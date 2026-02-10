@@ -13,3 +13,10 @@ export const compareVersions = (a: string, b: string): number => {
 export const isValidVersion = (version: string): boolean => {
   return /^\d+\.\d+\.\d+$/.test(version);
 };
+
+/** Увеличивает минорную часть версии и обнуляет патч: 1.2.3 → 1.3.0 */
+export const bumpMinor = (version: string): string | null => {
+  if (!isValidVersion(version)) return null;
+  const [major, minor] = version.split(".").map(Number);
+  return `${major}.${(minor ?? 0) + 1}.0`;
+};

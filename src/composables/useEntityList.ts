@@ -1,6 +1,6 @@
 import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from "vue";
 import { apiGet, apiPost, apiDelete } from "./useApi";
-import { compareVersions, isValidVersion } from "../utils/version";
+import { compareVersions, isValidVersion, bumpMinor } from "../utils/version";
 import type {
   VersionedEntity,
   EntityGroup,
@@ -174,6 +174,15 @@ export function useEntityList<T extends VersionedEntity>(
     if (!isValidVersion(newItemVersion.value.trim())) {
       return "Версия должна быть в формате X.Y.Z (например, 1.0.0)";
     }
+    const name = newItemName.value.trim();
+    const version = newItemVersion.value.trim();
+    const sameNameGroup = groupedItems.value.find(
+      (g) => g.name.toLowerCase() === name.toLowerCase()
+    );
+    const maxExisting = sameNameGroup?.versions[0]?.version;
+    if (maxExisting && compareVersions(version, maxExisting) < 0) {
+      return `Версия не может быть меньше максимальной существующей (${maxExisting}) для данного имени`;
+    }
     return null;
   };
 
@@ -285,6 +294,21 @@ export function useEntityList<T extends VersionedEntity>(
     createError.value = null;
     showCreateModal.value = true;
   };
+
+  watch(
+    () => [newItemName.value.trim(), groupedItems.value, showCreateModal.value] as const,
+    ([name, groups]) => {
+      if (!showCreateModal.value || !name) return;
+      const sameNameGroup = groups.find(
+        (g) => g.name.toLowerCase() === name.toLowerCase()
+      );
+      const maxVersion = sameNameGroup?.versions[0]?.version;
+      const suggested = maxVersion ? bumpMinor(maxVersion) : null;
+      if (suggested) {
+        newItemVersion.value = suggested;
+      }
+    }
+  );
 
   const closeCreateModal = () => {
     showCreateModal.value = false;

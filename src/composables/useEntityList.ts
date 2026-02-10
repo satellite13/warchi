@@ -14,6 +14,8 @@ export interface EntityListConfig {
   entityNamePlural: string;
   conflictMessage: string;
   notFoundMessage: string;
+  /** Сообщение при 404 при создании (например, «Владелец не найден» по контракту API) */
+  createNotFoundMessage?: string;
 }
 
 export interface EntityListReturn<T extends VersionedEntity> {
@@ -203,6 +205,12 @@ export function useEntityList<T extends VersionedEntity>(
       if (!result.success) {
         if (result.error.status === 409) {
           throw new Error(config.conflictMessage);
+        }
+        if (result.error.status === 404) {
+          throw new Error(
+            config.createNotFoundMessage ??
+              `Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../${config.endpoint} и запущен.`
+          );
         }
         throw new Error(result.error.message);
       }

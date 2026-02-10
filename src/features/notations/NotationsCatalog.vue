@@ -43,7 +43,8 @@ const {
   entityName: "Нотация",
   entityNamePlural: "нотации",
   conflictMessage: "Нотация с таким именем и версией уже существует",
-  notFoundMessage: "Нотация не найдена"
+  notFoundMessage: "Нотация не найдена",
+  createNotFoundMessage: "Владелец не найден"
 });
 
 const openNotation = (id: string) => {

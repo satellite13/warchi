@@ -38,7 +38,9 @@ export async function apiFetch<T>(
       };
     }
 
-    const data = (await response.json()) as T;
+    // 204 No Content и пустое тело — не парсим JSON (контракт API)
+    const text = await response.text();
+    const data = (text.length > 0 ? JSON.parse(text) : undefined) as T;
     return { success: true, data };
   } catch (error) {
     return {

@@ -43,7 +43,8 @@ const {
   entityName: "Модель",
   entityNamePlural: "модели",
   conflictMessage: "Модель с таким именем и версией уже существует",
-  notFoundMessage: "Модель не найдена"
+  notFoundMessage: "Модель не найдена",
+  createNotFoundMessage: "Владелец не найден"
 });
 
 const openModel = (id: string) => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, onMounted} from "vue";
 import {onBeforeRouteLeave} from "vue-router";
-import SearchInput from "../../components/SearchInput.vue";
+import SearchInput from "../../components/forms/SearchInput.vue";
 import NotationEntityModal from "./components/NotationEntityModal.vue";
 import NotationEntityCard from "./components/NotationEntityCard.vue";
 import NotationDiagram from "./components/NotationDiagram.vue";

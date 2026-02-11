@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import StubComponent from "../components/StubComponent.vue";
+import StubComponent from "../components/layout/StubComponent.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import NotationsViewLayout from "../layouts/NotationsViewLayout.vue";
 import NotationsCatalog from "../features/notations/NotationsCatalog.vue";
+import AppFooter from "../components/layout/AppFooter.vue";
 </script>
 
 <template>
@@ -14,7 +15,7 @@ import NotationsCatalog from "../features/notations/NotationsCatalog.vue";
       <NotationsCatalog/>
     </template>
     <template #footer>
-      <StubComponent/>
+      <AppFooter />
     </template>
   </NotationsViewLayout>
 

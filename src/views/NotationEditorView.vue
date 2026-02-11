@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import StubComponent from "../components/layout/StubComponent.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import MainLayout from "../layouts/MainLayout.vue";
+import NotationEditor from "../features/notations/NotationEditor.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 </script>
 
@@ -11,7 +11,7 @@ import AppFooter from "../components/layout/AppFooter.vue";
       <AppHeader />
     </template>
     <template #default>
-      <StubComponent />
+      <NotationEditor />
     </template>
     <template #footer>
       <AppFooter />

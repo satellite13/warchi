@@ -31,6 +31,9 @@ body {
     --base-text: #111827;
     --base-font: "Noto Sans", system-ui, -apple-system, sans-serif;
     --base-font-weight: 400;
+    --small-font-size: 10px;
+    --medium-font-size: 12px;
+    --large-font-size: 14px;
 
     --surface: #ffffff;
     --surface-muted: #f8fafc;

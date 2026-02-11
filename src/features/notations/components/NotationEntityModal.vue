@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BaseModal from "../../../components/BaseModal.vue";
+import BaseModal from "../../../components/modals/BaseModal.vue";
 import TagSuggestions from "./TagSuggestions.vue";
 import type { EditorNodeType, EditorLinkType } from "../types";
 

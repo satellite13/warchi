@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import BaseModal from "../BaseModal.vue";
+import BaseModal from "./BaseModal.vue";
 import NameVersionForm from "../forms/NameVersionForm.vue";
 
 const props = withDefaults(defineProps<{

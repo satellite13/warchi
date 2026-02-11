@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import SearchInput from "../SearchInput.vue";
+import SearchInput from "../forms/SearchInput.vue";
 
 const model = defineModel<string>({ default: "" });
 

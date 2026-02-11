@@ -1,9 +1,10 @@
 <script setup lang="ts">
 
 import ModelsViewLayout from "../layouts/ModelsViewLayout.vue";
-import StubComponent from "../components/StubComponent.vue";
+import StubComponent from "../components/layout/StubComponent.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import ModelsCatalog from "../features/models/ModelsCatalog.vue";
+import AppFooter from "../components/layout/AppFooter.vue";
 </script>
 
 <template>
@@ -15,7 +16,7 @@ import ModelsCatalog from "../features/models/ModelsCatalog.vue";
     <ModelsCatalog />
   </template>
   <template #footer>
-    <StubComponent />
+    <AppFooter />
   </template>
 </ModelsViewLayout>
 </template>

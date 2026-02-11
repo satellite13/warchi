@@ -47,7 +47,7 @@ defineProps<{
 }
 
 .logo__title {
-  font-weight: 400;
+  font-weight: var(--base-font-weight);
 }
 
 .logo--sm .logo__title {
@@ -63,18 +63,18 @@ defineProps<{
 }
 
 .logo__subtitle {
-  color: #6c737c;
+  color: var(--text-subtle);
 }
 
 .logo--sm .logo__subtitle {
-  font-size: 8px;
+  font-size: var(--small-font-size);
 }
 
 .logo--md .logo__subtitle {
-  font-size: 10px;
+  font-size: var(--medium-font-size);
 }
 
 .logo--lg .logo__subtitle {
-  font-size: 12px;
+  font-size: var(--large-font-size);
 }
 </style>

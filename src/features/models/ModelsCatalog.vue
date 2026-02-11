@@ -5,9 +5,9 @@ import { useEntityList } from "../../composables/useEntityList";
 import type { ModelData } from "../../types/entities";
 import ListHeader from "../../components/list/ListHeader.vue";
 import EntityCard from "../../components/cards/EntityCard.vue";
-import CreateCard from "../../components/CreateCard.vue";
-import CardSkeleton from "../../components/CardSkeleton.vue";
-import EmptyState from "../../components/EmptyState.vue";
+import CreateCard from "../../components/cards/CreateCard.vue";
+import CardSkeleton from "../../components/cards/CardSkeleton.vue";
+import EmptyState from "../../components/list/EmptyState.vue";
 import EntityCreateModal from "../../components/modals/EntityCreateModal.vue";
 import EntityDeleteModal from "../../components/modals/EntityDeleteModal.vue";
 

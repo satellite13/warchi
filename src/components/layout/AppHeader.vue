@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {useRouter} from "vue-router";
 import {useAuth} from "../../composables/useAuth";
-import AppLogo from "../AppLogo.vue";
-import UserAvatar from "../UserAvatar.vue";
+import AppLogo from "./AppLogo.vue";
+import UserAvatar from "./UserAvatar.vue";
 import NavigationMenu from "../menu/NavigationMenu.vue";
 
 const router = useRouter();

@@ -3,6 +3,7 @@ export interface VersionedEntity {
   name: string;
   version: string;
   ownerId: string;
+  createdAt?: string | null;
   updatedAt?: string | null;
 }
 
@@ -28,8 +29,13 @@ export interface PaginatedResponse<T> {
   content?: T[];
   totalElements?: number;
   totalPages?: number;
-  page?: number;
+  number?: number;
   size?: number;
+  first?: boolean;
+  last?: boolean;
+  numberOfElements?: number;
+  empty?: boolean;
+  sort?: object | null;
 }
 
 export interface User {

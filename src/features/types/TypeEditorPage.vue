@@ -149,6 +149,7 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
     return null
   }
 }
+
 </script>
 
 <template>
@@ -294,6 +295,15 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
                   v-model="selectedType.name"
                   placeholder="Название типа"
                 >
+              </div>
+            </div>
+
+            <!-- Relation rules -->
+            <div class="form-section">
+              <h3 class="form-section__title">Правила связей</h3>
+              <div class="form-section__empty">
+                Правила связей между компонентами настраиваются в редакторе нотации:
+                выберите компонент и откройте блок <b>Правила связей</b> в нижней панели.
               </div>
             </div>
 
@@ -1277,6 +1287,103 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
 
 .link-btn:hover {
   color: var(--primary-hover);
+}
+
+/* ===== Relation rules ===== */
+.relation-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relation-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease;
+  animation: fadeSlideIn 0.25s ease both;
+}
+
+.relation-rule:hover {
+  border-color: var(--border);
+}
+
+.relation-rule__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.relation-rule__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--base-text);
+}
+
+.relation-rule__remove {
+  opacity: 1;
+}
+
+.relation-rule__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation-rule__actions .link-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.relation-rule__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.relation-rule__row--links {
+  align-items: flex-start;
+}
+
+.relation-rule__label {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.relation-rule__target {
+  flex: 1;
+  min-width: 0;
+}
+
+.relation-rule__empty {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.relation-rule__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.relation-rule__link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--base-text);
+  cursor: pointer;
+}
+
+.relation-rule__link-item input {
+  accent-color: var(--primary);
 }
 
 /* ===== Right aside ===== */

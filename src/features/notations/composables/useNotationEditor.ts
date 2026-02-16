@@ -10,9 +10,12 @@ import type {
   ComponentResponse,
   ComponentRequest,
   RelationResponse,
-  RelationRequest
+  RelationRequest,
+  RelationRuleResponse,
+  RelationRuleRequest
 } from "../../../types/api"
 import {
+  createId,
   parseEntityAttrs,
   serializeEntityAttrs,
   parseTypeAttrs,
@@ -24,6 +27,7 @@ import {
   type EditorLinkType,
   type EditorComponent,
   type EditorRelation,
+  type EditorRelationRule,
   createEmptyEditorState
 } from "../types"
 
@@ -92,6 +96,37 @@ function toEditorRelation(response: RelationResponse): EditorRelation {
   }
 }
 
+function toEditorRelationRules(
+  rows: RelationRuleResponse[],
+  allowedComponentIds: Set<string>
+): EditorRelationRule[] {
+  const grouped = new Map<string, EditorRelationRule>()
+  for (const row of rows) {
+    if (!allowedComponentIds.has(row.fromComponentId) || !allowedComponentIds.has(row.toComponentId)) {
+      continue
+    }
+    const key = `${row.fromComponentId}::${row.toComponentId}`
+    const existing = grouped.get(key)
+    if (existing) {
+      if (!existing.allowedRelationIds.includes(row.relationId)) {
+        existing.allowedRelationIds.push(row.relationId)
+      }
+      continue
+    }
+    grouped.set(key, {
+      id: createId(),
+      fromComponentId: row.fromComponentId,
+      toComponentId: row.toComponentId,
+      allowedRelationIds: [row.relationId]
+    })
+  }
+  return Array.from(grouped.values())
+}
+
+function normalizeTypeName(name: string): string {
+  return name.trim().toLowerCase()
+}
+
 export function useNotationEditor(): NotationEditorReturn {
   const route = useRoute()
   const router = useRouter()
@@ -115,7 +150,7 @@ export function useNotationEditor(): NotationEditorReturn {
   })
 
   const hasUnsavedChanges = computed(() => {
-    const { nodeTypes, linkTypes, components, relations } = state.value
+    const { nodeTypes, linkTypes, components, relations, relationRules } = state.value
     const hasNewTypes =
       nodeTypes.some((t) => t._isNew) || linkTypes.some((t) => t._isNew)
     const hasChangedComponents = components.some(
@@ -124,7 +159,10 @@ export function useNotationEditor(): NotationEditorReturn {
     const hasChangedRelations = relations.some(
       (r) => r._isNew || r._isDirty || r._isDeleted
     )
-    return hasNewTypes || hasChangedComponents || hasChangedRelations
+    const hasChangedRelationRules = relationRules.some(
+      (rule) => rule._isNew || rule._isDirty || rule._isDeleted
+    )
+    return hasNewTypes || hasChangedComponents || hasChangedRelations || hasChangedRelationRules
   })
 
   const loadNotation = async () => {
@@ -139,13 +177,14 @@ export function useNotationEditor(): NotationEditorReturn {
     errorMessage.value = null
 
     try {
-      // Parallel fetch from 5 endpoints
+      // Parallel fetch from 6 endpoints
       const [
         notationResult,
         nodeTypesResult,
         linkTypesResult,
         componentsResult,
-        relationsResult
+        relationsResult,
+        relationRulesResult
       ] = await Promise.all([
         apiGet<NotationData>(`/notations/${notationId}`),
         apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?size=1000"),
@@ -155,7 +194,8 @@ export function useNotationEditor(): NotationEditorReturn {
         ),
         apiGet<PaginatedResponse<RelationResponse>>(
           `/relations?notationId=${encodeURIComponent(notationId)}&size=1000`
-        )
+        ),
+        apiGet<PaginatedResponse<RelationRuleResponse>>("/relation-rules?size=1000")
       ])
 
       if (!notationResult.success) {
@@ -167,6 +207,11 @@ export function useNotationEditor(): NotationEditorReturn {
 
       notation.value = notationResult.data
 
+      const components = componentsResult.success
+        ? (componentsResult.data.content ?? []).map(toEditorComponent)
+        : []
+      const componentIds = new Set(components.map((component) => component.id))
+
       state.value = {
         notationId,
         ownerId: notationResult.data.ownerId,
@@ -176,11 +221,12 @@ export function useNotationEditor(): NotationEditorReturn {
         linkTypes: linkTypesResult.success
           ? (linkTypesResult.data.content ?? []).map(toEditorLinkType)
           : [],
-        components: componentsResult.success
-          ? (componentsResult.data.content ?? []).map(toEditorComponent)
-          : [],
+        components,
         relations: relationsResult.success
           ? (relationsResult.data.content ?? []).map(toEditorRelation)
+          : [],
+        relationRules: relationRulesResult.success
+          ? toEditorRelationRules(relationRulesResult.data.content ?? [], componentIds)
           : []
       }
     } catch (error) {
@@ -207,12 +253,55 @@ export function useNotationEditor(): NotationEditorReturn {
     saveProgress.value = ""
 
     try {
-      const { notationId, ownerId, nodeTypes, linkTypes, components, relations } =
+      const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
 
-      // Step 1: Create new node types
+      // Step 1: Create or bind node types
+      const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?size=1000")
+      if (!existingNodeTypesResult.success) {
+        throw new Error(`Ошибка загрузки типов узлов: ${existingNodeTypesResult.error.message}`)
+      }
+      const existingNodeTypesByName = new Map<string, NodeTypeResponse>()
+      for (const existing of existingNodeTypesResult.data.content ?? []) {
+        const key = normalizeTypeName(existing.name)
+        if (!key || existingNodeTypesByName.has(key)) continue
+        existingNodeTypesByName.set(key, existing)
+      }
+      const resolvedNodeTypeIdByName = new Map<string, string>()
+
       const newNodeTypes = nodeTypes.filter((t) => t._isNew)
       for (const nodeType of newNodeTypes) {
+        const oldId = nodeType.id
+        const normalizedName = normalizeTypeName(nodeType.name)
+
+        const resolvedExistingId = normalizedName ? resolvedNodeTypeIdByName.get(normalizedName) : undefined
+        if (resolvedExistingId) {
+          nodeType.id = resolvedExistingId
+          nodeType._isNew = false
+          components.forEach((c) => {
+            if (c.nodeTypeId === oldId) {
+              c.nodeTypeId = resolvedExistingId
+            }
+          })
+          continue
+        }
+
+        const existingType = normalizedName ? existingNodeTypesByName.get(normalizedName) : undefined
+        if (existingType) {
+          nodeType.id = existingType.id
+          nodeType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
+          nodeType._isNew = false
+          if (normalizedName) {
+            resolvedNodeTypeIdByName.set(normalizedName, existingType.id)
+          }
+          components.forEach((c) => {
+            if (c.nodeTypeId === oldId) {
+              c.nodeTypeId = existingType.id
+            }
+          })
+          continue
+        }
+
         saveProgress.value = `Создание типа узла: ${nodeType.name}`
         const request: NodeTypeRequest = {
           name: nodeType.name,
@@ -223,10 +312,11 @@ export function useNotationEditor(): NotationEditorReturn {
         if (!result.success) {
           throw new Error(`Ошибка создания типа узла: ${result.error.message}`)
         }
-        // Update ID for components referencing this type
-        const oldId = nodeType.id
         nodeType.id = result.data.id
         nodeType._isNew = false
+        if (normalizedName) {
+          resolvedNodeTypeIdByName.set(normalizedName, result.data.id)
+        }
         components.forEach((c) => {
           if (c.nodeTypeId === oldId) {
             c.nodeTypeId = result.data.id
@@ -234,9 +324,52 @@ export function useNotationEditor(): NotationEditorReturn {
         })
       }
 
-      // Step 2: Create new link types
+      // Step 2: Create or bind link types
+      const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?size=1000")
+      if (!existingLinkTypesResult.success) {
+        throw new Error(`Ошибка загрузки типов связей: ${existingLinkTypesResult.error.message}`)
+      }
+      const existingLinkTypesByName = new Map<string, LinkTypeResponse>()
+      for (const existing of existingLinkTypesResult.data.content ?? []) {
+        const key = normalizeTypeName(existing.name)
+        if (!key || existingLinkTypesByName.has(key)) continue
+        existingLinkTypesByName.set(key, existing)
+      }
+      const resolvedLinkTypeIdByName = new Map<string, string>()
+
       const newLinkTypes = linkTypes.filter((t) => t._isNew)
       for (const linkType of newLinkTypes) {
+        const oldId = linkType.id
+        const normalizedName = normalizeTypeName(linkType.name)
+
+        const resolvedExistingId = normalizedName ? resolvedLinkTypeIdByName.get(normalizedName) : undefined
+        if (resolvedExistingId) {
+          linkType.id = resolvedExistingId
+          linkType._isNew = false
+          relations.forEach((r) => {
+            if (r.linkTypeId === oldId) {
+              r.linkTypeId = resolvedExistingId
+            }
+          })
+          continue
+        }
+
+        const existingType = normalizedName ? existingLinkTypesByName.get(normalizedName) : undefined
+        if (existingType) {
+          linkType.id = existingType.id
+          linkType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
+          linkType._isNew = false
+          if (normalizedName) {
+            resolvedLinkTypeIdByName.set(normalizedName, existingType.id)
+          }
+          relations.forEach((r) => {
+            if (r.linkTypeId === oldId) {
+              r.linkTypeId = existingType.id
+            }
+          })
+          continue
+        }
+
         saveProgress.value = `Создание типа связи: ${linkType.name}`
         const request: LinkTypeRequest = {
           name: linkType.name,
@@ -247,10 +380,11 @@ export function useNotationEditor(): NotationEditorReturn {
         if (!result.success) {
           throw new Error(`Ошибка создания типа связи: ${result.error.message}`)
         }
-        // Update ID for relations referencing this type
-        const oldId = linkType.id
         linkType.id = result.data.id
         linkType._isNew = false
+        if (normalizedName) {
+          resolvedLinkTypeIdByName.set(normalizedName, result.data.id)
+        }
         relations.forEach((r) => {
           if (r.linkTypeId === oldId) {
             r.linkTypeId = result.data.id
@@ -294,8 +428,19 @@ export function useNotationEditor(): NotationEditorReturn {
         if (!result.success) {
           throw new Error(`Ошибка создания компонента: ${result.error.message}`)
         }
+        const oldComponentId = component.id
         component.id = result.data.id
         component._isNew = false
+        for (const rule of relationRules) {
+          if (rule.fromComponentId === oldComponentId) {
+            rule.fromComponentId = component.id
+            rule._isDirty = true
+          }
+          if (rule.toComponentId === oldComponentId) {
+            rule.toComponentId = component.id
+            rule._isDirty = true
+          }
+        }
       }
 
       // Step 6: Update dirty components
@@ -365,6 +510,63 @@ export function useNotationEditor(): NotationEditorReturn {
         }
         relation._isDirty = false
       }
+
+      // Step 9: Sync relation rules for notation components
+      saveProgress.value = "Синхронизация правил связей"
+      const currentComponentIds = new Set(
+        components
+          .filter((component) => !component._isDeleted)
+          .map((component) => component.id)
+      )
+
+      const listRulesResult = await apiGet<PaginatedResponse<RelationRuleResponse>>("/relation-rules?size=1000")
+      if (!listRulesResult.success) {
+        throw new Error(`Ошибка загрузки правил связей: ${listRulesResult.error.message}`)
+      }
+
+      const existingRules = (listRulesResult.data.content ?? []).filter(
+        (rule) => currentComponentIds.has(rule.fromComponentId) && currentComponentIds.has(rule.toComponentId)
+      )
+      for (const rule of existingRules) {
+        const deleteResult = await apiDelete<void>(`/relation-rules/${rule.id}`)
+        if (!deleteResult.success) {
+          throw new Error(`Ошибка удаления правила связи: ${deleteResult.error.message}`)
+        }
+      }
+
+      const activeRelationIds = new Set(
+        relations
+          .filter((relation) => !relation._isDeleted)
+          .map((relation) => relation.id)
+      )
+      const activeRules = relationRules.filter(
+        (rule) =>
+          !rule._isDeleted &&
+          currentComponentIds.has(rule.fromComponentId) &&
+          currentComponentIds.has(rule.toComponentId)
+      )
+      for (const rule of activeRules) {
+        const uniqueRelationIds = Array.from(new Set(rule.allowedRelationIds)).filter((relationId) =>
+          activeRelationIds.has(relationId)
+        )
+        for (const relationId of uniqueRelationIds) {
+          const request: RelationRuleRequest = {
+            relationId,
+            fromComponentId: rule.fromComponentId,
+            toComponentId: rule.toComponentId,
+            ownerId
+          }
+          const createResult = await apiPost<RelationRuleResponse>("/relation-rules", request)
+          if (!createResult.success) {
+            throw new Error(`Ошибка создания правила связи: ${createResult.error.message}`)
+          }
+        }
+        rule.allowedRelationIds = uniqueRelationIds
+        rule._isNew = false
+        rule._isDirty = false
+      }
+
+      state.value.relationRules = activeRules
 
       // Remove deleted items from state
       state.value.components = components.filter((c) => !c._isDeleted)

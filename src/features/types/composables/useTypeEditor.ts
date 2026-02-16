@@ -59,7 +59,10 @@ export function useTypeEditor() {
   const savedSnapshot = ref<string | null>(null)
 
   function takeSnapshot(item: TypeItem): string {
-    return JSON.stringify({ name: item.name, attrs: serializeTypeAttrs(item.parsedAttrs) })
+    return JSON.stringify({
+      name: item.name,
+      attrs: serializeTypeAttrs(item.parsedAttrs)
+    })
   }
 
   function updateSnapshot() {
@@ -69,6 +72,10 @@ export function useTypeEditor() {
     } else {
       savedSnapshot.value = null
     }
+  }
+
+  function refreshSnapshot() {
+    updateSnapshot()
   }
 
   const isDirty = computed(() => {
@@ -350,6 +357,7 @@ export function useTypeEditor() {
     saveError,
     loadAll,
     selectType,
+    refreshSnapshot,
     addType,
     saveType,
     deleteType,

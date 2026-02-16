@@ -17,7 +17,14 @@ import {useNotationEditor} from "../features/notations/composables/useNotationEd
 import {useNotationEntity, appendTagValue} from "../features/notations/composables/useNotationEntity";
 import type {DiagramStyle} from "../features/notations/notationAttrs";
 import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../features/notations/notationAttrs";
-import type {NotationEditorState, EditorNodeType, EditorLinkType, EditorComponent, EditorRelation} from "../features/notations/types";
+import type {
+  NotationEditorState,
+  EditorNodeType,
+  EditorLinkType,
+  EditorComponent,
+  EditorRelation,
+  EditorRelationRule
+} from "../features/notations/types";
 
 const {
   notation,
@@ -107,6 +114,12 @@ const diagramRenderer = computed(() => diagramRef.value?.rendererRef ?? null);
 const gridVisible = ref(true);
 const miniMapVisible = ref(true);
 const snapEnabled = ref(false);
+const PROPERTIES_PANEL_DEFAULT_HEIGHT = 240;
+const propertiesPanelHeight = ref(PROPERTIES_PANEL_DEFAULT_HEIGHT);
+
+const resetPropertiesPanelHeight = () => {
+  propertiesPanelHeight.value = PROPERTIES_PANEL_DEFAULT_HEIGHT;
+};
 
 watch(interactionManager, (im) => {
   if (!im) return;
@@ -193,6 +206,8 @@ const normalizeImportedState = (raw: unknown): NotationEditorState => {
 
   const nodeTypeIdMap = new Map<string, string>();
   const linkTypeIdMap = new Map<string, string>();
+  const componentIdMap = new Map<string, string>();
+  const relationIdMap = new Map<string, string>();
 
   const nodeTypes: EditorNodeType[] = toObjectArray(source.nodeTypes).map((item) => {
     const importedId = toStringOr(item.id, createId());
@@ -249,10 +264,13 @@ const normalizeImportedState = (raw: unknown): NotationEditorState => {
   const defaultLinkTypeId = linkTypes[0]!.id;
 
   const components: EditorComponent[] = toObjectArray(source.components).map((item) => {
+    const importedComponentId = toStringOr(item.id, createId());
     const importedNodeTypeId = toStringOr(item.nodeTypeId, defaultNodeTypeId);
     const mappedNodeTypeId = nodeTypeIdMap.get(importedNodeTypeId) ?? importedNodeTypeId;
+    const id = createId();
+    componentIdMap.set(importedComponentId, id);
     return {
-      id: createId(),
+      id,
       name: toStringOr(item.name, "Новый компонент"),
       version: toStringOr(item.version, "1.0.0"),
       notationId: baseNotationId,
@@ -268,10 +286,13 @@ const normalizeImportedState = (raw: unknown): NotationEditorState => {
   });
 
   const relations: EditorRelation[] = toObjectArray(source.relations).map((item) => {
+    const importedRelationId = toStringOr(item.id, createId());
     const importedLinkTypeId = toStringOr(item.linkTypeId, defaultLinkTypeId);
     const mappedLinkTypeId = linkTypeIdMap.get(importedLinkTypeId) ?? importedLinkTypeId;
+    const id = createId();
+    relationIdMap.set(importedRelationId, id);
     return {
-      id: createId(),
+      id,
       name: toStringOr(item.name, "Новая связь"),
       version: toStringOr(item.version, "1.0.0"),
       notationId: baseNotationId,
@@ -286,13 +307,51 @@ const normalizeImportedState = (raw: unknown): NotationEditorState => {
     };
   });
 
+  const relationRules: EditorRelationRule[] = toObjectArray(source.relationRules).reduce<EditorRelationRule[]>(
+    (acc, item) => {
+      const importedFromId = toStringOr(item.fromComponentId, "");
+      const importedToId = toStringOr(item.toComponentId, "");
+      const fromComponentId = componentIdMap.get(importedFromId);
+      const toComponentId = componentIdMap.get(importedToId);
+      if (!fromComponentId || !toComponentId) return acc;
+
+      const rawRelationIds = Array.isArray(item.allowedRelationIds)
+        ? item.allowedRelationIds
+        : Array.isArray(item.allowedLinkTypeIds)
+          ? item.allowedLinkTypeIds
+          : [];
+
+      const allowedRelationIds = Array.from(
+        new Set(
+          rawRelationIds
+            .filter((relationId): relationId is string => typeof relationId === "string")
+            .map((relationId) => relationIdMap.get(relationId) ?? relationId)
+            .filter((relationId) => relations.some((relation) => relation.id === relationId))
+        )
+      );
+
+      acc.push({
+        id: createId(),
+        fromComponentId,
+        toComponentId,
+        allowedRelationIds,
+        _isNew: true,
+        _isDirty: false,
+        _isDeleted: false
+      });
+      return acc;
+    },
+    []
+  );
+
   return {
     notationId: baseNotationId,
     ownerId: baseOwnerId,
     nodeTypes,
     linkTypes,
     components,
-    relations
+    relations,
+    relationRules
   };
 };
 
@@ -403,6 +462,14 @@ const handleItemChanged = (id: string) => {
   } else if (selectedEntity.value?.kind === "relation") {
     markRelationDirty(id);
   }
+};
+
+const handleRelationRulesChanged = () => {
+  state.value.relationRules.forEach((rule) => {
+    if (!rule._isNew) {
+      rule._isDirty = true;
+    }
+  });
 };
 
 const handleSelect = (kind: "component" | "relation", id: string) => {
@@ -587,7 +654,10 @@ onBeforeUnmount(() => {
       />
     </template>
     <template #default>
-      <NotationMainPanelLayout>
+      <NotationMainPanelLayout
+        :properties-height="propertiesPanelHeight"
+        @update:properties-height="propertiesPanelHeight = $event"
+      >
         <template #left>
           <NotationComponentList
             v-if="!isLoading"
@@ -613,7 +683,12 @@ onBeforeUnmount(() => {
           <CustomPropertiesPanel
             :selected-item="selectedItem"
             :type-properties="selectedItemTypeProperties"
+            :all-components="state.components"
+            :all-relations="state.relations"
+            :relation-rules="state.relationRules"
             :on-item-changed="handleItemChanged"
+            :on-relation-rules-changed="handleRelationRulesChanged"
+            :on-reset-panel-size="resetPropertiesPanelHeight"
           />
         </template>
         <template #right>

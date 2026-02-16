@@ -323,6 +323,5 @@ export const serializeTypeAttrs = (attrs: TypeAttrs): string => {
   if (attrs.customProperties && attrs.customProperties.length > 0) {
     result.customProperties = stripInternalFlags(attrs.customProperties);
   }
-
   return JSON.stringify(result);
 };

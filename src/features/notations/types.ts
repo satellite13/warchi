@@ -47,6 +47,16 @@ export interface EditorRelation extends Omit<RelationResponse, 'attrs'> {
   _isDeleted?: boolean
 }
 
+export interface EditorRelationRule {
+  id: string
+  fromComponentId: string
+  toComponentId: string
+  allowedRelationIds: string[]
+  _isNew?: boolean
+  _isDirty?: boolean
+  _isDeleted?: boolean
+}
+
 // Main editor state
 export interface NotationEditorState {
   notationId: string
@@ -55,6 +65,7 @@ export interface NotationEditorState {
   linkTypes: EditorLinkType[]
   components: EditorComponent[]
   relations: EditorRelation[]
+  relationRules: EditorRelationRule[]
 }
 
 // Empty state factory
@@ -64,5 +75,6 @@ export const createEmptyEditorState = (): NotationEditorState => ({
   nodeTypes: [],
   linkTypes: [],
   components: [],
-  relations: []
+  relations: [],
+  relationRules: []
 })

@@ -1,5 +1,51 @@
 <script setup lang="ts">
+import { onBeforeUnmount } from "vue"
 
+const props = withDefaults(defineProps<{
+  propertiesHeight?: number
+}>(), {
+  propertiesHeight: 240
+})
+
+const emit = defineEmits<{
+  (e: "update:propertiesHeight", value: number): void
+}>()
+
+const MIN_HEIGHT = 180
+const MAX_HEIGHT = 520
+let dragStartY = 0
+let dragStartHeight = 240
+let dragging = false
+
+function clampHeight(value: number): number {
+  return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, value))
+}
+
+function onMouseMove(event: MouseEvent) {
+  if (!dragging) return
+  const deltaY = event.clientY - dragStartY
+  const nextHeight = clampHeight(dragStartHeight - deltaY)
+  emit("update:propertiesHeight", nextHeight)
+}
+
+function stopDragging() {
+  if (!dragging) return
+  dragging = false
+  window.removeEventListener("mousemove", onMouseMove)
+  window.removeEventListener("mouseup", stopDragging)
+}
+
+function startDragging(event: MouseEvent) {
+  dragging = true
+  dragStartY = event.clientY
+  dragStartHeight = clampHeight(props.propertiesHeight ?? 240)
+  window.addEventListener("mousemove", onMouseMove)
+  window.addEventListener("mouseup", stopDragging)
+}
+
+onBeforeUnmount(() => {
+  stopDragging()
+})
 </script>
 
 <template>
@@ -11,7 +57,16 @@
       <div class="notation-panel__diagram">
         <slot />
       </div>
-      <div class="notation-panel__properties">
+      <div
+        class="notation-panel__resizer"
+        role="separator"
+        aria-orientation="horizontal"
+        title="Потяните, чтобы изменить высоту панели свойств"
+        @mousedown.prevent="startDragging"
+      >
+        <span class="notation-panel__resizer-handle"></span>
+      </div>
+      <div class="notation-panel__properties" :style="{ height: `${propertiesHeight}px` }">
         <slot name="bottom" />
       </div>
     </section>
@@ -37,13 +92,17 @@
   overflow: hidden;
   border-right: 1px solid var(--border);
   background: var(--surface);
+  position: relative;
+  z-index: 1;
 }
 
 .notation-panel__center {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
 }
 
 .notation-panel__diagram {
@@ -54,9 +113,46 @@
 
 .notation-panel__properties {
   border-top: 1px solid var(--border);
-  height: 240px;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+}
+
+.notation-panel__resizer {
+  height: 10px;
+  margin-top: -5px;
+  margin-bottom: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  z-index: 3;
+  position: relative;
+}
+
+.notation-panel__resizer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--border);
+  transform: translateY(-50%);
+}
+
+.notation-panel__resizer-handle {
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--text-subtle);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.notation-panel__resizer:hover .notation-panel__resizer-handle {
+  opacity: 1;
+  background: var(--primary);
 }
 
 .notation-panel__right {

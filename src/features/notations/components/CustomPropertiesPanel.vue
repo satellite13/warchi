@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import {computed, reactive, ref, watch, onMounted, onBeforeUnmount} from "vue";
-import type {EditorComponent, EditorRelation} from "../types";
-import type {CustomProperty, CustomPropertyType} from "../notationAttrs";
+import {createId, type CustomProperty, type CustomPropertyType} from "../notationAttrs";
+import type {EditorComponent, EditorRelation, EditorRelationRule} from "../types";
 import {useCustomProperties} from "../composables/useCustomProperties";
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null;
   typeProperties?: CustomProperty[];
+  allComponents?: EditorComponent[];
+  allRelations?: EditorRelation[];
+  relationRules?: EditorRelationRule[];
   onItemChanged?: (id: string) => void;
+  onRelationRulesChanged?: () => void;
+  onResetPanelSize?: () => void;
 }>();
 
 const selectedItemComputed = computed(() => props.selectedItem);
@@ -36,6 +41,7 @@ const sameTags = (a: string[], b: string[]) =>
 
 const tagsDraft = ref("");
 const tagsExpanded = ref(false);
+const propertiesExpanded = ref(false);
 
 watch(
   () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join("|") ?? ""],
@@ -49,6 +55,7 @@ watch(
   () => props.selectedItem?.id ?? null,
   () => {
     tagsExpanded.value = false;
+    propertiesExpanded.value = false;
   }
 );
 
@@ -58,6 +65,10 @@ const handleTagsInput = (value: string) => {
 
 const toggleTagsCollapse = () => {
   tagsExpanded.value = !tagsExpanded.value;
+};
+
+const togglePropertiesCollapse = () => {
+  propertiesExpanded.value = !propertiesExpanded.value;
 };
 
 const applyTagsDraft = () => {
@@ -78,6 +89,70 @@ const removeTag = (tag: string) => {
   props.selectedItem.parsedAttrs.tags = props.selectedItem.parsedAttrs.tags.filter((item) => item !== tag);
   tagsDraft.value = props.selectedItem.parsedAttrs.tags.join(", ");
   props.onItemChanged?.(props.selectedItem.id);
+};
+
+const relationRulesExpanded = ref(false);
+const selectedComponentRelationRules = computed(() => {
+  if (!props.selectedItem || !props.relationRules) return [];
+  if ("linkTypeId" in props.selectedItem) return [];
+  return props.relationRules.filter((rule) => rule.fromComponentId === props.selectedItem?.id && !rule._isDeleted);
+});
+
+watch(
+  () => props.selectedItem?.id ?? null,
+  () => {
+    relationRulesExpanded.value = false;
+  }
+);
+
+const toggleRelationRulesCollapse = () => {
+  relationRulesExpanded.value = !relationRulesExpanded.value;
+};
+
+const addRelationRule = () => {
+  if (!props.selectedItem || !props.relationRules) return;
+  if ("linkTypeId" in props.selectedItem) return;
+  const componentId = props.selectedItem.id;
+  props.relationRules.push({
+    id: createId(),
+    fromComponentId: componentId,
+    toComponentId: componentId,
+    allowedRelationIds: [],
+    _isNew: true
+  });
+  relationRulesExpanded.value = true;
+  props.onRelationRulesChanged?.();
+};
+
+const removeRelationRule = (rule: EditorRelationRule) => {
+  if (!props.relationRules) return;
+  const idx = props.relationRules.findIndex((item) => item.id === rule.id);
+  if (idx === -1) return;
+  if (rule._isNew) {
+    props.relationRules.splice(idx, 1);
+  } else {
+    props.relationRules[idx]!._isDeleted = true;
+    props.relationRules[idx]!._isDirty = true;
+  }
+  props.onRelationRulesChanged?.();
+};
+
+const setRelationRuleTarget = (rule: EditorRelationRule, targetId: string) => {
+  rule.toComponentId = targetId;
+  if (!rule._isNew) rule._isDirty = true;
+  props.onRelationRulesChanged?.();
+};
+
+const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string, checked: boolean) => {
+  const next = new Set(rule.allowedRelationIds);
+  if (checked) {
+    next.add(relationId);
+  } else {
+    next.delete(relationId);
+  }
+  rule.allowedRelationIds = Array.from(next.values());
+  if (!rule._isNew) rule._isDirty = true;
+  props.onRelationRulesChanged?.();
 };
 
 const typeOptions: { value: CustomPropertyType; label: string }[] = [
@@ -254,36 +329,15 @@ onBeforeUnmount(() => {
     <div class="properties-panel__header">
       <h3 class="properties-panel__title">Свойства</h3>
       <span v-if="selectedItem" class="properties-panel__entity-name">{{ selectedItem.name }}</span>
-      <div v-if="selectedItem" ref="addMenuRef" class="properties-panel__add-wrapper">
+      <div class="properties-panel__size-controls">
         <button
           type="button"
-          class="properties-panel__add-btn"
-          title="Добавить свойство"
-          @click="toggleAddMenu"
+          class="properties-panel__size-btn"
+          title="Восстановить размер панели по умолчанию"
+          @click="props.onResetPanelSize?.()"
         >
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined">restart_alt</span>
         </button>
-        <div v-if="showAddMenu" class="add-menu">
-          <button type="button" class="add-menu__item" @click="addNewProperty">
-            <span class="material-symbols-outlined">note_add</span>
-            Новое свойство
-          </button>
-          <div class="add-menu__divider"></div>
-          <div class="add-menu__section-title">Недостающие из типа</div>
-          <button
-            v-for="prop in missingTypeProperties"
-            :key="`missing-${prop.name}-${prop.type}`"
-            type="button"
-            class="add-menu__item"
-            @click="addMissingTypeProperty(prop)"
-          >
-            <span class="material-symbols-outlined">linked_services</span>
-            {{ prop.name }} ({{ typeLabel(prop.type) }})
-          </button>
-          <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">
-            Нет недостающих свойств
-          </div>
-        </div>
       </div>
     </div>
 
@@ -291,7 +345,7 @@ onBeforeUnmount(() => {
       Выберите элемент для редактирования свойств
     </div>
 
-    <template v-else>
+    <div v-else class="properties-panel__content">
       <div class="properties-panel__tags">
         <div
           class="properties-panel__tags-header"
@@ -332,157 +386,295 @@ onBeforeUnmount(() => {
         </template>
       </div>
 
-      <div
-        v-if="selectedItem.parsedAttrs.customProperties.length === 0"
-        class="properties-panel__empty"
-      >
-        Нет свойств.
-        <button type="button" class="link-btn" @click="toggleAddMenu">Добавить</button>
-      </div>
-
-      <div v-else class="properties-panel__list">
-      <div
-        v-for="property in selectedItem.parsedAttrs.customProperties"
-        :key="property.id"
-        class="property-row"
-        :class="{ 'property-row--error': propertyErrors(property).length > 0 }"
-      >
-        <div class="property-row__header" role="button" tabindex="0" @click="toggleCollapse(property.id)" @keydown.enter="toggleCollapse(property.id)">
+      <div v-if="selectedItem && !('linkTypeId' in selectedItem)" class="properties-panel__rules">
+        <div
+          class="properties-panel__rules-header"
+          role="button"
+          tabindex="0"
+          @click="toggleRelationRulesCollapse"
+          @keydown.enter.prevent="toggleRelationRulesCollapse"
+          @keydown.space.prevent="toggleRelationRulesCollapse"
+        >
           <span
-            class="material-symbols-outlined property-row__chevron"
-            :class="{ 'property-row__chevron--collapsed': !expandedIds.has(property.id) }"
+            class="material-symbols-outlined properties-panel__rules-chevron"
+            :class="{ 'properties-panel__rules-chevron--collapsed': !relationRulesExpanded }"
           >expand_more</span>
-          <span class="property-row__name">{{ property.name || 'Без имени' }}</span>
-          <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
-          <span
-            v-if="property._fromType || isEquivalentToTypeProperty(property)"
-            class="property-row__from-type-badge"
-            title="Унаследовано от типа"
-          >
-            <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
-            Тип
-          </span>
-          <span v-if="property.required" class="property-row__required-badge">Обяз.</span>
+          <span class="properties-panel__rules-label">Правила связей</span>
           <button
             type="button"
-            class="property-remove-btn"
-            title="Удалить свойство"
-            @click.stop="removeCustomProperty(property.id)"
+            class="link-btn"
+            @click.stop="addRelationRule"
           >
-            <span class="material-symbols-outlined">close</span>
+            Добавить
           </button>
         </div>
-
-        <template v-if="expandedIds.has(property.id)">
-          <div class="property-row__body">
-            <div class="property-row__main">
-              <input
-                class="property-input property-input--name"
-                :value="property.name"
-                placeholder="Имя свойства"
-                @input="handleNameChange(property, ($event.target as HTMLInputElement).value)"
-              >
-              <select
-                class="property-select"
-                :value="property.type"
-                @change="handleTypeChange(property, ($event.target as HTMLSelectElement).value)"
-              >
-                <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
-              <label class="property-checkbox">
-                <input
-                  type="checkbox"
-                  :checked="property.required"
-                  @change="handleRequiredChange(property, ($event.target as HTMLInputElement).checked)"
-                >
-                <span class="property-checkbox__label">Обяз.</span>
-              </label>
-            </div>
-
-            <div v-if="property.type === 'string'" class="property-row__extra">
-              <input
-                class="property-input property-input--sm"
-                :value="property.regex || ''"
-                placeholder="Regex (необязательно)"
-                @input="handleRegexChange(property, ($event.target as HTMLInputElement).value)"
-              >
-              <input
-                class="property-input property-input--num"
-                type="number"
-                :value="property.maxLength ?? ''"
-                placeholder="Макс. длина"
-                min="0"
-                @input="handleMaxLengthChange(property, ($event.target as HTMLInputElement).value)"
-              >
-            </div>
-            <div v-if="property.type === 'string' && property.regex" class="property-row__extra regex-test">
-              <input
-                class="property-input property-input--sm"
-                :value="getRegexTestValue(property.id)"
-                placeholder="Тестовое значение..."
-                @input="setRegexTestValue(property.id, ($event.target as HTMLInputElement).value)"
-              >
-              <span
-                v-if="regexTestResult(property) !== null"
-                class="regex-result"
-                :class="regexTestResult(property) ? 'regex-result--pass' : 'regex-result--fail'"
-              >
-                <span class="material-symbols-outlined">
-                  {{ regexTestResult(property) ? 'check_circle' : 'cancel' }}
+        <template v-if="relationRulesExpanded">
+          <div v-if="selectedComponentRelationRules.length === 0" class="properties-panel__rules-empty">
+            Нет правил.
+          </div>
+          <div v-else class="properties-panel__rules-list">
+            <div
+              v-for="rule in selectedComponentRelationRules"
+              :key="rule.id"
+              class="properties-panel__rule-card"
+            >
+              <div class="properties-panel__rule-header">
+                <span class="properties-panel__rule-title">
+                  {{ selectedItem.name || 'A' }} →
+                  {{ allComponents?.find((item) => item.id === rule.toComponentId)?.name || 'B' }}
                 </span>
-                {{ regexTestResult(property) ? 'Совпадает' : 'Не совпадает' }}
-              </span>
-            </div>
-
-            <div v-if="property.type === 'number'" class="property-row__extra">
-              <input
-                class="property-input property-input--sm"
-                type="number"
-                :value="property.min ?? ''"
-                placeholder="min"
-                @input="handleMinChange(property, ($event.target as HTMLInputElement).value)"
-              >
-              <input
-                class="property-input property-input--sm"
-                type="number"
-                :value="property.max ?? ''"
-                placeholder="max"
-                @input="handleMaxChange(property, ($event.target as HTMLInputElement).value)"
-              >
-            </div>
-
-            <div v-if="property.type === 'enum'" class="property-row__extra">
-              <input
-                class="property-input property-input--sm"
-                :value="(property.enumValues || []).join(', ')"
-                placeholder="val1, val2, val3"
-                @change="updateEnumValues(property, ($event.target as HTMLInputElement).value)"
-              >
-            </div>
-            <div v-if="property.type === 'enum' && property.required && (property.enumValues || []).length > 0" class="property-row__extra">
-              <span class="property-row__label">По умолчанию</span>
-              <select
-                class="property-select"
-                :value="property.enumDefault || ''"
-                @change="handleEnumDefaultChange(property, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">— нет —</option>
-                <option v-for="val in property.enumValues" :key="val" :value="val">{{ val }}</option>
-              </select>
-            </div>
-
-            <div v-if="propertyErrors(property).length > 0" class="property-row__errors">
-              <span v-for="(err, i) in propertyErrors(property)" :key="i" class="property-error">
-                {{ err }}
-              </span>
+                <button
+                  type="button"
+                  class="property-remove-btn properties-panel__rule-remove"
+                  @click="removeRelationRule(rule)"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div class="properties-panel__rule-row">
+                <label class="properties-panel__rule-row-label">Кому</label>
+                <select
+                  class="property-select"
+                  :value="rule.toComponentId"
+                  @change="setRelationRuleTarget(rule, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option
+                    v-for="component in (allComponents ?? []).filter((item) => !item._isDeleted)"
+                    :key="component.id"
+                    :value="component.id"
+                  >
+                    {{ component.name || 'Без имени' }}
+                  </option>
+                </select>
+              </div>
+              <div class="properties-panel__rule-row">
+                <label class="properties-panel__rule-row-label">Связи</label>
+                <div v-if="!allRelations || allRelations.length === 0" class="properties-panel__rules-empty">
+                  Нет связей нотации
+                </div>
+                <div v-else class="properties-panel__rule-links">
+                  <label
+                    v-for="relation in allRelations.filter((item) => !item._isDeleted)"
+                    :key="`${rule.id}-${relation.id}`"
+                    class="properties-panel__rule-link-item"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="rule.allowedRelationIds.includes(relation.id)"
+                      @change="toggleRelationRuleRelation(rule, relation.id, ($event.target as HTMLInputElement).checked)"
+                    >
+                    <span>{{ relation.name || 'Без имени' }}</span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </template>
       </div>
+
+      <div class="properties-panel__custom">
+        <div
+          class="properties-panel__custom-header"
+          role="button"
+          tabindex="0"
+          @click="togglePropertiesCollapse"
+          @keydown.enter.prevent="togglePropertiesCollapse"
+          @keydown.space.prevent="togglePropertiesCollapse"
+        >
+          <span
+            class="material-symbols-outlined properties-panel__custom-chevron"
+            :class="{ 'properties-panel__custom-chevron--collapsed': !propertiesExpanded }"
+          >expand_more</span>
+          <span class="properties-panel__custom-label">Свойства</span>
+          <div
+            ref="addMenuRef"
+            class="properties-panel__add-wrapper"
+            @click.stop
+          >
+            <button
+              type="button"
+              class="link-btn"
+              @click="toggleAddMenu"
+            >
+              Добавить
+            </button>
+            <div v-if="showAddMenu" class="add-menu">
+              <button type="button" class="add-menu__item" @click="addNewProperty">
+                <span class="material-symbols-outlined">note_add</span>
+                Новое свойство
+              </button>
+              <div class="add-menu__divider"></div>
+              <div class="add-menu__section-title">Недостающие из типа</div>
+              <button
+                v-for="prop in missingTypeProperties"
+                :key="`missing-${prop.name}-${prop.type}`"
+                type="button"
+                class="add-menu__item"
+                @click="addMissingTypeProperty(prop)"
+              >
+                <span class="material-symbols-outlined">linked_services</span>
+                {{ prop.name }} ({{ typeLabel(prop.type) }})
+              </button>
+              <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">
+                Нет недостающих свойств
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <template v-if="propertiesExpanded">
+          <div
+            v-if="selectedItem.parsedAttrs.customProperties.length === 0"
+            class="properties-panel__empty"
+          >
+            Нет свойств.
+          </div>
+
+          <div v-else class="properties-panel__list">
+            <div
+              v-for="property in selectedItem.parsedAttrs.customProperties"
+              :key="property.id"
+              class="property-row"
+              :class="{ 'property-row--error': propertyErrors(property).length > 0 }"
+            >
+              <div class="property-row__header" role="button" tabindex="0" @click="toggleCollapse(property.id)" @keydown.enter="toggleCollapse(property.id)">
+                <span
+                  class="material-symbols-outlined property-row__chevron"
+                  :class="{ 'property-row__chevron--collapsed': !expandedIds.has(property.id) }"
+                >expand_more</span>
+                <span class="property-row__name">{{ property.name || 'Без имени' }}</span>
+                <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
+                <span
+                  v-if="property._fromType || isEquivalentToTypeProperty(property)"
+                  class="property-row__from-type-badge"
+                  title="Унаследовано от типа"
+                >
+                  <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
+                  Тип
+                </span>
+                <span v-if="property.required" class="property-row__required-badge">Обяз.</span>
+                <button
+                  type="button"
+                  class="property-remove-btn"
+                  title="Удалить свойство"
+                  @click.stop="removeCustomProperty(property.id)"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <template v-if="expandedIds.has(property.id)">
+                <div class="property-row__body">
+                  <div class="property-row__main">
+                    <input
+                      class="property-input property-input--name"
+                      :value="property.name"
+                      placeholder="Имя свойства"
+                      @input="handleNameChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                    <select
+                      class="property-select"
+                      :value="property.type"
+                      @change="handleTypeChange(property, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">
+                        {{ opt.label }}
+                      </option>
+                    </select>
+                    <label class="property-checkbox">
+                      <input
+                        type="checkbox"
+                        :checked="property.required"
+                        @change="handleRequiredChange(property, ($event.target as HTMLInputElement).checked)"
+                      >
+                      <span class="property-checkbox__label">Обяз.</span>
+                    </label>
+                  </div>
+
+                  <div v-if="property.type === 'string'" class="property-row__extra">
+                    <input
+                      class="property-input property-input--sm"
+                      :value="property.regex || ''"
+                      placeholder="Regex (необязательно)"
+                      @input="handleRegexChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                    <input
+                      class="property-input property-input--num"
+                      type="number"
+                      :value="property.maxLength ?? ''"
+                      placeholder="Макс. длина"
+                      min="0"
+                      @input="handleMaxLengthChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                  </div>
+                  <div v-if="property.type === 'string' && property.regex" class="property-row__extra regex-test">
+                    <input
+                      class="property-input property-input--sm"
+                      :value="getRegexTestValue(property.id)"
+                      placeholder="Тестовое значение..."
+                      @input="setRegexTestValue(property.id, ($event.target as HTMLInputElement).value)"
+                    >
+                    <span
+                      v-if="regexTestResult(property) !== null"
+                      class="regex-result"
+                      :class="regexTestResult(property) ? 'regex-result--pass' : 'regex-result--fail'"
+                    >
+                      <span class="material-symbols-outlined">
+                        {{ regexTestResult(property) ? 'check_circle' : 'cancel' }}
+                      </span>
+                      {{ regexTestResult(property) ? 'Совпадает' : 'Не совпадает' }}
+                    </span>
+                  </div>
+
+                  <div v-if="property.type === 'number'" class="property-row__extra">
+                    <input
+                      class="property-input property-input--sm"
+                      type="number"
+                      :value="property.min ?? ''"
+                      placeholder="min"
+                      @input="handleMinChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                    <input
+                      class="property-input property-input--sm"
+                      type="number"
+                      :value="property.max ?? ''"
+                      placeholder="max"
+                      @input="handleMaxChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                  </div>
+
+                  <div v-if="property.type === 'enum'" class="property-row__extra">
+                    <input
+                      class="property-input property-input--sm"
+                      :value="(property.enumValues || []).join(', ')"
+                      placeholder="val1, val2, val3"
+                      @change="updateEnumValues(property, ($event.target as HTMLInputElement).value)"
+                    >
+                  </div>
+                  <div v-if="property.type === 'enum' && property.required && (property.enumValues || []).length > 0" class="property-row__extra">
+                    <span class="property-row__label">По умолчанию</span>
+                    <select
+                      class="property-select"
+                      :value="property.enumDefault || ''"
+                      @change="handleEnumDefaultChange(property, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">— нет —</option>
+                      <option v-for="val in property.enumValues" :key="val" :value="val">{{ val }}</option>
+                    </select>
+                  </div>
+
+                  <div v-if="propertyErrors(property).length > 0" class="property-row__errors">
+                    <span v-for="(err, i) in propertyErrors(property)" :key="i" class="property-error">
+                      {{ err }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
       </div>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -492,7 +684,15 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   background: var(--surface);
+}
+
+.properties-panel__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .properties-panel__header {
@@ -521,6 +721,43 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+.properties-panel__size-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.properties-panel__size-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.properties-panel__size-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.properties-panel__size-btn:hover:not(:disabled) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.properties-panel__size-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .properties-panel__add-btn {
@@ -555,8 +792,10 @@ onBeforeUnmount(() => {
 
 .add-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: auto;
+  bottom: calc(100% + 6px);
   right: 0;
+  left: auto;
   min-width: 240px;
   max-width: 320px;
   max-height: 280px;
@@ -714,6 +953,151 @@ onBeforeUnmount(() => {
   background: rgba(220, 53, 69, 0.08);
 }
 
+.properties-panel__rules {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__rules-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.properties-panel__rules-chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.properties-panel__rules-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.properties-panel__rules-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.properties-panel__rules-empty {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.properties-panel__rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__custom {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__custom-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.properties-panel__custom-chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.properties-panel__custom-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.properties-panel__custom-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.properties-panel__rule-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  border: 1px solid transparent;
+}
+
+.properties-panel__rule-card:hover {
+  border-color: var(--border);
+}
+
+.properties-panel__rule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.properties-panel__rule-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--base-text);
+}
+
+.properties-panel__rule-remove {
+  opacity: 1;
+}
+
+.properties-panel__rule-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.properties-panel__rule-row-label {
+  width: 46px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.properties-panel__rule-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.properties-panel__rule-link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--base-text);
+  cursor: pointer;
+}
+
+.properties-panel__rule-link-item input {
+  accent-color: var(--primary);
+}
+
 .link-btn {
   background: none;
   border: none;
@@ -730,9 +1114,8 @@ onBeforeUnmount(() => {
 }
 
 .properties-panel__list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 12px;
+  overflow: visible;
+  padding: 8px 0 0;
   display: flex;
   flex-direction: column;
   gap: 6px;

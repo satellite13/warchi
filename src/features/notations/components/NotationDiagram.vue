@@ -27,6 +27,7 @@ const {
   initRenderer,
   destroyRenderer,
   fitToView,
+  autoLayoutComponents,
   resetView,
   interactionManagerRef,
   gridOverlayRef,
@@ -105,6 +106,7 @@ onBeforeUnmount(() => {
 
 defineExpose({
   fitToView,
+  autoLayoutComponents,
   resetView,
   interactionManagerRef,
   gridOverlayRef,

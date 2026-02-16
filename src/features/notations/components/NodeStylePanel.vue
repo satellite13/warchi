@@ -23,6 +23,14 @@ const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
 }>();
 
+type NodeShape =
+  | "rectangle"
+  | "beveled-rectangle"
+  | "diamond"
+  | "circle"
+  | "trapezoid"
+  | "slanted-rectangle";
+
 type IconPlacement =
   | "center"
   | "top"
@@ -36,6 +44,7 @@ type IconPlacement =
 
 function emitNodeStyle() {
   const style: DiagramStyle = {
+    nodeShape: nodeShape.value,
     fillColor: fillColor.value,
     fillOpacity: fillOpacity.value,
     strokeColor: strokeColor.value,
@@ -178,6 +187,7 @@ function confirmSavePreset() {
     selectedRelationPreset.value = name;
   } else {
     const style: import("../notationAttrs").DiagramStyle = {
+      nodeShape: nodeShape.value,
       fillColor: fillColor.value,
       fillOpacity: fillOpacity.value,
       strokeColor: strokeColor.value,
@@ -242,6 +252,9 @@ function applyComponentPreset(presetName: string) {
   const style = preset.style;
   
   // Update all node style refs (preserve current width/height if not in preset)
+  nodeShape.value = NODE_SHAPE_OPTIONS.some((option) => option.value === style.nodeShape)
+    ? (style.nodeShape as NodeShape)
+    : "rectangle";
   fillColor.value = style.fillColor ?? "#ffffff";
   fillOpacity.value = style.fillOpacity ?? 1;
   strokeColor.value = style.strokeColor ?? "#333333";
@@ -404,13 +417,22 @@ const AVAILABLE_ICONS = [
   "communication_network", "component_group", "component", "constraint",
   "contract", "course_of_action", "deliverable", "device",
   "distribution_network", "driver", "equipment", "event", "facility",
-  "function", "gap", "goal", "group", "hidden_rectangle", "interaction",
-  "interface", "material", "meaning", "node", "object", "octagon",
+  "function", "gap", "goal", "group", "grouping", "hidden_rectangle", "interaction",
+  "interface", "location", "material", "meaning", "node", "object", "octagon",
   "outcome", "path", "plateau", "principle", "process", "product",
   "rectangle", "representation", "requirement", "resource", "rhombus",
   "role", "rounded_rectangle", "service", "stakeholder", "system_software",
   "text", "value_stream", "value", "work_package"
 ] as const;
+
+const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; label: string }> = [
+  { value: "rectangle", label: "Прямоугольник" },
+  { value: "beveled-rectangle", label: "Прямоугольник с фаской" },
+  { value: "diamond", label: "Ромб" },
+  { value: "circle", label: "Круг" },
+  { value: "trapezoid", label: "Усеченная пирамида" },
+  { value: "slanted-rectangle", label: "Параллелограмм" }
+];
 
 // --- Node style state ---
 const iconName = ref("");
@@ -421,6 +443,7 @@ const iconPadding = ref(8);
 const iconMargin = ref(0);
 const iconStrokeColor = ref("#000000");
 const iconFillColor = ref("#000000");
+const nodeShape = ref<NodeShape>("rectangle");
 const label = ref("");
 const fillColor = ref("#ffffff");
 const fillOpacity = ref(1);
@@ -493,6 +516,26 @@ function loadNodeProps() {
   iconMargin.value = Number(iconOptions?.margin ?? 0);
   iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? "#000000";
   iconFillColor.value = (iconOptions?.fillColor as string) ?? "#000000";
+
+  const rawShape = (node as any).shapeType as NodeShape | undefined;
+  if (
+    rawShape === "rectangle" ||
+    rawShape === "beveled-rectangle" ||
+    rawShape === "diamond" ||
+    rawShape === "circle" ||
+    rawShape === "trapezoid" ||
+    rawShape === "slanted-rectangle"
+  ) {
+    nodeShape.value = rawShape;
+  } else {
+    const typeName = (node as any).typeName as string | undefined;
+    nodeShape.value =
+      typeName === "diamond"
+        ? "diamond"
+        : typeName === "circle"
+          ? "circle"
+          : "rectangle";
+  }
 
   label.value = node.label?.text ?? "";
   const style = node.style || {};
@@ -610,6 +653,13 @@ function handleIconChange(value: string) {
   iconName.value = value;
   resetComponentPreset();
   applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleNodeShapeChange(value: string) {
+  if (!NODE_SHAPE_OPTIONS.some((option) => option.value === value)) return;
+  nodeShape.value = value as NodeShape;
+  resetComponentPreset();
   emitNodeStyle();
 }
 
@@ -1628,6 +1678,23 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div class="style-row">
+        <label class="style-label">Базовая фигура</label>
+        <select
+          class="style-select"
+          :value="nodeShape"
+          @change="handleNodeShapeChange(($event.target as HTMLSelectElement).value)"
+        >
+          <option
+            v-for="shape in NODE_SHAPE_OPTIONS"
+            :key="shape.value"
+            :value="shape.value"
+          >
+            {{ shape.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="style-row">
         <label class="style-label">Ширина</label>
         <input
           type="number"
@@ -1870,7 +1937,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         >
       </div>
 
-      <div class="style-row">
+      <div v-if="nodeShape === 'rectangle'" class="style-row">
         <label class="style-label">Скругление</label>
         <input
           type="number"

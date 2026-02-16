@@ -65,6 +65,8 @@ export type DiagramStyle = {
   // Node dimensions
   width?: number;
   height?: number;
+  // Node base shape
+  nodeShape?: string;
 };
 
 type RawRecord = Record<string, unknown>;
@@ -186,6 +188,7 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.iconFillColor === "string") style.iconFillColor = value.iconFillColor;
   if (typeof value.width === "number") style.width = value.width;
   if (typeof value.height === "number") style.height = value.height;
+  if (typeof value.nodeShape === "string") style.nodeShape = value.nodeShape;
   return Object.keys(style).length ? style : undefined;
 };
 

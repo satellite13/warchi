@@ -3,6 +3,10 @@ import {
   DiagramRenderer,
   RectangleNode,
   CircleNode,
+  DiamondNode,
+  CustomShapeNode,
+  ShapeFactories,
+  Node as DiagramNode,
   Edge,
   AutoLayout,
   GridOverlay,
@@ -72,8 +76,91 @@ const GRID_SIZE = 20
 const NO_ANCHORS = { top: 0, right: 0, bottom: 0, left: 0 }
 const NOOP_RENDER_RESIZE_HANDLES = () => {}
 
-function disableTransformerFrame(node: RectangleNode | CircleNode) {
+type ComponentShape =
+  | "rectangle"
+  | "beveled-rectangle"
+  | "diamond"
+  | "circle"
+  | "trapezoid"
+  | "slanted-rectangle"
+
+function disableTransformerFrame(node: DiagramNode) {
   ;(node as any).renderResizeHandles = NOOP_RENDER_RESIZE_HANDLES
+}
+
+function getComponentShape(ds?: DiagramStyle): ComponentShape {
+  const shape = ds?.nodeShape as ComponentShape | undefined
+  switch (shape) {
+    case "beveled-rectangle":
+    case "diamond":
+    case "circle":
+    case "trapezoid":
+    case "slanted-rectangle":
+      return shape
+    default:
+      return "rectangle"
+  }
+}
+
+function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
+  return (node as any).typeName === "custom"
+}
+
+function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
+  if (node instanceof DiamondNode) return "diamond"
+  if (node instanceof CircleNode) return "circle"
+  if (isCustomShapeNode(node)) return ((node as any).shapeType as ComponentShape) ?? "rectangle"
+  return "rectangle"
+}
+
+function createBeveledRectanglePath(width: number, height: number): Path2D {
+  const path = new Path2D()
+  const cut = Math.min(width, height) * 0.16
+  path.moveTo(cut, 0)
+  path.lineTo(width - cut, 0)
+  path.lineTo(width, cut)
+  path.lineTo(width, height - cut)
+  path.lineTo(width - cut, height)
+  path.lineTo(cut, height)
+  path.lineTo(0, height - cut)
+  path.lineTo(0, cut)
+  path.closePath()
+  return path
+}
+
+function createTrapezoidPath(width: number, height: number): Path2D {
+  const path = new Path2D()
+  const topInset = width * 0.18
+  path.moveTo(topInset, 0)
+  path.lineTo(width - topInset, 0)
+  path.lineTo(width, height)
+  path.lineTo(0, height)
+  path.closePath()
+  return path
+}
+
+function normalizeTagForSort(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function getComponentTagsSortKey(component: EditorComponent): string {
+  const tags = (component.parsedAttrs.tags ?? [])
+    .map(normalizeTagForSort)
+    .filter((tag) => tag.length > 0)
+    .sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }))
+  return tags.join("|")
+}
+
+function compareComponentsForLayout(a: EditorComponent, b: EditorComponent): number {
+  const tagsDiff = getComponentTagsSortKey(a).localeCompare(getComponentTagsSortKey(b), "ru", {
+    sensitivity: "base"
+  })
+  if (tagsDiff !== 0) return tagsDiff
+
+  const nameDiff = a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
+  if (nameDiff !== 0) return nameDiff
+
+  return a.id.localeCompare(b.id, "ru", { sensitivity: "base" })
 }
 
 export function useNotationDiagram(options: NotationDiagramOptions) {
@@ -88,6 +175,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   const nodeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   const edgeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   let cleanupSelectionOutlineOverlay: (() => void) | null = null
+  let syncingRelationSelection = false
+  let syncingSelectionFromState = false
 
   function mergeStyle(base: ResolvedStyle, override?: NodeStyle): ResolvedStyle {
     return {
@@ -234,10 +323,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     item: EditorComponent,
     x: number,
     y: number
-  ): RectangleNode {
+  ): DiagramNode {
     const visual = resolveComponentStyle(item)
     const ds = item.parsedAttrs.diagramStyle
-    const node = new RectangleNode({
+    const shape = getComponentShape(ds)
+    const commonOptions = {
       id: `component-${item.id}`,
       x,
       y,
@@ -245,10 +335,36 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       height: visual.height,
       label: buildNodeLabel(item.name, ds),
       style: visual.style,
-      cornerRadius: visual.cornerRadius,
       anchorPoints: NO_ANCHORS,
       ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
-    })
+    }
+    let node: DiagramNode
+    if (shape === "diamond") {
+      node = new DiamondNode(commonOptions)
+    } else if (shape === "circle") {
+      node = new CircleNode(commonOptions)
+    } else if (shape === "beveled-rectangle") {
+      node = new CustomShapeNode({
+        ...commonOptions,
+        path: (w, h) => createBeveledRectanglePath(w, h)
+      })
+    } else if (shape === "trapezoid") {
+      node = new CustomShapeNode({
+        ...commonOptions,
+        path: (w, h) => createTrapezoidPath(w, h)
+      })
+    } else if (shape === "slanted-rectangle") {
+      node = new CustomShapeNode({
+        ...commonOptions,
+        path: (w, h) => ShapeFactories.parallelogram(w, h)
+      })
+    } else {
+      node = new RectangleNode({
+        ...commonOptions,
+        cornerRadius: visual.cornerRadius
+      })
+    }
+    ;(node as any).shapeType = shape
     if (ds?.labelPlacement) {
       (node as any).labelPlacement = ds.labelPlacement as LabelPlacement
     }
@@ -262,10 +378,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     nodeIdToEntity.clear()
     edgeIdToEntity.clear()
 
-    const componentNodes: RectangleNode[] = []
+    const componentNodes: DiagramNode[] = []
 
     // Filter out deleted items
     const activeComponents = state.value.components.filter((c) => !c._isDeleted)
+    const activeComponentsSorted = [...activeComponents].sort(compareComponentsForLayout)
     const activeRelations = state.value.relations.filter((r) => !r._isDeleted)
 
     // --- Components as rectangle nodes ---
@@ -276,11 +393,17 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
       const existing = renderer.getNode(nodeId)
       if (existing) {
-        if (existing instanceof RectangleNode || existing instanceof CircleNode) {
-          disableTransformerFrame(existing)
+        const ds = component.parsedAttrs.diagramStyle
+        const expectedShape = getComponentShape(ds)
+        const existingShape = getNodeShapeFromNode(existing)
+        if (expectedShape !== existingShape) {
+          const replacement = createComponentNode(component, existing.x, existing.y)
+          renderer.removeNode(nodeId)
+          renderer.addNode(replacement)
+          continue
         }
         const visual = resolveComponentStyle(component)
-        const ds = component.parsedAttrs.diagramStyle
+        disableTransformerFrame(existing)
         // Set label as string first (setter creates proper TextLabel), then apply style
         existing.label = component.name
         if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
@@ -305,7 +428,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
           ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         }
-        ;(existing as RectangleNode).cornerRadius = visual.cornerRadius
+        if (existing instanceof RectangleNode) {
+          existing.cornerRadius = visual.cornerRadius
+        }
         existing.icon = buildNodeIcon(ds)
         if (ds?.labelPlacement) {
           (existing as any).labelPlacement = ds.labelPlacement as LabelPlacement
@@ -334,9 +459,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const edgeStyle = resolveRelationStyle(relation)
 
       const existingSrc = renderer.getNode(srcId)
+      const existingTgt = renderer.getNode(tgtId)
       const existingEdge = renderer.getEdge(edgeId)
 
       if (existingSrc && existingEdge) {
+        disableTransformerFrame(existingSrc)
+        if (existingTgt) disableTransformerFrame(existingTgt)
         const ds = relation.parsedAttrs.diagramStyle
         // Set label as string first (setter creates proper TextLabel), then apply style
         existingEdge.label = relation.name
@@ -361,6 +489,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         }
         existingEdge.startMarker = buildMarker(ds?.startMarkerType, ds, "start")
         existingEdge.endMarker = buildMarker(ds?.endMarkerType, ds, "end")
+        existingEdge.arrowType = "none"
       } else {
         // Create new anchor pair + edge
         const srcNode = new CircleNode({
@@ -381,6 +510,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           style: ANCHOR_STYLE,
           anchorPoints: NO_ANCHORS
         })
+        disableTransformerFrame(srcNode)
+        disableTransformerFrame(tgtNode)
 
         newAnchorSources.push(srcNode)
 
@@ -413,7 +544,16 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const autoLayout = new AutoLayout()
       const startX = GRID_SIZE * 3
       const startY = GRID_SIZE * 3
-      autoLayout.applyGridLayout(componentNodes, {
+      const newComponentById = new Map(componentNodes.map((node) => [node.id, node]))
+      const componentNodesForLayout = activeComponentsSorted
+        .map((component) => {
+          const nodeId = `component-${component.id}`
+          const existing = renderer.getNode(nodeId)
+          return existing ?? newComponentById.get(nodeId) ?? null
+        })
+        .filter((node): node is DiagramNode => node !== null)
+
+      autoLayout.applyGridLayout(componentNodesForLayout, {
         columns: 2,
         columnGap: COLUMN_GAP,
         rowGap: ROW_GAP,
@@ -462,13 +602,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const edgeTypeVal = (ds?.edgeType as "straight" | "polyline" | "bezier") || "polyline"
         const startMarker = buildMarker(ds?.startMarkerType, ds, "start")
         const endMarker = buildMarker(ds?.endMarkerType, ds, "end")
-          ?? { type: "open" as const, size: 12 }
 
         const edge = new Edge({
           id: `relation-edge-${relationId}`,
           from: { nodeId: srcNode.id },
           to: { nodeId: tgtNode.id },
           type: edgeTypeVal,
+          arrowType: "none",
           label: buildEdgeLabel(relationName, ds),
           labelOffset: 18,
           labelBackground: buildEdgeLabelBackground(ds),
@@ -496,6 +636,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
   function updateSelection(renderer: DiagramRenderer, selectedEntityId?: string | null) {
     const id = selectedEntityId ?? selectedId.value
+    syncSelectionManagerFromEntityId(id)
     const activeComponents = state.value.components.filter((c) => !c._isDeleted)
 
     // Update node selection styles
@@ -545,6 +686,65 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     }
   }
 
+  function getRelationAnchorNodeIds(relationId: string): string[] {
+    const anchorIds: string[] = []
+    for (const [nodeId, entity] of nodeIdToEntity) {
+      if (
+        entity.kind === "relation" &&
+        entity.id === relationId &&
+        (nodeId.startsWith("relation-src-") || nodeId.startsWith("relation-tgt-"))
+      ) {
+        anchorIds.push(nodeId)
+      }
+    }
+    return anchorIds
+  }
+
+  function areSameIdSets(current: ReadonlySet<string>, target: string[]): boolean {
+    if (current.size !== target.length) return false
+    for (const id of target) {
+      if (!current.has(id)) return false
+    }
+    return true
+  }
+
+  function getSelectionElementIdsByEntityId(entityId: string): string[] {
+    const componentNodeId = `component-${entityId}`
+    if (nodeIdToEntity.has(componentNodeId)) {
+      return [componentNodeId]
+    }
+
+    const relationEdgeId = `relation-edge-${entityId}`
+    if (edgeIdToEntity.has(relationEdgeId)) {
+      return [relationEdgeId, ...getRelationAnchorNodeIds(entityId)]
+    }
+
+    return []
+  }
+
+  function syncSelectionManagerFromEntityId(entityId: string | null) {
+    const selectionManager = selectionManagerRef.value
+    if (!selectionManager) return
+
+    const targetIds = entityId ? getSelectionElementIdsByEntityId(entityId) : []
+    if (areSameIdSets(selectionManager.selectedIds, targetIds)) {
+      return
+    }
+
+    syncingSelectionFromState = true
+    try {
+      if (targetIds.length === 0) {
+        selectionManager.clearSelection()
+      } else if (targetIds.length === 1) {
+        selectionManager.select(targetIds[0]!)
+      } else {
+        selectionManager.selectMultiple(targetIds)
+      }
+    } finally {
+      syncingSelectionFromState = false
+    }
+  }
+
   function initRenderer(renderer: DiagramRenderer) {
     rendererRef.value = renderer
 
@@ -575,11 +775,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const selectedEntityId = selectedId.value
       if (!selectedEntityId) return
 
-      let selectedNode: RectangleNode | CircleNode | null = null
+      let selectedNode: DiagramNode | null = null
       for (const [nodeId, entity] of nodeIdToEntity) {
         if (entity.kind === "component" && entity.id === selectedEntityId) {
           const node = renderer.getNode(nodeId)
-          if (node instanceof RectangleNode || node instanceof CircleNode) {
+          if (node) {
             selectedNode = node
           }
           break
@@ -606,6 +806,14 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     })
 
     selectionManager.on("select", (elementIds: string[]) => {
+      if (syncingRelationSelection || syncingSelectionFromState) {
+        return
+      }
+      // SelectionManager.select() emits an intermediate empty selection before final id.
+      // Ignore this transient event to avoid restoring stale selection from state sync.
+      if (elementIds.length === 0) {
+        return
+      }
       if (elementIds.length === 1) {
         const elementId = elementIds[0]!
         // Check nodes first, then edges
@@ -617,6 +825,15 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         }
         const edgeEntity = edgeIdToEntity.get(elementId)
         if (edgeEntity) {
+          const relationAnchorIds = getRelationAnchorNodeIds(edgeEntity.id)
+          if (relationAnchorIds.length > 0) {
+            syncingRelationSelection = true
+            try {
+              selectionManager.selectMultiple(relationAnchorIds)
+            } finally {
+              syncingRelationSelection = false
+            }
+          }
           onSelect(edgeEntity.id, edgeEntity.kind)
           updateSelection(renderer, edgeEntity.id)
           return
@@ -644,6 +861,62 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
   function fitToView() {
     navigationManagerRef.value?.fitToView(50)
+  }
+
+  function autoLayoutComponents() {
+    const renderer = rendererRef.value
+    if (!renderer) return
+
+    const activeComponentsSorted = state.value.components
+      .filter((component) => !component._isDeleted)
+      .sort(compareComponentsForLayout)
+
+    const componentNodes = activeComponentsSorted
+      .map((component) => renderer.getNode(`component-${component.id}`))
+      .filter((node): node is DiagramNode => node !== undefined)
+
+    if (componentNodes.length === 0) return
+
+    const autoLayout = new AutoLayout()
+    autoLayout.applyGridLayout(componentNodes, {
+      columns: 2,
+      columnGap: COLUMN_GAP,
+      rowGap: ROW_GAP,
+      startX: GRID_SIZE * 3,
+      startY: GRID_SIZE * 3
+    })
+
+    // Re-layout relation anchor pairs to the right of components
+    const relationSourceNodes: CircleNode[] = []
+    for (const [nodeId, node] of renderer.nodes) {
+      const entity = nodeIdToEntity.get(nodeId)
+      if (entity?.kind === "relation" && nodeId.startsWith("relation-src-") && node instanceof CircleNode) {
+        relationSourceNodes.push(node)
+      }
+    }
+
+    if (relationSourceNodes.length > 0) {
+      const maxX = Math.max(...componentNodes.map((n) => n.x + n.width))
+      const startX = Math.ceil((maxX + COLUMN_GAP * 2) / GRID_SIZE) * GRID_SIZE
+      autoLayout.applyGridLayout(relationSourceNodes, {
+        columns: 1,
+        columnGap: COLUMN_GAP,
+        rowGap: ROW_GAP,
+        startX,
+        startY: GRID_SIZE * 3
+      })
+
+      for (const srcNode of relationSourceNodes) {
+        const relationId = srcNode.id.replace("relation-src-", "")
+        const tgtNode = renderer.getNode(`relation-tgt-${relationId}`)
+        if (tgtNode instanceof CircleNode) {
+          tgtNode.x = srcNode.x + ANCHOR_GAP
+          tgtNode.y = srcNode.y
+        }
+      }
+    }
+
+    renderer.markDirty()
   }
 
   function resetView() {
@@ -679,6 +952,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     initRenderer,
     destroyRenderer,
     fitToView,
+    autoLayoutComponents,
     resetView,
     getNodeEntity,
     getEdgeEntity

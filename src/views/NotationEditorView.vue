@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref, computed, onMounted, onBeforeUnmount} from "vue";
+import {ref, computed, watch, onMounted, onBeforeUnmount} from "vue";
 import {onBeforeRouteLeave, useRouter} from "vue-router";
 
 const router = useRouter();
@@ -16,7 +16,8 @@ import NodeStylePanel from "../features/notations/components/NodeStylePanel.vue"
 import {useNotationEditor} from "../features/notations/composables/useNotationEditor";
 import {useNotationEntity, appendTagValue} from "../features/notations/composables/useNotationEntity";
 import type {DiagramStyle} from "../features/notations/notationAttrs";
-import {serializeEntityAttrs, serializeTypeAttrs} from "../features/notations/notationAttrs";
+import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../features/notations/notationAttrs";
+import type {NotationEditorState, EditorNodeType, EditorLinkType, EditorComponent, EditorRelation} from "../features/notations/types";
 
 const {
   notation,
@@ -73,6 +74,20 @@ const NEW_TYPE_VALUE = "__new__";
 const diagramRef = ref<InstanceType<typeof NotationDiagram> | null>(null);
 
 const selectedEntityId = computed(() => selectedEntity.value?.id ?? null);
+const selectedItemTypeProperties = computed(() => {
+  const entity = selectedEntity.value;
+  if (!entity) return [];
+  if (entity.kind === "component") {
+    const item = state.value.components.find((c) => c.id === entity.id);
+    if (!item) return [];
+    const nodeType = state.value.nodeTypes.find((t) => t.id === item.nodeTypeId);
+    return nodeType?.parsedAttrs.customProperties ?? [];
+  }
+  const item = state.value.relations.find((r) => r.id === entity.id);
+  if (!item) return [];
+  const linkType = state.value.linkTypes.find((t) => t.id === item.linkTypeId);
+  return linkType?.parsedAttrs.customProperties ?? [];
+});
 
 // Compute the diagram element ID for the selected entity (for the style panel)
 // Components use node ID, relations use edge ID
@@ -93,9 +108,231 @@ const gridVisible = ref(true);
 const miniMapVisible = ref(true);
 const snapEnabled = ref(false);
 
+watch(interactionManager, (im) => {
+  if (!im) return;
+  // Keep interaction managers in sync with toolbar state.
+  im.drag.setSnapToGrid(snapEnabled.value);
+  im.resize.setSnapToGrid(snapEnabled.value);
+}, { immediate: true });
+
 // JSON attrs dialog
 const showAttrsJson = ref(false);
 const attrsJsonContent = ref("");
+const importNotationInputRef = ref<HTMLInputElement | null>(null);
+
+type NotationExportPayloadV1 = {
+  format: "warchi-notation-export";
+  version: 1;
+  exportedAt: string;
+  notation: {
+    id: string;
+    name: string;
+    version: string;
+  };
+  state: NotationEditorState;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toStringOr = (value: unknown, fallback: string): string =>
+  typeof value === "string" && value.trim().length > 0 ? value : fallback;
+
+const toObjectArray = (value: unknown): Record<string, unknown>[] =>
+  Array.isArray(value) ? value.filter(isRecord) : [];
+
+const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const sanitizeFileName = (value: string): string =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const exportNotation = () => {
+  const currentNotation = notation.value;
+  const fallbackNotationId = state.value.notationId || "notation";
+
+  const payload: NotationExportPayloadV1 = {
+    format: "warchi-notation-export",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    notation: {
+      id: currentNotation?.id ?? fallbackNotationId,
+      name: currentNotation?.name ?? "Notation",
+      version: currentNotation?.version ?? "1.0.0"
+    },
+    state: cloneJson(state.value)
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json;charset=utf-8"
+  });
+  const url = URL.createObjectURL(blob);
+  const fileNameBase = sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || "notation";
+  const fileName = `${fileNameBase}-export.json`;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const normalizeImportedState = (raw: unknown): NotationEditorState => {
+  const source = isRecord(raw) && isRecord(raw.state) ? raw.state : raw;
+  if (!isRecord(source)) {
+    throw new Error("Некорректный формат файла импорта");
+  }
+
+  const baseOwnerId = state.value.ownerId;
+  const baseNotationId = state.value.notationId;
+
+  const nodeTypeIdMap = new Map<string, string>();
+  const linkTypeIdMap = new Map<string, string>();
+
+  const nodeTypes: EditorNodeType[] = toObjectArray(source.nodeTypes).map((item) => {
+    const importedId = toStringOr(item.id, createId());
+    const id = createId();
+    nodeTypeIdMap.set(importedId, id);
+    return {
+      id,
+      name: toStringOr(item.name, "Новый тип узла"),
+      ownerId: toStringOr(item.ownerId, baseOwnerId),
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+      _isNew: true
+    };
+  });
+
+  const linkTypes: EditorLinkType[] = toObjectArray(source.linkTypes).map((item) => {
+    const importedId = toStringOr(item.id, createId());
+    const id = createId();
+    linkTypeIdMap.set(importedId, id);
+    return {
+      id,
+      name: toStringOr(item.name, "Новый тип связи"),
+      ownerId: toStringOr(item.ownerId, baseOwnerId),
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+      _isNew: true
+    };
+  });
+
+  if (nodeTypes.length === 0) {
+    nodeTypes.push({
+      id: createId(),
+      name: "Новый тип узла",
+      ownerId: baseOwnerId,
+      parsedAttrs: {},
+      _isNew: true
+    });
+  }
+  if (linkTypes.length === 0) {
+    linkTypes.push({
+      id: createId(),
+      name: "Новый тип связи",
+      ownerId: baseOwnerId,
+      parsedAttrs: {},
+      _isNew: true
+    });
+  }
+
+  const nodeTypeIds = new Set(nodeTypes.map((item) => item.id));
+  const linkTypeIds = new Set(linkTypes.map((item) => item.id));
+  const defaultNodeTypeId = nodeTypes[0]!.id;
+  const defaultLinkTypeId = linkTypes[0]!.id;
+
+  const components: EditorComponent[] = toObjectArray(source.components).map((item) => {
+    const importedNodeTypeId = toStringOr(item.nodeTypeId, defaultNodeTypeId);
+    const mappedNodeTypeId = nodeTypeIdMap.get(importedNodeTypeId) ?? importedNodeTypeId;
+    return {
+      id: createId(),
+      name: toStringOr(item.name, "Новый компонент"),
+      version: toStringOr(item.version, "1.0.0"),
+      notationId: baseNotationId,
+      ownerId: toStringOr(item.ownerId, baseOwnerId),
+      nodeTypeId: nodeTypeIds.has(mappedNodeTypeId) ? mappedNodeTypeId : defaultNodeTypeId,
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+      _isNew: true,
+      _isDirty: false,
+      _isDeleted: false
+    };
+  });
+
+  const relations: EditorRelation[] = toObjectArray(source.relations).map((item) => {
+    const importedLinkTypeId = toStringOr(item.linkTypeId, defaultLinkTypeId);
+    const mappedLinkTypeId = linkTypeIdMap.get(importedLinkTypeId) ?? importedLinkTypeId;
+    return {
+      id: createId(),
+      name: toStringOr(item.name, "Новая связь"),
+      version: toStringOr(item.version, "1.0.0"),
+      notationId: baseNotationId,
+      ownerId: toStringOr(item.ownerId, baseOwnerId),
+      linkTypeId: linkTypeIds.has(mappedLinkTypeId) ? mappedLinkTypeId : defaultLinkTypeId,
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+      _isNew: true,
+      _isDirty: false,
+      _isDeleted: false
+    };
+  });
+
+  return {
+    notationId: baseNotationId,
+    ownerId: baseOwnerId,
+    nodeTypes,
+    linkTypes,
+    components,
+    relations
+  };
+};
+
+const triggerNotationImport = () => {
+  const input = importNotationInputRef.value;
+  if (!input) return;
+  input.value = "";
+  const inputWithShowPicker = input as HTMLInputElement & { showPicker?: () => void };
+  if (typeof inputWithShowPicker.showPicker === "function") {
+    inputWithShowPicker.showPicker();
+    return;
+  }
+  input.click();
+};
+
+const resetImportInput = () => {
+  if (importNotationInputRef.value) {
+    importNotationInputRef.value.value = "";
+  }
+};
+
+const handleNotationImportChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text) as unknown;
+    state.value = normalizeImportedState(parsed);
+    saveError.value = null;
+    saveSuccess.value = false;
+  } catch (error) {
+    saveError.value =
+      error instanceof Error
+        ? `Ошибка импорта: ${error.message}`
+        : "Ошибка импорта: не удалось прочитать файл";
+  } finally {
+    resetImportInput();
+  }
+};
 
 const openAttrsJson = () => {
   const entity = selectedEntity.value;
@@ -243,6 +480,9 @@ const handleToolbarAction = async (event: string) => {
     case "zoom-selection":
       im?.zoomToSelection();
       break;
+    case "auto-layout-components":
+      diagramRef.value?.autoLayoutComponents();
+      break;
     case "reset-view":
       diagramRef.value?.resetView();
       break;
@@ -263,10 +503,17 @@ const handleToolbarAction = async (event: string) => {
     case "toggle-snap": {
       snapEnabled.value = !snapEnabled.value;
       im?.drag.setSnapToGrid(snapEnabled.value);
+      im?.resize.setSnapToGrid(snapEnabled.value);
       break;
     }
     case "show-attrs-json":
       openAttrsJson();
+      break;
+    case "export-notation":
+      exportNotation();
+      break;
+    case "import-notation":
+      triggerNotationImport();
       break;
   }
 };
@@ -322,6 +569,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <input
+    ref="importNotationInputRef"
+    class="notation-import-input"
+    type="file"
+    accept=".json,application/json"
+    @change="handleNotationImportChange"
+  >
   <MainLayout>
     <template #header>
       <NotationAppHeader
@@ -358,6 +612,7 @@ onBeforeUnmount(() => {
         <template #bottom>
           <CustomPropertiesPanel
             :selected-item="selectedItem"
+            :type-properties="selectedItemTypeProperties"
             :on-item-changed="handleItemChanged"
           />
         </template>
@@ -632,5 +887,15 @@ onBeforeUnmount(() => {
   max-height: 400px;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.notation-import-input {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 </style>

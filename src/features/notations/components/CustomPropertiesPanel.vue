@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {computed, reactive} from "vue";
+import {computed, reactive, ref, watch, onMounted, onBeforeUnmount} from "vue";
 import type {EditorComponent, EditorRelation} from "../types";
 import type {CustomProperty, CustomPropertyType} from "../notationAttrs";
 import {useCustomProperties} from "../composables/useCustomProperties";
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null;
+  typeProperties?: CustomProperty[];
   onItemChanged?: (id: string) => void;
 }>();
 
@@ -13,11 +14,71 @@ const selectedItemComputed = computed(() => props.selectedItem);
 
 const {
   addCustomProperty,
+  addCustomPropertyFromType,
   removeCustomProperty,
   updateEnumValues,
   parseNumberInput,
   propertyErrors
 } = useCustomProperties(selectedItemComputed, props.onItemChanged);
+
+const parseTagsInput = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    )
+  );
+
+const sameTags = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((tag, idx) => tag === b[idx]);
+
+const tagsDraft = ref("");
+const tagsExpanded = ref(false);
+
+watch(
+  () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join("|") ?? ""],
+  () => {
+    tagsDraft.value = props.selectedItem?.parsedAttrs.tags.join(", ") ?? "";
+  },
+  {immediate: true}
+);
+
+watch(
+  () => props.selectedItem?.id ?? null,
+  () => {
+    tagsExpanded.value = false;
+  }
+);
+
+const handleTagsInput = (value: string) => {
+  tagsDraft.value = value;
+};
+
+const toggleTagsCollapse = () => {
+  tagsExpanded.value = !tagsExpanded.value;
+};
+
+const applyTagsDraft = () => {
+  if (!props.selectedItem) return;
+  const nextTags = parseTagsInput(tagsDraft.value);
+  const currentTags = props.selectedItem.parsedAttrs.tags ?? [];
+  if (sameTags(currentTags, nextTags)) {
+    tagsDraft.value = currentTags.join(", ");
+    return;
+  }
+  props.selectedItem.parsedAttrs.tags = nextTags;
+  tagsDraft.value = nextTags.join(", ");
+  props.onItemChanged?.(props.selectedItem.id);
+};
+
+const removeTag = (tag: string) => {
+  if (!props.selectedItem) return;
+  props.selectedItem.parsedAttrs.tags = props.selectedItem.parsedAttrs.tags.filter((item) => item !== tag);
+  tagsDraft.value = props.selectedItem.parsedAttrs.tags.join(", ");
+  props.onItemChanged?.(props.selectedItem.id);
+};
 
 const typeOptions: { value: CustomPropertyType; label: string }[] = [
   {value: "string", label: "Строка"},
@@ -114,6 +175,78 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
     return null;
   }
 };
+
+const showAddMenu = ref(false);
+const addMenuRef = ref<HTMLElement | null>(null);
+
+const sameStringArray = (a?: string[], b?: string[]) => {
+  const aa = a ?? [];
+  const bb = b ?? [];
+  if (aa.length !== bb.length) return false;
+  return aa.every((value, idx) => value === bb[idx]);
+};
+
+const isEquivalentProperty = (a: CustomProperty, b: CustomProperty) =>
+  a.name === b.name &&
+  a.type === b.type &&
+  a.required === b.required &&
+  (a.regex ?? "") === (b.regex ?? "") &&
+  a.min === b.min &&
+  a.max === b.max &&
+  (a.maxLength ?? null) === (b.maxLength ?? null) &&
+  sameStringArray(a.enumValues, b.enumValues) &&
+  (a.enumDefault ?? "") === (b.enumDefault ?? "");
+
+const isEquivalentToTypeProperty = (property: CustomProperty) => {
+  const typeProps = props.typeProperties ?? [];
+  return typeProps.some((typeProp) => isEquivalentProperty(property, typeProp));
+};
+
+const missingTypeProperties = computed(() => {
+  if (!props.selectedItem) return [];
+  const current = props.selectedItem.parsedAttrs.customProperties;
+  const typeProps = props.typeProperties ?? [];
+  return typeProps.filter((typeProp) => !current.some((prop) => isEquivalentProperty(prop, typeProp)));
+});
+
+const toggleAddMenu = () => {
+  showAddMenu.value = !showAddMenu.value;
+};
+
+const addNewProperty = () => {
+  addCustomProperty();
+  showAddMenu.value = false;
+};
+
+const addMissingTypeProperty = (property: CustomProperty) => {
+  addCustomPropertyFromType(property);
+  showAddMenu.value = false;
+};
+
+const closeAddMenuOnOutsideClick = (event: MouseEvent) => {
+  if (!showAddMenu.value) return;
+  const target = event.target as Node | null;
+  if (!target) return;
+  if (!addMenuRef.value?.contains(target)) {
+    showAddMenu.value = false;
+  }
+};
+
+const closeAddMenuOnEscape = (event: KeyboardEvent) => {
+  if (event.key === "Escape") {
+    showAddMenu.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener("mousedown", closeAddMenuOnOutsideClick);
+  document.addEventListener("keydown", closeAddMenuOnEscape);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("mousedown", closeAddMenuOnOutsideClick);
+  document.removeEventListener("keydown", closeAddMenuOnEscape);
+});
 </script>
 
 <template>
@@ -121,30 +254,93 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
     <div class="properties-panel__header">
       <h3 class="properties-panel__title">Свойства</h3>
       <span v-if="selectedItem" class="properties-panel__entity-name">{{ selectedItem.name }}</span>
-      <button
-        v-if="selectedItem"
-        type="button"
-        class="properties-panel__add-btn"
-        title="Добавить свойство"
-        @click="addCustomProperty"
-      >
-        <span class="material-symbols-outlined">add</span>
-      </button>
+      <div v-if="selectedItem" ref="addMenuRef" class="properties-panel__add-wrapper">
+        <button
+          type="button"
+          class="properties-panel__add-btn"
+          title="Добавить свойство"
+          @click="toggleAddMenu"
+        >
+          <span class="material-symbols-outlined">add</span>
+        </button>
+        <div v-if="showAddMenu" class="add-menu">
+          <button type="button" class="add-menu__item" @click="addNewProperty">
+            <span class="material-symbols-outlined">note_add</span>
+            Новое свойство
+          </button>
+          <div class="add-menu__divider"></div>
+          <div class="add-menu__section-title">Недостающие из типа</div>
+          <button
+            v-for="prop in missingTypeProperties"
+            :key="`missing-${prop.name}-${prop.type}`"
+            type="button"
+            class="add-menu__item"
+            @click="addMissingTypeProperty(prop)"
+          >
+            <span class="material-symbols-outlined">linked_services</span>
+            {{ prop.name }} ({{ typeLabel(prop.type) }})
+          </button>
+          <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">
+            Нет недостающих свойств
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-if="!selectedItem" class="properties-panel__empty">
       Выберите элемент для редактирования свойств
     </div>
 
-    <div
-      v-else-if="selectedItem.parsedAttrs.customProperties.length === 0"
-      class="properties-panel__empty"
-    >
-      Нет свойств.
-      <button type="button" class="link-btn" @click="addCustomProperty">Добавить</button>
-    </div>
+    <template v-else>
+      <div class="properties-panel__tags">
+        <div
+          class="properties-panel__tags-header"
+          role="button"
+          tabindex="0"
+          @click="toggleTagsCollapse"
+          @keydown.enter.prevent="toggleTagsCollapse"
+          @keydown.space.prevent="toggleTagsCollapse"
+        >
+          <span
+            class="material-symbols-outlined properties-panel__tags-chevron"
+            :class="{ 'properties-panel__tags-chevron--collapsed': !tagsExpanded }"
+          >expand_more</span>
+          <label class="properties-panel__tags-label" for="entity-tags-input">Теги</label>
+        </div>
+        <template v-if="tagsExpanded">
+          <input
+            id="entity-tags-input"
+            class="properties-panel__tags-input"
+            :value="tagsDraft"
+            placeholder="tag1, tag2"
+            @input="handleTagsInput(($event.target as HTMLInputElement).value)"
+            @blur="applyTagsDraft"
+            @keydown.enter.prevent="applyTagsDraft"
+          >
+          <div v-if="selectedItem.parsedAttrs.tags.length > 0" class="properties-panel__tags-list">
+            <button
+              v-for="tag in selectedItem.parsedAttrs.tags"
+              :key="`tag-${tag}`"
+              type="button"
+              class="properties-panel__tag-chip"
+              @click="removeTag(tag)"
+            >
+              {{ tag }}
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+        </template>
+      </div>
 
-    <div v-else class="properties-panel__list">
+      <div
+        v-if="selectedItem.parsedAttrs.customProperties.length === 0"
+        class="properties-panel__empty"
+      >
+        Нет свойств.
+        <button type="button" class="link-btn" @click="toggleAddMenu">Добавить</button>
+      </div>
+
+      <div v-else class="properties-panel__list">
       <div
         v-for="property in selectedItem.parsedAttrs.customProperties"
         :key="property.id"
@@ -158,7 +354,11 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
           >expand_more</span>
           <span class="property-row__name">{{ property.name || 'Без имени' }}</span>
           <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
-          <span v-if="property._fromType" class="property-row__from-type-badge" title="Унаследовано от типа">
+          <span
+            v-if="property._fromType || isEquivalentToTypeProperty(property)"
+            class="property-row__from-type-badge"
+            title="Унаследовано от типа"
+          >
             <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
             Тип
           </span>
@@ -281,7 +481,8 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
           </div>
         </template>
       </div>
-    </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -347,11 +548,170 @@ const regexTestResult = (property: CustomProperty): null | boolean => {
   color: var(--primary);
 }
 
+.properties-panel__add-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.add-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  z-index: 20;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.add-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--base-text);
+  border-radius: 6px;
+  padding: 7px 8px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.add-menu__item:hover {
+  background: var(--surface-strong);
+}
+
+.add-menu__item .material-symbols-outlined {
+  font-size: 16px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.add-menu__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
+}
+
+.add-menu__section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  padding: 2px 8px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.add-menu__empty {
+  font-size: 12px;
+  color: var(--text-subtle);
+  padding: 6px 8px 8px;
+}
+
 .properties-panel__empty {
   padding: 24px 16px;
   text-align: center;
   font-size: 13px;
   color: var(--text-subtle);
+}
+
+.properties-panel__tags {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__tags-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.properties-panel__tags-chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.properties-panel__tags-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.properties-panel__tags-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: inherit;
+}
+
+.properties-panel__tags-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.properties-panel__tags-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
+  background: var(--surface);
+}
+
+.properties-panel__tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.properties-panel__tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.properties-panel__tag-chip .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.properties-panel__tag-chip:hover {
+  color: var(--danger);
+  border-color: rgba(220, 53, 69, 0.35);
+  background: rgba(220, 53, 69, 0.08);
 }
 
 .link-btn {

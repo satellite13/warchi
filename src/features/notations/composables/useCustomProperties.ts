@@ -5,6 +5,7 @@ import type { EditorComponent, EditorRelation } from "../types"
 export interface CustomPropertiesReturn {
   hasValidationErrors: ComputedRef<boolean>
   addCustomProperty: () => void
+  addCustomPropertyFromType: (typeProperty: CustomProperty) => void
   removeCustomProperty: (id: string) => void
   updateEnumValues: (property: CustomProperty, value: string) => void
   parseNumberInput: (value: string) => number | null
@@ -91,6 +92,22 @@ export function useCustomProperties(
     }
   }
 
+  const addCustomPropertyFromType = (typeProperty: CustomProperty) => {
+    if (!selectedItem.value) {
+      return
+    }
+    const property: CustomProperty = {
+      ...typeProperty,
+      id: createId(),
+      enumValues: typeProperty.enumValues ? [...typeProperty.enumValues] : [],
+      _fromType: true
+    }
+    selectedItem.value.parsedAttrs.customProperties.push(property)
+    if (onItemChanged) {
+      onItemChanged(selectedItem.value.id)
+    }
+  }
+
   const updateEnumValues = (property: CustomProperty, value: string) => {
     property.enumValues = value
       .split(",")
@@ -112,6 +129,7 @@ export function useCustomProperties(
   return {
     hasValidationErrors,
     addCustomProperty,
+    addCustomPropertyFromType,
     removeCustomProperty,
     updateEnumValues,
     parseNumberInput,

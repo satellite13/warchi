@@ -14,6 +14,7 @@ const emit = defineEmits<{
   select: [id: string, kind: EntityKind];
 }>();
 
+const containerRef = ref<HTMLDivElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const canvasWidth = ref(800);
 const canvasHeight = ref(600);
@@ -41,9 +42,9 @@ const {
 });
 
 function updateSize() {
-  if (canvasRef.value) {
-    const newWidth = canvasRef.value.clientWidth || 800;
-    const newHeight = canvasRef.value.clientHeight || 600;
+  if (containerRef.value) {
+    const newWidth = containerRef.value.clientWidth || 800;
+    const newHeight = containerRef.value.clientHeight || 600;
 
     if (newWidth !== canvasWidth.value || newHeight !== canvasHeight.value) {
       canvasWidth.value = newWidth;
@@ -58,15 +59,15 @@ function updateSize() {
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
-  if (!canvasRef.value) {
+  if (!canvasRef.value || !containerRef.value) {
     return;
   }
 
   const initCanvas = () => {
-    if (!canvasRef.value) return;
+    if (!canvasRef.value || !containerRef.value) return;
 
-    const width = canvasRef.value.clientWidth;
-    const height = canvasRef.value.clientHeight;
+    const width = containerRef.value.clientWidth;
+    const height = containerRef.value.clientHeight;
 
     if (width === 0 || height === 0) {
       window.requestAnimationFrame(initCanvas);
@@ -88,7 +89,7 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       updateSize();
     });
-    resizeObserver.observe(canvasRef.value);
+    resizeObserver.observe(containerRef.value);
   };
 
   initCanvas();
@@ -117,7 +118,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="notation-diagram">
+  <div ref="containerRef" class="notation-diagram">
     <canvas
       ref="canvasRef"
       class="diagram-canvas"

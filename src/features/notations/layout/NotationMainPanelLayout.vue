@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount } from "vue"
+import { ref, watch, onMounted, onBeforeUnmount } from "vue"
 
 const props = withDefaults(defineProps<{
   propertiesHeight?: number
@@ -13,12 +13,32 @@ const emit = defineEmits<{
 
 const MIN_HEIGHT = 180
 const MAX_HEIGHT = 520
+const MIN_DIAGRAM_HEIGHT = 180
+const RESIZER_HEIGHT = 10
 let dragStartY = 0
 let dragStartHeight = 240
 let dragging = false
+const centerRef = ref<HTMLElement | null>(null)
+let centerResizeObserver: ResizeObserver | null = null
+
+function getDynamicMaxHeight(): number {
+  const centerHeight = centerRef.value?.clientHeight ?? 0
+  if (centerHeight <= 0) return MAX_HEIGHT
+  const byAvailableSpace = centerHeight - MIN_DIAGRAM_HEIGHT - RESIZER_HEIGHT
+  return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, byAvailableSpace))
+}
 
 function clampHeight(value: number): number {
-  return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, value))
+  const dynamicMaxHeight = getDynamicMaxHeight()
+  return Math.max(MIN_HEIGHT, Math.min(dynamicMaxHeight, value))
+}
+
+function enforceHeightBounds() {
+  const current = props.propertiesHeight ?? 240
+  const clamped = clampHeight(current)
+  if (clamped !== current) {
+    emit("update:propertiesHeight", clamped)
+  }
 }
 
 function onMouseMove(event: MouseEvent) {
@@ -43,8 +63,29 @@ function startDragging(event: MouseEvent) {
   window.addEventListener("mouseup", stopDragging)
 }
 
+onMounted(() => {
+  enforceHeightBounds()
+  if (centerRef.value) {
+    centerResizeObserver = new ResizeObserver(() => {
+      enforceHeightBounds()
+    })
+    centerResizeObserver.observe(centerRef.value)
+  }
+})
+
+watch(
+  () => props.propertiesHeight,
+  () => {
+    enforceHeightBounds()
+  }
+)
+
 onBeforeUnmount(() => {
   stopDragging()
+  if (centerResizeObserver) {
+    centerResizeObserver.disconnect()
+    centerResizeObserver = null
+  }
 })
 </script>
 
@@ -53,7 +94,7 @@ onBeforeUnmount(() => {
     <aside class="notation-panel__left">
       <slot name="left" />
     </aside>
-    <section class="notation-panel__center">
+    <section ref="centerRef" class="notation-panel__center">
       <div class="notation-panel__diagram">
         <slot />
       </div>

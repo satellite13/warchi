@@ -13,13 +13,16 @@ import {RouterLink} from "vue-router";
     <RouterLink to="/notations" class="app-nav__link" active-class="app-nav__link--active">
       <span class="material-symbols-outlined" title="Нотации">graph_3</span>Нотации
     </RouterLink>
+    <RouterLink to="/types" class="app-nav__link" active-class="app-nav__link--active">
+      <span class="material-symbols-outlined" title="Типы">category</span>Типы
+    </RouterLink>
   </nav>
 </template>
 
 <style scoped>
 .app-nav {
   display: flex;
-  gap: 16px;
+  gap: 4px;
 }
 
 .app-nav__link {
@@ -27,21 +30,30 @@ import {RouterLink} from "vue-router";
   color: var(--text-muted);
   font-weight: 500;
   font-size: 14px;
-  padding: 8px 4px;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s ease, border-color 0.2s ease;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s ease, background 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.app-nav__link .material-symbols-outlined {
+  font-size: 20px;
 }
 
 .app-nav__link:hover {
-  color: var(--primary);
+  color: var(--base-text);
+  background: var(--surface-strong);
 }
 
 .app-nav__link--active {
   color: var(--primary);
-  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
+.app-nav__link--active:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
 </style>

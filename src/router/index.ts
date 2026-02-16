@@ -26,6 +26,11 @@ const router = createRouter({
       component: () => import("../views/NotationsView.vue")
     },
     {
+      path: "/types",
+      name: "types",
+      component: () => import("../views/TypesView.vue")
+    },
+    {
       path: "/notations/:id",
       name: "notation-editor",
       component: () => import("../views/NotationEditorView.vue")

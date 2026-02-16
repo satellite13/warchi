@@ -127,7 +127,7 @@ const emit = defineEmits<{
 .modal-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .modal-label {
@@ -135,54 +135,78 @@ const emit = defineEmits<{
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  color: #5f6368;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .modal-label input,
 .modal-label select {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #dfe1e5;
-  font-size: 13px;
-  color: #1f1f1f;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--base-text);
+  background: var(--surface-muted);
   box-sizing: border-box;
-  height: 36px;
+  height: 40px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  text-transform: none;
+}
+
+.modal-label input:focus,
+.modal-label select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
+  background: var(--surface);
+}
+
+.modal-label input::placeholder {
+  color: var(--text-subtle);
 }
 
 .form-error {
   padding: 12px 16px;
-  background: #fdecea;
-  color: #b3261e;
-  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  border: 1px solid rgba(220, 53, 69, 0.15);
+  text-transform: none;
 }
 
 .btn {
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
-  border-radius: 6px;
+  font-family: inherit;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  letter-spacing: 0.01em;
 }
 
 .btn--secondary {
-  color: #5f6368;
+  color: var(--text-muted);
   background: transparent;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border);
 }
 
 .btn--secondary:hover {
-  background: #f8f9fa;
+  background: var(--surface-strong);
+  color: var(--base-text);
 }
 
 .btn--primary {
   color: #fff;
-  background: #1a73e8;
+  background: var(--primary);
   border: none;
 }
 
 .btn--primary:hover {
-  background: #1557b0;
+  background: var(--primary-hover);
 }
 </style>

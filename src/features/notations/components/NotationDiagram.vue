@@ -23,7 +23,17 @@ const selectedIdRef = toRef(props, "selectedId");
 
 let renderer: DiagramRenderer | null = null;
 
-const { initRenderer, destroyRenderer, fitToView, resetView } = useNotationDiagram({
+const {
+  initRenderer,
+  destroyRenderer,
+  fitToView,
+  resetView,
+  interactionManagerRef,
+  gridOverlayRef,
+  miniMapRef,
+  rendererRef: diagramRendererRef,
+  getNodeEntity
+} = useNotationDiagram({
   state: stateRef,
   selectedId: selectedIdRef,
   onSelect: (id, kind) => emit("select", id, kind)
@@ -68,7 +78,7 @@ onMounted(() => {
     const options: DiagramOptions = {
       width,
       height,
-      backgroundColor: "#fafafa"
+      backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || "#f4f2ef"
     };
 
     renderer = new DiagramRenderer(canvasRef.value, options);
@@ -95,102 +105,28 @@ onBeforeUnmount(() => {
 
 defineExpose({
   fitToView,
-  resetView
+  resetView,
+  interactionManagerRef,
+  gridOverlayRef,
+  miniMapRef,
+  rendererRef: diagramRendererRef,
+  getNodeEntity
 });
 </script>
 
 <template>
-  <div class="notation-diagram-wrapper">
-    <div class="diagram-toolbar">
-      <button
-        type="button"
-        class="toolbar-button"
-        title="Вписать в экран"
-        @click="fitToView"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="toolbar-button"
-        title="Сбросить масштаб"
-        @click="resetView"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-        </svg>
-      </button>
-    </div>
-    <div class="notation-diagram">
-      <canvas
-        ref="canvasRef"
-        class="diagram-canvas"
-      />
-    </div>
+  <div class="notation-diagram">
+    <canvas
+      ref="canvasRef"
+      class="diagram-canvas"
+    />
   </div>
 </template>
 
 <style scoped>
-.notation-diagram-wrapper {
-  display: flex;
-  flex-direction: column;
+.notation-diagram {
   width: 100%;
   height: 100%;
-  overflow: hidden;
-}
-
-.diagram-toolbar {
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.toolbar-button {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-.toolbar-button:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
-.toolbar-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.notation-diagram {
-  flex: 1;
   overflow: hidden;
   position: relative;
 }

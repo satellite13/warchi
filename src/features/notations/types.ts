@@ -4,7 +4,7 @@ import type {
   ComponentResponse,
   RelationResponse
 } from '../../types/api'
-import type { CustomProperty, NodeStyle } from './notationAttrs'
+import type { CustomProperty, DiagramStyle, NodeStyle } from './notationAttrs'
 
 // Parsed attrs for node/link types
 export interface TypeParsedAttrs {
@@ -12,12 +12,14 @@ export interface TypeParsedAttrs {
   width?: number
   height?: number
   cornerRadius?: number
+  customProperties?: CustomProperty[]
 }
 
 // Parsed attrs for components/relations
 export interface EntityParsedAttrs {
   tags: string[]
   customProperties: CustomProperty[]
+  diagramStyle?: DiagramStyle
 }
 
 // Editor state types with parsed attrs and change tracking flags

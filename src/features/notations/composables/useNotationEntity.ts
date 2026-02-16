@@ -1,5 +1,5 @@
 import { computed, ref, type Ref, type ComputedRef } from "vue"
-import { createId } from "../notationAttrs"
+import { createId, type CustomProperty } from "../notationAttrs"
 import type {
   NotationEditorState,
   EditorNodeType,
@@ -82,6 +82,14 @@ export const appendTagValue = (current: string, tag: string): string => {
   unique.add(tag)
   return `${Array.from(unique).join(", ")}${unique.size ? ", " : ""}`
 }
+
+const copyTypeProperties = (source: CustomProperty[]): CustomProperty[] =>
+  source.map((p) => ({
+    ...p,
+    id: createId(),
+    enumValues: p.enumValues ? [...p.enumValues] : [],
+    _fromType: true
+  }))
 
 const typeNameById = (
   items: (EditorNodeType | EditorLinkType)[],
@@ -303,6 +311,9 @@ export function useNotationEntity(
       }
     }
 
+    const nodeType = state.value.nodeTypes.find((t) => t.id === nodeTypeId)
+    const typeProps = nodeType?.parsedAttrs.customProperties ?? []
+
     const component: EditorComponent = {
       id: createId(),
       name,
@@ -312,7 +323,7 @@ export function useNotationEntity(
       nodeTypeId,
       parsedAttrs: {
         tags: parseTagsInput(componentTags.value),
-        customProperties: []
+        customProperties: copyTypeProperties(typeProps)
       },
       _isNew: true
     }
@@ -355,6 +366,9 @@ export function useNotationEntity(
       }
     }
 
+    const linkType = state.value.linkTypes.find((t) => t.id === linkTypeId)
+    const typeProps = linkType?.parsedAttrs.customProperties ?? []
+
     const relation: EditorRelation = {
       id: createId(),
       name,
@@ -364,7 +378,7 @@ export function useNotationEntity(
       linkTypeId,
       parsedAttrs: {
         tags: parseTagsInput(relationTags.value),
-        customProperties: []
+        customProperties: copyTypeProperties(typeProps)
       },
       _isNew: true
     }

@@ -26,23 +26,25 @@ const emit = defineEmits<{
 .tag-suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: -4px;
+  gap: 6px;
+  margin-top: -6px;
 }
 
 .tag-suggestion {
-  border: 1px solid #dfe1e5;
-  background: #f8f9fb;
-  color: #4a4d52;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text-muted);
   padding: 4px 10px;
   border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
+  font-family: inherit;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .tag-suggestion:hover {
-  border-color: #1a73e8;
-  color: #1a73e8;
-  background: rgba(26, 115, 232, 0.08);
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
 }
 </style>

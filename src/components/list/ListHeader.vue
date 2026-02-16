@@ -38,11 +38,12 @@ defineProps<{
   display: inline-flex;
   align-items: center;
   margin-top: 0;
-  padding: 4px 12px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--primary);
   background: var(--primary-soft);
-  border-radius: 16px;
+  border-radius: 20px;
+  font-variant-numeric: tabular-nums;
 }
 </style>

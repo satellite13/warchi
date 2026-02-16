@@ -18,14 +18,14 @@ const emit = defineEmits<{
 }>();
 
 const gradientColors = [
-  "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-  "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-  "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-  "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
-  "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
-  "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
-  "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
-  "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)"
+  "linear-gradient(135deg, #7c5cfc 0%, #b06cff 100%)",
+  "linear-gradient(135deg, #45e0b8 0%, #7c5cfc 100%)",
+  "linear-gradient(135deg, #f472b6 0%, #ec4899 100%)",
+  "linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)",
+  "linear-gradient(135deg, #fb923c 0%, #f472b6 100%)",
+  "linear-gradient(135deg, #34d399 0%, #38bdf8 100%)",
+  "linear-gradient(135deg, #fbbf24 0%, #fb923c 100%)",
+  "linear-gradient(135deg, #a78bfa 0%, #f472b6 100%)"
 ];
 
 const cardColor = computed(() => {
@@ -101,24 +101,35 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card:hover {
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
   transform: translateY(-4px);
   border-color: var(--border-strong);
 }
 
 .model-card__gradient {
   height: 82px;
-  margin: -5px -6px 0;
+  margin: -1px -1px 0;
   display: flex;
   align-items: center;
   justify-content: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.model-card__gradient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.15) 100%);
 }
 
 .model-card__icon {
   color: rgba(255, 255, 255, 0.9);
   font-size: 36px;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
   margin-left: 30px;
+  position: relative;
+  z-index: 1;
 }
 
 .model-card__body {
@@ -161,6 +172,7 @@ const formattedUpdatedAt = computed(() => {
   font-size: 16px;
   color: var(--base-text);
   line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
 .model-card__version {
@@ -178,6 +190,7 @@ const formattedUpdatedAt = computed(() => {
   color: var(--text-muted);
   background: var(--surface-strong);
   border-radius: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .model-card__select {
@@ -194,12 +207,13 @@ const formattedUpdatedAt = computed(() => {
 
 .model-card__select select {
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-muted);
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-size: 12px;
   color: var(--base-text);
   cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
 
 .model-card__owner {

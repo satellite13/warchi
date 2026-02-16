@@ -20,7 +20,7 @@ const initials = computed(() => {
 </script>
 
 <template>
-  <span :class="['avatar', `avatar--${size || 'md'}`]">
+  <span :class="['avatar', `avatar--${size || 'md'}`]" :title="email">
     {{ initials }}
   </span>
 </template>
@@ -32,25 +32,27 @@ const initials = computed(() => {
   justify-content: center;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #7c5cfc 0%, #2bb896 100%);
   border-radius: 50%;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
 .avatar--sm {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   font-size: 10px;
 }
 
 .avatar--md {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   font-size: 12px;
 }
 
 .avatar--lg {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   font-size: 14px;
 }
 </style>

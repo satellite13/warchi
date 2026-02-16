@@ -23,35 +23,38 @@ const clear = () => {
 <style scoped>
 .search-box {
   position: relative;
-  max-width: 320px;
+  max-width: 360px;
 }
 
 .search-icon {
   position: absolute;
-  left: 10px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-subtle);
   pointer-events: none;
   transition: color 0.2s ease;
+  font-size: 20px;
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 38px 10px 40px;
+  padding: 10px 38px 10px 42px;
   font-size: 14px;
+  font-family: inherit;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  background: var(--surface);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  background: var(--surface-muted);
   color: var(--base-text);
 }
 
 .search-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
+  background: var(--surface);
 }
 
 .search-box:focus-within .search-icon {

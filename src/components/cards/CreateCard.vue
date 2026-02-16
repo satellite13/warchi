@@ -27,53 +27,45 @@ const emit = defineEmits<{
   align-items: center;
   width: 260px;
   min-height: 200px;
-  border: 2px dashed var(--border-strong);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
-  background: linear-gradient(135deg, var(--surface-muted) 0%, var(--primary-soft) 100%);
+  background: var(--surface-muted);
   cursor: pointer;
   transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .create-card:hover {
   border-color: var(--primary);
-  background: linear-gradient(135deg, var(--primary-soft) 0%, #dbe6ff 100%);
+  background: var(--primary-soft);
   transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
 }
 
 .create-card__icon {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 12px;
-  background: var(--primary-soft);
+  background: var(--surface-strong);
   border-radius: 50%;
   transition: background 0.25s ease, transform 0.25s ease;
+  color: var(--primary);
 }
 
 .create-card:hover .create-card__icon {
   background: var(--primary);
   transform: scale(1.1);
-}
-
-.create-card__icon svg {
-  width: 28px;
-  height: 28px;
-  color: var(--primary);
-  transition: color 0.25s ease;
-}
-
-.create-card:hover .create-card__icon svg {
   color: #fff;
 }
 
 .create-card__title {
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--base-text);
   text-align: center;
+  letter-spacing: -0.01em;
 }
 
 .create-card__description {

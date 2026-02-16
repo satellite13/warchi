@@ -30,7 +30,7 @@ defineProps<{
 .skeleton-gradient {
   height: 82px;
   margin: -1px -1px 0;
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background: linear-gradient(90deg, var(--surface-muted) 25%, var(--surface-strong) 50%, var(--surface-muted) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -44,9 +44,9 @@ defineProps<{
 
 .skeleton-line {
   height: 14px;
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background: linear-gradient(90deg, var(--surface-muted) 25%, var(--surface-strong) 50%, var(--surface-muted) 75%);
   background-size: 200% 100%;
-  border-radius: 4px;
+  border-radius: 6px;
   animation: shimmer 1.5s infinite;
 }
 

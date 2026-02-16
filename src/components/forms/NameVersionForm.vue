@@ -40,29 +40,38 @@ defineProps<{
 }
 
 .form-field label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--base-text);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .form-field input {
   padding: 12px 16px;
-  font-size: 16px;
+  font-size: 15px;
+  font-family: inherit;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  background: var(--surface);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  background: var(--surface-muted);
   color: var(--base-text);
 }
 
 .form-field input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
+  background: var(--surface);
+}
+
+.form-field input::placeholder {
+  color: var(--text-subtle);
 }
 
 .form-field input:disabled {
   background: var(--surface-strong);
-  color: var(--text-muted);
+  color: var(--text-subtle);
+  cursor: not-allowed;
 }
 </style>

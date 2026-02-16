@@ -35,13 +35,14 @@ const handleLogout = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 10px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: var(--shadow-sm);
 }
 
 .material-symbols-outlined {
@@ -51,32 +52,35 @@ const handleLogout = () => {
 .app-header__left {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 32px;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .user-email {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
+  letter-spacing: 0.01em;
 }
 
 .logout-button {
-  padding: 4px 8px;
+  padding: 6px 8px;
   font-size: large;
   font-weight: 100;
-  color: var(--text-muted);
+  color: var(--text-subtle);
   background: transparent;
   border: none;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .logout-button:hover {
-  color: var(--primary-hover);
+  color: var(--base-text);
+  background: var(--surface-strong);
 }
 </style>

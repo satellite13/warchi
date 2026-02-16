@@ -52,10 +52,15 @@ const emit = defineEmits<{
 <style scoped>
 .delete-modal p {
   margin: 0 0 12px;
+  color: var(--text-muted);
+}
+
+.delete-modal strong {
+  color: var(--base-text);
 }
 
 .delete-warning {
-  color: var(--danger);
+  color: var(--danger) !important;
   font-size: 14px;
 }
 
@@ -65,6 +70,7 @@ const emit = defineEmits<{
   color: var(--danger);
   border-radius: var(--radius-sm);
   font-size: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .btn {
@@ -73,7 +79,9 @@ const emit = defineEmits<{
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  font-family: inherit;
+  letter-spacing: 0.01em;
 }
 
 .btn--secondary {
@@ -83,11 +91,12 @@ const emit = defineEmits<{
 }
 
 .btn--secondary:hover:not(:disabled) {
-  background: var(--surface-muted);
+  background: var(--surface-strong);
+  color: var(--base-text);
 }
 
 .btn--secondary:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -98,11 +107,11 @@ const emit = defineEmits<{
 }
 
 .btn--danger:hover:not(:disabled) {
-  background: #9c1b13;
+  background: #dc2626;
 }
 
 .btn--danger:disabled {
-  background: #f5b5b0;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 </style>

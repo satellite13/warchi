@@ -18,6 +18,11 @@ export interface EntityListConfig {
   createNotFoundMessage?: string;
 }
 
+export interface SourceVersion {
+  id: string;
+  version: string;
+}
+
 export interface EntityListReturn<T extends VersionedEntity> {
   items: Ref<T[]>;
   ownerEmails: Ref<Map<string, string>>;
@@ -31,6 +36,8 @@ export interface EntityListReturn<T extends VersionedEntity> {
   showCreateModal: Ref<boolean>;
   newItemName: Ref<string>;
   newItemVersion: Ref<string>;
+  sourceVersionId: Ref<string | null>;
+  sourceVersions: ComputedRef<SourceVersion[]>;
   isCreating: Ref<boolean>;
   createError: Ref<string | null>;
 
@@ -64,6 +71,7 @@ export function useEntityList<T extends VersionedEntity>(
   const showCreateModal = ref(false);
   const newItemName = ref("");
   const newItemVersion = ref("1.0.0");
+  const sourceVersionId = ref<string | null>(null);
   const isCreating = ref(false);
   const createError = ref<string | null>(null);
 
@@ -120,6 +128,16 @@ export function useEntityList<T extends VersionedEntity>(
   });
 
   const itemCount = computed(() => filteredItems.value.length);
+
+  const sourceVersions = computed<SourceVersion[]>(() => {
+    const name = newItemName.value.trim();
+    if (!name) return [];
+    const group = groupedItems.value.find(
+      (g) => g.name.toLowerCase() === name.toLowerCase()
+    );
+    if (!group) return [];
+    return group.versions.map((item) => ({ id: item.id, version: item.version }));
+  });
 
   const loadOwnerEmails = async (ownerIds: string[]) => {
     const uniqueIds = [...new Set(ownerIds)];
@@ -205,11 +223,15 @@ export function useEntityList<T extends VersionedEntity>(
     createError.value = null;
 
     try {
-      const result = await apiPost<T>(`/${config.endpoint}`, {
+      const body = {
         name: newItemName.value.trim(),
         version: newItemVersion.value.trim(),
         ownerId
-      });
+      };
+      const url = sourceVersionId.value
+        ? `/${config.endpoint}/${sourceVersionId.value}/copy`
+        : `/${config.endpoint}`;
+      const result = await apiPost<T>(url, body);
 
       if (!result.success) {
         if (result.error.status === 409) {
@@ -291,6 +313,7 @@ export function useEntityList<T extends VersionedEntity>(
   const openCreateModal = () => {
     newItemName.value = "";
     newItemVersion.value = "1.0.0";
+    sourceVersionId.value = null;
     createError.value = null;
     showCreateModal.value = true;
   };
@@ -312,6 +335,7 @@ export function useEntityList<T extends VersionedEntity>(
 
   const closeCreateModal = () => {
     showCreateModal.value = false;
+    sourceVersionId.value = null;
   };
 
   const openDeleteModal = (item: T) => {
@@ -365,6 +389,8 @@ export function useEntityList<T extends VersionedEntity>(
     showCreateModal,
     newItemName,
     newItemVersion,
+    sourceVersionId,
+    sourceVersions,
     isCreating,
     createError,
 

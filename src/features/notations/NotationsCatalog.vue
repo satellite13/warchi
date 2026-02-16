@@ -24,6 +24,8 @@ const {
   showCreateModal,
   newItemName,
   newItemVersion,
+  sourceVersionId,
+  sourceVersions,
   isCreating,
   createError,
   showDeleteModal,
@@ -97,6 +99,7 @@ const handleCreate = () => {
       v-if="showCreateModal"
       v-model:name="newItemName"
       v-model:version="newItemVersion"
+      v-model:source-version-id="sourceVersionId"
       title="Создать нотацию"
       name-label="Название"
       name-placeholder="Название нотации"
@@ -104,6 +107,7 @@ const handleCreate = () => {
       version-placeholder="1.0.0"
       name-id="notation-name"
       version-id="notation-version"
+      :source-versions="sourceVersions"
       :is-submitting="isCreating"
       :error="createError"
       @close="closeCreateModal"
@@ -133,7 +137,6 @@ const handleCreate = () => {
   background: var(--base-bg);
   height: 100%;
   overflow: hidden;
-  font-family: "Roboto", "Inter", system-ui, -apple-system, sans-serif;
 }
 
 .home-header {
@@ -159,5 +162,6 @@ const handleCreate = () => {
   background: var(--danger-soft);
   color: var(--danger);
   font-size: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 </style>

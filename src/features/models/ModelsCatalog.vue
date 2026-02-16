@@ -137,7 +137,6 @@ const handleCreate = () => {
   background: var(--base-bg);
   height: 100%;
   overflow: hidden;
-  font-family: "Roboto", "Inter", system-ui, -apple-system, sans-serif;
 }
 
 .home-header {
@@ -163,5 +162,6 @@ const handleCreate = () => {
   background: var(--danger-soft);
   color: var(--danger);
   font-size: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 </style>

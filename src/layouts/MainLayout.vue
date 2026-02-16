@@ -29,6 +29,9 @@
 }
 .main-layout__body {
   flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .main-layout__footer {
 }

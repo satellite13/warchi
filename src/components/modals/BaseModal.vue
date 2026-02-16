@@ -38,20 +38,25 @@ const handleOverlayClick = () => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: fadeIn 0.15s ease;
 }
 
 .modal {
   width: 100%;
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   overflow: hidden;
   margin: 16px;
+  animation: slideUp 0.2s ease;
 }
 
 .modal-header {
@@ -64,9 +69,10 @@ const handleOverlayClick = () => {
 
 .modal-header h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 600;
   color: var(--base-text);
+  letter-spacing: -0.02em;
 }
 
 .modal-close {
@@ -75,12 +81,12 @@ const handleOverlayClick = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--text-subtle);
   background: transparent;
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .modal-close svg {
@@ -90,6 +96,7 @@ const handleOverlayClick = () => {
 
 .modal-close:hover {
   background: var(--surface-strong);
+  color: var(--text-muted);
 }
 
 .modal-body {
@@ -102,5 +109,21 @@ const handleOverlayClick = () => {
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid var(--border);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

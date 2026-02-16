@@ -10,7 +10,7 @@ defineProps<{
     <object class="logo__icon" data="/warchi.svg" type="image/svg+xml"/>
     <div class="logo__text">
       <span class="logo__title">wArchi</span>
-      <span class="logo__subtitle">Архитектурный репозиторий</span>
+      <span v-if="size != 'sm'" class="logo__subtitle">Архитектурный репозиторий</span>
     </div>
   </div>
 </template>
@@ -27,43 +27,47 @@ defineProps<{
 }
 
 .logo--sm .logo__icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
 }
 
 .logo--md .logo__icon {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
 }
 
 .logo--lg .logo__icon {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
 }
 
 .logo__text {
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 
 .logo__title {
-  font-weight: var(--base-font-weight);
+  font-weight: 600;
+  color: var(--base-text);
+  letter-spacing: -0.02em;
 }
 
 .logo--sm .logo__title {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .logo--md .logo__title {
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .logo--lg .logo__title {
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .logo__subtitle {
   color: var(--text-subtle);
+  letter-spacing: 0.01em;
 }
 
 .logo--sm .logo__subtitle {

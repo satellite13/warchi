@@ -1,0 +1,165 @@
+{
+  "presets": [
+    {
+      "name": "default",
+      "label": "По умолчанию",
+      "style": {
+        "fillColor": "#e0f2fe",
+        "strokeColor": "#0284c7",
+        "strokeWidth": 2,
+        "cornerRadius": 8,
+        "opacity": 1,
+        "labelColor": "#1e3a5f",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "filledBlue",
+      "label": "Синий",
+      "style": {
+        "fillColor": "#3b82f6",
+        "strokeColor": "#1d4ed8",
+        "strokeWidth": 2,
+        "cornerRadius": 4,
+        "opacity": 1,
+        "labelColor": "#ffffff",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "filledGreen",
+      "label": "Зеленый",
+      "style": {
+        "fillColor": "#10b981",
+        "strokeColor": "#047857",
+        "strokeWidth": 2,
+        "cornerRadius": 4,
+        "opacity": 1,
+        "labelColor": "#ffffff",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "filledRed",
+      "label": "Красный",
+      "style": {
+        "fillColor": "#ef4444",
+        "strokeColor": "#b91c1c",
+        "strokeWidth": 2,
+        "cornerRadius": 4,
+        "opacity": 1,
+        "labelColor": "#ffffff",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "filledGray",
+      "label": "Серый",
+      "style": {
+        "fillColor": "#6b7280",
+        "strokeColor": "#374151",
+        "strokeWidth": 2,
+        "cornerRadius": 4,
+        "opacity": 1,
+        "labelColor": "#ffffff",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "outlined",
+      "label": "Контурный",
+      "style": {
+        "fillColor": "#ffffff",
+        "strokeColor": "#374151",
+        "strokeWidth": 2,
+        "cornerRadius": 0,
+        "opacity": 1,
+        "labelColor": "#374151",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "outlinedDashed",
+      "label": "Пунктирный",
+      "style": {
+        "fillColor": "#f9fafb",
+        "strokeColor": "#6b7280",
+        "strokeWidth": 2,
+        "cornerRadius": 4,
+        "opacity": 1,
+        "lineDash": [8, 4],
+        "labelColor": "#374151",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "subtle",
+      "label": "Нежный",
+      "style": {
+        "fillColor": "#f3f4f6",
+        "strokeColor": "#d1d5db",
+        "strokeWidth": 1,
+        "cornerRadius": 8,
+        "opacity": 1,
+        "labelColor": "#6b7280",
+        "labelFontSize": 13,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "rounded",
+      "label": "Скругленный",
+      "style": {
+        "fillColor": "#fef3c7",
+        "strokeColor": "#f59e0b",
+        "strokeWidth": 2,
+        "cornerRadius": 20,
+        "opacity": 1,
+        "labelColor": "#92400e",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    },
+    {
+      "name": "important",
+      "label": "Важный",
+      "style": {
+        "fillColor": "#fef2f2",
+        "strokeColor": "#dc2626",
+        "strokeWidth": 3,
+        "cornerRadius": 4,
+        "opacity": 1,
+        "labelColor": "#991b1b",
+        "labelFontSize": 14,
+        "labelPadding": 8,
+        "labelMargin": 0,
+        "labelPlacement": "center"
+      }
+    }
+  ]
+}

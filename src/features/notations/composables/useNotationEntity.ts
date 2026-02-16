@@ -1,4 +1,4 @@
-import { computed, ref, type Ref, type ComputedRef } from "vue"
+import { computed, onScopeDispose, ref, type Ref, type ComputedRef } from "vue"
 import { createId, type CustomProperty } from "../notationAttrs"
 import type {
   NotationEditorState,
@@ -7,6 +7,17 @@ import type {
   EditorComponent,
   EditorRelation
 } from "../types"
+import {
+  getAllComponentPresets,
+  getAllRelationPresets,
+  applyComponentStylePreset,
+  applyRelationStylePreset,
+  getDefaultComponentStylePresetName,
+  getDefaultRelationStylePresetName,
+  subscribeStylePresetsChanges,
+  type ComponentStylePreset,
+  type RelationStylePreset
+} from "../styles/stylePresets"
 
 export type SelectedEntity = { kind: "component" | "relation"; id: string } | null
 
@@ -29,16 +40,20 @@ export interface NotationEntityReturn {
   componentVersion: Ref<string>
   componentTypeSelection: Ref<string>
   componentNewTypeName: Ref<string>
+  componentStylePreset: Ref<string>
   componentFormError: Ref<string | null>
   relationName: Ref<string>
   relationTags: Ref<string>
   relationVersion: Ref<string>
   relationTypeSelection: Ref<string>
   relationNewTypeName: Ref<string>
+  relationStylePreset: Ref<string>
   relationFormError: Ref<string | null>
   availableTags: ComputedRef<string[]>
   componentTagSuggestions: ComputedRef<string[]>
   relationTagSuggestions: ComputedRef<string[]>
+  componentStylePresets: ComputedRef<ComponentStylePreset[]>
+  relationStylePresets: ComputedRef<RelationStylePreset[]>
   selectedItem: ComputedRef<EditorComponent | EditorRelation | null>
   combinedItems: ComputedRef<ListItem[]>
   toggleTag: (tag: string) => void
@@ -163,6 +178,7 @@ export function useNotationEntity(
   const componentVersion = ref("1.0.0")
   const componentTypeSelection = ref(NEW_TYPE_VALUE)
   const componentNewTypeName = ref("")
+  const componentStylePreset = ref(getDefaultComponentStylePresetName())
   const componentFormError = ref<string | null>(null)
 
   const relationName = ref("")
@@ -170,7 +186,9 @@ export function useNotationEntity(
   const relationVersion = ref("1.0.0")
   const relationTypeSelection = ref(NEW_TYPE_VALUE)
   const relationNewTypeName = ref("")
+  const relationStylePreset = ref(getDefaultRelationStylePresetName())
   const relationFormError = ref<string | null>(null)
+  const stylePresetsVersion = ref(0)
 
   const availableTags = computed(() => {
     const tags = new Set<string>()
@@ -199,6 +217,21 @@ export function useNotationEntity(
       .filter((tag) => !prefix.includes(tag))
       .filter((tag) => (lowerQuery ? tag.toLowerCase().includes(lowerQuery) : true))
       .slice(0, 6)
+  })
+
+  const unsubscribeStylePresets = subscribeStylePresetsChanges(() => {
+    stylePresetsVersion.value += 1
+  })
+  onScopeDispose(unsubscribeStylePresets)
+
+  // Load style presets (built-in + user)
+  const componentStylePresets = computed(() => {
+    stylePresetsVersion.value
+    return getAllComponentPresets()
+  })
+  const relationStylePresets = computed(() => {
+    stylePresetsVersion.value
+    return getAllRelationPresets()
   })
 
   const toggleTag = (tag: string) => {
@@ -314,6 +347,9 @@ export function useNotationEntity(
     const nodeType = state.value.nodeTypes.find((t) => t.id === nodeTypeId)
     const typeProps = nodeType?.parsedAttrs.customProperties ?? []
 
+    // Apply selected style preset
+    const initialStyle = applyComponentStylePreset(componentStylePreset.value)
+
     const component: EditorComponent = {
       id: createId(),
       name,
@@ -323,7 +359,8 @@ export function useNotationEntity(
       nodeTypeId,
       parsedAttrs: {
         tags: parseTagsInput(componentTags.value),
-        customProperties: copyTypeProperties(typeProps)
+        customProperties: copyTypeProperties(typeProps),
+        diagramStyle: initialStyle
       },
       _isNew: true
     }
@@ -333,6 +370,7 @@ export function useNotationEntity(
     componentTags.value = ""
     componentVersion.value = "1.0.0"
     componentNewTypeName.value = ""
+    componentStylePreset.value = getDefaultComponentStylePresetName()
     componentTypeSelection.value = nodeTypeId
     selectComponent(component.id)
     showComponentModal.value = false
@@ -369,6 +407,9 @@ export function useNotationEntity(
     const linkType = state.value.linkTypes.find((t) => t.id === linkTypeId)
     const typeProps = linkType?.parsedAttrs.customProperties ?? []
 
+    // Apply selected style preset
+    const initialStyle = applyRelationStylePreset(relationStylePreset.value)
+
     const relation: EditorRelation = {
       id: createId(),
       name,
@@ -378,7 +419,8 @@ export function useNotationEntity(
       linkTypeId,
       parsedAttrs: {
         tags: parseTagsInput(relationTags.value),
-        customProperties: copyTypeProperties(typeProps)
+        customProperties: copyTypeProperties(typeProps),
+        diagramStyle: initialStyle
       },
       _isNew: true
     }
@@ -388,6 +430,7 @@ export function useNotationEntity(
     relationTags.value = ""
     relationVersion.value = "1.0.0"
     relationNewTypeName.value = ""
+    relationStylePreset.value = getDefaultRelationStylePresetName()
     relationTypeSelection.value = linkTypeId
     selectRelation(relation.id)
     showRelationModal.value = false
@@ -448,6 +491,7 @@ export function useNotationEntity(
     componentVersion.value = "1.0.0"
     componentTypeSelection.value = NEW_TYPE_VALUE
     componentNewTypeName.value = ""
+    componentStylePreset.value = getDefaultComponentStylePresetName()
     showComponentModal.value = true
   }
 
@@ -463,6 +507,7 @@ export function useNotationEntity(
     relationVersion.value = "1.0.0"
     relationTypeSelection.value = NEW_TYPE_VALUE
     relationNewTypeName.value = ""
+    relationStylePreset.value = getDefaultRelationStylePresetName()
     showRelationModal.value = true
   }
 
@@ -483,15 +528,19 @@ export function useNotationEntity(
     componentTypeSelection,
     componentNewTypeName,
     componentFormError,
+    componentStylePreset,
     relationName,
     relationTags,
     relationVersion,
     relationTypeSelection,
     relationNewTypeName,
     relationFormError,
+    relationStylePreset,
     availableTags,
     componentTagSuggestions,
     relationTagSuggestions,
+    componentStylePresets,
+    relationStylePresets,
     selectedItem,
     combinedItems,
     toggleTag,

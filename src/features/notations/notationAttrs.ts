@@ -23,7 +23,9 @@ export type NodeStyle = {
 
 export type DiagramStyle = {
   fillColor?: string;
+  fillOpacity?: number;
   strokeColor?: string;
+  strokeOpacity?: number;
   strokeWidth?: number;
   cornerRadius?: number;
   opacity?: number;
@@ -33,6 +35,7 @@ export type DiagramStyle = {
   endMarkerType?: string;
   // Label properties (shared node+edge)
   labelColor?: string;
+  labelOpacity?: number;
   labelFontSize?: number;
   // Node-specific label
   labelPadding?: number;
@@ -40,6 +43,7 @@ export type DiagramStyle = {
   labelPlacement?: string;
   // Edge label background
   labelBgColor?: string;
+  labelBgOpacity?: number;
   labelBgPadding?: number;
   labelBgBorderRadius?: number;
   // Marker details
@@ -51,6 +55,16 @@ export type DiagramStyle = {
   endMarkerFillOpacity?: number;
   // Node icon
   iconName?: string;
+  iconPlacement?: string;
+  iconWidth?: number;
+  iconHeight?: number;
+  iconPadding?: number;
+  iconMargin?: number;
+  iconStrokeColor?: string;
+  iconFillColor?: string;
+  // Node dimensions
+  width?: number;
+  height?: number;
 };
 
 type RawRecord = Record<string, unknown>;
@@ -112,8 +126,10 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   }
   const style: DiagramStyle = {};
   if (typeof value.fillColor === "string") style.fillColor = value.fillColor;
+  if (typeof value.fillOpacity === "number") style.fillOpacity = value.fillOpacity;
   if (typeof value.strokeColor === "string")
     style.strokeColor = value.strokeColor;
+  if (typeof value.strokeOpacity === "number") style.strokeOpacity = value.strokeOpacity;
   if (typeof value.strokeWidth === "number")
     style.strokeWidth = value.strokeWidth;
   if (typeof value.cornerRadius === "number")
@@ -131,6 +147,7 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.endMarkerType === "string")
     style.endMarkerType = value.endMarkerType;
   if (typeof value.labelColor === "string") style.labelColor = value.labelColor;
+  if (typeof value.labelOpacity === "number") style.labelOpacity = value.labelOpacity;
   if (typeof value.labelFontSize === "number")
     style.labelFontSize = value.labelFontSize;
   if (typeof value.labelPadding === "number")
@@ -141,6 +158,8 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
     style.labelPlacement = value.labelPlacement;
   if (typeof value.labelBgColor === "string")
     style.labelBgColor = value.labelBgColor;
+  if (typeof value.labelBgOpacity === "number")
+    style.labelBgOpacity = value.labelBgOpacity;
   if (typeof value.labelBgPadding === "number")
     style.labelBgPadding = value.labelBgPadding;
   if (typeof value.labelBgBorderRadius === "number")
@@ -158,6 +177,15 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.endMarkerFillOpacity === "number")
     style.endMarkerFillOpacity = value.endMarkerFillOpacity;
   if (typeof value.iconName === "string") style.iconName = value.iconName;
+  if (typeof value.iconPlacement === "string") style.iconPlacement = value.iconPlacement;
+  if (typeof value.iconWidth === "number") style.iconWidth = value.iconWidth;
+  if (typeof value.iconHeight === "number") style.iconHeight = value.iconHeight;
+  if (typeof value.iconPadding === "number") style.iconPadding = value.iconPadding;
+  if (typeof value.iconMargin === "number") style.iconMargin = value.iconMargin;
+  if (typeof value.iconStrokeColor === "string") style.iconStrokeColor = value.iconStrokeColor;
+  if (typeof value.iconFillColor === "string") style.iconFillColor = value.iconFillColor;
+  if (typeof value.width === "number") style.width = value.width;
+  if (typeof value.height === "number") style.height = value.height;
   return Object.keys(style).length ? style : undefined;
 };
 

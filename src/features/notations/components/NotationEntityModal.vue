@@ -2,12 +2,14 @@
 import BaseModal from "../../../components/modals/BaseModal.vue";
 import TagSuggestions from "./TagSuggestions.vue";
 import type { EditorNodeType, EditorLinkType } from "../types";
+import type { ComponentStylePreset, RelationStylePreset } from "../styles/stylePresets";
 
 const nameModel = defineModel<string>("name", { default: "" });
 const tagsModel = defineModel<string>("tags", { default: "" });
 const versionModel = defineModel<string>("version", { default: "1.0.0" });
 const typeSelectionModel = defineModel<string>("typeSelection", { default: "" });
 const newTypeNameModel = defineModel<string>("newTypeName", { default: "" });
+const stylePresetModel = defineModel<string>("stylePreset", { default: "default" });
 
 defineProps<{
   title: string;
@@ -23,6 +25,8 @@ defineProps<{
   newTypeValue: string;
   newTypeLabel: string;
   newTypePlaceholder?: string;
+  styleLabel?: string;
+  stylePresets: (ComponentStylePreset | RelationStylePreset)[];
   suggestions: string[];
   error?: string | null;
 }>();
@@ -96,6 +100,29 @@ const emit = defineEmits<{
           type="text"
           :placeholder="newTypePlaceholder"
         >
+      </label>
+      <label class="modal-label">
+        {{ styleLabel || 'Стиль' }}
+        <select v-model="stylePresetModel">
+          <optgroup label="Встроенные">
+            <option
+              v-for="preset in stylePresets.filter(p => !p._isUser)"
+              :key="preset.name"
+              :value="preset.name"
+            >
+              {{ preset.label }}
+            </option>
+          </optgroup>
+          <optgroup v-if="stylePresets.some(p => p._isUser)" label="Мои пресеты">
+            <option
+              v-for="preset in stylePresets.filter(p => p._isUser)"
+              :key="preset.name"
+              :value="preset.name"
+            >
+              {{ preset.label }}
+            </option>
+          </optgroup>
+        </select>
       </label>
       <p
         v-if="error"

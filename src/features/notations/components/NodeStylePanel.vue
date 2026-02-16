@@ -2,6 +2,16 @@
 import {ref, computed, watch} from "vue";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "papirus";
 import type {DiagramStyle} from "../notationAttrs";
+import {
+  getAllComponentPresets,
+  getAllRelationPresets,
+  saveUserComponentPreset,
+  saveUserRelationPreset,
+  deleteUserComponentPreset,
+  deleteUserRelationPreset,
+  type ComponentStylePreset,
+  type RelationStylePreset
+} from "../styles/stylePresets";
 
 const props = defineProps<{
   selectedElementId: string | null;
@@ -13,19 +23,46 @@ const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
 }>();
 
+type IconPlacement =
+  | "center"
+  | "top"
+  | "bottom"
+  | "left"
+  | "right"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+
 function emitNodeStyle() {
   const style: DiagramStyle = {
     fillColor: fillColor.value,
+    fillOpacity: fillOpacity.value,
     strokeColor: strokeColor.value,
+    strokeOpacity: strokeOpacity.value,
     strokeWidth: strokeWidth.value,
     cornerRadius: cornerRadius.value,
     opacity: opacity.value,
     labelColor: labelColor.value,
+    labelOpacity: labelOpacity.value,
     labelFontSize: labelFontSize.value,
     labelPadding: labelPadding.value,
     labelMargin: labelMargin.value,
     labelPlacement: labelPlacement.value,
-    ...(iconName.value ? { iconName: iconName.value } : {})
+    width: nodeWidth.value,
+    height: nodeHeight.value,
+    ...(iconName.value
+      ? {
+          iconName: iconName.value,
+          iconPlacement: iconPlacement.value,
+          iconWidth: iconWidth.value,
+          iconHeight: iconHeight.value,
+          iconPadding: iconPadding.value,
+          iconMargin: iconMargin.value,
+          iconStrokeColor: iconStrokeColor.value,
+          iconFillColor: iconFillColor.value
+        }
+      : {})
   };
   if (lineStyle.value === "dashed") {
     const pattern = lineDashPattern.value.trim() || "8,4";
@@ -37,14 +74,17 @@ function emitNodeStyle() {
 function emitEdgeStyle() {
   const style: DiagramStyle = {
     strokeColor: edgeStrokeColor.value,
+    strokeOpacity: edgeStrokeOpacity.value,
     strokeWidth: edgeStrokeWidth.value,
     opacity: edgeOpacity.value,
     edgeType: edgeType.value,
     startMarkerType: edgeStartMarker.value,
     endMarkerType: edgeEndMarker.value,
     labelColor: edgeLabelColor.value,
+    labelOpacity: edgeLabelOpacity.value,
     labelFontSize: edgeLabelFontSize.value,
     labelBgColor: edgeLabelBgColor.value,
+    labelBgOpacity: edgeLabelBgOpacity.value,
     startMarkerSize: edgeStartMarkerSize.value,
     startMarkerFillColor: edgeStartMarkerFillColor.value,
     startMarkerFillOpacity: edgeStartMarkerFillOpacity.value,
@@ -67,6 +107,298 @@ const elementType = computed<"node" | "edge" | null>(() => {
   return null;
 });
 
+// Reactivity trigger for localStorage-based user presets
+const presetVersion = ref(0);
+
+// Load style presets (built-in + user)
+const componentStylePresets = computed<ComponentStylePreset[]>(() => {
+  presetVersion.value; // dependency for reactivity
+  return getAllComponentPresets();
+});
+const relationStylePresets = computed<RelationStylePreset[]>(() => {
+  presetVersion.value;
+  return getAllRelationPresets();
+});
+
+const builtInComponentPresets = computed(() => componentStylePresets.value.filter(p => !p._isUser));
+const userComponentPresets = computed(() => componentStylePresets.value.filter(p => p._isUser));
+const builtInRelationPresets = computed(() => relationStylePresets.value.filter(p => !p._isUser));
+const userRelationPresets = computed(() => relationStylePresets.value.filter(p => p._isUser));
+
+// Current selected preset
+const selectedComponentPreset = ref("custom");
+const selectedRelationPreset = ref("custom");
+
+// Save-as-preset state
+const showSavePresetForm = ref(false);
+const newPresetName = ref("");
+
+function openSavePresetForm() {
+  newPresetName.value = "";
+  showSavePresetForm.value = true;
+}
+
+function cancelSavePreset() {
+  showSavePresetForm.value = false;
+  newPresetName.value = "";
+}
+
+function confirmSavePreset() {
+  const label = newPresetName.value.trim();
+  if (!label) return;
+
+  const name = `user_${Date.now()}`;
+
+  if (elementType.value === "edge") {
+    const style: import("../notationAttrs").DiagramStyle = {
+      strokeColor: edgeStrokeColor.value,
+      strokeOpacity: edgeStrokeOpacity.value,
+      strokeWidth: edgeStrokeWidth.value,
+      opacity: edgeOpacity.value,
+      edgeType: edgeType.value,
+      startMarkerType: edgeStartMarker.value,
+      endMarkerType: edgeEndMarker.value,
+      labelColor: edgeLabelColor.value,
+      labelOpacity: edgeLabelOpacity.value,
+      labelFontSize: edgeLabelFontSize.value,
+      labelBgColor: edgeLabelBgColor.value,
+      labelBgOpacity: edgeLabelBgOpacity.value,
+      startMarkerSize: edgeStartMarkerSize.value,
+      startMarkerFillColor: edgeStartMarkerFillColor.value,
+      startMarkerFillOpacity: edgeStartMarkerFillOpacity.value,
+      endMarkerSize: edgeEndMarkerSize.value,
+      endMarkerFillColor: edgeEndMarkerFillColor.value,
+      endMarkerFillOpacity: edgeEndMarkerFillOpacity.value
+    };
+    if (edgeLineStyle.value === "dashed") {
+      const pattern = edgeLineDashPattern.value.trim() || "8,4";
+      style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+    }
+    saveUserRelationPreset({ name, label, style });
+    selectedRelationPreset.value = name;
+  } else {
+    const style: import("../notationAttrs").DiagramStyle = {
+      fillColor: fillColor.value,
+      fillOpacity: fillOpacity.value,
+      strokeColor: strokeColor.value,
+      strokeOpacity: strokeOpacity.value,
+      strokeWidth: strokeWidth.value,
+      cornerRadius: cornerRadius.value,
+      opacity: opacity.value,
+      labelColor: labelColor.value,
+      labelOpacity: labelOpacity.value,
+      labelFontSize: labelFontSize.value,
+      labelPadding: labelPadding.value,
+      labelMargin: labelMargin.value,
+      labelPlacement: labelPlacement.value,
+      width: nodeWidth.value,
+      height: nodeHeight.value,
+      ...(iconName.value
+        ? {
+            iconName: iconName.value,
+            iconPlacement: iconPlacement.value,
+            iconWidth: iconWidth.value,
+            iconHeight: iconHeight.value,
+            iconPadding: iconPadding.value,
+            iconMargin: iconMargin.value,
+            iconStrokeColor: iconStrokeColor.value,
+            iconFillColor: iconFillColor.value
+          }
+        : {})
+    };
+    if (lineStyle.value === "dashed") {
+      const pattern = lineDashPattern.value.trim() || "8,4";
+      style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+    }
+    saveUserComponentPreset({ name, label, style });
+    selectedComponentPreset.value = name;
+  }
+
+  presetVersion.value++;
+  showSavePresetForm.value = false;
+  newPresetName.value = "";
+}
+
+function handleDeleteUserPreset(presetName: string, kind: "component" | "relation") {
+  if (kind === "component") {
+    deleteUserComponentPreset(presetName);
+    if (selectedComponentPreset.value === presetName) {
+      selectedComponentPreset.value = "custom";
+    }
+  } else {
+    deleteUserRelationPreset(presetName);
+    if (selectedRelationPreset.value === presetName) {
+      selectedRelationPreset.value = "custom";
+    }
+  }
+  presetVersion.value++;
+}
+
+// Apply component preset
+function applyComponentPreset(presetName: string) {
+  const preset = componentStylePresets.value.find(p => p.name === presetName);
+  if (!preset) return;
+  
+  const style = preset.style;
+  
+  // Update all node style refs (preserve current width/height if not in preset)
+  fillColor.value = style.fillColor ?? "#ffffff";
+  fillOpacity.value = style.fillOpacity ?? 1;
+  strokeColor.value = style.strokeColor ?? "#333333";
+  strokeOpacity.value = style.strokeOpacity ?? 1;
+  strokeWidth.value = style.strokeWidth ?? 2;
+  cornerRadius.value = style.cornerRadius ?? 0;
+  opacity.value = style.opacity ?? 1;
+  labelColor.value = style.labelColor ?? "#333333";
+  labelOpacity.value = style.labelOpacity ?? 1;
+  labelFontSize.value = style.labelFontSize ?? 14;
+  labelPadding.value = style.labelPadding ?? 8;
+  labelMargin.value = style.labelMargin ?? 0;
+  labelPlacement.value = (style.labelPlacement as any) ?? "auto";
+  // Only update dimensions if explicitly specified in preset
+  if (style.width !== undefined) nodeWidth.value = style.width;
+  if (style.height !== undefined) nodeHeight.value = style.height;
+  
+  if (style.lineDash && style.lineDash.length > 0) {
+    lineStyle.value = "dashed";
+    lineDashPattern.value = style.lineDash.join(",");
+  } else {
+    lineStyle.value = "solid";
+    lineDashPattern.value = "8,4";
+  }
+  
+  if (style.iconName) {
+    iconName.value = style.iconName;
+    iconPlacement.value = (style.iconPlacement as IconPlacement) ?? "top-left";
+    iconWidth.value = style.iconWidth ?? 20;
+    iconHeight.value = style.iconHeight ?? 20;
+    iconPadding.value = style.iconPadding ?? 8;
+    iconMargin.value = style.iconMargin ?? 0;
+    iconStrokeColor.value = style.iconStrokeColor ?? "#000000";
+    iconFillColor.value = style.iconFillColor ?? "#000000";
+  } else {
+    iconName.value = "";
+  }
+  
+  // Apply to node and emit
+  applyNodeStyle({
+    fillColor: fillColor.value,
+    fillOpacity: fillOpacity.value,
+    strokeColor: strokeColor.value,
+    strokeOpacity: strokeOpacity.value,
+    strokeWidth: strokeWidth.value,
+    opacity: opacity.value,
+    lineDash: style.lineDash
+  });
+  
+  // Apply label properties and dimensions
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    if (node.label) {
+      node.label.style = {
+        ...(node.label.style || {}),
+        color: labelColor.value,
+        fontSize: labelFontSize.value,
+        opacity: labelOpacity.value
+      } as any;
+      (node.label as any)._padding = labelPadding.value;
+      (node.label as any)._margin = labelMargin.value;
+    }
+    (node as any).labelPlacement = labelPlacement.value;
+    
+    // Apply dimensions and corner radius
+    node.width = nodeWidth.value;
+    node.height = nodeHeight.value;
+    (node as any).cornerRadius = cornerRadius.value;
+    
+    if (iconName.value) {
+      (node as any).icon = {
+        source: `/icons/${iconName.value}.svg`,
+        placement: iconPlacement.value,
+        width: iconWidth.value,
+        height: iconHeight.value,
+        fit: "contain",
+        padding: iconPadding.value,
+        margin: iconMargin.value,
+        strokeColor: iconStrokeColor.value,
+        fillColor: iconFillColor.value
+      };
+    } else {
+      (node as any).icon = undefined;
+    }
+  });
+  
+  emitNodeStyle();
+}
+
+// Apply edge preset
+function applyEdgePreset(presetName: string) {
+  const preset = relationStylePresets.value.find(p => p.name === presetName);
+  if (!preset) return;
+  
+  const style = preset.style;
+  
+  // Update all edge style refs
+  edgeStrokeColor.value = style.strokeColor ?? "#666666";
+  edgeStrokeOpacity.value = style.strokeOpacity ?? 1;
+  edgeStrokeWidth.value = style.strokeWidth ?? 2;
+  edgeOpacity.value = style.opacity ?? 1;
+  edgeType.value = (style.edgeType as any) ?? "polyline";
+  edgeStartMarker.value = (style.startMarkerType as any) ?? "none";
+  edgeEndMarker.value = (style.endMarkerType as any) ?? "open";
+  edgeLabelColor.value = style.labelColor ?? "#333333";
+  edgeLabelOpacity.value = style.labelOpacity ?? 1;
+  edgeLabelFontSize.value = style.labelFontSize ?? 14;
+  edgeLabelBgColor.value = style.labelBgColor ?? "#ffffff";
+  edgeLabelBgOpacity.value = style.labelBgOpacity ?? 1;
+  
+  if (style.lineDash && style.lineDash.length > 0) {
+    edgeLineStyle.value = "dashed";
+    edgeLineDashPattern.value = style.lineDash.join(",");
+  } else {
+    edgeLineStyle.value = "solid";
+    edgeLineDashPattern.value = "8,4";
+  }
+  
+  // Marker sizes
+  edgeStartMarkerSize.value = style.startMarkerSize ?? 12;
+  edgeStartMarkerFillColor.value = style.startMarkerFillColor ?? "#000000";
+  edgeStartMarkerFillOpacity.value = style.startMarkerFillOpacity ?? 1;
+  edgeEndMarkerSize.value = style.endMarkerSize ?? 12;
+  edgeEndMarkerFillColor.value = style.endMarkerFillColor ?? "#000000";
+  edgeEndMarkerFillOpacity.value = style.endMarkerFillOpacity ?? 1;
+  
+  // Apply to edge and emit
+  applyEdgeStyle({
+    strokeColor: edgeStrokeColor.value,
+    strokeOpacity: edgeStrokeOpacity.value,
+    strokeWidth: edgeStrokeWidth.value,
+    opacity: edgeOpacity.value,
+    lineDash: style.lineDash
+  });
+  
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    edge.type = edgeType.value;
+    edge.startMarker = buildMarkerConfig(edgeStartMarker.value, edgeStartMarkerSize.value, edgeStartMarkerFillColor.value, edgeStartMarkerFillOpacity.value);
+    edge.endMarker = buildMarkerConfig(edgeEndMarker.value, edgeEndMarkerSize.value, edgeEndMarkerFillColor.value, edgeEndMarkerFillOpacity.value);
+    if (edge.label) {
+      edge.label.style = {
+        ...(edge.label.style || {}),
+        color: edgeLabelColor.value,
+        fontSize: edgeLabelFontSize.value,
+        opacity: edgeLabelOpacity.value
+      } as any;
+    }
+    (edge as any).labelBackground = { 
+      color: edgeLabelBgColor.value,
+      opacity: edgeLabelBgOpacity.value 
+    };
+  });
+  
+  emitEdgeStyle();
+}
+
 const AVAILABLE_ICONS = [
   "actor", "artifact", "assessment", "capability", "circle", "collaboration",
   "communication_network", "component_group", "component", "constraint",
@@ -82,23 +414,36 @@ const AVAILABLE_ICONS = [
 
 // --- Node style state ---
 const iconName = ref("");
+const iconPlacement = ref<IconPlacement>("top-left");
+const iconWidth = ref(20);
+const iconHeight = ref(20);
+const iconPadding = ref(8);
+const iconMargin = ref(0);
+const iconStrokeColor = ref("#000000");
+const iconFillColor = ref("#000000");
 const label = ref("");
 const fillColor = ref("#ffffff");
+const fillOpacity = ref(1);
 const strokeColor = ref("#333333");
+const strokeOpacity = ref(1);
 const strokeWidth = ref(2);
 const cornerRadius = ref(0);
 const opacity = ref(1);
 const lineStyle = ref<"solid" | "dashed">("solid");
 const lineDashPattern = ref("8,4");
 const labelColor = ref("#333333");
+const labelOpacity = ref(1);
 const labelFontSize = ref(14);
 const labelPadding = ref(8);
 const labelMargin = ref(0);
 const labelPlacement = ref<"auto" | "center" | "top" | "bottom" | "left" | "right">("auto");
+const nodeWidth = ref(140);
+const nodeHeight = ref(50);
 
 // --- Edge style state ---
 const edgeLabel = ref("");
 const edgeStrokeColor = ref("#666666");
+const edgeStrokeOpacity = ref(1);
 const edgeStrokeWidth = ref(2);
 const edgeLineStyle = ref<"solid" | "dashed">("solid");
 const edgeLineDashPattern = ref("8,4");
@@ -107,8 +452,10 @@ const edgeEndMarker = ref<"none" | "arrow" | "open" | "diamond" | "circle">("ope
 const edgeStartMarker = ref<"none" | "arrow" | "open" | "diamond" | "circle">("none");
 const edgeOpacity = ref(1);
 const edgeLabelColor = ref("#333333");
+const edgeLabelOpacity = ref(1);
 const edgeLabelFontSize = ref(14);
 const edgeLabelBgColor = ref("#ffffff");
+const edgeLabelBgOpacity = ref(1);
 const edgeStartMarkerSize = ref(12);
 const edgeStartMarkerFillColor = ref("#000000");
 const edgeStartMarkerFillOpacity = ref(1);
@@ -131,18 +478,28 @@ function loadNodeProps() {
   if (!node) return;
 
   // Load icon
-  const iconSource = (node as any).icon?.source as string | undefined;
+  const iconSource = (node as any).icon?.options?.source as string | undefined;
   if (iconSource && typeof iconSource === "string") {
     const match = iconSource.match(/\/icons\/(.+)\.svg$/);
     iconName.value = match?.[1] ?? "";
   } else {
     iconName.value = "";
   }
+  const iconOptions = (node as any).icon?.options as Record<string, unknown> | undefined;
+  iconPlacement.value = (iconOptions?.placement as IconPlacement) ?? "top-left";
+  iconWidth.value = Math.round(Number(iconOptions?.width ?? 20));
+  iconHeight.value = Math.round(Number(iconOptions?.height ?? 20));
+  iconPadding.value = Number(iconOptions?.padding ?? 8);
+  iconMargin.value = Number(iconOptions?.margin ?? 0);
+  iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? "#000000";
+  iconFillColor.value = (iconOptions?.fillColor as string) ?? "#000000";
 
   label.value = node.label?.text ?? "";
   const style = node.style || {};
   fillColor.value = style.fillColor || "#ffffff";
+  fillOpacity.value = (style as any).fillOpacity ?? 1;
   strokeColor.value = style.strokeColor || "#333333";
+  strokeOpacity.value = (style as any).strokeOpacity ?? 1;
   strokeWidth.value = style.strokeWidth ?? 2;
   opacity.value = style.opacity ?? 1;
 
@@ -158,10 +515,15 @@ function loadNodeProps() {
 
   const labelStyle = node.label?.style;
   labelColor.value = labelStyle?.color || "#333333";
+  labelOpacity.value = (labelStyle as any)?.opacity ?? 1;
   labelFontSize.value = labelStyle?.fontSize ?? 14;
   labelPadding.value = node.label?.padding ?? 8;
   labelMargin.value = node.label?.margin ?? 0;
   labelPlacement.value = (node as any).labelPlacement ?? "auto";
+
+  // Load node dimensions
+  nodeWidth.value = Math.round(node.width ?? 140);
+  nodeHeight.value = Math.round(node.height ?? 50);
 }
 
 function loadEdgeProps() {
@@ -171,6 +533,7 @@ function loadEdgeProps() {
   edgeLabel.value = edge.label?.text ?? "";
   const style = edge.style || {};
   edgeStrokeColor.value = style.strokeColor || "#666666";
+  edgeStrokeOpacity.value = (style as any).strokeOpacity ?? 1;
   edgeStrokeWidth.value = style.strokeWidth ?? 2;
   edgeOpacity.value = style.opacity ?? 1;
   edgeType.value = edge.type ?? "polyline";
@@ -184,8 +547,10 @@ function loadEdgeProps() {
 
   const eLabelStyle = edge.label?.style;
   edgeLabelColor.value = eLabelStyle?.color || "#333333";
+  edgeLabelOpacity.value = (eLabelStyle as any)?.opacity ?? 1;
   edgeLabelFontSize.value = eLabelStyle?.fontSize ?? 14;
   edgeLabelBgColor.value = (edge as any).labelBackground?.color || "#ffffff";
+  edgeLabelBgOpacity.value = ((edge as any).labelBackground as any)?.opacity ?? 1;
   edgeStartMarkerSize.value = edge.startMarker?.size ?? 12;
   edgeStartMarkerFillColor.value = edge.startMarker?.fillColor || "#000000";
   edgeStartMarkerFillOpacity.value = edge.startMarker?.fillOpacity ?? 1;
@@ -197,28 +562,132 @@ function loadEdgeProps() {
 watch(() => props.selectedElementId, () => {
   if (elementType.value === "edge") {
     loadEdgeProps();
+    selectedRelationPreset.value = "custom";
   } else {
     loadNodeProps();
+    selectedComponentPreset.value = "custom";
   }
 }, {immediate: true});
+
+// Listen for resize events from canvas
+watch(() => props.interactionManager, (im, _, onCleanup) => {
+  if (!im) return;
+
+  const offResize = im.resize.on("resize", (nodeId: string, bounds: { width: number; height: number }) => {
+    // Check if this is the currently selected node
+    if (props.selectedElementId === nodeId && elementType.value === "node") {
+      nodeWidth.value = Math.round(bounds.width);
+      nodeHeight.value = Math.round(bounds.height);
+    }
+  });
+
+  const offResizeEnd = im.resize.on("resizeEnd", (nodeId: string, bounds: { width: number; height: number }) => {
+    if (props.selectedElementId === nodeId && elementType.value === "node") {
+      nodeWidth.value = Math.round(bounds.width);
+      nodeHeight.value = Math.round(bounds.height);
+      // Emit style change to update attrs
+      emitNodeStyle();
+    }
+  });
+
+  onCleanup(() => {
+    offResize();
+    offResizeEnd();
+  });
+}, { immediate: true });
+
+// Reset preset to custom when any style property is manually changed
+function resetComponentPreset() {
+  selectedComponentPreset.value = "custom";
+}
+
+function resetRelationPreset() {
+  selectedRelationPreset.value = "custom";
+}
 
 // --- Node handlers ---
 function handleIconChange(value: string) {
   iconName.value = value;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function applyNodeIcon() {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    if (value) {
+    if (iconName.value) {
       (node as any).icon = {
-        source: `/icons/${value}.svg`,
-        placement: "top-left",
-        width: 20,
-        height: 20,
-        fit: "contain"
+        source: `/icons/${iconName.value}.svg`,
+        placement: iconPlacement.value,
+        width: iconWidth.value,
+        height: iconHeight.value,
+        fit: "contain",
+        padding: iconPadding.value,
+        margin: iconMargin.value,
+        strokeColor: iconStrokeColor.value,
+        fillColor: iconFillColor.value
       };
     } else {
       (node as any).icon = undefined;
     }
   });
+}
+
+function handleIconPlacementChange(value: string) {
+  iconPlacement.value = value as IconPlacement;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconWidthChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v <= 0) return;
+  iconWidth.value = v;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconHeightChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v <= 0) return;
+  iconHeight.value = v;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconPaddingChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  iconPadding.value = v;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconMarginChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  iconMargin.value = v;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconStrokeColorChange(value: string) {
+  iconStrokeColor.value = value;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconFillColorChange(value: string) {
+  iconFillColor.value = value;
+  resetComponentPreset();
+  applyNodeIcon();
   emitNodeStyle();
 }
 
@@ -248,13 +717,33 @@ function handleLabelChange(value: string) {
 
 function handleFillChange(value: string) {
   fillColor.value = value;
-  applyNodeStyle({fillColor: value});
+  resetComponentPreset();
+  applyNodeStyle({fillColor: value, fillOpacity: fillOpacity.value});
+  emitNodeStyle();
+}
+
+function handleFillOpacityChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  fillOpacity.value = v;
+  resetComponentPreset();
+  applyNodeStyle({fillColor: fillColor.value, fillOpacity: v});
   emitNodeStyle();
 }
 
 function handleStrokeColorChange(value: string) {
   strokeColor.value = value;
-  applyNodeStyle({strokeColor: value});
+  resetComponentPreset();
+  applyNodeStyle({strokeColor: value, strokeOpacity: strokeOpacity.value});
+  emitNodeStyle();
+}
+
+function handleStrokeOpacityChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  strokeOpacity.value = v;
+  resetComponentPreset();
+  applyNodeStyle({strokeColor: strokeColor.value, strokeOpacity: v});
   emitNodeStyle();
 }
 
@@ -262,6 +751,7 @@ function handleStrokeWidthChange(value: string) {
   const v = parseFloat(value);
   if (Number.isFinite(v)) {
     strokeWidth.value = v;
+    resetComponentPreset();
     applyNodeStyle({strokeWidth: v});
     emitNodeStyle();
   }
@@ -271,6 +761,7 @@ function handleCornerRadiusChange(value: string) {
   const v = parseFloat(value);
   if (!Number.isFinite(v) || !props.selectedElementId || !props.interactionManager) return;
   cornerRadius.value = v;
+  resetComponentPreset();
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if ("cornerRadius" in node) {
       (node as any).cornerRadius = v;
@@ -279,17 +770,9 @@ function handleCornerRadiusChange(value: string) {
   emitNodeStyle();
 }
 
-function handleOpacityChange(value: string) {
-  const v = parseFloat(value);
-  if (Number.isFinite(v)) {
-    opacity.value = v;
-    applyNodeStyle({opacity: v});
-    emitNodeStyle();
-  }
-}
-
 function handleLineStyleChange(value: string) {
   lineStyle.value = value as "solid" | "dashed";
+  resetComponentPreset();
   if (value === "dashed") {
     const pattern = lineDashPattern.value.trim() || "8,4";
     const lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
@@ -302,6 +785,7 @@ function handleLineStyleChange(value: string) {
 
 function handleLineDashChange(value: string) {
   lineDashPattern.value = value;
+  resetComponentPreset();
   if (lineStyle.value === "dashed") {
     const lineDash = value.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
     if (lineDash.length > 0) {
@@ -313,10 +797,25 @@ function handleLineDashChange(value: string) {
 
 function handleLabelColorChange(value: string) {
   labelColor.value = value;
+  resetComponentPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (node.label) {
       node.label.style = {...(node.label.style || {}), color: value};
+    }
+  });
+  emitNodeStyle();
+}
+
+function handleLabelOpacityChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  labelOpacity.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    if (node.label) {
+      node.label.style = {...(node.label.style || {}), opacity: v} as any;
     }
   });
   emitNodeStyle();
@@ -371,6 +870,30 @@ function handleLabelPlacementChange(value: string) {
   emitNodeStyle();
 }
 
+function handleWidthChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 10) return;
+  nodeWidth.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    node.width = v;
+  });
+  emitNodeStyle();
+}
+
+function handleHeightChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 10) return;
+  nodeHeight.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    node.height = v;
+  });
+  emitNodeStyle();
+}
+
 // --- Edge handlers ---
 function applyEdgeStyle(updates: Record<string, any>) {
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -394,7 +917,17 @@ function handleEdgeLabelChange(value: string) {
 
 function handleEdgeStrokeColorChange(value: string) {
   edgeStrokeColor.value = value;
-  applyEdgeStyle({strokeColor: value});
+  resetRelationPreset();
+  applyEdgeStyle({strokeColor: value, strokeOpacity: edgeStrokeOpacity.value});
+  emitEdgeStyle();
+}
+
+function handleEdgeStrokeOpacityChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  edgeStrokeOpacity.value = v;
+  resetRelationPreset();
+  applyEdgeStyle({strokeColor: edgeStrokeColor.value, strokeOpacity: v});
   emitEdgeStyle();
 }
 
@@ -402,6 +935,7 @@ function handleEdgeStrokeWidthChange(value: string) {
   const v = parseFloat(value);
   if (Number.isFinite(v)) {
     edgeStrokeWidth.value = v;
+    resetRelationPreset();
     applyEdgeStyle({strokeWidth: v});
     emitEdgeStyle();
   }
@@ -409,6 +943,7 @@ function handleEdgeStrokeWidthChange(value: string) {
 
 function handleEdgeLineStyleChange(value: string) {
   edgeLineStyle.value = value as "solid" | "dashed";
+  resetRelationPreset();
   if (value === "dashed") {
     const pattern = edgeLineDashPattern.value.trim() || "8,4";
     const lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
@@ -421,6 +956,7 @@ function handleEdgeLineStyleChange(value: string) {
 
 function handleEdgeLineDashChange(value: string) {
   edgeLineDashPattern.value = value;
+  resetRelationPreset();
   if (edgeLineStyle.value === "dashed") {
     const lineDash = value.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
     if (lineDash.length > 0) {
@@ -433,6 +969,7 @@ function handleEdgeLineDashChange(value: string) {
 function handleEdgeTypeChange(value: string) {
   const v = value as "straight" | "polyline" | "bezier";
   edgeType.value = v;
+  resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     edge.type = v;
@@ -443,6 +980,7 @@ function handleEdgeTypeChange(value: string) {
 function handleEdgeEndMarkerChange(value: string) {
   const v = value as "none" | "arrow" | "open" | "diamond" | "circle";
   edgeEndMarker.value = v;
+  resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     edge.endMarker = buildMarkerConfig(v, edgeEndMarkerSize.value, edgeEndMarkerFillColor.value, edgeEndMarkerFillOpacity.value);
@@ -453,6 +991,7 @@ function handleEdgeEndMarkerChange(value: string) {
 function handleEdgeStartMarkerChange(value: string) {
   const v = value as "none" | "arrow" | "open" | "diamond" | "circle";
   edgeStartMarker.value = v;
+  resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     edge.startMarker = buildMarkerConfig(v, edgeStartMarkerSize.value, edgeStartMarkerFillColor.value, edgeStartMarkerFillOpacity.value);
@@ -460,21 +999,27 @@ function handleEdgeStartMarkerChange(value: string) {
   emitEdgeStyle();
 }
 
-function handleEdgeOpacityChange(value: string) {
-  const v = parseFloat(value);
-  if (Number.isFinite(v)) {
-    edgeOpacity.value = v;
-    applyEdgeStyle({opacity: v});
-    emitEdgeStyle();
-  }
-}
-
 function handleEdgeLabelColorChange(value: string) {
   edgeLabelColor.value = value;
+  resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     if (edge.label) {
       edge.label.style = {...(edge.label.style || {}), color: value};
+    }
+  });
+  emitEdgeStyle();
+}
+
+function handleEdgeLabelOpacityChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  edgeLabelOpacity.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    if (edge.label) {
+      edge.label.style = {...(edge.label.style || {}), opacity: v} as any;
     }
   });
   emitEdgeStyle();
@@ -495,9 +1040,22 @@ function handleEdgeLabelFontSizeChange(value: string) {
 
 function handleEdgeLabelBgColorChange(value: string) {
   edgeLabelBgColor.value = value;
+  resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     (edge as any).labelBackground = {...((edge as any).labelBackground || {}), color: value};
+  });
+  emitEdgeStyle();
+}
+
+function handleEdgeLabelBgOpacityChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  edgeLabelBgOpacity.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), opacity: v};
   });
   emitEdgeStyle();
 }
@@ -590,6 +1148,64 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
     <!-- Edge style controls -->
     <div v-else-if="elementType === 'edge'" class="style-panel__body">
       <div class="style-row">
+        <label class="style-label">Пресет</label>
+        <select
+          class="style-select style-select--wide"
+          :value="selectedRelationPreset"
+          @change="applyEdgePreset(($event.target as HTMLSelectElement).value); selectedRelationPreset = ($event.target as HTMLSelectElement).value"
+        >
+          <option value="custom">— Пользовательский —</option>
+          <optgroup label="Встроенные">
+            <option
+              v-for="preset in builtInRelationPresets"
+              :key="preset.name"
+              :value="preset.name"
+            >
+              {{ preset.label }}
+            </option>
+          </optgroup>
+          <optgroup v-if="userRelationPresets.length" label="Мои пресеты">
+            <option
+              v-for="preset in userRelationPresets"
+              :key="preset.name"
+              :value="preset.name"
+            >
+              {{ preset.label }}
+            </option>
+          </optgroup>
+        </select>
+        <button
+          type="button"
+          class="style-btn style-btn--icon"
+          title="Сохранить как пресет"
+          @click="openSavePresetForm"
+        >
+          +
+        </button>
+        <button
+          v-if="userRelationPresets.some(p => p.name === selectedRelationPreset)"
+          type="button"
+          class="style-btn style-btn--icon style-btn--danger"
+          title="Удалить пресет"
+          @click="handleDeleteUserPreset(selectedRelationPreset, 'relation')"
+        >
+          &times;
+        </button>
+      </div>
+      <div v-if="showSavePresetForm && elementType === 'edge'" class="style-row">
+        <label class="style-label">Название</label>
+        <input
+          v-model="newPresetName"
+          class="style-input style-input--wide"
+          placeholder="Мой пресет"
+          @keyup.enter="confirmSavePreset"
+          @keyup.escape="cancelSavePreset"
+        >
+        <button type="button" class="style-btn style-btn--icon" title="Сохранить" @click="confirmSavePreset">&#10003;</button>
+        <button type="button" class="style-btn style-btn--icon" title="Отмена" @click="cancelSavePreset">&times;</button>
+      </div>
+
+      <div class="style-row">
         <label class="style-label">Метка</label>
         <input
           class="style-input style-input--wide"
@@ -600,7 +1216,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div class="style-row">
-        <label class="style-label">Цвет метки</label>
+        <label class="style-label">Цвет и непрозрачность метки</label>
         <div class="color-group">
           <input
             type="color"
@@ -613,6 +1229,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             class="style-input"
             :value="edgeLabelColor"
             @change="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="edgeLabelOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)"
           >
         </div>
       </div>
@@ -631,7 +1257,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div class="style-row">
-        <label class="style-label">Фон метки</label>
+        <label class="style-label">Фон и непрозрачность метки</label>
         <div class="color-group">
           <input
             type="color"
@@ -645,11 +1271,21 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             :value="edgeLabelBgColor"
             @change="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)"
           >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="edgeLabelBgOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)"
+          >
         </div>
       </div>
 
       <div class="style-row">
-        <label class="style-label">Цвет</label>
+        <label class="style-label">Цвет и непрозрачность</label>
         <div class="color-group">
           <input
             type="color"
@@ -662,6 +1298,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             class="style-input"
             :value="edgeStrokeColor"
             @change="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="edgeStrokeOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)"
           >
         </div>
       </div>
@@ -744,7 +1390,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div v-if="edgeStartMarker !== 'none'" class="style-row">
-        <label class="style-label">Заливка нач.</label>
+        <label class="style-label">Заливка и непрозрачность нач.</label>
         <div class="color-group">
           <input
             type="color"
@@ -758,20 +1404,17 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             :value="edgeStartMarkerFillColor"
             @change="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)"
           >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="edgeStartMarkerFillOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)"
+          >
         </div>
-      </div>
-
-      <div v-if="edgeStartMarker !== 'none'" class="style-row">
-        <label class="style-label">Непрозр. нач.</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeStartMarkerFillOpacity"
-          min="0"
-          max="1"
-          step="0.1"
-          @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)"
-        >
       </div>
 
       <div class="style-row">
@@ -803,7 +1446,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div v-if="edgeEndMarker !== 'none'" class="style-row">
-        <label class="style-label">Заливка кон.</label>
+        <label class="style-label">Заливка и непрозрачность кон.</label>
         <div class="color-group">
           <input
             type="color"
@@ -817,38 +1460,80 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             :value="edgeEndMarkerFillColor"
             @change="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)"
           >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="edgeEndMarkerFillOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)"
+          >
         </div>
-      </div>
-
-      <div v-if="edgeEndMarker !== 'none'" class="style-row">
-        <label class="style-label">Непрозр. кон.</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeEndMarkerFillOpacity"
-          min="0"
-          max="1"
-          step="0.1"
-          @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Прозрачность</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeOpacity"
-          min="0"
-          max="1"
-          step="0.1"
-          @input="handleEdgeOpacityChange(($event.target as HTMLInputElement).value)"
-        >
       </div>
     </div>
 
     <!-- Node style controls -->
     <div v-else class="style-panel__body">
+      <div class="style-row">
+        <label class="style-label">Пресет</label>
+        <select
+          class="style-select style-select--wide"
+          :value="selectedComponentPreset"
+          @change="applyComponentPreset(($event.target as HTMLSelectElement).value); selectedComponentPreset = ($event.target as HTMLSelectElement).value"
+        >
+          <option value="custom">— Пользовательский —</option>
+          <optgroup label="Встроенные">
+            <option
+              v-for="preset in builtInComponentPresets"
+              :key="preset.name"
+              :value="preset.name"
+            >
+              {{ preset.label }}
+            </option>
+          </optgroup>
+          <optgroup v-if="userComponentPresets.length" label="Мои пресеты">
+            <option
+              v-for="preset in userComponentPresets"
+              :key="preset.name"
+              :value="preset.name"
+            >
+              {{ preset.label }}
+            </option>
+          </optgroup>
+        </select>
+        <button
+          type="button"
+          class="style-btn style-btn--icon"
+          title="Сохранить как пресет"
+          @click="openSavePresetForm"
+        >
+          +
+        </button>
+        <button
+          v-if="userComponentPresets.some(p => p.name === selectedComponentPreset)"
+          type="button"
+          class="style-btn style-btn--icon style-btn--danger"
+          title="Удалить пресет"
+          @click="handleDeleteUserPreset(selectedComponentPreset, 'component')"
+        >
+          &times;
+        </button>
+      </div>
+      <div v-if="showSavePresetForm && elementType === 'node'" class="style-row">
+        <label class="style-label">Название</label>
+        <input
+          v-model="newPresetName"
+          class="style-input style-input--wide"
+          placeholder="Мой пресет"
+          @keyup.enter="confirmSavePreset"
+          @keyup.escape="cancelSavePreset"
+        >
+        <button type="button" class="style-btn style-btn--icon" title="Сохранить" @click="confirmSavePreset">&#10003;</button>
+        <button type="button" class="style-btn style-btn--icon" title="Отмена" @click="cancelSavePreset">&times;</button>
+      </div>
+
       <div class="style-row">
         <label class="style-label">Метка</label>
         <input
@@ -860,7 +1545,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div class="style-row">
-        <label class="style-label">Цвет метки</label>
+        <label class="style-label">Цвет и непрозрачность метки</label>
         <div class="color-group">
           <input
             type="color"
@@ -873,6 +1558,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             class="style-input"
             :value="labelColor"
             @change="handleLabelColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="labelOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)"
           >
         </div>
       </div>
@@ -933,6 +1628,32 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <div class="style-row">
+        <label class="style-label">Ширина</label>
+        <input
+          type="number"
+          class="style-input style-input--num"
+          :value="nodeWidth"
+          min="10"
+          max="500"
+          step="10"
+          @input="handleWidthChange(($event.target as HTMLInputElement).value)"
+        >
+      </div>
+
+      <div class="style-row">
+        <label class="style-label">Высота</label>
+        <input
+          type="number"
+          class="style-input style-input--num"
+          :value="nodeHeight"
+          min="10"
+          max="300"
+          step="10"
+          @input="handleHeightChange(($event.target as HTMLInputElement).value)"
+        >
+      </div>
+
+      <div class="style-row">
         <label class="style-label">Иконка</label>
         <div class="icon-group">
           <select
@@ -954,8 +1675,111 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         </div>
       </div>
 
+      <div v-if="iconName" class="style-row">
+        <label class="style-label">Позиция иконки</label>
+        <select
+          class="style-select"
+          :value="iconPlacement"
+          @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="top-left">Сверху слева</option>
+          <option value="top-right">Сверху справа</option>
+          <option value="bottom-left">Снизу слева</option>
+          <option value="bottom-right">Снизу справа</option>
+          <option value="center">По центру</option>
+          <option value="top">Сверху</option>
+          <option value="bottom">Снизу</option>
+          <option value="left">Слева</option>
+          <option value="right">Справа</option>
+        </select>
+      </div>
+
+      <div v-if="iconName" class="style-row">
+        <label class="style-label">Цвета SVG иконки</label>
+        <div class="color-group">
+          <input
+            type="color"
+            class="color-picker"
+            :value="iconStrokeColor"
+            title="Цвет линий"
+            @input="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="text"
+            class="style-input"
+            :value="iconStrokeColor"
+            @change="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="color"
+            class="color-picker"
+            :value="iconFillColor"
+            title="Цвет заливки"
+            @input="handleIconFillColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="text"
+            class="style-input"
+            :value="iconFillColor"
+            @change="handleIconFillColorChange(($event.target as HTMLInputElement).value)"
+          >
+        </div>
+      </div>
+
+      <div v-if="iconName" class="style-row">
+        <label class="style-label">Размер иконки</label>
+        <div class="color-group">
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="iconWidth"
+            min="1"
+            max="200"
+            step="1"
+            title="Ширина"
+            @input="handleIconWidthChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="iconHeight"
+            min="1"
+            max="200"
+            step="1"
+            title="Высота"
+            @input="handleIconHeightChange(($event.target as HTMLInputElement).value)"
+          >
+        </div>
+      </div>
+
+      <div v-if="iconName" class="style-row">
+        <label class="style-label">Отступы иконки</label>
+        <div class="color-group">
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="iconPadding"
+            min="0"
+            max="100"
+            step="1"
+            title="Padding"
+            @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="iconMargin"
+            min="0"
+            max="100"
+            step="1"
+            title="Margin"
+            @input="handleIconMarginChange(($event.target as HTMLInputElement).value)"
+          >
+        </div>
+      </div>
+
       <div class="style-row">
-        <label class="style-label">Заливка</label>
+        <label class="style-label">Заливка и непрозрачность</label>
         <div class="color-group">
           <input
             type="color"
@@ -969,11 +1793,21 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             :value="fillColor"
             @change="handleFillChange(($event.target as HTMLInputElement).value)"
           >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="fillOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Непрозрачность"
+            @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)"
+          >
         </div>
       </div>
 
       <div class="style-row">
-        <label class="style-label">Обводка</label>
+        <label class="style-label">Обводка и непрозрачность</label>
         <div class="color-group">
           <input
             type="color"
@@ -986,6 +1820,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             class="style-input"
             :value="strokeColor"
             @change="handleStrokeColorChange(($event.target as HTMLInputElement).value)"
+          >
+          <input
+            type="number"
+            class="style-input style-input--num"
+            :value="strokeOpacity"
+            min="0"
+            max="1"
+            step="0.1"
+            title="Прозрачность"
+            @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)"
           >
         </div>
       </div>
@@ -1039,18 +1883,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         >
       </div>
 
-      <div class="style-row">
-        <label class="style-label">Прозрачность</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="opacity"
-          min="0"
-          max="1"
-          step="0.1"
-          @input="handleOpacityChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
     </div>
   </div>
 </template>
@@ -1193,5 +2025,34 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   cursor: pointer;
   flex-shrink: 0;
   background: var(--surface-muted);
+}
+
+.style-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.style-btn--icon:hover {
+  background: var(--surface-strong);
+  border-color: var(--primary);
+}
+
+.style-btn--danger:hover {
+  background: var(--danger-soft, #ffeef0);
+  border-color: var(--danger, #dc3545);
+  color: var(--danger, #dc3545);
 }
 </style>

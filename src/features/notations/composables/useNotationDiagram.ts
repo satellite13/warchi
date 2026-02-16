@@ -33,12 +33,15 @@ export interface NotationDiagramOptions {
 
 const COMPONENT_STYLE = {
   fillColor: "#e0f2fe",
+  fillOpacity: 1,
   strokeColor: "#0284c7",
+  strokeOpacity: 1,
   strokeWidth: 2
 }
 
 const RELATION_EDGE_STYLE = {
   strokeColor: "#7c3aed",
+  strokeOpacity: 1,
   strokeWidth: 2
 }
 
@@ -47,14 +50,14 @@ const ANCHOR_STYLE = {
   strokeColor: "transparent",
   strokeWidth: 0
 }
-
-const SELECTED_STYLE = {
-  strokeWidth: 3
-}
+const SOFT_SELECTION_COLOR = "#6366f1"
+const SOFT_SELECTION_OFFSET_PX = 3
 
 type ResolvedStyle = {
   fillColor: string
+  fillOpacity: number
   strokeColor: string
+  strokeOpacity: number
   strokeWidth: number
 }
 
@@ -67,6 +70,11 @@ const COLUMN_GAP = 60
 const ROW_GAP = 30
 const GRID_SIZE = 20
 const NO_ANCHORS = { top: 0, right: 0, bottom: 0, left: 0 }
+const NOOP_RENDER_RESIZE_HANDLES = () => {}
+
+function disableTransformerFrame(node: RectangleNode | CircleNode) {
+  ;(node as any).renderResizeHandles = NOOP_RENDER_RESIZE_HANDLES
+}
 
 export function useNotationDiagram(options: NotationDiagramOptions) {
   const { state, selectedId, onSelect } = options
@@ -79,11 +87,14 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   const miniMapRef = shallowRef<MiniMap | null>(null)
   const nodeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   const edgeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
+  let cleanupSelectionOutlineOverlay: (() => void) | null = null
 
   function mergeStyle(base: ResolvedStyle, override?: NodeStyle): ResolvedStyle {
     return {
       fillColor: override?.fillColor ?? base.fillColor,
+      fillOpacity: (override as any)?.fillOpacity ?? base.fillOpacity,
       strokeColor: override?.strokeColor ?? base.strokeColor,
+      strokeOpacity: (override as any)?.strokeOpacity ?? base.strokeOpacity,
       strokeWidth: override?.strokeWidth ?? base.strokeWidth
     }
   }
@@ -111,8 +122,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   function resolveRelationEdgeStyle(typeItem: EditorLinkType | undefined) {
     const base = RELATION_EDGE_STYLE
     const strokeColor = typeItem?.parsedAttrs.style?.strokeColor ?? base.strokeColor
+    const strokeOpacity = (typeItem?.parsedAttrs.style as any)?.strokeOpacity ?? base.strokeOpacity
     const strokeWidth = typeItem?.parsedAttrs.style?.strokeWidth ?? base.strokeWidth
-    return { strokeColor, strokeWidth }
+    return { strokeColor, strokeOpacity, strokeWidth }
   }
 
   function resolveComponentStyle(item: EditorComponent) {
@@ -125,11 +137,15 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     return {
       style: {
         fillColor: ds.fillColor ?? base.style.fillColor,
+        fillOpacity: ds.fillOpacity ?? base.style.fillOpacity ?? 1,
         strokeColor: ds.strokeColor ?? base.style.strokeColor,
-        strokeWidth: ds.strokeWidth ?? base.style.strokeWidth
+        strokeOpacity: ds.strokeOpacity ?? base.style.strokeOpacity ?? 1,
+        strokeWidth: ds.strokeWidth ?? base.style.strokeWidth,
+        ...(ds.opacity != null ? { opacity: ds.opacity } : {}),
+        ...(ds.lineDash ? { lineDash: ds.lineDash } : {})
       } as ResolvedStyle,
-      width: base.width,
-      height: base.height,
+      width: ds.width ?? base.width,
+      height: ds.height ?? base.height,
       cornerRadius: ds.cornerRadius ?? base.cornerRadius
     }
   }
@@ -143,17 +159,19 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     if (!ds) return base
     return {
       strokeColor: ds.strokeColor ?? base.strokeColor,
+      strokeOpacity: ds.strokeOpacity ?? base.strokeOpacity ?? 1,
       strokeWidth: ds.strokeWidth ?? base.strokeWidth
     }
   }
 
   function buildNodeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-    if (!ds?.labelColor && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
+    if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
       return name
     }
     const opts: TextLabelOptions = { text: name }
     const style: Record<string, unknown> = {}
     if (ds.labelColor) style.color = ds.labelColor
+    if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds.labelFontSize) style.fontSize = ds.labelFontSize
     if (Object.keys(style).length) opts.style = style as any
     if (ds.labelPadding != null) opts.padding = ds.labelPadding
@@ -162,12 +180,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   }
 
   function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-    if (!ds?.labelColor && !ds?.labelFontSize) {
+    if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize) {
       return name
     }
     const opts: TextLabelOptions = { text: name }
     const style: Record<string, unknown> = {}
     if (ds.labelColor) style.color = ds.labelColor
+    if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds.labelFontSize) style.fontSize = ds.labelFontSize
     if (Object.keys(style).length) opts.style = style as any
     return opts
@@ -176,8 +195,24 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   function buildEdgeLabelBackground(ds?: DiagramStyle) {
     return {
       color: ds?.labelBgColor || "transparent",
+      ...(ds?.labelBgOpacity != null ? { opacity: ds.labelBgOpacity } : {}),
       ...(ds?.labelBgPadding != null ? { padding: ds.labelBgPadding } : {}),
       ...(ds?.labelBgBorderRadius != null ? { borderRadius: ds.labelBgBorderRadius } : {})
+    }
+  }
+
+  function buildNodeIcon(ds?: DiagramStyle) {
+    if (!ds?.iconName) return undefined
+    return {
+      source: `/icons/${ds.iconName}.svg`,
+      placement: (ds.iconPlacement as any) ?? ("top-left" as const),
+      width: ds.iconWidth ?? 20,
+      height: ds.iconHeight ?? 20,
+      fit: "contain" as const,
+      ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
+      ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
+      ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
+      ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
     }
   }
 
@@ -209,28 +244,15 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       width: visual.width,
       height: visual.height,
       label: buildNodeLabel(item.name, ds),
-      style: {
-        ...visual.style,
-        ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-        ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
-      },
+      style: visual.style,
       cornerRadius: visual.cornerRadius,
       anchorPoints: NO_ANCHORS,
-      ...(ds?.iconName
-        ? {
-            icon: {
-              source: `/icons/${ds.iconName}.svg`,
-              placement: "top-left" as const,
-              width: 20,
-              height: 20,
-              fit: "contain" as const
-            }
-          }
-        : {})
+      ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
     })
     if (ds?.labelPlacement) {
       (node as any).labelPlacement = ds.labelPlacement as LabelPlacement
     }
+    disableTransformerFrame(node)
     return node
   }
 
@@ -254,13 +276,17 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
       const existing = renderer.getNode(nodeId)
       if (existing) {
+        if (existing instanceof RectangleNode || existing instanceof CircleNode) {
+          disableTransformerFrame(existing)
+        }
         const visual = resolveComponentStyle(component)
         const ds = component.parsedAttrs.diagramStyle
         // Set label as string first (setter creates proper TextLabel), then apply style
         existing.label = component.name
-        if (existing.label && (ds?.labelColor || ds?.labelFontSize)) {
+        if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
           existing.label.style = {
             ...(ds.labelColor ? { color: ds.labelColor } : {}),
+            ...(ds.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
             ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {})
           }
         }
@@ -274,21 +300,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         existing.height = visual.height
         existing.style = {
           ...visual.style,
+          ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
+          ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
           ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         }
         ;(existing as RectangleNode).cornerRadius = visual.cornerRadius
-        if (ds?.iconName) {
-          existing.icon = {
-            source: `/icons/${ds.iconName}.svg`,
-            placement: "top-left" as const,
-            width: 20,
-            height: 20,
-            fit: "contain" as const
-          }
-        } else {
-          existing.icon = undefined
-        }
+        existing.icon = buildNodeIcon(ds)
         if (ds?.labelPlacement) {
           (existing as any).labelPlacement = ds.labelPlacement as LabelPlacement
         }
@@ -322,9 +340,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const ds = relation.parsedAttrs.diagramStyle
         // Set label as string first (setter creates proper TextLabel), then apply style
         existingEdge.label = relation.name
-        if (existingEdge.label && (ds?.labelColor || ds?.labelFontSize)) {
+        if (existingEdge.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
           existingEdge.label.style = {
             ...(ds.labelColor ? { color: ds.labelColor } : {}),
+            ...(ds.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
             ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {})
           }
         }
@@ -332,9 +351,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         existingEdge.style = {
           strokeColor: edgeStyle.strokeColor,
           strokeWidth: edgeStyle.strokeWidth,
+          strokeOpacity: (edgeStyle as any).strokeOpacity ?? 1,
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
           ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
-        }
+        } as any
         ;(existingEdge as any).labelBackground = buildEdgeLabelBackground(ds)
         if (ds?.edgeType) {
           existingEdge.type = ds.edgeType as "straight" | "polyline" | "bezier"
@@ -455,9 +475,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           style: {
             strokeColor: edgeStyle.strokeColor,
             strokeWidth: edgeStyle.strokeWidth,
+            strokeOpacity: (edgeStyle as any).strokeOpacity ?? 1,
             ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
             ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
-          },
+          } as any,
           startMarker,
           endMarker
         })
@@ -473,8 +494,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     }
   }
 
-  function updateSelection(renderer: DiagramRenderer) {
-    const id = selectedId.value
+  function updateSelection(renderer: DiagramRenderer, selectedEntityId?: string | null) {
+    const id = selectedEntityId ?? selectedId.value
     const activeComponents = state.value.components.filter((c) => !c._isDeleted)
 
     // Update node selection styles
@@ -492,8 +513,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         }
         if (isSelected) {
-          node.style = { ...fullStyle, ...SELECTED_STYLE }
-          node.state = "selected"
+          node.style = fullStyle
+          node.state = "normal" as ElementState
         } else {
           node.style = fullStyle
           if (node.state === "selected") {
@@ -549,6 +570,41 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     selectionManagerRef.value = selectionManager
     navigationManagerRef.value = interactionManager.navigation
 
+    cleanupSelectionOutlineOverlay?.()
+    cleanupSelectionOutlineOverlay = renderer.addOverlayRenderer((ctx) => {
+      const selectedEntityId = selectedId.value
+      if (!selectedEntityId) return
+
+      let selectedNode: RectangleNode | CircleNode | null = null
+      for (const [nodeId, entity] of nodeIdToEntity) {
+        if (entity.kind === "component" && entity.id === selectedEntityId) {
+          const node = renderer.getNode(nodeId)
+          if (node instanceof RectangleNode || node instanceof CircleNode) {
+            selectedNode = node
+          }
+          break
+        }
+      }
+
+      if (!selectedNode) return
+      const bounds = selectedNode.getBounds()
+      const zoom = renderer.zoom || 1
+      const lineWidth = 1 / zoom
+      const offset = SOFT_SELECTION_OFFSET_PX / zoom
+
+      ctx.save()
+      ctx.strokeStyle = SOFT_SELECTION_COLOR
+      ctx.lineWidth = lineWidth
+      ctx.setLineDash([4 / zoom, 4 / zoom])
+      ctx.strokeRect(
+        bounds.x - offset,
+        bounds.y - offset,
+        bounds.width + offset * 2,
+        bounds.height + offset * 2
+      )
+      ctx.restore()
+    })
+
     selectionManager.on("select", (elementIds: string[]) => {
       if (elementIds.length === 1) {
         const elementId = elementIds[0]!
@@ -556,13 +612,17 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const nodeEntity = nodeIdToEntity.get(elementId)
         if (nodeEntity) {
           onSelect(nodeEntity.id, nodeEntity.kind)
+          updateSelection(renderer, nodeEntity.id)
           return
         }
         const edgeEntity = edgeIdToEntity.get(elementId)
         if (edgeEntity) {
           onSelect(edgeEntity.id, edgeEntity.kind)
+          updateSelection(renderer, edgeEntity.id)
+          return
         }
       }
+      updateSelection(renderer)
     })
 
     syncNodes(renderer)
@@ -599,6 +659,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   }
 
   function destroyRenderer() {
+    cleanupSelectionOutlineOverlay?.()
+    cleanupSelectionOutlineOverlay = null
     interactionManagerRef.value = null
     selectionManagerRef.value = null
     navigationManagerRef.value = null

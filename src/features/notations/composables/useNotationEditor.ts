@@ -1,4 +1,4 @@
-import { ref, computed, type Ref, type ComputedRef } from "vue"
+import { ref, computed, onScopeDispose, type Ref, type ComputedRef } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { apiGet, apiPost, apiPut, apiDelete } from "../../../composables/useApi"
 import type { NotationData, PaginatedResponse } from "../../../types/entities"
@@ -105,6 +105,14 @@ export function useNotationEditor(): NotationEditorReturn {
   const saveError = ref<string | null>(null)
   const saveSuccess = ref(false)
   const saveProgress = ref("")
+  let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
+
+  onScopeDispose(() => {
+    if (saveSuccessTimer !== null) {
+      clearTimeout(saveSuccessTimer)
+      saveSuccessTimer = null
+    }
+  })
 
   const hasUnsavedChanges = computed(() => {
     const { nodeTypes, linkTypes, components, relations } = state.value
@@ -363,6 +371,13 @@ export function useNotationEditor(): NotationEditorReturn {
       state.value.relations = relations.filter((r) => !r._isDeleted)
 
       saveSuccess.value = true
+      if (saveSuccessTimer !== null) {
+        clearTimeout(saveSuccessTimer)
+      }
+      saveSuccessTimer = setTimeout(() => {
+        saveSuccess.value = false
+        saveSuccessTimer = null
+      }, 3000)
       return true
     } catch (error) {
       saveError.value =

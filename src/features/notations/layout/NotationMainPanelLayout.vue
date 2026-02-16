@@ -26,7 +26,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
+  grid-template-columns: 280px 1fr 360px;
   overflow: hidden;
 }
 

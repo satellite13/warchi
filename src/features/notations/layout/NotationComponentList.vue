@@ -166,17 +166,20 @@ watch(() => props.selectedId, (id) => {
     </div>
 
     <div ref="itemsContainer" class="component-list__items">
-      <button
+      <div
         v-for="item in items"
         :key="item.id"
         :data-id="item.id"
-        type="button"
         class="component-item"
+        role="button"
+        tabindex="0"
         :class="{
           'component-item--active': selectedId === item.id,
           'component-item--relation': item.kind === 'relation'
         }"
         @click="emit('select', item.kind, item.id)"
+        @keydown.enter.prevent="emit('select', item.kind, item.id)"
+        @keydown.space.prevent="emit('select', item.kind, item.id)"
       >
         <span class="material-symbols-outlined component-item__icon">
           {{ item.kind === 'component' ? 'category' : 'conversion_path' }}
@@ -193,7 +196,7 @@ watch(() => props.selectedId, (id) => {
         >
           <span class="material-symbols-outlined">delete</span>
         </button>
-      </button>
+      </div>
 
       <p v-if="items.length === 0" class="component-list__empty">
         {{ searchQuery ? 'Ничего не найдено' : 'Нет элементов' }}
@@ -476,6 +479,11 @@ watch(() => props.selectedId, (id) => {
 
 .component-item:hover {
   background: var(--surface-strong);
+}
+
+.component-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .component-item--active {

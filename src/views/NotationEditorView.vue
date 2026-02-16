@@ -39,6 +39,7 @@ const {
   componentVersion,
   componentTypeSelection,
   componentNewTypeName,
+  componentStylePreset,
   componentFormError,
   componentTagSuggestions,
   showRelationModal,
@@ -47,8 +48,11 @@ const {
   relationVersion,
   relationTypeSelection,
   relationNewTypeName,
+  relationStylePreset,
   relationFormError,
   relationTagSuggestions,
+  componentStylePresets,
+  relationStylePresets,
   selectedItem,
   openComponentModal,
   closeComponentModal,
@@ -461,6 +465,7 @@ onBeforeUnmount(() => {
     v-model:tags="componentTags"
     v-model:type-selection="componentTypeSelection"
     v-model:new-type-name="componentNewTypeName"
+    v-model:style-preset="componentStylePreset"
     title="Новый компонент"
     form-id="component-form"
     name-label="Название компонента"
@@ -474,6 +479,8 @@ onBeforeUnmount(() => {
     :new-type-value="NEW_TYPE_VALUE"
     new-type-label="Новый тип узла"
     new-type-placeholder="Название типа"
+    style-label="Стиль фигуры"
+    :style-presets="componentStylePresets"
     :suggestions="componentTagSuggestions"
     :error="componentFormError"
     @close="closeComponentModal"
@@ -488,6 +495,7 @@ onBeforeUnmount(() => {
     v-model:tags="relationTags"
     v-model:type-selection="relationTypeSelection"
     v-model:new-type-name="relationNewTypeName"
+    v-model:style-preset="relationStylePreset"
     title="Новое отношение"
     form-id="relation-form"
     name-label="Название отношения"
@@ -501,6 +509,8 @@ onBeforeUnmount(() => {
     :new-type-value="NEW_TYPE_VALUE"
     new-type-label="Новый тип связи"
     new-type-placeholder="Название типа"
+    style-label="Стиль связи"
+    :style-presets="relationStylePresets"
     :suggestions="relationTagSuggestions"
     :error="relationFormError"
     @close="closeRelationModal"

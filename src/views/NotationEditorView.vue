@@ -852,7 +852,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .save-toast {
   position: fixed;
-  bottom: 24px;
+  bottom: 48px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;

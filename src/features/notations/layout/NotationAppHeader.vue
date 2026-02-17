@@ -41,7 +41,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   {icon: "separator", event: "sep4", separator: true},
   {icon: "data_object", event: "show-attrs-json", title: "Просмотр JSON attrs"},
   {icon: "separator", event: "sep5", separator: true},
-  {icon: "save", event: "save", title: "Сохранить", badge: props.hasUnsavedChanges},
+  {icon: "save", event: "save", title: "Сохранить", badge: props.hasUnsavedChanges, variant: "primary"},
 ]);
 
 const emit = defineEmits<{
@@ -72,9 +72,7 @@ const emit = defineEmits<{
   grid-template-columns: 280px 1fr 280px;
   align-items: center;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--surface);
   position: sticky;
   top: 0;
   z-index: 10;

@@ -198,9 +198,12 @@ watch(() => props.selectedId, (id) => {
         </button>
       </div>
 
-      <p v-if="items.length === 0" class="component-list__empty">
-        {{ searchQuery ? 'Ничего не найдено' : 'Нет элементов' }}
-      </p>
+      <div v-if="items.length === 0" class="component-list__empty">
+        <span class="material-symbols-outlined component-list__empty-icon">
+          {{ searchQuery ? 'search_off' : 'inventory_2' }}
+        </span>
+        <span>{{ searchQuery ? 'Ничего не найдено' : 'Нет элементов' }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -220,10 +223,10 @@ watch(() => props.selectedId, (id) => {
 }
 
 .notation-info__name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--base-text);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -262,11 +265,10 @@ watch(() => props.selectedId, (id) => {
 
 .component-list__title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--heading-font-size);
   font-weight: 600;
   color: var(--base-text);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: var(--heading-letter-spacing);
 }
 
 .component-list__actions {
@@ -289,15 +291,15 @@ watch(() => props.selectedId, (id) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface-strong);
+  background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .add-btn .material-symbols-outlined {
@@ -307,6 +309,7 @@ watch(() => props.selectedId, (id) => {
 .add-btn:hover {
   background: var(--primary-soft);
   color: var(--primary);
+  border-color: var(--primary);
 }
 
 .component-list__search {
@@ -475,6 +478,7 @@ watch(() => props.selectedId, (id) => {
   text-align: left;
   font-family: inherit;
   transition: background 0.15s ease;
+  border-left: 3px solid transparent;
 }
 
 .component-item:hover {
@@ -488,10 +492,23 @@ watch(() => props.selectedId, (id) => {
 
 .component-item--active {
   background: var(--primary-soft);
+  border-left-color: var(--primary);
 }
 
 .component-item--active:hover {
   background: var(--primary-soft);
+}
+
+.component-item--relation:not(.component-item--active) {
+  border-left-color: var(--accent);
+}
+
+.component-item:not(.component-item--relation):not(.component-item--active):hover {
+  border-left-color: rgba(124, 92, 252, 0.3);
+}
+
+.component-item--relation:not(.component-item--active):hover {
+  border-left-color: var(--accent);
 }
 
 .component-item__icon {
@@ -530,7 +547,7 @@ watch(() => props.selectedId, (id) => {
 
 .component-item__type {
   font-size: 11px;
-  color: var(--text-subtle);
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -568,10 +585,19 @@ watch(() => props.selectedId, (id) => {
 }
 
 .component-list__empty {
-  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
   text-align: center;
   font-size: 13px;
   color: var(--text-subtle);
   margin: 0;
+}
+
+.component-list__empty-icon {
+  font-size: 28px;
+  color: var(--border-strong);
 }
 </style>

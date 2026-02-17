@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from "vue"
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue"
 
 const props = withDefaults(defineProps<{
   propertiesHeight?: number
@@ -10,6 +10,23 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: "update:propertiesHeight", value: number): void
 }>()
+
+const leftCollapsed = ref(false)
+const rightCollapsed = ref(false)
+
+const gridColumns = computed(() => {
+  const left = leftCollapsed.value ? '0px' : '280px'
+  const right = rightCollapsed.value ? '0px' : '360px'
+  return `${left} minmax(0, 1fr) ${right}`
+})
+
+function toggleRight() {
+  rightCollapsed.value = !rightCollapsed.value
+}
+
+function toggleLeft() {
+  leftCollapsed.value = !leftCollapsed.value
+}
 
 const MIN_HEIGHT = 180
 const MAX_HEIGHT = 520
@@ -90,39 +107,62 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="notation-panel">
-    <aside class="notation-panel__left">
-      <slot name="left" />
-    </aside>
-    <section ref="centerRef" class="notation-panel__center">
-      <div class="notation-panel__diagram">
-        <slot />
-      </div>
-      <div
-        class="notation-panel__resizer"
-        role="separator"
-        aria-orientation="horizontal"
-        title="Потяните, чтобы изменить высоту панели свойств"
-        @mousedown.prevent="startDragging"
-      >
-        <span class="notation-panel__resizer-handle"></span>
-      </div>
-      <div class="notation-panel__properties" :style="{ height: `${propertiesHeight}px` }">
-        <slot name="bottom" />
-      </div>
-    </section>
-    <aside class="notation-panel__right">
-      <slot name="right" />
-    </aside>
+  <div class="notation-panel-wrapper">
+    <div class="notation-panel" :style="{ gridTemplateColumns: gridColumns }">
+      <aside class="notation-panel__left" :class="{ 'notation-panel__left--collapsed': leftCollapsed }">
+        <slot name="left" />
+      </aside>
+      <section ref="centerRef" class="notation-panel__center">
+        <div class="notation-panel__diagram">
+          <slot />
+        </div>
+        <div
+          class="notation-panel__resizer"
+          role="separator"
+          aria-orientation="horizontal"
+          title="Потяните, чтобы изменить высоту панели свойств"
+          @mousedown.prevent="startDragging"
+        >
+          <span class="notation-panel__resizer-handle"></span>
+        </div>
+        <div class="notation-panel__properties" :style="{ height: `${propertiesHeight}px` }">
+          <slot name="bottom" />
+        </div>
+      </section>
+      <aside class="notation-panel__right" :class="{ 'notation-panel__right--collapsed': rightCollapsed }">
+        <slot name="right" />
+      </aside>
+    </div>
+    <button
+      type="button"
+      class="notation-panel__collapse-btn notation-panel__collapse-btn--left"
+      :title="leftCollapsed ? 'Показать панель элементов' : 'Скрыть панель элементов'"
+      @click="toggleLeft"
+    >
+      <span class="material-symbols-outlined">{{ leftCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
+    </button>
+    <button
+      type="button"
+      class="notation-panel__collapse-btn notation-panel__collapse-btn--right"
+      :title="rightCollapsed ? 'Показать панель стилей' : 'Скрыть панель стилей'"
+      @click="toggleRight"
+    >
+      <span class="material-symbols-outlined">{{ rightCollapsed ? 'chevron_left' : 'chevron_right' }}</span>
+    </button>
   </div>
 </template>
 
 <style scoped>
-.notation-panel {
+.notation-panel-wrapper {
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+
+.notation-panel {
+  width: 100%;
+  height: 100%;
   display: grid;
-  grid-template-columns: 280px 1fr 360px;
   overflow: hidden;
 }
 
@@ -130,11 +170,14 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   border-right: 1px solid var(--border);
-  background: var(--surface);
-  position: relative;
-  z-index: 1;
+  background: var(--surface-panel);
+}
+
+.notation-panel__left--collapsed {
+  border-right-color: transparent;
 }
 
 .notation-panel__center {
@@ -143,7 +186,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: visible;
   position: relative;
-  z-index: 2;
 }
 
 .notation-panel__diagram {
@@ -200,8 +242,51 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   border-left: 1px solid var(--border);
+  background: var(--surface-panel);
+}
+
+.notation-panel__right--collapsed {
+  border-left-color: transparent;
+}
+
+.notation-panel__collapse-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
   background: var(--surface);
+  color: var(--text-subtle);
+  cursor: pointer;
+  z-index: 10;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.notation-panel__collapse-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.notation-panel__collapse-btn:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.notation-panel__collapse-btn--left {
+  left: 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.notation-panel__collapse-btn--right {
+  right: 0;
+  border-radius: 6px 0 0 6px;
 }
 </style>

@@ -7,6 +7,7 @@ export interface ToolbarButton {
   badge?: boolean;
   active?: boolean;
   separator?: boolean;
+  variant?: "default" | "primary";
 }
 
 defineProps<{
@@ -26,7 +27,10 @@ const emit = defineEmits<{
         v-else
         type="button"
         class="icon-toolbar__btn"
-        :class="{ 'icon-toolbar__btn--active': btn.active }"
+        :class="{
+          'icon-toolbar__btn--active': btn.active,
+          'icon-toolbar__btn--primary': btn.variant === 'primary'
+        }"
         :title="btn.title"
         :disabled="btn.disabled"
         @click="emit('action', btn.event)"
@@ -43,7 +47,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
+  padding: 5px 6px;
   background: var(--surface-strong);
   border-radius: var(--radius-sm);
 }
@@ -102,11 +106,27 @@ const emit = defineEmits<{
   opacity: 0.5;
 }
 
+.icon-toolbar__btn--primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.icon-toolbar__btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-toolbar__btn--primary:active:not(:disabled) {
+  background: var(--primary-hover);
+  color: #fff;
+}
+
 .icon-toolbar__sep {
   width: 1px;
   height: 20px;
   background: var(--border);
-  margin: 0 2px;
+  margin: 0 6px;
   flex-shrink: 0;
 }
 </style>

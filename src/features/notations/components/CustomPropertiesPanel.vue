@@ -40,8 +40,8 @@ const sameTags = (a: string[], b: string[]) =>
   a.length === b.length && a.every((tag, idx) => tag === b[idx]);
 
 const tagsDraft = ref("");
-const tagsExpanded = ref(false);
-const propertiesExpanded = ref(false);
+const tagsExpanded = ref(true);
+const propertiesExpanded = ref(true);
 
 watch(
   () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join("|") ?? ""],
@@ -49,14 +49,6 @@ watch(
     tagsDraft.value = props.selectedItem?.parsedAttrs.tags.join(", ") ?? "";
   },
   {immediate: true}
-);
-
-watch(
-  () => props.selectedItem?.id ?? null,
-  () => {
-    tagsExpanded.value = false;
-    propertiesExpanded.value = false;
-  }
 );
 
 const handleTagsInput = (value: string) => {
@@ -91,19 +83,12 @@ const removeTag = (tag: string) => {
   props.onItemChanged?.(props.selectedItem.id);
 };
 
-const relationRulesExpanded = ref(false);
+const relationRulesExpanded = ref(true);
 const selectedComponentRelationRules = computed(() => {
   if (!props.selectedItem || !props.relationRules) return [];
   if ("linkTypeId" in props.selectedItem) return [];
   return props.relationRules.filter((rule) => rule.fromComponentId === props.selectedItem?.id && !rule._isDeleted);
 });
-
-watch(
-  () => props.selectedItem?.id ?? null,
-  () => {
-    relationRulesExpanded.value = false;
-  }
-);
 
 const toggleRelationRulesCollapse = () => {
   relationRulesExpanded.value = !relationRulesExpanded.value;
@@ -341,8 +326,9 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="!selectedItem" class="properties-panel__empty">
-      Выберите элемент для редактирования свойств
+    <div v-if="!selectedItem" class="properties-panel__empty properties-panel__empty--centered">
+      <span class="material-symbols-outlined properties-panel__empty-icon">edit_note</span>
+      <span>Выберите элемент для редактирования свойств</span>
     </div>
 
     <div v-else class="properties-panel__content">
@@ -706,11 +692,10 @@ onBeforeUnmount(() => {
 
 .properties-panel__title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--heading-font-size);
   font-weight: 600;
   color: var(--base-text);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: var(--heading-letter-spacing);
 }
 
 .properties-panel__entity-name {
@@ -863,6 +848,18 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 13px;
   color: var(--text-subtle);
+}
+
+.properties-panel__empty--centered {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.properties-panel__empty-icon {
+  font-size: 24px;
+  color: var(--border-strong);
 }
 
 .properties-panel__tags {
@@ -1040,12 +1037,12 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--surface-muted);
-  border: 1px solid transparent;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
 }
 
 .properties-panel__rule-card:hover {
-  border-color: var(--border);
+  border-color: var(--border-strong);
 }
 
 .properties-panel__rule-header {

@@ -32,6 +32,7 @@ body {
     --surface: #ffffff;
     --surface-muted: #faf9f7;
     --surface-strong: #edecea;
+    --surface-panel: #fbfaf9;
 
     /* Text */
     --base-text: #1a1a1a;
@@ -72,4 +73,6 @@ body {
     --small-font-size: 11px;
     --medium-font-size: 13px;
     --large-font-size: 15px;
+    --heading-font-size: 14px;
+    --heading-letter-spacing: -0.01em;
 }

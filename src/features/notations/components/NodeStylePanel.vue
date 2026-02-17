@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref, computed, watch} from "vue";
+import {ref, reactive, computed, watch} from "vue";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "papirus";
 import type {DiagramStyle} from "../notationAttrs";
 import {
@@ -648,6 +648,26 @@ function resetRelationPreset() {
   selectedRelationPreset.value = "custom";
 }
 
+// Collapsible sections for node style
+const nodeSection = reactive<Record<string, boolean>>({
+  label: true,
+  shape: true,
+  fill: true,
+  stroke: true,
+  icon: false,
+});
+
+// Collapsible sections for edge style
+const edgeSection = reactive<Record<string, boolean>>({
+  label: true,
+  line: true,
+  markers: true,
+});
+
+function toggleSection(sections: Record<string, boolean>, key: string) {
+  sections[key] = !sections[key];
+}
+
 // --- Node handlers ---
 function handleIconChange(value: string) {
   iconName.value = value;
@@ -1192,12 +1212,14 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
     </div>
 
     <div v-if="!selectedElementId" class="style-panel__empty">
-      Выберите элемент на диаграмме
+      <span class="material-symbols-outlined style-panel__empty-icon">touch_app</span>
+      <span>Выберите элемент на диаграмме</span>
     </div>
 
     <!-- Edge style controls -->
     <div v-else-if="elementType === 'edge'" class="style-panel__body">
-      <div class="style-row">
+      <!-- Preset -->
+      <div class="style-row style-row--inline">
         <label class="style-label">Пресет</label>
         <select
           class="style-select style-select--wide"
@@ -1206,327 +1228,158 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         >
           <option value="custom">— Пользовательский —</option>
           <optgroup label="Встроенные">
-            <option
-              v-for="preset in builtInRelationPresets"
-              :key="preset.name"
-              :value="preset.name"
-            >
-              {{ preset.label }}
-            </option>
+            <option v-for="preset in builtInRelationPresets" :key="preset.name" :value="preset.name">{{ preset.label }}</option>
           </optgroup>
           <optgroup v-if="userRelationPresets.length" label="Мои пресеты">
-            <option
-              v-for="preset in userRelationPresets"
-              :key="preset.name"
-              :value="preset.name"
-            >
-              {{ preset.label }}
-            </option>
+            <option v-for="preset in userRelationPresets" :key="preset.name" :value="preset.name">{{ preset.label }}</option>
           </optgroup>
         </select>
-        <button
-          type="button"
-          class="style-btn style-btn--icon"
-          title="Сохранить как пресет"
-          @click="openSavePresetForm"
-        >
-          +
-        </button>
-        <button
-          v-if="userRelationPresets.some(p => p.name === selectedRelationPreset)"
-          type="button"
-          class="style-btn style-btn--icon style-btn--danger"
-          title="Удалить пресет"
-          @click="handleDeleteUserPreset(selectedRelationPreset, 'relation')"
-        >
-          &times;
-        </button>
+        <button type="button" class="style-btn style-btn--icon" title="Сохранить как пресет" @click="openSavePresetForm">+</button>
+        <button v-if="userRelationPresets.some(p => p.name === selectedRelationPreset)" type="button" class="style-btn style-btn--icon style-btn--danger" title="Удалить пресет" @click="handleDeleteUserPreset(selectedRelationPreset, 'relation')">&times;</button>
       </div>
-      <div v-if="showSavePresetForm && elementType === 'edge'" class="style-row">
+      <div v-if="showSavePresetForm && elementType === 'edge'" class="style-row style-row--inline">
         <label class="style-label">Название</label>
-        <input
-          v-model="newPresetName"
-          class="style-input style-input--wide"
-          placeholder="Мой пресет"
-          @keyup.enter="confirmSavePreset"
-          @keyup.escape="cancelSavePreset"
-        >
+        <input v-model="newPresetName" class="style-input style-input--wide" placeholder="Мой пресет" @keyup.enter="confirmSavePreset" @keyup.escape="cancelSavePreset">
         <button type="button" class="style-btn style-btn--icon" title="Сохранить" @click="confirmSavePreset">&#10003;</button>
         <button type="button" class="style-btn style-btn--icon" title="Отмена" @click="cancelSavePreset">&times;</button>
       </div>
 
-      <div class="style-row">
-        <label class="style-label">Метка</label>
-        <input
-          class="style-input style-input--wide"
-          :value="edgeLabel"
-          placeholder="Текст метки"
-          @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Цвет и непрозрачность метки</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="edgeLabelColor"
-            @input="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="edgeLabelColor"
-            @change="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="edgeLabelOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)"
-          >
+      <!-- Label section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(edgeSection, 'label')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !edgeSection.label }">expand_more</span>
+          <span class="style-section__title">Метка</span>
+        </button>
+        <div v-if="edgeSection.label" class="style-section__body">
+          <div class="style-row">
+            <label class="style-label">Текст</label>
+            <input class="style-input style-input--wide" :value="edgeLabel" placeholder="Текст метки" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
+          </div>
+          <div class="style-row">
+            <label class="style-label">Цвет</label>
+            <div class="color-group">
+              <input type="color" class="color-picker" :value="edgeLabelColor" @input="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
+              <input type="text" class="style-input" :value="edgeLabelColor" @change="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
+              <input type="number" class="style-input style-input--num" :value="edgeLabelOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
+          <div class="style-row style-row--inline">
+            <label class="style-label">Размер</label>
+            <input type="number" class="style-input style-input--num" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
+          </div>
+          <div class="style-row">
+            <label class="style-label">Фон</label>
+            <div class="color-group">
+              <input type="color" class="color-picker" :value="edgeLabelBgColor" @input="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
+              <input type="text" class="style-input" :value="edgeLabelBgColor" @change="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
+              <input type="number" class="style-input style-input--num" :value="edgeLabelBgOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="style-row">
-        <label class="style-label">Размер метки</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeLabelFontSize"
-          min="8"
-          max="72"
-          step="1"
-          @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Фон и непрозрачность метки</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="edgeLabelBgColor"
-            @input="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="edgeLabelBgColor"
-            @change="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="edgeLabelBgOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)"
-          >
+      <!-- Line section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(edgeSection, 'line')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !edgeSection.line }">expand_more</span>
+          <span class="style-section__title">Линия</span>
+        </button>
+        <div v-if="edgeSection.line" class="style-section__body">
+          <div class="style-row">
+            <label class="style-label">Цвет</label>
+            <div class="color-group">
+              <input type="color" class="color-picker" :value="edgeStrokeColor" @input="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
+              <input type="text" class="style-input" :value="edgeStrokeColor" @change="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
+              <input type="number" class="style-input style-input--num" :value="edgeStrokeOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
+          <div class="style-row style-row--inline">
+            <label class="style-label">Толщина</label>
+            <input type="number" class="style-input style-input--num" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
+            <label class="style-label">Стиль</label>
+            <select class="style-select" :value="edgeLineStyle" @change="handleEdgeLineStyleChange(($event.target as HTMLSelectElement).value)">
+              <option value="solid">Сплошная</option>
+              <option value="dashed">Пунктир</option>
+            </select>
+          </div>
+          <div v-if="edgeLineStyle === 'dashed'" class="style-row">
+            <label class="style-label">Паттерн</label>
+            <input type="text" class="style-input style-input--wide" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
+          </div>
+          <div class="style-row">
+            <label class="style-label">Тип</label>
+            <select class="style-select style-select--wide" :value="edgeType" @change="handleEdgeTypeChange(($event.target as HTMLSelectElement).value)">
+              <option value="straight">Прямая</option>
+              <option value="polyline">Ломаная</option>
+              <option value="bezier">Кривая</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div class="style-row">
-        <label class="style-label">Цвет и непрозрачность</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="edgeStrokeColor"
-            @input="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="edgeStrokeColor"
-            @change="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="edgeStrokeOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)"
-          >
-        </div>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Толщина</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeStrokeWidth"
-          min="0"
-          max="20"
-          step="1"
-          @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Стиль линии</label>
-        <select
-          class="style-select"
-          :value="edgeLineStyle"
-          @change="handleEdgeLineStyleChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="solid">Сплошная</option>
-          <option value="dashed">Пунктир</option>
-        </select>
-      </div>
-
-      <div v-if="edgeLineStyle === 'dashed'" class="style-row">
-        <label class="style-label">Паттерн</label>
-        <input
-          type="text"
-          class="style-input style-input--wide"
-          :value="edgeLineDashPattern"
-          placeholder="8,4"
-          @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Тип линии</label>
-        <select
-          class="style-select"
-          :value="edgeType"
-          @change="handleEdgeTypeChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="straight">Прямая</option>
-          <option value="polyline">Ломаная</option>
-          <option value="bezier">Кривая</option>
-        </select>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Начало</label>
-        <select
-          class="style-select"
-          :value="edgeStartMarker"
-          @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="none">Нет</option>
-          <option value="arrow">Стрелка</option>
-          <option value="open">Открытая</option>
-          <option value="diamond">Ромб</option>
-          <option value="circle">Круг</option>
-        </select>
-      </div>
-
-      <div v-if="edgeStartMarker !== 'none'" class="style-row">
-        <label class="style-label">Размер нач.</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeStartMarkerSize"
-          min="4"
-          max="40"
-          step="1"
-          @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div v-if="edgeStartMarker !== 'none'" class="style-row">
-        <label class="style-label">Заливка и непрозрачность нач.</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="edgeStartMarkerFillColor"
-            @input="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="edgeStartMarkerFillColor"
-            @change="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="edgeStartMarkerFillOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)"
-          >
-        </div>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Конец</label>
-        <select
-          class="style-select"
-          :value="edgeEndMarker"
-          @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="none">Нет</option>
-          <option value="arrow">Стрелка</option>
-          <option value="open">Открытая</option>
-          <option value="diamond">Ромб</option>
-          <option value="circle">Круг</option>
-        </select>
-      </div>
-
-      <div v-if="edgeEndMarker !== 'none'" class="style-row">
-        <label class="style-label">Размер кон.</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="edgeEndMarkerSize"
-          min="4"
-          max="40"
-          step="1"
-          @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div v-if="edgeEndMarker !== 'none'" class="style-row">
-        <label class="style-label">Заливка и непрозрачность кон.</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="edgeEndMarkerFillColor"
-            @input="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="edgeEndMarkerFillColor"
-            @change="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="edgeEndMarkerFillOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)"
-          >
+      <!-- Markers section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(edgeSection, 'markers')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !edgeSection.markers }">expand_more</span>
+          <span class="style-section__title">Маркеры</span>
+        </button>
+        <div v-if="edgeSection.markers" class="style-section__body">
+          <div class="style-row style-row--inline">
+            <label class="style-label">Начало</label>
+            <select class="style-select" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
+              <option value="none">Нет</option>
+              <option value="arrow">Стрелка</option>
+              <option value="open">Открытая</option>
+              <option value="diamond">Ромб</option>
+              <option value="circle">Круг</option>
+            </select>
+          </div>
+          <template v-if="edgeStartMarker !== 'none'">
+            <div class="style-row style-row--inline">
+              <label class="style-label">Размер</label>
+              <input type="number" class="style-input style-input--num" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
+            </div>
+            <div class="style-row">
+              <label class="style-label">Заливка</label>
+              <div class="color-group">
+                <input type="color" class="color-picker" :value="edgeStartMarkerFillColor" @input="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                <input type="text" class="style-input" :value="edgeStartMarkerFillColor" @change="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                <input type="number" class="style-input style-input--num" :value="edgeStartMarkerFillOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
+              </div>
+            </div>
+          </template>
+          <div class="style-row style-row--inline">
+            <label class="style-label">Конец</label>
+            <select class="style-select" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
+              <option value="none">Нет</option>
+              <option value="arrow">Стрелка</option>
+              <option value="open">Открытая</option>
+              <option value="diamond">Ромб</option>
+              <option value="circle">Круг</option>
+            </select>
+          </div>
+          <template v-if="edgeEndMarker !== 'none'">
+            <div class="style-row style-row--inline">
+              <label class="style-label">Размер</label>
+              <input type="number" class="style-input style-input--num" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
+            </div>
+            <div class="style-row">
+              <label class="style-label">Заливка</label>
+              <div class="color-group">
+                <input type="color" class="color-picker" :value="edgeEndMarkerFillColor" @input="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                <input type="text" class="style-input" :value="edgeEndMarkerFillColor" @change="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                <input type="number" class="style-input style-input--num" :value="edgeEndMarkerFillOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
 
     <!-- Node style controls -->
     <div v-else class="style-panel__body">
-      <div class="style-row">
+      <!-- Preset -->
+      <div class="style-row style-row--inline">
         <label class="style-label">Пресет</label>
         <select
           class="style-select style-select--wide"
@@ -1571,7 +1424,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           &times;
         </button>
       </div>
-      <div v-if="showSavePresetForm && elementType === 'node'" class="style-row">
+      <div v-if="showSavePresetForm && elementType === 'node'" class="style-row style-row--inline">
         <label class="style-label">Название</label>
         <input
           v-model="newPresetName"
@@ -1584,370 +1437,172 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         <button type="button" class="style-btn style-btn--icon" title="Отмена" @click="cancelSavePreset">&times;</button>
       </div>
 
-      <div class="style-row">
-        <label class="style-label">Метка</label>
-        <input
-          class="style-input style-input--wide"
-          :value="label"
-          placeholder="Текст метки"
-          @input="handleLabelChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Цвет и непрозрачность метки</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="labelColor"
-            @input="handleLabelColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="labelColor"
-            @change="handleLabelColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="labelOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)"
-          >
+      <!-- Label section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'label')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.label }">expand_more</span>
+          <span class="style-section__title">Метка</span>
+        </button>
+        <div v-if="nodeSection.label" class="style-section__body">
+          <div class="style-row">
+            <label class="style-label">Текст</label>
+            <input
+              class="style-input style-input--wide"
+              :value="label"
+              placeholder="Текст метки"
+              @input="handleLabelChange(($event.target as HTMLInputElement).value)"
+            >
+          </div>
+          <div class="style-row">
+            <label class="style-label">Цвет</label>
+            <div class="color-group">
+              <input type="color" class="color-picker" :value="labelColor" @input="handleLabelColorChange(($event.target as HTMLInputElement).value)">
+              <input type="text" class="style-input" :value="labelColor" @change="handleLabelColorChange(($event.target as HTMLInputElement).value)">
+              <input type="number" class="style-input style-input--num" :value="labelOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
+          <div class="style-row style-row--inline">
+            <label class="style-label">Размер</label>
+            <input type="number" class="style-input style-input--num" :value="labelFontSize" min="8" max="72" step="1" @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)">
+            <label class="style-label">Отступ</label>
+            <input type="number" class="style-input style-input--num" :value="labelPadding" min="0" max="50" step="1" @input="handleLabelPaddingChange(($event.target as HTMLInputElement).value)">
+            <label class="style-label">Маргин</label>
+            <input type="number" class="style-input style-input--num" :value="labelMargin" min="0" max="50" step="1" @input="handleLabelMarginChange(($event.target as HTMLInputElement).value)">
+          </div>
+          <div class="style-row">
+            <label class="style-label">Позиция</label>
+            <select class="style-select style-select--wide" :value="labelPlacement" @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)">
+              <option value="auto">Авто</option>
+              <option value="center">Центр</option>
+              <option value="top">Сверху</option>
+              <option value="bottom">Снизу</option>
+              <option value="left">Слева</option>
+              <option value="right">Справа</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div class="style-row">
-        <label class="style-label">Размер метки</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="labelFontSize"
-          min="8"
-          max="72"
-          step="1"
-          @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Отступ метки</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="labelPadding"
-          min="0"
-          max="50"
-          step="1"
-          @input="handleLabelPaddingChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Маргин метки</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="labelMargin"
-          min="0"
-          max="50"
-          step="1"
-          @input="handleLabelMarginChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Позиция метки</label>
-        <select
-          class="style-select"
-          :value="labelPlacement"
-          @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="auto">Авто</option>
-          <option value="center">Центр</option>
-          <option value="top">Сверху</option>
-          <option value="bottom">Снизу</option>
-          <option value="left">Слева</option>
-          <option value="right">Справа</option>
-        </select>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Базовая фигура</label>
-        <select
-          class="style-select"
-          :value="nodeShape"
-          @change="handleNodeShapeChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option
-            v-for="shape in NODE_SHAPE_OPTIONS"
-            :key="shape.value"
-            :value="shape.value"
-          >
-            {{ shape.label }}
-          </option>
-        </select>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Ширина</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="nodeWidth"
-          min="10"
-          max="500"
-          step="10"
-          @input="handleWidthChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Высота</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="nodeHeight"
-          min="10"
-          max="300"
-          step="10"
-          @input="handleHeightChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Иконка</label>
-        <div class="icon-group">
-          <select
-            class="style-select style-select--wide"
-            :value="iconName"
-            @change="handleIconChange(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">Нет</option>
-            <option v-for="name in AVAILABLE_ICONS" :key="name" :value="name">
-              {{ name }}
-            </option>
-          </select>
-          <img
-            v-if="iconName"
-            class="icon-preview"
-            :src="`/icons/${iconName}.svg`"
-            :alt="iconName"
-          >
+      <!-- Shape & Dimensions section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'shape')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.shape }">expand_more</span>
+          <span class="style-section__title">Фигура и размеры</span>
+        </button>
+        <div v-if="nodeSection.shape" class="style-section__body">
+          <div class="style-row">
+            <label class="style-label">Форма</label>
+            <select class="style-select style-select--wide" :value="nodeShape" @change="handleNodeShapeChange(($event.target as HTMLSelectElement).value)">
+              <option v-for="shape in NODE_SHAPE_OPTIONS" :key="shape.value" :value="shape.value">{{ shape.label }}</option>
+            </select>
+          </div>
+          <div class="style-row style-row--inline">
+            <label class="style-label">Ш</label>
+            <input type="number" class="style-input style-input--num" :value="nodeWidth" min="10" max="500" step="10" @input="handleWidthChange(($event.target as HTMLInputElement).value)">
+            <label class="style-label">В</label>
+            <input type="number" class="style-input style-input--num" :value="nodeHeight" min="10" max="300" step="10" @input="handleHeightChange(($event.target as HTMLInputElement).value)">
+          </div>
+          <div v-if="nodeShape === 'rectangle'" class="style-row">
+            <label class="style-label">Скругление</label>
+            <input type="number" class="style-input style-input--num" :value="cornerRadius" min="0" max="50" step="1" @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)">
+          </div>
         </div>
       </div>
 
-      <div v-if="iconName" class="style-row">
-        <label class="style-label">Позиция иконки</label>
-        <select
-          class="style-select"
-          :value="iconPlacement"
-          @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="top-left">Сверху слева</option>
-          <option value="top-right">Сверху справа</option>
-          <option value="bottom-left">Снизу слева</option>
-          <option value="bottom-right">Снизу справа</option>
-          <option value="center">По центру</option>
-          <option value="top">Сверху</option>
-          <option value="bottom">Снизу</option>
-          <option value="left">Слева</option>
-          <option value="right">Справа</option>
-        </select>
-      </div>
-
-      <div v-if="iconName" class="style-row">
-        <label class="style-label">Цвета SVG иконки</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="iconStrokeColor"
-            title="Цвет линий"
-            @input="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="iconStrokeColor"
-            @change="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="color"
-            class="color-picker"
-            :value="iconFillColor"
-            title="Цвет заливки"
-            @input="handleIconFillColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="iconFillColor"
-            @change="handleIconFillColorChange(($event.target as HTMLInputElement).value)"
-          >
+      <!-- Fill & Stroke section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'fill')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.fill }">expand_more</span>
+          <span class="style-section__title">Заливка и обводка</span>
+        </button>
+        <div v-if="nodeSection.fill" class="style-section__body">
+          <div class="style-row">
+            <label class="style-label">Заливка</label>
+            <div class="color-group">
+              <input type="color" class="color-picker" :value="fillColor" @input="handleFillChange(($event.target as HTMLInputElement).value)">
+              <input type="text" class="style-input" :value="fillColor" @change="handleFillChange(($event.target as HTMLInputElement).value)">
+              <input type="number" class="style-input style-input--num" :value="fillOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
+          <div class="style-row">
+            <label class="style-label">Обводка</label>
+            <div class="color-group">
+              <input type="color" class="color-picker" :value="strokeColor" @input="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
+              <input type="text" class="style-input" :value="strokeColor" @change="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
+              <input type="number" class="style-input style-input--num" :value="strokeOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
+          <div class="style-row style-row--inline">
+            <label class="style-label">Толщина</label>
+            <input type="number" class="style-input style-input--num" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
+            <label class="style-label">Линия</label>
+            <select class="style-select" :value="lineStyle" @change="handleLineStyleChange(($event.target as HTMLSelectElement).value)">
+              <option value="solid">Сплошная</option>
+              <option value="dashed">Пунктир</option>
+            </select>
+          </div>
+          <div v-if="lineStyle === 'dashed'" class="style-row">
+            <label class="style-label">Паттерн</label>
+            <input type="text" class="style-input style-input--wide" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
+          </div>
         </div>
       </div>
 
-      <div v-if="iconName" class="style-row">
-        <label class="style-label">Размер иконки</label>
-        <div class="color-group">
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="iconWidth"
-            min="1"
-            max="200"
-            step="1"
-            title="Ширина"
-            @input="handleIconWidthChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="iconHeight"
-            min="1"
-            max="200"
-            step="1"
-            title="Высота"
-            @input="handleIconHeightChange(($event.target as HTMLInputElement).value)"
-          >
+      <!-- Icon section -->
+      <div class="style-section">
+        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'icon')">
+          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.icon }">expand_more</span>
+          <span class="style-section__title">Иконка</span>
+          <span v-if="iconName" class="style-section__badge">{{ iconName }}</span>
+        </button>
+        <div v-if="nodeSection.icon" class="style-section__body">
+          <div class="style-row">
+            <label class="style-label">Иконка</label>
+            <div class="icon-group">
+              <select class="style-select style-select--wide" :value="iconName" @change="handleIconChange(($event.target as HTMLSelectElement).value)">
+                <option value="">Нет</option>
+                <option v-for="name in AVAILABLE_ICONS" :key="name" :value="name">{{ name }}</option>
+              </select>
+              <img v-if="iconName" class="icon-preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
+            </div>
+          </div>
+          <template v-if="iconName">
+            <div class="style-row">
+              <label class="style-label">Позиция</label>
+              <select class="style-select style-select--wide" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
+                <option value="top-left">Сверху слева</option>
+                <option value="top-right">Сверху справа</option>
+                <option value="bottom-left">Снизу слева</option>
+                <option value="bottom-right">Снизу справа</option>
+                <option value="center">По центру</option>
+                <option value="top">Сверху</option>
+                <option value="bottom">Снизу</option>
+                <option value="left">Слева</option>
+                <option value="right">Справа</option>
+              </select>
+            </div>
+            <div class="style-row">
+              <label class="style-label">Цвета SVG</label>
+              <div class="color-group">
+                <input type="color" class="color-picker" :value="iconStrokeColor" title="Линии" @input="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
+                <input type="text" class="style-input" :value="iconStrokeColor" @change="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
+                <input type="color" class="color-picker" :value="iconFillColor" title="Заливка" @input="handleIconFillColorChange(($event.target as HTMLInputElement).value)">
+              </div>
+            </div>
+            <div class="style-row style-row--inline">
+              <label class="style-label">Ш</label>
+              <input type="number" class="style-input style-input--num" :value="iconWidth" min="1" max="200" step="1" @input="handleIconWidthChange(($event.target as HTMLInputElement).value)">
+              <label class="style-label">В</label>
+              <input type="number" class="style-input style-input--num" :value="iconHeight" min="1" max="200" step="1" @input="handleIconHeightChange(($event.target as HTMLInputElement).value)">
+            </div>
+            <div class="style-row style-row--inline">
+              <label class="style-label">Padding</label>
+              <input type="number" class="style-input style-input--num" :value="iconPadding" min="0" max="100" step="1" @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)">
+              <label class="style-label">Margin</label>
+              <input type="number" class="style-input style-input--num" :value="iconMargin" min="0" max="100" step="1" @input="handleIconMarginChange(($event.target as HTMLInputElement).value)">
+            </div>
+          </template>
         </div>
-      </div>
-
-      <div v-if="iconName" class="style-row">
-        <label class="style-label">Отступы иконки</label>
-        <div class="color-group">
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="iconPadding"
-            min="0"
-            max="100"
-            step="1"
-            title="Padding"
-            @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="iconMargin"
-            min="0"
-            max="100"
-            step="1"
-            title="Margin"
-            @input="handleIconMarginChange(($event.target as HTMLInputElement).value)"
-          >
-        </div>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Заливка и непрозрачность</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="fillColor"
-            @input="handleFillChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="fillColor"
-            @change="handleFillChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="fillOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Непрозрачность"
-            @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)"
-          >
-        </div>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Обводка и непрозрачность</label>
-        <div class="color-group">
-          <input
-            type="color"
-            class="color-picker"
-            :value="strokeColor"
-            @input="handleStrokeColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="text"
-            class="style-input"
-            :value="strokeColor"
-            @change="handleStrokeColorChange(($event.target as HTMLInputElement).value)"
-          >
-          <input
-            type="number"
-            class="style-input style-input--num"
-            :value="strokeOpacity"
-            min="0"
-            max="1"
-            step="0.1"
-            title="Прозрачность"
-            @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)"
-          >
-        </div>
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Толщина</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="strokeWidth"
-          min="0"
-          max="20"
-          step="1"
-          @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div class="style-row">
-        <label class="style-label">Стиль линии</label>
-        <select
-          class="style-select"
-          :value="lineStyle"
-          @change="handleLineStyleChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="solid">Сплошная</option>
-          <option value="dashed">Пунктир</option>
-        </select>
-      </div>
-
-      <div v-if="lineStyle === 'dashed'" class="style-row">
-        <label class="style-label">Паттерн</label>
-        <input
-          type="text"
-          class="style-input style-input--wide"
-          :value="lineDashPattern"
-          placeholder="8,4"
-          @change="handleLineDashChange(($event.target as HTMLInputElement).value)"
-        >
-      </div>
-
-      <div v-if="nodeShape === 'rectangle'" class="style-row">
-        <label class="style-label">Скругление</label>
-        <input
-          type="number"
-          class="style-input style-input--num"
-          :value="cornerRadius"
-          min="0"
-          max="50"
-          step="1"
-          @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)"
-        >
       </div>
 
     </div>
@@ -1960,7 +1615,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--surface);
+  background: var(--surface-panel);
 }
 
 .style-panel__header {
@@ -1973,18 +1628,26 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
 .style-panel__title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--heading-font-size);
   font-weight: 600;
   color: var(--base-text);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: var(--heading-letter-spacing);
 }
 
 .style-panel__empty {
-  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 16px;
   text-align: center;
   font-size: 13px;
   color: var(--text-subtle);
+}
+
+.style-panel__empty-icon {
+  font-size: 32px;
+  color: var(--border-strong);
 }
 
 .style-panel__body {
@@ -1996,17 +1659,80 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   gap: 10px;
 }
 
+.style-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.style-section__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+}
+
+.style-section__chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.style-section__chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.style-section__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.style-section__badge {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
 .style-row {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.style-row--inline {
+  flex-direction: row;
   align-items: center;
   gap: 8px;
 }
 
 .style-label {
-  flex: 0 0 80px;
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .style-input {
@@ -2084,11 +1810,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 }
 
 .color-picker {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   flex-shrink: 0;
   background: var(--surface-muted);

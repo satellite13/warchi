@@ -10,6 +10,7 @@ export type CustomProperty = {
   max: number | null;
   maxLength?: number | null;
   enumValues?: string[];
+  defaultValue?: string | number | boolean;
   enumDefault?: string;
   _fromType?: boolean;
 };
@@ -105,6 +106,20 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
       record.type === "enum"
         ? record.type
         : "string";
+    const defaultValueRaw = record.defaultValue;
+    const enumDefaultRaw = typeof record.enumDefault === "string" ? record.enumDefault : undefined;
+    let defaultValue: string | number | boolean | undefined;
+    if ((type === "string" || type === "enum") && typeof defaultValueRaw === "string") {
+      defaultValue = defaultValueRaw;
+    } else if (type === "number" && typeof defaultValueRaw === "number" && Number.isFinite(defaultValueRaw)) {
+      defaultValue = defaultValueRaw;
+    } else if (type === "boolean" && typeof defaultValueRaw === "boolean") {
+      defaultValue = defaultValueRaw;
+    } else if (type === "enum" && typeof enumDefaultRaw === "string") {
+      // Backward compatibility for older payloads.
+      defaultValue = enumDefaultRaw;
+    }
+
     return {
       id: typeof record.id === "string" ? record.id : createId(),
       name: typeof record.name === "string" ? record.name : "",
@@ -117,7 +132,8 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
       enumValues: Array.isArray(record.enumValues)
         ? record.enumValues.filter((val) => typeof val === "string")
         : undefined,
-      enumDefault: typeof record.enumDefault === "string" ? record.enumDefault : undefined
+      defaultValue,
+      enumDefault: type === "enum" && typeof defaultValue === "string" ? defaultValue : enumDefaultRaw
     };
   });
 };

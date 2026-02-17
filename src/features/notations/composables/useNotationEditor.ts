@@ -152,15 +152,15 @@ export function useNotationEditor(): NotationEditorReturn {
   const hasUnsavedChanges = computed(() => {
     const { nodeTypes, linkTypes, components, relations, relationRules } = state.value
     const hasNewTypes =
-      nodeTypes.some((t) => t._isNew) || linkTypes.some((t) => t._isNew)
+      nodeTypes.some((t) => t._isNew === true) || linkTypes.some((t) => t._isNew === true)
     const hasChangedComponents = components.some(
-      (c) => c._isNew || c._isDirty || c._isDeleted
+      (c) => c._isNew === true || c._isDirty === true || c._isDeleted === true
     )
     const hasChangedRelations = relations.some(
-      (r) => r._isNew || r._isDirty || r._isDeleted
+      (r) => r._isNew === true || r._isDirty === true || r._isDeleted === true
     )
     const hasChangedRelationRules = relationRules.some(
-      (rule) => rule._isNew || rule._isDirty || rule._isDeleted
+      (rule) => rule._isNew === true || rule._isDirty === true || rule._isDeleted === true
     )
     return hasNewTypes || hasChangedComponents || hasChangedRelations || hasChangedRelationRules
   })

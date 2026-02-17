@@ -41,7 +41,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   {icon: "separator", event: "sep4", separator: true},
   {icon: "data_object", event: "show-attrs-json", title: "Просмотр JSON attrs"},
   {icon: "separator", event: "sep5", separator: true},
-  {icon: "save", event: "save", title: "Сохранить", badge: props.hasUnsavedChanges, variant: "primary"},
+  {
+    icon: "save",
+    event: "save",
+    title: props.hasUnsavedChanges ? "Сохранить (есть несохранённые изменения)" : "Сохранить",
+    badge: props.hasUnsavedChanges,
+    variant: props.hasUnsavedChanges ? "primary" : "default"
+  },
 ]);
 
 const emit = defineEmits<{
@@ -69,7 +75,7 @@ const emit = defineEmits<{
 <style scoped>
 .navigation-app-header {
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
   align-items: center;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -113,6 +119,8 @@ const emit = defineEmits<{
 .navigation-app-header__center {
   display: flex;
   align-items: center;
+  justify-content: center;
+  min-width: 0;
   padding: 12px 16px;
 }
 

@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import {computed, reactive, ref, watch, onMounted, onBeforeUnmount} from "vue";
+import BaseModal from "../../../components/modals/BaseModal.vue";
 import {createId, type CustomProperty, type CustomPropertyType} from "../notationAttrs";
 import type {EditorComponent, EditorRelation, EditorRelationRule} from "../types";
 import {useCustomProperties} from "../composables/useCustomProperties";
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null;
+  nodeTypes?: Array<{ id: string; name: string }>;
+  linkTypes?: Array<{ id: string; name: string }>;
   typeProperties?: CustomProperty[];
   allComponents?: EditorComponent[];
   allRelations?: EditorRelation[];
   relationRules?: EditorRelationRule[];
+  isComponentTypeLocked?: boolean;
+  isRelationTypeLocked?: boolean;
+  onComponentTypeChange?: (componentId: string, nodeTypeId: string) => void;
+  onRelationTypeChange?: (relationId: string, linkTypeId: string) => void;
+  onCreateNodeType?: (componentId: string, nodeTypeName: string) => void;
+  onCreateRelationType?: (relationId: string, linkTypeName: string) => void;
   onItemChanged?: (id: string) => void;
   onRelationRulesChanged?: () => void;
   onResetPanelSize?: () => void;
@@ -40,8 +49,8 @@ const sameTags = (a: string[], b: string[]) =>
   a.length === b.length && a.every((tag, idx) => tag === b[idx]);
 
 const tagsDraft = ref("");
-const tagsExpanded = ref(true);
-const propertiesExpanded = ref(true);
+const tagsExpanded = ref(false);
+const propertiesExpanded = ref(false);
 
 watch(
   () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join("|") ?? ""],
@@ -83,7 +92,104 @@ const removeTag = (tag: string) => {
   props.onItemChanged?.(props.selectedItem.id);
 };
 
-const relationRulesExpanded = ref(true);
+const selectedNodeTypeId = computed(() => {
+  if (!props.selectedItem) return "";
+  if ("linkTypeId" in props.selectedItem) return "";
+  return props.selectedItem.nodeTypeId;
+});
+
+const selectedLinkTypeId = computed(() => {
+  if (!props.selectedItem) return "";
+  if ("linkTypeId" in props.selectedItem) return props.selectedItem.linkTypeId;
+  return "";
+});
+
+const CREATE_NODE_TYPE_VALUE = "__create_node_type__";
+const CREATE_RELATION_TYPE_VALUE = "__create_relation_type__";
+const nodeTypeExpanded = ref(false);
+const relationTypeExpanded = ref(false);
+const showCreateNodeTypeDialog = ref(false);
+const newNodeTypeName = ref("");
+const newNodeTypeError = ref<string | null>(null);
+const showCreateRelationTypeDialog = ref(false);
+const newRelationTypeName = ref("");
+const newRelationTypeError = ref<string | null>(null);
+
+const toggleNodeTypeCollapse = () => {
+  nodeTypeExpanded.value = !nodeTypeExpanded.value;
+};
+
+const toggleRelationTypeCollapse = () => {
+  relationTypeExpanded.value = !relationTypeExpanded.value;
+};
+
+const openCreateNodeTypeDialog = () => {
+  newNodeTypeName.value = "";
+  newNodeTypeError.value = null;
+  showCreateNodeTypeDialog.value = true;
+};
+
+const closeCreateNodeTypeDialog = () => {
+  showCreateNodeTypeDialog.value = false;
+  newNodeTypeName.value = "";
+  newNodeTypeError.value = null;
+};
+
+const submitCreateNodeType = () => {
+  if (!props.selectedItem || "linkTypeId" in props.selectedItem) return;
+  const trimmedName = newNodeTypeName.value.trim();
+  if (!trimmedName) {
+    newNodeTypeError.value = "Введите название типа узла.";
+    return;
+  }
+  props.onCreateNodeType?.(props.selectedItem.id, trimmedName);
+  closeCreateNodeTypeDialog();
+};
+
+const openCreateRelationTypeDialog = () => {
+  newRelationTypeName.value = "";
+  newRelationTypeError.value = null;
+  showCreateRelationTypeDialog.value = true;
+};
+
+const closeCreateRelationTypeDialog = () => {
+  showCreateRelationTypeDialog.value = false;
+  newRelationTypeName.value = "";
+  newRelationTypeError.value = null;
+};
+
+const submitCreateRelationType = () => {
+  if (!props.selectedItem || !("linkTypeId" in props.selectedItem)) return;
+  const trimmedName = newRelationTypeName.value.trim();
+  if (!trimmedName) {
+    newRelationTypeError.value = "Введите название связи.";
+    return;
+  }
+  props.onCreateRelationType?.(props.selectedItem.id, trimmedName);
+  closeCreateRelationTypeDialog();
+};
+
+const handleComponentTypeChange = (nextNodeTypeId: string) => {
+  if (!props.selectedItem || "linkTypeId" in props.selectedItem) return;
+  if (nextNodeTypeId === CREATE_NODE_TYPE_VALUE) {
+    openCreateNodeTypeDialog();
+    return;
+  }
+  if (!nextNodeTypeId || nextNodeTypeId === props.selectedItem.nodeTypeId) return;
+  props.onComponentTypeChange?.(props.selectedItem.id, nextNodeTypeId);
+};
+
+const handleRelationTypeChange = (nextLinkTypeId: string) => {
+  if (!props.selectedItem || !("linkTypeId" in props.selectedItem)) return;
+  if (nextLinkTypeId === CREATE_RELATION_TYPE_VALUE) {
+    openCreateRelationTypeDialog();
+    return;
+  }
+  if (!nextLinkTypeId || nextLinkTypeId === props.selectedItem.linkTypeId) return;
+  props.onRelationTypeChange?.(props.selectedItem.id, nextLinkTypeId);
+};
+
+const relationRulesExpanded = ref(false);
 const selectedComponentRelationRules = computed(() => {
   if (!props.selectedItem || !props.relationRules) return [];
   if ("linkTypeId" in props.selectedItem) return [];
@@ -149,6 +255,8 @@ const typeOptions: { value: CustomPropertyType; label: string }[] = [
 
 const handleTypeChange = (property: CustomProperty, value: string) => {
   property.type = value as CustomPropertyType;
+  property.defaultValue = undefined;
+  property.enumDefault = undefined;
   if (props.selectedItem && props.onItemChanged) {
     props.onItemChanged(props.selectedItem.id);
   }
@@ -210,7 +318,36 @@ const handleMaxLengthChange = (property: CustomProperty, value: string) => {
 };
 
 const handleEnumDefaultChange = (property: CustomProperty, value: string) => {
-  property.enumDefault = value || undefined;
+  const nextValue = value || undefined;
+  property.defaultValue = nextValue;
+  property.enumDefault = nextValue;
+  if (props.selectedItem && props.onItemChanged) {
+    props.onItemChanged(props.selectedItem.id);
+  }
+};
+
+const handleDefaultStringChange = (property: CustomProperty, value: string) => {
+  property.defaultValue = value;
+  if (props.selectedItem && props.onItemChanged) {
+    props.onItemChanged(props.selectedItem.id);
+  }
+};
+
+const handleDefaultNumberChange = (property: CustomProperty, value: string) => {
+  property.defaultValue = parseNumberInput(value) ?? undefined;
+  if (props.selectedItem && props.onItemChanged) {
+    props.onItemChanged(props.selectedItem.id);
+  }
+};
+
+const handleDefaultBooleanChange = (property: CustomProperty, value: string) => {
+  if (value === "true") {
+    property.defaultValue = true;
+  } else if (value === "false") {
+    property.defaultValue = false;
+  } else {
+    property.defaultValue = undefined;
+  }
   if (props.selectedItem && props.onItemChanged) {
     props.onItemChanged(props.selectedItem.id);
   }
@@ -255,6 +392,7 @@ const isEquivalentProperty = (a: CustomProperty, b: CustomProperty) =>
   a.max === b.max &&
   (a.maxLength ?? null) === (b.maxLength ?? null) &&
   sameStringArray(a.enumValues, b.enumValues) &&
+  (a.defaultValue ?? "") === (b.defaultValue ?? "") &&
   (a.enumDefault ?? "") === (b.enumDefault ?? "");
 
 const isEquivalentToTypeProperty = (property: CustomProperty) => {
@@ -332,6 +470,81 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="properties-panel__content">
+      <div class="properties-panel__type">
+        <div v-if="selectedItem && !('linkTypeId' in selectedItem)" class="properties-panel__type-label">
+          <div
+            class="properties-panel__type-header"
+            role="button"
+            tabindex="0"
+            @click="toggleNodeTypeCollapse"
+            @keydown.enter.prevent="toggleNodeTypeCollapse"
+            @keydown.space.prevent="toggleNodeTypeCollapse"
+          >
+            <span
+              class="material-symbols-outlined properties-panel__type-chevron"
+              :class="{ 'properties-panel__type-chevron--collapsed': !nodeTypeExpanded }"
+            >expand_more</span>
+            <span class="properties-panel__type-collapse-label">Тип узла</span>
+          </div>
+        </div>
+        <template v-if="selectedItem && !('linkTypeId' in selectedItem) && nodeTypeExpanded">
+          <select
+            class="property-select properties-panel__type-select"
+            :value="selectedNodeTypeId"
+            :disabled="props.isComponentTypeLocked"
+            @change="handleComponentTypeChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option :value="CREATE_NODE_TYPE_VALUE">Создать новый тип...</option>
+            <option
+              v-for="typeItem in (props.nodeTypes ?? [])"
+              :key="typeItem.id"
+              :value="typeItem.id"
+            >
+              {{ typeItem.name }}
+            </option>
+          </select>
+          <div v-if="props.isComponentTypeLocked" class="properties-panel__type-hint">
+            Тип нельзя изменить: компонент уже используется в model nodes.
+          </div>
+        </template>
+        <template v-else-if="selectedItem && 'linkTypeId' in selectedItem">
+          <div
+            class="properties-panel__type-header"
+            role="button"
+            tabindex="0"
+            @click="toggleRelationTypeCollapse"
+            @keydown.enter.prevent="toggleRelationTypeCollapse"
+            @keydown.space.prevent="toggleRelationTypeCollapse"
+          >
+            <span
+              class="material-symbols-outlined properties-panel__type-chevron"
+              :class="{ 'properties-panel__type-chevron--collapsed': !relationTypeExpanded }"
+            >expand_more</span>
+            <span class="properties-panel__type-collapse-label">Тип связи</span>
+          </div>
+          <template v-if="relationTypeExpanded">
+            <select
+              class="property-select properties-panel__type-select"
+              :value="selectedLinkTypeId"
+              :disabled="props.isRelationTypeLocked"
+              @change="handleRelationTypeChange(($event.target as HTMLSelectElement).value)"
+            >
+              <option :value="CREATE_RELATION_TYPE_VALUE">Создать новую связь...</option>
+              <option
+                v-for="typeItem in (props.linkTypes ?? [])"
+                :key="typeItem.id"
+                :value="typeItem.id"
+              >
+                {{ typeItem.name }}
+              </option>
+            </select>
+            <div v-if="props.isRelationTypeLocked" class="properties-panel__type-hint">
+              Тип нельзя изменить: связь уже используется в model links.
+            </div>
+          </template>
+        </template>
+      </div>
+
       <div class="properties-panel__tags">
         <div
           class="properties-panel__tags-header"
@@ -388,10 +601,12 @@ onBeforeUnmount(() => {
           <span class="properties-panel__rules-label">Правила связей</span>
           <button
             type="button"
-            class="link-btn"
+            class="link-btn link-btn--icon"
+            title="Добавить правило связи"
+            aria-label="Добавить правило связи"
             @click.stop="addRelationRule"
           >
-            Добавить
+            <span class="material-symbols-outlined">add</span>
           </button>
         </div>
         <template v-if="relationRulesExpanded">
@@ -479,10 +694,12 @@ onBeforeUnmount(() => {
           >
             <button
               type="button"
-              class="link-btn"
+              class="link-btn link-btn--icon"
+              title="Добавить свойство"
+              aria-label="Добавить свойство"
               @click="toggleAddMenu"
             >
-              Добавить
+              <span class="material-symbols-outlined">add</span>
             </button>
             <div v-if="showAddMenu" class="add-menu">
               <button type="button" class="add-menu__item" @click="addNewProperty">
@@ -637,11 +854,42 @@ onBeforeUnmount(() => {
                       @change="updateEnumValues(property, ($event.target as HTMLInputElement).value)"
                     >
                   </div>
+                  <div v-if="property.type === 'string' && property.required" class="property-row__extra">
+                    <span class="property-row__label">По умолчанию</span>
+                    <input
+                      class="property-input property-input--sm"
+                      :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
+                      placeholder="Значение по умолчанию"
+                      @input="handleDefaultStringChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                  </div>
+                  <div v-if="property.type === 'number' && property.required" class="property-row__extra">
+                    <span class="property-row__label">По умолчанию</span>
+                    <input
+                      class="property-input property-input--sm"
+                      type="number"
+                      :value="typeof property.defaultValue === 'number' ? property.defaultValue : ''"
+                      placeholder="Число по умолчанию"
+                      @input="handleDefaultNumberChange(property, ($event.target as HTMLInputElement).value)"
+                    >
+                  </div>
+                  <div v-if="property.type === 'boolean' && property.required" class="property-row__extra">
+                    <span class="property-row__label">По умолчанию</span>
+                    <select
+                      class="property-select"
+                      :value="typeof property.defaultValue === 'boolean' ? String(property.defaultValue) : ''"
+                      @change="handleDefaultBooleanChange(property, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">— нет —</option>
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </div>
                   <div v-if="property.type === 'enum' && property.required && (property.enumValues || []).length > 0" class="property-row__extra">
                     <span class="property-row__label">По умолчанию</span>
                     <select
                       class="property-select"
-                      :value="property.enumDefault || ''"
+                      :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
                       @change="handleEnumDefaultChange(property, ($event.target as HTMLSelectElement).value)"
                     >
                       <option value="">— нет —</option>
@@ -662,6 +910,70 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </div>
+
+  <BaseModal
+    v-if="showCreateNodeTypeDialog"
+    title="Создание типа узла"
+    max-width="420px"
+    @close="closeCreateNodeTypeDialog"
+  >
+    <div class="properties-panel__relation-type-dialog">
+      <label class="properties-panel__relation-type-label" for="new-node-type-name">
+        Название типа узла
+      </label>
+      <input
+        id="new-node-type-name"
+        class="property-input"
+        :value="newNodeTypeName"
+        placeholder="Например, Service"
+        @input="newNodeTypeName = ($event.target as HTMLInputElement).value"
+        @keydown.enter.prevent="submitCreateNodeType"
+      >
+      <div v-if="newNodeTypeError" class="properties-panel__relation-type-error">
+        {{ newNodeTypeError }}
+      </div>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="closeCreateNodeTypeDialog">
+        Отмена
+      </button>
+      <button type="button" class="btn btn--primary" @click="submitCreateNodeType">
+        Создать
+      </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showCreateRelationTypeDialog"
+    title="Создание типа связи"
+    max-width="420px"
+    @close="closeCreateRelationTypeDialog"
+  >
+    <div class="properties-panel__relation-type-dialog">
+      <label class="properties-panel__relation-type-label" for="new-relation-type-name">
+        Название связи
+      </label>
+      <input
+        id="new-relation-type-name"
+        class="property-input"
+        :value="newRelationTypeName"
+        placeholder="Например, depends_on"
+        @input="newRelationTypeName = ($event.target as HTMLInputElement).value"
+        @keydown.enter.prevent="submitCreateRelationType"
+      >
+      <div v-if="newRelationTypeError" class="properties-panel__relation-type-error">
+        {{ newRelationTypeError }}
+      </div>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="closeCreateRelationTypeDialog">
+        Отмена
+      </button>
+      <button type="button" class="btn btn--primary" @click="submitCreateRelationType">
+        Создать
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
@@ -868,6 +1180,75 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.properties-panel__type {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.properties-panel__type-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.properties-panel__type-select {
+  width: 100%;
+}
+
+.properties-panel__type-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.properties-panel__type-chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.properties-panel__type-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.properties-panel__type-collapse-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.properties-panel__type-hint {
+  font-size: 12px;
+  color: var(--warning);
+}
+
+.properties-panel__relation-type-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__relation-type-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.properties-panel__relation-type-error {
+  font-size: 12px;
+  color: var(--danger);
 }
 
 .properties-panel__tags-header {
@@ -1108,6 +1489,31 @@ onBeforeUnmount(() => {
 
 .link-btn:hover {
   color: var(--primary-hover);
+}
+
+.link-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.link-btn--icon .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.link-btn--icon:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .properties-panel__list {

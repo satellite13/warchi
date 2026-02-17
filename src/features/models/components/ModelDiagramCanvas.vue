@@ -1,0 +1,1112 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import {
+  DiagramRenderer,
+  RectangleNode,
+  CircleNode,
+  DiamondNode,
+  CustomShapeNode,
+  ShapeFactories,
+  Node as DiagramNode,
+  Edge,
+  GridOverlay,
+  MiniMap,
+  InteractionManager,
+  type TextLabelOptions,
+  type LabelPlacement
+} from "papirus"
+import type { ComponentResponse, NodeTypeResponse } from "../../../types/api"
+import { parseEntityAttrs, type DiagramStyle } from "../../notations/notationAttrs"
+import type { DiagramAttrs, DiagramNodeInstance } from "../modelAttrs"
+import type { EditorDiagram, EditorLink, EditorNode } from "../types"
+
+const props = defineProps<{
+  activeDiagram: EditorDiagram | null
+  nodes: EditorNode[]
+  links: EditorLink[]
+  components: ComponentResponse[]
+  nodeTypes: NodeTypeResponse[]
+  selectedModelNodeIds: string[]
+  selectedModelLinkId: string | null
+  connectionValidator?: ((sourceModelNodeId: string, targetModelNodeId: string) => boolean) | null
+}>()
+
+const emit = defineEmits<{
+  updateDiagram: [next: DiagramAttrs]
+  selectNodes: [modelNodeIds: string[]]
+  selectLink: [modelLinkId: string]
+  createNodeFromComponent: [componentId: string, x: number, y: number]
+  addExistingNode: [modelNodeId: string, x: number, y: number]
+  connectNodes: [sourceModelNodeId: string, targetModelNodeId: string, sourceInstanceId: string, targetInstanceId: string]
+}>()
+
+// ── Refs ──
+const containerRef = ref<HTMLElement | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const paletteVisible = ref(true)
+const gridVisible = ref(true)
+const miniMapVisible = ref(true)
+const snapEnabled = ref(false)
+
+const GRID_SIZE = 20
+const MIN_ZOOM = 0.3
+const MAX_ZOOM = 2.5
+const DEFAULT_NODE_WIDTH = 160
+const DEFAULT_NODE_HEIGHT = 56
+const COMPONENT_RADIUS = 8
+
+let renderer: DiagramRenderer | null = null
+let interactionManager: InteractionManager | null = null
+let gridOverlay: GridOverlay | null = null
+let miniMap: MiniMap | null = null
+let resizeObserver: ResizeObserver | null = null
+let cleanupSelectionOverlay: (() => void) | null = null
+let suppressSelectionEvent = false
+
+// Maps: papirus element ID → model entity
+const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: string }>()
+const edgeIdToInstance = new Map<string, { modelLinkId: string; edgeId: string }>()
+
+// ── Computed ──
+const nodeById = computed(() => new Map(props.nodes.map((node) => [node.id, node])))
+const activeNotationId = computed(() => props.activeDiagram?.notationId ?? null)
+
+
+const instanceNodes = computed(() => props.activeDiagram?.parsedAttrs.instances.nodes ?? [])
+const instanceEdges = computed(() => props.activeDiagram?.parsedAttrs.instances.edges ?? [])
+
+const componentDiagramStyleById = computed(() => {
+  const notationId = activeNotationId.value
+  const map = new Map<string, DiagramStyle | undefined>()
+  if (!notationId) return map
+  for (const component of props.components) {
+    if (component.notationId !== notationId) continue
+    const parsedAttrs = parseEntityAttrs(component.attrs ?? null)
+    map.set(component.id, parsedAttrs.diagramStyle)
+  }
+  return map
+})
+
+// ── Style resolution ──
+const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined => {
+  const node = nodeById.value.get(modelNodeId)
+  const notationId = activeNotationId.value
+  if (!node || !notationId) return undefined
+  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (!componentId) return undefined
+  return componentDiagramStyleById.value.get(componentId)
+}
+
+const getInstanceDimensions = (instance: { modelNodeId: string; width?: number; height?: number }) => {
+  const ds = getBoundComponentStyle(instance.modelNodeId)
+  return {
+    width: instance.width ?? (typeof ds?.width === "number" ? ds.width : DEFAULT_NODE_WIDTH),
+    height: instance.height ?? (typeof ds?.height === "number" ? ds.height : DEFAULT_NODE_HEIGHT)
+  }
+}
+
+const getComponentMinDimensions = (modelNodeId: string) => {
+  const ds = getBoundComponentStyle(modelNodeId)
+  return {
+    width: typeof ds?.width === "number" ? ds.width : DEFAULT_NODE_WIDTH,
+    height: typeof ds?.height === "number" ? ds.height : DEFAULT_NODE_HEIGHT
+  }
+}
+
+function applyMinSizeConstraint(node: DiagramNode, modelNodeId: string) {
+  const original = node.getContentMinSize.bind(node)
+  node.getContentMinSize = (ctx: CanvasRenderingContext2D) => {
+    const contentMin = original(ctx)
+    const compMin = getComponentMinDimensions(modelNodeId)
+    return {
+      width: Math.max(contentMin.width, compMin.width),
+      height: Math.max(contentMin.height, compMin.height)
+    }
+  }
+}
+
+type ComponentShape = "rectangle" | "beveled-rectangle" | "diamond" | "circle" | "trapezoid" | "slanted-rectangle"
+
+function getComponentShape(ds?: DiagramStyle): ComponentShape {
+  const shape = ds?.nodeShape as ComponentShape | undefined
+  switch (shape) {
+    case "beveled-rectangle":
+    case "diamond":
+    case "circle":
+    case "trapezoid":
+    case "slanted-rectangle":
+      return shape
+    default:
+      return "rectangle"
+  }
+}
+
+function createBeveledRectanglePath(width: number, height: number): Path2D {
+  const path = new Path2D()
+  const cut = Math.min(width, height) * 0.16
+  path.moveTo(cut, 0)
+  path.lineTo(width - cut, 0)
+  path.lineTo(width, cut)
+  path.lineTo(width, height - cut)
+  path.lineTo(width - cut, height)
+  path.lineTo(cut, height)
+  path.lineTo(0, height - cut)
+  path.lineTo(0, cut)
+  path.closePath()
+  return path
+}
+
+function createTrapezoidPath(width: number, height: number): Path2D {
+  const path = new Path2D()
+  const topInset = width * 0.18
+  path.moveTo(topInset, 0)
+  path.lineTo(width - topInset, 0)
+  path.lineTo(width, height)
+  path.lineTo(0, height)
+  path.closePath()
+  return path
+}
+
+function buildNodeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
+  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
+    return name
+  }
+  const opts: TextLabelOptions = { text: name }
+  const style: Record<string, unknown> = {}
+  if (ds.labelColor) style.color = ds.labelColor
+  if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
+  if (ds.labelFontSize) style.fontSize = ds.labelFontSize
+  if (Object.keys(style).length) opts.style = style as any
+  if (ds.labelPadding != null) opts.padding = ds.labelPadding
+  if (ds.labelMargin != null) opts.margin = ds.labelMargin
+  return opts
+}
+
+function buildNodeIcon(ds?: DiagramStyle) {
+  if (!ds?.iconName) return undefined
+  return {
+    source: `/icons/${ds.iconName}.svg`,
+    placement: (ds.iconPlacement as any) ?? ("left" as const),
+    width: ds.iconWidth ?? 20,
+    height: ds.iconHeight ?? 20,
+    fit: "contain" as const,
+    ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
+    ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
+    ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
+    ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
+  }
+}
+
+function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) {
+  const dims = getInstanceDimensions(instance)
+  const style: Record<string, unknown> = {
+    fillColor: ds?.fillColor ?? "#ffffff",
+    strokeColor: ds?.strokeColor ?? "#d1d5db",
+    strokeWidth: ds?.strokeWidth ?? 1
+  }
+  if (ds?.fillOpacity != null) style.fillOpacity = ds.fillOpacity
+  if (ds?.strokeOpacity != null) style.strokeOpacity = ds.strokeOpacity
+  if (ds?.opacity != null) style.opacity = ds.opacity
+  if (ds?.lineDash) style.lineDash = ds.lineDash
+  return {
+    width: dims.width,
+    height: dims.height,
+    style,
+    cornerRadius: ds?.cornerRadius ?? COMPONENT_RADIUS
+  }
+}
+
+function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
+  return (node as any).typeName === "custom"
+}
+
+function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
+  if (node instanceof DiamondNode) return "diamond"
+  if (node instanceof CircleNode) return "circle"
+  if (isCustomShapeNode(node)) return ((node as any).shapeType as ComponentShape) ?? "rectangle"
+  return "rectangle"
+}
+
+// ── Node creation ──
+function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
+  const ds = getBoundComponentStyle(instance.modelNodeId)
+  const visual = resolveInstanceStyle(instance, ds)
+  const shape = getComponentShape(ds)
+  const nodeName = nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
+
+  const commonOptions = {
+    id: `instance-${instance.id}`,
+    x: instance.x,
+    y: instance.y,
+    width: visual.width,
+    height: visual.height,
+    label: buildNodeLabel(nodeName, ds),
+    style: visual.style,
+    anchorPoints: { top: 3, bottom: 3, left: 1, right: 1 },
+    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
+  }
+
+  let node: DiagramNode
+  if (shape === "diamond") {
+    node = new DiamondNode(commonOptions)
+  } else if (shape === "circle") {
+    node = new CircleNode(commonOptions)
+  } else if (shape === "beveled-rectangle") {
+    node = new CustomShapeNode({
+      ...commonOptions,
+      path: (w, h) => createBeveledRectanglePath(w, h)
+    })
+  } else if (shape === "trapezoid") {
+    node = new CustomShapeNode({
+      ...commonOptions,
+      path: (w, h) => createTrapezoidPath(w, h)
+    })
+  } else if (shape === "slanted-rectangle") {
+    node = new CustomShapeNode({
+      ...commonOptions,
+      path: (w, h) => ShapeFactories.parallelogram(w, h)
+    })
+  } else {
+    node = new RectangleNode({
+      ...commonOptions,
+      cornerRadius: visual.cornerRadius
+    })
+  }
+
+  ;(node as any).shapeType = shape
+  if (ds?.labelPlacement) {
+    (node as any).labelPlacement = ds.labelPlacement as LabelPlacement
+  }
+  applyMinSizeConstraint(node, instance.modelNodeId)
+  return node
+}
+
+// ── Sync diagram ──
+function syncDiagram() {
+  if (!renderer) return
+  const currentNodeIds = new Set<string>()
+  const currentEdgeIds = new Set<string>()
+  nodeIdToInstance.clear()
+  edgeIdToInstance.clear()
+
+  // Sync nodes
+  for (const instance of instanceNodes.value) {
+    const papNodeId = `instance-${instance.id}`
+    currentNodeIds.add(papNodeId)
+    nodeIdToInstance.set(papNodeId, { modelNodeId: instance.modelNodeId, instanceId: instance.id })
+
+    const existing = renderer.getNode(papNodeId)
+    if (existing) {
+      const ds = getBoundComponentStyle(instance.modelNodeId)
+      const expectedShape = getComponentShape(ds)
+      const existingShape = getNodeShapeFromNode(existing)
+
+      if (expectedShape !== existingShape) {
+        renderer.removeNode(papNodeId)
+        renderer.addNode(createInstanceNode(instance))
+        continue
+      }
+
+      // Update in-place
+      const visual = resolveInstanceStyle(instance, ds)
+      const nodeName = nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
+
+      existing.x = instance.x
+      existing.y = instance.y
+      existing.width = visual.width
+      existing.height = visual.height
+      existing.style = visual.style
+      existing.label = nodeName
+      if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
+        existing.label.style = {
+          ...(ds?.labelColor ? { color: ds.labelColor } : {}),
+          ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
+          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
+        }
+      }
+      if (existing.label && ds?.labelPadding != null) {
+        (existing.label as any)._padding = ds.labelPadding
+      }
+      if (existing.label && ds?.labelMargin != null) {
+        (existing.label as any)._margin = ds.labelMargin
+      }
+      if (existing instanceof RectangleNode) {
+        existing.cornerRadius = visual.cornerRadius
+      }
+      existing.icon = buildNodeIcon(ds)
+      if (ds?.labelPlacement) {
+        (existing as any).labelPlacement = ds.labelPlacement as LabelPlacement
+      }
+      applyMinSizeConstraint(existing, instance.modelNodeId)
+    } else {
+      renderer.addNode(createInstanceNode(instance))
+    }
+  }
+
+  // Sync edges
+  for (const edge of instanceEdges.value) {
+    const papEdgeId = `edge-${edge.id}`
+    currentEdgeIds.add(papEdgeId)
+    edgeIdToInstance.set(papEdgeId, { modelLinkId: edge.modelLinkId, edgeId: edge.id })
+
+    const sourcePapId = `instance-${edge.sourceInstanceId}`
+    const targetPapId = `instance-${edge.targetInstanceId}`
+
+    if (!currentNodeIds.has(sourcePapId) || !currentNodeIds.has(targetPapId)) continue
+
+    const existing = renderer.getEdge(papEdgeId)
+    if (existing) {
+      existing.from = { nodeId: sourcePapId }
+      existing.to = { nodeId: targetPapId }
+    } else {
+      renderer.addEdge(new Edge({
+        id: papEdgeId,
+        from: { nodeId: sourcePapId },
+        to: { nodeId: targetPapId },
+        type: "bezier",
+        arrowType: "single"
+      }))
+    }
+  }
+
+  // Remove stale nodes and edges
+  for (const [id] of renderer.nodes) {
+    if (!currentNodeIds.has(id)) renderer.removeNode(id)
+  }
+  for (const [id] of renderer.edges) {
+    if (!currentEdgeIds.has(id)) renderer.removeEdge(id)
+  }
+
+  renderer.markDirty()
+  updateSelection()
+}
+
+// ── Selection sync ──
+function updateSelection() {
+  if (!renderer || !interactionManager) return
+  const selectionManager = interactionManager.selection
+
+  // Sync selection from props
+  const selectedNodeIds = props.selectedModelNodeIds
+  const selectedLinkId = props.selectedModelLinkId
+
+  const targetPapIds: string[] = []
+
+  if (selectedNodeIds.length > 0) {
+    const selectedSet = new Set(selectedNodeIds)
+    for (const [papId, entity] of nodeIdToInstance) {
+      if (selectedSet.has(entity.modelNodeId)) {
+        targetPapIds.push(papId)
+      }
+    }
+  } else if (selectedLinkId) {
+    for (const [papId, entity] of edgeIdToInstance) {
+      if (entity.modelLinkId === selectedLinkId) {
+        targetPapIds.push(papId)
+        break
+      }
+    }
+  }
+
+  if (targetPapIds.length > 0) {
+    const currentIds = selectionManager.selectedIds
+    const needsSync = targetPapIds.length !== currentIds.size ||
+      targetPapIds.some((id) => !currentIds.has(id))
+    if (needsSync) {
+      suppressSelectionEvent = true
+      try {
+        selectionManager.selectMultiple(targetPapIds)
+      } finally {
+        suppressSelectionEvent = false
+      }
+    }
+  } else {
+    if (selectionManager.selectedIds.size > 0) {
+      suppressSelectionEvent = true
+      try {
+        selectionManager.clearSelection()
+      } finally {
+        suppressSelectionEvent = false
+      }
+    }
+  }
+}
+
+// ── Persist positions from papirus back to model ──
+function persistNodePositions(papNodeIds: string[]) {
+  if (!renderer) return
+  const next = cloneDiagramAttrs()
+  let changed = false
+  for (const papNodeId of papNodeIds) {
+    const entity = nodeIdToInstance.get(papNodeId)
+    if (!entity) continue
+    const papNode = renderer.getNode(papNodeId)
+    if (!papNode) continue
+    const instance = next.instances.nodes.find((n) => n.id === entity.instanceId)
+    if (!instance) continue
+    instance.x = papNode.x
+    instance.y = papNode.y
+    instance.width = papNode.width
+    instance.height = papNode.height
+    changed = true
+  }
+  if (changed) {
+    emit("updateDiagram", next)
+  }
+}
+
+// ── Renderer init ──
+function initRenderer(r: DiagramRenderer) {
+  renderer = r
+
+  // Grid overlay
+  gridOverlay = new GridOverlay({ gridSize: 24, color: "#e2e8f0" })
+  r.use(gridOverlay)
+
+  // MiniMap
+  miniMap = new MiniMap({
+    enabled: miniMapVisible.value,
+    width: 190,
+    height: 128,
+    padding: 12,
+    backgroundColor: "transparent",
+    anchor: "bottom-left"
+  })
+  r.use(miniMap)
+
+  // Selection outline overlay — registered BEFORE enableInteractions so it
+  // renders beneath anchor points and resize handles drawn by InteractionManager.
+  cleanupSelectionOverlay = r.addOverlayRenderer((ctx) => {
+    const selectedNodeIds = props.selectedModelNodeIds
+    if (selectedNodeIds.length === 0) return
+
+    const selectedSet = new Set(selectedNodeIds)
+    const zoom = renderer?.zoom || 1
+    const lineWidth = 2 / zoom
+
+    ctx.save()
+    ctx.strokeStyle = "#6366f1"
+    ctx.lineWidth = lineWidth
+
+    for (const [papId, entity] of nodeIdToInstance) {
+      if (!selectedSet.has(entity.modelNodeId)) continue
+      const node = renderer?.getNode(papId)
+      if (!node) continue
+      const bounds = node.getBounds()
+      ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height)
+    }
+
+    ctx.restore()
+  })
+
+  // Enable interactions (after selection overlay so anchors render on top)
+  interactionManager = r.enableInteractions({
+    snapToGrid: snapEnabled.value,
+    gridSize: GRID_SIZE,
+    keymap: { deleteKeys: [] }
+  })
+
+  // Selection events → emit selectNodes/selectLink
+  interactionManager.selection.on("select", (elementIds: string[]) => {
+    if (suppressSelectionEvent) return
+    if (elementIds.length === 0) return
+
+    const modelNodeIds: string[] = []
+    for (const elementId of elementIds) {
+      const nodeEntity = nodeIdToInstance.get(elementId)
+      if (nodeEntity) {
+        modelNodeIds.push(nodeEntity.modelNodeId)
+      }
+    }
+    if (modelNodeIds.length > 0) {
+      emit("selectNodes", modelNodeIds)
+      return
+    }
+
+    if (elementIds.length === 1) {
+      const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
+      if (edgeEntity) {
+        emit("selectLink", edgeEntity.modelLinkId)
+      }
+    }
+  })
+
+  // Drag end → persist position changes
+  interactionManager.drag.on("dragend", (nodeIds: string[]) => {
+    persistNodePositions(nodeIds)
+  })
+
+  // Resize end → persist size changes
+  interactionManager.resize.on("resizeEnd", (nodeId: string) => {
+    persistNodePositions([nodeId])
+  })
+
+  // Connection validator: translate papirus node IDs to model node IDs and delegate
+  interactionManager.connection.connectionValidator = (sourcePapId: string, targetPapId: string) => {
+    if (!props.connectionValidator) return true
+    const sourceEntity = nodeIdToInstance.get(sourcePapId)
+    const targetEntity = nodeIdToInstance.get(targetPapId)
+    if (!sourceEntity || !targetEntity) return false
+    return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
+  }
+
+  // Connection → emit connectNodes
+  interactionManager.connection.on("connect", (edge: Edge) => {
+    const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
+    const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
+    if (sourceEntity && targetEntity && sourceEntity.modelNodeId !== targetEntity.modelNodeId) {
+      emit("connectNodes", sourceEntity.modelNodeId, targetEntity.modelNodeId,
+           sourceEntity.instanceId, targetEntity.instanceId)
+    }
+    // Remove the edge papirus created — parent will add it through state
+    renderer?.removeEdge(edge.id)
+  })
+
+  syncDiagram()
+}
+
+// ── Helpers ──
+const cloneDiagramAttrs = (): DiagramAttrs => {
+  const source = props.activeDiagram?.parsedAttrs
+  if (!source) return { instances: { nodes: [], edges: [] } }
+  return JSON.parse(JSON.stringify(source)) as DiagramAttrs
+}
+
+const getCanvasCenter = (): { x: number; y: number } => {
+  const el = containerRef.value
+  if (!el) return { x: 0, y: 0 }
+  const rect = el.getBoundingClientRect()
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+}
+
+// ── Exposed API ──
+const zoomIn = () => {
+  interactionManager?.navigation.setZoom((renderer?.zoom ?? 1) * 1.2, getCanvasCenter())
+}
+
+const zoomOut = () => {
+  interactionManager?.navigation.setZoom((renderer?.zoom ?? 1) / 1.2, getCanvasCenter())
+}
+
+const resetView = () => {
+  interactionManager?.navigation.resetView()
+}
+
+const fitToView = () => {
+  interactionManager?.navigation.fitToView(50)
+}
+
+const zoomToSelection = () => {
+  if (!interactionManager || !renderer) return
+  if (props.selectedModelNodeIds.length === 0) return
+  const selectedSet = new Set(props.selectedModelNodeIds)
+  const selectedInstances = instanceNodes.value.filter((node) => selectedSet.has(node.modelNodeId))
+  if (selectedInstances.length === 0) return
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const instance of selectedInstances) {
+    const dims = getInstanceDimensions(instance)
+    minX = Math.min(minX, instance.x)
+    minY = Math.min(minY, instance.y)
+    maxX = Math.max(maxX, instance.x + dims.width)
+    maxY = Math.max(maxY, instance.y + dims.height)
+  }
+  interactionManager.navigation.zoomToRect(
+    { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    64
+  )
+}
+
+const autoLayoutNodes = () => {
+  if (!props.activeDiagram) return
+  const next = cloneDiagramAttrs()
+  const paddingX = 48
+  const paddingY = 40
+  const columnGap = 48
+  const rowGap = 28
+  const columns = Math.max(1, Math.ceil(Math.sqrt(next.instances.nodes.length || 1)))
+  next.instances.nodes.forEach((node, index) => {
+    const col = index % columns
+    const row = Math.floor(index / columns)
+    const width = node.width ?? DEFAULT_NODE_WIDTH
+    const height = node.height ?? DEFAULT_NODE_HEIGHT
+    node.x = paddingX + col * (width + columnGap)
+    node.y = paddingY + row * (height + rowGap)
+  })
+  emit("updateDiagram", next)
+  requestAnimationFrame(() => fitToView())
+}
+
+const toggleGrid = (): boolean => {
+  gridVisible.value = !gridVisible.value
+  gridOverlay?.setEnabled(gridVisible.value)
+  renderer?.markDirty()
+  return gridVisible.value
+}
+
+const getGridVisible = () => gridVisible.value
+
+const toggleMiniMap = (): boolean => {
+  miniMapVisible.value = !miniMapVisible.value
+  miniMap?.setEnabled(miniMapVisible.value)
+  renderer?.markDirty()
+  return miniMapVisible.value
+}
+
+const getMiniMapVisible = () => miniMapVisible.value
+
+const toggleSnap = (): boolean => {
+  snapEnabled.value = !snapEnabled.value
+  if (interactionManager) {
+    interactionManager.drag.setSnapToGrid(snapEnabled.value)
+    interactionManager.resize.setSnapToGrid(snapEnabled.value)
+  }
+  return snapEnabled.value
+}
+
+const getSnapEnabled = () => snapEnabled.value
+
+// ── Drop handling ──
+const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } => {
+  if (!renderer) return { x: 0, y: 0 }
+  const world = renderer.screenToWorld(event.clientX, event.clientY)
+  const snapTo = (value: number) => snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  return {
+    x: Math.max(24, snapTo(world.x - 70)),
+    y: Math.max(24, snapTo(world.y - 28))
+  }
+}
+
+const onDragOver = (event: DragEvent) => {
+  if (!props.activeDiagram) return
+  event.preventDefault()
+}
+
+const onDrop = (event: DragEvent) => {
+  if (!props.activeDiagram) return
+  event.preventDefault()
+  const { x, y } = normalizeDropCoordinates(event)
+
+  const componentId = event.dataTransfer?.getData("application/x-notation-component-id")
+  if (componentId) {
+    emit("createNodeFromComponent", componentId, x, y)
+    return
+  }
+
+  const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+  if (modelNodeId) {
+    emit("addExistingNode", modelNodeId, x, y)
+  }
+}
+
+const onDragComponentStart = (event: DragEvent, componentId: string) => {
+  event.dataTransfer?.setData("application/x-notation-component-id", componentId)
+  event.dataTransfer?.setData("text/plain", `component:${componentId}`)
+  event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
+}
+
+// ── Palette ──
+const paletteItems = computed(() => {
+  const notationId = props.activeDiagram?.notationId
+  if (!notationId) return []
+  return props.components
+    .filter((component) => component.notationId === notationId)
+    .map((component) => {
+      const parsedAttrs = parseEntityAttrs(component.attrs ?? null)
+      const iconName = parsedAttrs.diagramStyle?.iconName?.trim()
+      const fillColor = parsedAttrs.diagramStyle?.fillColor?.trim()
+      return {
+        ...component,
+        paletteIconName: iconName && iconName.length > 0 ? iconName : "component",
+        paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : "var(--accent)"
+      }
+    })
+    .sort((a, b) => {
+      const colorDiff = a.paletteFillColor.localeCompare(b.paletteFillColor, "ru", {
+        sensitivity: "base"
+      })
+      if (colorDiff !== 0) return colorDiff
+      return a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
+    })
+})
+
+const paletteEntries = computed(() => {
+  const entries: Array<
+    | { kind: "divider"; colorKey: string }
+    | { kind: "item"; component: (typeof paletteItems.value)[number] }
+  > = []
+  let previousColorKey: string | null = null
+
+  for (const component of paletteItems.value) {
+    const colorKey = component.paletteFillColor.trim().toLowerCase()
+    if (previousColorKey !== null && colorKey !== previousColorKey) {
+      entries.push({ kind: "divider", colorKey })
+    }
+    entries.push({ kind: "item", component })
+    previousColorKey = colorKey
+  }
+
+  return entries
+})
+
+const buildIconUrl = (iconName: string): string => {
+  const normalized = iconName.trim()
+  if (!normalized) return "/icons/component.svg"
+  if (normalized.startsWith("/")) return normalized
+  if (normalized.toLowerCase().endsWith(".svg")) return `/icons/${normalized}`
+  return `/icons/${normalized}.svg`
+}
+
+const handlePaletteIconError = (event: Event, iconName: string) => {
+  const img = event.target as HTMLImageElement | null
+  if (!img) return
+  const triedAltPath = img.dataset.iconFallbackTried === "1"
+  if (!triedAltPath) {
+    img.dataset.iconFallbackTried = "1"
+    const normalized = iconName.trim()
+    img.src = normalized.toLowerCase().endsWith(".svg")
+      ? `/icon/${normalized}`
+      : `/icon/${normalized}.svg`
+    return
+  }
+  img.src = "/icons/component.svg"
+}
+
+// ── Lifecycle ──
+onMounted(() => {
+  const mount = () => {
+    if (!containerRef.value || !canvasRef.value) return
+    if (containerRef.value.clientWidth === 0 || containerRef.value.clientHeight === 0) {
+      requestAnimationFrame(mount)
+      return
+    }
+
+    const width = containerRef.value.clientWidth
+    const height = containerRef.value.clientHeight
+
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || "#f4f2ef"
+    const r = new DiagramRenderer(canvasRef.value, {
+      width,
+      height,
+      backgroundColor: bgColor,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+      scrollbarOverlay: true
+    })
+    initRenderer(r)
+
+    resizeObserver = new ResizeObserver(() => {
+      if (!renderer || !containerRef.value) return
+      renderer.resize(containerRef.value.clientWidth, containerRef.value.clientHeight)
+    })
+    resizeObserver.observe(containerRef.value)
+  }
+  mount()
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  cleanupSelectionOverlay?.()
+  cleanupSelectionOverlay = null
+  renderer?.destroy()
+  renderer = null
+  interactionManager = null
+  gridOverlay = null
+  miniMap = null
+  nodeIdToInstance.clear()
+  edgeIdToInstance.clear()
+})
+
+// Watch for data changes
+watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
+
+watch(
+  () => [props.activeDiagram?.id, props.activeDiagram?.notationId],
+  () => syncDiagram()
+)
+
+watch(
+  () => props.selectedModelNodeIds,
+  () => updateSelection(),
+  { deep: true }
+)
+
+watch(
+  () => props.selectedModelLinkId,
+  () => updateSelection()
+)
+
+defineExpose({
+  zoomIn,
+  zoomOut,
+  fitToView,
+  zoomToSelection,
+  autoLayoutNodes,
+  resetView,
+  toggleGrid,
+  getGridVisible,
+  toggleMiniMap,
+  getMiniMapVisible,
+  toggleSnap,
+  getSnapEnabled
+})
+</script>
+
+<template>
+  <div
+    ref="containerRef"
+    class="diagram-canvas"
+    :class="{ 'diagram-canvas--disabled': !activeDiagram }"
+    @dragover="onDragOver"
+    @drop="onDrop"
+  >
+    <canvas
+      ref="canvasRef"
+      class="diagram-canvas__canvas"
+      :class="{ 'diagram-canvas__canvas--hidden': !activeDiagram }"
+    />
+
+    <div v-if="!activeDiagram" class="diagram-canvas__placeholder">
+      <span class="material-symbols-outlined diagram-canvas__placeholder-icon">draw</span>
+      <span class="diagram-canvas__placeholder-text">Откройте или создайте диаграмму</span>
+      <span class="diagram-canvas__placeholder-hint">Выберите диаграмму в дереве слева</span>
+    </div>
+
+    <template v-if="activeDiagram">
+      <button
+        v-if="!paletteVisible"
+        type="button"
+        class="canvas-palette-toggle"
+        title="Показать палитру нотации"
+        @click="paletteVisible = true"
+      >
+        <span class="material-symbols-outlined">palette</span>
+      </button>
+
+      <div v-if="paletteVisible" class="canvas-palette">
+        <div class="canvas-palette__header">
+          <span class="material-symbols-outlined">palette</span>
+          <span>Палитра</span>
+          <button
+            type="button"
+            class="canvas-palette__hide"
+            title="Скрыть палитру"
+            @click="paletteVisible = false"
+          >
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+        <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
+          В нотации нет компонентов
+        </div>
+        <div v-else class="canvas-palette__list">
+          <template v-for="(entry, index) in paletteEntries" :key="entry.kind === 'item' ? entry.component.id : `divider-${entry.colorKey}-${index}`">
+            <div v-if="entry.kind === 'divider'" class="canvas-palette__divider" />
+            <button
+              v-else
+              type="button"
+              class="canvas-palette__item"
+              :title="entry.component.name"
+              :style="{ '--palette-item-fill': entry.component.paletteFillColor }"
+              draggable="true"
+              @dragstart="onDragComponentStart($event, entry.component.id)"
+            >
+              <img
+                class="canvas-palette__icon"
+                :src="buildIconUrl(entry.component.paletteIconName)"
+                :alt="entry.component.name"
+                draggable="false"
+                @error="handlePaletteIconError($event, entry.component.paletteIconName)"
+              >
+            </button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.diagram-canvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--base-bg);
+}
+
+.diagram-canvas__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.diagram-canvas__canvas--hidden {
+  display: none;
+}
+
+.diagram-canvas--disabled {
+  background: var(--surface-muted);
+}
+
+.diagram-canvas__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  animation: fadeIn 0.4s ease;
+}
+
+.diagram-canvas__placeholder-icon {
+  font-size: 48px;
+  color: var(--border-strong);
+  margin-bottom: 4px;
+}
+
+.diagram-canvas__placeholder-text {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.diagram-canvas__placeholder-hint {
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.canvas-palette-toggle {
+  position: absolute;
+  right: 24px;
+  top: 12px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+}
+
+.canvas-palette-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.canvas-palette {
+  position: absolute;
+  right: 24px;
+  top: 12px;
+  bottom: 12px;
+  width: 152px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 6;
+}
+
+.canvas-palette__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.canvas-palette__header .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.canvas-palette__hide {
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 0 10px 0 8px;
+  background: var(--surface);
+  color: var(--text-subtle);
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-palette__hide .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.canvas-palette__list {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  overflow: auto;
+  align-content: start;
+}
+
+.canvas-palette__divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+.canvas-palette__item {
+  --palette-item-bg: color-mix(in srgb, var(--palette-item-fill) 18%, var(--surface));
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--palette-item-bg);
+  color: var(--base-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: all 0.15s ease;
+}
+
+.canvas-palette__item:hover {
+  border-color: var(--palette-item-fill, var(--accent));
+  background: color-mix(in srgb, var(--palette-item-fill) 28%, var(--surface));
+}
+
+.canvas-palette__icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.canvas-palette__empty {
+  font-size: 11px;
+  color: var(--text-subtle);
+  text-align: center;
+  line-height: 1.3;
+}
+</style>

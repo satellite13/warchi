@@ -6,6 +6,7 @@ const router = useRouter();
 import MainLayout from "../layouts/MainLayout.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 import BaseModal from "../components/modals/BaseModal.vue";
+import {apiGet} from "../composables/useApi";
 import NotationMainPanelLayout from "../features/notations/layout/NotationMainPanelLayout.vue";
 import NotationAppHeader from "../features/notations/layout/NotationAppHeader.vue";
 import NotationComponentList from "../features/notations/layout/NotationComponentList.vue";
@@ -17,6 +18,7 @@ import {useNotationEditor} from "../features/notations/composables/useNotationEd
 import {useNotationEntity, appendTagValue} from "../features/notations/composables/useNotationEntity";
 import type {DiagramStyle} from "../features/notations/notationAttrs";
 import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../features/notations/notationAttrs";
+import type {NodeResponse, LinkResponse} from "../types/api";
 import type {
   NotationEditorState,
   EditorNodeType,
@@ -25,6 +27,7 @@ import type {
   EditorRelation,
   EditorRelationRule
 } from "../features/notations/types";
+import type {PaginatedResponse} from "../types/entities";
 
 const {
   notation,
@@ -94,6 +97,63 @@ const selectedItemTypeProperties = computed(() => {
   if (!item) return [];
   const linkType = state.value.linkTypes.find((t) => t.id === item.linkTypeId);
   return linkType?.parsedAttrs.customProperties ?? [];
+});
+
+const modelNodes = ref<NodeResponse[]>([]);
+const modelLinks = ref<LinkResponse[]>([]);
+
+const parseJsonObject = (raw: string | null | undefined): Record<string, unknown> => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // ignore malformed attrs
+  }
+  return {};
+};
+
+const loadModelUsage = async () => {
+  const [nodesResult, linksResult] = await Promise.all([
+    apiGet<PaginatedResponse<NodeResponse>>("/nodes?size=2000"),
+    apiGet<PaginatedResponse<LinkResponse>>("/links?size=2000")
+  ]);
+  modelNodes.value = nodesResult.success ? (nodesResult.data.content ?? []) : [];
+  modelLinks.value = linksResult.success ? (linksResult.data.content ?? []) : [];
+};
+
+const selectedComponentUsedInModelNodes = computed(() => {
+  if (selectedEntity.value?.kind !== "component") return false;
+  const componentId = selectedEntity.value.id;
+  const notationId = state.value.notationId;
+  return modelNodes.value.some((node) => {
+    const attrs = parseJsonObject(node.attrs);
+    const componentBindings = attrs.componentBindings;
+    if (!componentBindings || typeof componentBindings !== "object" || Array.isArray(componentBindings)) {
+      return false;
+    }
+    const byNotation = (componentBindings as Record<string, unknown>)[notationId];
+    if (!byNotation || typeof byNotation !== "object" || Array.isArray(byNotation)) return false;
+    return (byNotation as Record<string, unknown>).componentId === componentId;
+  });
+});
+
+const selectedRelationUsedInModelLinks = computed(() => {
+  if (selectedEntity.value?.kind !== "relation") return false;
+  const relationId = selectedEntity.value.id;
+  const notationId = state.value.notationId;
+  return modelLinks.value.some((link) => {
+    const attrs = parseJsonObject(link.attrs);
+    const relationBindings = attrs.relationBindings;
+    if (!relationBindings || typeof relationBindings !== "object" || Array.isArray(relationBindings)) {
+      return false;
+    }
+    const byNotation = (relationBindings as Record<string, unknown>)[notationId];
+    if (!byNotation || typeof byNotation !== "object" || Array.isArray(byNotation)) return false;
+    return (byNotation as Record<string, unknown>).relationId === relationId;
+  });
 });
 
 // Compute the diagram element ID for the selected entity (for the style panel)
@@ -464,6 +524,64 @@ const handleItemChanged = (id: string) => {
   }
 };
 
+const handleComponentTypeChanged = (componentId: string, nodeTypeId: string) => {
+  const component = state.value.components.find((item) => item.id === componentId);
+  if (!component || component.nodeTypeId === nodeTypeId) return;
+  component.nodeTypeId = nodeTypeId;
+  markComponentDirty(componentId);
+};
+
+const handleCreateNodeType = (componentId: string, nodeTypeName: string) => {
+  const trimmedName = nodeTypeName.trim();
+  if (!trimmedName) return;
+
+  const existingType = state.value.nodeTypes.find(
+    (item) => item.name.trim().toLowerCase() === trimmedName.toLowerCase()
+  );
+
+  const nodeTypeId = existingType?.id ?? createId();
+  if (!existingType) {
+    state.value.nodeTypes.push({
+      id: nodeTypeId,
+      ownerId: state.value.ownerId,
+      name: trimmedName,
+      parsedAttrs: {},
+      _isNew: true
+    });
+  }
+
+  handleComponentTypeChanged(componentId, nodeTypeId);
+};
+
+const handleRelationTypeChanged = (relationId: string, linkTypeId: string) => {
+  const relation = state.value.relations.find((item) => item.id === relationId);
+  if (!relation || relation.linkTypeId === linkTypeId) return;
+  relation.linkTypeId = linkTypeId;
+  markRelationDirty(relationId);
+};
+
+const handleCreateRelationType = (relationId: string, linkTypeName: string) => {
+  const trimmedName = linkTypeName.trim();
+  if (!trimmedName) return;
+
+  const existingType = state.value.linkTypes.find(
+    (item) => item.name.trim().toLowerCase() === trimmedName.toLowerCase()
+  );
+
+  const linkTypeId = existingType?.id ?? createId();
+  if (!existingType) {
+    state.value.linkTypes.push({
+      id: linkTypeId,
+      ownerId: state.value.ownerId,
+      name: trimmedName,
+      parsedAttrs: {},
+      _isNew: true
+    });
+  }
+
+  handleRelationTypeChanged(relationId, linkTypeId);
+};
+
 const handleRelationRulesChanged = () => {
   state.value.relationRules.forEach((rule) => {
     if (!rule._isNew) {
@@ -627,6 +745,7 @@ const onBeforeUnload = (e: BeforeUnloadEvent) => {
 
 onMounted(() => {
   loadNotation();
+  loadModelUsage();
   window.addEventListener("beforeunload", onBeforeUnload);
 });
 
@@ -682,10 +801,18 @@ onBeforeUnmount(() => {
         <template #bottom>
           <CustomPropertiesPanel
             :selected-item="selectedItem"
+            :node-types="state.nodeTypes"
+            :link-types="state.linkTypes"
             :type-properties="selectedItemTypeProperties"
             :all-components="state.components"
             :all-relations="state.relations"
             :relation-rules="state.relationRules"
+            :is-component-type-locked="selectedComponentUsedInModelNodes"
+            :is-relation-type-locked="selectedRelationUsedInModelLinks"
+            :on-component-type-change="handleComponentTypeChanged"
+            :on-relation-type-change="handleRelationTypeChanged"
+            :on-create-node-type="handleCreateNodeType"
+            :on-create-relation-type="handleCreateRelationType"
             :on-item-changed="handleItemChanged"
             :on-relation-rules-changed="handleRelationRulesChanged"
             :on-reset-panel-size="resetPropertiesPanelHeight"

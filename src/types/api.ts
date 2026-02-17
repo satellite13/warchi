@@ -28,6 +28,41 @@ export interface ModelUpdateRequest {
   attrs?: string | null
 }
 
+// Diagrams
+
+export interface DiagramResponse {
+  id: string
+  name: string
+  version: string
+  ownerId: string
+  modelId: string
+  nodeId?: string | null
+  notationId: string
+  attrs?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface DiagramRequest {
+  name: string
+  version: string
+  ownerId: string
+  modelId: string
+  nodeId?: string | null
+  notationId: string
+  attrs?: string | null
+}
+
+export interface DiagramUpdateRequest {
+  name?: string | null
+  version?: string | null
+  ownerId?: string | null
+  modelId?: string | null
+  nodeId?: string | null
+  notationId?: string | null
+  attrs?: string | null
+}
+
 // Nodes
 
 export interface NodeResponse {

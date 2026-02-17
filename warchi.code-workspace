@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../papirus"
+		},
+		{
+			"path": "../arepos-server"
+		}
+	],
+	"settings": {}
+}

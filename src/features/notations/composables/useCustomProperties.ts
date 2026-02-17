@@ -16,6 +16,16 @@ export function useCustomProperties(
   selectedItem: ComputedRef<EditorComponent | EditorRelation | null>,
   onItemChanged?: (id: string) => void
 ): CustomPropertiesReturn {
+  const hasDefaultValue = (property: CustomProperty): boolean => {
+    if (property.type === "number") {
+      return typeof property.defaultValue === "number" && Number.isFinite(property.defaultValue)
+    }
+    if (property.type === "boolean") {
+      return typeof property.defaultValue === "boolean"
+    }
+    return typeof property.defaultValue === "string" && property.defaultValue.trim().length > 0
+  }
+
   const propertyErrors = (property: CustomProperty): string[] => {
     const errors: string[] = []
     if (!property.name.trim()) {
@@ -46,6 +56,10 @@ export function useCustomProperties(
       errors.push("Для enum нужно указать значения")
     }
 
+    if (property.required && !hasDefaultValue(property)) {
+      errors.push("Для обязательного поля нужно задать значение по умолчанию")
+    }
+
     return errors
   }
 
@@ -71,7 +85,8 @@ export function useCustomProperties(
       regex: "",
       min: null,
       max: null,
-      enumValues: []
+      enumValues: [],
+      defaultValue: undefined
     }
     selectedItem.value.parsedAttrs.customProperties.push(property)
     if (onItemChanged) {

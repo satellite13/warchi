@@ -253,7 +253,8 @@ export function useTypeEditor() {
       regex: "",
       min: null,
       max: null,
-      enumValues: []
+      enumValues: [],
+      defaultValue: undefined
     })
   }
 

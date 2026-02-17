@@ -16,6 +16,9 @@ import {RouterLink} from "vue-router";
     <RouterLink to="/types" class="app-nav__link" active-class="app-nav__link--active">
       <span class="material-symbols-outlined" title="Типы">category</span>Типы
     </RouterLink>
+    <RouterLink to="/docs" class="app-nav__link" active-class="app-nav__link--active">
+      <span class="material-symbols-outlined" title="Документация">menu_book</span>Документация
+    </RouterLink>
   </nav>
 </template>
 

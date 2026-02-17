@@ -36,6 +36,15 @@ const router = createRouter({
       component: () => import("../views/NotationEditorView.vue")
     },
     {
+      path: "/docs",
+      redirect: "/docs/overview"
+    },
+    {
+      path: "/docs/:section",
+      name: "docs-section",
+      component: () => import("../views/DocsView.vue")
+    },
+    {
       path: "/",
       name: "home",
       component: () => import("../views/HomeView.vue"),

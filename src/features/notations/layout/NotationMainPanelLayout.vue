@@ -13,12 +13,22 @@ const emit = defineEmits<{
 
 const leftCollapsed = ref(false)
 const rightCollapsed = ref(false)
+const leftWidth = ref(320)
+const rightWidth = ref(420)
 
 const gridColumns = computed(() => {
-  const left = leftCollapsed.value ? '0px' : '280px'
-  const right = rightCollapsed.value ? '0px' : '360px'
+  const left = leftCollapsed.value ? "0px" : `${leftWidth.value}px`
+  const right = rightCollapsed.value ? "0px" : `${rightWidth.value}px`
   return `${left} minmax(0, 1fr) ${right}`
 })
+
+const leftResizerStyle = computed(() =>
+  leftCollapsed.value ? undefined : ({ left: `calc(${leftWidth.value}px - 3px)` } as const)
+)
+
+const rightResizerStyle = computed(() =>
+  rightCollapsed.value ? undefined : ({ right: `calc(${rightWidth.value}px - 3px)` } as const)
+)
 
 function toggleRight() {
   rightCollapsed.value = !rightCollapsed.value
@@ -35,8 +45,18 @@ const RESIZER_HEIGHT = 10
 let dragStartY = 0
 let dragStartHeight = 240
 let dragging = false
+const MIN_SIDE_WIDTH = 260
+const MAX_SIDE_WIDTH = 560
+type SideResizeTarget = "left" | "right"
+let resizingSide: SideResizeTarget | null = null
+let sideDragStartX = 0
+let sideDragStartWidth = 0
 const centerRef = ref<HTMLElement | null>(null)
 let centerResizeObserver: ResizeObserver | null = null
+
+function clampSideWidth(value: number): number {
+  return Math.max(MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, value))
+}
 
 function getDynamicMaxHeight(): number {
   const centerHeight = centerRef.value?.clientHeight ?? 0
@@ -80,6 +100,36 @@ function startDragging(event: MouseEvent) {
   window.addEventListener("mouseup", stopDragging)
 }
 
+function onSideResizeMove(event: MouseEvent) {
+  if (!resizingSide) return
+
+  const deltaX = event.clientX - sideDragStartX
+  if (resizingSide === "left") {
+    leftWidth.value = clampSideWidth(sideDragStartWidth + deltaX)
+  } else {
+    rightWidth.value = clampSideWidth(sideDragStartWidth - deltaX)
+  }
+}
+
+function stopSideResize() {
+  if (!resizingSide) return
+  resizingSide = null
+  document.body.style.cursor = ""
+  document.body.style.userSelect = ""
+  window.removeEventListener("mousemove", onSideResizeMove)
+  window.removeEventListener("mouseup", stopSideResize)
+}
+
+function startSideResize(target: SideResizeTarget, event: MouseEvent) {
+  resizingSide = target
+  sideDragStartX = event.clientX
+  sideDragStartWidth = target === "left" ? leftWidth.value : rightWidth.value
+  document.body.style.cursor = "col-resize"
+  document.body.style.userSelect = "none"
+  window.addEventListener("mousemove", onSideResizeMove)
+  window.addEventListener("mouseup", stopSideResize)
+}
+
 onMounted(() => {
   enforceHeightBounds()
   if (centerRef.value) {
@@ -99,6 +149,7 @@ watch(
 
 onBeforeUnmount(() => {
   stopDragging()
+  stopSideResize()
   if (centerResizeObserver) {
     centerResizeObserver.disconnect()
     centerResizeObserver = null
@@ -132,6 +183,28 @@ onBeforeUnmount(() => {
       <aside class="notation-panel__right" :class="{ 'notation-panel__right--collapsed': rightCollapsed }">
         <slot name="right" />
       </aside>
+      <div
+        v-if="!leftCollapsed"
+        class="notation-panel__side-resizer notation-panel__side-resizer--left"
+        :style="leftResizerStyle"
+        role="separator"
+        aria-orientation="vertical"
+        title="Потяните, чтобы изменить ширину панели элементов"
+        @mousedown.prevent="startSideResize('left', $event)"
+      >
+        <span class="notation-panel__side-resizer-handle"></span>
+      </div>
+      <div
+        v-if="!rightCollapsed"
+        class="notation-panel__side-resizer notation-panel__side-resizer--right"
+        :style="rightResizerStyle"
+        role="separator"
+        aria-orientation="vertical"
+        title="Потяните, чтобы изменить ширину панели стилей"
+        @mousedown.prevent="startSideResize('right', $event)"
+      >
+        <span class="notation-panel__side-resizer-handle"></span>
+      </div>
     </div>
     <button
       type="button"
@@ -157,6 +230,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   position: relative;
+  overflow: hidden;
 }
 
 .notation-panel {
@@ -164,6 +238,7 @@ onBeforeUnmount(() => {
   height: 100%;
   display: grid;
   overflow: hidden;
+  position: relative;
 }
 
 .notation-panel__left {
@@ -184,8 +259,58 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
+}
+
+.notation-panel__side-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  display: flex;
+  align-items: center;
+  cursor: col-resize;
+  z-index: 8;
+}
+
+.notation-panel__side-resizer--left {
+  justify-content: flex-start;
+}
+
+.notation-panel__side-resizer--right {
+  justify-content: flex-end;
+}
+
+.notation-panel__side-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.notation-panel__side-resizer--left::before {
+  left: 0;
+}
+
+.notation-panel__side-resizer--right::before {
+  right: 0;
+}
+
+.notation-panel__side-resizer-handle {
+  width: 3px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--text-subtle);
+  opacity: 0.4;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.notation-panel__side-resizer:hover .notation-panel__side-resizer-handle {
+  opacity: 1;
+  background: var(--primary);
 }
 
 .notation-panel__diagram {

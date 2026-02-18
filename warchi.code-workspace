@@ -10,5 +10,7 @@
 			"path": "../arepos-server"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "papirus"
+	}
 }

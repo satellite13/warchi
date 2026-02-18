@@ -19,6 +19,9 @@ const emit = defineEmits<{
 const searchQuery = ref("");
 const selectedTags = ref<Set<string>>(new Set());
 const tagsExpanded = ref(true);
+const RU_LOCALE = "ru";
+type SortMode = "alpha-asc" | "alpha-desc" | "type";
+const sortMode = ref<SortMode>("alpha-asc");
 
 type ListItem = {
   id: string;
@@ -40,7 +43,7 @@ const allTags = computed<string[]>(() => {
       r.parsedAttrs.tags.forEach(t => tagSet.add(t));
     }
   }
-  return [...tagSet].sort();
+  return [...tagSet].sort((a, b) => a.localeCompare(b, RU_LOCALE, {sensitivity: "base"}));
 });
 
 const toggleTag = (tag: string) => {
@@ -87,7 +90,24 @@ const items = computed<ListItem[]>(() => {
     all = all.filter(item => item.tags.some(t => activeTags.has(t)));
   }
 
-  return all;
+  return all.sort((a, b) => {
+    const byName = a.name.localeCompare(b.name, RU_LOCALE, {sensitivity: "base"});
+
+    if (sortMode.value === "alpha-asc") {
+      if (byName !== 0) return byName;
+    } else if (sortMode.value === "alpha-desc") {
+      if (byName !== 0) return -byName;
+    } else {
+      const aRank = a.kind === "component" ? 0 : 1;
+      const bRank = b.kind === "component" ? 0 : 1;
+      if (aRank !== bRank) return aRank - bRank;
+      if (byName !== 0) return byName;
+    }
+
+    const byKind = a.kind.localeCompare(b.kind, RU_LOCALE, {sensitivity: "base"});
+    if (byKind !== 0) return byKind;
+    return a.id.localeCompare(b.id, RU_LOCALE, {sensitivity: "base"});
+  });
 });
 
 const itemsContainer = ref<HTMLElement | null>(null);
@@ -116,6 +136,16 @@ watch(() => props.selectedId, (id) => {
       <h3 class="component-list__title">Элементы</h3>
       <div class="component-list__actions">
         <span class="component-list__count">{{ items.length }}</span>
+        <select
+          class="sort-select"
+          :value="sortMode"
+          title="Сортировка списка"
+          @change="sortMode = ($event.target as HTMLSelectElement).value as SortMode"
+        >
+          <option value="alpha-asc">А-Я</option>
+          <option value="alpha-desc">Я-А</option>
+          <option value="type">По типу</option>
+        </select>
         <button type="button" class="add-btn" title="Добавить компонент" @click="emit('create-component')">
           <span class="material-symbols-outlined">category</span>
         </button>
@@ -214,6 +244,8 @@ watch(() => props.selectedId, (id) => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .notation-info {
@@ -275,6 +307,24 @@ watch(() => props.selectedId, (id) => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.sort-select {
+  height: 28px;
+  max-width: 86px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  outline: none;
+}
+
+.sort-select:focus {
+  border-color: var(--primary);
 }
 
 .component-list__count {
@@ -462,6 +512,7 @@ watch(() => props.selectedId, (id) => {
 .component-list__items {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 6px;
 }
 
@@ -469,7 +520,8 @@ watch(() => props.selectedId, (id) => {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  width: auto;
+  min-width: 0;
   padding: 9px 10px;
   border: none;
   border-radius: 8px;
@@ -477,8 +529,9 @@ watch(() => props.selectedId, (id) => {
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
   border-left: 3px solid transparent;
+  box-sizing: border-box;
 }
 
 .component-item:hover {
@@ -499,8 +552,13 @@ watch(() => props.selectedId, (id) => {
   background: var(--primary-soft);
 }
 
-.component-item--relation:not(.component-item--active) {
+.component-item--relation.component-item--active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   border-left-color: var(--accent);
+}
+
+.component-item--relation.component-item--active:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
 }
 
 .component-item:not(.component-item--relation):not(.component-item--active):hover {
@@ -508,7 +566,7 @@ watch(() => props.selectedId, (id) => {
 }
 
 .component-item--relation:not(.component-item--active):hover {
-  border-left-color: var(--accent);
+  border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .component-item__icon {
@@ -526,7 +584,7 @@ watch(() => props.selectedId, (id) => {
 }
 
 .component-item--relation.component-item--active .component-item__icon {
-  color: var(--primary);
+  color: var(--accent);
 }
 
 .component-item__info {

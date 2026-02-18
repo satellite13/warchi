@@ -54,272 +54,363 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
 </script>
 
 <template>
-  <div class="props">
-    <div class="props__header">
-      <span class="material-symbols-outlined">tune</span>
-      <h3>Свойства</h3>
+  <div class="mp">
+    <!-- Empty state -->
+    <div v-if="currentMode === 'empty'" class="mp-empty">
+      <div class="mp-empty__graphic">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="10" y="14" width="12" height="10" rx="2.5" stroke="currentColor" stroke-width="1.4" opacity="0.25"/>
+          <rect x="26" y="24" width="12" height="10" rx="2.5" stroke="currentColor" stroke-width="1.4" opacity="0.25"/>
+          <path d="M22 22L26 26" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 2" opacity="0.18"/>
+          <circle cx="24" cy="24" r="2" fill="currentColor" opacity="0.15"/>
+        </svg>
+      </div>
+      <span class="mp-empty__text">Выберите элемент</span>
+      <span class="mp-empty__hint">Нажмите на ноду или связь на диаграмме</span>
     </div>
 
-    <div v-if="currentMode === 'empty'" class="props__empty-state">
-      <span class="material-symbols-outlined props__empty-icon">touch_app</span>
-      <span class="props__empty-text">Выберите элемент</span>
-      <span class="props__empty-hint">Нажмите на ноду или связь на диаграмме</span>
-    </div>
-
-    <template v-else-if="currentMode === 'node' && selectedNode">
-      <div class="props__mode-badge props__mode-badge--node">
-        <span class="material-symbols-outlined">category</span>
-        <span>{{ selectedNode.name }}</span>
-      </div>
-      <div class="props__section">
-        <label class="props__label">Компонент нотации</label>
-        <select
-          class="props__select"
-          :disabled="!activeNotationId || availableComponents.length === 0"
-          :value="nodeBindingComponentId || ''"
-          @change="emit('bindNodeComponent', ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="" disabled>Выберите компонент</option>
-          <option v-for="component in availableComponents" :key="component.id" :value="component.id">
-            {{ component.name }}
-          </option>
-        </select>
+    <template v-else>
+      <!-- Type badge -->
+      <div class="mp-badge" :class="currentMode === 'link' ? 'mp-badge--link' : 'mp-badge--node'">
+        <svg v-if="currentMode === 'link'" class="mp-badge__icon" width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.2"/>
+          <circle cx="13" cy="3" r="2" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M4.5 11.5L11.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <svg v-else class="mp-badge__icon" width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+        <span class="mp-badge__label">
+          {{ currentMode === 'link' ? 'Связь' : (selectedNode?.name ?? 'Нода') }}
+        </span>
       </div>
 
-      <div v-if="nodeProperties.length === 0" class="props__empty">
-        Для выбранного компонента нет настраиваемых свойств
-      </div>
+      <!-- Scrollable content -->
+      <div class="mp-body">
 
-      <div v-else class="props__section">
-        <div v-for="property in nodeProperties" :key="property.id" class="props__field">
-          <label class="props__field-label">{{ property.name }}</label>
-          <input
-            v-if="property.type !== 'boolean'"
-            class="props__input"
-            :type="property.type === 'number' ? 'number' : 'text'"
-            :value="String(nodeScopedValues[property.name] ?? '')"
-            @input="emit('setNodeScopedValue', property.name, coerceValue(property, ($event.target as HTMLInputElement).value))"
-          >
-          <label v-else class="props__checkbox">
-            <input
-              type="checkbox"
-              :checked="Boolean(nodeScopedValues[property.name])"
-              @change="emit('setNodeScopedValue', property.name, coerceValue(property, '', ($event.target as HTMLInputElement).checked))"
+        <!-- NODE binding -->
+        <template v-if="currentMode === 'node' && selectedNode">
+          <section class="mp-section">
+            <span class="mp-section__title">Компонент нотации</span>
+            <select
+              class="mp-select"
+              :disabled="!activeNotationId || availableComponents.length === 0"
+              :value="nodeBindingComponentId || ''"
+              @change="emit('bindNodeComponent', ($event.target as HTMLSelectElement).value)"
             >
-            <span>Да</span>
-          </label>
-        </div>
-      </div>
-    </template>
+              <option value="" disabled>Выберите компонент...</option>
+              <option v-for="component in availableComponents" :key="component.id" :value="component.id">
+                {{ component.name }}
+              </option>
+            </select>
+          </section>
 
-    <template v-else-if="currentMode === 'link' && selectedLink">
-      <div class="props__mode-badge props__mode-badge--link">
-        <span class="material-symbols-outlined">link</span>
-        <span>Связь</span>
-      </div>
-      <div class="props__section">
-        <label class="props__label">Relation нотации</label>
-        <select
-          class="props__select"
-          :disabled="!activeNotationId || availableRelations.length === 0"
-          :value="linkBindingRelationId || ''"
-          @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="" disabled>Выберите relation</option>
-          <option v-for="relation in availableRelations" :key="relation.id" :value="relation.id">
-            {{ relation.name }}
-          </option>
-        </select>
-      </div>
+          <section v-if="nodeProperties.length > 0" class="mp-section">
+            <span class="mp-section__title">Свойства</span>
+            <div class="mp-fields">
+              <div v-for="property in nodeProperties" :key="property.id" class="mp-field">
+                <label class="mp-field__label">{{ property.name }}</label>
+                <div v-if="property.type === 'boolean'" class="mp-toggle">
+                  <button
+                    type="button"
+                    class="mp-toggle__track"
+                    :class="{ 'mp-toggle__track--on': Boolean(nodeScopedValues[property.name]) }"
+                    role="switch"
+                    :aria-checked="Boolean(nodeScopedValues[property.name])"
+                    @click="emit('setNodeScopedValue', property.name, !Boolean(nodeScopedValues[property.name]))"
+                  >
+                    <span class="mp-toggle__thumb"></span>
+                  </button>
+                  <span class="mp-toggle__label">{{ Boolean(nodeScopedValues[property.name]) ? 'Да' : 'Нет' }}</span>
+                </div>
+                <input
+                  v-else
+                  class="mp-input"
+                  :type="property.type === 'number' ? 'number' : 'text'"
+                  :placeholder="property.name"
+                  :value="String(nodeScopedValues[property.name] ?? '')"
+                  @input="emit('setNodeScopedValue', property.name, coerceValue(property, ($event.target as HTMLInputElement).value))"
+                >
+              </div>
+            </div>
+          </section>
 
-      <div v-if="linkProperties.length === 0" class="props__empty">
-        Для выбранной relation нет настраиваемых свойств
-      </div>
+          <div v-else-if="nodeBindingComponentId" class="mp-hint">
+            Нет настраиваемых свойств
+          </div>
+        </template>
 
-      <div v-else class="props__section">
-        <div v-for="property in linkProperties" :key="property.id" class="props__field">
-          <label class="props__field-label">{{ property.name }}</label>
-          <input
-            v-if="property.type !== 'boolean'"
-            class="props__input"
-            :type="property.type === 'number' ? 'number' : 'text'"
-            :value="String(linkScopedValues[property.name] ?? '')"
-            @input="emit('setLinkScopedValue', property.name, coerceValue(property, ($event.target as HTMLInputElement).value))"
-          >
-          <label v-else class="props__checkbox">
-            <input
-              type="checkbox"
-              :checked="Boolean(linkScopedValues[property.name])"
-              @change="emit('setLinkScopedValue', property.name, coerceValue(property, '', ($event.target as HTMLInputElement).checked))"
+        <!-- LINK binding -->
+        <template v-if="currentMode === 'link' && selectedLink">
+          <section class="mp-section">
+            <span class="mp-section__title">Relation нотации</span>
+            <select
+              class="mp-select"
+              :disabled="!activeNotationId || availableRelations.length === 0"
+              :value="linkBindingRelationId || ''"
+              @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
             >
-            <span>Да</span>
-          </label>
-        </div>
+              <option value="" disabled>Выберите relation...</option>
+              <option v-for="relation in availableRelations" :key="relation.id" :value="relation.id">
+                {{ relation.name }}
+              </option>
+            </select>
+          </section>
+
+          <section v-if="linkProperties.length > 0" class="mp-section">
+            <span class="mp-section__title">Свойства</span>
+            <div class="mp-fields">
+              <div v-for="property in linkProperties" :key="property.id" class="mp-field">
+                <label class="mp-field__label">{{ property.name }}</label>
+                <div v-if="property.type === 'boolean'" class="mp-toggle">
+                  <button
+                    type="button"
+                    class="mp-toggle__track"
+                    :class="{ 'mp-toggle__track--on': Boolean(linkScopedValues[property.name]) }"
+                    role="switch"
+                    :aria-checked="Boolean(linkScopedValues[property.name])"
+                    @click="emit('setLinkScopedValue', property.name, !Boolean(linkScopedValues[property.name]))"
+                  >
+                    <span class="mp-toggle__thumb"></span>
+                  </button>
+                  <span class="mp-toggle__label">{{ Boolean(linkScopedValues[property.name]) ? 'Да' : 'Нет' }}</span>
+                </div>
+                <input
+                  v-else
+                  class="mp-input"
+                  :type="property.type === 'number' ? 'number' : 'text'"
+                  :placeholder="property.name"
+                  :value="String(linkScopedValues[property.name] ?? '')"
+                  @input="emit('setLinkScopedValue', property.name, coerceValue(property, ($event.target as HTMLInputElement).value))"
+                >
+              </div>
+            </div>
+          </section>
+
+          <div v-else-if="linkBindingRelationId" class="mp-hint">
+            Нет настраиваемых свойств
+          </div>
+        </template>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* ========================================
+   Model Properties Panel
+   ======================================== */
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.props {
+.mp {
+  --mp-h: 30px;
+  --mp-radius: 6px;
+  --mp-pad: 12px;
   height: 100%;
   min-height: 0;
-  overflow: auto;
   display: flex;
   flex-direction: column;
-}
-
-.props__header {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
-}
-
-.props__header .material-symbols-outlined {
-  font-size: 18px;
-  color: var(--text-muted);
-}
-
-.props__header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.props__mode-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  border-bottom: 1px solid var(--border);
-  animation: fadeIn 0.2s ease;
-}
-
-.props__mode-badge .material-symbols-outlined {
-  font-size: 16px;
-}
-
-.props__mode-badge--node {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.props__mode-badge--link {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.props__section {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
-  animation: fadeSlideIn 0.25s ease both;
-}
-
-.props__label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-subtle);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.props__select,
-.props__input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
+  font-size: 12px;
   color: var(--base-text);
-  font-size: 13px;
-  font-family: inherit;
-  padding: 8px 10px;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.props__select:focus,
-.props__input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
-
-.props__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  animation: fadeSlideIn 0.2s ease both;
-}
-
-.props__field-label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.props__checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.props__checkbox input {
-  accent-color: var(--primary);
-}
-
-.props__empty {
-  padding: 14px 12px;
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
-.props__empty-state {
+/* ---- Empty state ---- */
+.mp-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 40px 16px;
-  animation: fadeIn 0.4s ease;
+  gap: 10px;
+  padding: 48px 24px;
+  flex: 1;
 }
 
-.props__empty-icon {
-  font-size: 36px;
+.mp-empty__graphic {
   color: var(--border-strong);
-  margin-bottom: 4px;
+  opacity: 0.6;
 }
 
-.props__empty-text {
+.mp-empty__text {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-muted);
 }
 
-.props__empty-hint {
+.mp-empty__hint {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+/* ---- Type badge ---- */
+.mp-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--mp-pad);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mp-badge__icon {
+  flex-shrink: 0;
+}
+
+.mp-badge__label {
   font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-badge--node {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.mp-badge--link {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---- Scrollable body ---- */
+.mp-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.mp-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.mp-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mp-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.mp-body::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ---- Sections ---- */
+.mp-section {
+  padding: var(--mp-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mp-section__title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Inputs & Selects ---- */
+.mp-select,
+.mp-input {
+  width: 100%;
+  height: var(--mp-h);
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--mp-radius);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0 8px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mp-select:focus,
+.mp-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.mp-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Fields list ---- */
+.mp-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mp-field__label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ---- Toggle switch (replaces checkbox) ---- */
+.mp-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mp-toggle__track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  border: none;
+  background: var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.mp-toggle__track--on {
+  background: var(--primary);
+}
+
+.mp-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mp-toggle__track--on .mp-toggle__thumb {
+  transform: translateX(16px);
+}
+
+.mp-toggle__label {
+  font-size: 11px;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+/* ---- Hint ---- */
+.mp-hint {
+  padding: 14px var(--mp-pad);
+  font-size: 11px;
   color: var(--text-subtle);
 }
 </style>

@@ -589,6 +589,13 @@ const handleFindInTree = (modelNodeId: string) => {
   })
 }
 
+const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
+  const node = state.value.nodes.find((item) => item.id === modelNodeId)
+  if (!node || node.name === newLabel) return
+  node.name = newLabel
+  markNodeDirty(node.id)
+}
+
 const handleMoveNode = (nodeId: string, newParentNodeId: string | null) => {
   const node = state.value.nodes.find((item) => item.id === nodeId)
   if (!node) return
@@ -834,6 +841,7 @@ onBeforeUnmount(() => {
           @add-existing-node="addExistingNodeToDiagram"
           @connect-nodes="startConnectNodes"
           @find-in-tree="handleFindInTree"
+          @node-label-change="handleNodeLabelChange"
         />
 
         <template #right>

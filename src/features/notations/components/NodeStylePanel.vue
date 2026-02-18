@@ -68,6 +68,7 @@ function emitNodeStyle() {
           iconHeight: iconHeight.value,
           iconPadding: iconPadding.value,
           iconMargin: iconMargin.value,
+          iconGap: iconGap.value,
           iconStrokeColor: iconStrokeColor.value,
           iconFillColor: iconFillColor.value
         }
@@ -211,6 +212,7 @@ function confirmSavePreset() {
             iconHeight: iconHeight.value,
             iconPadding: iconPadding.value,
             iconMargin: iconMargin.value,
+            iconGap: iconGap.value,
             iconStrokeColor: iconStrokeColor.value,
             iconFillColor: iconFillColor.value
           }
@@ -287,6 +289,7 @@ function applyComponentPreset(presetName: string) {
     iconHeight.value = style.iconHeight ?? 20;
     iconPadding.value = style.iconPadding ?? 8;
     iconMargin.value = style.iconMargin ?? 0;
+    iconGap.value = style.iconGap ?? 6;
     iconStrokeColor.value = style.iconStrokeColor ?? "#000000";
     iconFillColor.value = style.iconFillColor ?? "#000000";
   } else {
@@ -333,6 +336,7 @@ function applyComponentPreset(presetName: string) {
         fit: "contain",
         padding: iconPadding.value,
         margin: iconMargin.value,
+        gap: iconGap.value,
         strokeColor: iconStrokeColor.value,
         fillColor: iconFillColor.value
       };
@@ -441,6 +445,7 @@ const iconWidth = ref(20);
 const iconHeight = ref(20);
 const iconPadding = ref(8);
 const iconMargin = ref(0);
+const iconGap = ref(6);
 const iconStrokeColor = ref("#000000");
 const iconFillColor = ref("#000000");
 const nodeShape = ref<NodeShape>("rectangle");
@@ -514,6 +519,7 @@ function loadNodeProps() {
   iconHeight.value = Math.round(Number(iconOptions?.height ?? 20));
   iconPadding.value = Number(iconOptions?.padding ?? 8);
   iconMargin.value = Number(iconOptions?.margin ?? 0);
+  iconGap.value = Number(iconOptions?.gap ?? 6);
   iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? "#000000";
   iconFillColor.value = (iconOptions?.fillColor as string) ?? "#000000";
 
@@ -695,6 +701,7 @@ function applyNodeIcon() {
         fit: "contain",
         padding: iconPadding.value,
         margin: iconMargin.value,
+        gap: iconGap.value,
         strokeColor: iconStrokeColor.value,
         fillColor: iconFillColor.value
       };
@@ -742,6 +749,15 @@ function handleIconMarginChange(value: string) {
   const v = parseFloat(value);
   if (!Number.isFinite(v) || v < 0) return;
   iconMargin.value = v;
+  resetComponentPreset();
+  applyNodeIcon();
+  emitNodeStyle();
+}
+
+function handleIconGapChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  iconGap.value = v;
   resetComponentPreset();
   applyNodeIcon();
   emitNodeStyle();
@@ -1204,648 +1220,1210 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 </script>
 
 <template>
-  <div class="style-panel">
-    <div class="style-panel__header">
-      <h3 class="style-panel__title">
-        {{ elementType === 'edge' ? 'Стиль связи' : 'Стиль фигуры' }}
-      </h3>
+  <div class="sp">
+    <!-- Empty state -->
+    <div v-if="!selectedElementId" class="sp-empty">
+      <div class="sp-empty__graphic">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="12" width="32" height="24" rx="4" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.3"/>
+          <circle cx="24" cy="24" r="3" fill="currentColor" opacity="0.2"/>
+          <path d="M24 18v-4M24 34v-4M18 24h-4M34 24h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.15"/>
+        </svg>
+      </div>
+      <span class="sp-empty__text">Выберите элемент на диаграмме</span>
     </div>
 
-    <div v-if="!selectedElementId" class="style-panel__empty">
-      <span class="material-symbols-outlined style-panel__empty-icon">touch_app</span>
-      <span>Выберите элемент на диаграмме</span>
-    </div>
+    <template v-else>
+      <!-- Header with type indicator -->
+      <div class="sp-header">
+        <div class="sp-header__type" :class="elementType === 'edge' ? 'sp-header__type--edge' : 'sp-header__type--node'">
+          <svg v-if="elementType === 'edge'" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.2"/>
+            <circle cx="13" cy="3" r="2" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M4.5 11.5L11.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+          <span>{{ elementType === 'edge' ? 'Связь' : 'Фигура' }}</span>
+        </div>
+      </div>
 
-    <!-- Edge style controls -->
-    <div v-else-if="elementType === 'edge'" class="style-panel__body">
-      <!-- Preset -->
-      <div class="style-row style-row--inline">
-        <label class="style-label">Пресет</label>
+      <!-- Preset bar -->
+      <div class="sp-preset">
         <select
-          class="style-select style-select--wide"
-          :value="selectedRelationPreset"
-          @change="applyEdgePreset(($event.target as HTMLSelectElement).value); selectedRelationPreset = ($event.target as HTMLSelectElement).value"
+          class="sp-select sp-select--preset"
+          :value="elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset"
+          @change="elementType === 'edge'
+            ? (applyEdgePreset(($event.target as HTMLSelectElement).value), selectedRelationPreset = ($event.target as HTMLSelectElement).value)
+            : (applyComponentPreset(($event.target as HTMLSelectElement).value), selectedComponentPreset = ($event.target as HTMLSelectElement).value)"
         >
-          <option value="custom">— Пользовательский —</option>
-          <optgroup label="Встроенные">
-            <option v-for="preset in builtInRelationPresets" :key="preset.name" :value="preset.name">{{ preset.label }}</option>
-          </optgroup>
-          <optgroup v-if="userRelationPresets.length" label="Мои пресеты">
-            <option v-for="preset in userRelationPresets" :key="preset.name" :value="preset.name">{{ preset.label }}</option>
-          </optgroup>
-        </select>
-        <button type="button" class="style-btn style-btn--icon" title="Сохранить как пресет" @click="openSavePresetForm">+</button>
-        <button v-if="userRelationPresets.some(p => p.name === selectedRelationPreset)" type="button" class="style-btn style-btn--icon style-btn--danger" title="Удалить пресет" @click="handleDeleteUserPreset(selectedRelationPreset, 'relation')">&times;</button>
-      </div>
-      <div v-if="showSavePresetForm && elementType === 'edge'" class="style-row style-row--inline">
-        <label class="style-label">Название</label>
-        <input v-model="newPresetName" class="style-input style-input--wide" placeholder="Мой пресет" @keyup.enter="confirmSavePreset" @keyup.escape="cancelSavePreset">
-        <button type="button" class="style-btn style-btn--icon" title="Сохранить" @click="confirmSavePreset">&#10003;</button>
-        <button type="button" class="style-btn style-btn--icon" title="Отмена" @click="cancelSavePreset">&times;</button>
-      </div>
-
-      <!-- Label section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(edgeSection, 'label')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !edgeSection.label }">expand_more</span>
-          <span class="style-section__title">Метка</span>
-        </button>
-        <div v-if="edgeSection.label" class="style-section__body">
-          <div class="style-row">
-            <label class="style-label">Текст</label>
-            <input class="style-input style-input--wide" :value="edgeLabel" placeholder="Текст метки" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
-          </div>
-          <div class="style-row">
-            <label class="style-label">Цвет</label>
-            <div class="color-group">
-              <input type="color" class="color-picker" :value="edgeLabelColor" @input="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
-              <input type="text" class="style-input" :value="edgeLabelColor" @change="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
-              <input type="number" class="style-input style-input--num" :value="edgeLabelOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </div>
-          <div class="style-row style-row--inline">
-            <label class="style-label">Размер</label>
-            <input type="number" class="style-input style-input--num" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
-          </div>
-          <div class="style-row">
-            <label class="style-label">Фон</label>
-            <div class="color-group">
-              <input type="color" class="color-picker" :value="edgeLabelBgColor" @input="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
-              <input type="text" class="style-input" :value="edgeLabelBgColor" @change="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
-              <input type="number" class="style-input style-input--num" :value="edgeLabelBgOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Line section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(edgeSection, 'line')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !edgeSection.line }">expand_more</span>
-          <span class="style-section__title">Линия</span>
-        </button>
-        <div v-if="edgeSection.line" class="style-section__body">
-          <div class="style-row">
-            <label class="style-label">Цвет</label>
-            <div class="color-group">
-              <input type="color" class="color-picker" :value="edgeStrokeColor" @input="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
-              <input type="text" class="style-input" :value="edgeStrokeColor" @change="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
-              <input type="number" class="style-input style-input--num" :value="edgeStrokeOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </div>
-          <div class="style-row style-row--inline">
-            <label class="style-label">Толщина</label>
-            <input type="number" class="style-input style-input--num" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
-            <label class="style-label">Стиль</label>
-            <select class="style-select" :value="edgeLineStyle" @change="handleEdgeLineStyleChange(($event.target as HTMLSelectElement).value)">
-              <option value="solid">Сплошная</option>
-              <option value="dashed">Пунктир</option>
-            </select>
-          </div>
-          <div v-if="edgeLineStyle === 'dashed'" class="style-row">
-            <label class="style-label">Паттерн</label>
-            <input type="text" class="style-input style-input--wide" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
-          </div>
-          <div class="style-row">
-            <label class="style-label">Тип</label>
-            <select class="style-select style-select--wide" :value="edgeType" @change="handleEdgeTypeChange(($event.target as HTMLSelectElement).value)">
-              <option value="straight">Прямая</option>
-              <option value="polyline">Ломаная</option>
-              <option value="bezier">Кривая</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <!-- Markers section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(edgeSection, 'markers')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !edgeSection.markers }">expand_more</span>
-          <span class="style-section__title">Маркеры</span>
-        </button>
-        <div v-if="edgeSection.markers" class="style-section__body">
-          <div class="style-row style-row--inline">
-            <label class="style-label">Начало</label>
-            <select class="style-select" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
-              <option value="none">Нет</option>
-              <option value="arrow">Стрелка</option>
-              <option value="open">Открытая</option>
-              <option value="diamond">Ромб</option>
-              <option value="circle">Круг</option>
-            </select>
-          </div>
-          <template v-if="edgeStartMarker !== 'none'">
-            <div class="style-row style-row--inline">
-              <label class="style-label">Размер</label>
-              <input type="number" class="style-input style-input--num" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
-            </div>
-            <div class="style-row">
-              <label class="style-label">Заливка</label>
-              <div class="color-group">
-                <input type="color" class="color-picker" :value="edgeStartMarkerFillColor" @input="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                <input type="text" class="style-input" :value="edgeStartMarkerFillColor" @change="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                <input type="number" class="style-input style-input--num" :value="edgeStartMarkerFillOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
-              </div>
-            </div>
-          </template>
-          <div class="style-row style-row--inline">
-            <label class="style-label">Конец</label>
-            <select class="style-select" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
-              <option value="none">Нет</option>
-              <option value="arrow">Стрелка</option>
-              <option value="open">Открытая</option>
-              <option value="diamond">Ромб</option>
-              <option value="circle">Круг</option>
-            </select>
-          </div>
-          <template v-if="edgeEndMarker !== 'none'">
-            <div class="style-row style-row--inline">
-              <label class="style-label">Размер</label>
-              <input type="number" class="style-input style-input--num" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
-            </div>
-            <div class="style-row">
-              <label class="style-label">Заливка</label>
-              <div class="color-group">
-                <input type="color" class="color-picker" :value="edgeEndMarkerFillColor" @input="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                <input type="text" class="style-input" :value="edgeEndMarkerFillColor" @change="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                <input type="number" class="style-input style-input--num" :value="edgeEndMarkerFillOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </div>
-
-    <!-- Node style controls -->
-    <div v-else class="style-panel__body">
-      <!-- Preset -->
-      <div class="style-row style-row--inline">
-        <label class="style-label">Пресет</label>
-        <select
-          class="style-select style-select--wide"
-          :value="selectedComponentPreset"
-          @change="applyComponentPreset(($event.target as HTMLSelectElement).value); selectedComponentPreset = ($event.target as HTMLSelectElement).value"
-        >
-          <option value="custom">— Пользовательский —</option>
+          <option value="custom">Пользовательский</option>
           <optgroup label="Встроенные">
             <option
-              v-for="preset in builtInComponentPresets"
+              v-for="preset in (elementType === 'edge' ? builtInRelationPresets : builtInComponentPresets)"
               :key="preset.name"
               :value="preset.name"
-            >
-              {{ preset.label }}
-            </option>
+            >{{ preset.label }}</option>
           </optgroup>
-          <optgroup v-if="userComponentPresets.length" label="Мои пресеты">
+          <optgroup
+            v-if="(elementType === 'edge' ? userRelationPresets : userComponentPresets).length"
+            label="Мои пресеты"
+          >
             <option
-              v-for="preset in userComponentPresets"
+              v-for="preset in (elementType === 'edge' ? userRelationPresets : userComponentPresets)"
               :key="preset.name"
               :value="preset.name"
-            >
-              {{ preset.label }}
-            </option>
+            >{{ preset.label }}</option>
           </optgroup>
         </select>
-        <button
-          type="button"
-          class="style-btn style-btn--icon"
-          title="Сохранить как пресет"
-          @click="openSavePresetForm"
-        >
-          +
+        <button type="button" class="sp-preset__btn" title="Сохранить как пресет" @click="openSavePresetForm">
+          <span class="material-symbols-outlined">bookmark_add</span>
         </button>
         <button
-          v-if="userComponentPresets.some(p => p.name === selectedComponentPreset)"
+          v-if="(elementType === 'edge' ? userRelationPresets : userComponentPresets).some(p => p.name === (elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset))"
           type="button"
-          class="style-btn style-btn--icon style-btn--danger"
+          class="sp-preset__btn sp-preset__btn--danger"
           title="Удалить пресет"
-          @click="handleDeleteUserPreset(selectedComponentPreset, 'component')"
+          @click="handleDeleteUserPreset(elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset, elementType === 'edge' ? 'relation' : 'component')"
         >
-          &times;
+          <span class="material-symbols-outlined">delete_outline</span>
         </button>
-      </div>
-      <div v-if="showSavePresetForm && elementType === 'node'" class="style-row style-row--inline">
-        <label class="style-label">Название</label>
-        <input
-          v-model="newPresetName"
-          class="style-input style-input--wide"
-          placeholder="Мой пресет"
-          @keyup.enter="confirmSavePreset"
-          @keyup.escape="cancelSavePreset"
-        >
-        <button type="button" class="style-btn style-btn--icon" title="Сохранить" @click="confirmSavePreset">&#10003;</button>
-        <button type="button" class="style-btn style-btn--icon" title="Отмена" @click="cancelSavePreset">&times;</button>
       </div>
 
-      <!-- Label section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'label')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.label }">expand_more</span>
-          <span class="style-section__title">Метка</span>
-        </button>
-        <div v-if="nodeSection.label" class="style-section__body">
-          <div class="style-row">
-            <label class="style-label">Текст</label>
-            <input
-              class="style-input style-input--wide"
-              :value="label"
-              placeholder="Текст метки"
-              @input="handleLabelChange(($event.target as HTMLInputElement).value)"
-            >
-          </div>
-          <div class="style-row">
-            <label class="style-label">Цвет</label>
-            <div class="color-group">
-              <input type="color" class="color-picker" :value="labelColor" @input="handleLabelColorChange(($event.target as HTMLInputElement).value)">
-              <input type="text" class="style-input" :value="labelColor" @change="handleLabelColorChange(($event.target as HTMLInputElement).value)">
-              <input type="number" class="style-input style-input--num" :value="labelOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </div>
-          <div class="style-row style-row--inline">
-            <label class="style-label">Размер</label>
-            <input type="number" class="style-input style-input--num" :value="labelFontSize" min="8" max="72" step="1" @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)">
-            <label class="style-label">Отступ</label>
-            <input type="number" class="style-input style-input--num" :value="labelPadding" min="0" max="50" step="1" @input="handleLabelPaddingChange(($event.target as HTMLInputElement).value)">
-            <label class="style-label">Маргин</label>
-            <input type="number" class="style-input style-input--num" :value="labelMargin" min="0" max="50" step="1" @input="handleLabelMarginChange(($event.target as HTMLInputElement).value)">
-          </div>
-          <div class="style-row">
-            <label class="style-label">Позиция</label>
-            <select class="style-select style-select--wide" :value="labelPlacement" @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)">
-              <option value="auto">Авто</option>
-              <option value="center">Центр</option>
-              <option value="top">Сверху</option>
-              <option value="bottom">Снизу</option>
-              <option value="left">Слева</option>
-              <option value="right">Справа</option>
-            </select>
-          </div>
+      <!-- Save preset inline form -->
+      <Transition name="sp-slide">
+        <div v-if="showSavePresetForm" class="sp-save-form">
+          <input
+            v-model="newPresetName"
+            class="sp-input sp-save-form__input"
+            placeholder="Название пресета..."
+            @keyup.enter="confirmSavePreset"
+            @keyup.escape="cancelSavePreset"
+          >
+          <button type="button" class="sp-save-form__btn sp-save-form__btn--ok" @click="confirmSavePreset">
+            <span class="material-symbols-outlined">check</span>
+          </button>
+          <button type="button" class="sp-save-form__btn" @click="cancelSavePreset">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
-      </div>
+      </Transition>
 
-      <!-- Shape & Dimensions section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'shape')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.shape }">expand_more</span>
-          <span class="style-section__title">Фигура и размеры</span>
-        </button>
-        <div v-if="nodeSection.shape" class="style-section__body">
-          <div class="style-row">
-            <label class="style-label">Форма</label>
-            <select class="style-select style-select--wide" :value="nodeShape" @change="handleNodeShapeChange(($event.target as HTMLSelectElement).value)">
-              <option v-for="shape in NODE_SHAPE_OPTIONS" :key="shape.value" :value="shape.value">{{ shape.label }}</option>
-            </select>
-          </div>
-          <div class="style-row style-row--inline">
-            <label class="style-label">Ш</label>
-            <input type="number" class="style-input style-input--num" :value="nodeWidth" min="10" max="500" step="10" @input="handleWidthChange(($event.target as HTMLInputElement).value)">
-            <label class="style-label">В</label>
-            <input type="number" class="style-input style-input--num" :value="nodeHeight" min="10" max="300" step="10" @input="handleHeightChange(($event.target as HTMLInputElement).value)">
-          </div>
-          <div v-if="nodeShape === 'rectangle'" class="style-row">
-            <label class="style-label">Скругление</label>
-            <input type="number" class="style-input style-input--num" :value="cornerRadius" min="0" max="50" step="1" @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)">
-          </div>
-        </div>
-      </div>
+      <!-- Scrollable body -->
+      <div class="sp-body">
 
-      <!-- Fill & Stroke section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'fill')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.fill }">expand_more</span>
-          <span class="style-section__title">Заливка и обводка</span>
-        </button>
-        <div v-if="nodeSection.fill" class="style-section__body">
-          <div class="style-row">
-            <label class="style-label">Заливка</label>
-            <div class="color-group">
-              <input type="color" class="color-picker" :value="fillColor" @input="handleFillChange(($event.target as HTMLInputElement).value)">
-              <input type="text" class="style-input" :value="fillColor" @change="handleFillChange(($event.target as HTMLInputElement).value)">
-              <input type="number" class="style-input style-input--num" :value="fillOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </div>
-          <div class="style-row">
-            <label class="style-label">Обводка</label>
-            <div class="color-group">
-              <input type="color" class="color-picker" :value="strokeColor" @input="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
-              <input type="text" class="style-input" :value="strokeColor" @change="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
-              <input type="number" class="style-input style-input--num" :value="strokeOpacity" min="0" max="1" step="0.1" title="Непрозрачность" @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </div>
-          <div class="style-row style-row--inline">
-            <label class="style-label">Толщина</label>
-            <input type="number" class="style-input style-input--num" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
-            <label class="style-label">Линия</label>
-            <select class="style-select" :value="lineStyle" @change="handleLineStyleChange(($event.target as HTMLSelectElement).value)">
-              <option value="solid">Сплошная</option>
-              <option value="dashed">Пунктир</option>
-            </select>
-          </div>
-          <div v-if="lineStyle === 'dashed'" class="style-row">
-            <label class="style-label">Паттерн</label>
-            <input type="text" class="style-input style-input--wide" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
-          </div>
-        </div>
-      </div>
+        <!-- ==================== EDGE PANEL ==================== -->
+        <template v-if="elementType === 'edge'">
 
-      <!-- Icon section -->
-      <div class="style-section">
-        <button type="button" class="style-section__header" @click="toggleSection(nodeSection, 'icon')">
-          <span class="material-symbols-outlined style-section__chevron" :class="{ 'style-section__chevron--collapsed': !nodeSection.icon }">expand_more</span>
-          <span class="style-section__title">Иконка</span>
-          <span v-if="iconName" class="style-section__badge">{{ iconName }}</span>
-        </button>
-        <div v-if="nodeSection.icon" class="style-section__body">
-          <div class="style-row">
-            <label class="style-label">Иконка</label>
-            <div class="icon-group">
-              <select class="style-select style-select--wide" :value="iconName" @change="handleIconChange(($event.target as HTMLSelectElement).value)">
-                <option value="">Нет</option>
-                <option v-for="name in AVAILABLE_ICONS" :key="name" :value="name">{{ name }}</option>
-              </select>
-              <img v-if="iconName" class="icon-preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
-            </div>
-          </div>
-          <template v-if="iconName">
-            <div class="style-row">
-              <label class="style-label">Позиция</label>
-              <select class="style-select style-select--wide" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
-                <option value="top-left">Сверху слева</option>
-                <option value="top-right">Сверху справа</option>
-                <option value="bottom-left">Снизу слева</option>
-                <option value="bottom-right">Снизу справа</option>
-                <option value="center">По центру</option>
-                <option value="top">Сверху</option>
-                <option value="bottom">Снизу</option>
-                <option value="left">Слева</option>
-                <option value="right">Справа</option>
-              </select>
-            </div>
-            <div class="style-row">
-              <label class="style-label">Цвета SVG</label>
-              <div class="color-group">
-                <input type="color" class="color-picker" :value="iconStrokeColor" title="Линии" @input="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
-                <input type="text" class="style-input" :value="iconStrokeColor" @change="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
-                <input type="color" class="color-picker" :value="iconFillColor" title="Заливка" @input="handleIconFillColorChange(($event.target as HTMLInputElement).value)">
+          <!-- Label -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'label')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.label }">chevron_right</span>
+              <span class="sp-section__name">Метка</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="edgeSection.label" class="sp-section__content">
+                <div class="sp-field">
+                  <input class="sp-input sp-input--full" :value="edgeLabel" placeholder="Текст метки..." @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Цвет</span>
+                  <div class="sp-color">
+                    <label class="sp-color__swatch">
+                      <input type="color" :value="edgeLabelColor" @input="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: edgeLabelColor }"></span>
+                    </label>
+                    <input type="text" class="sp-input sp-input--hex" :value="edgeLabelColor" @change="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field">
+                    <span class="sp-num-field__label">A</span>
+                    <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Размер</span>
+                  <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Фон</span>
+                  <div class="sp-color">
+                    <label class="sp-color__swatch">
+                      <input type="color" :value="edgeLabelBgColor" @input="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: edgeLabelBgColor }"></span>
+                    </label>
+                    <input type="text" class="sp-input sp-input--hex" :value="edgeLabelBgColor" @change="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field">
+                    <span class="sp-num-field__label">A</span>
+                    <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelBgOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="style-row style-row--inline">
-              <label class="style-label">Ш</label>
-              <input type="number" class="style-input style-input--num" :value="iconWidth" min="1" max="200" step="1" @input="handleIconWidthChange(($event.target as HTMLInputElement).value)">
-              <label class="style-label">В</label>
-              <input type="number" class="style-input style-input--num" :value="iconHeight" min="1" max="200" step="1" @input="handleIconHeightChange(($event.target as HTMLInputElement).value)">
-            </div>
-            <div class="style-row style-row--inline">
-              <label class="style-label">Padding</label>
-              <input type="number" class="style-input style-input--num" :value="iconPadding" min="0" max="100" step="1" @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)">
-              <label class="style-label">Margin</label>
-              <input type="number" class="style-input style-input--num" :value="iconMargin" min="0" max="100" step="1" @input="handleIconMarginChange(($event.target as HTMLInputElement).value)">
-            </div>
-          </template>
-        </div>
-      </div>
+            </Transition>
+          </section>
 
-    </div>
+          <!-- Line -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'line')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.line }">chevron_right</span>
+              <span class="sp-section__name">Линия</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="edgeSection.line" class="sp-section__content">
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Цвет</span>
+                  <div class="sp-color">
+                    <label class="sp-color__swatch">
+                      <input type="color" :value="edgeStrokeColor" @input="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: edgeStrokeColor }"></span>
+                    </label>
+                    <input type="text" class="sp-input sp-input--hex" :value="edgeStrokeColor" @change="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field">
+                    <span class="sp-num-field__label">A</span>
+                    <input type="number" class="sp-input sp-input--tiny" :value="edgeStrokeOpacity" min="0" max="1" step="0.1" @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Толщина</span>
+                  <input type="range" class="sp-range" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
+                  <input type="number" class="sp-input sp-input--tiny" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Стиль</span>
+                  <div class="sp-segmented">
+                    <button
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': edgeLineStyle === 'solid' }"
+                      @click="handleEdgeLineStyleChange('solid')"
+                    >
+                      <svg width="20" height="2" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="currentColor" stroke-width="2"/></svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': edgeLineStyle === 'dashed' }"
+                      @click="handleEdgeLineStyleChange('dashed')"
+                    >
+                      <svg width="20" height="2" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="edgeLineStyle === 'dashed'" class="sp-field sp-field--row">
+                  <span class="sp-field__label">Паттерн</span>
+                  <input type="text" class="sp-input sp-input--flex" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Тип</span>
+                  <div class="sp-segmented">
+                    <button
+                      v-for="t in ([{v:'straight',l:'Прямая',icon:'remove'},{v:'polyline',l:'Ломаная',icon:'timeline'},{v:'bezier',l:'Кривая',icon:'line_curve'}] as const)"
+                      :key="t.v"
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': edgeType === t.v }"
+                      :title="t.l"
+                      @click="handleEdgeTypeChange(t.v)"
+                    >
+                      <span class="material-symbols-outlined">{{ t.icon }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </section>
+
+          <!-- Markers -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'markers')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.markers }">chevron_right</span>
+              <span class="sp-section__name">Маркеры</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="edgeSection.markers" class="sp-section__content">
+                <!-- Start marker -->
+                <div class="sp-marker-group">
+                  <div class="sp-field sp-field--row">
+                    <span class="sp-field__label">Начало</span>
+                    <select class="sp-select sp-select--flex" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
+                      <option value="none">Нет</option>
+                      <option value="arrow">Стрелка</option>
+                      <option value="open">Открытая</option>
+                      <option value="diamond">Ромб</option>
+                      <option value="circle">Круг</option>
+                    </select>
+                  </div>
+                  <template v-if="edgeStartMarker !== 'none'">
+                    <div class="sp-field sp-field--row sp-field--indent">
+                      <span class="sp-field__label">Размер</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                    <div class="sp-field sp-field--row sp-field--indent">
+                      <span class="sp-field__label">Заливка</span>
+                      <div class="sp-color">
+                        <label class="sp-color__swatch">
+                          <input type="color" :value="edgeStartMarkerFillColor" @input="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                          <span class="sp-color__preview" :style="{ background: edgeStartMarkerFillColor }"></span>
+                        </label>
+                        <input type="text" class="sp-input sp-input--hex" :value="edgeStartMarkerFillColor" @change="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                      </div>
+                      <div class="sp-num-field">
+                        <span class="sp-num-field__label">A</span>
+                        <input type="number" class="sp-input sp-input--tiny" :value="edgeStartMarkerFillOpacity" min="0" max="1" step="0.1" @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
+                      </div>
+                    </div>
+                  </template>
+                </div>
+                <!-- End marker -->
+                <div class="sp-marker-group">
+                  <div class="sp-field sp-field--row">
+                    <span class="sp-field__label">Конец</span>
+                    <select class="sp-select sp-select--flex" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
+                      <option value="none">Нет</option>
+                      <option value="arrow">Стрелка</option>
+                      <option value="open">Открытая</option>
+                      <option value="diamond">Ромб</option>
+                      <option value="circle">Круг</option>
+                    </select>
+                  </div>
+                  <template v-if="edgeEndMarker !== 'none'">
+                    <div class="sp-field sp-field--row sp-field--indent">
+                      <span class="sp-field__label">Размер</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                    <div class="sp-field sp-field--row sp-field--indent">
+                      <span class="sp-field__label">Заливка</span>
+                      <div class="sp-color">
+                        <label class="sp-color__swatch">
+                          <input type="color" :value="edgeEndMarkerFillColor" @input="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                          <span class="sp-color__preview" :style="{ background: edgeEndMarkerFillColor }"></span>
+                        </label>
+                        <input type="text" class="sp-input sp-input--hex" :value="edgeEndMarkerFillColor" @change="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
+                      </div>
+                      <div class="sp-num-field">
+                        <span class="sp-num-field__label">A</span>
+                        <input type="number" class="sp-input sp-input--tiny" :value="edgeEndMarkerFillOpacity" min="0" max="1" step="0.1" @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </Transition>
+          </section>
+
+        </template>
+
+        <!-- ==================== NODE PANEL ==================== -->
+        <template v-else>
+
+          <!-- Label -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'label')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.label }">chevron_right</span>
+              <span class="sp-section__name">Метка</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="nodeSection.label" class="sp-section__content">
+                <div class="sp-field">
+                  <input class="sp-input sp-input--full" :value="label" placeholder="Текст метки..." @input="handleLabelChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Цвет</span>
+                  <div class="sp-color">
+                    <label class="sp-color__swatch">
+                      <input type="color" :value="labelColor" @input="handleLabelColorChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: labelColor }"></span>
+                    </label>
+                    <input type="text" class="sp-input sp-input--hex" :value="labelColor" @change="handleLabelColorChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field">
+                    <span class="sp-num-field__label">A</span>
+                    <input type="number" class="sp-input sp-input--tiny" :value="labelOpacity" min="0" max="1" step="0.1" @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field-grid sp-field-grid--3">
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">Размер</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="labelFontSize" min="8" max="72" step="1" @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">Внутр.</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="labelPadding" min="0" max="50" step="1" @input="handleLabelPaddingChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">Внешн.</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="labelMargin" min="0" max="50" step="1" @input="handleLabelMarginChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Позиция</span>
+                  <select class="sp-select sp-select--flex" :value="labelPlacement" @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)">
+                    <option value="auto">Авто</option>
+                    <option value="center">Центр</option>
+                    <option value="top">Сверху</option>
+                    <option value="bottom">Снизу</option>
+                    <option value="left">Слева</option>
+                    <option value="right">Справа</option>
+                  </select>
+                </div>
+              </div>
+            </Transition>
+          </section>
+
+          <!-- Shape & Dimensions -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'shape')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.shape }">chevron_right</span>
+              <span class="sp-section__name">Фигура</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="nodeSection.shape" class="sp-section__content">
+                <!-- Visual shape picker -->
+                <div class="sp-shapes">
+                  <button
+                    v-for="shape in NODE_SHAPE_OPTIONS"
+                    :key="shape.value"
+                    type="button"
+                    class="sp-shapes__item"
+                    :class="{ 'sp-shapes__item--active': nodeShape === shape.value }"
+                    :title="shape.label"
+                    @click="handleNodeShapeChange(shape.value)"
+                  >
+                    <svg width="28" height="20" viewBox="0 0 28 20">
+                      <rect v-if="shape.value === 'rectangle'" x="2" y="3" width="24" height="14" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                      <polygon v-else-if="shape.value === 'beveled-rectangle'" points="5,3 23,3 26,6 26,17 23,20 5,20 2,17 2,6" stroke="currentColor" stroke-width="1.2" fill="none" transform="translate(0,-1.5)"/>
+                      <polygon v-else-if="shape.value === 'diamond'" points="14,1 27,10 14,19 1,10" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                      <circle v-else-if="shape.value === 'circle'" cx="14" cy="10" r="8" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                      <polygon v-else-if="shape.value === 'trapezoid'" points="5,3 23,3 26,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                      <polygon v-else-if="shape.value === 'slanted-rectangle'" points="6,3 26,3 22,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="sp-field-grid sp-field-grid--dims">
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">W</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="nodeWidth" min="10" max="500" step="10" @input="handleWidthChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">H</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="nodeHeight" min="10" max="300" step="10" @input="handleHeightChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div v-if="nodeShape === 'rectangle'" class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">R</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="cornerRadius" min="0" max="50" step="1" @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </section>
+
+          <!-- Fill & Stroke -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'fill')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.fill }">chevron_right</span>
+              <span class="sp-section__name">Заливка и обводка</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="nodeSection.fill" class="sp-section__content">
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Заливка</span>
+                  <div class="sp-color">
+                    <label class="sp-color__swatch">
+                      <input type="color" :value="fillColor" @input="handleFillChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: fillColor }"></span>
+                    </label>
+                    <input type="text" class="sp-input sp-input--hex" :value="fillColor" @change="handleFillChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field">
+                    <span class="sp-num-field__label">A</span>
+                    <input type="number" class="sp-input sp-input--tiny" :value="fillOpacity" min="0" max="1" step="0.1" @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Обводка</span>
+                  <div class="sp-color">
+                    <label class="sp-color__swatch">
+                      <input type="color" :value="strokeColor" @input="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: strokeColor }"></span>
+                    </label>
+                    <input type="text" class="sp-input sp-input--hex" :value="strokeColor" @change="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field">
+                    <span class="sp-num-field__label">A</span>
+                    <input type="number" class="sp-input sp-input--tiny" :value="strokeOpacity" min="0" max="1" step="0.1" @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Толщина</span>
+                  <input type="range" class="sp-range" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
+                  <input type="number" class="sp-input sp-input--tiny" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Стиль</span>
+                  <div class="sp-segmented">
+                    <button
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': lineStyle === 'solid' }"
+                      @click="handleLineStyleChange('solid')"
+                    >
+                      <svg width="20" height="2" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="currentColor" stroke-width="2"/></svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': lineStyle === 'dashed' }"
+                      @click="handleLineStyleChange('dashed')"
+                    >
+                      <svg width="20" height="2" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="lineStyle === 'dashed'" class="sp-field sp-field--row">
+                  <span class="sp-field__label">Паттерн</span>
+                  <input type="text" class="sp-input sp-input--flex" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
+                </div>
+              </div>
+            </Transition>
+          </section>
+
+          <!-- Icon -->
+          <section class="sp-section">
+            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'icon')">
+              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.icon }">chevron_right</span>
+              <span class="sp-section__name">Иконка</span>
+              <span v-if="iconName" class="sp-section__pill">{{ iconName }}</span>
+            </button>
+            <Transition name="sp-expand">
+              <div v-if="nodeSection.icon" class="sp-section__content">
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Иконка</span>
+                  <div class="sp-icon-select">
+                    <select class="sp-select sp-select--flex" :value="iconName" @change="handleIconChange(($event.target as HTMLSelectElement).value)">
+                      <option value="">Нет</option>
+                      <option v-for="name in AVAILABLE_ICONS" :key="name" :value="name">{{ name }}</option>
+                    </select>
+                    <img v-if="iconName" class="sp-icon-select__preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
+                  </div>
+                </div>
+                <template v-if="iconName">
+                  <div class="sp-field sp-field--row">
+                    <span class="sp-field__label">Позиция</span>
+                    <select class="sp-select sp-select--flex" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
+                      <option value="top-left">Сверху слева</option>
+                      <option value="top-right">Сверху справа</option>
+                      <option value="bottom-left">Снизу слева</option>
+                      <option value="bottom-right">Снизу справа</option>
+                      <option value="center">По центру</option>
+                      <option value="top">Сверху</option>
+                      <option value="bottom">Снизу</option>
+                      <option value="left">Слева</option>
+                      <option value="right">Справа</option>
+                    </select>
+                  </div>
+                  <div class="sp-field sp-field--row">
+                    <span class="sp-field__label">Цвета</span>
+                    <div class="sp-color">
+                      <label class="sp-color__swatch" title="Линии">
+                        <input type="color" :value="iconStrokeColor" @input="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
+                        <span class="sp-color__preview" :style="{ background: iconStrokeColor }"></span>
+                      </label>
+                      <input type="text" class="sp-input sp-input--hex" :value="iconStrokeColor" @change="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                    <label class="sp-color__swatch" title="Заливка">
+                      <input type="color" :value="iconFillColor" @input="handleIconFillColorChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-color__preview" :style="{ background: iconFillColor }"></span>
+                    </label>
+                  </div>
+                  <div class="sp-field-grid sp-field-grid--2">
+                    <div class="sp-num-field sp-num-field--stacked">
+                      <span class="sp-num-field__label">W</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="iconWidth" min="1" max="200" step="1" @input="handleIconWidthChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                    <div class="sp-num-field sp-num-field--stacked">
+                      <span class="sp-num-field__label">H</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="iconHeight" min="1" max="200" step="1" @input="handleIconHeightChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                  </div>
+                  <div class="sp-field-grid sp-field-grid--3">
+                    <div class="sp-num-field sp-num-field--stacked">
+                      <span class="sp-num-field__label">Внутр.</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="iconPadding" min="0" max="100" step="1" @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                    <div class="sp-num-field sp-num-field--stacked">
+                      <span class="sp-num-field__label">Внешн.</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="iconMargin" min="0" max="100" step="1" @input="handleIconMarginChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                    <div class="sp-num-field sp-num-field--stacked">
+                      <span class="sp-num-field__label">Зазор</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="iconGap" min="0" max="100" step="1" @input="handleIconGapChange(($event.target as HTMLInputElement).value)">
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </Transition>
+          </section>
+
+        </template>
+      </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.style-panel {
+/* ========================================
+   Style Panel — refined design-tool aesthetic
+   ======================================== */
+
+.sp {
+  --sp-h: 28px;
+  --sp-radius: 6px;
+  --sp-gap: 6px;
+  --sp-pad: 12px;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   background: var(--surface-panel);
+  font-size: 12px;
+  color: var(--base-text);
 }
 
-.style-panel__header {
+/* ---- Empty state ---- */
+.sp-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 10px 16px;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  flex: 1;
+}
+
+.sp-empty__graphic {
+  color: var(--border-strong);
+  opacity: 0.6;
+}
+
+.sp-empty__text {
+  font-size: 12px;
+  color: var(--text-subtle);
+  letter-spacing: 0.01em;
+}
+
+/* ---- Header ---- */
+.sp-header {
+  padding: 10px var(--sp-pad);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.style-panel__title {
-  margin: 0;
-  font-size: var(--heading-font-size);
-  font-weight: 600;
-  color: var(--base-text);
-  letter-spacing: var(--heading-letter-spacing);
-}
-
-.style-panel__empty {
-  display: flex;
-  flex-direction: column;
+.sp-header__type {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 40px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-subtle);
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px 3px 6px;
+  border-radius: 5px;
 }
 
-.style-panel__empty-icon {
-  font-size: 32px;
-  color: var(--border-strong);
+.sp-header__type--node {
+  color: var(--primary);
+  background: var(--primary-soft);
 }
 
-.style-panel__body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.sp-header__type--edge {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
-.style-section {
-  border-bottom: 1px solid var(--border);
+.sp-header__type svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
-.style-section__header {
+/* ---- Preset bar ---- */
+.sp-preset {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 8px var(--sp-pad);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sp-preset .sp-select--preset {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-preset__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sp-h);
+  height: var(--sp-h);
+  border: none;
+  border-radius: var(--sp-radius);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.sp-preset__btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.sp-preset__btn:hover {
+  background: var(--surface-strong);
+  color: var(--base-text);
+}
+
+.sp-preset__btn--danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---- Save preset form ---- */
+.sp-save-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px var(--sp-pad);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sp-save-form__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-save-form__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sp-h);
+  height: var(--sp-h);
+  border: none;
+  border-radius: var(--sp-radius);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.sp-save-form__btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.sp-save-form__btn:hover {
+  background: var(--surface-strong);
+  color: var(--base-text);
+}
+
+.sp-save-form__btn--ok:hover {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* ---- Scrollable body ---- */
+.sp-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* ---- Sections ---- */
+.sp-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.sp-section__toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   width: 100%;
-  padding: 8px 0;
+  padding: 7px var(--sp-pad);
   border: none;
   background: none;
   cursor: pointer;
   user-select: none;
   font-family: inherit;
+  transition: background 0.1s ease;
 }
 
-.style-section__chevron {
-  font-size: 18px;
+.sp-section__toggle:hover {
+  background: var(--surface-muted);
+}
+
+.sp-section__arrow {
+  font-size: 16px;
   color: var(--text-subtle);
   flex-shrink: 0;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotate(90deg);
 }
 
-.style-section__chevron--collapsed {
-  transform: rotate(-90deg);
+.sp-section__arrow--closed {
+  transform: rotate(0deg);
 }
 
-.style-section__title {
+.sp-section__name {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-subtle);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
-.style-section__badge {
+.sp-section__pill {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--primary);
   background: var(--primary-soft);
-  padding: 1px 7px;
-  border-radius: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
   font-weight: 500;
-  max-width: 120px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.style-section__body {
+.sp-section__content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-bottom: 10px;
+  gap: var(--sp-gap);
+  padding: 0 var(--sp-pad) 10px;
 }
 
-.style-row {
+/* ---- Fields ---- */
+.sp-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-width: 0;
 }
 
-.style-row--inline {
+.sp-field--row {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.style-label {
-  font-size: 12px;
-  color: var(--text-muted);
+.sp-field--indent {
+  padding-left: 12px;
+}
+
+.sp-field__label {
+  font-size: 11px;
+  color: var(--text-subtle);
   white-space: nowrap;
   flex-shrink: 0;
+  min-width: 48px;
 }
 
-.style-input {
-  padding: 5px 8px;
-  font-size: 13px;
+/* ---- Field grid ---- */
+.sp-field-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.sp-field-grid--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.sp-field-grid--3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.sp-field-grid--dims {
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+}
+
+/* ---- Inputs ---- */
+.sp-input {
+  height: var(--sp-h);
+  padding: 0 7px;
+  font-size: 12px;
   font-family: inherit;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--sp-radius);
   background: var(--surface-muted);
   color: var(--base-text);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
 
-.style-input:focus {
+.sp-input:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
-.style-input--wide {
+.sp-input--full {
+  width: 100%;
+}
+
+.sp-input--flex {
   flex: 1;
   min-width: 0;
 }
 
-.style-input--num {
-  width: 70px;
+.sp-input--sm {
+  width: 100%;
 }
 
-.style-select {
-  padding: 5px 8px;
-  font-size: 13px;
+.sp-input--tiny {
+  width: 48px;
+  flex-shrink: 0;
+  text-align: center;
+  padding: 0 3px;
+}
+
+.sp-input--hex {
+  flex: 1;
+  min-width: 0;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Selects ---- */
+.sp-select {
+  height: var(--sp-h);
+  padding: 0 6px;
+  font-size: 12px;
   font-family: inherit;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--sp-radius);
   background: var(--surface-muted);
   color: var(--base-text);
   cursor: pointer;
   outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
 }
 
-.style-select:focus {
+.sp-select:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
-.icon-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.sp-select--flex {
   flex: 1;
   min-width: 0;
 }
 
-.icon-preview {
-  width: 24px;
-  height: 24px;
+/* ---- Color picker ---- */
+.sp-color {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-color__swatch {
+  position: relative;
+  width: var(--sp-h);
+  height: var(--sp-h);
   flex-shrink: 0;
-}
-
-.style-select--wide {
-  flex: 1;
-  min-width: 0;
-}
-
-.color-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-
-.color-group .style-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.color-picker {
-  width: 32px;
-  height: 32px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
   cursor: pointer;
+}
+
+.sp-color__swatch input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.sp-color__preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  /* Checkerboard for transparency */
+  background-image:
+    linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+    linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+    linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+}
+
+.sp-color__swatch:hover .sp-color__preview {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+/* ---- Number field with label ---- */
+.sp-num-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.sp-num-field__label {
+  font-size: 10px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.sp-num-field--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.sp-num-field--stacked .sp-num-field__label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-left: 2px;
+}
+
+/* ---- Range slider ---- */
+.sp-range {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.sp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.sp-range::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 3px var(--primary-soft), 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.sp-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+/* ---- Segmented control ---- */
+.sp-segmented {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--sp-radius);
+  overflow: hidden;
   background: var(--surface-muted);
 }
 
-.style-btn--icon {
-  display: inline-flex;
+.sp-segmented__btn {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  font-size: 16px;
-  line-height: 1;
+  height: calc(var(--sp-h) - 2px);
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
   cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
+  font-family: inherit;
 }
 
-.style-btn--icon:hover {
+.sp-segmented__btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.sp-segmented__btn + .sp-segmented__btn {
+  border-left: 1px solid var(--border);
+}
+
+.sp-segmented__btn:hover {
   background: var(--surface-strong);
-  border-color: var(--primary);
+  color: var(--base-text);
 }
 
-.style-btn--danger:hover {
-  background: var(--danger-soft, #ffeef0);
-  border-color: var(--danger, #dc3545);
-  color: var(--danger, #dc3545);
+.sp-segmented__btn--active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.sp-segmented__btn--active:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* ---- Shape picker ---- */
+.sp-shapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sp-shapes__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--sp-radius);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-shapes__item:hover {
+  border-color: var(--border-strong);
+  color: var(--base-text);
+  background: var(--surface-strong);
+}
+
+.sp-shapes__item--active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.sp-shapes__item--active:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* ---- Icon select with preview ---- */
+.sp-icon-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-icon-select .sp-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-icon-select__preview {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ---- Marker group ---- */
+.sp-marker-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-gap);
+}
+
+.sp-marker-group + .sp-marker-group {
+  padding-top: var(--sp-gap);
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+/* ---- Transitions ---- */
+.sp-slide-enter-active,
+.sp-slide-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.sp-slide-enter-from,
+.sp-slide-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.sp-slide-enter-to,
+.sp-slide-leave-from {
+  opacity: 1;
+  max-height: 60px;
+}
+
+.sp-expand-enter-active,
+.sp-expand-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.sp-expand-enter-from,
+.sp-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-bottom: 0;
+}
+
+.sp-expand-enter-to,
+.sp-expand-leave-from {
+  opacity: 1;
+  max-height: 600px;
+}
+
+/* ---- Scrollbar ---- */
+.sp-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sp-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sp-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.sp-body::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
 }
 </style>

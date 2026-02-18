@@ -61,6 +61,7 @@ export type DiagramStyle = {
   iconHeight?: number;
   iconPadding?: number;
   iconMargin?: number;
+  iconGap?: number;
   iconStrokeColor?: string;
   iconFillColor?: string;
   // Node dimensions
@@ -200,6 +201,7 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.iconHeight === "number") style.iconHeight = value.iconHeight;
   if (typeof value.iconPadding === "number") style.iconPadding = value.iconPadding;
   if (typeof value.iconMargin === "number") style.iconMargin = value.iconMargin;
+  if (typeof value.iconGap === "number") style.iconGap = value.iconGap;
   if (typeof value.iconStrokeColor === "string") style.iconStrokeColor = value.iconStrokeColor;
   if (typeof value.iconFillColor === "string") style.iconFillColor = value.iconFillColor;
   if (typeof value.width === "number") style.width = value.width;

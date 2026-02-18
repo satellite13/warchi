@@ -300,6 +300,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       fit: "contain" as const,
       ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
       ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
+      ...(ds.iconGap != null ? { gap: ds.iconGap } : {}),
       ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
       ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
     }

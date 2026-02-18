@@ -42,6 +42,7 @@ const emit = defineEmits<{
   addExistingNode: [modelNodeId: string, x: number, y: number]
   connectNodes: [sourceModelNodeId: string, targetModelNodeId: string, sourceInstanceId: string, targetInstanceId: string]
   findInTree: [modelNodeId: string]
+  nodeLabelChange: [modelNodeId: string, newLabel: string]
 }>()
 
 // ── Refs ──
@@ -268,6 +269,7 @@ function buildNodeIcon(ds?: DiagramStyle) {
     fit: "contain" as const,
     ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
     ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
+    ...(ds.iconGap != null ? { gap: ds.iconGap } : {}),
     ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
     ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
   }
@@ -529,6 +531,22 @@ function updateSelection() {
   }
 }
 
+// ── Detect label changes from inline editing ──
+function detectLabelChanges() {
+  if (!renderer) return
+  for (const [papNodeId, entity] of nodeIdToInstance) {
+    const papNode = renderer.getNode(papNodeId)
+    if (!papNode) continue
+    const labelText = typeof papNode.label === "string"
+      ? papNode.label
+      : papNode.label?.text ?? ""
+    const modelNode = nodeById.value.get(entity.modelNodeId)
+    if (modelNode && labelText !== modelNode.name) {
+      emit("nodeLabelChange", entity.modelNodeId, labelText)
+    }
+  }
+}
+
 // ── Persist positions from papirus back to model ──
 function persistNodePositions(papNodeIds: string[]) {
   if (!renderer) return
@@ -665,10 +683,11 @@ function initRenderer(r: DiagramRenderer) {
     return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
   }
 
-  // History → sync canUndo/canRedo
+  // History → sync canUndo/canRedo + detect label changes
   interactionManager.history.on("change", () => {
     canUndo.value = interactionManager!.history.canUndo
     canRedo.value = interactionManager!.history.canRedo
+    detectLabelChanges()
   })
 
   // Connection → emit connectNodes

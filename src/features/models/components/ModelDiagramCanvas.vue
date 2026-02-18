@@ -13,17 +13,20 @@ import {
   MiniMap,
   InteractionManager,
   type TextLabelOptions,
-  type LabelPlacement
+  type LabelPlacement,
+  type EdgePathType,
+  type EdgeStyle
 } from "papirus"
-import type { ComponentResponse, NodeTypeResponse } from "../../../types/api"
+import type { ComponentResponse, NodeTypeResponse, RelationResponse } from "../../../types/api"
 import { parseEntityAttrs, type DiagramStyle } from "../../notations/notationAttrs"
-import type { DiagramAttrs, DiagramNodeInstance } from "../modelAttrs"
+import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "../types"
 
 const props = defineProps<{
   activeDiagram: EditorDiagram | null
   nodes: EditorNode[]
   links: EditorLink[]
+  relations: RelationResponse[]
   components: ComponentResponse[]
   nodeTypes: NodeTypeResponse[]
   selectedModelNodeIds: string[]
@@ -38,6 +41,7 @@ const emit = defineEmits<{
   createNodeFromComponent: [componentId: string, x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
   connectNodes: [sourceModelNodeId: string, targetModelNodeId: string, sourceInstanceId: string, targetInstanceId: string]
+  findInTree: [modelNodeId: string]
 }>()
 
 // ── Refs ──
@@ -47,6 +51,9 @@ const paletteVisible = ref(true)
 const gridVisible = ref(true)
 const miniMapVisible = ref(true)
 const snapEnabled = ref(false)
+const lockAnchorsEnabled = ref(true)
+const canUndo = ref(false)
+const canRedo = ref(false)
 
 const GRID_SIZE = 20
 const MIN_ZOOM = 0.3
@@ -87,6 +94,66 @@ const componentDiagramStyleById = computed(() => {
   return map
 })
 
+const linkById = computed(() => new Map(props.links.map(l => [l.id, l])))
+
+const relationDiagramStyleById = computed(() => {
+  const notationId = activeNotationId.value
+  const map = new Map<string, DiagramStyle | undefined>()
+  if (!notationId) return map
+  for (const rel of props.relations) {
+    if (rel.notationId !== notationId) continue
+    const parsed = parseEntityAttrs(rel.attrs ?? null)
+    map.set(rel.id, parsed.diagramStyle)
+  }
+  return map
+})
+
+const getBoundRelationStyle = (modelLinkId: string): DiagramStyle | undefined => {
+  const link = linkById.value.get(modelLinkId)
+  const notationId = activeNotationId.value
+  if (!link || !notationId) return undefined
+  const relationId = link.parsedAttrs.notationRelations[notationId]?.relationId
+  if (!relationId) return undefined
+  return relationDiagramStyleById.value.get(relationId)
+}
+
+const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
+  if (edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === "object") {
+    return edgeInst.attrs.diagramStyle as DiagramStyle
+  }
+  return getBoundRelationStyle(edgeInst.modelLinkId)
+}
+
+const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: any; endMarker: any }> => {
+  if (!ds) return {}
+  const opts: Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: any; endMarker: any }> = {}
+  const style: EdgeStyle = {}
+  if (ds.strokeColor) style.strokeColor = ds.strokeColor
+  if (ds.strokeWidth != null) style.strokeWidth = ds.strokeWidth
+  if (ds.strokeOpacity != null) style.strokeOpacity = ds.strokeOpacity
+  if (ds.opacity != null) style.opacity = ds.opacity
+  if (ds.lineDash) style.lineDash = ds.lineDash
+  if (Object.keys(style).length) opts.style = style
+  if (ds.edgeType) opts.type = ds.edgeType as EdgePathType
+  if (ds.startMarkerType) {
+    opts.startMarker = {
+      type: ds.startMarkerType as any,
+      ...(ds.startMarkerSize != null && { size: ds.startMarkerSize }),
+      ...(ds.startMarkerFillColor && { fillColor: ds.startMarkerFillColor }),
+      ...(ds.startMarkerFillOpacity != null && { fillOpacity: ds.startMarkerFillOpacity })
+    }
+  }
+  if (ds.endMarkerType) {
+    opts.endMarker = {
+      type: ds.endMarkerType as any,
+      ...(ds.endMarkerSize != null && { size: ds.endMarkerSize }),
+      ...(ds.endMarkerFillColor && { fillColor: ds.endMarkerFillColor }),
+      ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity })
+    }
+  }
+  return opts
+}
+
 // ── Style resolution ──
 const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined => {
   const node = nodeById.value.get(modelNodeId)
@@ -97,8 +164,17 @@ const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined =
   return componentDiagramStyleById.value.get(componentId)
 }
 
-const getInstanceDimensions = (instance: { modelNodeId: string; width?: number; height?: number }) => {
-  const ds = getBoundComponentStyle(instance.modelNodeId)
+const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefined => {
+  if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === "object") {
+    return instance.attrs.diagramStyle as DiagramStyle
+  }
+  return getBoundComponentStyle(instance.modelNodeId)
+}
+
+const getInstanceDimensions = (instance: { modelNodeId: string; width?: number; height?: number; attrs?: Record<string, unknown> }) => {
+  const ds = (instance as DiagramNodeInstance).attrs?.diagramStyle
+    ? getEffectiveStyle(instance as DiagramNodeInstance)
+    : getBoundComponentStyle(instance.modelNodeId)
   return {
     width: instance.width ?? (typeof ds?.width === "number" ? ds.width : DEFAULT_NODE_WIDTH),
     height: instance.height ?? (typeof ds?.height === "number" ? ds.height : DEFAULT_NODE_HEIGHT)
@@ -229,7 +305,7 @@ function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
 
 // ── Node creation ──
 function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
-  const ds = getBoundComponentStyle(instance.modelNodeId)
+  const ds = getEffectiveStyle(instance)
   const visual = resolveInstanceStyle(instance, ds)
   const shape = getComponentShape(ds)
   const nodeName = nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
@@ -297,7 +373,7 @@ function syncDiagram() {
 
     const existing = renderer.getNode(papNodeId)
     if (existing) {
-      const ds = getBoundComponentStyle(instance.modelNodeId)
+      const ds = getEffectiveStyle(instance)
       const expectedShape = getComponentShape(ds)
       const existingShape = getNodeShapeFromNode(existing)
 
@@ -354,17 +430,28 @@ function syncDiagram() {
 
     if (!currentNodeIds.has(sourcePapId) || !currentNodeIds.has(targetPapId)) continue
 
+    const ds = getEffectiveEdgeStyle(edge)
+    const edgeOpts = resolveEdgeOptions(ds)
+
     const existing = renderer.getEdge(papEdgeId)
     if (existing) {
-      existing.from = { nodeId: sourcePapId }
-      existing.to = { nodeId: targetPapId }
+      if (existing.from.nodeId !== sourcePapId) existing.from = { nodeId: sourcePapId }
+      if (existing.to.nodeId !== targetPapId) existing.to = { nodeId: targetPapId }
+      if (edgeOpts.style) existing.style = { ...existing.style, ...edgeOpts.style }
+      if (edgeOpts.type) existing.type = edgeOpts.type
+      if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
+      if (edgeOpts.endMarker !== undefined) existing.endMarker = edgeOpts.endMarker
     } else {
       renderer.addEdge(new Edge({
         id: papEdgeId,
-        from: { nodeId: sourcePapId },
-        to: { nodeId: targetPapId },
-        type: "bezier",
-        arrowType: "single"
+        from: { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
+        to: { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
+        type: edgeOpts.type ?? "bezier",
+        arrowType: ds?.endMarkerType ? undefined : "single",
+        style: edgeOpts.style,
+        startMarker: edgeOpts.startMarker,
+        endMarker: edgeOpts.endMarker,
+        lockAnchors: lockAnchorsEnabled.value
       }))
     }
   }
@@ -451,7 +538,21 @@ function persistNodePositions(papNodeIds: string[]) {
     changed = true
   }
   if (changed) {
+    syncEdgePortIds(next)
     emit("updateDiagram", next)
+  }
+}
+
+function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
+  if (!renderer || !lockAnchorsEnabled.value) return
+  for (const edgeInst of diagramAttrs.instances.edges) {
+    const papEdge = renderer.getEdge(`edge-${edgeInst.id}`)
+    if (!papEdge) continue
+    if (!edgeInst.attrs) edgeInst.attrs = {}
+    if (papEdge.from.portId) edgeInst.attrs.fromPortId = papEdge.from.portId
+    else delete edgeInst.attrs.fromPortId
+    if (papEdge.to.portId) edgeInst.attrs.toPortId = papEdge.to.portId
+    else delete edgeInst.attrs.toPortId
   }
 }
 
@@ -482,18 +583,22 @@ function initRenderer(r: DiagramRenderer) {
 
     const selectedSet = new Set(selectedNodeIds)
     const zoom = renderer?.zoom || 1
-    const lineWidth = 2 / zoom
 
     ctx.save()
-    ctx.strokeStyle = "#6366f1"
-    ctx.lineWidth = lineWidth
 
     for (const [papId, entity] of nodeIdToInstance) {
       if (!selectedSet.has(entity.modelNodeId)) continue
       const node = renderer?.getNode(papId)
       if (!node) continue
       const bounds = node.getBounds()
-      ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height)
+      ctx.shadowColor = "rgba(99, 102, 241, 0.45)"
+      ctx.shadowBlur = 12 / zoom
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 2 / zoom
+      ctx.fillStyle = "rgba(99, 102, 241, 0.08)"
+      ctx.beginPath()
+      ctx.roundRect(bounds.x - 2 / zoom, bounds.y - 2 / zoom, bounds.width + 4 / zoom, bounds.height + 4 / zoom, 4 / zoom)
+      ctx.fill()
     }
 
     ctx.restore()
@@ -550,6 +655,12 @@ function initRenderer(r: DiagramRenderer) {
     return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
   }
 
+  // History → sync canUndo/canRedo
+  interactionManager.history.on("change", () => {
+    canUndo.value = interactionManager!.history.canUndo
+    canRedo.value = interactionManager!.history.canRedo
+  })
+
   // Connection → emit connectNodes
   interactionManager.connection.on("connect", (edge: Edge) => {
     const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
@@ -560,6 +671,23 @@ function initRenderer(r: DiagramRenderer) {
     }
     // Remove the edge papirus created — parent will add it through state
     renderer?.removeEdge(edge.id)
+  })
+
+  // Context menu
+  r.enableContextMenu({
+    menu: {
+      node: (target: any) => {
+        const entity = nodeIdToInstance.get(target.node.id)
+        if (!entity) return []
+        return [
+          {
+            label: "Найти в дереве",
+            icon: "account_tree",
+            action: () => emit("findInTree", entity.modelNodeId)
+          }
+        ]
+      }
+    }
   })
 
   syncDiagram()
@@ -589,7 +717,7 @@ const zoomOut = () => {
 }
 
 const resetView = () => {
-  interactionManager?.navigation.resetView()
+  interactionManager?.navigation.setZoom(1, getCanvasCenter())
 }
 
 const fitToView = () => {
@@ -665,6 +793,29 @@ const toggleSnap = (): boolean => {
 }
 
 const getSnapEnabled = () => snapEnabled.value
+
+const undo = () => {
+  interactionManager?.history.undo()
+}
+
+const redo = () => {
+  interactionManager?.history.redo()
+}
+
+const getCanUndo = () => canUndo.value
+const getCanRedo = () => canRedo.value
+
+const toggleLockAnchors = (): boolean => {
+  lockAnchorsEnabled.value = !lockAnchorsEnabled.value
+  if (renderer) {
+    for (const [, edge] of renderer.edges) {
+      edge.lockAnchors = lockAnchorsEnabled.value
+    }
+  }
+  return lockAnchorsEnabled.value
+}
+
+const getLockAnchorsEnabled = () => lockAnchorsEnabled.value
 
 // ── Drop handling ──
 const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } => {
@@ -849,7 +1000,13 @@ defineExpose({
   toggleMiniMap,
   getMiniMapVisible,
   toggleSnap,
-  getSnapEnabled
+  getSnapEnabled,
+  toggleLockAnchors,
+  getLockAnchorsEnabled,
+  undo,
+  redo,
+  getCanUndo,
+  getCanRedo
 })
 </script>
 

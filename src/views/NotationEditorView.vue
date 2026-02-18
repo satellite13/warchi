@@ -82,6 +82,8 @@ const {
 const NEW_TYPE_VALUE = "__new__";
 
 const diagramRef = ref<InstanceType<typeof NotationDiagram> | null>(null);
+const canUndo = ref(false);
+const canRedo = ref(false);
 
 const selectedEntityId = computed(() => selectedEntity.value?.id ?? null);
 const selectedItemTypeProperties = computed(() => {
@@ -186,6 +188,10 @@ watch(interactionManager, (im) => {
   // Keep interaction managers in sync with toolbar state.
   im.drag.setSnapToGrid(snapEnabled.value);
   im.resize.setSnapToGrid(snapEnabled.value);
+  im.history.on("change", () => {
+    canUndo.value = im.history.canUndo;
+    canRedo.value = im.history.canRedo;
+  });
 }, { immediate: true });
 
 // JSON attrs dialog
@@ -769,6 +775,8 @@ onBeforeUnmount(() => {
         :grid-visible="gridVisible"
         :mini-map-visible="miniMapVisible"
         :snap-enabled="snapEnabled"
+        :can-undo="canUndo"
+        :can-redo="canRedo"
         @action="handleToolbarAction"
       />
     </template>

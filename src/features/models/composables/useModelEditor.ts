@@ -81,11 +81,16 @@ export const useModelEditor = (): ModelEditorReturn => {
   const saveSuccess = ref(false)
   const saveProgress = ref("")
   let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
+  let saveErrorTimer: ReturnType<typeof setTimeout> | null = null
 
   onScopeDispose(() => {
     if (saveSuccessTimer) {
       clearTimeout(saveSuccessTimer)
       saveSuccessTimer = null
+    }
+    if (saveErrorTimer) {
+      clearTimeout(saveErrorTimer)
+      saveErrorTimer = null
     }
   })
 
@@ -338,6 +343,11 @@ export const useModelEditor = (): ModelEditorReturn => {
       return true
     } catch (error) {
       saveError.value = error instanceof Error ? error.message : "Не удалось сохранить изменения."
+      if (saveErrorTimer) clearTimeout(saveErrorTimer)
+      saveErrorTimer = setTimeout(() => {
+        saveError.value = null
+        saveErrorTimer = null
+      }, 5000)
       return false
     } finally {
       isSaving.value = false

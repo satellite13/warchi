@@ -46,7 +46,7 @@ const filteredLinkTypes = computed(() => {
       <button
         v-if="typeSearchQuery"
         type="button"
-        class="sidebar__search-clear"
+        class="sidebar__clear-btn"
         title="Очистить поиск"
         @click="typeSearchQuery = ''"
       >
@@ -176,58 +176,70 @@ const filteredLinkTypes = computed(() => {
 }
 
 .sidebar__search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 10px 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
+  position: relative;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .sidebar__search-icon {
-  font-size: 16px;
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
   color: var(--text-subtle);
-  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .sidebar__search-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--base-text);
-  font-size: 12px;
+  width: 100%;
+  padding: 7px 10px 7px 34px;
+  font-size: 13px;
   font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   outline: none;
+  box-sizing: border-box;
+  background: var(--surface-muted);
+  color: var(--base-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sidebar__search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
 }
 
 .sidebar__search-input::placeholder {
   color: var(--text-subtle);
 }
 
-.sidebar__search-clear {
-  display: inline-flex;
+.sidebar__clear-btn {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: none;
   border-radius: 50%;
-  background: transparent;
+  background: var(--surface-strong);
   color: var(--text-subtle);
   cursor: pointer;
-  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.sidebar__search-clear:hover {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.sidebar__search-clear .material-symbols-outlined {
+.sidebar__clear-btn .material-symbols-outlined {
   font-size: 14px;
+}
+
+.sidebar__clear-btn:hover {
+  background: var(--border-strong);
+  color: var(--base-text);
 }
 
 /* Sections */

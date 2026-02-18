@@ -147,16 +147,16 @@ const toDiagramEdges = (value: unknown): DiagramEdgeInstance[] => {
 export const parseNodeAttrs = (raw: string | null | undefined): ModelNodeAttrs => {
   const data = parseJson(raw)
   return {
-    notationComponents: toNodeBindings(data.notationComponents ?? data.componentBindings),
-    componentProperties: toScopedMap(data.componentProperties ?? data.componentScoped)
+    notationComponents: toNodeBindings(data.notationComponents),
+    componentProperties: toScopedMap(data.componentProperties)
   }
 }
 
 export const parseLinkAttrs = (raw: string | null | undefined): ModelLinkAttrs => {
   const data = parseJson(raw)
   return {
-    notationRelations: toLinkBindings(data.notationRelations ?? data.relationBindings),
-    relationProperties: toScopedMap(data.relationProperties ?? data.relationScoped)
+    notationRelations: toLinkBindings(data.notationRelations),
+    relationProperties: toScopedMap(data.relationProperties)
   }
 }
 

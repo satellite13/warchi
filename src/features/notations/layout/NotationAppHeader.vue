@@ -11,19 +11,23 @@ const props = withDefaults(defineProps<{
   gridVisible?: boolean;
   miniMapVisible?: boolean;
   snapEnabled?: boolean;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }>(), {
   hasUnsavedChanges: false,
   gridVisible: true,
   miniMapVisible: true,
-  snapEnabled: false
+  snapEnabled: false,
+  canUndo: false,
+  canRedo: false
 });
 
 const router = useRouter();
 const {currentUser} = useAuth();
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
-  {icon: "undo", event: "undo", title: "Отменить"},
-  {icon: "redo", event: "redo", title: "Повторить"},
+  {icon: "undo", event: "undo", title: "Отменить", disabled: !props.canUndo},
+  {icon: "redo", event: "redo", title: "Повторить", disabled: !props.canRedo},
   {icon: "separator", event: "sep1", separator: true},
   {icon: "zoom_in", event: "zoom-in", title: "Приблизить"},
   {icon: "zoom_out", event: "zoom-out", title: "Отдалить"},

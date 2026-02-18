@@ -20,9 +20,11 @@ const emit = defineEmits<{
   deleteNode: [nodeId: string]
   createDiagram: [nodeId: string]
   deleteDiagram: [diagramId: string]
+  moveNode: [nodeId: string, newParentNodeId: string | null]
 }>()
 
 const expandedNodes = ref<Set<string>>(new Set())
+const treeSearchQuery = ref("")
 
 const nodeTypeNameById = computed(() => {
   const map = new Map<string, string>()
@@ -37,6 +39,23 @@ const rootNodes = computed(() => props.nodes.filter((node) => !node.parentNodeId
 
 const childNodes = (nodeId: string): EditorNode[] =>
   props.nodes.filter((node) => node.parentNodeId === nodeId && !node._isDeleted)
+
+const nodeMatchesSearch = (node: EditorNode, query: string): boolean => {
+  if (node.name.toLowerCase().includes(query)) return true
+  return childNodes(node.id).some((child) => nodeMatchesSearch(child, query))
+}
+
+const filteredRootNodes = computed(() => {
+  const query = treeSearchQuery.value.trim().toLowerCase()
+  if (!query) return rootNodes.value
+  return rootNodes.value.filter((node) => nodeMatchesSearch(node, query))
+})
+
+const filteredChildNodes = (nodeId: string): EditorNode[] => {
+  const query = treeSearchQuery.value.trim().toLowerCase()
+  if (!query) return childNodes(nodeId)
+  return childNodes(nodeId).filter((child) => nodeMatchesSearch(child, query))
+}
 
 const nodeDiagrams = (nodeId: string): EditorDiagram[] =>
   props.diagrams.filter((diagram) => diagram.nodeId === nodeId && !diagram._isDeleted)
@@ -73,6 +92,95 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
     requestAnimationFrame(() => document.body.removeChild(ghost))
   }
 }
+
+const dropTarget = ref<{ nodeId: string | null; position: "above" | "below" | "inside" } | null>(null)
+
+const isDescendant = (nodeId: string, potentialParentId: string): boolean => {
+  const children = childNodes(potentialParentId)
+  for (const child of children) {
+    if (child.id === nodeId) return true
+    if (isDescendant(nodeId, child.id)) return true
+  }
+  return false
+}
+
+const onTreeDragOver = (event: DragEvent, targetNodeId: string | null) => {
+  if (!event.dataTransfer?.types.includes("application/x-model-node-id")) return
+  event.preventDefault()
+  if (!targetNodeId) {
+    dropTarget.value = { nodeId: null, position: "inside" }
+    return
+  }
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const y = event.clientY - rect.top
+  const third = rect.height / 3
+
+  const targetNode = props.nodes.find((n) => n.id === targetNodeId)
+  if (targetNode && isDirectory(targetNode)) {
+    if (y < third) dropTarget.value = { nodeId: targetNodeId, position: "above" }
+    else if (y > third * 2) dropTarget.value = { nodeId: targetNodeId, position: "below" }
+    else dropTarget.value = { nodeId: targetNodeId, position: "inside" }
+  } else {
+    dropTarget.value = { nodeId: targetNodeId, position: y < rect.height / 2 ? "above" : "below" }
+  }
+}
+
+const onTreeDragLeave = (event: DragEvent) => {
+  const related = event.relatedTarget as Node | null
+  const current = event.currentTarget as HTMLElement
+  if (related && current.contains(related)) return
+  dropTarget.value = null
+}
+
+const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
+  event.preventDefault()
+  const draggedNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+  dropTarget.value = null
+  if (!draggedNodeId || draggedNodeId === targetNodeId) return
+
+  // Prevent dropping a node onto its own descendant
+  if (targetNodeId && isDescendant(targetNodeId, draggedNodeId)) return
+
+  let newParentId: string | null = null
+  if (!targetNodeId) {
+    newParentId = null
+  } else {
+    const targetNode = props.nodes.find((n) => n.id === targetNodeId)
+    if (targetNode && isDirectory(targetNode)) {
+      // Drop inside a directory
+      newParentId = targetNodeId
+    } else {
+      // Drop as sibling: use target's parent
+      newParentId = targetNode?.parentNodeId ?? null
+    }
+  }
+
+  emit("moveNode", draggedNodeId, newParentId)
+}
+
+const getDropClass = (nodeId: string) => {
+  if (!dropTarget.value || dropTarget.value.nodeId !== nodeId) return {}
+  return {
+    "tree-node__row--drop-above": dropTarget.value.position === "above",
+    "tree-node__row--drop-below": dropTarget.value.position === "below",
+    "tree-node__row--drop-inside": dropTarget.value.position === "inside"
+  }
+}
+
+const expandToNode = (nodeId: string) => {
+  const chain: string[] = []
+  let current = props.nodes.find((n) => n.id === nodeId)
+  while (current?.parentNodeId) {
+    chain.push(current.parentNodeId)
+    current = props.nodes.find((n) => n.id === current!.parentNodeId)
+  }
+  const next = new Set(expandedNodes.value)
+  for (const id of chain) next.add(id)
+  expandedNodes.value = next
+}
+
+defineExpose({ expandToNode })
 </script>
 
 <template>
@@ -92,19 +200,41 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
       </div>
     </div>
 
+    <div class="tree-search">
+      <span class="material-symbols-outlined tree-search__icon">search</span>
+      <input
+        v-model="treeSearchQuery"
+        type="text"
+        class="tree-search__input"
+        placeholder="Поиск..."
+      >
+      <button
+        v-if="treeSearchQuery"
+        type="button"
+        class="tree-search__clear"
+        @click="treeSearchQuery = ''"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
     <div class="tree">
-      <div v-if="rootNodes.length === 0" class="tree__empty">
+      <div v-if="filteredRootNodes.length === 0" class="tree__empty">
         <span class="material-symbols-outlined tree__empty-icon">account_tree</span>
         <span class="tree__empty-text">Нет нод</span>
         <span class="tree__empty-hint">Создайте папку или ноду в шапке</span>
       </div>
-      <template v-for="node in rootNodes" :key="node.id">
+      <template v-for="node in filteredRootNodes" :key="node.id">
         <div class="tree-node">
           <div
             class="tree-node__row"
-            :class="{ 'tree-node__row--active': selectedNodeId === node.id }"
+            :class="{ 'tree-node__row--active': selectedNodeId === node.id, ...getDropClass(node.id) }"
+            :data-tree-node-id="node.id"
             draggable="true"
             @dragstart="onDragNodeStart($event, node.id)"
+            @dragover.prevent="onTreeDragOver($event, node.id)"
+            @dragleave="onTreeDragLeave"
+            @drop.prevent="onTreeDrop($event, node.id)"
           >
             <button
               v-if="isDirectory(node)"
@@ -119,6 +249,7 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
             <button type="button" class="tree-node__select" @click="emit('selectNode', node.id)">
               <span class="material-symbols-outlined">{{ isDirectory(node) ? "folder" : "category" }}</span>
               <span class="tree-node__name">{{ node.name }}</span>
+              <span v-if="!isDirectory(node)" class="tree-node__type">{{ nodeTypeNameById.get(node.nodeTypeId) }}</span>
             </button>
             <div class="tree-node__actions">
               <button
@@ -177,15 +308,19 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
             </div>
 
             <div
-              v-for="child in childNodes(node.id)"
+              v-for="child in filteredChildNodes(node.id)"
               :key="child.id"
               class="tree-node tree-node--nested"
             >
               <div
                 class="tree-node__row"
-                :class="{ 'tree-node__row--active': selectedNodeId === child.id }"
+                :class="{ 'tree-node__row--active': selectedNodeId === child.id, ...getDropClass(child.id) }"
+                :data-tree-node-id="child.id"
                 draggable="true"
                 @dragstart="onDragNodeStart($event, child.id)"
+                @dragover.prevent="onTreeDragOver($event, child.id)"
+                @dragleave="onTreeDragLeave"
+                @drop.prevent="onTreeDrop($event, child.id)"
               >
                 <button
                   v-if="isDirectory(child)"
@@ -200,6 +335,7 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
                 <button type="button" class="tree-node__select" @click="emit('selectNode', child.id)">
                   <span class="material-symbols-outlined">{{ isDirectory(child) ? "folder" : "category" }}</span>
                   <span class="tree-node__name">{{ child.name }}</span>
+                  <span v-if="!isDirectory(child)" class="tree-node__type">{{ nodeTypeNameById.get(child.nodeTypeId) }}</span>
                 </button>
                 <div class="tree-node__actions">
                   <button
@@ -327,6 +463,74 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
   background: var(--danger-soft);
 }
 
+.tree-search {
+  position: relative;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tree-search__icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+
+.tree-search__input {
+  width: 100%;
+  padding: 7px 10px 7px 34px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  box-sizing: border-box;
+  background: var(--surface-muted);
+  color: var(--base-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tree-search__input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
+}
+
+.tree-search__input::placeholder {
+  color: var(--text-subtle);
+}
+
+.tree-search__clear {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tree-search__clear .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.tree-search__clear:hover {
+  background: var(--border-strong);
+  color: var(--base-text);
+}
+
 .tree {
   flex: 1;
   min-height: 0;
@@ -394,6 +598,20 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
   background: var(--primary-soft);
 }
 
+.tree-node__row--drop-above {
+  border-top: 2px solid var(--primary);
+}
+
+.tree-node__row--drop-below {
+  border-bottom: 2px solid var(--primary);
+}
+
+.tree-node__row--drop-inside {
+  background: var(--primary-soft);
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
+}
+
 .tree-node__toggle {
   border: none;
   background: transparent;
@@ -425,6 +643,13 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+}
+
+.tree-node__type {
+  font-size: 10px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tree-node__actions {

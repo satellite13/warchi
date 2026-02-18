@@ -54,7 +54,7 @@ const handleOverlayClick = () => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
-  overflow: hidden;
+  overflow: visible;
   margin: 16px;
   animation: slideUp 0.2s ease;
 }
@@ -65,6 +65,7 @@ const handleOverlayClick = () => {
   align-items: center;
   padding: 20px 24px;
   border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .modal-header h2 {
@@ -109,6 +110,7 @@ const handleOverlayClick = () => {
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
 }
 
 @keyframes fadeIn {

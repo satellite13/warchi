@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from "vue-router"
 import MainLayout from "../../layouts/MainLayout.vue"
 import AppFooter from "../../components/layout/AppFooter.vue"
@@ -13,6 +13,7 @@ import ModelTreePalettePanel from "./components/ModelTreePalettePanel.vue"
 import ModelDiagramCanvas from "./components/ModelDiagramCanvas.vue"
 import ModelPropertiesPanel from "./components/ModelPropertiesPanel.vue"
 import { parseEntityAttrs } from "../notations/notationAttrs"
+import { bumpMinor, compareVersions } from "../../utils/version"
 
 const {
   model,
@@ -36,9 +37,14 @@ const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
+const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const gridVisible = ref(true)
 const miniMapVisible = ref(true)
 const snapEnabled = ref(false)
+const lockAnchorsEnabled = ref(true)
+
+const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
+const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
 
 const activeDiagram = computed(() =>
   selectedDiagramId.value
@@ -110,6 +116,15 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
 })
 
 const uiError = ref<string | null>(null)
+let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
+const setUiError = (msg: string) => {
+  if (uiErrorTimer) clearTimeout(uiErrorTimer)
+  uiError.value = msg
+  uiErrorTimer = setTimeout(() => {
+    uiError.value = null
+    uiErrorTimer = null
+  }, 5000)
+}
 const createNodeModal = ref<{ parentNodeId: string | null; kind: "folder" | "node" }>({
   parentNodeId: null,
   kind: "node"
@@ -135,6 +150,19 @@ const hasDiagramNameVersionConflict = computed(() => {
       diagram.version.trim() === normalizedNewDiagramVersion.value
     )
   })
+})
+
+watch([normalizedNewDiagramName, () => newDiagramNotationId.value], () => {
+  const name = normalizedNewDiagramName.value
+  const notationId = newDiagramNotationId.value
+  if (!name || !notationId) return
+  const matching = state.value.diagrams.filter(
+    (d) => !d._isDeleted && d.name.trim().toLowerCase() === name && d.notationId === notationId
+  )
+  if (matching.length === 0) return
+  const maxVersion = matching.reduce((max, d) => (compareVersions(d.version, max) > 0 ? d.version : max), matching[0]!.version)
+  const bumped = bumpMinor(maxVersion)
+  if (bumped) newDiagramVersion.value = bumped
 })
 
 const showComponentChoiceModal = ref(false)
@@ -163,6 +191,18 @@ const nonDirectoryNodeTypes = computed(() =>
 const createNodeModalTitle = computed(() =>
   createNodeModal.value.kind === "folder" ? "Создать папку" : "Создать ноду"
 )
+const nodeTypeSearchQuery = ref("")
+const nodeTypeDropdownOpen = ref(false)
+const filteredNodeTypes = computed(() => {
+  const query = nodeTypeSearchQuery.value.trim().toLowerCase()
+  if (!query) return nonDirectoryNodeTypes.value
+  return nonDirectoryNodeTypes.value.filter((t) => t.name.toLowerCase().includes(query))
+})
+const selectedNodeTypeName = computed(() => {
+  if (!newNodeTypeId.value) return ""
+  return nonDirectoryNodeTypes.value.find((t) => t.id === newNodeTypeId.value)?.name ?? ""
+})
+
 const canCreateNodeFromModal = computed(() => {
   if (!newNodeName.value.trim()) return false
   if (createNodeModal.value.kind === "folder") return !!directoryNodeType.value
@@ -193,7 +233,7 @@ const bindLinkRelation = (link: EditorLink, relationId: string) => {
 
 const openCreateFolder = (parentNodeId: string | null) => {
   if (!directoryNodeType.value) {
-    uiError.value = "Тип Directory не найден. Невозможно создать папку."
+    setUiError("Тип Directory не найден. Невозможно создать папку.")
     return
   }
   createNodeModal.value = { parentNodeId, kind: "folder" }
@@ -205,12 +245,14 @@ const openCreateFolder = (parentNodeId: string | null) => {
 
 const openCreateRegularNode = (parentNodeId: string | null) => {
   if (nonDirectoryNodeTypes.value.length === 0) {
-    uiError.value = "Нет доступных типов нод, кроме Directory."
+    setUiError("Нет доступных типов нод, кроме Directory.")
     return
   }
   createNodeModal.value = { parentNodeId, kind: "node" }
   newNodeName.value = ""
   newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ""
+  nodeTypeSearchQuery.value = ""
+  nodeTypeDropdownOpen.value = false
   uiError.value = null
   showCreateNodeModal.value = true
 }
@@ -249,7 +291,7 @@ const openCreateDiagram = (nodeId: string) => {
 const createDiagram = () => {
   if (!createDiagramNodeId.value || !newDiagramName.value.trim() || !newDiagramNotationId.value) return
   if (hasDiagramNameVersionConflict.value) {
-    uiError.value = "Диаграмма с таким именем и версией уже существует в модели."
+    setUiError("Диаграмма с таким именем и версией уже существует в модели.")
     return
   }
   uiError.value = null
@@ -331,7 +373,7 @@ const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
     showComponentChoiceModal.value = true
     return false
   }
-  uiError.value = "В выбранной нотации нет подходящего компонента для типа узла."
+  setUiError("В выбранной нотации нет подходящего компонента для типа узла.")
   return false
 }
 
@@ -359,7 +401,8 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
     x,
     y,
     width,
-    height
+    height,
+    attrs: diagramStyle ? { diagramStyle: JSON.parse(JSON.stringify(diagramStyle)) } : undefined
   })
   markDiagramDirty(diagram.id)
 }
@@ -367,7 +410,7 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
 const createNodeFromPaletteComponent = (componentId: string, x: number, y: number) => {
   const diagram = activeDiagram.value
   if (!diagram || !diagram.nodeId) {
-    uiError.value = "Нельзя создать ноду без активной директории диаграммы."
+    setUiError("Нельзя создать ноду без активной директории диаграммы.")
     return
   }
   const component = state.value.components.find((item) => item.id === componentId)
@@ -401,7 +444,8 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     x,
     y,
     width,
-    height
+    height,
+    attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined
   })
   markDiagramDirty(diagram.id)
 }
@@ -421,7 +465,7 @@ const startConnectNodes = (
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
   if (!sourceComponentId || !targetComponentId) {
-    uiError.value = "Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации."
+    setUiError("Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.")
     return
   }
 
@@ -429,14 +473,14 @@ const startConnectNodes = (
     .filter((rule) => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId)
     .map((rule) => rule.relationId)
   if (ruleRelationIds.length === 0) {
-    uiError.value = "Для этой пары компонентов нет разрешённых связей по правилам нотации."
+    setUiError("Для этой пары компонентов нет разрешённых связей по правилам нотации.")
     return
   }
   const allowedRelations = state.value.relations.filter((relation) =>
     relation.notationId === notationId && ruleRelationIds.includes(relation.id)
   )
   if (allowedRelations.length === 0) {
-    uiError.value = "Для этой пары компонентов нет доступных relation по правилам нотации."
+    setUiError("Для этой пары компонентов нет доступных relation по правилам нотации.")
     return
   }
   pendingConnection.value = { sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId }
@@ -506,11 +550,14 @@ const createOrReuseLink = (linkId: string | null) => {
   if (!link) return
 
   bindLinkRelation(link, relation.id)
+  const relParsed = parseEntityAttrs(relation.attrs ?? null)
+  const relationDs = relParsed.diagramStyle
   diagram.parsedAttrs.instances.edges.push({
     id: createId(),
     modelLinkId: link.id,
     sourceInstanceId: connection.sourceInstanceId,
-    targetInstanceId: connection.targetInstanceId
+    targetInstanceId: connection.targetInstanceId,
+    attrs: relationDs ? { diagramStyle: JSON.parse(JSON.stringify(relationDs)) } : undefined
   })
   markDiagramDirty(diagram.id)
 
@@ -531,6 +578,23 @@ const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boole
   return state.value.relationRules.some(
     (rule) => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
   )
+}
+
+const handleFindInTree = (modelNodeId: string) => {
+  selectedNodeId.value = modelNodeId
+  treePanelRef.value?.expandToNode(modelNodeId)
+  nextTick(() => {
+    const el = document.querySelector(`[data-tree-node-id="${modelNodeId}"]`)
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  })
+}
+
+const handleMoveNode = (nodeId: string, newParentNodeId: string | null) => {
+  const node = state.value.nodes.find((item) => item.id === nodeId)
+  if (!node) return
+  if (node.parentNodeId === newParentNodeId) return
+  node.parentNodeId = newParentNodeId
+  markNodeDirty(node.id)
 }
 
 const handleToolbarAction = async (event: string) => {
@@ -563,6 +627,12 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     }
+    case "undo":
+      diagramCanvasRef.value?.undo()
+      break
+    case "redo":
+      diagramCanvasRef.value?.redo()
+      break
     case "zoom-in":
       diagramCanvasRef.value?.zoomIn()
       break
@@ -600,6 +670,11 @@ const handleToolbarAction = async (event: string) => {
       if (typeof next === "boolean") {
         snapEnabled.value = next
       }
+      break
+    }
+    case "toggle-lock-anchors": {
+      const next = diagramCanvasRef.value?.toggleLockAnchors()
+      if (typeof next === "boolean") lockAnchorsEnabled.value = next
       break
     }
     case "close-diagram":
@@ -712,7 +787,10 @@ onBeforeUnmount(() => {
         :grid-visible="gridVisible"
         :mini-map-visible="miniMapVisible"
         :snap-enabled="snapEnabled"
+        :lock-anchors-enabled="lockAnchorsEnabled"
         :has-active-diagram="!!activeDiagram"
+        :can-undo="canUndo"
+        :can-redo="canRedo"
         @action="handleToolbarAction"
       />
     </template>
@@ -720,6 +798,7 @@ onBeforeUnmount(() => {
       <ModelMainPanelLayout>
         <template #left>
           <ModelTreePalettePanel
+            ref="treePanelRef"
             :nodes="state.nodes"
             :diagrams="state.diagrams"
             :node-types="state.nodeTypes"
@@ -733,6 +812,7 @@ onBeforeUnmount(() => {
             @delete-node="markNodeDeleted"
             @create-diagram="openCreateDiagram"
             @delete-diagram="markDiagramDeleted"
+            @move-node="handleMoveNode"
           />
         </template>
 
@@ -741,6 +821,7 @@ onBeforeUnmount(() => {
           :active-diagram="activeDiagram"
           :nodes="state.nodes"
           :links="state.links"
+          :relations="state.relations"
           :components="state.components"
           :node-types="state.nodeTypes"
           :selected-model-node-ids="selectedModelNodeIds"
@@ -752,6 +833,7 @@ onBeforeUnmount(() => {
           @create-node-from-component="createNodeFromPaletteComponent"
           @add-existing-node="addExistingNodeToDiagram"
           @connect-nodes="startConnectNodes"
+          @find-in-tree="handleFindInTree"
         />
 
         <template #right>
@@ -805,14 +887,39 @@ onBeforeUnmount(() => {
           :placeholder="createNodeModal.kind === 'folder' ? 'Новая папка' : 'Новая нода'"
         >
       </label>
-      <label v-if="createNodeModal.kind === 'node'">
-        <span>Тип ноды</span>
-        <select v-model="newNodeTypeId" class="field-input">
-          <option v-for="typeItem in nonDirectoryNodeTypes" :key="typeItem.id" :value="typeItem.id">
-            {{ typeItem.name }}
-          </option>
-        </select>
-      </label>
+      <div v-if="createNodeModal.kind === 'node'" class="node-type-dropdown">
+        <span class="node-type-dropdown__label">Тип ноды</span>
+        <div class="node-type-dropdown__control" @click="nodeTypeDropdownOpen = !nodeTypeDropdownOpen">
+          <span class="node-type-dropdown__value">{{ selectedNodeTypeName || 'Выберите тип' }}</span>
+          <span class="material-symbols-outlined node-type-dropdown__arrow">
+            {{ nodeTypeDropdownOpen ? 'expand_less' : 'expand_more' }}
+          </span>
+        </div>
+        <div v-if="nodeTypeDropdownOpen" class="node-type-dropdown__panel">
+          <input
+            v-model="nodeTypeSearchQuery"
+            class="node-type-dropdown__search"
+            type="text"
+            placeholder="Поиск типа..."
+            @click.stop
+          >
+          <div class="node-type-dropdown__list">
+            <button
+              v-for="typeItem in filteredNodeTypes"
+              :key="typeItem.id"
+              type="button"
+              class="node-type-dropdown__item"
+              :class="{ 'node-type-dropdown__item--active': newNodeTypeId === typeItem.id }"
+              @click="newNodeTypeId = typeItem.id; nodeTypeDropdownOpen = false"
+            >
+              {{ typeItem.name }}
+            </button>
+            <div v-if="filteredNodeTypes.length === 0" class="node-type-dropdown__empty">
+              Ничего не найдено
+            </div>
+          </div>
+        </div>
+      </div>
       <div v-else class="form-hint">Будет использован тип <b>Directory</b>.</div>
     </div>
     <template #footer>
@@ -1110,5 +1217,105 @@ onBeforeUnmount(() => {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
+}
+
+.node-type-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.node-type-dropdown__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.node-type-dropdown__control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--surface);
+}
+
+.node-type-dropdown__control:hover {
+  border-color: var(--primary);
+}
+
+.node-type-dropdown__value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-type-dropdown__arrow {
+  font-size: 18px;
+  color: var(--text-subtle);
+}
+
+.node-type-dropdown__panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.node-type-dropdown__search {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  background: var(--surface-muted);
+}
+
+.node-type-dropdown__list {
+  max-height: 160px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.node-type-dropdown__item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 7px 8px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.node-type-dropdown__item:hover {
+  background: var(--surface-strong);
+}
+
+.node-type-dropdown__item--active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.node-type-dropdown__empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-subtle);
+  text-align: center;
 }
 </style>

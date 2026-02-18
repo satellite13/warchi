@@ -12,7 +12,10 @@ const props = withDefaults(defineProps<{
   gridVisible?: boolean
   miniMapVisible?: boolean
   snapEnabled?: boolean
+  lockAnchorsEnabled?: boolean
   hasActiveDiagram?: boolean
+  canUndo?: boolean
+  canRedo?: boolean
 }>(), {
   hasUnsavedChanges: false,
   canSave: true,
@@ -21,7 +24,10 @@ const props = withDefaults(defineProps<{
   gridVisible: true,
   miniMapVisible: true,
   snapEnabled: false,
-  hasActiveDiagram: false
+  lockAnchorsEnabled: true,
+  hasActiveDiagram: false,
+  canUndo: false,
+  canRedo: false
 })
 
 const router = useRouter()
@@ -34,8 +40,8 @@ const saveTitle = computed(() =>
 )
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
-  { icon: "undo", event: "undo", title: "Отменить", disabled: true },
-  { icon: "redo", event: "redo", title: "Повторить", disabled: true },
+  { icon: "undo", event: "undo", title: "Отменить", disabled: !props.canUndo || !props.hasActiveDiagram },
+  { icon: "redo", event: "redo", title: "Повторить", disabled: !props.canRedo || !props.hasActiveDiagram },
   { icon: "separator", event: "sep0", separator: true },
   { icon: "zoom_in", event: "zoom-in", title: "Приблизить", disabled: !props.hasActiveDiagram },
   { icon: "zoom_out", event: "zoom-out", title: "Отдалить", disabled: !props.hasActiveDiagram },
@@ -73,6 +79,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     event: "toggle-snap",
     title: "Привязка к сетке",
     active: props.snapEnabled,
+    disabled: !props.hasActiveDiagram
+  },
+  {
+    icon: "commit",
+    event: "toggle-lock-anchors",
+    title: "Закрепить точки связей",
+    active: props.lockAnchorsEnabled,
     disabled: !props.hasActiveDiagram
   },
   { icon: "separator", event: "sep2", separator: true },

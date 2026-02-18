@@ -52,6 +52,49 @@ const tagsDraft = ref("");
 const tagsExpanded = ref(false);
 const propertiesExpanded = ref(false);
 
+const ruleTargetSearchQuery = ref("");
+const openRuleTargetDropdownId = ref<string | null>(null);
+
+const activeComponents = computed(() =>
+  (props.allComponents ?? []).filter((item) => !item._isDeleted)
+);
+
+const filteredRuleTargetComponents = computed(() => {
+  const query = ruleTargetSearchQuery.value.trim().toLowerCase();
+  if (!query) return activeComponents.value;
+  return activeComponents.value.filter((c) => (c.name || "").toLowerCase().includes(query));
+});
+
+const toggleRuleTargetDropdown = (ruleId: string) => {
+  if (openRuleTargetDropdownId.value === ruleId) {
+    openRuleTargetDropdownId.value = null;
+  } else {
+    openRuleTargetDropdownId.value = ruleId;
+    ruleTargetSearchQuery.value = "";
+  }
+};
+
+const selectRuleTarget = (rule: EditorRelationRule, componentId: string) => {
+  setRelationRuleTarget(rule, componentId);
+  openRuleTargetDropdownId.value = null;
+};
+
+const handleClickOutsideRuleDropdown = (e: MouseEvent) => {
+  if (!openRuleTargetDropdownId.value) return;
+  const target = e.target as HTMLElement;
+  if (!target.closest(".rule-target-dropdown")) {
+    openRuleTargetDropdownId.value = null;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener("click", handleClickOutsideRuleDropdown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", handleClickOutsideRuleDropdown);
+});
+
 watch(
   () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join("|") ?? ""],
   () => {
@@ -634,19 +677,40 @@ onBeforeUnmount(() => {
               </div>
               <div class="properties-panel__rule-row">
                 <label class="properties-panel__rule-row-label">Кому</label>
-                <select
-                  class="property-select"
-                  :value="rule.toComponentId"
-                  @change="setRelationRuleTarget(rule, ($event.target as HTMLSelectElement).value)"
-                >
-                  <option
-                    v-for="component in (allComponents ?? []).filter((item) => !item._isDeleted)"
-                    :key="component.id"
-                    :value="component.id"
-                  >
-                    {{ component.name || 'Без имени' }}
-                  </option>
-                </select>
+                <div class="rule-target-dropdown">
+                  <div class="rule-target-dropdown__control" @click.stop="toggleRuleTargetDropdown(rule.id)">
+                    <span class="rule-target-dropdown__value">
+                      {{ activeComponents.find((c) => c.id === rule.toComponentId)?.name || 'Выберите компонент' }}
+                    </span>
+                    <span class="material-symbols-outlined rule-target-dropdown__arrow">
+                      {{ openRuleTargetDropdownId === rule.id ? 'expand_less' : 'expand_more' }}
+                    </span>
+                  </div>
+                  <div v-if="openRuleTargetDropdownId === rule.id" class="rule-target-dropdown__panel">
+                    <input
+                      v-model="ruleTargetSearchQuery"
+                      class="rule-target-dropdown__search"
+                      type="text"
+                      placeholder="Поиск компонента..."
+                      @click.stop
+                    >
+                    <div class="rule-target-dropdown__list">
+                      <button
+                        v-for="component in filteredRuleTargetComponents"
+                        :key="component.id"
+                        type="button"
+                        class="rule-target-dropdown__item"
+                        :class="{ 'rule-target-dropdown__item--active': rule.toComponentId === component.id }"
+                        @click.stop="selectRuleTarget(rule, component.id)"
+                      >
+                        {{ component.name || 'Без имени' }}
+                      </button>
+                      <div v-if="filteredRuleTargetComponents.length === 0" class="rule-target-dropdown__empty">
+                        Ничего не найдено
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="properties-panel__rule-row">
                 <label class="properties-panel__rule-row-label">Связи</label>
@@ -1761,5 +1825,121 @@ onBeforeUnmount(() => {
 .property-error {
   font-size: 11px;
   color: var(--danger);
+}
+
+/* Rule target searchable dropdown */
+.rule-target-dropdown {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.rule-target-dropdown__control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--base-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.rule-target-dropdown__control:hover {
+  border-color: var(--primary);
+}
+
+.rule-target-dropdown__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-target-dropdown__arrow {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.rule-target-dropdown__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.rule-target-dropdown__search {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  background: var(--surface);
+  color: var(--base-text);
+  box-sizing: border-box;
+}
+
+.rule-target-dropdown__search::placeholder {
+  color: var(--text-subtle);
+}
+
+.rule-target-dropdown__list {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.rule-target-dropdown__item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--base-text);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-target-dropdown__item:hover {
+  background: var(--surface-strong);
+}
+
+.rule-target-dropdown__item--active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.rule-target-dropdown__item--active:hover {
+  background: var(--primary-soft);
+}
+
+.rule-target-dropdown__empty {
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--text-subtle);
+  text-align: center;
 }
 </style>

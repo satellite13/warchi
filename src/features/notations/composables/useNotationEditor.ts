@@ -471,6 +471,7 @@ export function useNotationEditor(): NotationEditorReturn {
       const newRelations = relations.filter((r) => r._isNew && !r._isDeleted)
       for (const relation of newRelations) {
         saveProgress.value = `Создание отношения: ${relation.name}`
+        const oldRelationId = relation.id
         const request: RelationRequest = {
           name: relation.name,
           version: relation.version,
@@ -485,6 +486,15 @@ export function useNotationEditor(): NotationEditorReturn {
         }
         relation.id = result.data.id
         relation._isNew = false
+        for (const rule of relationRules) {
+          if (!rule.allowedRelationIds.includes(oldRelationId)) {
+            continue
+          }
+          rule.allowedRelationIds = rule.allowedRelationIds.map((relationId) =>
+            relationId === oldRelationId ? relation.id : relationId
+          )
+          rule._isDirty = true
+        }
       }
 
       // Step 8: Update dirty relations

@@ -10,7 +10,7 @@
     <div class="app-footer__center">
     </div>
     <div class="app-footer__right">
-      Version: 0.0.1
+      Version: 0.0.2
     </div>
   </footer>
 

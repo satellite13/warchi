@@ -1,13 +1,68 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, onBeforeUnmount, ref } from "vue"
 
 const leftCollapsed = ref(false)
 const rightCollapsed = ref(false)
+const leftWidth = ref(320)
+const rightWidth = ref(360)
+
+const MIN_SIDE_WIDTH = 260
+const MAX_SIDE_WIDTH = 560
+type SideResizeTarget = "left" | "right"
+let resizingSide: SideResizeTarget | null = null
+let sideDragStartX = 0
+let sideDragStartWidth = 0
 
 const gridColumns = computed(() => {
-  const left = leftCollapsed.value ? "0px" : "320px"
-  const right = rightCollapsed.value ? "0px" : "360px"
+  const left = leftCollapsed.value ? "0px" : `${leftWidth.value}px`
+  const right = rightCollapsed.value ? "0px" : `${rightWidth.value}px`
   return `${left} minmax(0, 1fr) ${right}`
+})
+
+const leftResizerStyle = computed(() =>
+  leftCollapsed.value ? undefined : ({ left: `calc(${leftWidth.value}px - 3px)` } as const)
+)
+
+const rightResizerStyle = computed(() =>
+  rightCollapsed.value ? undefined : ({ right: `calc(${rightWidth.value}px - 3px)` } as const)
+)
+
+function clampSideWidth(value: number): number {
+  return Math.max(MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, value))
+}
+
+function onSideResizeMove(event: MouseEvent) {
+  if (!resizingSide) return
+
+  const deltaX = event.clientX - sideDragStartX
+  if (resizingSide === "left") {
+    leftWidth.value = clampSideWidth(sideDragStartWidth + deltaX)
+  } else {
+    rightWidth.value = clampSideWidth(sideDragStartWidth - deltaX)
+  }
+}
+
+function stopSideResize() {
+  if (!resizingSide) return
+  resizingSide = null
+  document.body.style.cursor = ""
+  document.body.style.userSelect = ""
+  window.removeEventListener("mousemove", onSideResizeMove)
+  window.removeEventListener("mouseup", stopSideResize)
+}
+
+function startSideResize(target: SideResizeTarget, event: MouseEvent) {
+  resizingSide = target
+  sideDragStartX = event.clientX
+  sideDragStartWidth = target === "left" ? leftWidth.value : rightWidth.value
+  document.body.style.cursor = "col-resize"
+  document.body.style.userSelect = "none"
+  window.addEventListener("mousemove", onSideResizeMove)
+  window.addEventListener("mouseup", stopSideResize)
+}
+
+onBeforeUnmount(() => {
+  stopSideResize()
 })
 </script>
 
@@ -23,6 +78,28 @@ const gridColumns = computed(() => {
       <aside class="model-panel__right" :class="{ 'model-panel__right--collapsed': rightCollapsed }">
         <slot name="right" />
       </aside>
+      <div
+        v-if="!leftCollapsed"
+        class="model-panel__side-resizer model-panel__side-resizer--left"
+        :style="leftResizerStyle"
+        role="separator"
+        aria-orientation="vertical"
+        title="Потяните, чтобы изменить ширину левой панели"
+        @mousedown.prevent="startSideResize('left', $event)"
+      >
+        <span class="model-panel__side-resizer-handle"></span>
+      </div>
+      <div
+        v-if="!rightCollapsed"
+        class="model-panel__side-resizer model-panel__side-resizer--right"
+        :style="rightResizerStyle"
+        role="separator"
+        aria-orientation="vertical"
+        title="Потяните, чтобы изменить ширину правой панели"
+        @mousedown.prevent="startSideResize('right', $event)"
+      >
+        <span class="model-panel__side-resizer-handle"></span>
+      </div>
     </div>
     <button
       type="button"
@@ -55,6 +132,7 @@ const gridColumns = computed(() => {
   height: 100%;
   display: grid;
   overflow: hidden;
+  position: relative;
 }
 
 .model-panel__left,
@@ -85,6 +163,56 @@ const gridColumns = computed(() => {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.model-panel__side-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  display: flex;
+  align-items: center;
+  cursor: col-resize;
+  z-index: 8;
+}
+
+.model-panel__side-resizer--left {
+  justify-content: flex-start;
+}
+
+.model-panel__side-resizer--right {
+  justify-content: flex-end;
+}
+
+.model-panel__side-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.model-panel__side-resizer--left::before {
+  left: 0;
+}
+
+.model-panel__side-resizer--right::before {
+  right: 0;
+}
+
+.model-panel__side-resizer-handle {
+  width: 3px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--text-subtle);
+  opacity: 0.4;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.model-panel__side-resizer:hover .model-panel__side-resizer-handle {
+  opacity: 1;
+  background: var(--primary);
 }
 
 .model-panel__collapse-btn {

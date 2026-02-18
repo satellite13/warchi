@@ -123,6 +123,21 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   </button>
                   <span class="mp-toggle__label">{{ Boolean(nodeScopedValues[property.name]) ? 'Да' : 'Нет' }}</span>
                 </div>
+                <select
+                  v-else-if="property.type === 'enum'"
+                  class="mp-select"
+                  :value="String(nodeScopedValues[property.name] ?? property.enumDefault ?? property.defaultValue ?? '')"
+                  @change="emit('setNodeScopedValue', property.name, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Выберите значение...</option>
+                  <option
+                    v-for="enumValue in (property.enumValues ?? [])"
+                    :key="`${property.id}-${enumValue}`"
+                    :value="enumValue"
+                  >
+                    {{ enumValue }}
+                  </option>
+                </select>
                 <input
                   v-else
                   class="mp-input"
@@ -175,6 +190,21 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   </button>
                   <span class="mp-toggle__label">{{ Boolean(linkScopedValues[property.name]) ? 'Да' : 'Нет' }}</span>
                 </div>
+                <select
+                  v-else-if="property.type === 'enum'"
+                  class="mp-select"
+                  :value="String(linkScopedValues[property.name] ?? property.enumDefault ?? property.defaultValue ?? '')"
+                  @change="emit('setLinkScopedValue', property.name, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Выберите значение...</option>
+                  <option
+                    v-for="enumValue in (property.enumValues ?? [])"
+                    :key="`${property.id}-${enumValue}`"
+                    :value="enumValue"
+                  >
+                    {{ enumValue }}
+                  </option>
+                </select>
                 <input
                   v-else
                   class="mp-input"

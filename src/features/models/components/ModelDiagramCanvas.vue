@@ -38,6 +38,8 @@ const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs]
   selectNodes: [modelNodeIds: string[]]
   selectLink: [modelLinkId: string]
+  selectCanvasElementId: [elementId: string | null]
+  canvasContextChange: [ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }]
   createNodeFromComponent: [componentId: string, x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
   connectNodes: [sourceModelNodeId: string, targetModelNodeId: string, sourceInstanceId: string, targetInstanceId: string]
@@ -123,6 +125,36 @@ const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | un
     return edgeInst.attrs.diagramStyle as DiagramStyle
   }
   return getBoundRelationStyle(edgeInst.modelLinkId)
+}
+
+const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined => {
+  const raw = edgeInst.attrs?.label
+  if (typeof raw === "string") return raw
+  if (raw && typeof raw === "object" && typeof (raw as { text?: unknown }).text === "string") {
+    return (raw as { text: string }).text
+  }
+  return undefined
+}
+
+const getPapEdgeLabelText = (edge: Edge): string =>
+  typeof edge.label === "string" ? edge.label : edge.label?.text ?? ""
+
+const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
+  const text = labelText?.trim()
+  if (!text) return undefined
+  return text
+}
+
+const buildEdgeLabelBackground = (ds?: DiagramStyle): Record<string, unknown> | undefined => {
+  if (!ds) return undefined
+
+  const background: Record<string, unknown> = {}
+  if (ds.labelBgColor) background.color = ds.labelBgColor
+  if (ds.labelBgOpacity != null) background.opacity = ds.labelBgOpacity
+  if (ds.labelBgPadding != null) background.padding = ds.labelBgPadding
+  if (ds.labelBgBorderRadius != null) background.borderRadius = ds.labelBgBorderRadius
+
+  return Object.keys(background).length > 0 ? background : undefined
 }
 
 const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: any; endMarker: any }> => {
@@ -434,6 +466,9 @@ function syncDiagram() {
 
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveEdgeOptions(ds)
+    const edgeLabel = getInstanceEdgeLabel(edge)
+    const edgeLabelConfig = buildEdgeLabel(edgeLabel)
+    const edgeLabelBackground = buildEdgeLabelBackground(ds)
 
     const existing = renderer.getEdge(papEdgeId)
     if (existing) {
@@ -453,8 +488,18 @@ function syncDiagram() {
       if (edgeOpts.type) existing.type = edgeOpts.type
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
       if (edgeOpts.endMarker !== undefined) existing.endMarker = edgeOpts.endMarker
+      existing.label = edgeLabelConfig
+      if (existing.label) {
+        existing.label.style = {
+          ...(existing.label.style || {}),
+          ...(ds?.labelColor ? { color: ds.labelColor } : {}),
+          ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
+          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
+        }
+      }
+      ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground = edgeLabelBackground
     } else {
-      renderer.addEdge(new Edge({
+      const newEdge = new Edge({
         id: papEdgeId,
         from: { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
         to: { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
@@ -463,8 +508,19 @@ function syncDiagram() {
         style: edgeOpts.style,
         startMarker: edgeOpts.startMarker,
         endMarker: edgeOpts.endMarker,
+        ...(edgeLabelConfig !== undefined ? { label: edgeLabelConfig } : {}),
+        ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         lockAnchors: lockAnchorsEnabled.value
-      }))
+      })
+      if (newEdge.label) {
+        newEdge.label.style = {
+          ...(newEdge.label.style || {}),
+          ...(ds?.labelColor ? { color: ds.labelColor } : {}),
+          ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
+          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
+        }
+      }
+      renderer.addEdge(newEdge)
     }
   }
 
@@ -544,6 +600,39 @@ function detectLabelChanges() {
     if (modelNode && labelText !== modelNode.name) {
       emit("nodeLabelChange", entity.modelNodeId, labelText)
     }
+  }
+}
+
+function detectEdgeLabelChanges() {
+  if (!renderer) return
+
+  const next = cloneDiagramAttrs()
+  let changed = false
+
+  for (const [papEdgeId, entity] of edgeIdToInstance) {
+    const papEdge = renderer.getEdge(papEdgeId)
+    if (!papEdge) continue
+
+    const edgeInst = next.instances.edges.find((edge) => edge.id === entity.edgeId)
+    if (!edgeInst) continue
+
+    const nextLabel = getPapEdgeLabelText(papEdge)
+    const currentLabel = getInstanceEdgeLabel(edgeInst) ?? ""
+    if (nextLabel === currentLabel) continue
+
+    if (!edgeInst.attrs) edgeInst.attrs = {}
+    if (nextLabel.length > 0) edgeInst.attrs.label = nextLabel
+    else delete edgeInst.attrs.label
+
+    if (Object.keys(edgeInst.attrs).length === 0) {
+      delete edgeInst.attrs
+    }
+    changed = true
+  }
+
+  if (changed) {
+    syncEdgePortIds(next)
+    emit("updateDiagram", next)
   }
 }
 
@@ -638,11 +727,16 @@ function initRenderer(r: DiagramRenderer) {
     gridSize: GRID_SIZE,
     keymap: { deleteKeys: [] }
   })
+  emit("canvasContextChange", { renderer: r, interactionManager })
 
   // Selection events → emit selectNodes/selectLink
   interactionManager.selection.on("select", (elementIds: string[]) => {
     if (suppressSelectionEvent) return
-    if (elementIds.length === 0) return
+    if (elementIds.length === 0) {
+      emit("selectCanvasElementId", null)
+      return
+    }
+    emit("selectCanvasElementId", elementIds[0] ?? null)
 
     const modelNodeIds: string[] = []
     for (const elementId of elementIds) {
@@ -688,6 +782,7 @@ function initRenderer(r: DiagramRenderer) {
     canUndo.value = interactionManager!.history.canUndo
     canRedo.value = interactionManager!.history.canRedo
     detectLabelChanges()
+    detectEdgeLabelChanges()
   })
 
   // Connection → emit connectNodes
@@ -829,6 +924,12 @@ const undo = () => {
 
 const redo = () => {
   interactionManager?.history.redo()
+}
+
+const resetHistory = () => {
+  interactionManager?.history.clear()
+  canUndo.value = false
+  canRedo.value = false
 }
 
 const getCanUndo = () => canUndo.value
@@ -992,6 +1093,7 @@ onBeforeUnmount(() => {
   renderer?.destroy()
   renderer = null
   interactionManager = null
+  emit("canvasContextChange", { renderer: null, interactionManager: null })
   gridOverlay = null
   miniMap = null
   nodeIdToInstance.clear()
@@ -1004,6 +1106,13 @@ watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
 watch(
   () => [props.activeDiagram?.id, props.activeDiagram?.notationId],
   () => syncDiagram()
+)
+
+watch(
+  () => props.activeDiagram?.id ?? null,
+  (nextId, prevId) => {
+    if (nextId !== prevId) resetHistory()
+  }
 )
 
 watch(

@@ -1,2 +1,2 @@
 #!/bin/sh
-cd charts && helm lint ./warchi && helm template ./warchi --values warchi/values.yaml | kubectl apply --dry-run=client -f - && helm install warchi-0.0.1 ./warchi --dry-run=client -n arch --debug --values warchi/values.yaml
+cd charts && helm lint ./warchi && helm template ./warchi --values warchi/values.yaml | kubectl apply --dry-run=client -f - && helm install warchi-0.0.2 ./warchi --dry-run=client -n arch --debug --values warchi/values.yaml

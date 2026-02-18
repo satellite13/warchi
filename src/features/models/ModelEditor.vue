@@ -12,7 +12,8 @@ import ModelMainPanelLayout from "./layout/ModelMainPanelLayout.vue"
 import ModelTreePalettePanel from "./components/ModelTreePalettePanel.vue"
 import ModelDiagramCanvas from "./components/ModelDiagramCanvas.vue"
 import ModelPropertiesPanel from "./components/ModelPropertiesPanel.vue"
-import { parseEntityAttrs } from "../notations/notationAttrs"
+import { parseEntityAttrs, type DiagramStyle } from "../notations/notationAttrs"
+import NodeStylePanel from "../notations/components/NodeStylePanel.vue"
 import { bumpMinor, compareVersions } from "../../utils/version"
 
 const {
@@ -36,6 +37,13 @@ const selectedNodeId = ref<string | null>(null)
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
+const selectedCanvasElementId = ref<string | null>(null)
+const diagramRenderer = ref<any>(null)
+const diagramInteractionManager = ref<any>(null)
+const stylePanelCollapsed = ref(true)
+const rightStackRows = computed(() =>
+  stylePanelCollapsed.value ? "minmax(240px, 1fr) 46px" : "minmax(240px, 1fr) minmax(320px, 1fr)"
+)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const gridVisible = ref(true)
@@ -181,6 +189,38 @@ const pendingConnection = ref<{
 const showReuseLinkModal = ref(false)
 const reuseLinkOptions = ref<EditorLink[]>([])
 const pendingRelationId = ref<string | null>(null)
+const showLinkDeleteModal = ref(false)
+const pendingDeleteLinkId = ref<string | null>(null)
+const showDiagramSwitchModal = ref(false)
+const pendingDiagramSwitchId = ref<string | null>(null)
+
+const getLinkTypeName = (linkTypeId: string): string =>
+  state.value.linkTypes.find((item) => item.id === linkTypeId)?.name ?? "Неизвестный тип"
+
+const extractLinkLabelValue = (link: EditorLink): string => {
+  const notationId = activeNotationId.value
+  if (!notationId) return "без метки"
+
+  const relationId = link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
+  if (!relationId) return "без метки"
+
+  const scopedValues = link.parsedAttrs.relationProperties[notationId]?.[relationId]
+  if (!scopedValues) return "без метки"
+
+  for (const key of ["label", "name", "title", "метка"]) {
+    const value = scopedValues[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+
+  for (const value of Object.values(scopedValues)) {
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+
+  return "без метки"
+}
+
+const formatReuseLinkOption = (link: EditorLink): string =>
+  `${getLinkTypeName(link.linkTypeId)}: ${extractLinkLabelValue(link)}`
 
 const directoryNodeType = computed(
   () => state.value.nodeTypes.find((typeItem) => typeItem.name.trim().toLowerCase() === "directory") ?? null
@@ -209,6 +249,19 @@ const canCreateNodeFromModal = computed(() => {
   return !!newNodeTypeId.value
 })
 
+const applyDefaultCustomValues = (
+  target: Record<string, unknown>,
+  attrsRaw: string | null | undefined
+) => {
+  const customProperties = parseEntityAttrs(attrsRaw ?? null).customProperties
+  for (const property of customProperties) {
+    const hasOwnValue = Object.prototype.hasOwnProperty.call(target, property.name)
+    if (hasOwnValue) continue
+    if (property.defaultValue === undefined) continue
+    target[property.name] = property.defaultValue
+  }
+}
+
 const bindNodeComponent = (node: EditorNode, componentId: string) => {
   const notationId = activeNotationId.value
   if (!notationId) return
@@ -216,6 +269,12 @@ const bindNodeComponent = (node: EditorNode, componentId: string) => {
   if (!node.parsedAttrs.componentProperties[notationId]) node.parsedAttrs.componentProperties[notationId] = {}
   if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
     node.parsedAttrs.componentProperties[notationId][componentId] = {}
+  }
+  const component = state.value.components.find(
+    (item) => item.id === componentId && item.notationId === notationId
+  )
+  if (component) {
+    applyDefaultCustomValues(node.parsedAttrs.componentProperties[notationId][componentId]!, component.attrs)
   }
   markNodeDirty(node.id)
 }
@@ -227,6 +286,12 @@ const bindLinkRelation = (link: EditorLink, relationId: string) => {
   if (!link.parsedAttrs.relationProperties[notationId]) link.parsedAttrs.relationProperties[notationId] = {}
   if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
     link.parsedAttrs.relationProperties[notationId][relationId] = {}
+  }
+  const relation = state.value.relations.find(
+    (item) => item.id === relationId && item.notationId === notationId
+  )
+  if (relation) {
+    applyDefaultCustomValues(link.parsedAttrs.relationProperties[notationId][relationId]!, relation.attrs)
   }
   markLinkDirty(link.id)
 }
@@ -345,11 +410,213 @@ const markDiagramDeleted = (diagramId: string) => {
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
 }
 
-const selectDiagram = (diagramId: string) => {
+const markLinkDeleted = (linkId: string) => {
+  const row = state.value.links.find((item) => item.id === linkId)
+  if (!row) return
+
+  if (row._isNew) {
+    state.value.links = state.value.links.filter((item) => item.id !== linkId)
+  } else {
+    row._isDeleted = true
+    row._isDirty = true
+  }
+
+  if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
+  if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+}
+
+const applyDiagramSelection = (diagramId: string) => {
   selectedDiagramId.value = diagramId
   selectedModelNodeIds.value = []
   selectedModelLinkId.value = null
 }
+
+const cancelDiagramSwitch = () => {
+  pendingDiagramSwitchId.value = null
+  showDiagramSwitchModal.value = false
+}
+
+const switchDiagramWithoutSave = async () => {
+  const targetDiagramId = pendingDiagramSwitchId.value
+  if (!targetDiagramId) return
+
+  await loadModel()
+  const restoredTarget = state.value.diagrams.find(
+    (diagram) => diagram.id === targetDiagramId && !diagram._isDeleted
+  )
+  if (!restoredTarget) {
+    setUiError("Не удалось открыть выбранную диаграмму после обновления данных.")
+    cancelDiagramSwitch()
+    return
+  }
+
+  applyDiagramSelection(restoredTarget.id)
+  cancelDiagramSwitch()
+}
+
+const isRequiredPropertyFilled = (value: unknown, type: string): boolean => {
+  if (type === "boolean") return typeof value === "boolean"
+  if (type === "number") return typeof value === "number" && Number.isFinite(value)
+  if (typeof value === "string") return value.trim().length > 0
+  return value !== null && value !== undefined
+}
+
+const validateRequiredCustomProperties = (): string | null => {
+  const componentById = new Map(state.value.components.map((component) => [component.id, component]))
+  const relationById = new Map(state.value.relations.map((relation) => [relation.id, relation]))
+
+  for (const node of state.value.nodes) {
+    if (node._isDeleted) continue
+
+    for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
+      const component = componentById.get(binding.componentId)
+      if (!component || component.notationId !== notationId) continue
+
+      const requiredProperties = parseEntityAttrs(component.attrs ?? null).customProperties.filter(
+        (property) => property.required
+      )
+      if (requiredProperties.length === 0) continue
+
+      const scopedValues = node.parsedAttrs.componentProperties[notationId]?.[binding.componentId] ?? {}
+      for (const property of requiredProperties) {
+        const value = scopedValues[property.name]
+        if (!isRequiredPropertyFilled(value, property.type)) {
+          return `У ноды "${node.name}" не заполнено обязательное свойство "${property.name}" (компонент "${component.name}").`
+        }
+      }
+    }
+  }
+
+  for (const link of state.value.links) {
+    if (link._isDeleted) continue
+
+    for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
+      const relation = relationById.get(binding.relationId)
+      if (!relation || relation.notationId !== notationId) continue
+
+      const requiredProperties = parseEntityAttrs(relation.attrs ?? null).customProperties.filter(
+        (property) => property.required
+      )
+      if (requiredProperties.length === 0) continue
+
+      const scopedValues = link.parsedAttrs.relationProperties[notationId]?.[binding.relationId] ?? {}
+      for (const property of requiredProperties) {
+        const value = scopedValues[property.name]
+        if (!isRequiredPropertyFilled(value, property.type)) {
+          return `У связи "${relation.name}" не заполнено обязательное свойство "${property.name}".`
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+const saveWithValidation = async (): Promise<boolean> => {
+  const validationError = validateRequiredCustomProperties()
+  if (validationError) {
+    setUiError(validationError)
+    return false
+  }
+  return saveChanges()
+}
+
+const saveAndSwitchDiagram = async () => {
+  const targetDiagramId = pendingDiagramSwitchId.value
+  if (!targetDiagramId) return
+  const ok = await saveWithValidation()
+  if (!ok) return
+  applyDiagramSelection(targetDiagramId)
+  cancelDiagramSwitch()
+}
+
+const selectDiagram = (diagramId: string) => {
+  if (diagramId === selectedDiagramId.value) return
+  if (activeDiagram.value && hasUnsavedChanges.value) {
+    pendingDiagramSwitchId.value = diagramId
+    showDiagramSwitchModal.value = true
+    return
+  }
+  applyDiagramSelection(diagramId)
+}
+
+const cancelLinkDelete = () => {
+  pendingDeleteLinkId.value = null
+  showLinkDeleteModal.value = false
+}
+
+const openLinkDeleteDialog = (linkId: string) => {
+  pendingDeleteLinkId.value = linkId
+  showLinkDeleteModal.value = true
+}
+
+const removeLinkFromCurrentDiagram = () => {
+  const linkId = pendingDeleteLinkId.value
+  const diagram = activeDiagram.value
+  if (!linkId || !diagram) {
+    cancelLinkDelete()
+    return
+  }
+
+  const initial = diagram.parsedAttrs.instances.edges.length
+  diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+    (edge) => edge.modelLinkId !== linkId
+  )
+  if (diagram.parsedAttrs.instances.edges.length !== initial) {
+    markDiagramDirty(diagram.id)
+  }
+
+  if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
+  if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+  cancelLinkDelete()
+}
+
+const removeLinkFromModel = () => {
+  const linkId = pendingDeleteLinkId.value
+  if (!linkId) {
+    cancelLinkDelete()
+    return
+  }
+
+  for (const diagram of state.value.diagrams) {
+    if (diagram._isDeleted) continue
+    const initial = diagram.parsedAttrs.instances.edges.length
+    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+      (edge) => edge.modelLinkId !== linkId
+    )
+    if (diagram.parsedAttrs.instances.edges.length !== initial) {
+      markDiagramDirty(diagram.id)
+    }
+  }
+
+  markLinkDeleted(linkId)
+  cancelLinkDelete()
+}
+
+const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
+  const target = event.target as HTMLElement | null
+  if (!target) return false
+  const tag = target.tagName
+  return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
+}
+
+const onDeleteKeydown = (event: KeyboardEvent) => {
+  if (event.key !== "Delete" && event.key !== "Backspace") return
+  if (!activeDiagram.value || !selectedModelLinkId.value) return
+  if (showLinkDeleteModal.value || shouldSkipDeleteHotkey(event)) return
+
+  event.preventDefault()
+  openLinkDeleteDialog(selectedModelLinkId.value)
+}
+
+watch(
+  () => activeDiagram.value?.id ?? null,
+  (diagramId) => {
+    if (!diagramId) {
+      selectedCanvasElementId.value = null
+    }
+  }
+)
 
 const setDiagramAttrs = (next: any) => {
   if (!activeDiagram.value) return
@@ -420,7 +687,9 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
   const parsedAttrs = parseNodeAttrs(null)
   if (notationId) {
     parsedAttrs.notationComponents[notationId] = { componentId }
-    parsedAttrs.componentProperties[notationId] = { [componentId]: {} }
+    const scopedDefaults: Record<string, unknown> = {}
+    applyDefaultCustomValues(scopedDefaults, component.attrs)
+    parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
   }
   state.value.nodes.push({
     id: nodeId,
@@ -615,7 +884,7 @@ const handleToolbarAction = async (event: string) => {
             notationId: activeDiagram.value.notationId
           }
         : null
-      const ok = await saveChanges()
+      const ok = await saveWithValidation()
       if (!ok || !openedBeforeSave) break
       const stillOpened = state.value.diagrams.some(
         (diagram) => diagram.id === selectedDiagramId.value && !diagram._isDeleted
@@ -721,6 +990,129 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   markLinkDirty(link.id)
 }
 
+const handleCanvasContextChange = (ctx: {
+  renderer: any
+  interactionManager: any
+}) => {
+  diagramRenderer.value = ctx.renderer
+  diagramInteractionManager.value = ctx.interactionManager
+}
+
+const handleDiagramElementStyleChange = (style: DiagramStyle) => {
+  const diagram = activeDiagram.value
+  const selectedElementId = selectedCanvasElementId.value
+  if (!diagram) return
+
+  let targetNodeInstance = null as (typeof diagram.parsedAttrs.instances.nodes)[number] | null
+  let targetEdgeInstance = null as (typeof diagram.parsedAttrs.instances.edges)[number] | null
+
+  if (selectedElementId?.startsWith("instance-")) {
+    const instanceId = selectedElementId.slice("instance-".length)
+    targetNodeInstance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId) ?? null
+  } else if (selectedElementId?.startsWith("edge-")) {
+    const edgeId = selectedElementId.slice("edge-".length)
+    targetEdgeInstance = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId) ?? null
+  }
+
+  if (!targetNodeInstance && !targetEdgeInstance && selectedModelNodeIds.value.length === 1) {
+    const modelNodeId = selectedModelNodeIds.value[0]
+    targetNodeInstance =
+      diagram.parsedAttrs.instances.nodes.find((item) => item.modelNodeId === modelNodeId) ?? null
+  }
+
+  if (!targetNodeInstance && !targetEdgeInstance && selectedModelLinkId.value) {
+    targetEdgeInstance =
+      diagram.parsedAttrs.instances.edges.find((item) => item.modelLinkId === selectedModelLinkId.value) ?? null
+  }
+
+  if (targetNodeInstance) {
+    if (!targetNodeInstance.attrs) targetNodeInstance.attrs = {}
+    targetNodeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
+    markDiagramDirty(diagram.id)
+    return
+  }
+
+  if (targetEdgeInstance) {
+    if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
+    targetEdgeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
+    markDiagramDirty(diagram.id)
+  }
+}
+
+const hasDiagramStyleOverride = computed(() => {
+  const diagram = activeDiagram.value
+  const selectedElementId = selectedCanvasElementId.value
+  if (!diagram || !selectedElementId) return false
+
+  if (selectedElementId.startsWith("instance-")) {
+    const instanceId = selectedElementId.slice("instance-".length)
+    const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+    return Boolean(instance?.attrs?.diagramStyle)
+  }
+
+  if (selectedElementId.startsWith("edge-")) {
+    const edgeId = selectedElementId.slice("edge-".length)
+    const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
+    return Boolean(edge?.attrs?.diagramStyle)
+  }
+
+  return false
+})
+
+const restoreStyleFromNotation = () => {
+  const diagram = activeDiagram.value
+  const notationId = activeNotationId.value
+  const selectedElementId = selectedCanvasElementId.value
+  if (!diagram || !notationId || !selectedElementId) return
+
+  if (selectedElementId.startsWith("instance-")) {
+    const instanceId = selectedElementId.slice("instance-".length)
+    const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+    if (!instance) return
+
+    const modelNode = state.value.nodes.find((item) => item.id === instance.modelNodeId && !item._isDeleted)
+    const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
+    const component = componentId
+      ? state.value.components.find((item) => item.id === componentId && item.notationId === notationId)
+      : null
+
+    if (!component) {
+      setUiError("Для выбранной фигуры не найден компонент нотации.")
+      return
+    }
+
+    if (instance.attrs && typeof instance.attrs === "object") {
+      delete instance.attrs.diagramStyle
+      if (Object.keys(instance.attrs).length === 0) delete instance.attrs
+    }
+    markDiagramDirty(diagram.id)
+    return
+  }
+
+  if (selectedElementId.startsWith("edge-")) {
+    const edgeId = selectedElementId.slice("edge-".length)
+    const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
+    if (!edge) return
+
+    const modelLink = state.value.links.find((item) => item.id === edge.modelLinkId && !item._isDeleted)
+    const relationId = modelLink?.parsedAttrs.notationRelations[notationId]?.relationId
+    const relation = relationId
+      ? state.value.relations.find((item) => item.id === relationId && item.notationId === notationId)
+      : null
+
+    if (!relation) {
+      setUiError("Для выбранной связи не найден relation нотации.")
+      return
+    }
+
+    if (edge.attrs && typeof edge.attrs === "object") {
+      delete edge.attrs.diagramStyle
+      if (Object.keys(edge.attrs).length === 0) delete edge.attrs
+    }
+    markDiagramDirty(diagram.id)
+  }
+}
+
 const showDiagramJson = ref(false)
 const diagramJsonContent = ref("")
 
@@ -777,9 +1169,11 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(() => {
   loadModel()
   window.addEventListener("beforeunload", onBeforeUnload)
+  window.addEventListener("keydown", onDeleteKeydown)
 })
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", onBeforeUnload)
+  window.removeEventListener("keydown", onDeleteKeydown)
 })
 </script>
 
@@ -842,24 +1236,63 @@ onBeforeUnmount(() => {
           @connect-nodes="startConnectNodes"
           @find-in-tree="handleFindInTree"
           @node-label-change="handleNodeLabelChange"
+          @select-canvas-element-id="selectedCanvasElementId = $event"
+          @canvas-context-change="handleCanvasContextChange"
         />
 
         <template #right>
-          <ModelPropertiesPanel
-            :active-notation-id="activeNotationId"
-            :selected-node="selectedNode"
-            :selected-link="selectedLink"
-            :node-binding-component-id="nodeBindingComponentId"
-            :link-binding-relation-id="linkBindingRelationId"
-            :available-components="availableNodeComponents"
-            :available-relations="availableLinkRelations"
-            :node-scoped-values="nodeScopedValues"
-            :link-scoped-values="linkScopedValues"
-            @bind-node-component="selectedNode && bindNodeComponent(selectedNode, $event)"
-            @bind-link-relation="selectedLink && bindLinkRelation(selectedLink, $event)"
-            @set-node-scoped-value="setNodeScopedValue"
-            @set-link-scoped-value="setLinkScopedValue"
-          />
+          <div class="model-right-stack" :style="{ gridTemplateRows: rightStackRows }">
+            <div class="model-right-stack__top">
+              <ModelPropertiesPanel
+                :active-notation-id="activeNotationId"
+                :selected-node="selectedNode"
+                :selected-link="selectedLink"
+                :node-binding-component-id="nodeBindingComponentId"
+                :link-binding-relation-id="linkBindingRelationId"
+                :available-components="availableNodeComponents"
+                :available-relations="availableLinkRelations"
+                :node-scoped-values="nodeScopedValues"
+                :link-scoped-values="linkScopedValues"
+                @bind-node-component="selectedNode && bindNodeComponent(selectedNode, $event)"
+                @bind-link-relation="selectedLink && bindLinkRelation(selectedLink, $event)"
+                @set-node-scoped-value="setNodeScopedValue"
+                @set-link-scoped-value="setLinkScopedValue"
+              />
+            </div>
+            <div class="model-right-stack__bottom" :class="{ 'model-right-stack__bottom--collapsed': stylePanelCollapsed }">
+              <div class="model-right-stack__bottom-header">
+                <span class="model-right-stack__bottom-title">Стиль</span>
+                <div class="model-right-stack__bottom-actions">
+                  <button
+                    type="button"
+                    class="btn btn--secondary model-right-stack__btn model-right-stack__btn--icon"
+                    title="Восстановить стиль из нотации"
+                    :disabled="!selectedCanvasElementId || !hasDiagramStyleOverride"
+                    @click="restoreStyleFromNotation"
+                  >
+                    <span class="material-symbols-outlined">restart_alt</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--secondary model-right-stack__btn model-right-stack__btn--icon"
+                    :title="stylePanelCollapsed ? 'Развернуть панель стилей' : 'Свернуть панель стилей'"
+                    @click="stylePanelCollapsed = !stylePanelCollapsed"
+                  >
+                    <span class="material-symbols-outlined">
+                      {{ stylePanelCollapsed ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <NodeStylePanel
+                v-show="!stylePanelCollapsed"
+                :selected-element-id="selectedCanvasElementId"
+                :interaction-manager="diagramInteractionManager"
+                :renderer="diagramRenderer"
+                @style-change="handleDiagramElementStyleChange"
+              />
+            </div>
+          </div>
         </template>
       </ModelMainPanelLayout>
     </template>
@@ -1015,12 +1448,52 @@ onBeforeUnmount(() => {
         class="choice-item"
         @click="createOrReuseLink(link.id)"
       >
-        Использовать существующую #{{ link.id.slice(0, 8) }}
+        Использовать существующую ({{ formatReuseLinkOption(link) }})
       </button>
       <button type="button" class="choice-item choice-item--primary" @click="createOrReuseLink(null)">
         Создать новую связь
       </button>
     </div>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showDiagramSwitchModal"
+    title="Несохранённые изменения"
+    max-width="500px"
+    @close="cancelDiagramSwitch"
+  >
+    <p class="leave-text">
+      Есть несохранённые изменения. Сохранить их перед переключением на другую диаграмму?
+    </p>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">Отмена</button>
+      <button type="button" class="btn btn--secondary" :disabled="isLoading || isSaving" @click="switchDiagramWithoutSave">
+        Не сохранять
+      </button>
+      <button type="button" class="btn btn--primary" :disabled="isSaving" @click="saveAndSwitchDiagram">
+        Сохранить и переключить
+      </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showLinkDeleteModal"
+    title="Удаление связи"
+    max-width="500px"
+    @close="cancelLinkDelete"
+  >
+    <p class="leave-text">
+      Что сделать с выбранной связью?
+    </p>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="cancelLinkDelete">Отмена</button>
+      <button type="button" class="btn btn--secondary" @click="removeLinkFromCurrentDiagram">
+        Удалить с диаграммы
+      </button>
+      <button type="button" class="btn btn--danger" @click="removeLinkFromModel">
+        Удалить из модели
+      </button>
+    </template>
   </BaseModal>
 
   <BaseModal v-if="showLeaveDialog" title="Несохранённые изменения" max-width="400px" @close="cancelLeave">
@@ -1167,6 +1640,70 @@ onBeforeUnmount(() => {
   word-break: break-all;
   max-height: 420px;
   overflow: auto;
+}
+
+.model-right-stack {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+}
+
+.model-right-stack__top,
+.model-right-stack__bottom {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.model-right-stack__bottom {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.model-right-stack__bottom--collapsed {
+  min-height: 46px;
+}
+
+.model-right-stack__bottom-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-panel);
+}
+
+.model-right-stack__bottom-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.model-right-stack__bottom-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-right-stack__btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.model-right-stack__btn--icon {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.model-right-stack__btn--icon .material-symbols-outlined {
+  font-size: 18px;
 }
 
 .save-toast {

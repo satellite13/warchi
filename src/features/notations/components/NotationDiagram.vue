@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, toRef, onMounted, onBeforeUnmount } from "vue";
-import { DiagramRenderer } from "papirus";
-import type { DiagramOptions } from "papirus";
+import { DiagramRenderer } from "@ngroznykh/papirus";
+import type { DiagramOptions } from "@ngroznykh/papirus";
 import type { NotationEditorState } from "../types";
 import { useNotationDiagram, type EntityKind } from "../composables/useNotationDiagram";
 

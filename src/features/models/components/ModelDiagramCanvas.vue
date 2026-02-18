@@ -16,7 +16,7 @@ import {
   type LabelPlacement,
   type EdgePathType,
   type EdgeStyle
-} from "papirus"
+} from "@ngroznykh/papirus"
 import type { ComponentResponse, NodeTypeResponse, RelationResponse } from "../../../types/api"
 import { parseEntityAttrs, type DiagramStyle } from "../../notations/notationAttrs"
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from "../modelAttrs"
@@ -435,8 +435,18 @@ function syncDiagram() {
 
     const existing = renderer.getEdge(papEdgeId)
     if (existing) {
-      if (existing.from.nodeId !== sourcePapId) existing.from = { nodeId: sourcePapId }
-      if (existing.to.nodeId !== targetPapId) existing.to = { nodeId: targetPapId }
+      if (existing.from.nodeId !== sourcePapId) {
+        existing.from = {
+          nodeId: sourcePapId,
+          portId: (edge.attrs?.fromPortId as string | undefined) ?? existing.from.portId
+        }
+      }
+      if (existing.to.nodeId !== targetPapId) {
+        existing.to = {
+          nodeId: targetPapId,
+          portId: (edge.attrs?.toPortId as string | undefined) ?? existing.to.portId
+        }
+      }
       if (edgeOpts.style) existing.style = { ...existing.style, ...edgeOpts.style }
       if (edgeOpts.type) existing.type = edgeOpts.type
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker

@@ -12,8 +12,7 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "../papirus/src"),
-        "papirus": path.resolve(__dirname, "../papirus/src")
+        "@": path.resolve(__dirname, "./src")
       }
     },
     server: {

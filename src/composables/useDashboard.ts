@@ -68,7 +68,7 @@ export function useDashboard() {
       apiGet<PaginatedResponse<NotationData>>("/notations?page=0&size=50"),
       apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?page=0&size=50"),
       apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?page=0&size=50"),
-      apiGet<PaginatedResponse<AuditLogResponse>>("/audit-logs?page=0&size=20")
+      apiGet<PaginatedResponse<AuditLogResponse>>("/audit-log?page=0&size=20")
     ])
 
     if (modelsRes.success) models.value = modelsRes.data.content ?? []

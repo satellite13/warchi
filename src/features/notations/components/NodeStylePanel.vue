@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref, reactive, computed, watch} from "vue";
-import type {InteractionManager, DiagramRenderer, Node, Edge} from "papirus";
+import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import type {DiagramStyle} from "../notationAttrs";
 import {
   getAllComponentPresets,

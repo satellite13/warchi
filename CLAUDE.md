@@ -61,7 +61,7 @@ src/
 **Papirus Dependency**: Local sibling package (`../papirus`) provides canvas/diagram rendering for NotationEditor.
 
 ### Path Aliases
-- `@/` and `papirus/` both resolve to `../papirus/src`
+- `@/` resolves to `src/`
 
 ## Environment Variables
 

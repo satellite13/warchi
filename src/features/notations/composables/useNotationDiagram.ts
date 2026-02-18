@@ -17,7 +17,7 @@ import {
   type ElementState,
   type TextLabelOptions,
   type LabelPlacement
-} from "papirus"
+} from "@ngroznykh/papirus"
 import type { DiagramStyle, NodeStyle } from "../notationAttrs"
 import type {
   NotationEditorState,

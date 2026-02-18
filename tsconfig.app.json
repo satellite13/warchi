@@ -5,9 +5,7 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../papirus/src/*"],
-      "papirus": ["../papirus/src"],
-      "papirus/*": ["../papirus/src/*"]
+      "@/*": ["./src/*"]
     },
 
     /* Linting */

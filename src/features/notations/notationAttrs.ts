@@ -67,6 +67,11 @@ export type DiagramStyle = {
   // Node dimensions
   width?: number;
   height?: number;
+  // Node anchor points
+  portsTop?: number;
+  portsBottom?: number;
+  portsLeft?: number;
+  portsRight?: number;
   // Node base shape
   nodeShape?: string;
 };
@@ -206,6 +211,10 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.iconFillColor === "string") style.iconFillColor = value.iconFillColor;
   if (typeof value.width === "number") style.width = value.width;
   if (typeof value.height === "number") style.height = value.height;
+  if (typeof value.portsTop === "number") style.portsTop = value.portsTop;
+  if (typeof value.portsBottom === "number") style.portsBottom = value.portsBottom;
+  if (typeof value.portsLeft === "number") style.portsLeft = value.portsLeft;
+  if (typeof value.portsRight === "number") style.portsRight = value.portsRight;
   if (typeof value.nodeShape === "string") style.nodeShape = value.nodeShape;
   return Object.keys(style).length ? style : undefined;
 };

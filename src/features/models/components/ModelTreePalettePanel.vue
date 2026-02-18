@@ -21,6 +21,7 @@ const emit = defineEmits<{
   createDiagram: [nodeId: string]
   deleteDiagram: [diagramId: string]
   moveNode: [nodeId: string, newParentNodeId: string | null]
+  renameNode: [nodeId: string, name: string]
 }>()
 
 const expandedNodes = ref<Set<string>>(new Set())
@@ -94,6 +95,8 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
 }
 
 const dropTarget = ref<{ nodeId: string | null; position: "above" | "below" | "inside" } | null>(null)
+const renamingNodeId = ref<string | null>(null)
+const renamingNodeName = ref("")
 
 const isDescendant = (nodeId: string, potentialParentId: string): boolean => {
   const children = childNodes(potentialParentId)
@@ -166,6 +169,28 @@ const getDropClass = (nodeId: string) => {
     "tree-node__row--drop-below": dropTarget.value.position === "below",
     "tree-node__row--drop-inside": dropTarget.value.position === "inside"
   }
+}
+
+const startRenameNode = (node: EditorNode) => {
+  renamingNodeId.value = node.id
+  renamingNodeName.value = node.name
+}
+
+const cancelRenameNode = () => {
+  renamingNodeId.value = null
+  renamingNodeName.value = ""
+}
+
+const commitRenameNode = (node: EditorNode) => {
+  const nextName = renamingNodeName.value.trim()
+  if (!nextName) {
+    cancelRenameNode()
+    return
+  }
+  if (nextName !== node.name) {
+    emit("renameNode", node.id, nextName)
+  }
+  cancelRenameNode()
 }
 
 const expandToNode = (nodeId: string) => {
@@ -246,9 +271,24 @@ defineExpose({ expandToNode })
                 {{ expandedNodes.has(node.id) ? "expand_more" : "chevron_right" }}
               </span>
             </button>
-            <button type="button" class="tree-node__select" @click="emit('selectNode', node.id)">
+            <button
+              type="button"
+              class="tree-node__select"
+              @click="emit('selectNode', node.id)"
+              @dblclick="isDirectory(node) && toggleNode(node.id)"
+            >
               <span class="material-symbols-outlined">{{ isDirectory(node) ? "folder" : "category" }}</span>
-              <span class="tree-node__name">{{ node.name }}</span>
+              <input
+                v-if="renamingNodeId === node.id"
+                v-model="renamingNodeName"
+                class="tree-node__rename-input"
+                type="text"
+                @click.stop
+                @keydown.enter.prevent="commitRenameNode(node)"
+                @keydown.esc.prevent="cancelRenameNode"
+                @blur="commitRenameNode(node)"
+              >
+              <span v-else class="tree-node__name">{{ node.name }}</span>
               <span v-if="!isDirectory(node)" class="tree-node__type">{{ nodeTypeNameById.get(node.nodeTypeId) }}</span>
             </button>
             <div class="tree-node__actions">
@@ -278,6 +318,15 @@ defineExpose({ expandToNode })
                 @click.stop="emit('createDiagram', node.id)"
               >
                 <span class="material-symbols-outlined">add_chart</span>
+              </button>
+              <button
+                v-if="isDirectory(node)"
+                type="button"
+                class="mini-btn"
+                title="Переименовать папку"
+                @click.stop="startRenameNode(node)"
+              >
+                <span class="material-symbols-outlined">edit</span>
               </button>
               <button type="button" class="mini-btn mini-btn--danger" title="Удалить" @click.stop="emit('deleteNode', node.id)">
                 <span class="material-symbols-outlined">delete</span>
@@ -332,9 +381,24 @@ defineExpose({ expandToNode })
                     {{ expandedNodes.has(child.id) ? "expand_more" : "chevron_right" }}
                   </span>
                 </button>
-                <button type="button" class="tree-node__select" @click="emit('selectNode', child.id)">
+                <button
+                  type="button"
+                  class="tree-node__select"
+                  @click="emit('selectNode', child.id)"
+                  @dblclick="isDirectory(child) && toggleNode(child.id)"
+                >
                   <span class="material-symbols-outlined">{{ isDirectory(child) ? "folder" : "category" }}</span>
-                  <span class="tree-node__name">{{ child.name }}</span>
+                  <input
+                    v-if="renamingNodeId === child.id"
+                    v-model="renamingNodeName"
+                    class="tree-node__rename-input"
+                    type="text"
+                    @click.stop
+                    @keydown.enter.prevent="commitRenameNode(child)"
+                    @keydown.esc.prevent="cancelRenameNode"
+                    @blur="commitRenameNode(child)"
+                  >
+                  <span v-else class="tree-node__name">{{ child.name }}</span>
                   <span v-if="!isDirectory(child)" class="tree-node__type">{{ nodeTypeNameById.get(child.nodeTypeId) }}</span>
                 </button>
                 <div class="tree-node__actions">
@@ -355,6 +419,15 @@ defineExpose({ expandToNode })
                     @click.stop="emit('createNode', child.id)"
                   >
                     <span class="material-symbols-outlined">add_box</span>
+                  </button>
+                  <button
+                    v-if="isDirectory(child)"
+                    type="button"
+                    class="mini-btn"
+                    title="Переименовать папку"
+                    @click.stop="startRenameNode(child)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
                   </button>
                   <button
                     v-if="isDirectory(child)"
@@ -643,6 +716,19 @@ defineExpose({ expandToNode })
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+}
+
+.tree-node__rename-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--base-text);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 2px 6px;
+  outline: none;
 }
 
 .tree-node__type {

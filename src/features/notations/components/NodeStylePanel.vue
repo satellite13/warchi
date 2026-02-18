@@ -17,10 +17,15 @@ const props = defineProps<{
   selectedElementId: string | null;
   interactionManager: InteractionManager | null;
   renderer: DiagramRenderer | null;
+  showPanelActions?: boolean;
+  stylePanelCollapsed?: boolean;
+  canRestoreStyle?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
+  (e: "restore-style"): void;
+  (e: "toggle-collapse"): void;
 }>();
 
 type NodeShape =
@@ -60,6 +65,10 @@ function emitNodeStyle() {
     labelPlacement: labelPlacement.value,
     width: nodeWidth.value,
     height: nodeHeight.value,
+    portsTop: nodePortsTop.value,
+    portsBottom: nodePortsBottom.value,
+    portsLeft: nodePortsLeft.value,
+    portsRight: nodePortsRight.value,
     ...(iconName.value
       ? {
           iconName: iconName.value,
@@ -204,6 +213,10 @@ function confirmSavePreset() {
       labelPlacement: labelPlacement.value,
       width: nodeWidth.value,
       height: nodeHeight.value,
+      portsTop: nodePortsTop.value,
+      portsBottom: nodePortsBottom.value,
+      portsLeft: nodePortsLeft.value,
+      portsRight: nodePortsRight.value,
       ...(iconName.value
         ? {
             iconName: iconName.value,
@@ -273,6 +286,10 @@ function applyComponentPreset(presetName: string) {
   // Only update dimensions if explicitly specified in preset
   if (style.width !== undefined) nodeWidth.value = style.width;
   if (style.height !== undefined) nodeHeight.value = style.height;
+  nodePortsTop.value = style.portsTop ?? 3;
+  nodePortsBottom.value = style.portsBottom ?? 3;
+  nodePortsLeft.value = style.portsLeft ?? 1;
+  nodePortsRight.value = style.portsRight ?? 1;
   
   if (style.lineDash && style.lineDash.length > 0) {
     lineStyle.value = "dashed";
@@ -326,6 +343,12 @@ function applyComponentPreset(presetName: string) {
     node.width = nodeWidth.value;
     node.height = nodeHeight.value;
     (node as any).cornerRadius = cornerRadius.value;
+    (node as any).anchorPoints = {
+      top: nodePortsTop.value,
+      bottom: nodePortsBottom.value,
+      left: nodePortsLeft.value,
+      right: nodePortsRight.value
+    };
     
     if (iconName.value) {
       (node as any).icon = {
@@ -467,6 +490,10 @@ const labelMargin = ref(0);
 const labelPlacement = ref<"auto" | "center" | "top" | "bottom" | "left" | "right">("auto");
 const nodeWidth = ref(140);
 const nodeHeight = ref(50);
+const nodePortsTop = ref(3);
+const nodePortsBottom = ref(3);
+const nodePortsLeft = ref(1);
+const nodePortsRight = ref(1);
 
 // --- Edge style state ---
 const edgeLabel = ref("");
@@ -573,6 +600,11 @@ function loadNodeProps() {
   // Load node dimensions
   nodeWidth.value = Math.round(node.width ?? 140);
   nodeHeight.value = Math.round(node.height ?? 50);
+  const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, unknown>;
+  nodePortsTop.value = Math.max(0, Math.round(Number(anchorPoints.top ?? 3)));
+  nodePortsBottom.value = Math.max(0, Math.round(Number(anchorPoints.bottom ?? 3)));
+  nodePortsLeft.value = Math.max(0, Math.round(Number(anchorPoints.left ?? 1)));
+  nodePortsRight.value = Math.max(0, Math.round(Number(anchorPoints.right ?? 1)));
 }
 
 function loadEdgeProps() {
@@ -980,6 +1012,58 @@ function handleHeightChange(value: string) {
   emitNodeStyle();
 }
 
+function handlePortsTopChange(value: string) {
+  const v = Math.max(0, Math.round(Number(value)));
+  if (!Number.isFinite(v)) return;
+  nodePortsTop.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
+    (node as any).anchorPoints = { ...anchorPoints, top: v };
+  });
+  emitNodeStyle();
+}
+
+function handlePortsBottomChange(value: string) {
+  const v = Math.max(0, Math.round(Number(value)));
+  if (!Number.isFinite(v)) return;
+  nodePortsBottom.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
+    (node as any).anchorPoints = { ...anchorPoints, bottom: v };
+  });
+  emitNodeStyle();
+}
+
+function handlePortsLeftChange(value: string) {
+  const v = Math.max(0, Math.round(Number(value)));
+  if (!Number.isFinite(v)) return;
+  nodePortsLeft.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
+    (node as any).anchorPoints = { ...anchorPoints, left: v };
+  });
+  emitNodeStyle();
+}
+
+function handlePortsRightChange(value: string) {
+  const v = Math.max(0, Math.round(Number(value)));
+  if (!Number.isFinite(v)) return;
+  nodePortsRight.value = v;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
+    (node as any).anchorPoints = { ...anchorPoints, right: v };
+  });
+  emitNodeStyle();
+}
+
 // --- Edge handlers ---
 function applyEdgeStyle(updates: Record<string, any>) {
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1247,10 +1331,31 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           </svg>
           <span>{{ elementType === 'edge' ? 'Связь' : 'Фигура' }}</span>
         </div>
+        <div v-if="showPanelActions" class="sp-header__actions">
+          <button
+            type="button"
+            class="sp-header__btn"
+            title="Восстановить стиль из нотации"
+            :disabled="!selectedElementId || !canRestoreStyle"
+            @click="emit('restore-style')"
+          >
+            <span class="material-symbols-outlined">restart_alt</span>
+          </button>
+          <button
+            type="button"
+            class="sp-header__btn"
+            :title="stylePanelCollapsed ? 'Развернуть панель стилей' : 'Свернуть панель стилей'"
+            @click="emit('toggle-collapse')"
+          >
+            <span class="material-symbols-outlined">
+              {{ stylePanelCollapsed ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}
+            </span>
+          </button>
+        </div>
       </div>
 
       <!-- Preset bar -->
-      <div class="sp-preset">
+      <div v-show="!stylePanelCollapsed" class="sp-preset">
         <select
           class="sp-select sp-select--preset"
           :value="elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset"
@@ -1293,7 +1398,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
       <!-- Save preset inline form -->
       <Transition name="sp-slide">
-        <div v-if="showSavePresetForm" class="sp-save-form">
+        <div v-if="showSavePresetForm && !stylePanelCollapsed" class="sp-save-form">
           <input
             v-model="newPresetName"
             class="sp-input sp-save-form__input"
@@ -1311,7 +1416,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </Transition>
 
       <!-- Scrollable body -->
-      <div class="sp-body">
+      <div v-show="!stylePanelCollapsed" class="sp-body">
 
         <!-- ==================== EDGE PANEL ==================== -->
         <template v-if="elementType === 'edge'">
@@ -1615,6 +1720,24 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <input type="number" class="sp-input sp-input--sm" :value="cornerRadius" min="0" max="50" step="1" @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)">
                   </div>
                 </div>
+                <div class="sp-field-grid sp-field-grid--dims">
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">PT</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsTop" min="0" max="16" step="1" @input="handlePortsTopChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">PB</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsBottom" min="0" max="16" step="1" @input="handlePortsBottomChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">PL</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsLeft" min="0" max="16" step="1" @input="handlePortsLeftChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">PR</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsRight" min="0" max="16" step="1" @input="handlePortsRightChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
               </div>
             </Transition>
           </section>
@@ -1819,6 +1942,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   padding: 10px var(--sp-pad);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .sp-header__type {
@@ -1847,6 +1973,40 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+}
+
+.sp-header__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sp-header__btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sp-header__btn:hover:not(:disabled) {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.sp-header__btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.sp-header__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---- Preset bar ---- */

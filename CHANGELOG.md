@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.3] - 2026-02-19
+
+### Added
+- Added node and edge context-menu actions in model editor canvas: node deletion from current diagram, edge type switching, and edge deletion flow.
+- Added edge type icons to context menu (`straight`, `polyline`, `bezier`) matching the style panel controls.
+- Added node port count controls in style panel (`top`, `bottom`, `left`, `right`) with persistence in `attrs.diagramStyle`.
+
+### Changed
+- Moved style panel action buttons (restore from notation, collapse/expand) into the `Фигура/Связь` header row and removed redundant `Стиль` row to save space.
+- Unified style-panel header action buttons appearance with left tree panel icon buttons.
+- Added unsaved-changes confirmation when closing an active diagram (`Сохранить / Не сохранять / Отмена`).
+
+### Fixed
+- Fixed edge port rebind tracking so save button activates and undo/redo updates correctly after reconnecting to another port.
+- Fixed edge deletion from current diagram to participate in undo/redo history.
+- Fixed applying custom port counts and anchor points after diagram reopen.
+
+### Release
+- Bumped application version to `0.0.3` in package metadata, footer, Docker/Helm scripts, and chart values.
+
 ## [0.0.2] - 2026-02-19
 
 ### Added

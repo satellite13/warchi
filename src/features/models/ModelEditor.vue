@@ -193,6 +193,7 @@ const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
 const showDiagramSwitchModal = ref(false)
 const pendingDiagramSwitchId = ref<string | null>(null)
+const pendingDiagramAction = ref<"switch" | "close" | null>(null)
 
 const getLinkTypeName = (linkTypeId: string): string =>
   state.value.linkTypes.find((item) => item.id === linkTypeId)?.name ?? "Неизвестный тип"
@@ -433,17 +434,29 @@ const applyDiagramSelection = (diagramId: string) => {
 
 const cancelDiagramSwitch = () => {
   pendingDiagramSwitchId.value = null
+  pendingDiagramAction.value = null
   showDiagramSwitchModal.value = false
 }
 
 const switchDiagramWithoutSave = async () => {
-  const targetDiagramId = pendingDiagramSwitchId.value
-  if (!targetDiagramId) return
+  const action = pendingDiagramAction.value
+  if (!action) return
 
   await loadModel()
-  const restoredTarget = state.value.diagrams.find(
-    (diagram) => diagram.id === targetDiagramId && !diagram._isDeleted
-  )
+  if (action === "close") {
+    selectedDiagramId.value = null
+    selectedModelNodeIds.value = []
+    selectedModelLinkId.value = null
+    cancelDiagramSwitch()
+    return
+  }
+
+  const targetDiagramId = pendingDiagramSwitchId.value
+  if (!targetDiagramId) {
+    cancelDiagramSwitch()
+    return
+  }
+  const restoredTarget = state.value.diagrams.find((diagram) => diagram.id === targetDiagramId && !diagram._isDeleted)
   if (!restoredTarget) {
     setUiError("Не удалось открыть выбранную диаграмму после обновления данных.")
     cancelDiagramSwitch()
@@ -518,14 +531,31 @@ const saveWithValidation = async (): Promise<boolean> => {
     setUiError(validationError)
     return false
   }
-  return saveChanges()
+  const ok = await saveChanges()
+  if (ok) {
+    diagramInteractionManager.value?.history?.clear?.()
+  }
+  return ok
 }
 
 const saveAndSwitchDiagram = async () => {
-  const targetDiagramId = pendingDiagramSwitchId.value
-  if (!targetDiagramId) return
+  const action = pendingDiagramAction.value
+  if (!action) return
   const ok = await saveWithValidation()
   if (!ok) return
+  if (action === "close") {
+    selectedDiagramId.value = null
+    selectedModelNodeIds.value = []
+    selectedModelLinkId.value = null
+    cancelDiagramSwitch()
+    return
+  }
+
+  const targetDiagramId = pendingDiagramSwitchId.value
+  if (!targetDiagramId) {
+    cancelDiagramSwitch()
+    return
+  }
   applyDiagramSelection(targetDiagramId)
   cancelDiagramSwitch()
 }
@@ -533,6 +563,7 @@ const saveAndSwitchDiagram = async () => {
 const selectDiagram = (diagramId: string) => {
   if (diagramId === selectedDiagramId.value) return
   if (activeDiagram.value && hasUnsavedChanges.value) {
+    pendingDiagramAction.value = "switch"
     pendingDiagramSwitchId.value = diagramId
     showDiagramSwitchModal.value = true
     return
@@ -558,16 +589,45 @@ const removeLinkFromCurrentDiagram = () => {
     return
   }
 
-  const initial = diagram.parsedAttrs.instances.edges.length
-  diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-    (edge) => edge.modelLinkId !== linkId
-  )
-  if (diagram.parsedAttrs.instances.edges.length !== initial) {
+  const removedEdges = diagram.parsedAttrs.instances.edges
+    .map((edge, index) => ({ index, edge: JSON.parse(JSON.stringify(edge)) }))
+    .filter((entry) => entry.edge.modelLinkId === linkId)
+  if (removedEdges.length === 0) {
+    cancelLinkDelete()
+    return
+  }
+
+  const applyRemoval = () => {
+    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+      (edge) => edge.modelLinkId !== linkId
+    )
+    if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
+    if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
   }
 
-  if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
-  if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+  const restoreRemoved = () => {
+    const currentEdges = [...diagram.parsedAttrs.instances.edges]
+    for (const { index, edge } of removedEdges) {
+      const alreadyExists = currentEdges.some((item) => item.id === edge.id)
+      if (alreadyExists) continue
+      const safeIndex = Math.max(0, Math.min(index, currentEdges.length))
+      currentEdges.splice(safeIndex, 0, JSON.parse(JSON.stringify(edge)))
+    }
+    diagram.parsedAttrs.instances.edges = currentEdges
+    markDiagramDirty(diagram.id)
+  }
+
+  const history = diagramInteractionManager.value?.history
+  if (history && typeof history.execute === "function") {
+    history.execute({
+      execute: applyRemoval,
+      undo: restoreRemoved
+    })
+  } else {
+    applyRemoval()
+  }
+
   cancelLinkDelete()
 }
 
@@ -602,9 +662,16 @@ const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
 
 const onDeleteKeydown = (event: KeyboardEvent) => {
   if (event.key !== "Delete" && event.key !== "Backspace") return
-  if (!activeDiagram.value || !selectedModelLinkId.value) return
+  if (!activeDiagram.value) return
   if (showLinkDeleteModal.value || shouldSkipDeleteHotkey(event)) return
 
+  if (selectedModelNodeIds.value.length > 0) {
+    event.preventDefault()
+    removeSelectedNodesFromCurrentDiagram()
+    return
+  }
+
+  if (!selectedModelLinkId.value) return
   event.preventDefault()
   openLinkDeleteDialog(selectedModelLinkId.value)
 }
@@ -873,6 +940,86 @@ const handleMoveNode = (nodeId: string, newParentNodeId: string | null) => {
   markNodeDirty(node.id)
 }
 
+const handleRenameNode = (nodeId: string, newName: string) => {
+  const node = state.value.nodes.find((item) => item.id === nodeId)
+  if (!node || node.name === newName) return
+  node.name = newName
+  markNodeDirty(node.id)
+}
+
+const removeSelectedNodesFromCurrentDiagram = () => {
+  const diagram = activeDiagram.value
+  if (!diagram || selectedModelNodeIds.value.length === 0) return
+
+  const selectedSet = new Set(selectedModelNodeIds.value)
+  const removedNodes = diagram.parsedAttrs.instances.nodes
+    .filter((nodeInst) => selectedSet.has(nodeInst.modelNodeId))
+    .map((nodeInst) => JSON.parse(JSON.stringify(nodeInst)))
+  const removedInstanceIds = new Set(removedNodes.map((nodeInst) => nodeInst.id))
+  if (removedInstanceIds.size === 0) return
+
+  const removedEdges = diagram.parsedAttrs.instances.edges
+    .filter(
+      (edgeInst) =>
+        removedInstanceIds.has(edgeInst.sourceInstanceId) ||
+        removedInstanceIds.has(edgeInst.targetInstanceId)
+    )
+    .map((edgeInst) => JSON.parse(JSON.stringify(edgeInst)))
+
+  const applyRemoval = () => {
+    diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+      (nodeInst) => !removedInstanceIds.has(nodeInst.id)
+    )
+    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+      (edgeInst) => !removedEdges.some((removed) => removed.id === edgeInst.id)
+    )
+    selectedModelNodeIds.value = []
+    selectedCanvasElementId.value = null
+    markDiagramDirty(diagram.id)
+  }
+
+  const restoreRemoved = () => {
+    const existingNodeIds = new Set(diagram.parsedAttrs.instances.nodes.map((nodeInst) => nodeInst.id))
+    for (const nodeInst of removedNodes) {
+      if (!existingNodeIds.has(nodeInst.id)) {
+        diagram.parsedAttrs.instances.nodes.push(JSON.parse(JSON.stringify(nodeInst)))
+      }
+    }
+
+    const existingEdgeIds = new Set(diagram.parsedAttrs.instances.edges.map((edgeInst) => edgeInst.id))
+    for (const edgeInst of removedEdges) {
+      if (!existingEdgeIds.has(edgeInst.id)) {
+        diagram.parsedAttrs.instances.edges.push(JSON.parse(JSON.stringify(edgeInst)))
+      }
+    }
+
+    markDiagramDirty(diagram.id)
+  }
+
+  const history = diagramInteractionManager.value?.history
+  if (history && typeof history.execute === "function") {
+    history.execute({
+      execute: applyRemoval,
+      undo: restoreRemoved
+    })
+    return
+  }
+
+  applyRemoval()
+}
+
+const handleRequestDeleteNodeFromDiagram = (modelNodeId: string) => {
+  selectedModelLinkId.value = null
+  selectedModelNodeIds.value = [modelNodeId]
+  removeSelectedNodesFromCurrentDiagram()
+}
+
+const handleRequestDeleteLink = (linkId: string) => {
+  selectedModelNodeIds.value = []
+  selectedModelLinkId.value = linkId
+  openLinkDeleteDialog(linkId)
+}
+
 const handleToolbarAction = async (event: string) => {
   switch (event) {
     case "save": {
@@ -954,6 +1101,12 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case "close-diagram":
+      if (activeDiagram.value && hasUnsavedChanges.value) {
+        pendingDiagramAction.value = "close"
+        pendingDiagramSwitchId.value = null
+        showDiagramSwitchModal.value = true
+        break
+      }
       selectedDiagramId.value = null
       selectedModelNodeIds.value = []
       selectedModelLinkId.value = null
@@ -1214,6 +1367,7 @@ onBeforeUnmount(() => {
             @create-diagram="openCreateDiagram"
             @delete-diagram="markDiagramDeleted"
             @move-node="handleMoveNode"
+            @rename-node="handleRenameNode"
           />
         </template>
 
@@ -1236,6 +1390,8 @@ onBeforeUnmount(() => {
           @connect-nodes="startConnectNodes"
           @find-in-tree="handleFindInTree"
           @node-label-change="handleNodeLabelChange"
+          @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"
+          @request-delete-link="handleRequestDeleteLink"
           @select-canvas-element-id="selectedCanvasElementId = $event"
           @canvas-context-change="handleCanvasContextChange"
         />
@@ -1260,36 +1416,16 @@ onBeforeUnmount(() => {
               />
             </div>
             <div class="model-right-stack__bottom" :class="{ 'model-right-stack__bottom--collapsed': stylePanelCollapsed }">
-              <div class="model-right-stack__bottom-header">
-                <span class="model-right-stack__bottom-title">Стиль</span>
-                <div class="model-right-stack__bottom-actions">
-                  <button
-                    type="button"
-                    class="btn btn--secondary model-right-stack__btn model-right-stack__btn--icon"
-                    title="Восстановить стиль из нотации"
-                    :disabled="!selectedCanvasElementId || !hasDiagramStyleOverride"
-                    @click="restoreStyleFromNotation"
-                  >
-                    <span class="material-symbols-outlined">restart_alt</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--secondary model-right-stack__btn model-right-stack__btn--icon"
-                    :title="stylePanelCollapsed ? 'Развернуть панель стилей' : 'Свернуть панель стилей'"
-                    @click="stylePanelCollapsed = !stylePanelCollapsed"
-                  >
-                    <span class="material-symbols-outlined">
-                      {{ stylePanelCollapsed ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}
-                    </span>
-                  </button>
-                </div>
-              </div>
               <NodeStylePanel
-                v-show="!stylePanelCollapsed"
                 :selected-element-id="selectedCanvasElementId"
                 :interaction-manager="diagramInteractionManager"
                 :renderer="diagramRenderer"
+                :show-panel-actions="true"
+                :style-panel-collapsed="stylePanelCollapsed"
+                :can-restore-style="hasDiagramStyleOverride"
                 @style-change="handleDiagramElementStyleChange"
+                @restore-style="restoreStyleFromNotation"
+                @toggle-collapse="stylePanelCollapsed = !stylePanelCollapsed"
               />
             </div>
           </div>
@@ -1463,7 +1599,11 @@ onBeforeUnmount(() => {
     @close="cancelDiagramSwitch"
   >
     <p class="leave-text">
-      Есть несохранённые изменения. Сохранить их перед переключением на другую диаграмму?
+      {{
+        pendingDiagramAction === "close"
+          ? "Есть несохранённые изменения. Сохранить их перед закрытием диаграммы?"
+          : "Есть несохранённые изменения. Сохранить их перед переключением на другую диаграмму?"
+      }}
     </p>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">Отмена</button>
@@ -1471,7 +1611,7 @@ onBeforeUnmount(() => {
         Не сохранять
       </button>
       <button type="button" class="btn btn--primary" :disabled="isSaving" @click="saveAndSwitchDiagram">
-        Сохранить и переключить
+        {{ pendingDiagramAction === "close" ? "Сохранить и закрыть" : "Сохранить и переключить" }}
       </button>
     </template>
   </BaseModal>
@@ -1662,48 +1802,6 @@ onBeforeUnmount(() => {
 
 .model-right-stack__bottom--collapsed {
   min-height: 46px;
-}
-
-.model-right-stack__bottom-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-panel);
-}
-
-.model-right-stack__bottom-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.model-right-stack__bottom-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.model-right-stack__btn {
-  padding: 6px 10px;
-  font-size: 12px;
-}
-
-.model-right-stack__btn--icon {
-  width: 32px;
-  height: 30px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.model-right-stack__btn--icon .material-symbols-outlined {
-  font-size: 18px;
 }
 
 .save-toast {

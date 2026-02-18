@@ -45,6 +45,8 @@ const emit = defineEmits<{
   connectNodes: [sourceModelNodeId: string, targetModelNodeId: string, sourceInstanceId: string, targetInstanceId: string]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
+  requestDeleteNodeFromDiagram: [modelNodeId: string]
+  requestDeleteLink: [modelLinkId: string]
 }>()
 
 // ── Refs ──
@@ -326,6 +328,20 @@ function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) 
   }
 }
 
+function resolveAnchorPoints(ds?: DiagramStyle): { top: number; bottom: number; left: number; right: number } {
+  const normalize = (value: unknown, fallback: number): number => {
+    const parsed = Math.round(Number(value));
+    if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+    return parsed;
+  };
+  return {
+    top: normalize(ds?.portsTop, 3),
+    bottom: normalize(ds?.portsBottom, 3),
+    left: normalize(ds?.portsLeft, 1),
+    right: normalize(ds?.portsRight, 1)
+  };
+}
+
 function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
   return (node as any).typeName === "custom"
 }
@@ -352,7 +368,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     height: visual.height,
     label: buildNodeLabel(nodeName, ds),
     style: visual.style,
-    anchorPoints: { top: 3, bottom: 3, left: 1, right: 1 },
+    anchorPoints: resolveAnchorPoints(ds),
     ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
   }
 
@@ -426,6 +442,7 @@ function syncDiagram() {
       existing.width = visual.width
       existing.height = visual.height
       existing.style = visual.style
+      ;(existing as any).anchorPoints = resolveAnchorPoints(ds)
       existing.label = nodeName
       if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
         existing.label.style = {
@@ -636,6 +653,66 @@ function detectEdgeLabelChanges() {
   }
 }
 
+function detectEdgePortChanges() {
+  if (!renderer || !lockAnchorsEnabled.value) return
+
+  const next = cloneDiagramAttrs()
+  let changed = false
+
+  for (const [papEdgeId, entity] of edgeIdToInstance) {
+    const papEdge = renderer.getEdge(papEdgeId)
+    if (!papEdge) continue
+
+    const edgeInst = next.instances.edges.find((edge) => edge.id === entity.edgeId)
+    if (!edgeInst) continue
+
+    const nextFromPortId = papEdge.from.portId ?? undefined
+    const nextToPortId = papEdge.to.portId ?? undefined
+    const currentFromPortId = edgeInst.attrs?.fromPortId as string | undefined
+    const currentToPortId = edgeInst.attrs?.toPortId as string | undefined
+
+    if (nextFromPortId === currentFromPortId && nextToPortId === currentToPortId) {
+      continue
+    }
+
+    if (!edgeInst.attrs) edgeInst.attrs = {}
+    if (nextFromPortId) edgeInst.attrs.fromPortId = nextFromPortId
+    else delete edgeInst.attrs.fromPortId
+    if (nextToPortId) edgeInst.attrs.toPortId = nextToPortId
+    else delete edgeInst.attrs.toPortId
+
+    if (Object.keys(edgeInst.attrs).length === 0) {
+      delete edgeInst.attrs
+    }
+    changed = true
+  }
+
+  if (changed) {
+    emit("updateDiagram", next)
+  }
+}
+
+function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) {
+  const next = cloneDiagramAttrs()
+  const edgeInst = next.instances.edges.find((edge) => edge.id === edgeInstanceId)
+  if (!edgeInst) return
+
+  const baseStyle =
+    edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === "object"
+      ? (edgeInst.attrs.diagramStyle as Record<string, unknown>)
+      : {}
+
+  const currentType = (baseStyle.edgeType as EdgePathType | undefined) ?? "bezier"
+  if (currentType === edgeType) return
+
+  if (!edgeInst.attrs) edgeInst.attrs = {}
+  edgeInst.attrs.diagramStyle = {
+    ...baseStyle,
+    edgeType
+  }
+  emit("updateDiagram", next)
+}
+
 // ── Persist positions from papirus back to model ──
 function persistNodePositions(papNodeIds: string[]) {
   if (!renderer) return
@@ -781,6 +858,7 @@ function initRenderer(r: DiagramRenderer) {
   interactionManager.history.on("change", () => {
     canUndo.value = interactionManager!.history.canUndo
     canRedo.value = interactionManager!.history.canRedo
+    detectEdgePortChanges()
     detectLabelChanges()
     detectEdgeLabelChanges()
   })
@@ -797,6 +875,10 @@ function initRenderer(r: DiagramRenderer) {
     renderer?.removeEdge(edge.id)
   })
 
+  interactionManager.connection.on("edgeReconnect", () => {
+    detectEdgePortChanges()
+  })
+
   // Context menu
   r.enableContextMenu({
     menu: {
@@ -808,6 +890,53 @@ function initRenderer(r: DiagramRenderer) {
             label: "Найти в дереве",
             icon: "account_tree",
             action: () => emit("findInTree", entity.modelNodeId)
+          },
+          {
+            label: "Удалить с диаграммы",
+            icon: "delete",
+            action: () => emit("requestDeleteNodeFromDiagram", entity.modelNodeId)
+          }
+        ]
+      },
+      edge: (target: any) => {
+        const entity = edgeIdToInstance.get(target.edge.id)
+        if (!entity) return []
+
+        const edgeInst = instanceEdges.value.find((edge) => edge.id === entity.edgeId)
+        const currentType = ((getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)?.edgeType as EdgePathType | undefined) ?? "bezier")
+
+        return [
+          {
+            label: "Тип связи",
+            icon: "conversion_path",
+            items: [
+              {
+                label: "Прямая",
+                icon: "remove",
+                enabled: currentType !== "straight",
+                action: () => setEdgeTypeFromContext(entity.edgeId, "straight")
+              },
+              {
+                label: "Ломаная",
+                icon: "timeline",
+                enabled: currentType !== "polyline",
+                action: () => setEdgeTypeFromContext(entity.edgeId, "polyline")
+              },
+              {
+                label: "Безье",
+                icon: "line_curve",
+                enabled: currentType !== "bezier",
+                action: () => setEdgeTypeFromContext(entity.edgeId, "bezier")
+              }
+            ]
+          },
+          {
+            separator: true
+          },
+          {
+            label: "Удалить",
+            icon: "delete",
+            action: () => emit("requestDeleteLink", entity.modelLinkId)
           }
         ]
       }

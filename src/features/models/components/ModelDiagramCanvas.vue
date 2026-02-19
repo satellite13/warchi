@@ -12,6 +12,7 @@ import {
   GridOverlay,
   MiniMap,
   InteractionManager,
+  TextLabel,
   type ContextMenuTarget,
   type ArrowMarkerConfig,
   type NodeImageOptions,
@@ -149,6 +150,23 @@ const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
   const text = labelText?.trim()
   if (!text) return undefined
   return text
+}
+
+const buildEdgeLabelWithStyle = (labelText: string | undefined, ds?: DiagramStyle): string | TextLabel | undefined => {
+  const text = labelText?.trim()
+  if (!text) return undefined
+  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
+    return text
+  }
+  const opts: TextLabelOptions = { text }
+  const style: TextStyle = {}
+  if (ds?.labelColor) style.color = ds.labelColor
+  if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
+  if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
+  if (Object.keys(style).length) opts.style = style
+  if (ds?.labelPadding != null) opts.padding = ds.labelPadding
+  if (ds?.labelMargin != null) opts.margin = ds.labelMargin
+  return new TextLabel(opts)
 }
 
 const buildEdgeLabelBackground = (ds?: DiagramStyle): { color?: string; opacity?: number; padding?: number; borderRadius?: number } | undefined => {
@@ -504,7 +522,7 @@ function syncDiagram() {
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveEdgeOptions(ds)
     const edgeLabel = getInstanceEdgeLabel(edge)
-    const edgeLabelConfig = buildEdgeLabel(edgeLabel)
+    const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
     const edgeLabelBackground = buildEdgeLabelBackground(ds)
 
     const existing = renderer.getEdge(papEdgeId)
@@ -534,6 +552,12 @@ function syncDiagram() {
           ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
           ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
         }
+      }
+      if (existing.label && ds?.labelPadding != null) {
+        existing.label.padding = ds.labelPadding
+      }
+      if (existing.label && ds?.labelMargin != null) {
+        existing.label.margin = ds.labelMargin
       }
       ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground = edgeLabelBackground
     } else {

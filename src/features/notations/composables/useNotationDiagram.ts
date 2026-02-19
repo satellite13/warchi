@@ -293,7 +293,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   }
 
   function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-    if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize) {
+  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
       return name
     }
     const opts: TextLabelOptions = { text: name }
@@ -302,6 +302,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds.labelFontSize) style.fontSize = ds.labelFontSize
     if (Object.keys(style).length) opts.style = style
+  if (ds.labelPadding != null) opts.padding = ds.labelPadding
+  if (ds.labelMargin != null) opts.margin = ds.labelMargin
     return opts
   }
 
@@ -518,6 +520,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
             ...(ds.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
             ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {})
           }
+        }
+        if (existingEdge.label && ds?.labelPadding != null) {
+          existingEdge.label.padding = ds.labelPadding
+        }
+        if (existingEdge.label && ds?.labelMargin != null) {
+          existingEdge.label.margin = ds.labelMargin
         }
         // Update edge style
         existingEdge.style = {

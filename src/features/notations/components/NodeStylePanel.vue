@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
 import {ref, reactive, computed, watch} from "vue";
+import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import type {DiagramStyle} from "../notationAttrs";
 import {
@@ -103,9 +104,13 @@ function emitEdgeStyle() {
     labelColor: edgeLabelColor.value,
     labelOpacity: edgeLabelOpacity.value,
     labelFontSize: edgeLabelFontSize.value,
+    labelPadding: edgeLabelPadding.value,
+    labelMargin: edgeLabelMargin.value,
     edgeLabelOffset: edgeLabelOffset.value,
     labelBgColor: edgeLabelBgColor.value,
     labelBgOpacity: edgeLabelBgOpacity.value,
+    labelBgPadding: edgeLabelBgPadding.value,
+    labelBgBorderRadius: edgeLabelBgBorderRadius.value,
     startMarkerSize: edgeStartMarkerSize.value,
     startMarkerFillColor: edgeStartMarkerFillColor.value,
     startMarkerFillOpacity: edgeStartMarkerFillOpacity.value,
@@ -182,9 +187,13 @@ function confirmSavePreset() {
       labelColor: edgeLabelColor.value,
       labelOpacity: edgeLabelOpacity.value,
       labelFontSize: edgeLabelFontSize.value,
+      labelPadding: edgeLabelPadding.value,
+      labelMargin: edgeLabelMargin.value,
       edgeLabelOffset: edgeLabelOffset.value,
       labelBgColor: edgeLabelBgColor.value,
       labelBgOpacity: edgeLabelBgOpacity.value,
+      labelBgPadding: edgeLabelBgPadding.value,
+      labelBgBorderRadius: edgeLabelBgBorderRadius.value,
       startMarkerSize: edgeStartMarkerSize.value,
       startMarkerFillColor: edgeStartMarkerFillColor.value,
       startMarkerFillOpacity: edgeStartMarkerFillOpacity.value,
@@ -392,9 +401,13 @@ function applyEdgePreset(presetName: string) {
   edgeLabelColor.value = style.labelColor ?? "#333333";
   edgeLabelOpacity.value = style.labelOpacity ?? 1;
   edgeLabelFontSize.value = style.labelFontSize ?? 14;
+  edgeLabelPadding.value = style.labelPadding ?? 8;
+  edgeLabelMargin.value = style.labelMargin ?? 0;
   edgeLabelOffset.value = style.edgeLabelOffset ?? edgeLabelOffset.value;
   edgeLabelBgColor.value = style.labelBgColor ?? "#ffffff";
   edgeLabelBgOpacity.value = style.labelBgOpacity ?? 1;
+  edgeLabelBgPadding.value = style.labelBgPadding ?? 4;
+  edgeLabelBgBorderRadius.value = style.labelBgBorderRadius ?? 2;
   
   if (style.lineDash && style.lineDash.length > 0) {
     edgeLineStyle.value = "dashed";
@@ -433,11 +446,15 @@ function applyEdgePreset(presetName: string) {
         fontSize: edgeLabelFontSize.value,
         opacity: edgeLabelOpacity.value
       } as any;
+      edge.label.padding = edgeLabelPadding.value;
+      edge.label.margin = edgeLabelMargin.value;
     }
     edge.labelOffset = edgeLabelOffset.value;
     (edge as any).labelBackground = { 
       color: edgeLabelBgColor.value,
-      opacity: edgeLabelBgOpacity.value 
+      opacity: edgeLabelBgOpacity.value,
+      padding: edgeLabelBgPadding.value,
+      borderRadius: edgeLabelBgBorderRadius.value
     };
   });
   
@@ -514,9 +531,13 @@ const edgeOpacity = ref(1);
 const edgeLabelColor = ref("#333333");
 const edgeLabelOpacity = ref(1);
 const edgeLabelFontSize = ref(14);
+const edgeLabelPadding = ref(8);
+const edgeLabelMargin = ref(0);
 const edgeLabelOffset = ref(0);
 const edgeLabelBgColor = ref("#ffffff");
 const edgeLabelBgOpacity = ref(1);
+const edgeLabelBgPadding = ref(4);
+const edgeLabelBgBorderRadius = ref(2);
 const edgeStartMarkerSize = ref(12);
 const edgeStartMarkerFillColor = ref("#000000");
 const edgeStartMarkerFillOpacity = ref(1);
@@ -636,9 +657,13 @@ function loadEdgeProps() {
   edgeLabelColor.value = eLabelStyle?.color || "#333333";
   edgeLabelOpacity.value = (eLabelStyle as any)?.opacity ?? 1;
   edgeLabelFontSize.value = eLabelStyle?.fontSize ?? 14;
+  edgeLabelPadding.value = edge.label?.padding ?? 8;
+  edgeLabelMargin.value = edge.label?.margin ?? 0;
   edgeLabelOffset.value = edge.labelOffset ?? 0;
   edgeLabelBgColor.value = (edge as any).labelBackground?.color || "#ffffff";
   edgeLabelBgOpacity.value = ((edge as any).labelBackground as any)?.opacity ?? 1;
+  edgeLabelBgPadding.value = ((edge as any).labelBackground as any)?.padding ?? 4;
+  edgeLabelBgBorderRadius.value = ((edge as any).labelBackground as any)?.borderRadius ?? 2;
   edgeStartMarkerSize.value = edge.startMarker?.size ?? 12;
   edgeStartMarkerFillColor.value = edge.startMarker?.fillColor || "#000000";
   edgeStartMarkerFillOpacity.value = edge.startMarker?.fillOpacity ?? 1;
@@ -1108,7 +1133,15 @@ function handleEdgeLabelChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     if (value) {
-      edge.label = value;
+      if (edge.label) {
+        edge.label.text = value;
+      } else {
+        edge.label = new TextLabel({
+          text: value,
+          padding: edgeLabelPadding.value,
+          margin: edgeLabelMargin.value
+        });
+      }
     } else {
       edge.label = undefined;
     }
@@ -1238,6 +1271,34 @@ function handleEdgeLabelFontSizeChange(value: string) {
   emitEdgeStyle();
 }
 
+function handleEdgeLabelPaddingChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  edgeLabelPadding.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    if (edge.label) {
+      edge.label.padding = v;
+    }
+  });
+  emitEdgeStyle();
+}
+
+function handleEdgeLabelMarginChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  edgeLabelMargin.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    if (edge.label) {
+      edge.label.margin = v;
+    }
+  });
+  emitEdgeStyle();
+}
+
 function handleEdgeLabelOffsetChange(value: string) {
   const v = parseFloat(value);
   if (!Number.isFinite(v)) return;
@@ -1268,6 +1329,30 @@ function handleEdgeLabelBgOpacityChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     (edge as any).labelBackground = {...((edge as any).labelBackground || {}), opacity: v};
+  });
+  emitEdgeStyle();
+}
+
+function handleEdgeLabelBgPaddingChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  edgeLabelBgPadding.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), padding: v};
+  });
+  emitEdgeStyle();
+}
+
+function handleEdgeLabelBgBorderRadiusChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  edgeLabelBgBorderRadius.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), borderRadius: v};
   });
   emitEdgeStyle();
 }
@@ -1492,6 +1577,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <span class="sp-field__label">Размер</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
                 </div>
+                <div class="sp-field-grid sp-field-grid--2">
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">Внутр.</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelPadding" min="0" max="60" step="1" @input="handleEdgeLabelPaddingChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">Внешн.</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelMargin" min="0" max="60" step="1" @input="handleEdgeLabelMarginChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Смещение</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
@@ -1508,6 +1603,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelBgOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                </div>
+                <div class="sp-field-grid sp-field-grid--2">
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">Внутр. метки</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelBgPadding" min="0" max="40" step="1" @input="handleEdgeLabelBgPaddingChange(($event.target as HTMLInputElement).value)">
+                  </div>
+                  <div class="sp-num-field sp-num-field--stacked">
+                    <span class="sp-num-field__label">R</span>
+                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelBgBorderRadius" min="0" max="40" step="1" @input="handleEdgeLabelBgBorderRadiusChange(($event.target as HTMLInputElement).value)">
                   </div>
                 </div>
               </div>

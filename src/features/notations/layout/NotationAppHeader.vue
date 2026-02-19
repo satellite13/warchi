@@ -53,6 +53,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     event: "save",
     title: props.hasUnsavedChanges ? "Сохранить (есть несохранённые изменения)" : "Сохранить",
     badge: props.hasUnsavedChanges,
+    disabled: !props.hasUnsavedChanges,
     variant: props.hasUnsavedChanges ? "primary" : "default"
   },
 ]);

@@ -38,7 +38,7 @@ export type DiagramStyle = {
   labelColor?: string;
   labelOpacity?: number;
   labelFontSize?: number;
-  // Node-specific label
+  // Label spacing
   labelPadding?: number;
   labelMargin?: number;
   labelPlacement?: string;

@@ -725,6 +725,7 @@ const handleToolbarAction = async (event: string) => {
 
   switch (event) {
     case "save":
+      if (!hasUnsavedChanges.value) break;
       await saveChanges(false);
       break;
     case "undo":

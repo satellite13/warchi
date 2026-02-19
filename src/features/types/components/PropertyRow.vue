@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable vue/no-mutating-props -- editing mutable draft passed from type editor */
 import { reactive } from "vue"
 import type { CustomProperty, CustomPropertyType } from "../../notations/notationAttrs"
 

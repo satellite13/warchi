@@ -226,11 +226,11 @@ export function useNotationEntity(
 
   // Load style presets (built-in + user)
   const componentStylePresets = computed(() => {
-    stylePresetsVersion.value
+    void stylePresetsVersion.value
     return getAllComponentPresets()
   })
   const relationStylePresets = computed(() => {
-    stylePresetsVersion.value
+    void stylePresetsVersion.value
     return getAllRelationPresets()
   })
 

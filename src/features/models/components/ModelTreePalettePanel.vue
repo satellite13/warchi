@@ -147,7 +147,7 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   // Prevent dropping a node onto its own descendant
   if (targetNodeId && isDescendant(targetNodeId, draggedNodeId)) return
 
-  let newParentId: string | null = null
+  let newParentId: string | null
   if (!targetNodeId) {
     newParentId = null
   } else {

@@ -41,6 +41,11 @@ async function handleDelete() {
   await deleteType(selectedType.value)
 }
 
+function handleTypeNameUpdate(value: string) {
+  if (!selectedType.value) return
+  selectedType.value.name = value
+}
+
 // --- Unsaved changes dialog ---
 const pendingSelectId = ref<string | null>(null)
 const showUnsavedDialog = ref(false)
@@ -126,6 +131,7 @@ const attrsJson = computed(() => {
             :is-type-in-use="isTypeInUse"
             @save="handleSave"
             @delete="handleDelete"
+            @update-name="handleTypeNameUpdate"
             @add-property="addCustomProperty(selectedType)"
             @remove-property="removeCustomProperty(selectedType, $event)"
           />

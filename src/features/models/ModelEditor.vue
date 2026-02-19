@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any -- Papirus integration requires dynamic runtime node access */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from "vue-router"
 import MainLayout from "../../layouts/MainLayout.vue"
@@ -866,7 +867,7 @@ const createOrReuseLink = (linkId: string | null) => {
   const relation = state.value.relations.find((item) => item.id === relationId)
   if (!relation) return
 
-  let link: EditorLink | null = null
+  let link: EditorLink | null
   if (linkId) {
     link = state.value.links.find((item) => item.id === linkId) ?? null
   } else {

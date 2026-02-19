@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable vue/no-mutating-props -- editing shared draft objects in notation editor */
 import {computed, reactive, ref, watch, onMounted, onBeforeUnmount} from "vue";
 import BaseModal from "../../../components/modals/BaseModal.vue";
 import {createId, type CustomProperty, type CustomPropertyType} from "../notationAttrs";

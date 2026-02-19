@@ -16,6 +16,7 @@ const emit = defineEmits<{
   delete: []
   addProperty: []
   removeProperty: [propertyId: string]
+  updateName: [value: string]
 }>()
 
 const expandedIds = reactive(new Set<string>())
@@ -85,7 +86,12 @@ const filteredCustomProperties = computed(() => {
         <h3 class="form-section__title">Основные</h3>
         <div class="form-row">
           <label class="form-label">Имя</label>
-          <input class="form-input" v-model="selectedType.name" placeholder="Название типа">
+          <input
+            class="form-input"
+            :value="selectedType.name"
+            placeholder="Название типа"
+            @input="emit('updateName', ($event.target as HTMLInputElement).value)"
+          >
         </div>
       </div>
 

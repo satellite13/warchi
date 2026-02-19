@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
 import {ref, reactive, computed, watch} from "vue";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import type {DiagramStyle} from "../notationAttrs";
@@ -131,11 +132,11 @@ const presetVersion = ref(0);
 
 // Load style presets (built-in + user)
 const componentStylePresets = computed<ComponentStylePreset[]>(() => {
-  presetVersion.value; // dependency for reactivity
+  void presetVersion.value; // dependency for reactivity
   return getAllComponentPresets();
 });
 const relationStylePresets = computed<RelationStylePreset[]>(() => {
-  presetVersion.value;
+  void presetVersion.value;
   return getAllRelationPresets();
 });
 

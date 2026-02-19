@@ -528,6 +528,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         } as PapirusEdgeStyle
         existingEdge.labelBackground = buildEdgeLabelBackground(ds)
+        existingEdge.labelOffset = ds?.edgeLabelOffset ?? 18
         if (ds?.edgeType) {
           existingEdge.type = ds.edgeType as "straight" | "polyline" | "bezier"
         }
@@ -654,7 +655,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           type: edgeTypeVal,
           arrowType: "none",
           label: buildEdgeLabel(relationName, ds),
-          labelOffset: 18,
+          labelOffset: ds?.edgeLabelOffset ?? 18,
           labelBackground: buildEdgeLabelBackground(ds),
           style: {
             strokeColor: edgeStyle.strokeColor,

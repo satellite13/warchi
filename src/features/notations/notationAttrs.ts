@@ -47,6 +47,7 @@ export type DiagramStyle = {
   labelBgOpacity?: number;
   labelBgPadding?: number;
   labelBgBorderRadius?: number;
+  edgeLabelOffset?: number;
   // Marker details
   startMarkerSize?: number;
   startMarkerFillColor?: string;
@@ -188,6 +189,8 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
     style.labelBgPadding = value.labelBgPadding;
   if (typeof value.labelBgBorderRadius === "number")
     style.labelBgBorderRadius = value.labelBgBorderRadius;
+  if (typeof value.edgeLabelOffset === "number")
+    style.edgeLabelOffset = value.edgeLabelOffset;
   if (typeof value.startMarkerSize === "number")
     style.startMarkerSize = value.startMarkerSize;
   if (typeof value.startMarkerFillColor === "string")

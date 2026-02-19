@@ -90,19 +90,32 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   },
   { icon: "separator", event: "sep2", separator: true },
   {
+    icon: "image",
+    event: "export-diagram-png",
+    title: "Экспорт диаграммы в PNG",
+    disabled: !props.hasActiveDiagram
+  },
+  {
+    icon: "description",
+    event: "export-diagram-svg",
+    title: "Экспорт диаграммы в SVG",
+    disabled: !props.hasActiveDiagram
+  },
+  { icon: "separator", event: "sep3", separator: true },
+  {
     icon: "close",
     event: "close-diagram",
     title: "Закрыть диаграмму",
     disabled: !props.hasActiveDiagram
   },
-  { icon: "separator", event: "sep3", separator: true },
+  { icon: "separator", event: "sep4", separator: true },
   {
     icon: "data_object",
     event: "show-diagram-json",
     title: "Просмотр JSON диаграммы",
     disabled: !props.hasActiveDiagram
   },
-  { icon: "separator", event: "sep4", separator: true },
+  { icon: "separator", event: "sep5", separator: true },
   {
     icon: "save",
     event: "save",

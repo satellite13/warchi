@@ -6,6 +6,7 @@ const router = useRouter();
 import MainLayout from "../layouts/MainLayout.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 import BaseModal from "../components/modals/BaseModal.vue";
+import {ImageExporter, SvgExporter} from "@ngroznykh/papirus";
 import {apiGet} from "../composables/useApi";
 import NotationMainPanelLayout from "../features/notations/layout/NotationMainPanelLayout.vue";
 import NotationAppHeader from "../features/notations/layout/NotationAppHeader.vue";
@@ -282,6 +283,47 @@ const exportNotation = () => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+const getDiagramExportBaseName = () => {
+  const currentNotation = notation.value;
+  const fallbackNotationId = state.value.notationId || "notation";
+  return sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || "notation";
+};
+
+const getDiagramExportBackgroundColor = () =>
+  getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#ffffff";
+
+const exportDiagramAsPng = async () => {
+  const renderer = diagramRenderer.value;
+  if (!renderer) {
+    saveError.value = "Диаграмма еще не готова к экспорту";
+    return;
+  }
+
+  const exporter = new ImageExporter(renderer);
+  const fileName = `${getDiagramExportBaseName()}.png`;
+  await exporter.download(fileName, {
+    scale: 2,
+    padding: 24,
+    backgroundColor: getDiagramExportBackgroundColor()
+  });
+};
+
+const exportDiagramAsSvg = () => {
+  const renderer = diagramRenderer.value;
+  if (!renderer) {
+    saveError.value = "Диаграмма еще не готова к экспорту";
+    return;
+  }
+
+  const exporter = new SvgExporter(renderer);
+  const fileName = `${getDiagramExportBaseName()}.svg`;
+  exporter.download(fileName, {
+    includeBackground: true,
+    backgroundColor: getDiagramExportBackgroundColor(),
+    padding: 24
+  });
 };
 
 const normalizeImportedState = (raw: unknown): NotationEditorState => {
@@ -740,6 +782,12 @@ const handleToolbarAction = async (event: string) => {
       break;
     case "export-notation":
       exportNotation();
+      break;
+    case "export-diagram-png":
+      await exportDiagramAsPng();
+      break;
+    case "export-diagram-svg":
+      exportDiagramAsSvg();
       break;
     case "import-notation":
       triggerNotationImport();

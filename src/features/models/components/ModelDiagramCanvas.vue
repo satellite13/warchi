@@ -163,9 +163,9 @@ const buildEdgeLabelBackground = (ds?: DiagramStyle): { color?: string; opacity?
   return Object.keys(background).length > 0 ? background : undefined
 }
 
-const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig }> => {
+const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig; labelOffset: number }> => {
   if (!ds) return {}
-  const opts: Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig }> = {}
+  const opts: Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig; labelOffset: number }> = {}
   const style: EdgeStyle = {}
   if (ds.strokeColor) style.strokeColor = ds.strokeColor
   if (ds.strokeWidth != null) style.strokeWidth = ds.strokeWidth
@@ -190,6 +190,7 @@ const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; st
       ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity })
     }
   }
+  if (ds.edgeLabelOffset != null) opts.labelOffset = ds.edgeLabelOffset
   return opts
 }
 
@@ -524,6 +525,7 @@ function syncDiagram() {
       if (edgeOpts.type) existing.type = edgeOpts.type
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
       if (edgeOpts.endMarker !== undefined) existing.endMarker = edgeOpts.endMarker
+      existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
       existing.label = edgeLabelConfig
       if (existing.label) {
         existing.label.style = {
@@ -545,6 +547,7 @@ function syncDiagram() {
         startMarker: edgeOpts.startMarker,
         endMarker: edgeOpts.endMarker,
         ...(edgeLabelConfig !== undefined ? { label: edgeLabelConfig } : {}),
+        ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         lockAnchors: lockAnchorsEnabled.value
       })

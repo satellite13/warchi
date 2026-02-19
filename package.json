@@ -15,7 +15,7 @@
   "dependencies": {
     "@fontsource/material-symbols-outlined": "^5.2.35",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.3.0",
+    "@ngroznykh/papirus": "^0.3.3",
     "marked": "^17.0.3",
     "vue": "^3.5.28",
     "vue-router": "^5.0.2"

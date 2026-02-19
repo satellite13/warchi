@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from "vue
 import MainLayout from "../../layouts/MainLayout.vue"
 import AppFooter from "../../components/layout/AppFooter.vue"
 import BaseModal from "../../components/modals/BaseModal.vue"
+import { ImageExporter, SvgExporter } from "@ngroznykh/papirus"
 import { createId, parseLinkAttrs, parseNodeAttrs, resolveComponentByNodeType, resolveRelationByLinkType } from "./modelAttrs"
 import type { EditorLink, EditorNode } from "./types"
 import { useModelEditor } from "./composables/useModelEditor"
@@ -1057,6 +1058,53 @@ const handleRequestDeleteLink = (linkId: string) => {
   openLinkDeleteDialog(linkId)
 }
 
+const sanitizeFileName = (value: string): string =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+
+const getDiagramExportBaseName = () => {
+  const modelName = model.value?.name?.trim() || "model"
+  const diagramName = activeDiagram.value?.name?.trim() || "diagram"
+  const modelPart = sanitizeFileName(modelName) || "model"
+  const diagramPart = sanitizeFileName(diagramName) || "diagram"
+  return `${modelPart}-${diagramPart}`
+}
+
+const getDiagramExportBackgroundColor = () =>
+  getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#ffffff"
+
+const exportActiveDiagramAsPng = async () => {
+  if (!activeDiagram.value || !diagramRenderer.value) {
+    setUiError("Откройте диаграмму перед экспортом.")
+    return
+  }
+
+  const exporter = new ImageExporter(diagramRenderer.value)
+  await exporter.download(`${getDiagramExportBaseName()}.png`, {
+    scale: 2,
+    padding: 24,
+    backgroundColor: getDiagramExportBackgroundColor()
+  })
+}
+
+const exportActiveDiagramAsSvg = () => {
+  if (!activeDiagram.value || !diagramRenderer.value) {
+    setUiError("Откройте диаграмму перед экспортом.")
+    return
+  }
+
+  const exporter = new SvgExporter(diagramRenderer.value)
+  exporter.download(`${getDiagramExportBaseName()}.svg`, {
+    includeBackground: true,
+    backgroundColor: getDiagramExportBackgroundColor(),
+    padding: 24
+  })
+}
+
 const handleToolbarAction = async (event: string) => {
   switch (event) {
     case "save": {
@@ -1137,6 +1185,12 @@ const handleToolbarAction = async (event: string) => {
       if (typeof next === "boolean") lockAnchorsEnabled.value = next
       break
     }
+    case "export-diagram-png":
+      await exportActiveDiagramAsPng()
+      break
+    case "export-diagram-svg":
+      exportActiveDiagramAsSvg()
+      break
     case "close-diagram":
       if (activeDiagram.value && hasUnsavedChanges.value) {
         pendingDiagramAction.value = "close"

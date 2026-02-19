@@ -103,6 +103,7 @@ function emitEdgeStyle() {
     labelColor: edgeLabelColor.value,
     labelOpacity: edgeLabelOpacity.value,
     labelFontSize: edgeLabelFontSize.value,
+    edgeLabelOffset: edgeLabelOffset.value,
     labelBgColor: edgeLabelBgColor.value,
     labelBgOpacity: edgeLabelBgOpacity.value,
     startMarkerSize: edgeStartMarkerSize.value,
@@ -181,6 +182,7 @@ function confirmSavePreset() {
       labelColor: edgeLabelColor.value,
       labelOpacity: edgeLabelOpacity.value,
       labelFontSize: edgeLabelFontSize.value,
+      edgeLabelOffset: edgeLabelOffset.value,
       labelBgColor: edgeLabelBgColor.value,
       labelBgOpacity: edgeLabelBgOpacity.value,
       startMarkerSize: edgeStartMarkerSize.value,
@@ -390,6 +392,7 @@ function applyEdgePreset(presetName: string) {
   edgeLabelColor.value = style.labelColor ?? "#333333";
   edgeLabelOpacity.value = style.labelOpacity ?? 1;
   edgeLabelFontSize.value = style.labelFontSize ?? 14;
+  edgeLabelOffset.value = style.edgeLabelOffset ?? edgeLabelOffset.value;
   edgeLabelBgColor.value = style.labelBgColor ?? "#ffffff";
   edgeLabelBgOpacity.value = style.labelBgOpacity ?? 1;
   
@@ -431,6 +434,7 @@ function applyEdgePreset(presetName: string) {
         opacity: edgeLabelOpacity.value
       } as any;
     }
+    edge.labelOffset = edgeLabelOffset.value;
     (edge as any).labelBackground = { 
       color: edgeLabelBgColor.value,
       opacity: edgeLabelBgOpacity.value 
@@ -510,6 +514,7 @@ const edgeOpacity = ref(1);
 const edgeLabelColor = ref("#333333");
 const edgeLabelOpacity = ref(1);
 const edgeLabelFontSize = ref(14);
+const edgeLabelOffset = ref(0);
 const edgeLabelBgColor = ref("#ffffff");
 const edgeLabelBgOpacity = ref(1);
 const edgeStartMarkerSize = ref(12);
@@ -631,6 +636,7 @@ function loadEdgeProps() {
   edgeLabelColor.value = eLabelStyle?.color || "#333333";
   edgeLabelOpacity.value = (eLabelStyle as any)?.opacity ?? 1;
   edgeLabelFontSize.value = eLabelStyle?.fontSize ?? 14;
+  edgeLabelOffset.value = edge.labelOffset ?? 0;
   edgeLabelBgColor.value = (edge as any).labelBackground?.color || "#ffffff";
   edgeLabelBgOpacity.value = ((edge as any).labelBackground as any)?.opacity ?? 1;
   edgeStartMarkerSize.value = edge.startMarker?.size ?? 12;
@@ -650,6 +656,14 @@ watch(() => props.selectedElementId, () => {
     selectedComponentPreset.value = "custom";
   }
 }, {immediate: true});
+
+function reloadSelectedProps() {
+  if (elementType.value === "edge") {
+    loadEdgeProps();
+  } else if (elementType.value === "node") {
+    loadNodeProps();
+  }
+}
 
 // Listen for resize events from canvas
 watch(() => props.interactionManager, (im, _, onCleanup) => {
@@ -675,6 +689,21 @@ watch(() => props.interactionManager, (im, _, onCleanup) => {
   onCleanup(() => {
     offResize();
     offResizeEnd();
+  });
+}, { immediate: true });
+
+// Keep panel fields in sync with inline canvas edits (double click label edit, etc.)
+watch(() => props.interactionManager, (im, _, onCleanup) => {
+  if (!im) return;
+
+  const offHistoryChange = im.history.on("change", () => {
+    requestAnimationFrame(() => {
+      reloadSelectedProps();
+    });
+  });
+
+  onCleanup(() => {
+    offHistoryChange();
   });
 }, { immediate: true });
 
@@ -1209,6 +1238,18 @@ function handleEdgeLabelFontSizeChange(value: string) {
   emitEdgeStyle();
 }
 
+function handleEdgeLabelOffsetChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  edgeLabelOffset.value = v;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    edge.labelOffset = v;
+  });
+  emitEdgeStyle();
+}
+
 function handleEdgeLabelBgColorChange(value: string) {
   edgeLabelBgColor.value = value;
   resetRelationPreset();
@@ -1450,6 +1491,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Размер</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Смещение</span>
+                  <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Фон</span>

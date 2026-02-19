@@ -288,6 +288,22 @@ const releaseNotes = computed(() => {
                 </button>
               </div>
             </section>
+
+            <section class="section release-notes">
+              <div class="section__header">
+                <span class="material-symbols-outlined section__icon">new_releases</span>
+                <h2 class="section__title">Изменения в версии v{{ appVersion }}</h2>
+              </div>
+              <ul v-if="releaseNotes.length > 0" class="release-notes__list">
+                <li v-for="(item, index) in releaseNotes" :key="`${index}-${item}`" class="release-notes__item">
+                  {{ item }}
+                </li>
+              </ul>
+              <div v-else class="section__empty section__empty--compact">
+                <span class="material-symbols-outlined">description</span>
+                <span>Нет записей в changelog для текущей версии</span>
+              </div>
+            </section>
           </div>
 
           <!-- Right: activity + quick actions -->
@@ -346,21 +362,6 @@ const releaseNotes = computed(() => {
           </div>
         </div>
 
-        <section class="section release-notes">
-          <div class="section__header">
-            <span class="material-symbols-outlined section__icon">new_releases</span>
-            <h2 class="section__title">Изменения в версии v{{ appVersion }}</h2>
-          </div>
-          <ul v-if="releaseNotes.length > 0" class="release-notes__list">
-            <li v-for="(item, index) in releaseNotes" :key="`${index}-${item}`" class="release-notes__item">
-              {{ item }}
-            </li>
-          </ul>
-          <div v-else class="section__empty section__empty--compact">
-            <span class="material-symbols-outlined">description</span>
-            <span>Нет записей в changelog для текущей версии</span>
-          </div>
-        </section>
       </div>
     </template>
     <template #footer>
@@ -552,7 +553,7 @@ const releaseNotes = computed(() => {
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 20px;
-  flex: 1;
+  align-items: start;
   min-height: 0;
 }
 
@@ -585,8 +586,9 @@ const releaseNotes = computed(() => {
 }
 
 .section--grow {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 320px;
+  min-height: 320px;
+  max-height: 320px;
   overflow: hidden;
 }
 

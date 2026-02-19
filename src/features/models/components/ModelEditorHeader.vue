@@ -139,7 +139,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 <style scoped>
 .model-header {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(620px, max-content) minmax(0, 1fr) 360px;
   align-items: center;
   border-bottom: 1px solid var(--border);
   background: var(--surface);

@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import {ref, computed, watch, nextTick} from "vue";
 import type {NotationEditorState} from "../types";
-import type {NotationData} from "../../../types/entities";
 
 const props = defineProps<{
   state: NotationEditorState;
-  notation?: NotationData | null;
   selectedId?: string | null;
+  syncSelectionEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -14,14 +13,27 @@ const emit = defineEmits<{
   "create-component": [];
   "create-relation": [];
   "remove-item": [kind: "component" | "relation", id: string];
+  "toggle-sync-selection": [];
 }>();
 
 const searchQuery = ref("");
 const selectedTags = ref<Set<string>>(new Set());
-const tagsExpanded = ref(true);
 const RU_LOCALE = "ru";
 type SortMode = "alpha-asc" | "alpha-desc" | "type";
 const sortMode = ref<SortMode>("alpha-asc");
+const TAGS_EXPANDED_STORAGE_KEY = "warchi:notation-editor:component-list:tags-expanded";
+
+const readTagsExpanded = (): boolean => {
+  try {
+    const raw = window.localStorage.getItem(TAGS_EXPANDED_STORAGE_KEY);
+    if (raw === null) return true;
+    return raw === "1";
+  } catch {
+    return true;
+  }
+};
+
+const tagsExpanded = ref(readTagsExpanded());
 
 type ListItem = {
   id: string;
@@ -113,39 +125,39 @@ const items = computed<ListItem[]>(() => {
 const itemsContainer = ref<HTMLElement | null>(null);
 
 watch(() => props.selectedId, (id) => {
-  if (!id || !itemsContainer.value) return;
+  if (!props.syncSelectionEnabled || !id || !itemsContainer.value) return;
   nextTick(() => {
     const el = itemsContainer.value?.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
     el?.scrollIntoView({block: "nearest", behavior: "smooth"});
   });
 });
+
+watch(tagsExpanded, (value) => {
+  try {
+    window.localStorage.setItem(TAGS_EXPANDED_STORAGE_KEY, value ? "1" : "0");
+  } catch {
+    // Ignore storage errors (private mode/quota/etc.)
+  }
+});
 </script>
 
 <template>
   <div class="component-list">
-    <div v-if="notation" class="notation-info">
-      <div class="notation-info__name">{{ notation.name }}</div>
-      <div class="notation-info__meta">
-        <span class="notation-info__version">v{{ notation.version }}</span>
-        <span v-if="notation.updatedAt" class="notation-info__date">
-          {{ new Date(notation.updatedAt).toLocaleDateString("ru-RU") }}
-        </span>
-      </div>
-    </div>
     <div class="component-list__header">
-      <h3 class="component-list__title">Элементы</h3>
-      <div class="component-list__actions">
+      <div class="component-list__title-row">
+        <h3 class="component-list__title">Элементы</h3>
         <span class="component-list__count">{{ items.length }}</span>
-        <select
-          class="sort-select"
-          :value="sortMode"
-          title="Сортировка списка"
-          @change="sortMode = ($event.target as HTMLSelectElement).value as SortMode"
+      </div>
+      <div class="component-list__actions">
+        <button
+          type="button"
+          class="add-btn"
+          :class="{ 'add-btn--active': !!syncSelectionEnabled }"
+          :title="syncSelectionEnabled ? 'Отключить синхронизацию выбора' : 'Включить синхронизацию выбора'"
+          @click="emit('toggle-sync-selection')"
         >
-          <option value="alpha-asc">А-Я</option>
-          <option value="alpha-desc">Я-А</option>
-          <option value="type">По типу</option>
-        </select>
+          <span class="material-symbols-outlined">{{ syncSelectionEnabled ? "link" : "link_off" }}</span>
+        </button>
         <button type="button" class="add-btn" title="Добавить компонент" @click="emit('create-component')">
           <span class="material-symbols-outlined">category</span>
         </button>
@@ -156,21 +168,33 @@ watch(() => props.selectedId, (id) => {
     </div>
 
     <div class="component-list__search">
-      <span class="material-symbols-outlined search-icon">search</span>
-      <input
-        v-model="searchQuery"
-        type="text"
-        class="search-input"
-        placeholder="Поиск..."
+      <div class="component-list__search-input-wrap">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Поиск..."
+        >
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-btn"
+          @click="searchQuery = ''"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <select
+        class="sort-select"
+        :value="sortMode"
+        title="Сортировка списка"
+        @change="sortMode = ($event.target as HTMLSelectElement).value as SortMode"
       >
-      <button
-        v-if="searchQuery"
-        type="button"
-        class="clear-btn"
-        @click="searchQuery = ''"
-      >
-        <span class="material-symbols-outlined">close</span>
-      </button>
+        <option value="alpha-asc">А-Я</option>
+        <option value="alpha-desc">Я-А</option>
+        <option value="type">По типу</option>
+      </select>
     </div>
 
     <div v-if="allTags.length > 0" class="component-list__tags-section">
@@ -248,44 +272,6 @@ watch(() => props.selectedId, (id) => {
   overflow-x: hidden;
 }
 
-.notation-info {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.notation-info__name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--base-text);
-  letter-spacing: -0.02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.notation-info__meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.notation-info__version {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--primary);
-  background: var(--primary-soft);
-  padding: 1px 7px;
-  border-radius: 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.notation-info__date {
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
 .component-list__header {
   display: flex;
   align-items: center;
@@ -303,24 +289,32 @@ watch(() => props.selectedId, (id) => {
   letter-spacing: var(--heading-letter-spacing);
 }
 
+.component-list__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .component-list__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sort-select {
-  height: 28px;
+  height: 22px;
   max-width: 86px;
-  padding: 0 8px;
+  padding: 0 6px;
   font-size: 12px;
   font-family: inherit;
+  line-height: 20px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
   outline: none;
+  box-sizing: border-box;
 }
 
 .sort-select:focus {
@@ -341,11 +335,11 @@ watch(() => props.selectedId, (id) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
@@ -353,7 +347,7 @@ watch(() => props.selectedId, (id) => {
 }
 
 .add-btn .material-symbols-outlined {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .add-btn:hover {
@@ -362,16 +356,30 @@ watch(() => props.selectedId, (id) => {
   border-color: var(--primary);
 }
 
+.add-btn--active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 .component-list__search {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
+.component-list__search-input-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
 .search-icon {
   position: absolute;
-  left: 20px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
   font-size: 18px;
@@ -404,7 +412,7 @@ watch(() => props.selectedId, (id) => {
 
 .clear-btn {
   position: absolute;
-  right: 18px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;

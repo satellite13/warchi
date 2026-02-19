@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, nextTick, ref } from "vue"
 import type { NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 
@@ -10,6 +10,7 @@ const props = defineProps<{
   selectedNodeId: string | null
   selectedDiagramId: string | null
   modelName?: string
+  syncSelectionEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   deleteDiagram: [diagramId: string]
   moveNode: [nodeId: string, newParentNodeId: string | null]
   renameNode: [nodeId: string, name: string]
+  toggleSyncSelection: []
 }>()
 
 const expandedNodes = ref<Set<string>>(new Set())
@@ -205,7 +207,15 @@ const expandToNode = (nodeId: string) => {
   expandedNodes.value = next
 }
 
-defineExpose({ expandToNode })
+const focusNode = (nodeId: string) => {
+  expandToNode(nodeId)
+  nextTick(() => {
+    const row = document.querySelector(`[data-tree-node-id="${nodeId}"]`) as HTMLElement | null
+    row?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  })
+}
+
+defineExpose({ expandToNode, focusNode })
 </script>
 
 <template>
@@ -216,6 +226,15 @@ defineExpose({ expandToNode })
         <span class="panel__title">{{ modelName || "Модель" }}</span>
       </div>
       <div class="panel__header-actions">
+        <button
+          type="button"
+          class="mini-btn"
+          :class="{ 'mini-btn--active': !!syncSelectionEnabled }"
+          :title="syncSelectionEnabled ? 'Отключить синхронизацию выбора' : 'Включить синхронизацию выбора'"
+          @click="emit('toggleSyncSelection')"
+        >
+          <span class="material-symbols-outlined">{{ syncSelectionEnabled ? "link" : "link_off" }}</span>
+        </button>
         <button type="button" class="mini-btn" title="Добавить корневую папку" @click="emit('createFolder', null)">
           <span class="material-symbols-outlined">create_new_folder</span>
         </button>
@@ -534,6 +553,12 @@ defineExpose({ expandToNode })
   color: var(--danger);
   border-color: var(--danger);
   background: var(--danger-soft);
+}
+
+.mini-btn--active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .tree-search {

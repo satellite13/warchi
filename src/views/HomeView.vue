@@ -6,10 +6,12 @@ import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
+import changelogRaw from "../../CHANGELOG.md?raw"
 
 const router = useRouter()
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
+const appVersion = "0.0.4"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -153,6 +155,19 @@ const tableLabel = (table: string) => {
 }
 
 const goTo = (name: string) => router.push({ name })
+
+const releaseNotes = computed(() => {
+  const escapedVersion = appVersion.replace(/\./g, "\\.")
+  const sectionPattern = new RegExp(`## \\[${escapedVersion}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n## \\[|$)`)
+  const match = changelogRaw.match(sectionPattern)
+  if (!match?.[1]) return [] as string[]
+
+  return match[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.slice(2))
+})
 </script>
 
 <template>
@@ -330,6 +345,22 @@ const goTo = (name: string) => router.push({ name })
             </section>
           </div>
         </div>
+
+        <section class="section release-notes">
+          <div class="section__header">
+            <span class="material-symbols-outlined section__icon">new_releases</span>
+            <h2 class="section__title">Изменения в версии v{{ appVersion }}</h2>
+          </div>
+          <ul v-if="releaseNotes.length > 0" class="release-notes__list">
+            <li v-for="(item, index) in releaseNotes" :key="`${index}-${item}`" class="release-notes__item">
+              {{ item }}
+            </li>
+          </ul>
+          <div v-else class="section__empty section__empty--compact">
+            <span class="material-symbols-outlined">description</span>
+            <span>Нет записей в changelog для текущей версии</span>
+          </div>
+        </section>
       </div>
     </template>
     <template #footer>
@@ -614,9 +645,30 @@ const goTo = (name: string) => router.push({ name })
   font-size: 13px;
 }
 
+.section__empty--compact {
+  padding: 8px 0 2px;
+}
+
 .section__empty .material-symbols-outlined {
   font-size: 32px;
   opacity: 0.5;
+}
+
+.release-notes {
+  padding: 18px 20px;
+}
+
+.release-notes__list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.release-notes__item {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* ── Entity List ── */

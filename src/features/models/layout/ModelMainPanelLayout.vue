@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 
-const leftCollapsed = ref(false)
-const rightCollapsed = ref(false)
-const leftWidth = ref(320)
-const rightWidth = ref(360)
+const STORAGE_KEY = "warchi:model-editor:workspace"
+type WorkspaceSettings = {
+  leftCollapsed: boolean
+  rightCollapsed: boolean
+  leftWidth: number
+  rightWidth: number
+}
 
 const MIN_SIDE_WIDTH = 260
 const MAX_SIDE_WIDTH = 560
@@ -12,6 +15,47 @@ type SideResizeTarget = "left" | "right"
 let resizingSide: SideResizeTarget | null = null
 let sideDragStartX = 0
 let sideDragStartWidth = 0
+
+function clampSideWidth(value: number): number {
+  return Math.max(MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, value))
+}
+
+function readWorkspaceSettings(): Partial<WorkspaceSettings> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Partial<WorkspaceSettings>
+    return parsed && typeof parsed === "object" ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistWorkspaceSettings(): void {
+  if (typeof window === "undefined") return
+  const next: WorkspaceSettings = {
+    leftCollapsed: leftCollapsed.value,
+    rightCollapsed: rightCollapsed.value,
+    leftWidth: leftWidth.value,
+    rightWidth: rightWidth.value
+  }
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // ignore quota/storage access errors
+  }
+}
+
+const savedSettings = readWorkspaceSettings()
+const leftCollapsed = ref(typeof savedSettings.leftCollapsed === "boolean" ? savedSettings.leftCollapsed : false)
+const rightCollapsed = ref(typeof savedSettings.rightCollapsed === "boolean" ? savedSettings.rightCollapsed : false)
+const leftWidth = ref(
+  typeof savedSettings.leftWidth === "number" ? clampSideWidth(savedSettings.leftWidth) : 320
+)
+const rightWidth = ref(
+  typeof savedSettings.rightWidth === "number" ? clampSideWidth(savedSettings.rightWidth) : 360
+)
 
 const gridColumns = computed(() => {
   const left = leftCollapsed.value ? "0px" : `${leftWidth.value}px`
@@ -26,10 +70,6 @@ const leftResizerStyle = computed(() =>
 const rightResizerStyle = computed(() =>
   rightCollapsed.value ? undefined : ({ right: `calc(${rightWidth.value}px - 3px)` } as const)
 )
-
-function clampSideWidth(value: number): number {
-  return Math.max(MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, value))
-}
 
 function onSideResizeMove(event: MouseEvent) {
   if (!resizingSide) return
@@ -63,6 +103,10 @@ function startSideResize(target: SideResizeTarget, event: MouseEvent) {
 
 onBeforeUnmount(() => {
   stopSideResize()
+})
+
+watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
+  persistWorkspaceSettings()
 })
 </script>
 

@@ -50,6 +50,7 @@ const gridVisible = ref(true)
 const miniMapVisible = ref(true)
 const snapEnabled = ref(false)
 const lockAnchorsEnabled = ref(true)
+const selectionSyncEnabled = ref(true)
 
 const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
@@ -918,11 +919,46 @@ const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boole
 
 const handleFindInTree = (modelNodeId: string) => {
   selectedNodeId.value = modelNodeId
-  treePanelRef.value?.expandToNode(modelNodeId)
+  treePanelRef.value?.focusNode?.(modelNodeId)
+}
+
+const handleTreeSelectNode = (nodeId: string) => {
+  selectedNodeId.value = nodeId
+  if (!selectionSyncEnabled.value) return
+  selectedModelLinkId.value = null
+  selectedModelNodeIds.value = [nodeId]
   nextTick(() => {
-    const el = document.querySelector(`[data-tree-node-id="${modelNodeId}"]`)
-    el?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    diagramCanvasRef.value?.zoomToSelection()
   })
+}
+
+const handleCanvasSelectNodes = (modelNodeIds: string[]) => {
+  selectedModelNodeIds.value = modelNodeIds
+  selectedModelLinkId.value = null
+  if (!selectionSyncEnabled.value || modelNodeIds.length !== 1) return
+  const modelNodeId = modelNodeIds[0]!
+  selectedNodeId.value = modelNodeId
+  treePanelRef.value?.focusNode?.(modelNodeId)
+}
+
+const toggleSelectionSync = () => {
+  selectionSyncEnabled.value = !selectionSyncEnabled.value
+  if (!selectionSyncEnabled.value) return
+
+  if (selectedModelNodeIds.value.length === 1) {
+    const modelNodeId = selectedModelNodeIds.value[0]!
+    selectedNodeId.value = modelNodeId
+    treePanelRef.value?.focusNode?.(modelNodeId)
+    return
+  }
+
+  if (selectedNodeId.value) {
+    selectedModelLinkId.value = null
+    selectedModelNodeIds.value = [selectedNodeId.value]
+    nextTick(() => {
+      diagramCanvasRef.value?.zoomToSelection()
+    })
+  }
 }
 
 const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
@@ -1359,7 +1395,9 @@ onBeforeUnmount(() => {
             :selected-node-id="selectedNodeId"
             :selected-diagram-id="selectedDiagramId"
             :model-name="model?.name"
-            @select-node="selectedNodeId = $event"
+            :sync-selection-enabled="selectionSyncEnabled"
+            @select-node="handleTreeSelectNode"
+            @toggle-sync-selection="toggleSelectionSync"
             @open-diagram="selectDiagram"
             @create-folder="openCreateFolder"
             @create-node="openCreateRegularNode"
@@ -1383,7 +1421,7 @@ onBeforeUnmount(() => {
           :selected-model-link-id="selectedModelLinkId"
           :connection-validator="canConnect"
           @update-diagram="setDiagramAttrs"
-          @select-nodes="selectedModelNodeIds = $event; selectedModelLinkId = null"
+          @select-nodes="handleCanvasSelectNodes"
           @select-link="selectedModelLinkId = $event; selectedModelNodeIds = []; selectedNodeId = null"
           @create-node-from-component="createNodeFromPaletteComponent"
           @add-existing-node="addExistingNodeToDiagram"

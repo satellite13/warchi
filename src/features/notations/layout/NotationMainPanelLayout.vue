@@ -11,8 +11,46 @@ const emit = defineEmits<{
   (e: "update:propertiesHeight", value: number): void
 }>()
 
-const leftCollapsed = ref(false)
-const rightCollapsed = ref(false)
+const STORAGE_KEY = "warchi:notation-editor:workspace"
+type WorkspaceSettings = {
+  leftCollapsed: boolean
+  rightCollapsed: boolean
+  leftWidth: number
+  rightWidth: number
+  propertiesHeight: number
+}
+
+function readWorkspaceSettings(): Partial<WorkspaceSettings> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Partial<WorkspaceSettings>
+    return parsed && typeof parsed === "object" ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistWorkspaceSettings(): void {
+  if (typeof window === "undefined") return
+  const next: WorkspaceSettings = {
+    leftCollapsed: leftCollapsed.value,
+    rightCollapsed: rightCollapsed.value,
+    leftWidth: leftWidth.value,
+    rightWidth: rightWidth.value,
+    propertiesHeight: props.propertiesHeight ?? 240
+  }
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // ignore quota/storage access errors
+  }
+}
+
+const savedSettings = readWorkspaceSettings()
+const leftCollapsed = ref(typeof savedSettings.leftCollapsed === "boolean" ? savedSettings.leftCollapsed : false)
+const rightCollapsed = ref(typeof savedSettings.rightCollapsed === "boolean" ? savedSettings.rightCollapsed : false)
 const leftWidth = ref(320)
 const rightWidth = ref(420)
 
@@ -57,6 +95,11 @@ let centerResizeObserver: ResizeObserver | null = null
 function clampSideWidth(value: number): number {
   return Math.max(MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, value))
 }
+
+leftWidth.value =
+  typeof savedSettings.leftWidth === "number" ? clampSideWidth(savedSettings.leftWidth) : leftWidth.value
+rightWidth.value =
+  typeof savedSettings.rightWidth === "number" ? clampSideWidth(savedSettings.rightWidth) : rightWidth.value
 
 function getDynamicMaxHeight(): number {
   const centerHeight = centerRef.value?.clientHeight ?? 0
@@ -131,6 +174,11 @@ function startSideResize(target: SideResizeTarget, event: MouseEvent) {
 }
 
 onMounted(() => {
+  const storedHeight =
+    typeof savedSettings.propertiesHeight === "number" ? clampHeight(savedSettings.propertiesHeight) : null
+  if (storedHeight !== null && storedHeight !== props.propertiesHeight) {
+    emit("update:propertiesHeight", storedHeight)
+  }
   enforceHeightBounds()
   if (centerRef.value) {
     centerResizeObserver = new ResizeObserver(() => {
@@ -146,6 +194,10 @@ watch(
     enforceHeightBounds()
   }
 )
+
+watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth, () => props.propertiesHeight], () => {
+  persistWorkspaceSettings()
+})
 
 onBeforeUnmount(() => {
   stopDragging()

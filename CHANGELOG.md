@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.4] - 2026-02-19
+
+### Added
+- Added workspace preference persistence for notation component list tags collapse state.
+- Added release notes section on Home page that shows current version changes from `CHANGELOG`.
+
+### Changed
+- Moved notation title/version metadata from left panel to header and aligned header visuals with model editor style.
+- Updated notation left panel controls: compact icon buttons, moved sorting near search, and moved elements counter next to title.
+- Expanded header space in model/notation editors to keep long names visible without truncation.
+
+### Fixed
+- Fixed notation component list control row height so sorting select no longer stretches neighboring icon buttons.
+- Fixed missing persistence of tags section collapse/expand state between sessions.
+
+### Release
+- Bumped application version to `0.0.4` in package metadata, footer, Docker/Helm scripts, and chart values.
+
 ## [0.0.3] - 2026-02-19
 
 ### Added

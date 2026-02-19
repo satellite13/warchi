@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref, computed, watch, onMounted, onBeforeUnmount} from "vue";
+import {ref, computed, watch, onMounted, onBeforeUnmount, nextTick} from "vue";
 import {onBeforeRouteLeave, useRouter} from "vue-router";
 
 const router = useRouter();
@@ -176,11 +176,34 @@ const diagramRenderer = computed(() => diagramRef.value?.rendererRef ?? null);
 const gridVisible = ref(true);
 const miniMapVisible = ref(true);
 const snapEnabled = ref(false);
+const selectionSyncEnabled = ref(true);
 const PROPERTIES_PANEL_DEFAULT_HEIGHT = 240;
 const propertiesPanelHeight = ref(PROPERTIES_PANEL_DEFAULT_HEIGHT);
 
 const resetPropertiesPanelHeight = () => {
   propertiesPanelHeight.value = PROPERTIES_PANEL_DEFAULT_HEIGHT;
+};
+
+const focusSelectedOnDiagram = (kind: "component" | "relation", id: string) => {
+  if (!selectionSyncEnabled.value) return;
+  const renderer = diagramRef.value?.rendererRef as any;
+  const navigation = diagramRef.value?.interactionManagerRef?.navigation as any;
+  if (!renderer || !navigation || typeof navigation.zoomToRect !== "function") return;
+
+  if (kind === "component") {
+    const node = renderer.getNode?.(`component-${id}`);
+    const bounds = node?.getBounds?.();
+    if (bounds) {
+      navigation.zoomToRect(bounds, 64);
+    }
+    return;
+  }
+
+  const edge = renderer.getEdge?.(`relation-edge-${id}`);
+  const bounds = edge?.getBounds?.();
+  if (bounds) {
+    navigation.zoomToRect(bounds, 64);
+  }
 };
 
 watch(interactionManager, (im) => {
@@ -596,16 +619,31 @@ const handleRelationRulesChanged = () => {
   });
 };
 
-const handleSelect = (kind: "component" | "relation", id: string) => {
+const handleSelect = (kind: "component" | "relation", id: string, source: "list" | "diagram" = "list") => {
   if (kind === "component") {
     selectComponent(id);
   } else {
     selectRelation(id);
   }
+  if (source === "list") {
+    nextTick(() => {
+      focusSelectedOnDiagram(kind, id);
+    });
+  }
 };
 
 const handleDiagramSelect = (id: string, kind: "component" | "relation") => {
-  handleSelect(kind, id);
+  handleSelect(kind, id, "diagram");
+};
+
+const toggleSelectionSync = () => {
+  selectionSyncEnabled.value = !selectionSyncEnabled.value;
+  if (!selectionSyncEnabled.value) return;
+  const entity = selectedEntity.value;
+  if (!entity) return;
+  nextTick(() => {
+    focusSelectedOnDiagram(entity.kind, entity.id);
+  });
 };
 
 // Remove item confirmation
@@ -772,6 +810,8 @@ onBeforeUnmount(() => {
     <template #header>
       <NotationAppHeader
         :has-unsaved-changes="hasUnsavedChanges"
+        :notation-name="notation?.name"
+        :notation-version="notation?.version"
         :grid-visible="gridVisible"
         :mini-map-visible="miniMapVisible"
         :snap-enabled="snapEnabled"
@@ -789,9 +829,10 @@ onBeforeUnmount(() => {
           <NotationComponentList
             v-if="!isLoading"
             :state="state"
-            :notation="notation"
             :selected-id="selectedEntityId"
+            :sync-selection-enabled="selectionSyncEnabled"
             @select="handleSelect"
+            @toggle-sync-selection="toggleSelectionSync"
             @create-component="openComponentModal"
             @create-relation="openRelationModal"
             @remove-item="handleRemoveItem"

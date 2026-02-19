@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import {useRouter} from "vue-router";
-import {useAuth} from "../../../composables/useAuth";
 import AppLogo from "../../../components/layout/AppLogo.vue";
-import UserAvatar from "../../../components/layout/UserAvatar.vue";
 import IconToolbar, {type ToolbarButton} from "./IconToolbar.vue";
 
 const props = withDefaults(defineProps<{
   hasUnsavedChanges?: boolean;
+  notationName?: string;
+  notationVersion?: string;
   gridVisible?: boolean;
   miniMapVisible?: boolean;
   snapEnabled?: boolean;
@@ -15,6 +15,8 @@ const props = withDefaults(defineProps<{
   canRedo?: boolean;
 }>(), {
   hasUnsavedChanges: false,
+  notationName: "",
+  notationVersion: "",
   gridVisible: true,
   miniMapVisible: true,
   snapEnabled: false,
@@ -23,8 +25,6 @@ const props = withDefaults(defineProps<{
 });
 
 const router = useRouter();
-const {currentUser} = useAuth();
-
 const toolbarButtons = computed<ToolbarButton[]>(() => [
   {icon: "undo", event: "undo", title: "Отменить", disabled: !props.canUndo},
   {icon: "redo", event: "redo", title: "Повторить", disabled: !props.canRedo},
@@ -60,38 +60,41 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="navigation-app-header">
-    <div class="navigation-app-header__left">
+  <header class="notation-header">
+    <div class="notation-header__left">
       <button type="button" class="back-btn" title="К списку нотаций" @click="router.push({name: 'notations'})">
         <span class="material-symbols-outlined">arrow_back</span>
       </button>
       <AppLogo size="sm"/>
+      <span class="notation-header__divider">/</span>
+      <span class="notation-header__title">{{ notationName || "Редактор нотации" }}</span>
+      <span v-if="notationVersion" class="notation-header__version">{{ notationVersion }}</span>
+      <span v-if="hasUnsavedChanges" class="dirty-badge" title="Есть несохранённые изменения">
+        <span class="dirty-dot"></span>
+        Не сохранено
+      </span>
     </div>
-    <div class="navigation-app-header__center">
+    <div class="notation-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)"/>
     </div>
-    <div class="navigation-app-header__right">
-      <UserAvatar :email="currentUser?.email" size="sm"/>
-    </div>
+    <div class="notation-header__right-spacer" />
   </header>
 </template>
 
 <style scoped>
-.navigation-app-header {
+.notation-header {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(620px, max-content) minmax(0, 1fr) 360px;
   align-items: center;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
-.navigation-app-header__left {
+.notation-header__left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
   padding: 12px 16px;
 }
 
@@ -101,17 +104,15 @@ const emit = defineEmits<{
   justify-content: center;
   width: 32px;
   height: 32px;
-  padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .back-btn .material-symbols-outlined {
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .back-btn:hover {
@@ -120,7 +121,28 @@ const emit = defineEmits<{
   border-color: var(--primary);
 }
 
-.navigation-app-header__center {
+.notation-header__divider {
+  color: var(--border-strong);
+  font-size: 16px;
+  font-weight: 300;
+}
+
+.notation-header__title {
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.notation-header__version {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text-subtle);
+  background: var(--surface-strong);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.notation-header__center {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -128,10 +150,27 @@ const emit = defineEmits<{
   padding: 12px 16px;
 }
 
-.navigation-app-header__right {
-  display: flex;
+.notation-header__right-spacer {
+  min-width: 0;
+}
+
+.dirty-badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 12px 16px;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--warning);
+  background: var(--warning-soft);
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
 }
 </style>

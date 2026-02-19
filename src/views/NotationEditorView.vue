@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref, computed, watch, onMounted, onBeforeUnmount, nextTick} from "vue";
-import {onBeforeRouteLeave, useRouter} from "vue-router";
+import {onBeforeRouteLeave, useRouter, type RouteLocationRaw} from "vue-router";
 
 const router = useRouter();
 import MainLayout from "../layouts/MainLayout.vue";
@@ -186,8 +186,8 @@ const resetPropertiesPanelHeight = () => {
 
 const focusSelectedOnDiagram = (kind: "component" | "relation", id: string) => {
   if (!selectionSyncEnabled.value) return;
-  const renderer = diagramRef.value?.rendererRef as any;
-  const navigation = diagramRef.value?.interactionManagerRef?.navigation as any;
+  const renderer = diagramRef.value?.rendererRef;
+  const navigation = diagramRef.value?.interactionManagerRef?.navigation;
   if (!renderer || !navigation || typeof navigation.zoomToRect !== "function") return;
 
   if (kind === "component") {
@@ -750,13 +750,13 @@ const handleToolbarAction = async (event: string) => {
 // Unsaved changes confirmation dialog
 const showLeaveDialog = ref(false);
 const allowLeave = ref(false);
-let pendingRoute: ReturnType<typeof Object> | null = null;
+let pendingRoute: RouteLocationRaw | null = null;
 
 const confirmLeave = () => {
   showLeaveDialog.value = false;
   allowLeave.value = true;
   if (pendingRoute) {
-    router.push(pendingRoute as any);
+    router.push(pendingRoute);
     pendingRoute = null;
   }
 };
@@ -774,7 +774,7 @@ onBeforeRouteLeave((to) => {
   }
   if (hasUnsavedChanges.value) {
     showLeaveDialog.value = true;
-    pendingRoute = to;
+    pendingRoute = to.fullPath;
     return false;
   }
   return true;

@@ -8,21 +8,30 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .vue,.ts,.tsx --cache",
+    "lint:fix": "eslint src --ext .vue,.ts,.tsx --fix"
   },
   "dependencies": {
     "@fontsource/material-symbols-outlined": "^5.2.35",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.2.0",
+    "@ngroznykh/papirus": "^0.3.0",
     "marked": "^17.0.3",
     "vue": "^3.5.28",
     "vue-router": "^5.0.2"
   },
   "devDependencies": {
-    "@types/node": "^25.2.2",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.3.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "@vue/tsconfig": "^0.8.1",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.8.0",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.0",
     "vite": "^7.3.1",
     "vitest": "^4.0.18",
     "vue-tsc": "^3.2.4"

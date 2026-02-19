@@ -16,7 +16,11 @@ import {
   InteractionManager,
   type ElementState,
   type TextLabelOptions,
-  type LabelPlacement
+  type LabelPlacement,
+  type TextStyle,
+  type NodeImageOptions,
+  type EdgeStyle as PapirusEdgeStyle,
+  type ArrowMarkerType
 } from "@ngroznykh/papirus"
 import type { DiagramStyle, NodeStyle } from "../notationAttrs"
 import type {
@@ -74,7 +78,26 @@ const COLUMN_GAP = 60
 const ROW_GAP = 30
 const GRID_SIZE = 20
 const NO_ANCHORS = { top: 0, right: 0, bottom: 0, left: 0 }
-const NOOP_RENDER_RESIZE_HANDLES = () => {}
+
+type ExtendedNotationNodeStyle = NodeStyle & {
+  fillOpacity?: number
+  strokeOpacity?: number
+}
+
+type RelationEdgeStyle = {
+  strokeColor: string
+  strokeOpacity?: number
+  strokeWidth: number
+}
+
+type AnchorRelationMeta = {
+  pairedTarget: CircleNode
+  relationId: string
+  relationName: string
+  edgeStyle: RelationEdgeStyle
+  diagramStyle?: DiagramStyle
+}
+
 
 type ComponentShape =
   | "rectangle"
@@ -85,7 +108,7 @@ type ComponentShape =
   | "slanted-rectangle"
 
 function disableTransformerFrame(node: DiagramNode) {
-  ;(node as any).renderResizeHandles = NOOP_RENDER_RESIZE_HANDLES
+  node.resizeHandlesEnabled = false
 }
 
 function getComponentShape(ds?: DiagramStyle): ComponentShape {
@@ -103,13 +126,13 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
 }
 
 function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
-  return (node as any).typeName === "custom"
+  return node instanceof CustomShapeNode
 }
 
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
   if (node instanceof DiamondNode) return "diamond"
   if (node instanceof CircleNode) return "circle"
-  if (isCustomShapeNode(node)) return ((node as any).shapeType as ComponentShape) ?? "rectangle"
+  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? "rectangle"
   return "rectangle"
 }
 
@@ -178,12 +201,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   let syncingRelationSelection = false
   let syncingSelectionFromState = false
 
-  function mergeStyle(base: ResolvedStyle, override?: NodeStyle): ResolvedStyle {
+  function mergeStyle(base: ResolvedStyle, override?: ExtendedNotationNodeStyle): ResolvedStyle {
     return {
       fillColor: override?.fillColor ?? base.fillColor,
-      fillOpacity: (override as any)?.fillOpacity ?? base.fillOpacity,
+      fillOpacity: override?.fillOpacity ?? base.fillOpacity,
       strokeColor: override?.strokeColor ?? base.strokeColor,
-      strokeOpacity: (override as any)?.strokeOpacity ?? base.strokeOpacity,
+      strokeOpacity: override?.strokeOpacity ?? base.strokeOpacity,
       strokeWidth: override?.strokeWidth ?? base.strokeWidth
     }
   }
@@ -210,9 +233,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
   function resolveRelationEdgeStyle(typeItem: EditorLinkType | undefined) {
     const base = RELATION_EDGE_STYLE
-    const strokeColor = typeItem?.parsedAttrs.style?.strokeColor ?? base.strokeColor
-    const strokeOpacity = (typeItem?.parsedAttrs.style as any)?.strokeOpacity ?? base.strokeOpacity
-    const strokeWidth = typeItem?.parsedAttrs.style?.strokeWidth ?? base.strokeWidth
+    const rawStyle = typeItem?.parsedAttrs.style as ExtendedNotationNodeStyle | undefined
+    const strokeColor = rawStyle?.strokeColor ?? base.strokeColor
+    const strokeOpacity = rawStyle?.strokeOpacity ?? base.strokeOpacity
+    const strokeWidth = rawStyle?.strokeWidth ?? base.strokeWidth
     return { strokeColor, strokeOpacity, strokeWidth }
   }
 
@@ -258,11 +282,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       return name
     }
     const opts: TextLabelOptions = { text: name }
-    const style: Record<string, unknown> = {}
+    const style: TextStyle = {}
     if (ds.labelColor) style.color = ds.labelColor
     if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds.labelFontSize) style.fontSize = ds.labelFontSize
-    if (Object.keys(style).length) opts.style = style as any
+    if (Object.keys(style).length) opts.style = style
     if (ds.labelPadding != null) opts.padding = ds.labelPadding
     if (ds.labelMargin != null) opts.margin = ds.labelMargin
     return opts
@@ -273,11 +297,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       return name
     }
     const opts: TextLabelOptions = { text: name }
-    const style: Record<string, unknown> = {}
+    const style: TextStyle = {}
     if (ds.labelColor) style.color = ds.labelColor
     if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds.labelFontSize) style.fontSize = ds.labelFontSize
-    if (Object.keys(style).length) opts.style = style as any
+    if (Object.keys(style).length) opts.style = style
     return opts
   }
 
@@ -292,9 +316,22 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
   function buildNodeIcon(ds?: DiagramStyle) {
     if (!ds?.iconName) return undefined
+    const placement = ds.iconPlacement
+    const resolvedPlacement: NodeImageOptions["placement"] =
+      placement === "center" ||
+      placement === "top" ||
+      placement === "bottom" ||
+      placement === "left" ||
+      placement === "right" ||
+      placement === "top-left" ||
+      placement === "top-right" ||
+      placement === "bottom-left" ||
+      placement === "bottom-right"
+        ? placement
+        : "top-left"
     return {
       source: `/icons/${ds.iconName}.svg`,
-      placement: (ds.iconPlacement as any) ?? ("top-left" as const),
+      placement: resolvedPlacement,
       width: ds.iconWidth ?? 20,
       height: ds.iconHeight ?? 20,
       fit: "contain" as const,
@@ -307,8 +344,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   }
 
   function buildMarker(typeStr: string | undefined, ds: DiagramStyle | undefined, prefix: "start" | "end") {
-    const markerType = typeStr as "arrow" | "open" | "diamond" | "circle" | undefined
-    if (!markerType || markerType === ("none" as any)) return undefined
+    const markerType =
+      typeStr === "arrow" || typeStr === "open" || typeStr === "diamond" || typeStr === "circle"
+        ? (typeStr as ArrowMarkerType)
+        : undefined
+    if (!markerType) return undefined
     const sizeKey = prefix === "start" ? "startMarkerSize" : "endMarkerSize"
     const fillKey = prefix === "start" ? "startMarkerFillColor" : "endMarkerFillColor"
     const opacityKey = prefix === "start" ? "startMarkerFillOpacity" : "endMarkerFillOpacity"
@@ -365,9 +405,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         cornerRadius: visual.cornerRadius
       })
     }
-    ;(node as any).shapeType = shape
+    if (node instanceof CustomShapeNode) {
+      node.shapeType = shape
+    }
     if (ds?.labelPlacement) {
-      (node as any).labelPlacement = ds.labelPlacement as LabelPlacement
+      node.labelPlacement = ds.labelPlacement as LabelPlacement
     }
     disableTransformerFrame(node)
     return node
@@ -415,10 +457,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           }
         }
         if (existing.label && ds?.labelPadding != null) {
-          (existing.label as any)._padding = ds.labelPadding
+          existing.label.padding = ds.labelPadding
         }
         if (existing.label && ds?.labelMargin != null) {
-          (existing.label as any)._margin = ds.labelMargin
+          existing.label.margin = ds.labelMargin
         }
         existing.width = visual.width
         existing.height = visual.height
@@ -434,7 +476,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         }
         existing.icon = buildNodeIcon(ds)
         if (ds?.labelPlacement) {
-          (existing as any).labelPlacement = ds.labelPlacement as LabelPlacement
+          existing.labelPlacement = ds.labelPlacement as LabelPlacement
         }
       } else {
         componentNodes.push(createComponentNode(component, 0, 0))
@@ -443,6 +485,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
     // --- Relations as anchor pairs + edges ---
     const newAnchorSources: CircleNode[] = []
+    const relationMetaBySourceId = new Map<string, AnchorRelationMeta>()
 
     for (const relation of activeRelations) {
       const srcId = `relation-src-${relation.id}`
@@ -480,11 +523,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         existingEdge.style = {
           strokeColor: edgeStyle.strokeColor,
           strokeWidth: edgeStyle.strokeWidth,
-          strokeOpacity: (edgeStyle as any).strokeOpacity ?? 1,
+          strokeOpacity: edgeStyle.strokeOpacity ?? 1,
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
           ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
-        } as any
-        ;(existingEdge as any).labelBackground = buildEdgeLabelBackground(ds)
+        } as PapirusEdgeStyle
+        existingEdge.labelBackground = buildEdgeLabelBackground(ds)
         if (ds?.edgeType) {
           existingEdge.type = ds.edgeType as "straight" | "polyline" | "bezier"
         }
@@ -518,11 +561,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
         // We'll add nodes + edges after layout
         // Store tgtNode on srcNode temporarily via a side map
-        ;(srcNode as any)._pairedTarget = tgtNode
-        ;(srcNode as any)._relationId = relation.id
-        ;(srcNode as any)._edgeStyle = edgeStyle
-        ;(srcNode as any)._relationName = relation.name
-        ;(srcNode as any)._diagramStyle = relation.parsedAttrs.diagramStyle
+        relationMetaBySourceId.set(srcNode.id, {
+          pairedTarget: tgtNode,
+          relationId: relation.id,
+          relationName: relation.name,
+          edgeStyle,
+          diagramStyle: relation.parsedAttrs.diagramStyle
+        })
       }
     }
 
@@ -587,11 +632,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       })
 
       for (const srcNode of newAnchorSources) {
-        const tgtNode = (srcNode as any)._pairedTarget as CircleNode
-        const edgeStyle = (srcNode as any)._edgeStyle as { strokeColor: string; strokeWidth: number }
-        const relationName = (srcNode as any)._relationName as string
-        const relationId = (srcNode as any)._relationId as string
-        const ds = (srcNode as any)._diagramStyle as DiagramStyle | undefined
+        const relationMeta = relationMetaBySourceId.get(srcNode.id)
+        if (!relationMeta) continue
+        const { pairedTarget: tgtNode, edgeStyle, relationName, relationId, diagramStyle: ds } = relationMeta
 
         // Position target relative to source
         tgtNode.x = srcNode.x + ANCHOR_GAP
@@ -616,21 +659,14 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           style: {
             strokeColor: edgeStyle.strokeColor,
             strokeWidth: edgeStyle.strokeWidth,
-            strokeOpacity: (edgeStyle as any).strokeOpacity ?? 1,
+            strokeOpacity: edgeStyle.strokeOpacity ?? 1,
             ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
             ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
-          } as any,
+          } as PapirusEdgeStyle,
           startMarker,
           endMarker
         })
         renderer.addEdge(edge)
-
-        // Clean up temp properties
-        delete (srcNode as any)._pairedTarget
-        delete (srcNode as any)._relationId
-        delete (srcNode as any)._edgeStyle
-        delete (srcNode as any)._relationName
-        delete (srcNode as any)._diagramStyle
       }
     }
   }

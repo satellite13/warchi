@@ -12,6 +12,10 @@ import {
   GridOverlay,
   MiniMap,
   InteractionManager,
+  type ContextMenuTarget,
+  type ArrowMarkerConfig,
+  type NodeImageOptions,
+  type TextStyle,
   type TextLabelOptions,
   type LabelPlacement,
   type EdgePathType,
@@ -147,7 +151,7 @@ const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
   return text
 }
 
-const buildEdgeLabelBackground = (ds?: DiagramStyle): Record<string, unknown> | undefined => {
+const buildEdgeLabelBackground = (ds?: DiagramStyle): { color?: string; opacity?: number; padding?: number; borderRadius?: number } | undefined => {
   if (!ds) return undefined
 
   const background: Record<string, unknown> = {}
@@ -159,9 +163,9 @@ const buildEdgeLabelBackground = (ds?: DiagramStyle): Record<string, unknown> | 
   return Object.keys(background).length > 0 ? background : undefined
 }
 
-const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: any; endMarker: any }> => {
+const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig }> => {
   if (!ds) return {}
-  const opts: Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: any; endMarker: any }> = {}
+  const opts: Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig }> = {}
   const style: EdgeStyle = {}
   if (ds.strokeColor) style.strokeColor = ds.strokeColor
   if (ds.strokeWidth != null) style.strokeWidth = ds.strokeWidth
@@ -172,7 +176,7 @@ const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; st
   if (ds.edgeType) opts.type = ds.edgeType as EdgePathType
   if (ds.startMarkerType) {
     opts.startMarker = {
-      type: ds.startMarkerType as any,
+      type: ds.startMarkerType as ArrowMarkerConfig["type"],
       ...(ds.startMarkerSize != null && { size: ds.startMarkerSize }),
       ...(ds.startMarkerFillColor && { fillColor: ds.startMarkerFillColor }),
       ...(ds.startMarkerFillOpacity != null && { fillOpacity: ds.startMarkerFillOpacity })
@@ -180,7 +184,7 @@ const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; st
   }
   if (ds.endMarkerType) {
     opts.endMarker = {
-      type: ds.endMarkerType as any,
+      type: ds.endMarkerType as ArrowMarkerConfig["type"],
       ...(ds.endMarkerSize != null && { size: ds.endMarkerSize }),
       ...(ds.endMarkerFillColor && { fillColor: ds.endMarkerFillColor }),
       ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity })
@@ -283,11 +287,11 @@ function buildNodeLabel(name: string, ds?: DiagramStyle): string | TextLabelOpti
     return name
   }
   const opts: TextLabelOptions = { text: name }
-  const style: Record<string, unknown> = {}
+  const style: TextStyle = {}
   if (ds.labelColor) style.color = ds.labelColor
   if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
   if (ds.labelFontSize) style.fontSize = ds.labelFontSize
-  if (Object.keys(style).length) opts.style = style as any
+  if (Object.keys(style).length) opts.style = style
   if (ds.labelPadding != null) opts.padding = ds.labelPadding
   if (ds.labelMargin != null) opts.margin = ds.labelMargin
   return opts
@@ -295,9 +299,22 @@ function buildNodeLabel(name: string, ds?: DiagramStyle): string | TextLabelOpti
 
 function buildNodeIcon(ds?: DiagramStyle) {
   if (!ds?.iconName) return undefined
+  const placement = ds.iconPlacement
+  const resolvedPlacement: NodeImageOptions["placement"] =
+    placement === "center" ||
+    placement === "top" ||
+    placement === "bottom" ||
+    placement === "left" ||
+    placement === "right" ||
+    placement === "top-left" ||
+    placement === "top-right" ||
+    placement === "bottom-left" ||
+    placement === "bottom-right"
+      ? placement
+      : "left"
   return {
     source: `/icons/${ds.iconName}.svg`,
-    placement: (ds.iconPlacement as any) ?? ("left" as const),
+    placement: resolvedPlacement,
     width: ds.iconWidth ?? 20,
     height: ds.iconHeight ?? 20,
     fit: "contain" as const,
@@ -343,13 +360,13 @@ function resolveAnchorPoints(ds?: DiagramStyle): { top: number; bottom: number; 
 }
 
 function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
-  return (node as any).typeName === "custom"
+  return node instanceof CustomShapeNode
 }
 
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
   if (node instanceof DiamondNode) return "diamond"
   if (node instanceof CircleNode) return "circle"
-  if (isCustomShapeNode(node)) return ((node as any).shapeType as ComponentShape) ?? "rectangle"
+  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? "rectangle"
   return "rectangle"
 }
 
@@ -399,9 +416,11 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     })
   }
 
-  ;(node as any).shapeType = shape
+  if (node instanceof CustomShapeNode) {
+    node.shapeType = shape
+  }
   if (ds?.labelPlacement) {
-    (node as any).labelPlacement = ds.labelPlacement as LabelPlacement
+    node.labelPlacement = ds.labelPlacement as LabelPlacement
   }
   applyMinSizeConstraint(node, instance.modelNodeId)
   return node
@@ -442,7 +461,7 @@ function syncDiagram() {
       existing.width = visual.width
       existing.height = visual.height
       existing.style = visual.style
-      ;(existing as any).anchorPoints = resolveAnchorPoints(ds)
+      existing.anchorPoints = resolveAnchorPoints(ds)
       existing.label = nodeName
       if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
         existing.label.style = {
@@ -452,17 +471,17 @@ function syncDiagram() {
         }
       }
       if (existing.label && ds?.labelPadding != null) {
-        (existing.label as any)._padding = ds.labelPadding
+        existing.label.padding = ds.labelPadding
       }
       if (existing.label && ds?.labelMargin != null) {
-        (existing.label as any)._margin = ds.labelMargin
+        existing.label.margin = ds.labelMargin
       }
       if (existing instanceof RectangleNode) {
         existing.cornerRadius = visual.cornerRadius
       }
       existing.icon = buildNodeIcon(ds)
       if (ds?.labelPlacement) {
-        (existing as any).labelPlacement = ds.labelPlacement as LabelPlacement
+        existing.labelPlacement = ds.labelPlacement as LabelPlacement
       }
       applyMinSizeConstraint(existing, instance.modelNodeId)
     } else {
@@ -882,7 +901,8 @@ function initRenderer(r: DiagramRenderer) {
   // Context menu
   r.enableContextMenu({
     menu: {
-      node: (target: any) => {
+      node: (target: ContextMenuTarget) => {
+        if (target.type !== "node") return []
         const entity = nodeIdToInstance.get(target.node.id)
         if (!entity) return []
         return [
@@ -898,7 +918,8 @@ function initRenderer(r: DiagramRenderer) {
           }
         ]
       },
-      edge: (target: any) => {
+      edge: (target: ContextMenuTarget) => {
+        if (target.type !== "edge") return []
         const entity = edgeIdToInstance.get(target.edge.id)
         if (!entity) return []
 

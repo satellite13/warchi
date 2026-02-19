@@ -10,6 +10,7 @@ import type {
   LinkRequest,
   LinkResponse,
   LinkTypeResponse,
+  ModelUpdateRequest,
   NodeRequest,
   NodeResponse,
   NodeTypeResponse,
@@ -47,6 +48,7 @@ type ModelEditorReturn = {
   markNodeDirty: (id: string) => void
   markLinkDirty: (id: string) => void
   markDiagramDirty: (id: string) => void
+  renameModel: (nextName: string) => string | null
   handleBack: () => void
 }
 
@@ -80,6 +82,9 @@ export const useModelEditor = (): ModelEditorReturn => {
   const saveError = ref<string | null>(null)
   const saveSuccess = ref(false)
   const saveProgress = ref("")
+  const modelDirty = ref(false)
+  const modelInitialName = ref("")
+  const modelCatalog = ref<ModelData[]>([])
   let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
   let saveErrorTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -98,7 +103,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     const hasDirtyNodes = state.value.nodes.some((item) => item._isNew || item._isDirty || item._isDeleted)
     const hasDirtyLinks = state.value.links.some((item) => item._isNew || item._isDirty || item._isDeleted)
     const hasDirtyDiagrams = state.value.diagrams.some((item) => item._isNew || item._isDirty || item._isDeleted)
-    return hasDirtyNodes || hasDirtyLinks || hasDirtyDiagrams
+    return modelDirty.value || hasDirtyNodes || hasDirtyLinks || hasDirtyDiagrams
   })
 
   const loadModel = async (): Promise<void> => {
@@ -115,6 +120,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     try {
       const [
         modelResult,
+        modelsResult,
         nodesResult,
         linksResult,
         diagramsResult,
@@ -126,6 +132,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         relationRulesResult
       ] = await Promise.all([
         apiGet<ModelData>(`/models/${modelId}`),
+        apiGet<PaginatedResponse<ModelData>>("/models?page=0&size=1000"),
         apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(modelId)}&size=1000`),
         apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(modelId)}&size=1000`),
         apiGet<PaginatedResponse<DiagramResponse>>(`/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`),
@@ -142,6 +149,9 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
 
       model.value = modelResult.data
+      modelInitialName.value = modelResult.data.name
+      modelDirty.value = false
+      modelCatalog.value = modelsResult.success ? (modelsResult.data.content ?? []) : []
       state.value = {
         modelId,
         ownerId: modelResult.data.ownerId,
@@ -175,6 +185,31 @@ export const useModelEditor = (): ModelEditorReturn => {
     if (row && !row._isNew) row._isDirty = true
   }
 
+  const hasModelNameVersionConflict = (name: string, version: string): boolean => {
+    if (!model.value) return false
+    const normalizedName = name.trim().toLowerCase()
+    const normalizedVersion = version.trim()
+    if (!normalizedName || !normalizedVersion) return false
+    return modelCatalog.value.some((item) =>
+      item.id !== model.value!.id &&
+      item.name.trim().toLowerCase() === normalizedName &&
+      item.version.trim() === normalizedVersion
+    )
+  }
+
+  const renameModel = (nextName: string): string | null => {
+    if (!model.value) return "Модель не загружена."
+    const trimmed = nextName.trim()
+    if (!trimmed) return "Название модели не может быть пустым."
+    if (hasModelNameVersionConflict(trimmed, model.value.version)) {
+      return "Модель с таким именем и версией уже существует."
+    }
+    if (trimmed === model.value.name) return null
+    model.value.name = trimmed
+    modelDirty.value = trimmed !== modelInitialName.value
+    return null
+  }
+
   const saveChanges = async (): Promise<boolean> => {
     if (!model.value) return false
     isSaving.value = true
@@ -189,6 +224,28 @@ export const useModelEditor = (): ModelEditorReturn => {
       const nodes = state.value.nodes
       const links = state.value.links
       const diagrams = state.value.diagrams
+
+      if (model.value && modelDirty.value) {
+        saveProgress.value = `Обновление модели: ${model.value.name}`
+        const request: ModelUpdateRequest = {
+          name: model.value.name,
+          version: model.value.version,
+          ownerId: model.value.ownerId,
+          attrs: model.value.attrs ?? null
+        }
+        const result = await apiPut<ModelData>(`/models/${model.value.id}`, request)
+        if (!result.success) {
+          if (result.error.status === 409) {
+            throw new Error("Модель с таким именем и версией уже существует.")
+          }
+          throw new Error(`Ошибка обновления модели: ${result.error.message}`)
+        }
+        model.value = result.data
+        modelInitialName.value = result.data.name
+        modelDirty.value = false
+        const idx = modelCatalog.value.findIndex((item) => item.id === result.data.id)
+        if (idx >= 0) modelCatalog.value[idx] = result.data
+      }
 
       const newNodeIdMap = new Map<string, string>()
 
@@ -374,6 +431,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     markNodeDirty,
     markLinkDirty,
     markDiagramDirty,
+    renameModel,
     handleBack
   }
 }

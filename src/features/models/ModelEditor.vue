@@ -32,7 +32,8 @@ const {
   saveChanges,
   markNodeDirty,
   markLinkDirty,
-  markDiagramDirty
+  markDiagramDirty,
+  renameModel
 } = useModelEditor()
 
 const selectedNodeId = ref<string | null>(null)
@@ -136,6 +137,11 @@ const setUiError = (msg: string) => {
     uiErrorTimer = null
   }, 5000)
 }
+
+const handleRenameModel = (nextName: string) => {
+  const error = renameModel(nextName)
+  if (error) setUiError(error)
+}
 const createNodeModal = ref<{ parentNodeId: string | null; kind: "folder" | "node" }>({
   parentNodeId: null,
   kind: "node"
@@ -187,6 +193,8 @@ const pendingConnection = ref<{
   targetModelNodeId: string
   sourceInstanceId: string
   targetInstanceId: string
+  sourcePortId?: string
+  targetPortId?: string
 } | null>(null)
 
 const showReuseLinkModal = ref(false)
@@ -793,7 +801,9 @@ const startConnectNodes = (
   sourceModelNodeId: string,
   targetModelNodeId: string,
   sourceInstanceId: string,
-  targetInstanceId: string
+  targetInstanceId: string,
+  sourcePortId?: string,
+  targetPortId?: string
 ) => {
   const notationId = activeNotationId.value
   if (!notationId) return
@@ -822,7 +832,14 @@ const startConnectNodes = (
     setUiError("Для этой пары компонентов нет доступных relation по правилам нотации.")
     return
   }
-  pendingConnection.value = { sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId }
+  pendingConnection.value = {
+    sourceModelNodeId,
+    targetModelNodeId,
+    sourceInstanceId,
+    targetInstanceId,
+    sourcePortId,
+    targetPortId
+  }
   if (allowedRelations.length === 1) {
     finalizeConnection(allowedRelations[0]!.id)
     return
@@ -891,12 +908,22 @@ const createOrReuseLink = (linkId: string | null) => {
   bindLinkRelation(link, relation.id)
   const relParsed = parseEntityAttrs(relation.attrs ?? null)
   const relationDs = relParsed.diagramStyle
+  const edgeAttrs: Record<string, unknown> = {}
+  if (relationDs) {
+    edgeAttrs.diagramStyle = JSON.parse(JSON.stringify(relationDs))
+  }
+  if (connection.sourcePortId) {
+    edgeAttrs.fromPortId = connection.sourcePortId
+  }
+  if (connection.targetPortId) {
+    edgeAttrs.toPortId = connection.targetPortId
+  }
   diagram.parsedAttrs.instances.edges.push({
     id: createId(),
     modelLinkId: link.id,
     sourceInstanceId: connection.sourceInstanceId,
     targetInstanceId: connection.targetInstanceId,
-    attrs: relationDs ? { diagramStyle: JSON.parse(JSON.stringify(relationDs)) } : undefined
+    attrs: Object.keys(edgeAttrs).length ? edgeAttrs : undefined
   })
   markDiagramDirty(diagram.id)
 
@@ -1437,6 +1464,7 @@ onBeforeUnmount(() => {
         :can-undo="canUndo"
         :can-redo="canRedo"
         @action="handleToolbarAction"
+        @rename-model="handleRenameModel"
       />
     </template>
     <template #default>

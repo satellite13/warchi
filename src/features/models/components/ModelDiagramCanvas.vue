@@ -47,7 +47,14 @@ const emit = defineEmits<{
   canvasContextChange: [ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }]
   createNodeFromComponent: [componentId: string, x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
-  connectNodes: [sourceModelNodeId: string, targetModelNodeId: string, sourceInstanceId: string, targetInstanceId: string]
+  connectNodes: [
+    sourceModelNodeId: string,
+    targetModelNodeId: string,
+    sourceInstanceId: string,
+    targetInstanceId: string,
+    sourcePortId?: string,
+    targetPortId?: string
+  ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
   requestDeleteNodeFromDiagram: [modelNodeId: string]
@@ -261,6 +268,86 @@ function applyMinSizeConstraint(node: DiagramNode, modelNodeId: string) {
 
 type ComponentShape = "rectangle" | "beveled-rectangle" | "diamond" | "circle" | "trapezoid" | "slanted-rectangle"
 
+const getInstanceArea = (instance: DiagramNodeInstance): number => {
+  const { width, height } = getInstanceDimensions(instance)
+  return width * height
+}
+
+const getInstanceZIndex = (instance: DiagramNodeInstance): number | null => {
+  const raw = instance.attrs?.zIndex
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw
+  }
+  return null
+}
+
+const sortInstancesByZLayer = (instances: DiagramNodeInstance[]): DiagramNodeInstance[] =>
+  [...instances].sort((a, b) => {
+    const areaDiff = getInstanceArea(b) - getInstanceArea(a)
+    if (areaDiff !== 0) return areaDiff
+    const aSelected = props.selectedModelNodeIds.includes(a.modelNodeId)
+    const bSelected = props.selectedModelNodeIds.includes(b.modelNodeId)
+    if (aSelected !== bSelected) return aSelected ? 1 : -1
+    const aZ = getInstanceZIndex(a)
+    const bZ = getInstanceZIndex(b)
+    if (aZ != null && bZ != null && aZ !== bZ) return aZ - bZ
+    if (aZ != null && bZ == null) return 1
+    if (aZ == null && bZ != null) return -1
+    return a.id.localeCompare(b.id)
+  })
+
+const reorderRendererNodesBySize = (orderedInstances: DiagramNodeInstance[]) => {
+  if (!renderer) return
+  const nodesMap = renderer.nodes as Map<string, DiagramNode>
+  const orderedNodeIds = orderedInstances.map((instance) => `instance-${instance.id}`)
+  const orderedNodes: DiagramNode[] = []
+  const orderedIdSet = new Set(orderedNodeIds)
+
+  for (const nodeId of orderedNodeIds) {
+    const node = nodesMap.get(nodeId)
+    if (node) orderedNodes.push(node)
+  }
+
+  // Preserve any non-instance nodes (if ever added) after managed nodes.
+  for (const [nodeId, node] of nodesMap) {
+    if (!orderedIdSet.has(nodeId)) orderedNodes.push(node)
+  }
+
+  const currentOrder = Array.from(nodesMap.keys())
+  const nextOrder = orderedNodes.map((node) => node.id)
+  const sameOrder =
+    currentOrder.length === nextOrder.length &&
+    currentOrder.every((id, index) => id === nextOrder[index])
+
+  if (sameOrder) return
+
+  nodesMap.clear()
+  for (const node of orderedNodes) {
+    nodesMap.set(node.id, node)
+  }
+}
+
+const persistNodeZOrder = (orderedInstances: DiagramNodeInstance[]) => {
+  if (!props.activeDiagram) return
+  const next = cloneDiagramAttrs()
+  const instanceById = new Map(next.instances.nodes.map((instance) => [instance.id, instance]))
+  let changed = false
+
+  for (const [zIndex, source] of orderedInstances.entries()) {
+    const target = instanceById.get(source.id)
+    if (!target) continue
+    const current = typeof target.attrs?.zIndex === "number" ? target.attrs.zIndex : null
+    if (current === zIndex) continue
+    if (!target.attrs) target.attrs = {}
+    target.attrs.zIndex = zIndex
+    changed = true
+  }
+
+  if (changed) {
+    emit("updateDiagram", next)
+  }
+}
+
 function getComponentShape(ds?: DiagramStyle): ComponentShape {
   const shape = ds?.nodeShape as ComponentShape | undefined
   switch (shape) {
@@ -452,9 +539,10 @@ function syncDiagram() {
   const currentEdgeIds = new Set<string>()
   nodeIdToInstance.clear()
   edgeIdToInstance.clear()
+  const orderedInstances = sortInstancesByZLayer(instanceNodes.value)
 
   // Sync nodes
-  for (const instance of instanceNodes.value) {
+  for (const instance of orderedInstances) {
     const papNodeId = `instance-${instance.id}`
     currentNodeIds.add(papNodeId)
     nodeIdToInstance.set(papNodeId, { modelNodeId: instance.modelNodeId, instanceId: instance.id })
@@ -595,6 +683,7 @@ function syncDiagram() {
     if (!currentEdgeIds.has(id)) renderer.removeEdge(id)
   }
 
+  reorderRendererNodesBySize(orderedInstances)
   renderer.markDirty()
   updateSelection()
 }
@@ -913,9 +1002,9 @@ function initRenderer(r: DiagramRenderer) {
   interactionManager.connection.on("connect", (edge: Edge) => {
     const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
     const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
-    if (sourceEntity && targetEntity && sourceEntity.modelNodeId !== targetEntity.modelNodeId) {
+    if (sourceEntity && targetEntity) {
       emit("connectNodes", sourceEntity.modelNodeId, targetEntity.modelNodeId,
-           sourceEntity.instanceId, targetEntity.instanceId)
+           sourceEntity.instanceId, targetEntity.instanceId, edge.from.portId, edge.to.portId)
     }
     // Remove the edge papirus created — parent will add it through state
     renderer?.removeEdge(edge.id)
@@ -1294,7 +1383,13 @@ watch(
 
 watch(
   () => props.selectedModelNodeIds,
-  () => updateSelection(),
+  () => {
+    updateSelection()
+    const orderedInstances = sortInstancesByZLayer(instanceNodes.value)
+    reorderRendererNodesBySize(orderedInstances)
+    renderer?.markDirty()
+    persistNodeZOrder(orderedInstances)
+  },
   { deep: true }
 )
 

@@ -95,15 +95,6 @@ const filteredCustomProperties = computed(() => {
         </div>
       </div>
 
-      <!-- Relation rules info -->
-      <div class="form-section">
-        <h3 class="form-section__title">Правила связей</h3>
-        <div class="form-section__empty">
-          Правила связей между компонентами настраиваются в редакторе нотации:
-          выберите компонент и откройте блок <b>Правила связей</b> в нижней панели.
-        </div>
-      </div>
-
       <!-- Custom Properties -->
       <div class="form-section">
         <div class="form-section__header">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, nextTick, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import AppLogo from "../../../components/layout/AppLogo.vue"
 import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
@@ -33,7 +33,40 @@ const props = withDefaults(defineProps<{
 const router = useRouter()
 const emit = defineEmits<{
   action: [event: string]
+  renameModel: [name: string]
 }>()
+
+const isRenamingModel = ref(false)
+const editableModelName = ref("")
+const modelNameInputRef = ref<HTMLInputElement | null>(null)
+
+watch(
+  () => props.modelName,
+  (name) => {
+    if (!isRenamingModel.value) editableModelName.value = name || ""
+  },
+  { immediate: true }
+)
+
+const startModelRename = async () => {
+  editableModelName.value = props.modelName || ""
+  isRenamingModel.value = true
+  await nextTick()
+  modelNameInputRef.value?.focus()
+  modelNameInputRef.value?.select()
+}
+
+const cancelModelRename = () => {
+  isRenamingModel.value = false
+  editableModelName.value = props.modelName || ""
+}
+
+const commitModelRename = () => {
+  const nextName = editableModelName.value.trim()
+  isRenamingModel.value = false
+  if (!nextName || nextName === (props.modelName || "").trim()) return
+  emit("renameModel", nextName)
+}
 
 const saveTitle = computed(() =>
   props.hasUnsavedChanges ? "Сохранить изменения" : "Изменений нет"
@@ -135,7 +168,27 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
       </button>
       <AppLogo size="sm" />
       <span class="model-header__divider">/</span>
-      <span class="model-header__title">{{ modelName || 'Редактор модели' }}</span>
+      <div class="model-header__title-wrap">
+        <input
+          v-if="isRenamingModel"
+          ref="modelNameInputRef"
+          v-model="editableModelName"
+          class="model-header__title-input"
+          @blur="commitModelRename"
+          @keydown.enter.prevent="commitModelRename"
+          @keydown.esc.prevent="cancelModelRename"
+        >
+        <button
+          v-else
+          type="button"
+          class="model-header__title-btn"
+          title="Переименовать модель"
+          @click="startModelRename"
+        >
+          <span class="model-header__title">{{ modelName || "Редактор модели" }}</span>
+          <span class="material-symbols-outlined model-header__title-edit-icon">edit</span>
+        </button>
+      </div>
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
       <span v-if="hasUnsavedChanges" class="dirty-badge" title="Есть несохранённые изменения">
         <span class="dirty-dot"></span>
@@ -169,6 +222,59 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 .model-header__title {
   font-size: 14px;
   color: var(--text-muted);
+}
+
+.model-header__title-wrap {
+  min-width: 0;
+}
+
+.model-header__title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.model-header__title-btn .model-header__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-header__title-edit-icon {
+  font-size: 14px;
+  color: var(--text-subtle);
+}
+
+.model-header__title-btn:hover .model-header__title {
+  color: var(--primary);
+}
+
+.model-header__title-btn:hover .model-header__title-edit-icon {
+  color: var(--primary);
+}
+
+.model-header__title-input {
+  width: 220px;
+  max-width: 30vw;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 14px;
+  outline: none;
+}
+
+.model-header__title-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 .model-header__center {

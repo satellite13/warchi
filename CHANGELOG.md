@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.5] - 2026-02-20
+
+### Added
+- Added model rename actions in both model editor header and models catalog cards.
+- Added duplicate name/version validation for model rename flows.
+- Added node z-order persistence in diagram attrs (`attrs.zIndex`) to keep layering after reopen.
+
+### Changed
+- Updated node layering logic: smaller nodes are rendered above larger ones.
+- Updated equal-size tie-break for node layering: selected node is lifted above others.
+
+### Fixed
+- Fixed model diagram build/lint issues in z-order helper logic.
+
+### Release
+- Bumped application version to `0.0.5` in package metadata, footer, Docker/Helm scripts, and chart values.
+- Tagged and pushed release tag `v0.0.5`.
+
 ## [0.0.4] - 2026-02-19
 
 ### Added

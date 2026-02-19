@@ -14,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   click: [];
   delete: [];
+  rename: [];
   "version-change": [string];
 }>();
 
@@ -62,6 +63,10 @@ const formattedUpdatedAt = computed(() => {
       <button class="model-card__delete" type="button" aria-label="Удалить модель" title="Удалить"
               @click.stop="emit('delete')">
         <span class="material-symbols-outlined" title="Удалить">delete</span>
+      </button>
+      <button class="model-card__rename" type="button" aria-label="Переименовать модель" title="Переименовать"
+              @click.stop="emit('rename')">
+        <span class="material-symbols-outlined" title="Переименовать">edit</span>
       </button>
       <span class="model-card__title">{{ name }}</span>
       <div class="model-card__version">
@@ -157,9 +162,31 @@ const formattedUpdatedAt = computed(() => {
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+.model-card__rename {
+  position: absolute;
+  top: 12px;
+  right: 48px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-strong);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
 .model-card__delete:hover {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.model-card__rename:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .model-card__delete svg {

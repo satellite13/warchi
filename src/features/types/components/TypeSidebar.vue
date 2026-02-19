@@ -16,16 +16,29 @@ const emit = defineEmits<{
 
 const typeSearchQuery = ref("")
 
+function sortTypes(types: TypeItem[]): TypeItem[] {
+  return [...types].sort((a, b) =>
+    (a.name || "~~~").localeCompare((b.name || "~~~"), "ru", {
+      sensitivity: "base",
+      numeric: true
+    })
+  )
+}
+
 const filteredNodeTypes = computed(() => {
   const query = typeSearchQuery.value.trim().toLowerCase()
-  if (!query) return props.nodeTypes
-  return props.nodeTypes.filter((t) => t.name.toLowerCase().includes(query))
+  const filtered = !query
+    ? props.nodeTypes
+    : props.nodeTypes.filter((t) => t.name.toLowerCase().includes(query))
+  return sortTypes(filtered)
 })
 
 const filteredLinkTypes = computed(() => {
   const query = typeSearchQuery.value.trim().toLowerCase()
-  if (!query) return props.linkTypes
-  return props.linkTypes.filter((t) => t.name.toLowerCase().includes(query))
+  const filtered = !query
+    ? props.linkTypes
+    : props.linkTypes.filter((t) => t.name.toLowerCase().includes(query))
+  return sortTypes(filtered)
 })
 </script>
 

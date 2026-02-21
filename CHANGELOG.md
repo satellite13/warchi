@@ -4,26 +4,26 @@ All notable changes to this project are documented in this file.
 
 ## [0.0.8] - 2026-02-21
 
-### Добавлено
-- Составные метки для узлов диаграммы с шаблонами подстановки `${name}` и `${имяСвойства}`.
-- Поддержка переноса строки `\n` в шаблонах меток для многострочного отображения.
-- Управление выравниванием текста в метке (по левому / по центру / по правому) независимо от позиции метки.
-- UI для редактирования шаблона метки в панели стиля и панели свойств с предпросмотром результата.
-- Поддержка `editableText` в Papirus TextLabel для раздельного отображения и редактирования текста.
-- Автоподстановка значений по умолчанию для новых обязательных свойств при загрузке модели.
+### Added
+- Composite label templates for diagram nodes with `${name}` and `${propertyName}` placeholder syntax.
+- Line break support (`\n`) in label templates for multiline node labels.
+- Label text alignment control (left / center / right) independent of label placement.
+- Label template editing UI in NodeStylePanel and CustomPropertiesPanel with live preview.
+- `editableText` support in Papirus TextLabel for separate display and inline-edit text.
+- Auto-sync of default custom property values on model load for new required properties.
 
-### Изменено
-- Обновлён Papirus до 0.3.6 с поддержкой выравнивания текста в метке.
-- При двойном клике на узел для переименования отображается только имя компонента, а не результат шаблона.
+### Changed
+- Updated Papirus to 0.3.6 with text align support and basic example enhancements.
+- Inline label editing (double-click) now shows only the component name, not the resolved template.
 
-### Исправлено
-- Шаблон метки не копировался в инстанс при перетаскивании компонента из палитры.
-- Метка на диаграмме не обновлялась при изменении значения кастомного свойства.
-- Ошибка валидации при сохранении модели, если в нотации добавлены новые обязательные свойства.
+### Fixed
+- Model nodes not receiving label templates from notation when dragged from palette.
+- Diagram labels not updating in real-time when custom property values change.
+- Validation errors when notation gains new required properties after model nodes already exist.
 
-### Релиз
-- Версия обновлена до `0.0.8`.
-- Теги: `v0.0.6`, `v0.0.7`, `v0.0.8`.
+### Release
+- Bumped application version to `0.0.8`.
+- Tagged and pushed release tags `v0.0.6`, `v0.0.7`, `v0.0.8`.
 
 ## [0.0.5] - 2026-02-20
 

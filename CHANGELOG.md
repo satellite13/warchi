@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.8] - 2026-02-21
+
+### Added
+- Added composite label templates for diagram nodes with `${name}` and `${propertyName}` placeholder syntax.
+- Added `\n` line break support in label templates for multiline node labels.
+- Added label text alignment control (left / center / right) independent of label placement.
+- Added label template editing UI in NodeStylePanel and CustomPropertiesPanel with live preview.
+- Added `editableText` support in Papirus TextLabel for separate display and inline-edit text.
+- Added auto-sync of default custom property values on model load for new required properties.
+
+### Changed
+- Updated Papirus to 0.3.6 with text align support and basic example enhancements.
+- Updated inline label editing (double-click) to show only the component name, not the resolved template.
+
+### Fixed
+- Fixed model nodes not receiving label templates from notation when dragged from palette.
+- Fixed diagram labels not updating in real-time when custom property values change.
+- Fixed validation errors when notation gains new required properties after model nodes already exist.
+
+### Release
+- Bumped application version to `0.0.8` in package metadata.
+- Tagged and pushed release tags `v0.0.6`, `v0.0.7`, `v0.0.8`.
+
 ## [0.0.5] - 2026-02-20
 
 ### Added

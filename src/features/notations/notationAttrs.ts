@@ -42,6 +42,7 @@ export type DiagramStyle = {
   labelPadding?: number;
   labelMargin?: number;
   labelPlacement?: string;
+  labelAlign?: string;
   // Edge label background
   labelBgColor?: string;
   labelBgOpacity?: number;
@@ -183,6 +184,8 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
     style.labelMargin = value.labelMargin;
   if (typeof value.labelPlacement === "string")
     style.labelPlacement = value.labelPlacement;
+  if (typeof value.labelAlign === "string")
+    style.labelAlign = value.labelAlign;
   if (typeof value.labelBgColor === "string")
     style.labelBgColor = value.labelBgColor;
   if (typeof value.labelBgOpacity === "number")

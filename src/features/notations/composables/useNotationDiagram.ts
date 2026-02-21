@@ -304,7 +304,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [])
       : name
 
-    const hasStyle = !!(ds?.labelColor || ds?.labelOpacity != null || ds?.labelFontSize || ds?.labelPadding != null || ds?.labelMargin != null)
+    const hasStyle = !!(ds?.labelColor || ds?.labelOpacity != null || ds?.labelFontSize || ds?.labelPadding != null || ds?.labelMargin != null || ds?.labelAlign)
 
     if (!hasStyle && !hasTemplate) {
       return displayText
@@ -317,6 +317,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     if (ds?.labelColor) style.color = ds.labelColor
     if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
+    if (ds?.labelAlign) style.align = ds.labelAlign as TextStyle["align"]
     if (Object.keys(style).length) opts.style = style
     if (ds?.labelPadding != null) opts.padding = ds.labelPadding
     if (ds?.labelMargin != null) opts.margin = ds.labelMargin

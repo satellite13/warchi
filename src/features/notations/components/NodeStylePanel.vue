@@ -66,6 +66,7 @@ function emitNodeStyle() {
     labelPadding: labelPadding.value,
     labelMargin: labelMargin.value,
     labelPlacement: labelPlacement.value,
+    labelAlign: labelAlign.value,
     ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
     width: nodeWidth.value,
     height: nodeHeight.value,
@@ -225,6 +226,7 @@ function confirmSavePreset() {
       labelPadding: labelPadding.value,
       labelMargin: labelMargin.value,
       labelPlacement: labelPlacement.value,
+      labelAlign: labelAlign.value,
       width: nodeWidth.value,
       height: nodeHeight.value,
       portsTop: nodePortsTop.value,
@@ -513,6 +515,7 @@ const labelFontSize = ref(14);
 const labelPadding = ref(8);
 const labelMargin = ref(0);
 const labelPlacement = ref<"auto" | "center" | "top" | "bottom" | "left" | "right">("auto");
+const labelAlign = ref<"center" | "left" | "right">("center");
 const nodeWidth = ref(140);
 const nodeHeight = ref(50);
 const nodePortsTop = ref(3);
@@ -626,6 +629,7 @@ function loadNodeProps() {
   labelPadding.value = node.label?.padding ?? 8;
   labelMargin.value = node.label?.margin ?? 0;
   labelPlacement.value = (node as any).labelPlacement ?? "auto";
+  labelAlign.value = (labelStyle?.align as "center" | "left" | "right") ?? "center";
   labelTemplate.value = props.currentDiagramStyle?.labelTemplate ?? "";
 
   // Load node dimensions
@@ -1053,6 +1057,16 @@ function handleLabelPlacementChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     (node as any).labelPlacement = v;
+  });
+  emitNodeStyle();
+}
+
+function handleLabelAlignChange(value: string) {
+  const v = value as "center" | "left" | "right";
+  labelAlign.value = v;
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    if (node.label) node.label.style = { ...node.label.style, align: v };
   });
   emitNodeStyle();
 }
@@ -1840,6 +1854,14 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <option value="bottom">Снизу</option>
                     <option value="left">Слева</option>
                     <option value="right">Справа</option>
+                  </select>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">Выравн.</span>
+                  <select class="sp-select sp-select--flex" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
+                    <option value="center">По центру</option>
+                    <option value="left">По левому</option>
+                    <option value="right">По правому</option>
                   </select>
                 </div>
               </div>

@@ -173,6 +173,15 @@ const selectedDiagramElementId = computed(() => {
 const interactionManager = computed(() => diagramRef.value?.interactionManagerRef ?? null);
 const diagramRenderer = computed(() => diagramRef.value?.rendererRef ?? null);
 
+const selectedDiagramStyle = computed(() => {
+  const entity = selectedEntity.value;
+  if (!entity) return undefined;
+  if (entity.kind === "component") {
+    return state.value.components.find(c => c.id === entity.id)?.parsedAttrs.diagramStyle;
+  }
+  return state.value.relations.find(r => r.id === entity.id)?.parsedAttrs.diagramStyle;
+});
+
 // Toggle states
 const gridVisible = ref(true);
 const miniMapVisible = ref(true);
@@ -921,6 +930,7 @@ onBeforeUnmount(() => {
             :selected-element-id="selectedDiagramElementId"
             :interaction-manager="interactionManager"
             :renderer="diagramRenderer"
+            :current-diagram-style="selectedDiagramStyle"
             @style-change="handleStyleChange"
           />
         </template>

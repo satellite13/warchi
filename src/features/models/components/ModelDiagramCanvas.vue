@@ -23,7 +23,7 @@ import {
   type EdgeStyle
 } from "@ngroznykh/papirus"
 import type { ComponentResponse, NodeTypeResponse, RelationResponse } from "../../../types/api"
-import { parseEntityAttrs, type DiagramStyle } from "../../notations/notationAttrs"
+import { parseEntityAttrs, type CustomProperty, type DiagramStyle } from "../../notations/notationAttrs"
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "../types"
 
@@ -388,18 +388,68 @@ function createTrapezoidPath(width: number, height: number): Path2D {
   return path
 }
 
-function buildNodeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
-    return name
+function getNodeScopedPropertyValues(modelNodeId: string): Record<string, unknown> {
+  const node = nodeById.value.get(modelNodeId)
+  const notationId = activeNotationId.value
+  if (!node || !notationId) return {}
+  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (!componentId) return {}
+  return node.parsedAttrs.componentProperties[notationId]?.[componentId] ?? {}
+}
+
+function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[] {
+  const node = nodeById.value.get(modelNodeId)
+  const notationId = activeNotationId.value
+  if (!node || !notationId) return []
+  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (!componentId) return []
+  const component = props.components.find((c) => c.id === componentId)
+  if (!component) return []
+  return parseEntityAttrs(component.attrs ?? null).customProperties
+}
+
+function resolveLabelTemplate(
+  template: string,
+  name: string,
+  customProperties: CustomProperty[],
+  scopedValues: Record<string, unknown>
+): string {
+  return template.replace(/\$\{(\w+)\}/g, (_match, key: string) => {
+    if (key === "name") return name
+    const prop = customProperties.find((p) => p.name === key)
+    if (prop) {
+      const val = scopedValues[key] ?? prop.defaultValue
+      return val != null ? String(val) : ""
+    }
+    return ""
+  })
+}
+
+function buildNodeLabel(name: string, ds?: DiagramStyle, modelNodeId?: string): string | TextLabelOptions {
+  const hasTemplate = !!ds?.labelTemplate
+  let displayText = name
+  if (hasTemplate && modelNodeId) {
+    const customProps = getNodeComponentCustomProperties(modelNodeId)
+    const scopedValues = getNodeScopedPropertyValues(modelNodeId)
+    displayText = resolveLabelTemplate(ds!.labelTemplate!, name, customProps, scopedValues)
   }
-  const opts: TextLabelOptions = { text: name }
+
+  const hasStyle = !!(ds?.labelColor || ds?.labelOpacity != null || ds?.labelFontSize || ds?.labelPadding != null || ds?.labelMargin != null)
+
+  if (!hasStyle && !hasTemplate) {
+    return displayText
+  }
+  const opts: TextLabelOptions = { text: displayText }
+  if (hasTemplate) {
+    opts.editableText = name
+  }
   const style: TextStyle = {}
-  if (ds.labelColor) style.color = ds.labelColor
-  if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
-  if (ds.labelFontSize) style.fontSize = ds.labelFontSize
+  if (ds?.labelColor) style.color = ds.labelColor
+  if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
+  if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
   if (Object.keys(style).length) opts.style = style
-  if (ds.labelPadding != null) opts.padding = ds.labelPadding
-  if (ds.labelMargin != null) opts.margin = ds.labelMargin
+  if (ds?.labelPadding != null) opts.padding = ds.labelPadding
+  if (ds?.labelMargin != null) opts.margin = ds.labelMargin
   return opts
 }
 
@@ -489,7 +539,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     y: instance.y,
     width: visual.width,
     height: visual.height,
-    label: buildNodeLabel(nodeName, ds),
+    label: buildNodeLabel(nodeName, ds, instance.modelNodeId),
     style: visual.style,
     anchorPoints: resolveAnchorPoints(ds),
     ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
@@ -569,19 +619,11 @@ function syncDiagram() {
       existing.height = visual.height
       existing.style = visual.style
       existing.anchorPoints = resolveAnchorPoints(ds)
-      existing.label = nodeName
-      if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
-        existing.label.style = {
-          ...(ds?.labelColor ? { color: ds.labelColor } : {}),
-          ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
-        }
-      }
-      if (existing.label && ds?.labelPadding != null) {
-        existing.label.padding = ds.labelPadding
-      }
-      if (existing.label && ds?.labelMargin != null) {
-        existing.label.margin = ds.labelMargin
+      const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId)
+      if (typeof newLabel === "string") {
+        existing.label = newLabel
+      } else {
+        existing.label = new TextLabel(newLabel)
       }
       if (existing instanceof RectangleNode) {
         existing.cornerRadius = visual.cornerRadius
@@ -747,7 +789,7 @@ function detectLabelChanges() {
     if (!papNode) continue
     const labelText = typeof papNode.label === "string"
       ? papNode.label
-      : papNode.label?.text ?? ""
+      : papNode.label?.editableText ?? papNode.label?.text ?? ""
     const modelNode = nodeById.value.get(entity.modelNodeId)
     if (modelNode && labelText !== modelNode.name) {
       emit("nodeLabelChange", entity.modelNodeId, labelText)
@@ -1368,6 +1410,7 @@ onBeforeUnmount(() => {
 
 // Watch for data changes
 watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
+watch(() => props.nodes, () => syncDiagram(), { deep: true })
 
 watch(
   () => [props.activeDiagram?.id, props.activeDiagram?.notationId],

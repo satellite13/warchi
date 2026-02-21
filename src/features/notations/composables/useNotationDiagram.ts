@@ -14,6 +14,7 @@ import {
   NavigationManager,
   SelectionManager,
   InteractionManager,
+  TextLabel,
   type ElementState,
   type TextLabelOptions,
   type LabelPlacement,
@@ -22,7 +23,7 @@ import {
   type EdgeStyle as PapirusEdgeStyle,
   type ArrowMarkerType
 } from "@ngroznykh/papirus"
-import type { DiagramStyle, NodeStyle } from "../notationAttrs"
+import type { DiagramStyle, NodeStyle, CustomProperty } from "../notationAttrs"
 import type {
   NotationEditorState,
   EditorNodeType,
@@ -277,18 +278,48 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     }
   }
 
-  function buildNodeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-    if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
-      return name
+  function resolveLabelTemplate(
+    template: string,
+    name: string,
+    customProperties: CustomProperty[]
+  ): string {
+    return template.replace(/\$\{(\w+)\}/g, (_match, key: string) => {
+      if (key === "name") return name
+      const prop = customProperties.find((p) => p.name === key)
+      if (prop) {
+        const val = prop.defaultValue
+        return val != null ? String(val) : ""
+      }
+      return ""
+    })
+  }
+
+  function buildNodeLabel(
+    name: string,
+    ds?: DiagramStyle,
+    customProperties?: CustomProperty[]
+  ): string | TextLabelOptions {
+    const hasTemplate = !!ds?.labelTemplate
+    const displayText = hasTemplate
+      ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [])
+      : name
+
+    const hasStyle = !!(ds?.labelColor || ds?.labelOpacity != null || ds?.labelFontSize || ds?.labelPadding != null || ds?.labelMargin != null)
+
+    if (!hasStyle && !hasTemplate) {
+      return displayText
     }
-    const opts: TextLabelOptions = { text: name }
+    const opts: TextLabelOptions = { text: displayText }
+    if (hasTemplate) {
+      opts.editableText = name
+    }
     const style: TextStyle = {}
-    if (ds.labelColor) style.color = ds.labelColor
-    if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
-    if (ds.labelFontSize) style.fontSize = ds.labelFontSize
+    if (ds?.labelColor) style.color = ds.labelColor
+    if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
+    if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
     if (Object.keys(style).length) opts.style = style
-    if (ds.labelPadding != null) opts.padding = ds.labelPadding
-    if (ds.labelMargin != null) opts.margin = ds.labelMargin
+    if (ds?.labelPadding != null) opts.padding = ds.labelPadding
+    if (ds?.labelMargin != null) opts.margin = ds.labelMargin
     return opts
   }
 
@@ -376,7 +407,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       y,
       width: visual.width,
       height: visual.height,
-      label: buildNodeLabel(item.name, ds),
+      label: buildNodeLabel(item.name, ds, item.parsedAttrs.customProperties),
       style: visual.style,
       anchorPoints: NO_ANCHORS,
       ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
@@ -449,20 +480,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         }
         const visual = resolveComponentStyle(component)
         disableTransformerFrame(existing)
-        // Set label as string first (setter creates proper TextLabel), then apply style
-        existing.label = component.name
-        if (existing.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
-          existing.label.style = {
-            ...(ds.labelColor ? { color: ds.labelColor } : {}),
-            ...(ds.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-            ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {})
-          }
-        }
-        if (existing.label && ds?.labelPadding != null) {
-          existing.label.padding = ds.labelPadding
-        }
-        if (existing.label && ds?.labelMargin != null) {
-          existing.label.margin = ds.labelMargin
+        // Update label using template if available
+        const newLabel = buildNodeLabel(component.name, ds, component.parsedAttrs.customProperties)
+        if (typeof newLabel === "string") {
+          existing.label = newLabel
+        } else {
+          existing.label = new TextLabel(newLabel)
         }
         existing.width = visual.width
         existing.height = visual.height

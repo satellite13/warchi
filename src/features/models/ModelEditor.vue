@@ -274,6 +274,47 @@ const applyDefaultCustomValues = (
   }
 }
 
+const syncDefaultsOnLoad = () => {
+  for (const node of state.value.nodes) {
+    for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
+      const componentId = binding.componentId
+      if (!componentId) continue
+      if (!node.parsedAttrs.componentProperties[notationId]) node.parsedAttrs.componentProperties[notationId] = {}
+      if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
+        node.parsedAttrs.componentProperties[notationId][componentId] = {}
+      }
+      const component = state.value.components.find(
+        (item) => item.id === componentId && item.notationId === notationId
+      )
+      if (component) {
+        const target = node.parsedAttrs.componentProperties[notationId][componentId]!
+        const before = JSON.stringify(target)
+        applyDefaultCustomValues(target, component.attrs)
+        if (JSON.stringify(target) !== before) markNodeDirty(node.id)
+      }
+    }
+  }
+  for (const link of state.value.links) {
+    for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
+      const relationId = binding.relationId
+      if (!relationId) continue
+      if (!link.parsedAttrs.relationProperties[notationId]) link.parsedAttrs.relationProperties[notationId] = {}
+      if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
+        link.parsedAttrs.relationProperties[notationId][relationId] = {}
+      }
+      const relation = state.value.relations.find(
+        (item) => item.id === relationId && item.notationId === notationId
+      )
+      if (relation) {
+        const target = link.parsedAttrs.relationProperties[notationId][relationId]!
+        const before = JSON.stringify(target)
+        applyDefaultCustomValues(target, relation.attrs)
+        if (JSON.stringify(target) !== before) markLinkDirty(link.id)
+      }
+    }
+  }
+}
+
 const bindNodeComponent = (node: EditorNode, componentId: string) => {
   const notationId = activeNotationId.value
   if (!notationId) return
@@ -454,6 +495,7 @@ const switchDiagramWithoutSave = async () => {
   if (!action) return
 
   await loadModel()
+  syncDefaultsOnLoad()
   if (action === "close") {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
@@ -1310,6 +1352,38 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   }
 }
 
+const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
+  const diagram = activeDiagram.value
+  const selectedElementId = selectedCanvasElementId.value
+  if (!diagram || !selectedElementId) return undefined
+
+  if (selectedElementId.startsWith("instance-")) {
+    const instanceId = selectedElementId.slice("instance-".length)
+    const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+    if (instance?.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === "object") {
+      return instance.attrs.diagramStyle as DiagramStyle
+    }
+    const notationId = activeNotationId.value
+    if (!notationId) return undefined
+    const modelNode = state.value.nodes.find((item) => item.id === instance?.modelNodeId)
+    const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
+    if (!componentId) return undefined
+    const component = state.value.components.find((item) => item.id === componentId)
+    if (!component) return undefined
+    return parseEntityAttrs(component.attrs ?? null).diagramStyle
+  }
+
+  if (selectedElementId.startsWith("edge-")) {
+    const edgeId = selectedElementId.slice("edge-".length)
+    const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
+    if (edge?.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === "object") {
+      return edge.attrs.diagramStyle as DiagramStyle
+    }
+  }
+
+  return undefined
+})
+
 const hasDiagramStyleOverride = computed(() => {
   const diagram = activeDiagram.value
   const selectedElementId = selectedCanvasElementId.value
@@ -1437,8 +1511,9 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
   }
 }
 
-onMounted(() => {
-  loadModel()
+onMounted(async () => {
+  await loadModel()
+  syncDefaultsOnLoad()
   window.addEventListener("beforeunload", onBeforeUnload)
   window.addEventListener("keydown", onDeleteKeydown)
 })
@@ -1541,6 +1616,7 @@ onBeforeUnmount(() => {
                 :selected-element-id="selectedCanvasElementId"
                 :interaction-manager="diagramInteractionManager"
                 :renderer="diagramRenderer"
+                :current-diagram-style="selectedElementDiagramStyle"
                 :show-panel-actions="true"
                 :style-panel-collapsed="stylePanelCollapsed"
                 :can-restore-style="hasDiagramStyleOverride"

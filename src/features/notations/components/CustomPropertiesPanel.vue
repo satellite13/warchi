@@ -51,6 +51,7 @@ const sameTags = (a: string[], b: string[]) =>
 
 const tagsDraft = ref("");
 const tagsExpanded = ref(false);
+const labelTemplateExpanded = ref(false);
 const propertiesExpanded = ref(false);
 
 const ruleTargetSearchQuery = ref("");
@@ -112,8 +113,46 @@ const toggleTagsCollapse = () => {
   tagsExpanded.value = !tagsExpanded.value;
 };
 
+const toggleLabelTemplateCollapse = () => {
+  labelTemplateExpanded.value = !labelTemplateExpanded.value;
+};
+
 const togglePropertiesCollapse = () => {
   propertiesExpanded.value = !propertiesExpanded.value;
+};
+
+const labelTemplateValue = computed(() => {
+  if (!props.selectedItem) return "";
+  return props.selectedItem.parsedAttrs.diagramStyle?.labelTemplate ?? "";
+});
+
+const labelTemplatePreview = computed(() => {
+  const item = props.selectedItem;
+  if (!item) return "";
+  const template = item.parsedAttrs.diagramStyle?.labelTemplate;
+  if (!template) return item.name;
+  return template.replace(/\$\{(\w+)\}/g, (_match: string, key: string) => {
+    if (key === "name") return item.name;
+    const prop = item.parsedAttrs.customProperties.find((p) => p.name === key);
+    if (prop) {
+      const val = prop.defaultValue;
+      return val != null ? String(val) : "";
+    }
+    return "";
+  });
+});
+
+const handleLabelTemplateInput = (value: string) => {
+  if (!props.selectedItem) return;
+  if (!props.selectedItem.parsedAttrs.diagramStyle) {
+    props.selectedItem.parsedAttrs.diagramStyle = {};
+  }
+  if (value) {
+    props.selectedItem.parsedAttrs.diagramStyle.labelTemplate = value;
+  } else {
+    delete props.selectedItem.parsedAttrs.diagramStyle.labelTemplate;
+  }
+  props.onItemChanged?.(props.selectedItem.id);
 };
 
 const applyTagsDraft = () => {
@@ -625,6 +664,37 @@ onBeforeUnmount(() => {
               {{ tag }}
               <span class="material-symbols-outlined">close</span>
             </button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Label template section (only for components) -->
+      <div v-if="selectedItem && !('linkTypeId' in selectedItem)" class="properties-panel__label-template">
+        <div
+          class="properties-panel__label-template-header"
+          role="button"
+          tabindex="0"
+          @click="toggleLabelTemplateCollapse"
+          @keydown.enter.prevent="toggleLabelTemplateCollapse"
+          @keydown.space.prevent="toggleLabelTemplateCollapse"
+        >
+          <span
+            class="material-symbols-outlined properties-panel__label-template-chevron"
+            :class="{ 'properties-panel__label-template-chevron--collapsed': !labelTemplateExpanded }"
+          >expand_more</span>
+          <span class="properties-panel__label-template-label">Составная метка</span>
+        </div>
+        <template v-if="labelTemplateExpanded">
+          <textarea
+            class="properties-panel__label-template-input"
+            :value="labelTemplateValue"
+            placeholder="${name} — ${status}"
+            rows="2"
+            @input="handleLabelTemplateInput(($event.target as HTMLTextAreaElement).value)"
+          ></textarea>
+          <div v-if="labelTemplateValue" class="properties-panel__label-template-preview">
+            <span class="properties-panel__label-template-preview-label">Результат:</span>
+            <span class="properties-panel__label-template-preview-text">{{ labelTemplatePreview }}</span>
           </div>
         </template>
       </div>
@@ -1394,6 +1464,81 @@ onBeforeUnmount(() => {
   color: var(--danger);
   border-color: rgba(220, 53, 69, 0.35);
   background: rgba(220, 53, 69, 0.08);
+}
+
+.properties-panel__label-template {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__label-template-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.properties-panel__label-template-chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.properties-panel__label-template-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.properties-panel__label-template-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: inherit;
+}
+
+.properties-panel__label-template-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 13px;
+  font-family: monospace;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.properties-panel__label-template-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
+  background: var(--surface);
+}
+
+.properties-panel__label-template-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.properties-panel__label-template-preview-label {
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.properties-panel__label-template-preview-text {
+  color: var(--base-text);
+  word-break: break-all;
 }
 
 .properties-panel__rules {

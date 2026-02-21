@@ -75,6 +75,8 @@ export type DiagramStyle = {
   portsRight?: number;
   // Node base shape
   nodeShape?: string;
+  // Label template for composite labels
+  labelTemplate?: string;
 };
 
 type RawRecord = Record<string, unknown>;
@@ -219,6 +221,7 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.portsLeft === "number") style.portsLeft = value.portsLeft;
   if (typeof value.portsRight === "number") style.portsRight = value.portsRight;
   if (typeof value.nodeShape === "string") style.nodeShape = value.nodeShape;
+  if (typeof value.labelTemplate === "string") style.labelTemplate = value.labelTemplate;
   return Object.keys(style).length ? style : undefined;
 };
 

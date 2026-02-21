@@ -22,6 +22,7 @@ const props = defineProps<{
   showPanelActions?: boolean;
   stylePanelCollapsed?: boolean;
   canRestoreStyle?: boolean;
+  currentDiagramStyle?: DiagramStyle;
 }>();
 
 const emit = defineEmits<{
@@ -65,6 +66,7 @@ function emitNodeStyle() {
     labelPadding: labelPadding.value,
     labelMargin: labelMargin.value,
     labelPlacement: labelPlacement.value,
+    ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
     width: nodeWidth.value,
     height: nodeHeight.value,
     portsTop: nodePortsTop.value,
@@ -504,6 +506,7 @@ const cornerRadius = ref(0);
 const opacity = ref(1);
 const lineStyle = ref<"solid" | "dashed">("solid");
 const lineDashPattern = ref("8,4");
+const labelTemplate = ref("");
 const labelColor = ref("#333333");
 const labelOpacity = ref(1);
 const labelFontSize = ref(14);
@@ -623,6 +626,7 @@ function loadNodeProps() {
   labelPadding.value = node.label?.padding ?? 8;
   labelMargin.value = node.label?.margin ?? 0;
   labelPlacement.value = (node as any).labelPlacement ?? "auto";
+  labelTemplate.value = props.currentDiagramStyle?.labelTemplate ?? "";
 
   // Load node dimensions
   nodeWidth.value = Math.round(node.width ?? 140);
@@ -681,6 +685,10 @@ watch(() => props.selectedElementId, () => {
     selectedComponentPreset.value = "custom";
   }
 }, {immediate: true});
+
+watch(() => props.currentDiagramStyle?.labelTemplate, (val) => {
+  labelTemplate.value = val ?? "";
+});
 
 function reloadSelectedProps() {
   if (elementType.value === "edge") {
@@ -966,6 +974,12 @@ function handleLineDashChange(value: string) {
       emitNodeStyle();
     }
   }
+}
+
+function handleLabelTemplateChange(value: string) {
+  labelTemplate.value = value;
+  resetComponentPreset();
+  emitNodeStyle();
 }
 
 function handleLabelColorChange(value: string) {
@@ -1784,6 +1798,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
               <div v-if="nodeSection.label" class="sp-section__content">
                 <div class="sp-field">
                   <input class="sp-input sp-input--full" :value="label" placeholder="Текст метки..." @input="handleLabelChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field">
+                  <span class="sp-field__label">Шаблон</span>
+                  <input class="sp-input sp-input--full" :value="labelTemplate" placeholder="${name} — ${status}" @input="handleLabelTemplateChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Цвет</span>

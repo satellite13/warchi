@@ -422,7 +422,7 @@ function resolveLabelTemplate(
       return val != null ? String(val) : ""
     }
     return ""
-  })
+  }).replace(/\\n/g, "\n")
 }
 
 function buildNodeLabel(name: string, ds?: DiagramStyle, modelNodeId?: string): string | TextLabelOptions {

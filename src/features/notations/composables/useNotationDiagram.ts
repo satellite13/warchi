@@ -291,7 +291,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         return val != null ? String(val) : ""
       }
       return ""
-    })
+    }).replace(/\\n/g, "\n")
   }
 
   function buildNodeLabel(

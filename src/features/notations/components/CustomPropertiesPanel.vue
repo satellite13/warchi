@@ -139,7 +139,7 @@ const labelTemplatePreview = computed(() => {
       return val != null ? String(val) : "";
     }
     return "";
-  });
+  }).replace(/\\n/g, "\n");
 });
 
 const handleLabelTemplateInput = (value: string) => {

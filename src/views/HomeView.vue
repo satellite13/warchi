@@ -6,12 +6,12 @@ import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
-import changelogRaw from "../../CHANGELOG.md?raw"
+import changelogRaw from "../../CHANGELOG.ru.md?raw"
 
 const router = useRouter()
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
-const appVersion = "0.0.5"
+const appVersion = "0.0.8"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()

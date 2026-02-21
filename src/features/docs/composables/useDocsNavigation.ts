@@ -9,6 +9,7 @@ const contentModules: Record<string, () => Promise<{ default: string }>> = {
   diagrams: () => import("../content/diagrams.md?raw"),
   types: () => import("../content/types.md?raw"),
   hotkeys: () => import("../content/hotkeys.md?raw"),
+  changelog: () => import("../../../../CHANGELOG.ru.md?raw"),
   faq: () => import("../content/faq.md?raw"),
 }
 
@@ -19,6 +20,7 @@ export const sections: DocSection[] = [
   { id: "diagrams", title: "Диаграммы", icon: "dashboard" },
   { id: "types", title: "Типы", icon: "category" },
   { id: "hotkeys", title: "Горячие клавиши", icon: "keyboard" },
+  { id: "changelog", title: "История изменений", icon: "history" },
   { id: "faq", title: "FAQ", icon: "help" },
 ]
 

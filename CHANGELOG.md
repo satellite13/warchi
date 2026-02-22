@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.9] - 2026-02-22
+
+### Added
+- ACL-based sharing UI for models, notations, and types with access management modal.
+- Support for share permissions `VIEW` and `EDIT`, including effective access badges in catalogs.
+- User profile and admin users pages with normalized role handling (`ADMIN` / `USER`).
+- Diagram info action in model editor toolbar with notation metadata (name/version/owner) fallback loading.
+- Notation metadata endpoint support in frontend (`/notations/{id}/meta`) for diagrams referencing inaccessible notations.
+
+### Changed
+- Removed legacy `EDITOR` role assumptions from auth, routing, and entity filtering flows.
+- Updated model/notation/type editors to rely on backend ACL responses instead of owner-only client filtering.
+- Refined API error messaging for revoked or missing shared access scenarios.
+
+### Fixed
+- Multiple shared-edit save regressions (403/409) in model and notation editing flows.
+- Sharing UX issues in user search and share assignment defaults.
+- Home dashboard hero text clipping and panel sizing issues.
+
+### Release
+- Bumped application version to `0.0.9` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.9`.
+
 ## [0.0.8] - 2026-02-21
 
 ### Added

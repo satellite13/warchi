@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
   snapEnabled?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
+  canShare?: boolean;
 }>(), {
   hasUnsavedChanges: false,
   notationName: "",
@@ -21,7 +22,8 @@ const props = withDefaults(defineProps<{
   miniMapVisible: true,
   snapEnabled: false,
   canUndo: false,
-  canRedo: false
+  canRedo: false,
+  canShare: false
 });
 
 const router = useRouter();
@@ -60,6 +62,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 
 const emit = defineEmits<{
   action: [event: string];
+  share: [];
 }>();
 </script>
 
@@ -77,6 +80,16 @@ const emit = defineEmits<{
         <span class="dirty-dot"></span>
         Не сохранено
       </span>
+      <button
+        v-if="canShare"
+        type="button"
+        class="share-btn"
+        title="Поделиться доступом"
+        @click="emit('share')"
+      >
+        <span class="material-symbols-outlined">share</span>
+        Поделиться
+      </button>
     </div>
     <div class="notation-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)"/>
@@ -176,5 +189,23 @@ const emit = defineEmits<{
   height: 6px;
   border-radius: 50%;
   background: var(--warning);
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.share-btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 </style>

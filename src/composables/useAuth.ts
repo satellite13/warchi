@@ -1,66 +1,154 @@
 import { ref, computed } from "vue";
-import { apiGet } from "./useApi";
-import type { User, PaginatedResponse } from "../types/entities";
+import { apiGet, apiPost, apiPut } from "./useApi";
+import {
+  AUTH_CLEARED_EVENT,
+  AUTH_UPDATED_EVENT,
+  clearAuthStorage,
+  emitAuthCleared,
+  emitAuthUpdated,
+  loadStoredUser,
+  saveStoredUser,
+  setAccessToken,
+  setRefreshToken
+} from "./authStorage";
+import type { User, UserProfileForm } from "../types/entities";
+import { normalizeUser } from "../utils/userRole";
 
 export type { User };
 
-const STORAGE_KEY = "warchi_user";
+type AuthResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+};
 
-const currentUser = ref<User | null>(loadUserFromStorage());
+type AuthResult = { success: true } | { success: false; error: string };
 
-function loadUserFromStorage(): User | null {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored) as User;
-    }
-  } catch {
-    window.localStorage.removeItem(STORAGE_KEY);
-  }
-  return null;
+const currentUser = ref<User | null>(loadStoredUser());
+if (currentUser.value) {
+  currentUser.value = normalizeUser(currentUser.value);
+  saveStoredUser(currentUser.value);
 }
 
-function saveUserToStorage(user: User | null): void {
-  if (user) {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-  } else {
-    window.localStorage.removeItem(STORAGE_KEY);
-  }
+const applyAuth = (response: AuthResponse): void => {
+  const normalizedUser = normalizeUser(response.user);
+  currentUser.value = normalizedUser;
+  saveStoredUser(normalizedUser);
+  setAccessToken(response.accessToken);
+  setRefreshToken(response.refreshToken);
+  emitAuthUpdated(normalizedUser);
+};
+
+const AUTH_LISTENERS_FLAG = "__warchiAuthListenersAttached__";
+type WindowWithAuthFlag = Window & { [AUTH_LISTENERS_FLAG]?: boolean };
+
+if (
+  typeof window !== "undefined" &&
+  !(window as WindowWithAuthFlag)[AUTH_LISTENERS_FLAG]
+) {
+  (window as WindowWithAuthFlag)[AUTH_LISTENERS_FLAG] = true;
+
+  window.addEventListener(AUTH_UPDATED_EVENT, (event) => {
+    const payload = (event as CustomEvent<User>).detail;
+    const user = payload ? normalizeUser(payload) : null;
+    if (!user) return;
+    currentUser.value = user;
+    saveStoredUser(user);
+  });
+
+  window.addEventListener(AUTH_CLEARED_EVENT, () => {
+    currentUser.value = null;
+  });
 }
 
 export function useAuth() {
   const isAuthenticated = computed(() => currentUser.value !== null);
+  const isAdmin = computed(() => currentUser.value?.role === "ADMIN");
 
-  async function login(email: string): Promise<{ success: boolean; error?: string }> {
-    const result = await apiGet<PaginatedResponse<User>>(
-      `/users?email=${encodeURIComponent(email)}&size=1`
-    );
+  async function login(email: string, password: string): Promise<AuthResult> {
+    const result = await apiPost<AuthResponse>("/auth/login", { email, password });
 
     if (!result.success) {
       return { success: false, error: result.error.message };
     }
 
-    const users = Array.isArray(result.data.content) ? result.data.content : [];
+    applyAuth(result.data);
+    return { success: true };
+  }
 
-    const user = users[0];
-    if (!user) {
-      return { success: false, error: "Пользователь не найден" };
+  async function register(
+    email: string,
+    password: string,
+    profile: UserProfileForm
+  ): Promise<AuthResult> {
+    const result = await apiPost<AuthResponse>("/auth/register", { email, password, ...profile });
+
+    if (!result.success) {
+      return { success: false, error: result.error.message };
     }
 
-    currentUser.value = user;
-    saveUserToStorage(user);
+    applyAuth(result.data);
+    return { success: true };
+  }
+
+  async function registerAdmin(
+    email: string,
+    password: string,
+    adminSecret: string,
+    profile: UserProfileForm
+  ): Promise<AuthResult> {
+    const result = await apiPost<AuthResponse>("/auth/register-admin", {
+      email,
+      password,
+      ...profile,
+      adminSecret
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error.message };
+    }
+
+    applyAuth(result.data);
+    return { success: true };
+  }
+
+  async function loadCurrentUser(): Promise<void> {
+    const result = await apiGet<User>("/auth/me");
+    if (!result.success) return;
+
+    const normalizedUser = normalizeUser(result.data);
+    currentUser.value = normalizedUser;
+    saveStoredUser(normalizedUser);
+  }
+
+  async function updateMyProfile(profile: Partial<UserProfileForm>): Promise<AuthResult> {
+    const result = await apiPut<User>("/users/me/profile", profile);
+    if (!result.success) {
+      return { success: false, error: result.error.message };
+    }
+
+    const normalizedUser = normalizeUser(result.data);
+    currentUser.value = normalizedUser;
+    saveStoredUser(normalizedUser);
+    emitAuthUpdated(normalizedUser);
     return { success: true };
   }
 
   function logout(): void {
+    clearAuthStorage();
+    emitAuthCleared();
     currentUser.value = null;
-    saveUserToStorage(null);
   }
 
   return {
     currentUser,
     isAuthenticated,
+    isAdmin,
     login,
+    register,
+    registerAdmin,
+    loadCurrentUser,
+    updateMyProfile,
     logout
   };
 }

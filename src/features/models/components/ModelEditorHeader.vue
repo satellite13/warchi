@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<{
   hasActiveDiagram?: boolean
   canUndo?: boolean
   canRedo?: boolean
+  canShare?: boolean
 }>(), {
   hasUnsavedChanges: false,
   canSave: true,
@@ -27,13 +28,15 @@ const props = withDefaults(defineProps<{
   lockAnchorsEnabled: true,
   hasActiveDiagram: false,
   canUndo: false,
-  canRedo: false
+  canRedo: false,
+  canShare: false
 })
 
 const router = useRouter()
 const emit = defineEmits<{
   action: [event: string]
   renameModel: [name: string]
+  share: []
 }>()
 
 const isRenamingModel = ref(false)
@@ -148,6 +151,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: "Просмотр JSON диаграммы",
     disabled: !props.hasActiveDiagram
   },
+  { icon: "info", event: "show-diagram-info", title: "Информация о диаграмме", disabled: !props.hasActiveDiagram },
   { icon: "separator", event: "sep5", separator: true },
   {
     icon: "save",
@@ -194,6 +198,16 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
         <span class="dirty-dot"></span>
         Не сохранено
       </span>
+      <button
+        v-if="canShare"
+        type="button"
+        class="share-btn"
+        title="Поделиться доступом"
+        @click="emit('share')"
+      >
+        <span class="material-symbols-outlined">share</span>
+        Поделиться
+      </button>
     </div>
     <div class="model-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
@@ -323,6 +337,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   border-radius: 6px;
 }
 
+
 .dirty-badge {
   display: inline-flex;
   align-items: center;
@@ -353,5 +368,23 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 @keyframes pulseGlow {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.share-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 </style>

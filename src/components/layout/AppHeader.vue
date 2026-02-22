@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import {computed} from "vue";
 import {useRouter} from "vue-router";
 import {useAuth} from "../../composables/useAuth";
+import {getUserDisplayName} from "../../utils/userDisplay";
 import AppLogo from "./AppLogo.vue";
 import UserAvatar from "./UserAvatar.vue";
 import NavigationMenu from "../menu/NavigationMenu.vue";
 
 const router = useRouter();
 const {currentUser, logout} = useAuth();
+const userDisplayName = computed(() => getUserDisplayName(currentUser.value, "Пользователь"));
 
 const handleLogout = () => {
   logout();
@@ -21,8 +24,9 @@ const handleLogout = () => {
       <NavigationMenu/>
     </div>
     <div class="user-info">
-      <UserAvatar :email="currentUser?.email" size="sm"/>
-      <span class="user-email">{{ currentUser?.email }}</span>
+      <UserAvatar :label="userDisplayName" size="sm"/>
+      <span class="user-email">{{ userDisplayName }}</span>
+      <span v-if="currentUser?.role" class="user-role">{{ currentUser.role }}</span>
       <button class="logout-button" type="button" @click="handleLogout">
         <span class="material-symbols-outlined">exit_to_app</span>
       </button>
@@ -65,6 +69,17 @@ const handleLogout = () => {
   font-size: 13px;
   color: var(--text-muted);
   letter-spacing: 0.01em;
+}
+
+.user-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
+  letter-spacing: 0.03em;
 }
 
 .logout-button {

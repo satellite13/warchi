@@ -3,6 +3,7 @@ export interface VersionedEntity {
   name: string;
   version: string;
   ownerId: string;
+  accessPermission?: AccessPermission | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -23,6 +24,10 @@ export interface EntityGroup<T extends VersionedEntity> {
 export interface UserInfo {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  middleName?: string | null;
+  position?: string | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -41,7 +46,24 @@ export interface PaginatedResponse<T> {
 export interface User {
   id: string;
   email: string;
+  role?: UserRole;
+  isActive?: boolean;
+  firstName?: string | null;
+  lastName?: string | null;
+  middleName?: string | null;
+  position?: string | null;
   attrs?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }
+
+export type UserRole = "USER" | "ADMIN";
+
+export interface UserProfileForm {
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  position?: string;
+}
+
+export type AccessPermission = "OWNER" | "EDIT" | "VIEW" | "ADMIN";

@@ -2,13 +2,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Papirus integration requires dynamic runtime node access */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from "vue-router"
+import { apiGet } from "../../composables/useApi"
 import MainLayout from "../../layouts/MainLayout.vue"
 import AppFooter from "../../components/layout/AppFooter.vue"
 import BaseModal from "../../components/modals/BaseModal.vue"
+import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
 import { ImageExporter, SvgExporter } from "@ngroznykh/papirus"
 import { createId, parseLinkAttrs, parseNodeAttrs, resolveComponentByNodeType, resolveRelationByLinkType } from "./modelAttrs"
 import type { EditorLink, EditorNode } from "./types"
 import { useModelEditor } from "./composables/useModelEditor"
+import { useAuth } from "../../composables/useAuth"
 import ModelEditorHeader from "./components/ModelEditorHeader.vue"
 import ModelMainPanelLayout from "./layout/ModelMainPanelLayout.vue"
 import ModelTreePalettePanel from "./components/ModelTreePalettePanel.vue"
@@ -17,6 +20,7 @@ import ModelPropertiesPanel from "./components/ModelPropertiesPanel.vue"
 import { parseEntityAttrs, type DiagramStyle } from "../notations/notationAttrs"
 import NodeStylePanel from "../notations/components/NodeStylePanel.vue"
 import { bumpMinor, compareVersions } from "../../utils/version"
+import type { NotationMetaResponse } from "../../types/api"
 
 const {
   model,
@@ -35,8 +39,11 @@ const {
   markDiagramDirty,
   renameModel
 } = useModelEditor()
+const { currentUser } = useAuth()
 
 const selectedNodeId = ref<string | null>(null)
+const showShareModal = ref(false)
+const showDiagramInfoModal = ref(false)
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
@@ -46,6 +53,9 @@ const diagramInteractionManager = ref<any>(null)
 const stylePanelCollapsed = ref(true)
 const rightStackRows = computed(() =>
   stylePanelCollapsed.value ? "minmax(240px, 1fr) 46px" : "minmax(240px, 1fr) minmax(320px, 1fr)"
+)
+const canShareModel = computed(
+  () => !!model.value?.ownerId && !!currentUser.value?.id && model.value.ownerId === currentUser.value.id
 )
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
@@ -64,6 +74,56 @@ const activeDiagram = computed(() =>
     : null
 )
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
+const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
+const fallbackNotationMetaLoading = ref(false)
+const fallbackNotationMetaError = ref<string | null>(null)
+const activeDiagramNotationLabel = computed(() => {
+  const notationId = activeDiagram.value?.notationId
+  if (!notationId) return ""
+  const notation = state.value.notations.find((item) => item.id === notationId)
+  if (!notation) {
+    if (fallbackNotationMeta.value?.id === notationId) {
+      return `${fallbackNotationMeta.value.name} (${fallbackNotationMeta.value.version})`
+    }
+    if (fallbackNotationMetaLoading.value) return "Нотация загружается..."
+    if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
+    return "Нотация недоступна"
+  }
+  return `${notation.name} (${notation.version})`
+})
+const activeDiagramNotationOwnerLabel = computed(() => {
+  const notationId = activeDiagram.value?.notationId
+  if (!notationId) return ""
+  if (fallbackNotationMeta.value?.id !== notationId) return ""
+  return fallbackNotationMeta.value.ownerEmail
+})
+
+watch(
+  () => activeDiagram.value?.notationId ?? null,
+  async (notationId) => {
+    fallbackNotationMeta.value = null
+    fallbackNotationMetaError.value = null
+    fallbackNotationMetaLoading.value = false
+    if (!notationId) return
+    const hasNotationInState = state.value.notations.some((item) => item.id === notationId)
+    if (hasNotationInState) return
+
+    fallbackNotationMetaLoading.value = true
+    const result = await apiGet<NotationMetaResponse>(`/notations/${notationId}/meta`)
+    if (activeDiagram.value?.notationId !== notationId) return
+    fallbackNotationMetaLoading.value = false
+    if (!result.success) {
+      fallbackNotationMetaError.value =
+        result.error.status === 404
+          ? "Метаданные нотации недоступны (backend не обновлён или нотация удалена)"
+          : result.error.status === 403
+            ? "Нет доступа к нотации"
+            : "Не удалось загрузить нотацию"
+      return
+    }
+    fallbackNotationMeta.value = result.data
+  }
+)
 
 const selectedTreeNode = computed(() =>
   selectedNodeId.value
@@ -1274,6 +1334,9 @@ const handleToolbarAction = async (event: string) => {
     case "show-diagram-json":
       openDiagramJson()
       break
+    case "show-diagram-info":
+      if (activeDiagram.value) showDiagramInfoModal.value = true
+      break
   }
 }
 
@@ -1538,8 +1601,10 @@ onBeforeUnmount(() => {
         :has-active-diagram="!!activeDiagram"
         :can-undo="canUndo"
         :can-redo="canRedo"
+        :can-share="canShareModel"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
+        @share="showShareModal = true"
       />
     </template>
     <template #default>
@@ -1851,6 +1916,39 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
+  <BaseModal
+    v-if="showDiagramInfoModal && activeDiagram"
+    title="Информация о диаграмме"
+    max-width="460px"
+    @close="showDiagramInfoModal = false"
+  >
+    <div class="diagram-info">
+      <div class="diagram-info__row">
+        <span class="diagram-info__label">Диаграмма</span>
+        <span class="diagram-info__value">{{ activeDiagram.name }} ({{ activeDiagram.version }})</span>
+      </div>
+      <div class="diagram-info__row">
+        <span class="diagram-info__label">Нотация</span>
+        <span class="diagram-info__value">{{ activeDiagramNotationLabel }}</span>
+      </div>
+      <div v-if="activeDiagramNotationOwnerLabel" class="diagram-info__row">
+        <span class="diagram-info__label">Владелец нотации</span>
+        <span class="diagram-info__value">{{ activeDiagramNotationOwnerLabel }}</span>
+      </div>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="showDiagramInfoModal = false">Закрыть</button>
+    </template>
+  </BaseModal>
+
+  <ShareAccessModal
+    v-if="showShareModal && model"
+    title="Доступ к модели"
+    resource-type="MODEL"
+    :resource-id="model.id"
+    @close="showShareModal = false"
+  />
+
   <div v-if="isLoading" class="overlay-loading">Загрузка...</div>
   <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">{{ errorMessage }}</div>
 </template>
@@ -1999,6 +2097,27 @@ onBeforeUnmount(() => {
 
 .model-right-stack__bottom--collapsed {
   min-height: 46px;
+}
+
+.diagram-info {
+  display: grid;
+  gap: 8px;
+}
+
+.diagram-info__row {
+  display: grid;
+  gap: 2px;
+}
+
+.diagram-info__label {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.diagram-info__value {
+  font-size: 14px;
+  color: var(--base-text);
+  overflow-wrap: anywhere;
 }
 
 .save-toast {

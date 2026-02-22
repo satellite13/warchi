@@ -63,11 +63,16 @@ export function useDashboard() {
 
   const loadAll = async () => {
     isLoading.value = true
+    const modelsQuery = new URLSearchParams({ page: "0", size: "50" })
+    const notationsQuery = new URLSearchParams({ page: "0", size: "50" })
+    const nodeTypesQuery = new URLSearchParams({ page: "0", size: "50" })
+    const linkTypesQuery = new URLSearchParams({ page: "0", size: "50" })
+
     const [modelsRes, notationsRes, nodeTypesRes, linkTypesRes, auditRes] = await Promise.all([
-      apiGet<PaginatedResponse<ModelData>>("/models?page=0&size=50"),
-      apiGet<PaginatedResponse<NotationData>>("/notations?page=0&size=50"),
-      apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?page=0&size=50"),
-      apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?page=0&size=50"),
+      apiGet<PaginatedResponse<ModelData>>(`/models?${modelsQuery.toString()}`),
+      apiGet<PaginatedResponse<NotationData>>(`/notations?${notationsQuery.toString()}`),
+      apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
+      apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${linkTypesQuery.toString()}`),
       apiGet<PaginatedResponse<AuditLogResponse>>("/audit-log?page=0&size=20")
     ])
 

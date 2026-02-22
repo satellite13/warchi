@@ -118,6 +118,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     errorMessage.value = null
 
     try {
+      const listQuery = new URLSearchParams({ size: "1000" })
+
       const [
         modelResult,
         modelsResult,
@@ -132,20 +134,26 @@ export const useModelEditor = (): ModelEditorReturn => {
         relationRulesResult
       ] = await Promise.all([
         apiGet<ModelData>(`/models/${modelId}`),
-        apiGet<PaginatedResponse<ModelData>>("/models?page=0&size=1000"),
+        apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
         apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(modelId)}&size=1000`),
         apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(modelId)}&size=1000`),
         apiGet<PaginatedResponse<DiagramResponse>>(`/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`),
-        apiGet<PaginatedResponse<NotationData>>("/notations?size=1000"),
-        apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?size=1000"),
-        apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?size=1000"),
-        apiGet<PaginatedResponse<ComponentResponse>>("/components?size=1000"),
-        apiGet<PaginatedResponse<RelationResponse>>("/relations?size=1000"),
-        apiGet<PaginatedResponse<RelationRuleResponse>>("/relation-rules?size=1000")
+        apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`)
       ])
 
       if (!modelResult.success) {
-        throw new Error(modelResult.error.status === 404 ? "Модель не найдена" : modelResult.error.message)
+        if (modelResult.error.status === 404) {
+          throw new Error("Модель не найдена")
+        }
+        if (modelResult.error.status === 403) {
+          throw new Error("Доступ к модели отозван или отсутствует.")
+        }
+        throw new Error(modelResult.error.message)
       }
 
       model.value = modelResult.data
@@ -218,6 +226,18 @@ export const useModelEditor = (): ModelEditorReturn => {
     saveProgress.value = ""
 
     try {
+      const formatSaveEntityError = (
+        action: "создания" | "обновления" | "удаления",
+        entity: string,
+        status: number,
+        message: string
+      ): string => {
+        if (status === 401 || status === 403) {
+          return "Недостаточно прав для редактирования модели. Войдите заново или обратитесь к администратору."
+        }
+        return `Ошибка ${action} ${entity}: ${message}`
+      }
+
       const ownerId = state.value.ownerId
       const modelId = state.value.modelId
 
@@ -252,7 +272,11 @@ export const useModelEditor = (): ModelEditorReturn => {
       for (const node of nodes.filter((row) => row._isDeleted && !row._isNew)) {
         saveProgress.value = `Удаление узла: ${node.name}`
         const result = await apiDelete<void>(`/nodes/${node.id}`)
-        if (!result.success) throw new Error(`Ошибка удаления узла: ${result.error.message}`)
+        if (!result.success) {
+          throw new Error(
+            formatSaveEntityError("удаления", "узла", result.error.status, result.error.message)
+          )
+        }
       }
 
       for (const node of nodes.filter((row) => row._isNew && !row._isDeleted)) {
@@ -266,7 +290,11 @@ export const useModelEditor = (): ModelEditorReturn => {
           attrs: serializeNodeAttrs(node.parsedAttrs)
         }
         const result = await apiPost<NodeResponse>("/nodes", request)
-        if (!result.success) throw new Error(`Ошибка создания узла: ${result.error.message}`)
+        if (!result.success) {
+          throw new Error(
+            formatSaveEntityError("создания", "узла", result.error.status, result.error.message)
+          )
+        }
         newNodeIdMap.set(node.id, result.data.id)
         node.id = result.data.id
         node._isNew = false
@@ -283,7 +311,11 @@ export const useModelEditor = (): ModelEditorReturn => {
           attrs: serializeNodeAttrs(node.parsedAttrs)
         }
         const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
-        if (!result.success) throw new Error(`Ошибка обновления узла: ${result.error.message}`)
+        if (!result.success) {
+          throw new Error(
+            formatSaveEntityError("обновления", "узла", result.error.status, result.error.message)
+          )
+        }
         node._isDirty = false
       }
 

@@ -1,6 +1,7 @@
 import { ref, computed, onScopeDispose, type Ref, type ComputedRef } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { apiGet, apiPost, apiPut, apiDelete } from "../../../composables/useApi"
+import { useAuth } from "../../../composables/useAuth"
 import type { NotationData, PaginatedResponse } from "../../../types/entities"
 import type {
   NodeTypeResponse,
@@ -130,6 +131,7 @@ function normalizeTypeName(name: string): string {
 export function useNotationEditor(): NotationEditorReturn {
   const route = useRoute()
   const router = useRouter()
+  const { currentUser } = useAuth()
 
   const notation = ref<NotationData | null>(null)
   const state = ref<NotationEditorState>(createEmptyEditorState())
@@ -177,6 +179,12 @@ export function useNotationEditor(): NotationEditorReturn {
     errorMessage.value = null
 
     try {
+      const listQuery = new URLSearchParams({ size: "1000" })
+      const listQueryWithNotation = new URLSearchParams({
+        size: "1000",
+        notationId
+      })
+
       // Parallel fetch from 6 endpoints
       const [
         notationResult,
@@ -187,20 +195,23 @@ export function useNotationEditor(): NotationEditorReturn {
         relationRulesResult
       ] = await Promise.all([
         apiGet<NotationData>(`/notations/${notationId}`),
-        apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?size=1000"),
-        apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?size=1000"),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQueryWithNotation.toString()}`),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQueryWithNotation.toString()}`),
         apiGet<PaginatedResponse<ComponentResponse>>(
-          `/components?notationId=${encodeURIComponent(notationId)}&size=1000`
+          `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
         ),
         apiGet<PaginatedResponse<RelationResponse>>(
-          `/relations?notationId=${encodeURIComponent(notationId)}&size=1000`
+          `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
         ),
-        apiGet<PaginatedResponse<RelationRuleResponse>>("/relation-rules?size=1000")
+        apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`)
       ])
 
       if (!notationResult.success) {
         if (notationResult.error.status === 404) {
           throw new Error("Нотация не найдена")
+        }
+        if (notationResult.error.status === 403) {
+          throw new Error("Доступ к нотации отозван или отсутствует.")
         }
         throw new Error(notationResult.error.message)
       }
@@ -253,11 +264,31 @@ export function useNotationEditor(): NotationEditorReturn {
     saveProgress.value = ""
 
     try {
+      const role = currentUser.value?.role
+      const formatNotationEntityError = (
+        action: "создания" | "обновления" | "удаления",
+        entity: string,
+        status: number,
+        message: string
+      ): string => {
+        if (status === 401 || status === 403) {
+          return "Недостаточно прав для редактирования нотации. Войдите заново или обратитесь к администратору."
+        }
+        return `Ошибка ${action} ${entity}: ${message}`
+      }
+
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
+      const typeOwnerId = role !== "ADMIN" ? currentUser.value?.id ?? ownerId : ownerId
 
       // Step 1: Create or bind node types
-      const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?size=1000")
+      const existingNodeTypeQuery = new URLSearchParams({ size: "1000" })
+      if (role !== "ADMIN" && currentUser.value?.id) {
+        existingNodeTypeQuery.set("ownerId", currentUser.value.id)
+      }
+      const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>(
+        `/node-types?${existingNodeTypeQuery.toString()}`
+      )
       if (!existingNodeTypesResult.success) {
         throw new Error(`Ошибка загрузки типов узлов: ${existingNodeTypesResult.error.message}`)
       }
@@ -305,12 +336,19 @@ export function useNotationEditor(): NotationEditorReturn {
         saveProgress.value = `Создание типа узла: ${nodeType.name}`
         const request: NodeTypeRequest = {
           name: nodeType.name,
-          ownerId,
+          ownerId: typeOwnerId,
           attrs: serializeTypeAttrs(nodeType.parsedAttrs)
         }
         const result = await apiPost<NodeTypeResponse>("/node-types", request)
         if (!result.success) {
-          throw new Error(`Ошибка создания типа узла: ${result.error.message}`)
+          throw new Error(
+            formatNotationEntityError(
+              "создания",
+              "типа узла",
+              result.error.status,
+              result.error.message
+            )
+          )
         }
         nodeType.id = result.data.id
         nodeType._isNew = false
@@ -325,7 +363,13 @@ export function useNotationEditor(): NotationEditorReturn {
       }
 
       // Step 2: Create or bind link types
-      const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?size=1000")
+      const existingLinkTypeQuery = new URLSearchParams({ size: "1000" })
+      if (role !== "ADMIN" && currentUser.value?.id) {
+        existingLinkTypeQuery.set("ownerId", currentUser.value.id)
+      }
+      const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>(
+        `/link-types?${existingLinkTypeQuery.toString()}`
+      )
       if (!existingLinkTypesResult.success) {
         throw new Error(`Ошибка загрузки типов связей: ${existingLinkTypesResult.error.message}`)
       }
@@ -373,12 +417,19 @@ export function useNotationEditor(): NotationEditorReturn {
         saveProgress.value = `Создание типа связи: ${linkType.name}`
         const request: LinkTypeRequest = {
           name: linkType.name,
-          ownerId,
+          ownerId: typeOwnerId,
           attrs: serializeTypeAttrs(linkType.parsedAttrs)
         }
         const result = await apiPost<LinkTypeResponse>("/link-types", request)
         if (!result.success) {
-          throw new Error(`Ошибка создания типа связи: ${result.error.message}`)
+          throw new Error(
+            formatNotationEntityError(
+              "создания",
+              "типа связи",
+              result.error.status,
+              result.error.message
+            )
+          )
         }
         linkType.id = result.data.id
         linkType._isNew = false
@@ -398,7 +449,9 @@ export function useNotationEditor(): NotationEditorReturn {
         saveProgress.value = `Удаление компонента: ${component.name}`
         const result = await apiDelete<void>(`/components/${component.id}`)
         if (!result.success) {
-          throw new Error(`Ошибка удаления компонента: ${result.error.message}`)
+          throw new Error(
+            formatNotationEntityError("удаления", "компонента", result.error.status, result.error.message)
+          )
         }
       }
 
@@ -426,7 +479,9 @@ export function useNotationEditor(): NotationEditorReturn {
         }
         const result = await apiPost<ComponentResponse>("/components", request)
         if (!result.success) {
-          throw new Error(`Ошибка создания компонента: ${result.error.message}`)
+          throw new Error(
+            formatNotationEntityError("создания", "компонента", result.error.status, result.error.message)
+          )
         }
         const oldComponentId = component.id
         component.id = result.data.id
@@ -462,7 +517,9 @@ export function useNotationEditor(): NotationEditorReturn {
           request
         )
         if (!result.success) {
-          throw new Error(`Ошибка обновления компонента: ${result.error.message}`)
+          throw new Error(
+            formatNotationEntityError("обновления", "компонента", result.error.status, result.error.message)
+          )
         }
         component._isDirty = false
       }
@@ -529,7 +586,10 @@ export function useNotationEditor(): NotationEditorReturn {
           .map((component) => component.id)
       )
 
-      const listRulesResult = await apiGet<PaginatedResponse<RelationRuleResponse>>("/relation-rules?size=1000")
+      const relationRulesQuery = new URLSearchParams({ size: "1000" })
+      const listRulesResult = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+        `/relation-rules?${relationRulesQuery.toString()}`
+      )
       if (!listRulesResult.success) {
         throw new Error(`Ошибка загрузки правил связей: ${listRulesResult.error.message}`)
       }

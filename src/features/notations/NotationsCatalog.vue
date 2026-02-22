@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../../composables/useAuth";
 import { useEntityList } from "../../composables/useEntityList";
+import { getUserDisplayName } from "../../utils/userDisplay";
+import { toAccessLabel } from "../../utils/accessPermission";
 import type { NotationData } from "../../types/entities";
 import ListHeader from "../../components/list/ListHeader.vue";
 import EntityCard from "../../components/cards/EntityCard.vue";
@@ -10,6 +13,7 @@ import CardSkeleton from "../../components/cards/CardSkeleton.vue";
 import EmptyState from "../../components/list/EmptyState.vue";
 import EntityCreateModal from "../../components/modals/EntityCreateModal.vue";
 import EntityDeleteModal from "../../components/modals/EntityDeleteModal.vue";
+import ShareAccessModal from "../../components/modals/ShareAccessModal.vue";
 
 const router = useRouter();
 const { currentUser } = useAuth();
@@ -52,11 +56,18 @@ const {
 const openNotation = (id: string) => {
   router.push({ name: "notation-editor", params: { id } });
 };
+const showShareModal = ref(false);
+const shareTargetId = ref<string | null>(null);
 
 const handleCreate = () => {
   if (currentUser.value) {
-    createItem(currentUser.value.id, currentUser.value.email);
+    createItem(currentUser.value.id, getUserDisplayName(currentUser.value, "Неизвестный пользователь"));
   }
+};
+
+const openShareModal = (item: NotationData) => {
+  shareTargetId.value = item.id;
+  showShareModal.value = true;
 };
 </script>
 
@@ -86,9 +97,16 @@ const handleCreate = () => {
         :version="getSelectedItem(group)?.version || ''"
         :versions="group.versions.map((notation) => notation.version)"
         :owner-email="ownerEmails.get(getSelectedItem(group)?.ownerId || '')"
+        :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission)"
+        :can-share="
+          !!getSelectedItem(group)?.ownerId &&
+          !!currentUser?.id &&
+          getSelectedItem(group)?.ownerId === currentUser.id
+        "
         :updated-at="getSelectedItem(group)?.updatedAt"
         @click="getSelectedItem(group) && openNotation(getSelectedItem(group)!.id)"
         @delete="getSelectedItem(group) && openDeleteModal(getSelectedItem(group)!)"
+        @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @version-change="handleVersionChange(group.name, $event)"
       >
         <template #icon><span class="material-symbols-outlined" title="Нотация">graph_3</span></template>
@@ -123,6 +141,14 @@ const handleCreate = () => {
       :error="deleteError"
       @close="closeDeleteModal"
       @confirm="deleteItem"
+    />
+
+    <ShareAccessModal
+      v-if="showShareModal && shareTargetId"
+      title="Доступ к нотации"
+      resource-type="NOTATION"
+      :resource-id="shareTargetId"
+      @close="showShareModal = false; shareTargetId = null"
     />
   </main>
 </template>

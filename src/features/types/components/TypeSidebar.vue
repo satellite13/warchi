@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import type { TypeItem } from "../composables/useTypeEditor"
+import { toAccessLabel } from "../../../utils/accessPermission"
 
 const props = defineProps<{
   nodeTypes: TypeItem[]
   linkTypes: TypeItem[]
+  currentUserId: string | null
   selectedTypeId: string | null
   isLoading: boolean
 }>()
@@ -97,6 +99,9 @@ const filteredLinkTypes = computed(() => {
           >
             <span class="material-symbols-outlined type-list__icon">category</span>
             <span class="type-list__name">{{ t.name || 'Без имени' }}</span>
+            <span v-if="!t._isNew && toAccessLabel(t.accessPermission)" class="type-list__access-badge">
+              {{ toAccessLabel(t.accessPermission) }}
+            </span>
             <span v-if="t._isNew" class="type-list__badge">новый</span>
           </li>
         </ul>
@@ -133,6 +138,9 @@ const filteredLinkTypes = computed(() => {
           >
             <span class="material-symbols-outlined type-list__icon">link</span>
             <span class="type-list__name">{{ t.name || 'Без имени' }}</span>
+            <span v-if="!t._isNew && toAccessLabel(t.accessPermission)" class="type-list__access-badge">
+              {{ toAccessLabel(t.accessPermission) }}
+            </span>
             <span v-if="t._isNew" class="type-list__badge">новый</span>
           </li>
         </ul>
@@ -409,5 +417,16 @@ const filteredLinkTypes = computed(() => {
   text-transform: uppercase;
   flex-shrink: 0;
   letter-spacing: 0.02em;
+}
+
+.type-list__access-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 </style>

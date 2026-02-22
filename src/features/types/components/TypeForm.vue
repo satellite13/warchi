@@ -5,10 +5,11 @@ import PropertyRow from "./PropertyRow.vue"
 
 const props = defineProps<{
   selectedType: TypeItem
+  ownerDisplayName: string
   isDirty: boolean
   isSaving: boolean
-  saveError: string | null
   isTypeInUse: boolean
+  canShare: boolean
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   addProperty: []
   removeProperty: [propertyId: string]
   updateName: [value: string]
+  share: []
 }>()
 
 const expandedIds = reactive(new Set<string>())
@@ -54,6 +56,16 @@ const filteredCustomProperties = computed(() => {
       </div>
       <div class="type-form__actions">
         <button
+          v-if="canShare"
+          type="button"
+          class="btn btn--secondary"
+          :disabled="isSaving"
+          @click="emit('share')"
+        >
+          <span class="material-symbols-outlined">share</span>
+          Поделиться
+        </button>
+        <button
           v-if="!isTypeInUse"
           type="button"
           class="btn btn--danger"
@@ -75,11 +87,6 @@ const filteredCustomProperties = computed(() => {
       </div>
     </div>
 
-    <div v-if="saveError" class="type-form__error">
-      <span class="material-symbols-outlined">error</span>
-      {{ saveError }}
-    </div>
-
     <div class="type-form__body">
       <!-- Name -->
       <div class="form-section">
@@ -92,6 +99,10 @@ const filteredCustomProperties = computed(() => {
             placeholder="Название типа"
             @input="emit('updateName', ($event.target as HTMLInputElement).value)"
           >
+        </div>
+        <div class="form-row">
+          <label class="form-label">Автор</label>
+          <div class="form-input form-input--readonly">{{ ownerDisplayName }}</div>
         </div>
       </div>
 
@@ -236,25 +247,6 @@ const filteredCustomProperties = computed(() => {
   flex-shrink: 0;
 }
 
-.type-form__error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  border-radius: 10px;
-  border: 1px solid var(--danger-soft);
-  animation: fadeSlideIn 0.25s ease;
-}
-
-.type-form__error .material-symbols-outlined {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
 .type-form__body {
   display: flex;
   flex-direction: column;
@@ -349,6 +341,14 @@ const filteredCustomProperties = computed(() => {
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
+}
+
+.form-input--readonly {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--text-muted);
+  background: var(--surface-strong);
 }
 
 .form-input:focus {

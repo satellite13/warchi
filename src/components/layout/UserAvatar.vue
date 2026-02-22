@@ -1,26 +1,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { getDisplayInitials } from "../../utils/userDisplay";
 
 const props = defineProps<{
-  email?: string;
+  label?: string;
   size?: "sm" | "md" | "lg";
 }>();
 
 const initials = computed(() => {
-  if (!props.email) return "?";
-  const name = props.email.split("@")[0] ?? "";
-  const parts = name.split(/[._-]/);
-  if (parts.length >= 2) {
-    const first = parts[0]?.[0] ?? "";
-    const second = parts[1]?.[0] ?? "";
-    return (first + second).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
+  return getDisplayInitials(props.label);
 });
 </script>
 
 <template>
-  <span :class="['avatar', `avatar--${size || 'md'}`]" :title="email">
+  <span :class="['avatar', `avatar--${size || 'md'}`]" :title="label">
     {{ initials }}
   </span>
 </template>

@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { useAuth } from "../../composables/useAuth";
 import { useEntityList } from "../../composables/useEntityList";
 import { apiPut } from "../../composables/useApi";
+import { getUserDisplayName } from "../../utils/userDisplay";
+import { toAccessLabel } from "../../utils/accessPermission";
 import type { ModelUpdateRequest } from "../../types/api";
 import type { ModelData } from "../../types/entities";
 import ListHeader from "../../components/list/ListHeader.vue";
@@ -14,6 +16,7 @@ import EmptyState from "../../components/list/EmptyState.vue";
 import EntityCreateModal from "../../components/modals/EntityCreateModal.vue";
 import EntityDeleteModal from "../../components/modals/EntityDeleteModal.vue";
 import BaseModal from "../../components/modals/BaseModal.vue";
+import ShareAccessModal from "../../components/modals/ShareAccessModal.vue";
 
 const router = useRouter();
 const { currentUser } = useAuth();
@@ -59,7 +62,7 @@ const openModel = (id: string) => {
 
 const handleCreate = () => {
   if (currentUser.value) {
-    createItem(currentUser.value.id, currentUser.value.email);
+    createItem(currentUser.value.id, getUserDisplayName(currentUser.value, "Неизвестный пользователь"));
   }
 };
 
@@ -70,6 +73,8 @@ const renameError = ref<string | null>(null);
 const isRenaming = ref(false);
 
 const canSubmitRename = computed(() => renameName.value.trim().length > 0 && !isRenaming.value);
+const showShareModal = ref(false);
+const shareTargetId = ref<string | null>(null);
 
 const openRenameModal = (item: ModelData) => {
   itemToRename.value = item;
@@ -140,6 +145,11 @@ const renameItem = async () => {
     isRenaming.value = false;
   }
 };
+
+const openShareModal = (item: ModelData) => {
+  shareTargetId.value = item.id;
+  showShareModal.value = true;
+};
 </script>
 
 <template>
@@ -172,10 +182,17 @@ const renameItem = async () => {
         :version="getSelectedItem(group)?.version || ''"
         :versions="group.versions.map((model) => model.version)"
         :owner-email="ownerEmails.get(getSelectedItem(group)?.ownerId || '')"
+        :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission)"
+        :can-share="
+          !!getSelectedItem(group)?.ownerId &&
+          !!currentUser?.id &&
+          getSelectedItem(group)?.ownerId === currentUser.id
+        "
         :updated-at="getSelectedItem(group)?.updatedAt"
         @click="getSelectedItem(group) && openModel(getSelectedItem(group)!.id)"
         @delete="getSelectedItem(group) && openDeleteModal(getSelectedItem(group)!)"
         @rename="getSelectedItem(group) && openRenameModal(getSelectedItem(group)!)"
+        @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @version-change="handleVersionChange(group.name, $event)"
       >
         <template #icon><span class="material-symbols-outlined" title="Модель">schema</span></template>
@@ -234,6 +251,14 @@ const renameItem = async () => {
         </div>
       </form>
     </BaseModal>
+
+    <ShareAccessModal
+      v-if="showShareModal && shareTargetId"
+      title="Доступ к модели"
+      resource-type="MODEL"
+      :resource-id="shareTargetId"
+      @close="showShareModal = false; shareTargetId = null"
+    />
   </main>
 </template>
 

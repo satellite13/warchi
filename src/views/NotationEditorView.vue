@@ -6,8 +6,10 @@ const router = useRouter();
 import MainLayout from "../layouts/MainLayout.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 import BaseModal from "../components/modals/BaseModal.vue";
+import ShareAccessModal from "../components/modals/ShareAccessModal.vue";
 import {ImageExporter, SvgExporter} from "@ngroznykh/papirus";
 import {apiGet} from "../composables/useApi";
+import {useAuth} from "../composables/useAuth";
 import NotationMainPanelLayout from "../features/notations/layout/NotationMainPanelLayout.vue";
 import NotationAppHeader from "../features/notations/layout/NotationAppHeader.vue";
 import NotationComponentList from "../features/notations/layout/NotationComponentList.vue";
@@ -42,6 +44,11 @@ const {
   loadNotation,
   saveChanges
 } = useNotationEditor();
+const {currentUser} = useAuth();
+const showShareModal = ref(false);
+const canShareNotation = computed(
+  () => !!notation.value?.ownerId && !!currentUser.value?.id && notation.value.ownerId === currentUser.value.id
+);
 
 const {
   selectedEntity,
@@ -119,9 +126,10 @@ const parseJsonObject = (raw: string | null | undefined): Record<string, unknown
 };
 
 const loadModelUsage = async () => {
+  const query = new URLSearchParams({size: "2000"});
   const [nodesResult, linksResult] = await Promise.all([
-    apiGet<PaginatedResponse<NodeResponse>>("/nodes?size=2000"),
-    apiGet<PaginatedResponse<LinkResponse>>("/links?size=2000")
+    apiGet<PaginatedResponse<NodeResponse>>(`/nodes?${query.toString()}`),
+    apiGet<PaginatedResponse<LinkResponse>>(`/links?${query.toString()}`)
   ]);
   modelNodes.value = nodesResult.success ? (nodesResult.data.content ?? []) : [];
   modelLinks.value = linksResult.success ? (linksResult.data.content ?? []) : [];
@@ -875,7 +883,9 @@ onBeforeUnmount(() => {
         :snap-enabled="snapEnabled"
         :can-undo="canUndo"
         :can-redo="canRedo"
+        :can-share="canShareNotation"
         @action="handleToolbarAction"
+        @share="showShareModal = true"
       />
     </template>
     <template #default>
@@ -1081,6 +1091,14 @@ onBeforeUnmount(() => {
     @close="closeRelationModal"
     @submit="addRelation"
     @select-tag="relationTags = appendTagValue(relationTags, $event)"
+  />
+
+  <ShareAccessModal
+    v-if="showShareModal && notation"
+    title="Доступ к нотации"
+    resource-type="NOTATION"
+    :resource-id="notation.id"
+    @close="showShareModal = false"
   />
 </template>
 

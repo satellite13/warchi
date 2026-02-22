@@ -6,6 +6,7 @@ import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
+import { getUserDisplayName } from "../utils/userDisplay"
 import changelogRaw from "../../CHANGELOG.ru.md?raw"
 
 const router = useRouter()
@@ -22,8 +23,7 @@ const greeting = computed(() => {
 })
 
 const userDisplayName = computed(() => {
-  const email = currentUser.value?.email ?? ""
-  return email.split("@")[0] || "пользователь"
+  return getUserDisplayName(currentUser.value, "пользователь")
 })
 
 const statCards = computed(() => [
@@ -384,7 +384,8 @@ const releaseNotes = computed(() => {
 /* ── Hero ── */
 .hero {
   position: relative;
-  padding: 32px 36px;
+  padding: 36px 36px;
+  min-height: 60px;
   border-radius: var(--radius);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -394,6 +395,7 @@ const releaseNotes = computed(() => {
 .hero__content {
   position: relative;
   z-index: 1;
+  max-width: min(100%, 760px);
 }
 
 .hero__greeting {
@@ -403,19 +405,24 @@ const releaseNotes = computed(() => {
   color: var(--base-text);
   letter-spacing: -0.02em;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .hero__name {
+  display: inline;
   background: linear-gradient(135deg, var(--primary) 0%, #b06cff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  overflow-wrap: anywhere;
 }
 
 .hero__subtitle {
   margin: 6px 0 0;
   font-size: 14px;
+  line-height: 1.4;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .hero__decoration {

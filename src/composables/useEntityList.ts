@@ -1,5 +1,7 @@
 import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from "vue";
 import { apiGet, apiPost, apiDelete } from "./useApi";
+import { useAuth } from "./useAuth";
+import { getUserDisplayName } from "../utils/userDisplay";
 import { compareVersions, isValidVersion, bumpMinor } from "../utils/version";
 import type {
   VersionedEntity,
@@ -47,7 +49,7 @@ export interface EntityListReturn<T extends VersionedEntity> {
   deleteError: Ref<string | null>;
 
   loadItems: () => Promise<void>;
-  createItem: (ownerId: string, ownerEmail?: string) => Promise<T | null>;
+  createItem: (ownerId: string, ownerDisplayName?: string) => Promise<T | null>;
   deleteItem: () => Promise<boolean>;
   openCreateModal: () => void;
   closeCreateModal: () => void;
@@ -61,6 +63,7 @@ export interface EntityListReturn<T extends VersionedEntity> {
 export function useEntityList<T extends VersionedEntity>(
   config: EntityListConfig
 ): EntityListReturn<T> {
+  const { currentUser } = useAuth();
   const items = ref<T[]>([]) as Ref<T[]>;
   const ownerEmails = ref<Map<string, string>>(new Map());
   const isLoading = ref(true);
@@ -141,13 +144,26 @@ export function useEntityList<T extends VersionedEntity>(
 
   const loadOwnerEmails = async (ownerIds: string[]) => {
     const uniqueIds = [...new Set(ownerIds)];
-    const emailMap = new Map<string, string>();
+    const emailMap = new Map<string, string>(ownerEmails.value);
+
+    if (currentUser.value?.id) {
+      emailMap.set(
+        currentUser.value.id,
+        getUserDisplayName(currentUser.value, "Неизвестный пользователь")
+      );
+    }
 
     await Promise.all(
       uniqueIds.map(async (id) => {
-        const result = await apiGet<UserInfo>(`/users/${id}`);
+        if (emailMap.has(id)) return;
+
+        const result = await apiGet<UserInfo>(`/users/${id}/public`);
         if (result.success) {
-          emailMap.set(id, result.data.email);
+          emailMap.set(id, getUserDisplayName(result.data, "Неизвестный пользователь"));
+        } else if (currentUser.value?.id === id) {
+          emailMap.set(id, getUserDisplayName(currentUser.value, "Неизвестный пользователь"));
+        } else {
+          emailMap.set(id, "Неизвестный пользователь");
         }
       })
     );
@@ -160,8 +176,12 @@ export function useEntityList<T extends VersionedEntity>(
     errorMessage.value = null;
 
     try {
+      const query = new URLSearchParams({
+        page: "0",
+        size: "50"
+      });
       const result = await apiGet<PaginatedResponse<T>>(
-        `/${config.endpoint}?page=0&size=50`
+        `/${config.endpoint}?${query.toString()}`
       );
 
       if (!result.success) {
@@ -197,6 +217,12 @@ export function useEntityList<T extends VersionedEntity>(
     const sameNameGroup = groupedItems.value.find(
       (g) => g.name.toLowerCase() === name.toLowerCase()
     );
+    const hasExactVersionConflict = sameNameGroup?.versions.some(
+      (item) => item.version.trim() === version
+    );
+    if (hasExactVersionConflict) {
+      return config.conflictMessage;
+    }
     const maxExisting = sameNameGroup?.versions[0]?.version;
     if (maxExisting && compareVersions(version, maxExisting) < 0) {
       return `Версия не может быть меньше максимальной существующей (${maxExisting}) для данного имени`;
@@ -206,7 +232,7 @@ export function useEntityList<T extends VersionedEntity>(
 
   const createItem = async (
     ownerId: string,
-    ownerEmail?: string
+    ownerDisplayName?: string
   ): Promise<T | null> => {
     const validationError = validateCreate();
     if (validationError) {
@@ -256,9 +282,9 @@ export function useEntityList<T extends VersionedEntity>(
           : [created, ...items.value];
       }
 
-      if (created?.ownerId && ownerEmail) {
+      if (created?.ownerId && ownerDisplayName) {
         ownerEmails.value = new Map(ownerEmails.value);
-        ownerEmails.value.set(created.ownerId, ownerEmail);
+        ownerEmails.value.set(created.ownerId, ownerDisplayName);
       }
 
       if (created?.name && created?.version) {

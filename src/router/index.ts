@@ -11,6 +11,17 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: "/admin/users",
+      name: "admin-users",
+      component: () => import("../views/AdminUsersView.vue"),
+      meta: { requiresRole: "ADMIN" }
+    },
+    {
+      path: "/profile",
+      name: "profile",
+      component: () => import("../views/UserProfileView.vue")
+    },
+    {
       path: "/models",
       name: "models",
       component: () => import("../views/ModelsView.vue"),
@@ -53,14 +64,23 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentUser } = useAuth();
 
   if (to.meta.requiresAuth === false) {
+    if (to.name === "login" && isAuthenticated.value) {
+      return { name: "home" };
+    }
     return true;
   }
 
   if (!isAuthenticated.value) {
     return { name: "login" };
+  }
+
+  const requiredRole =
+    typeof to.meta.requiresRole === "string" ? to.meta.requiresRole : undefined;
+  if (requiredRole && currentUser.value?.role !== requiredRole) {
+    return { name: "home" };
   }
 
   return true;

@@ -1,20 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue"
+import { onBeforeUnmount, onMounted, ref, computed, watch } from "vue"
 
 import { useTypeEditor } from "./composables/useTypeEditor"
 import { serializeTypeAttrs } from "../notations/notationAttrs"
 import BaseModal from "../../components/modals/BaseModal.vue"
+import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
 import TypeSidebar from "./components/TypeSidebar.vue"
 import TypeForm from "./components/TypeForm.vue"
 import TypeAside from "./components/TypeAside.vue"
+import type { ShareResourceType } from "../../types/api"
 
 const {
+  currentUserId,
   nodeTypes,
   linkTypes,
   selectedType,
   isLoading,
   isSaving,
   saveError,
+  ownerDisplayNames,
   loadAll,
   selectType,
   addType,
@@ -86,6 +90,48 @@ function cancelSwitch() {
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
+const canShareSelectedType = computed(() => {
+  const type = selectedType.value
+  return !!type && !type._isNew && !!currentUserId.value && type.ownerId === currentUserId.value
+})
+const shareResourceType = computed<ShareResourceType>(() =>
+  selectedType.value?.kind === "link" ? "LINK_TYPE" : "NODE_TYPE"
+)
+const showShareModal = ref(false)
+const selectedTypeOwnerName = computed(() => {
+  const type = selectedType.value
+  if (!type) return "Неизвестный пользователь"
+  return ownerDisplayNames.value.get(type.ownerId) ?? "Неизвестный пользователь"
+})
+
+const toastError = ref<string | null>(null)
+const isToastVisible = ref(false)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(saveError, (value) => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+
+  if (!value) {
+    isToastVisible.value = false
+    toastError.value = null
+    return
+  }
+
+  toastError.value = value
+  isToastVisible.value = true
+  toastTimer = setTimeout(() => {
+    isToastVisible.value = false
+  }, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (!toastTimer) return
+  clearTimeout(toastTimer)
+  toastTimer = null
+})
 
 // --- JSON preview ---
 const attrsJson = computed(() => {
@@ -105,6 +151,7 @@ const attrsJson = computed(() => {
     <TypeSidebar
       :node-types="nodeTypes"
       :link-types="linkTypes"
+      :current-user-id="currentUserId"
       :selected-type-id="selectedType?.id ?? null"
       :is-loading="isLoading"
       @select-type="handleSelectType"
@@ -125,15 +172,17 @@ const attrsJson = computed(() => {
         <div class="type-editor__content">
           <TypeForm
             :selected-type="selectedType"
+            :owner-display-name="selectedTypeOwnerName"
             :is-dirty="isDirty"
             :is-saving="isSaving"
-            :save-error="saveError"
             :is-type-in-use="isTypeInUse"
+            :can-share="canShareSelectedType"
             @save="handleSave"
             @delete="handleDelete"
             @update-name="handleTypeNameUpdate"
             @add-property="addCustomProperty(selectedType)"
             @remove-property="removeCustomProperty(selectedType, $event)"
+            @share="showShareModal = true"
           />
 
           <TypeAside
@@ -160,6 +209,23 @@ const attrsJson = computed(() => {
         <button type="button" class="btn btn--danger" @click="discardAndSwitch">Отменить и перейти</button>
       </template>
     </BaseModal>
+
+    <Teleport to="body">
+      <Transition name="toast">
+        <div v-if="isToastVisible && toastError" class="save-toast save-toast--error">
+          <span class="material-symbols-outlined save-toast__icon">error</span>
+          <span>{{ toastError }}</span>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <ShareAccessModal
+      v-if="showShareModal && selectedType"
+      title="Доступ к типу"
+      :resource-type="shareResourceType"
+      :resource-id="selectedType.id"
+      @close="showShareModal = false"
+    />
   </div>
 </template>
 
@@ -272,5 +338,42 @@ const attrsJson = computed(() => {
   font-size: 14px;
   color: var(--base-text);
   line-height: 1.55;
+}
+
+.save-toast {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 2100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.save-toast--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-soft);
+}
+
+.save-toast__icon {
+  font-size: 20px;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 </style>

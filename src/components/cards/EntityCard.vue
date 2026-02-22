@@ -8,6 +8,8 @@ const props = defineProps<{
   version: string;
   versions?: string[];
   ownerEmail?: string;
+  accessLabel?: string;
+  canShare?: boolean;
   updatedAt?: string | null;
 }>();
 
@@ -15,6 +17,7 @@ const emit = defineEmits<{
   click: [];
   delete: [];
   rename: [];
+  share: [];
   "version-change": [string];
 }>();
 
@@ -68,6 +71,16 @@ const formattedUpdatedAt = computed(() => {
               @click.stop="emit('rename')">
         <span class="material-symbols-outlined" title="Переименовать">edit</span>
       </button>
+      <button
+        v-if="canShare"
+        class="model-card__share"
+        type="button"
+        aria-label="Управлять доступом"
+        title="Поделиться"
+        @click.stop="emit('share')"
+      >
+        <span class="material-symbols-outlined" title="Поделиться">share</span>
+      </button>
       <span class="model-card__title">{{ name }}</span>
       <div class="model-card__version">
         <span v-if="!versions || versions.length <= 1" class="model-card__badge">v{{ version }}</span>
@@ -80,10 +93,13 @@ const formattedUpdatedAt = computed(() => {
         </label>
         <span class="model-card__updated">Обновлено: {{ formattedUpdatedAt }}</span>
       </div>
+      <div v-if="accessLabel" class="model-card__access-badge">
+        {{ accessLabel }}
+      </div>
       <div class="model-card__owner">
-        <UserAvatar :email="ownerEmail" size="md"/>
+        <UserAvatar :label="ownerEmail" size="md"/>
         <div class="owner-meta">
-          <span class="owner-email">{{ ownerEmail || 'Загрузка...' }}</span>
+          <span class="owner-email">{{ ownerEmail || 'Неизвестный пользователь' }}</span>
         </div>
       </div>
     </div>
@@ -179,6 +195,23 @@ const formattedUpdatedAt = computed(() => {
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+.model-card__share {
+  position: absolute;
+  top: 12px;
+  right: 84px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-strong);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
 .model-card__delete:hover {
   background: var(--danger-soft);
   color: var(--danger);
@@ -187,6 +220,11 @@ const formattedUpdatedAt = computed(() => {
 .model-card__rename:hover {
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.model-card__share:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .model-card__delete svg {
@@ -271,5 +309,16 @@ const formattedUpdatedAt = computed(() => {
 .model-card__updated {
   font-size: 12px;
   color: var(--text-subtle);
+}
+
+.model-card__access-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 </style>

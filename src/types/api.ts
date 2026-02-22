@@ -207,12 +207,21 @@ export interface NotationUpdateRequest {
   attrs?: string | null
 }
 
+export interface NotationMetaResponse {
+  id: string
+  name: string
+  version: string
+  ownerId: string
+  ownerEmail: string
+}
+
 // Node Types
 
 export interface NodeTypeResponse {
   id: string
   name: string
   ownerId: string
+  accessPermission?: "OWNER" | "EDIT" | "VIEW" | "ADMIN" | null
   attrs?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -220,7 +229,7 @@ export interface NodeTypeResponse {
 
 export interface NodeTypeRequest {
   name: string
-  ownerId: string
+  ownerId?: string | null
   attrs?: string | null
 }
 
@@ -236,6 +245,7 @@ export interface LinkTypeResponse {
   id: string
   name: string
   ownerId: string
+  accessPermission?: "OWNER" | "EDIT" | "VIEW" | "ADMIN" | null
   attrs?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -243,7 +253,7 @@ export interface LinkTypeResponse {
 
 export interface LinkTypeRequest {
   name: string
-  ownerId: string
+  ownerId?: string | null
   attrs?: string | null
 }
 
@@ -301,4 +311,27 @@ export interface ApiError {
   status: number
   message: string
   timestamp: string
+}
+
+// Access shares
+
+export type ShareResourceType = "MODEL" | "NOTATION" | "NODE_TYPE" | "LINK_TYPE"
+export type SharePermission = "VIEW" | "EDIT"
+
+export interface AccessShareRequest {
+  resourceType: ShareResourceType
+  resourceId: string
+  granteeUserId: string
+  permission: SharePermission
+}
+
+export interface AccessShareResponse {
+  id: string
+  resourceType: ShareResourceType
+  resourceId: string
+  granteeUserId: string
+  grantedByUserId: string
+  permission: SharePermission
+  createdAt?: string | null
+  updatedAt?: string | null
 }

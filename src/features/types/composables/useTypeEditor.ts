@@ -1,6 +1,7 @@
 import { ref, computed, watch, type Ref } from "vue"
 import { apiGet, apiPost, apiPut, apiDelete } from "../../../composables/useApi"
 import { useAuth } from "../../../composables/useAuth"
+import { getUserDisplayName } from "../../../utils/userDisplay"
 import { parseTypeAttrs, serializeTypeAttrs, createId } from "../../notations/notationAttrs"
 import type { TypeParsedAttrs } from "../../notations/types"
 import type {
@@ -13,7 +14,7 @@ import type {
   ComponentResponse,
   RelationResponse
 } from "../../../types/api"
-import type { PaginatedResponse, NotationData } from "../../../types/entities"
+import type { AccessPermission, PaginatedResponse, NotationData, UserInfo } from "../../../types/entities"
 
 export type TypeKind = "node" | "link"
 
@@ -21,6 +22,7 @@ export interface TypeItem {
   id: string
   name: string
   ownerId: string
+  accessPermission?: AccessPermission | null
   kind: TypeKind
   parsedAttrs: TypeParsedAttrs
   _isNew?: boolean
@@ -31,13 +33,26 @@ function toTypeItem(resp: NodeTypeResponse | LinkTypeResponse, kind: TypeKind): 
     id: resp.id,
     name: resp.name,
     ownerId: resp.ownerId,
+    accessPermission: resp.accessPermission ?? null,
     kind,
     parsedAttrs: parseTypeAttrs(resp.attrs ?? null)
   }
 }
 
+function formatTypeOperationError(
+  operation: "сохранения" | "удаления",
+  status: number,
+  message: string
+): string {
+  if (status === 401 || status === 403) {
+    return "Недостаточно прав для редактирования типов. Войдите заново или обратитесь к администратору."
+  }
+  return `Ошибка ${operation} типа: ${message}`
+}
+
 export function useTypeEditor() {
   const { currentUser } = useAuth()
+  const currentUserId = computed(() => currentUser.value?.id ?? null)
 
   const nodeTypes: Ref<TypeItem[]> = ref([])
   const linkTypes: Ref<TypeItem[]> = ref([])
@@ -45,6 +60,7 @@ export function useTypeEditor() {
   const isLoading = ref(false)
   const isSaving = ref(false)
   const saveError = ref<string | null>(null)
+  const ownerDisplayNames: Ref<Map<string, string>> = ref(new Map())
 
   const selectedType = computed(() => {
     if (!selectedTypeId.value) return null
@@ -90,9 +106,11 @@ export function useTypeEditor() {
     isLoading.value = true
     saveError.value = null
     try {
+      const query = new URLSearchParams({ size: "1000" })
+
       const [nodeResult, linkResult] = await Promise.all([
-        apiGet<PaginatedResponse<NodeTypeResponse>>("/node-types?size=1000"),
-        apiGet<PaginatedResponse<LinkTypeResponse>>("/link-types?size=1000")
+        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${query.toString()}`),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${query.toString()}`)
       ])
 
       if (nodeResult.success) {
@@ -101,9 +119,38 @@ export function useTypeEditor() {
       if (linkResult.success) {
         linkTypes.value = (linkResult.data.content ?? []).map((r) => toTypeItem(r, "link"))
       }
+
+      const allTypes = [...nodeTypes.value, ...linkTypes.value]
+      await loadOwnerDisplayNames(allTypes.map((item) => item.ownerId))
     } finally {
       isLoading.value = false
     }
+  }
+
+  async function loadOwnerDisplayNames(ownerIds: string[]): Promise<void> {
+    const uniqueIds = [...new Set(ownerIds)]
+    const nextMap = new Map(ownerDisplayNames.value)
+
+    if (currentUser.value?.id) {
+      nextMap.set(
+        currentUser.value.id,
+        getUserDisplayName(currentUser.value, currentUser.value.email ?? "Неизвестный пользователь")
+      )
+    }
+
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        if (!id || nextMap.has(id)) return
+        const result = await apiGet<UserInfo>(`/users/${id}/public`)
+        if (result.success) {
+          nextMap.set(id, getUserDisplayName(result.data, result.data.email))
+        } else {
+          nextMap.set(id, "Неизвестный пользователь")
+        }
+      })
+    )
+
+    ownerDisplayNames.value = nextMap
   }
 
   function selectType(id: string | null) {
@@ -133,18 +180,23 @@ export function useTypeEditor() {
     saveError.value = null
 
     const attrs = serializeTypeAttrs(item.parsedAttrs)
+    const requestOwnerId = currentUser.value?.role === "ADMIN" ? item.ownerId : undefined
 
     try {
       if (item._isNew) {
         if (item.kind === "node") {
           const body: NodeTypeRequest = {
             name: item.name,
-            ownerId: item.ownerId,
+            ownerId: requestOwnerId,
             attrs
           }
           const result = await apiPost<NodeTypeResponse>("/node-types", body)
           if (!result.success) {
-            saveError.value = result.error.message
+            saveError.value = formatTypeOperationError(
+              "сохранения",
+              result.error.status,
+              result.error.message
+            )
             return false
           }
           const idx = nodeTypes.value.findIndex((t) => t.id === item.id)
@@ -158,12 +210,16 @@ export function useTypeEditor() {
         } else {
           const body: LinkTypeRequest = {
             name: item.name,
-            ownerId: item.ownerId,
+            ownerId: requestOwnerId,
             attrs
           }
           const result = await apiPost<LinkTypeResponse>("/link-types", body)
           if (!result.success) {
-            saveError.value = result.error.message
+            saveError.value = formatTypeOperationError(
+              "сохранения",
+              result.error.status,
+              result.error.message
+            )
             return false
           }
           const idx = linkTypes.value.findIndex((t) => t.id === item.id)
@@ -180,7 +236,11 @@ export function useTypeEditor() {
           const body: NodeTypeUpdateRequest = { name: item.name, attrs }
           const result = await apiPut<NodeTypeResponse>(`/node-types/${item.id}`, body)
           if (!result.success) {
-            saveError.value = result.error.message
+            saveError.value = formatTypeOperationError(
+              "сохранения",
+              result.error.status,
+              result.error.message
+            )
             return false
           }
           const idx = nodeTypes.value.findIndex((t) => t.id === item.id)
@@ -191,7 +251,11 @@ export function useTypeEditor() {
           const body: LinkTypeUpdateRequest = { name: item.name, attrs }
           const result = await apiPut<LinkTypeResponse>(`/link-types/${item.id}`, body)
           if (!result.success) {
-            saveError.value = result.error.message
+            saveError.value = formatTypeOperationError(
+              "сохранения",
+              result.error.status,
+              result.error.message
+            )
             return false
           }
           const idx = linkTypes.value.findIndex((t) => t.id === item.id)
@@ -220,7 +284,11 @@ export function useTypeEditor() {
       const path = item.kind === "node" ? `/node-types/${item.id}` : `/link-types/${item.id}`
       const result = await apiDelete<void>(path)
       if (!result.success) {
-        saveError.value = result.error.message
+        saveError.value = formatTypeOperationError(
+          "удаления",
+          result.error.status,
+          result.error.message
+        )
         return false
       }
       removeLocal(item)
@@ -290,11 +358,13 @@ export function useTypeEditor() {
 
     isLoadingUsages.value = true
     try {
+      const query = new URLSearchParams({ size: "1000" })
+
       const [notationsResult, elementsResult] = await Promise.all([
-        apiGet<PaginatedResponse<NotationData>>("/notations?size=1000"),
+        apiGet<PaginatedResponse<NotationData>>(`/notations?${query.toString()}`),
         item.kind === "node"
-          ? apiGet<PaginatedResponse<ComponentResponse>>("/components?size=1000")
-          : apiGet<PaginatedResponse<RelationResponse>>("/relations?size=1000")
+          ? apiGet<PaginatedResponse<ComponentResponse>>(`/components?${query.toString()}`)
+          : apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
       ])
 
       const notationsMap = new Map<string, string>()
@@ -349,6 +419,7 @@ export function useTypeEditor() {
   })
 
   return {
+    currentUserId,
     nodeTypes,
     linkTypes,
     selectedType,
@@ -356,6 +427,7 @@ export function useTypeEditor() {
     isLoading,
     isSaving,
     saveError,
+    ownerDisplayNames,
     loadAll,
     selectType,
     refreshSnapshot,

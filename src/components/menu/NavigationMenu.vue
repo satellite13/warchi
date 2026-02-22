@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import {RouterLink} from "vue-router";
+import { useAuth } from "../../composables/useAuth";
+
+const { isAdmin } = useAuth();
 </script>
 
 <template>
@@ -18,6 +21,12 @@ import {RouterLink} from "vue-router";
     </RouterLink>
     <RouterLink to="/docs" class="app-nav__link" active-class="app-nav__link--active">
       <span class="material-symbols-outlined" title="Документация">menu_book</span>Документация
+    </RouterLink>
+    <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">
+      <span class="material-symbols-outlined" title="Профиль">account_circle</span>Профиль
+    </RouterLink>
+    <RouterLink v-if="isAdmin" to="/admin/users" class="app-nav__link" active-class="app-nav__link--active">
+      <span class="material-symbols-outlined" title="Администрирование">admin_panel_settings</span>Администрирование
     </RouterLink>
   </nav>
 </template>

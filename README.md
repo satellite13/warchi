@@ -1,104 +1,115 @@
 # Warchi
 
-SPA для управления архитектурными моделями и нотациями. Предоставляет интерфейс для создания, редактирования и версионирования доменных моделей с поддержкой компонентов, связей и пользовательских свойств.
+Frontend SPA for architectural modeling workflows: managing models, notations, visual styles, and versioned entities.
 
-## Ключевые возможности
+Русская версия: `README.ru.md`
 
-- Редактор нотаций на canvas (Papirus) с выделением, трансформацией и авторазмещением
-- Импорт/экспорт нотаций в JSON
-- Настройка стилей узлов и связей (включая базовые фигуры компонентов)
-- Редактирование тегов, кастомных свойств и правил связей между компонентами нотации
-- Гибкая панель свойств со сворачиваемыми секциями и изменяемой высотой
-- Версионирование сущностей моделей и нотаций
+## Features
 
-## Стек технологий
+- Notation editor on top of Papirus canvas (selection, transforms, auto-layout)
+- JSON import/export for notation data
+- Component and relation style customization
+- Tags, custom attributes, and relation rules editor
+- Versioned models and notations
+- Blue/green deployment support via Helm and `deploy.sh`
 
-- **Vue 3** (Composition API, `<script setup>`)
-- **TypeScript** (strict mode)
-- **Vite** для сборки и разработки
-- **Vue Router 4** с lazy-loaded маршрутами и auth guards
-- **Vitest** для юнит-тестов
-- **Playwright** для e2e-тестов
+## Tech Stack
 
-## Требования
+- Vue 3 (`<script setup>`, Composition API)
+- TypeScript (strict mode)
+- Vite
+- Vue Router 4
+- Vitest
+- Playwright
+
+## Requirements
 
 - Node.js 18+
 - npm 9+
-- [Papirus](../papirus) — пакет для рендеринга canvas/диаграмм (должен находиться в `../papirus`)
+- Papirus NPM package (`@ngroznykh/papirus`)
 
-## Быстрый старт
+## Quick Start
 
 ```bash
-# Установка зависимостей
 npm install
-
-# Копирование конфигурации окружения
 cp .env.example .env.local
-
-# Запуск dev-сервера
 npm run dev
 ```
 
-Приложение будет доступно по адресу http://localhost:5173. Dev-сервер проксирует запросы `/api/*` на бэкенд.
+App runs on `http://localhost:5173` and proxies `/api/*` to backend.
 
-## Скрипты
+## NPM Scripts
 
-| Команда              | Описание                            |
-|----------------------|-------------------------------------|
-| `npm run dev`        | Запуск dev-сервера                  |
-| `npm run lint`       | Проверка ESLint                     |
-| `npm run lint:fix`   | Автоисправление ESLint              |
-| `npm run build`      | Проверка типов и сборка продакшена  |
-| `npm run preview`    | Предпросмотр продакшен-сборки      |
-| `npm run test`       | Запуск юнит-тестов (Vitest)         |
-| `npm run test:watch` | Запуск тестов в watch-режиме        |
-| `npm run test:e2e`   | Запуск e2e-тестов (Playwright)      |
+| Command | Description |
+|---|---|
+| `npm run dev` | Start dev server |
+| `npm run lint` | Run ESLint |
+| `npm run lint:fix` | Auto-fix lint issues |
+| `npm run build` | Type-check and production build |
+| `npm run preview` | Preview built app |
+| `npm run test` | Run unit tests |
+| `npm run test:watch` | Run unit tests in watch mode |
+| `npm run test:e2e` | Run Playwright tests |
 
-## Переменные окружения
+## Deployment (`deploy.sh`)
 
-Настраиваются в `.env.local` (полный список в `.env.example`):
+`./deploy.sh` supports two modes:
 
-| Переменная              | По умолчанию            | Описание                                     |
-|-------------------------|-------------------------|----------------------------------------------|
-| `VITE_API_PROXY_TARGET` | `http://localhost:8080` | URL бэкенд-API                               |
-| `VITE_API_BASE_URL`     | —                       | Базовый URL API                               |
-| `VITE_API_VERSION`      | `v1`                    | Версия API                                    |
-| `VITE_CANVAS_*`         | —                       | Настройки canvas (зум, панорамирование, сетка, скроллбары) |
+- **Legacy**: recreates release
+- **Blue/Green**: deploys inactive color, verifies readiness, optionally switches traffic
 
-## Структура проекта
+Main environment flags:
 
+| Variable | Default | Purpose |
+|---|---|---|
+| `NAMESPACE` | `arch` | Kubernetes namespace |
+| `RELEASE_NAME` | `warchi` | Helm release name |
+| `CHART_PATH` | `charts/warchi` | Helm chart path |
+| `VALUES_FILE` | `charts/warchi/values.yaml` | Values file |
+| `BUILD_IMAGE` | `true` | Build Docker image before deploy |
+| `WAIT_TIMEOUT` | `180` | Readiness timeout in seconds |
+| `INGRESS_HOST` | `warchi.local` | Ingress host in output hints |
+| `IMAGE_TAG` | `""` | Image tag override |
+| `BLUE_GREEN` | `false` | Enable blue/green mode |
+| `BG_SWITCH` | `true` | Switch traffic after green/blue verification |
+| `SERVICE_NAME` | `warchi` | Service used to detect active color |
+
+Examples:
+
+```bash
+./deploy.sh
+BUILD_IMAGE=false ./deploy.sh
+BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.10 ./deploy.sh
+BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.10 ./deploy.sh
 ```
-src/
-├── api/           # Конфигурация API
-├── components/    # Переиспользуемые Vue-компоненты
-│   ├── cards/     # Карточки сущностей
-│   ├── forms/     # Формы
-│   ├── layout/    # AppHeader, лейаут
-│   ├── list/      # Заголовок списка, поиск
-│   └── modals/    # Модальные окна (создание/удаление)
-├── composables/   # Композиции Vue (useAuth, useApi, useEntityList)
-├── features/      # Функциональные модули
-│   ├── models/    # Список и редактор моделей
-│   └── notations/ # Список, редактор и диаграммы нотаций
-├── layouts/       # Лейауты страниц
-├── router/        # Конфигурация Vue Router с auth guards
-├── types/         # TypeScript-интерфейсы
-├── utils/         # Утилиты (работа с semver)
-└── views/         # Корневые представления
-```
 
-## Архитектура
+## Environment Variables
 
-**Управление состоянием** — паттерн composables, без центрального стора. Каждый feature-модуль управляет собственным состоянием.
+Configured via `.env.local`:
 
-**API-слой** — нативный `fetch` с типизированной обёрткой `ApiResult<T>` (`useApi.ts`).
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_API_PROXY_TARGET` | `http://localhost:8080` | Backend API URL |
+| `VITE_API_BASE_URL` | empty | API base URL |
+| `VITE_API_VERSION` | `v1` | API version |
+| `VITE_CANVAS_*` | empty | Canvas/editor settings |
 
-**Модель сущностей** — версионируемые сущности с семантическим версионированием, группировка по имени с выбором версии.
+## Architecture Notes
 
-**Редактор диаграмм** — canvas-редактор нотаций на базе пакета Papirus.
+- State management uses composables (no global store)
+- API layer is based on typed `ApiResult<T>` wrappers
+- Entities are versioned and grouped by name
+- Notation editor uses Papirus rendering engine
 
-## Редактор нотаций: что важно знать
+## Open Source Readiness
 
-- **Импорт/экспорт**: работает через JSON, импортируемые сущности нормализуются в локальное состояние.
-- **Типы узлов/связей**: при сохранении импортированной нотации существующие типы переиспользуются по имени, чтобы избежать дубликатов на сервере.
-- **Правила связей**: задаются между конкретными компонентами нотации (A -> B), поддерживают множественные разрешенные связи и сценарий A -> A.
+For public release preparation, see:
+
+- `docs/OPEN_SOURCE_PREPARATION.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `CODE_OF_CONDUCT.md`
+
+## License
+
+License is not finalized yet. Add `LICENSE` before public release.

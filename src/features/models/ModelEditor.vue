@@ -323,9 +323,25 @@ const reuseLinkOptions = ref<EditorLink[]>([])
 const pendingRelationId = ref<string | null>(null)
 const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
+const showNodeDeleteModal = ref(false)
+const pendingDeleteNodeIds = ref<string[]>([])
+const pendingDeleteNodeSource = ref<"canvas" | "tree">("tree")
+const showDiagramDeleteModal = ref(false)
+const pendingDeleteDiagramId = ref<string | null>(null)
 const showDiagramSwitchModal = ref(false)
 const pendingDiagramSwitchId = ref<string | null>(null)
 const pendingDiagramAction = ref<"switch" | "close" | null>(null)
+const pendingDeleteNodeCount = computed(() => pendingDeleteNodeIds.value.length)
+const pendingDeleteNodeSingleName = computed(() => {
+  if (pendingDeleteNodeIds.value.length !== 1) return ""
+  const nodeId = pendingDeleteNodeIds.value[0]
+  return state.value.nodes.find((item) => item.id === nodeId)?.name ?? ""
+})
+const pendingDeleteDiagramName = computed(() => {
+  const diagramId = pendingDeleteDiagramId.value
+  if (!diagramId) return ""
+  return state.value.diagrams.find((item) => item.id === diagramId)?.name ?? ""
+})
 
 const getLinkTypeName = (linkTypeId: string): string =>
   state.value.linkTypes.find((item) => item.id === linkTypeId)?.name ?? "Неизвестный тип"
@@ -419,6 +435,17 @@ const reindexTreeOrders = () => {
   }
 }
 
+const deepClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
+  const history = diagramInteractionManager.value?.history
+  if (history && typeof history.execute === "function") {
+    history.execute(command)
+    return
+  }
+  command.execute()
+}
+
 const applyDefaultCustomValues = (
   target: Record<string, unknown>,
   attrsRaw: string | null | undefined
@@ -490,7 +517,7 @@ const bindNodeComponent = (node: EditorNode, componentId: string) => {
   markNodeDirty(node.id)
 }
 
-const bindLinkRelation = (link: EditorLink, relationId: string) => {
+const bindLinkRelation = (link: EditorLink, relationId: string, options?: { markDirty?: boolean }) => {
   const notationId = activeNotationId.value
   if (!notationId) return
   link.parsedAttrs.notationRelations[notationId] = { relationId }
@@ -504,7 +531,9 @@ const bindLinkRelation = (link: EditorLink, relationId: string) => {
   if (relation) {
     applyDefaultCustomValues(link.parsedAttrs.relationProperties[notationId][relationId]!, relation.attrs)
   }
-  markLinkDirty(link.id)
+  if (options?.markDirty ?? true) {
+    markLinkDirty(link.id)
+  }
 }
 
 const openCreateFolder = (parentNodeId: string | null) => {
@@ -623,6 +652,29 @@ const markDiagramDeleted = (diagramId: string) => {
     row._isDirty = true
   }
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
+}
+
+const openNodeDeleteDialog = (nodeIds: string[], source: "canvas" | "tree") => {
+  if (nodeIds.length === 0) return
+  pendingDeleteNodeIds.value = [...new Set(nodeIds)]
+  pendingDeleteNodeSource.value = source
+  showNodeDeleteModal.value = true
+}
+
+const cancelNodeDelete = () => {
+  pendingDeleteNodeIds.value = []
+  pendingDeleteNodeSource.value = "tree"
+  showNodeDeleteModal.value = false
+}
+
+const openDiagramDeleteDialog = (diagramId: string) => {
+  pendingDeleteDiagramId.value = diagramId
+  showDiagramDeleteModal.value = true
+}
+
+const cancelDiagramDelete = () => {
+  pendingDeleteDiagramId.value = null
+  showDiagramDeleteModal.value = false
 }
 
 const markLinkDeleted = (linkId: string) => {
@@ -878,11 +930,11 @@ const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
 const onDeleteKeydown = (event: KeyboardEvent) => {
   if (event.key !== "Delete" && event.key !== "Backspace") return
   if (!activeDiagram.value) return
-  if (showLinkDeleteModal.value || shouldSkipDeleteHotkey(event)) return
+  if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event)) return
 
   if (selectedModelNodeIds.value.length > 0) {
     event.preventDefault()
-    removeSelectedNodesFromCurrentDiagram()
+    openNodeDeleteDialog(selectedModelNodeIds.value, "canvas")
     return
   }
 
@@ -947,7 +999,7 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
   const width = typeof diagramStyle?.width === "number" ? diagramStyle.width : 160
   const height = typeof diagramStyle?.height === "number" ? diagramStyle.height : 56
 
-  diagram.parsedAttrs.instances.nodes.push({
+  const nodeInstance = {
     id: createId(),
     modelNodeId,
     x,
@@ -955,8 +1007,23 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
     width,
     height,
     attrs: diagramStyle ? { diagramStyle: JSON.parse(JSON.stringify(diagramStyle)) } : undefined
+  }
+
+  executeDiagramHistoryCommand({
+    execute: () => {
+      const alreadyExists = diagram.parsedAttrs.instances.nodes.some((item) => item.id === nodeInstance.id)
+      if (!alreadyExists) {
+        diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
+      }
+      markDiagramDirty(diagram.id)
+    },
+    undo: () => {
+      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+        (item) => item.id !== nodeInstance.id
+      )
+      markDiagramDirty(diagram.id)
+    }
   })
-  markDiagramDirty(diagram.id)
 }
 
 const createNodeFromPaletteComponent = (componentId: string, x: number, y: number) => {
@@ -977,7 +1044,7 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     applyDefaultCustomValues(scopedDefaults, component.attrs)
     parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
   }
-  state.value.nodes.push({
+  const newNode: EditorNode = {
     id: nodeId,
     name: component.name,
     modelId: state.value.modelId,
@@ -988,12 +1055,12 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     updatedAt: null,
     parsedAttrs,
     _isNew: true
-  })
+  }
   const parsedComponentAttrs = parseEntityAttrs(component.attrs ?? null)
   const ds = parsedComponentAttrs.diagramStyle
   const width = typeof ds?.width === "number" ? ds.width : 160
   const height = typeof ds?.height === "number" ? ds.height : 56
-  diagram.parsedAttrs.instances.nodes.push({
+  const newInstance = {
     id: createId(),
     modelNodeId: nodeId,
     x,
@@ -1001,8 +1068,34 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     width,
     height,
     attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined
+  }
+
+  executeDiagramHistoryCommand({
+    execute: () => {
+      const hasNode = state.value.nodes.some((item) => item.id === newNode.id)
+      if (!hasNode) {
+        state.value.nodes.push(deepClone(newNode))
+      }
+      const hasInstance = diagram.parsedAttrs.instances.nodes.some((item) => item.id === newInstance.id)
+      if (!hasInstance) {
+        diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
+      }
+      markDiagramDirty(diagram.id)
+    },
+    undo: () => {
+      state.value.nodes = state.value.nodes.filter((item) => item.id !== newNode.id)
+      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+        (item) => item.id !== newInstance.id
+      )
+      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+        (edge) => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
+      )
+      if (selectedModelNodeIds.value.includes(newNode.id)) {
+        selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== newNode.id)
+      }
+      markDiagramDirty(diagram.id)
+    }
   })
-  markDiagramDirty(diagram.id)
 }
 
 const startConnectNodes = (
@@ -1093,27 +1186,26 @@ const createOrReuseLink = (linkId: string | null) => {
   const relation = state.value.relations.find((item) => item.id === relationId)
   if (!relation) return
 
-  let link: EditorLink | null
-  if (linkId) {
-    link = state.value.links.find((item) => item.id === linkId) ?? null
-  } else {
-    link = {
-      id: createId(),
-      sourceId: connection.sourceModelNodeId,
-      targetId: connection.targetModelNodeId,
-      modelId: state.value.modelId,
-      ownerId: state.value.ownerId,
-      linkTypeId: relation.linkTypeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: parseLinkAttrs(null),
-      _isNew: true
-    }
-    state.value.links.push(link)
-  }
-  if (!link) return
+  const isNewLink = !linkId
+  const resolvedLinkId = linkId ?? createId()
+  const existingLink = state.value.links.find((item) => item.id === resolvedLinkId) ?? null
+  if (!isNewLink && !existingLink) return
+  const previousParsedAttrs = existingLink ? deepClone(existingLink.parsedAttrs) : null
+  const newLink: EditorLink | null = isNewLink
+    ? {
+        id: resolvedLinkId,
+        sourceId: connection.sourceModelNodeId,
+        targetId: connection.targetModelNodeId,
+        modelId: state.value.modelId,
+        ownerId: state.value.ownerId,
+        linkTypeId: relation.linkTypeId,
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs: parseLinkAttrs(null),
+        _isNew: true
+      }
+    : null
 
-  bindLinkRelation(link, relation.id)
   const relParsed = parseEntityAttrs(relation.attrs ?? null)
   const relationDs = relParsed.diagramStyle
   const edgeAttrs: Record<string, unknown> = {}
@@ -1126,14 +1218,47 @@ const createOrReuseLink = (linkId: string | null) => {
   if (connection.targetPortId) {
     edgeAttrs.toPortId = connection.targetPortId
   }
-  diagram.parsedAttrs.instances.edges.push({
+  const newEdgeInstance = {
     id: createId(),
-    modelLinkId: link.id,
+    modelLinkId: resolvedLinkId,
     sourceInstanceId: connection.sourceInstanceId,
     targetInstanceId: connection.targetInstanceId,
     attrs: Object.keys(edgeAttrs).length ? edgeAttrs : undefined
+  }
+
+  executeDiagramHistoryCommand({
+    execute: () => {
+      let link = state.value.links.find((item) => item.id === resolvedLinkId) ?? null
+      if (!link && newLink) {
+        state.value.links.push(deepClone(newLink))
+        link = state.value.links.find((item) => item.id === resolvedLinkId) ?? null
+      }
+      if (!link) return
+
+      bindLinkRelation(link, relation.id)
+      const hasEdge = diagram.parsedAttrs.instances.edges.some((edge) => edge.id === newEdgeInstance.id)
+      if (!hasEdge) {
+        diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
+      }
+      markDiagramDirty(diagram.id)
+    },
+    undo: () => {
+      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+        (edge) => edge.id !== newEdgeInstance.id
+      )
+
+      if (isNewLink) {
+        state.value.links = state.value.links.filter((item) => item.id !== resolvedLinkId)
+      } else if (previousParsedAttrs) {
+        const link = state.value.links.find((item) => item.id === resolvedLinkId)
+        if (link) {
+          link.parsedAttrs = deepClone(previousParsedAttrs)
+          markLinkDirty(link.id)
+        }
+      }
+      markDiagramDirty(diagram.id)
+    }
   })
-  markDiagramDirty(diagram.id)
 
   pendingConnection.value = null
   pendingRelationId.value = null
@@ -1289,11 +1414,11 @@ const handleRenameNode = (nodeId: string, newName: string) => {
   markNodeDirty(node.id)
 }
 
-const removeSelectedNodesFromCurrentDiagram = () => {
+const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
   const diagram = activeDiagram.value
-  if (!diagram || selectedModelNodeIds.value.length === 0) return
+  if (!diagram || modelNodeIds.length === 0) return
 
-  const selectedSet = new Set(selectedModelNodeIds.value)
+  const selectedSet = new Set(modelNodeIds)
   const removedNodes = diagram.parsedAttrs.instances.nodes
     .filter((nodeInst) => selectedSet.has(nodeInst.modelNodeId))
     .map((nodeInst) => JSON.parse(JSON.stringify(nodeInst)))
@@ -1353,13 +1478,41 @@ const removeSelectedNodesFromCurrentDiagram = () => {
 const handleRequestDeleteNodeFromDiagram = (modelNodeId: string) => {
   selectedModelLinkId.value = null
   selectedModelNodeIds.value = [modelNodeId]
-  removeSelectedNodesFromCurrentDiagram()
+  openNodeDeleteDialog([modelNodeId], "canvas")
 }
 
 const handleRequestDeleteLink = (linkId: string) => {
   selectedModelNodeIds.value = []
   selectedModelLinkId.value = linkId
   openLinkDeleteDialog(linkId)
+}
+
+const confirmNodeDelete = () => {
+  const nodeIds = pendingDeleteNodeIds.value
+  const source = pendingDeleteNodeSource.value
+  if (nodeIds.length === 0) {
+    cancelNodeDelete()
+    return
+  }
+
+  if (source === "canvas") {
+    removeNodesFromCurrentDiagram(nodeIds)
+  } else {
+    for (const nodeId of nodeIds) {
+      markNodeDeleted(nodeId)
+    }
+  }
+  cancelNodeDelete()
+}
+
+const confirmDiagramDelete = () => {
+  const diagramId = pendingDeleteDiagramId.value
+  if (!diagramId) {
+    cancelDiagramDelete()
+    return
+  }
+  markDiagramDeleted(diagramId)
+  cancelDiagramDelete()
 }
 
 const sanitizeFileName = (value: string): string =>
@@ -1803,9 +1956,9 @@ onBeforeUnmount(() => {
             @open-diagram="selectDiagram"
             @create-folder="openCreateFolder"
             @create-node="openCreateRegularNode"
-            @delete-node="markNodeDeleted"
+            @delete-node="openNodeDeleteDialog([$event], 'tree')"
             @create-diagram="openCreateDiagram"
-            @delete-diagram="markDiagramDeleted"
+            @delete-diagram="openDiagramDeleteDialog"
             @move-diagram="handleMoveDiagram"
             @move-node="handleMoveNode"
             @rename-node="handleRenameNode"
@@ -2082,6 +2235,53 @@ onBeforeUnmount(() => {
       <button type="button" class="btn btn--primary" :disabled="isSaving" @click="saveAndSwitchDiagram">
         {{ pendingDiagramAction === "close" ? "Сохранить и закрыть" : "Сохранить и переключить" }}
       </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showNodeDeleteModal"
+    title="Удаление ноды"
+    max-width="500px"
+    @close="cancelNodeDelete"
+  >
+    <p class="leave-text">
+      <template v-if="pendingDeleteNodeSource === 'canvas'">
+        Удалить
+        <template v-if="pendingDeleteNodeCount === 1">
+          ноду <b>{{ pendingDeleteNodeSingleName || "без имени" }}</b> с текущей диаграммы?
+        </template>
+        <template v-else>
+          {{ pendingDeleteNodeCount }} нод(ы) с текущей диаграммы?
+        </template>
+      </template>
+      <template v-else>
+        Удалить
+        <template v-if="pendingDeleteNodeCount === 1">
+          ноду <b>{{ pendingDeleteNodeSingleName || "без имени" }}</b> из модели?
+        </template>
+        <template v-else>
+          {{ pendingDeleteNodeCount }} нод(ы) из модели?
+        </template>
+      </template>
+    </p>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">Отмена</button>
+      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">Удалить</button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showDiagramDeleteModal"
+    title="Удаление диаграммы"
+    max-width="500px"
+    @close="cancelDiagramDelete"
+  >
+    <p class="leave-text">
+      Удалить диаграмму <b>{{ pendingDeleteDiagramName || "без имени" }}</b>?
+    </p>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">Отмена</button>
+      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">Удалить</button>
     </template>
   </BaseModal>
 

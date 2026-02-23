@@ -957,11 +957,18 @@ function persistNodePositions(papNodeIds: string[]) {
     if (!papNode) continue
     const instance = next.instances.nodes.find((n) => n.id === entity.instanceId)
     if (!instance) continue
-    instance.x = papNode.x
-    instance.y = papNode.y
-    instance.width = papNode.width
-    instance.height = papNode.height
-    changed = true
+    if (
+      instance.x !== papNode.x ||
+      instance.y !== papNode.y ||
+      instance.width !== papNode.width ||
+      instance.height !== papNode.height
+    ) {
+      instance.x = papNode.x
+      instance.y = papNode.y
+      instance.width = papNode.width
+      instance.height = papNode.height
+      changed = true
+    }
   }
   if (changed) {
     syncEdgePortIds(next)
@@ -1009,6 +1016,11 @@ function initRenderer(r: DiagramRenderer) {
     gridSize: GRID_SIZE,
     keymap: { deleteKeys: [] }
   })
+  // Warchi persists connections via model state/events.
+  // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
+  ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (edge: Edge) => {
+    r.addEdge(edge)
+  }
   emit("canvasContextChange", { renderer: r, interactionManager })
 
   // Selection events → emit selectNodes/selectLink
@@ -1063,6 +1075,8 @@ function initRenderer(r: DiagramRenderer) {
   interactionManager.history.on("change", () => {
     canUndo.value = interactionManager!.history.canUndo
     canRedo.value = interactionManager!.history.canRedo
+    // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
+    persistNodePositions(Array.from(nodeIdToInstance.keys()))
     detectEdgePortChanges()
     detectLabelChanges()
     detectEdgeLabelChanges()

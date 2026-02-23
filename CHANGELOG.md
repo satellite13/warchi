@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.10] - 2026-02-23
+
+### Fixed
+- Notation export now includes only active notation entities and only node/link types that are actually used by exported components and relations.
+- Restored notation rename flow in catalog cards with modal UI, duplicate validation, and backend update via `PUT /notations/{id}`.
+
+### Release
+- Bumped application version to `0.0.10` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.10`.
+
 ## [0.0.9] - 2026-02-22
 
 ### Added

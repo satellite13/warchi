@@ -271,6 +271,41 @@ const sanitizeFileName = (value: string): string =>
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
+const buildExportState = (): NotationEditorState => {
+  const source = cloneJson(state.value);
+  const components = source.components.filter((component) => !component._isDeleted);
+  const relations = source.relations.filter((relation) => !relation._isDeleted);
+
+  const componentIds = new Set(components.map((component) => component.id));
+  const relationIds = new Set(relations.map((relation) => relation.id));
+  const usedNodeTypeIds = new Set(components.map((component) => component.nodeTypeId));
+  const usedLinkTypeIds = new Set(relations.map((relation) => relation.linkTypeId));
+
+  const relationRules = source.relationRules
+    .filter(
+      (rule) =>
+        !rule._isDeleted &&
+        componentIds.has(rule.fromComponentId) &&
+        componentIds.has(rule.toComponentId)
+    )
+    .map((rule) => ({
+      ...rule,
+      allowedRelationIds: Array.from(
+        new Set(rule.allowedRelationIds.filter((relationId) => relationIds.has(relationId)))
+      )
+    }))
+    .filter((rule) => rule.allowedRelationIds.length > 0);
+
+  return {
+    ...source,
+    nodeTypes: source.nodeTypes.filter((typeItem) => usedNodeTypeIds.has(typeItem.id)),
+    linkTypes: source.linkTypes.filter((typeItem) => usedLinkTypeIds.has(typeItem.id)),
+    components,
+    relations,
+    relationRules
+  };
+};
+
 const exportNotation = () => {
   const currentNotation = notation.value;
   const fallbackNotationId = state.value.notationId || "notation";
@@ -284,7 +319,7 @@ const exportNotation = () => {
       name: currentNotation?.name ?? "Notation",
       version: currentNotation?.version ?? "1.0.0"
     },
-    state: cloneJson(state.value)
+    state: buildExportState()
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], {

@@ -76,7 +76,6 @@ describe("useModelEditor save order", () => {
             ownerId: "owner-1",
             nodeTypeId: "type-folder",
             parentNodeId: null,
-            attrs: null,
             parsedAttrs: parseNodeAttrs(null),
             _isDeleted: true,
             _isDirty: true
@@ -88,7 +87,6 @@ describe("useModelEditor save order", () => {
             ownerId: "owner-1",
             nodeTypeId: "type-1",
             parentNodeId: null,
-            attrs: null,
             parsedAttrs: parseNodeAttrs(null),
             _isDirty: true
           }
@@ -119,8 +117,8 @@ describe("useModelEditor save order", () => {
     )
     expect(apiDeleteMock).toHaveBeenCalledWith("/nodes/node-folder")
 
-    const putOrder = apiPutMock.mock.invocationCallOrder[0]
-    const deleteOrder = apiDeleteMock.mock.invocationCallOrder[0]
+    const putOrder = apiPutMock.mock.invocationCallOrder[0] ?? 0
+    const deleteOrder = apiDeleteMock.mock.invocationCallOrder[0] ?? 0
     expect(putOrder).toBeLessThan(deleteOrder)
   })
 })

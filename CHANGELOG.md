@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.11] - 2026-02-23
+
+### Added
+- Added explicit release playbook memory for `warchi` (`MEMORY.md`) so the "release" command always means commit + version bump + changelog + tag + push.
+
+### Changed
+- Unified model/notation editor toolbar visuals: compact share icon button, matching floating-canvas toolbar style, and hidden duplicate top toolbar in notation editor.
+- Persisted model diagram toolbar toggles per user (grid, minimap, snap, lock anchors) and synchronized restored values with canvas runtime.
+
+### Fixed
+- Added confirmation dialogs before deleting nodes/diagrams from left tree and before deleting nodes from canvas in model editor.
+- Fixed model editor undo/redo drift by routing add/connect/delete flows through consistent history/state synchronization.
+- Fixed redo artifacts where connection markers/styles could reappear in multiple phases after reconnecting edges.
+
+### Release
+- Bumped application version to `0.0.11` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.11`.
+
 ## [0.0.10] - 2026-02-23
 
 ### Fixed

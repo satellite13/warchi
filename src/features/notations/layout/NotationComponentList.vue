@@ -269,6 +269,7 @@ watch(tagsExpanded, (value) => {
   height: 100%;
   min-height: 0;
   min-width: 0;
+  margin-left: 50px;
   overflow-x: hidden;
 }
 

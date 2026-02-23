@@ -1,5 +1,8 @@
-import { computed, onScopeDispose, ref, type Ref, type ComputedRef } from "vue"
+import { computed, onScopeDispose, ref, watch, type Ref, type ComputedRef } from "vue"
+import { apiGet } from "../../../composables/useApi"
 import { createId, type CustomProperty } from "../notationAttrs"
+import type { PaginatedResponse } from "../../../types/entities"
+import type { ComponentResponse, RelationResponse } from "../../../types/api"
 import type {
   NotationEditorState,
   EditorNodeType,
@@ -189,6 +192,58 @@ export function useNotationEntity(
   const relationStylePreset = ref(getDefaultRelationStylePresetName())
   const relationFormError = ref<string | null>(null)
   const stylePresetsVersion = ref(0)
+  const serverFilteredComponentIds = ref<Set<string> | null>(null)
+  const serverFilteredRelationIds = ref<Set<string> | null>(null)
+  let serverFilterTimer: ReturnType<typeof setTimeout> | null = null
+
+  const hasLocalEntityChanges = computed(() =>
+    state.value.components.some((item) => item._isNew || item._isDirty || item._isDeleted) ||
+    state.value.relations.some((item) => item._isNew || item._isDirty || item._isDeleted)
+  )
+  const hasActiveSearchFilters = computed(
+    () => normalizeQuery(searchQuery.value).length > 0 || selectedTags.value.length > 0
+  )
+
+  const refreshServerFilters = async () => {
+    if (!state.value.notationId || !hasActiveSearchFilters.value || hasLocalEntityChanges.value) {
+      serverFilteredComponentIds.value = null
+      serverFilteredRelationIds.value = null
+      return
+    }
+
+    const query = normalizeQuery(searchQuery.value)
+    const params = new URLSearchParams({
+      notationId: state.value.notationId,
+      size: "1000"
+    })
+    if (query) params.set("name", query)
+    if (selectedTags.value.length > 0) {
+      params.set("tagsAll", selectedTags.value.join(","))
+    }
+
+    const [componentsResult, relationsResult] = await Promise.all([
+      apiGet<PaginatedResponse<ComponentResponse>>(`/components?${params.toString()}`),
+      apiGet<PaginatedResponse<RelationResponse>>(`/relations?${params.toString()}`)
+    ])
+
+    serverFilteredComponentIds.value = componentsResult.success
+      ? new Set((componentsResult.data.content ?? []).map((item) => item.id))
+      : null
+    serverFilteredRelationIds.value = relationsResult.success
+      ? new Set((relationsResult.data.content ?? []).map((item) => item.id))
+      : null
+  }
+
+  watch(
+    [() => state.value.notationId, searchQuery, selectedTags, hasLocalEntityChanges],
+    () => {
+      if (serverFilterTimer) clearTimeout(serverFilterTimer)
+      serverFilterTimer = setTimeout(() => {
+        void refreshServerFilters()
+      }, 180)
+    },
+    { immediate: true }
+  )
 
   const availableTags = computed(() => {
     const tags = new Set<string>()
@@ -222,7 +277,13 @@ export function useNotationEntity(
   const unsubscribeStylePresets = subscribeStylePresetsChanges(() => {
     stylePresetsVersion.value += 1
   })
-  onScopeDispose(unsubscribeStylePresets)
+  onScopeDispose(() => {
+    unsubscribeStylePresets()
+    if (serverFilterTimer) {
+      clearTimeout(serverFilterTimer)
+      serverFilterTimer = null
+    }
+  })
 
   // Load style presets (built-in + user)
   const componentStylePresets = computed(() => {
@@ -280,8 +341,21 @@ export function useNotationEntity(
   })
 
   const combinedItems = computed<ListItem[]>(() => {
+    const componentFilterSet = serverFilteredComponentIds.value
+    const relationFilterSet = serverFilteredRelationIds.value
+    const useServerFilters = hasActiveSearchFilters.value && !hasLocalEntityChanges.value
+
     const components = state.value.components
       .filter((c) => !c._isDeleted)
+      .filter((component) => {
+        if (!useServerFilters || !componentFilterSet) {
+          return matchesFilters(component.name, component.parsedAttrs.tags)
+        }
+        if (component._isNew || component._isDirty) {
+          return matchesFilters(component.name, component.parsedAttrs.tags)
+        }
+        return componentFilterSet.has(component.id)
+      })
       .map((component) => ({
         id: component.id,
         kind: "component" as const,
@@ -289,10 +363,18 @@ export function useNotationEntity(
         typeLabel: typeNameById(state.value.nodeTypes, component.nodeTypeId),
         tags: component.parsedAttrs.tags
       }))
-      .filter((item) => matchesFilters(item.name, item.tags))
 
     const relations = state.value.relations
       .filter((r) => !r._isDeleted)
+      .filter((relation) => {
+        if (!useServerFilters || !relationFilterSet) {
+          return matchesFilters(relation.name, relation.parsedAttrs.tags)
+        }
+        if (relation._isNew || relation._isDirty) {
+          return matchesFilters(relation.name, relation.parsedAttrs.tags)
+        }
+        return relationFilterSet.has(relation.id)
+      })
       .map((relation) => ({
         id: relation.id,
         kind: "relation" as const,
@@ -300,7 +382,6 @@ export function useNotationEntity(
         typeLabel: typeNameById(state.value.linkTypes, relation.linkTypeId),
         tags: relation.parsedAttrs.tags
       }))
-      .filter((item) => matchesFilters(item.name, item.tags))
 
     const sortByNameAndType = (a: ListItem, b: ListItem) => {
       const nameDiff = a.name.localeCompare(b.name, "ru")

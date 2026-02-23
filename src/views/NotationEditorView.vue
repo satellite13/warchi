@@ -910,6 +910,7 @@ onBeforeUnmount(() => {
   <MainLayout>
     <template #header>
       <NotationAppHeader
+        hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :notation-name="notation?.name"
         :notation-version="notation?.version"
@@ -942,13 +943,31 @@ onBeforeUnmount(() => {
           />
         </template>
         <template #default>
-          <NotationDiagram
-            ref="diagramRef"
-            v-if="!isLoading"
-            :state="state"
-            :selected-id="selectedEntityId"
-            @select="handleDiagramSelect"
-          />
+          <div class="notation-canvas-area">
+            <div class="notation-canvas-area__toolbar">
+              <NotationAppHeader
+                canvas-mode
+                :has-unsaved-changes="hasUnsavedChanges"
+                :notation-name="notation?.name"
+                :notation-version="notation?.version"
+                :grid-visible="gridVisible"
+                :mini-map-visible="miniMapVisible"
+                :snap-enabled="snapEnabled"
+                :can-undo="canUndo"
+                :can-redo="canRedo"
+                :can-share="canShareNotation"
+                @action="handleToolbarAction"
+                @share="showShareModal = true"
+              />
+            </div>
+            <NotationDiagram
+              ref="diagramRef"
+              v-if="!isLoading"
+              :state="state"
+              :selected-id="selectedEntityId"
+              @select="handleDiagramSelect"
+            />
+          </div>
         </template>
         <template #bottom>
           <CustomPropertiesPanel
@@ -1138,6 +1157,25 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.notation-canvas-area {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.notation-canvas-area__toolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  pointer-events: none;
+}
+
+.notation-canvas-area__toolbar :deep(*) {
+  pointer-events: auto;
+}
+
 .save-toast {
   position: fixed;
   bottom: 48px;

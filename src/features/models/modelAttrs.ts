@@ -11,6 +11,7 @@ export type LinkRelationBinding = {
 }
 
 export type ModelNodeAttrs = {
+  treeOrder: number
   notationComponents: Record<string, NodeComponentBinding>
   componentProperties: Record<string, Record<string, Record<string, unknown>>>
 }
@@ -146,7 +147,13 @@ const toDiagramEdges = (value: unknown): DiagramEdgeInstance[] => {
 
 export const parseNodeAttrs = (raw: string | null | undefined): ModelNodeAttrs => {
   const data = parseJson(raw)
+  const rawTreeOrder = data.treeOrder
+  const treeOrder =
+    typeof rawTreeOrder === "number" && Number.isFinite(rawTreeOrder) && rawTreeOrder >= 0
+      ? Math.trunc(rawTreeOrder)
+      : 0
   return {
+    treeOrder,
     notationComponents: toNodeBindings(data.notationComponents),
     componentProperties: toScopedMap(data.componentProperties)
   }

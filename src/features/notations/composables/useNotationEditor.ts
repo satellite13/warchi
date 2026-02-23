@@ -128,6 +128,38 @@ function normalizeTypeName(name: string): string {
   return name.trim().toLowerCase()
 }
 
+const fetchAllRelationRulesByNotation = async (
+  notationId: string
+): Promise<RelationRuleResponse[]> => {
+  const pageSize = 200
+  let page = 0
+  const collected: RelationRuleResponse[] = []
+
+  while (true) {
+    const query = new URLSearchParams({
+      notationId,
+      page: String(page),
+      size: String(pageSize)
+    })
+    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+      `/relation-rules?${query.toString()}`
+    )
+    if (!result.success) {
+      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
+    }
+
+    const content = result.data.content ?? []
+    collected.push(...content)
+
+    if (result.data.last === true || content.length < pageSize) {
+      break
+    }
+    page += 1
+  }
+
+  return collected
+}
+
 export function useNotationEditor(): NotationEditorReturn {
   const route = useRoute()
   const router = useRouter()
@@ -191,8 +223,7 @@ export function useNotationEditor(): NotationEditorReturn {
         nodeTypesResult,
         linkTypesResult,
         componentsResult,
-        relationsResult,
-        relationRulesResult
+        relationsResult
       ] = await Promise.all([
         apiGet<NotationData>(`/notations/${notationId}`),
         apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQueryWithNotation.toString()}`),
@@ -202,8 +233,7 @@ export function useNotationEditor(): NotationEditorReturn {
         ),
         apiGet<PaginatedResponse<RelationResponse>>(
           `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-        ),
-        apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`)
+        )
       ])
 
       if (!notationResult.success) {
@@ -223,6 +253,8 @@ export function useNotationEditor(): NotationEditorReturn {
         : []
       const componentIds = new Set(components.map((component) => component.id))
 
+      const relationRules = await fetchAllRelationRulesByNotation(notationId)
+
       state.value = {
         notationId,
         ownerId: notationResult.data.ownerId,
@@ -236,9 +268,7 @@ export function useNotationEditor(): NotationEditorReturn {
         relations: relationsResult.success
           ? (relationsResult.data.content ?? []).map(toEditorRelation)
           : [],
-        relationRules: relationRulesResult.success
-          ? toEditorRelationRules(relationRulesResult.data.content ?? [], componentIds)
-          : []
+        relationRules: toEditorRelationRules(relationRules, componentIds)
       }
     } catch (error) {
       errorMessage.value =
@@ -586,15 +616,7 @@ export function useNotationEditor(): NotationEditorReturn {
           .map((component) => component.id)
       )
 
-      const relationRulesQuery = new URLSearchParams({ size: "1000" })
-      const listRulesResult = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-        `/relation-rules?${relationRulesQuery.toString()}`
-      )
-      if (!listRulesResult.success) {
-        throw new Error(`Ошибка загрузки правил связей: ${listRulesResult.error.message}`)
-      }
-
-      const existingRules = (listRulesResult.data.content ?? []).filter(
+      const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
         (rule) => currentComponentIds.has(rule.fromComponentId) && currentComponentIds.has(rule.toComponentId)
       )
       for (const rule of existingRules) {

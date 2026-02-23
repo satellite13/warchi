@@ -7,6 +7,7 @@ const props = defineProps<{
   nodes: EditorNode[]
   diagrams: EditorDiagram[]
   nodeTypes: NodeTypeResponse[]
+  treeRootNodeId?: string | null
   selectedNodeId: string | null
   selectedDiagramId: string | null
   modelName?: string
@@ -21,7 +22,8 @@ const emit = defineEmits<{
   deleteNode: [nodeId: string]
   createDiagram: [nodeId: string]
   deleteDiagram: [diagramId: string]
-  moveNode: [nodeId: string, newParentNodeId: string | null]
+  moveDiagram: [diagramId: string, newNodeId: string]
+  moveNode: [nodeId: string, targetNodeId: string | null, position: "above" | "below" | "inside"]
   renameNode: [nodeId: string, name: string]
   toggleSyncSelection: []
 }>()
@@ -35,13 +37,40 @@ const nodeTypeNameById = computed(() => {
   return map
 })
 
+const nodeIndexById = computed(() => {
+  const map = new Map<string, number>()
+  props.nodes.forEach((node, index) => map.set(node.id, index))
+  return map
+})
+
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
 
-const rootNodes = computed(() => props.nodes.filter((node) => !node.parentNodeId && !node._isDeleted))
+const sortNodesByTreeOrder = (nodes: EditorNode[]): EditorNode[] =>
+  [...nodes].sort((a, b) => {
+    const orderDiff = (a.parsedAttrs.treeOrder ?? 0) - (b.parsedAttrs.treeOrder ?? 0)
+    if (orderDiff !== 0) return orderDiff
+    return (nodeIndexById.value.get(a.id) ?? 0) - (nodeIndexById.value.get(b.id) ?? 0)
+  })
+
+const rootNodes = computed(() => {
+  const topParentId = props.treeRootNodeId ?? null
+  return sortNodesByTreeOrder(
+    props.nodes.filter(
+      (node) =>
+        !node._isDeleted &&
+        node.id !== props.treeRootNodeId &&
+        (node.parentNodeId ?? null) === topParentId
+    )
+  )
+})
 
 const childNodes = (nodeId: string): EditorNode[] =>
-  props.nodes.filter((node) => node.parentNodeId === nodeId && !node._isDeleted)
+  sortNodesByTreeOrder(
+    props.nodes.filter(
+      (node) => node.parentNodeId === nodeId && !node._isDeleted && node.id !== props.treeRootNodeId
+    )
+  )
 
 const nodeMatchesSearch = (node: EditorNode, query: string): boolean => {
   if (node.name.toLowerCase().includes(query)) return true
@@ -96,6 +125,11 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
   }
 }
 
+const onDragDiagramStart = (event: DragEvent, diagramId: string) => {
+  event.dataTransfer?.setData("application/x-model-diagram-id", diagramId)
+  event.dataTransfer?.setData("text/plain", `diagram:${diagramId}`)
+}
+
 const dropTarget = ref<{ nodeId: string | null; position: "above" | "below" | "inside" } | null>(null)
 const renamingNodeId = ref<string | null>(null)
 const renamingNodeName = ref("")
@@ -110,7 +144,9 @@ const isDescendant = (nodeId: string, potentialParentId: string): boolean => {
 }
 
 const onTreeDragOver = (event: DragEvent, targetNodeId: string | null) => {
-  if (!event.dataTransfer?.types.includes("application/x-model-node-id")) return
+  const isNodeDrag = event.dataTransfer?.types.includes("application/x-model-node-id")
+  const isDiagramDrag = event.dataTransfer?.types.includes("application/x-model-diagram-id")
+  if (!isNodeDrag && !isDiagramDrag) return
   event.preventDefault()
   if (!targetNodeId) {
     dropTarget.value = { nodeId: null, position: "inside" }
@@ -119,12 +155,23 @@ const onTreeDragOver = (event: DragEvent, targetNodeId: string | null) => {
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   const y = event.clientY - rect.top
-  const third = rect.height / 3
+  const topBand = rect.height * 0.25
+  const bottomBand = rect.height * 0.75
 
   const targetNode = props.nodes.find((n) => n.id === targetNodeId)
-  if (targetNode && isDirectory(targetNode)) {
-    if (y < third) dropTarget.value = { nodeId: targetNodeId, position: "above" }
-    else if (y > third * 2) dropTarget.value = { nodeId: targetNodeId, position: "below" }
+  if (!targetNode) {
+    dropTarget.value = null
+    return
+  }
+
+  if (isDiagramDrag) {
+    dropTarget.value = isDirectory(targetNode) ? { nodeId: targetNodeId, position: "inside" } : null
+    return
+  }
+
+  if (isDirectory(targetNode)) {
+    if (y < topBand) dropTarget.value = { nodeId: targetNodeId, position: "above" }
+    else if (y > bottomBand) dropTarget.value = { nodeId: targetNodeId, position: "below" }
     else dropTarget.value = { nodeId: targetNodeId, position: "inside" }
   } else {
     dropTarget.value = { nodeId: targetNodeId, position: y < rect.height / 2 ? "above" : "below" }
@@ -141,27 +188,25 @@ const onTreeDragLeave = (event: DragEvent) => {
 const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   event.preventDefault()
   const draggedNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+  const draggedDiagramId = event.dataTransfer?.getData("application/x-model-diagram-id")
+  const targetPosition = dropTarget.value?.position ?? "inside"
   dropTarget.value = null
+  if (!draggedNodeId && !draggedDiagramId) return
+
+  if (draggedDiagramId) {
+    if (!targetNodeId) return
+    const targetNode = props.nodes.find((n) => n.id === targetNodeId)
+    if (!targetNode || !isDirectory(targetNode)) return
+    emit("moveDiagram", draggedDiagramId, targetNodeId)
+    return
+  }
+
   if (!draggedNodeId || draggedNodeId === targetNodeId) return
 
   // Prevent dropping a node onto its own descendant
   if (targetNodeId && isDescendant(targetNodeId, draggedNodeId)) return
 
-  let newParentId: string | null
-  if (!targetNodeId) {
-    newParentId = null
-  } else {
-    const targetNode = props.nodes.find((n) => n.id === targetNodeId)
-    if (targetNode && isDirectory(targetNode)) {
-      // Drop inside a directory
-      newParentId = targetNodeId
-    } else {
-      // Drop as sibling: use target's parent
-      newParentId = targetNode?.parentNodeId ?? null
-    }
-  }
-
-  emit("moveNode", draggedNodeId, newParentId)
+  emit("moveNode", draggedNodeId, targetNodeId, targetPosition)
 }
 
 const getDropClass = (nodeId: string) => {
@@ -262,7 +307,11 @@ defineExpose({ expandToNode, focusNode })
       </button>
     </div>
 
-    <div class="tree">
+    <div
+      class="tree"
+      @dragover.self.prevent="onTreeDragOver($event, null)"
+      @drop.self.prevent="onTreeDrop($event, null)"
+    >
       <div v-if="filteredRootNodes.length === 0" class="tree__empty">
         <span class="material-symbols-outlined tree__empty-icon">account_tree</span>
         <span class="tree__empty-text">Нет нод</span>
@@ -359,6 +408,8 @@ defineExpose({ expandToNode, focusNode })
               :key="diagram.id"
               class="diagram-row"
               :class="{ 'diagram-row--active': selectedDiagramId === diagram.id }"
+              draggable="true"
+              @dragstart="onDragDiagramStart($event, diagram.id)"
             >
               <button
                 type="button"
@@ -459,6 +510,119 @@ defineExpose({ expandToNode, focusNode })
                   <button type="button" class="mini-btn mini-btn--danger" @click.stop="emit('deleteNode', child.id)">
                     <span class="material-symbols-outlined">delete</span>
                   </button>
+                </div>
+              </div>
+
+              <div v-if="isDirectory(child) && expandedNodes.has(child.id)" class="tree-node__children">
+                <div
+                  v-for="diagram in nodeDiagrams(child.id)"
+                  :key="diagram.id"
+                  class="diagram-row"
+                  :class="{ 'diagram-row--active': selectedDiagramId === diagram.id }"
+                  draggable="true"
+                  @dragstart="onDragDiagramStart($event, diagram.id)"
+                >
+                  <button
+                    type="button"
+                    class="diagram-row__select"
+                    title="Открыть диаграмму (двойной клик)"
+                    @dblclick="emit('openDiagram', diagram.id)"
+                  >
+                    <span class="material-symbols-outlined">table_chart</span>
+                    <span>{{ diagram.name }}</span>
+                    <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">Открыта</span>
+                  </button>
+                  <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+
+                <div
+                  v-for="grandchild in filteredChildNodes(child.id)"
+                  :key="grandchild.id"
+                  class="tree-node tree-node--nested"
+                >
+                  <div
+                    class="tree-node__row"
+                    :class="{ 'tree-node__row--active': selectedNodeId === grandchild.id, ...getDropClass(grandchild.id) }"
+                    :data-tree-node-id="grandchild.id"
+                    draggable="true"
+                    @dragstart="onDragNodeStart($event, grandchild.id)"
+                    @dragover.prevent="onTreeDragOver($event, grandchild.id)"
+                    @dragleave="onTreeDragLeave"
+                    @drop.prevent="onTreeDrop($event, grandchild.id)"
+                  >
+                    <button
+                      v-if="isDirectory(grandchild)"
+                      type="button"
+                      class="tree-node__toggle"
+                      @click="toggleNode(grandchild.id)"
+                    >
+                      <span class="material-symbols-outlined">
+                        {{ expandedNodes.has(grandchild.id) ? "expand_more" : "chevron_right" }}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      class="tree-node__select"
+                      @click="emit('selectNode', grandchild.id)"
+                      @dblclick="isDirectory(grandchild) && toggleNode(grandchild.id)"
+                    >
+                      <span class="material-symbols-outlined">{{ isDirectory(grandchild) ? "folder" : "category" }}</span>
+                      <input
+                        v-if="renamingNodeId === grandchild.id"
+                        v-model="renamingNodeName"
+                        class="tree-node__rename-input"
+                        type="text"
+                        @click.stop
+                        @keydown.enter.prevent="commitRenameNode(grandchild)"
+                        @keydown.esc.prevent="cancelRenameNode"
+                        @blur="commitRenameNode(grandchild)"
+                      >
+                      <span v-else class="tree-node__name">{{ grandchild.name }}</span>
+                      <span v-if="!isDirectory(grandchild)" class="tree-node__type">{{ nodeTypeNameById.get(grandchild.nodeTypeId) }}</span>
+                    </button>
+                    <div class="tree-node__actions">
+                      <button
+                        v-if="isDirectory(grandchild)"
+                        type="button"
+                        class="mini-btn"
+                        title="Добавить дочернюю папку"
+                        @click.stop="emit('createFolder', grandchild.id)"
+                      >
+                        <span class="material-symbols-outlined">create_new_folder</span>
+                      </button>
+                      <button
+                        v-if="isDirectory(grandchild)"
+                        type="button"
+                        class="mini-btn"
+                        title="Добавить дочернюю ноду"
+                        @click.stop="emit('createNode', grandchild.id)"
+                      >
+                        <span class="material-symbols-outlined">add_box</span>
+                      </button>
+                      <button
+                        v-if="isDirectory(grandchild)"
+                        type="button"
+                        class="mini-btn"
+                        title="Переименовать папку"
+                        @click.stop="startRenameNode(grandchild)"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        v-if="isDirectory(grandchild)"
+                        type="button"
+                        class="mini-btn"
+                        @click.stop="emit('createDiagram', grandchild.id)"
+                      >
+                        <span class="material-symbols-outlined">add_chart</span>
+                      </button>
+                      <button type="button" class="mini-btn mini-btn--danger" @click.stop="emit('deleteNode', grandchild.id)">
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

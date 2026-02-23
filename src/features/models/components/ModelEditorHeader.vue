@@ -17,6 +17,13 @@ const props = withDefaults(defineProps<{
   canUndo?: boolean
   canRedo?: boolean
   canShare?: boolean
+  canvasMode?: boolean
+  hideToolbar?: boolean
+  diagramName?: string
+  diagramVersion?: string
+  notationName?: string
+  notationVersion?: string
+  notationOwnerInfo?: string
 }>(), {
   hasUnsavedChanges: false,
   canSave: true,
@@ -29,7 +36,14 @@ const props = withDefaults(defineProps<{
   hasActiveDiagram: false,
   canUndo: false,
   canRedo: false,
-  canShare: false
+  canShare: false,
+  canvasMode: false,
+  hideToolbar: false,
+  diagramName: "",
+  diagramVersion: "",
+  notationName: "",
+  notationVersion: "",
+  notationOwnerInfo: ""
 })
 
 const router = useRouter()
@@ -151,7 +165,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: "Просмотр JSON диаграммы",
     disabled: !props.hasActiveDiagram
   },
-  { icon: "info", event: "show-diagram-info", title: "Информация о диаграмме", disabled: !props.hasActiveDiagram },
   { icon: "separator", event: "sep5", separator: true },
   {
     icon: "save",
@@ -165,7 +178,10 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 </script>
 
 <template>
-  <header class="model-header">
+  <div v-if="canvasMode" class="model-header-canvas">
+    <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+  </div>
+  <header v-else class="model-header" :class="{ 'model-header--no-toolbar': hideToolbar }">
     <div class="model-header__left">
       <button type="button" class="back-btn" title="К списку моделей" @click="router.push({name: 'models'})">
         <span class="material-symbols-outlined">arrow_back</span>
@@ -206,13 +222,26 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
         @click="emit('share')"
       >
         <span class="material-symbols-outlined">share</span>
-        Поделиться
       </button>
     </div>
-    <div class="model-header__center">
+    <div v-if="hideToolbar" class="model-header__info">
+      <template v-if="diagramName">
+        <span class="model-header__info-label">Диаграмма:</span>
+        <span class="model-header__info-value">{{ diagramName }}</span>
+        <span v-if="diagramVersion" class="model-header__version">{{ diagramVersion }}</span>
+      </template>
+      <template v-if="notationName">
+        <span class="model-header__info-label">Нотация:</span>
+        <span class="model-header__info-value">{{ notationName }}</span>
+        <span v-if="notationVersion" class="model-header__version">{{ notationVersion }}</span>
+      </template>
+      <span v-if="notationOwnerInfo" class="model-header__info-owner">{{ notationOwnerInfo }}</span>
+      <span v-if="!diagramName" class="model-header__info-muted">Диаграмма не выбрана</span>
+    </div>
+    <div v-if="!hideToolbar" class="model-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
     </div>
-    <div class="model-header__right-spacer" />
+    <div v-if="!hideToolbar" class="model-header__right-spacer" />
   </header>
 </template>
 
@@ -225,12 +254,66 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   background: var(--surface);
 }
 
+.model-header--no-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.model-header-canvas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.model-header-canvas :deep(.icon-toolbar) {
+  padding: 2px 3px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+}
+
 .model-header__left {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
   padding: 12px 16px;
+}
+
+.model-header__info {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px 0 0;
+}
+
+.model-header__info-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.model-header__info-value {
+  font-size: 13px;
+  color: var(--base-text);
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-header__info-owner,
+.model-header__info-muted {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .model-header__title {
@@ -371,20 +454,27 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 }
 
 .share-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--surface-strong);
   color: var(--text-muted);
-  padding: 4px 8px;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.share-btn .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .share-btn:hover {
-  color: var(--primary);
-  border-color: var(--primary);
   background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 </style>

@@ -269,45 +269,63 @@ export const useModelEditor = (): ModelEditorReturn => {
 
       const newNodeIdMap = new Map<string, string>()
 
-      for (const node of nodes.filter((row) => row._isDeleted && !row._isNew)) {
-        saveProgress.value = `Удаление узла: ${node.name}`
-        const result = await apiDelete<void>(`/nodes/${node.id}`)
-        if (!result.success) {
-          throw new Error(
-            formatSaveEntityError("удаления", "узла", result.error.status, result.error.message)
-          )
-        }
-      }
+      const pendingNewNodes = nodes.filter((row) => row._isNew && !row._isDeleted)
+      const pendingNewNodeIds = new Set(pendingNewNodes.map((node) => node.id))
 
-      for (const node of nodes.filter((row) => row._isNew && !row._isDeleted)) {
-        saveProgress.value = `Создание узла: ${node.name}`
-        const request: NodeRequest = {
-          name: node.name,
-          modelId,
-          ownerId,
-          nodeTypeId: node.nodeTypeId,
-          parentNodeId: node.parentNodeId ?? null,
-          attrs: serializeNodeAttrs(node.parsedAttrs)
+      while (pendingNewNodes.length > 0) {
+        let progress = false
+
+        for (let i = 0; i < pendingNewNodes.length; i += 1) {
+          const node = pendingNewNodes[i]!
+          const rawParentId = node.parentNodeId ?? null
+          const parentIsPending = rawParentId ? pendingNewNodeIds.has(rawParentId) : false
+          if (parentIsPending && !newNodeIdMap.has(rawParentId!)) {
+            continue
+          }
+
+          const resolvedParentId = rawParentId ? (newNodeIdMap.get(rawParentId) ?? rawParentId) : null
+          saveProgress.value = `Создание узла: ${node.name}`
+          const request: NodeRequest = {
+            name: node.name,
+            modelId,
+            ownerId,
+            nodeTypeId: node.nodeTypeId,
+            parentNodeId: resolvedParentId,
+            attrs: serializeNodeAttrs(node.parsedAttrs)
+          }
+          const result = await apiPost<NodeResponse>("/nodes", request)
+          if (!result.success) {
+            throw new Error(
+              formatSaveEntityError("создания", "узла", result.error.status, result.error.message)
+            )
+          }
+          const oldId = node.id
+          newNodeIdMap.set(oldId, result.data.id)
+          node.id = result.data.id
+          node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
+          node._isNew = false
+          pendingNewNodes.splice(i, 1)
+          pendingNewNodeIds.delete(oldId)
+          i -= 1
+          progress = true
         }
-        const result = await apiPost<NodeResponse>("/nodes", request)
-        if (!result.success) {
-          throw new Error(
-            formatSaveEntityError("создания", "узла", result.error.status, result.error.message)
-          )
+
+        if (!progress) {
+          throw new Error("Не удалось сохранить новые узлы: проверьте иерархию дерева.")
         }
-        newNodeIdMap.set(node.id, result.data.id)
-        node.id = result.data.id
-        node._isNew = false
       }
 
       for (const node of nodes.filter((row) => row._isDirty && !row._isDeleted && !row._isNew)) {
         saveProgress.value = `Обновление узла: ${node.name}`
+        const resolvedParentId = node.parentNodeId
+          ? (newNodeIdMap.get(node.parentNodeId) ?? node.parentNodeId)
+          : null
         const request: NodeRequest = {
           name: node.name,
           modelId,
           ownerId,
           nodeTypeId: node.nodeTypeId,
-          parentNodeId: node.parentNodeId ?? null,
+          parentNodeId: resolvedParentId,
           attrs: serializeNodeAttrs(node.parsedAttrs)
         }
         const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
@@ -316,7 +334,21 @@ export const useModelEditor = (): ModelEditorReturn => {
             formatSaveEntityError("обновления", "узла", result.error.status, result.error.message)
           )
         }
+        node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
         node._isDirty = false
+      }
+
+      // Delete nodes after all node updates.
+      // This prevents backend cascades from removing nodes that were moved out
+      // of a folder in the same save transaction.
+      for (const node of nodes.filter((row) => row._isDeleted && !row._isNew)) {
+        saveProgress.value = `Удаление узла: ${node.name}`
+        const result = await apiDelete<void>(`/nodes/${node.id}`)
+        if (!result.success) {
+          throw new Error(
+            formatSaveEntityError("удаления", "узла", result.error.status, result.error.message)
+          )
+        }
       }
 
       // Update links/diagrams references if nodes were recreated.

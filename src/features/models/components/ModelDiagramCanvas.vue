@@ -27,7 +27,7 @@ import { parseEntityAttrs, type CustomProperty, type DiagramStyle } from "../../
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "../types"
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   activeDiagram: EditorDiagram | null
   nodes: EditorNode[]
   links: EditorLink[]
@@ -37,7 +37,16 @@ const props = defineProps<{
   selectedModelNodeIds: string[]
   selectedModelLinkId: string | null
   connectionValidator?: ((sourceModelNodeId: string, targetModelNodeId: string) => boolean) | null
-}>()
+  gridVisible?: boolean
+  miniMapVisible?: boolean
+  snapEnabled?: boolean
+  lockAnchorsEnabled?: boolean
+}>(), {
+  gridVisible: true,
+  miniMapVisible: true,
+  snapEnabled: false,
+  lockAnchorsEnabled: true
+})
 
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs]
@@ -65,10 +74,10 @@ const emit = defineEmits<{
 const containerRef = ref<HTMLElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const paletteVisible = ref(true)
-const gridVisible = ref(true)
-const miniMapVisible = ref(true)
-const snapEnabled = ref(false)
-const lockAnchorsEnabled = ref(true)
+const gridVisible = ref(props.gridVisible)
+const miniMapVisible = ref(props.miniMapVisible)
+const snapEnabled = ref(props.snapEnabled)
+const lockAnchorsEnabled = ref(props.lockAnchorsEnabled)
 const canUndo = ref(false)
 const canRedo = ref(false)
 
@@ -690,6 +699,7 @@ function syncDiagram() {
       if (existing.label && ds?.labelMargin != null) {
         existing.label.margin = ds.labelMargin
       }
+      existing.lockAnchors = lockAnchorsEnabled.value
       ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground = edgeLabelBackground
     } else {
       const newEdge = new Edge({
@@ -980,6 +990,7 @@ function initRenderer(r: DiagramRenderer) {
   // Grid overlay
   gridOverlay = new GridOverlay({ gridSize: 24, color: "#e2e8f0" })
   r.use(gridOverlay)
+  gridOverlay.setEnabled(gridVisible.value)
 
   // MiniMap
   miniMap = new MiniMap({
@@ -1273,6 +1284,36 @@ const toggleLockAnchors = (): boolean => {
 const getLockAnchorsEnabled = () => lockAnchorsEnabled.value
 
 // ── Drop handling ──
+const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
+  const notationId = activeNotationId.value
+  if (!notationId) return false
+
+  const node = props.nodes.find((item) => item.id === modelNodeId && !item._isDeleted)
+  if (!node) return false
+
+  const existingComponentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (existingComponentId) {
+    return props.components.some(
+      (component) => component.id === existingComponentId && component.notationId === notationId
+    )
+  }
+
+  return props.components.some(
+    (component) => component.notationId === notationId && component.nodeTypeId === node.nodeTypeId
+  )
+}
+
+const hasDragType = (event: DragEvent, type: string): boolean =>
+  Boolean(event.dataTransfer?.types?.includes(type))
+
+const isAllowedDropEvent = (event: DragEvent): boolean => {
+  const componentId = event.dataTransfer?.getData("application/x-notation-component-id")
+  if (componentId) return true
+  const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+  if (modelNodeId) return canDropModelNodeToDiagram(modelNodeId)
+  return false
+}
+
 const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } => {
   if (!renderer) return { x: 0, y: 0 }
   const world = renderer.screenToWorld(event.clientX, event.clientY)
@@ -1285,11 +1326,31 @@ const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } =>
 
 const onDragOver = (event: DragEvent) => {
   if (!props.activeDiagram) return
+
+  const hasComponentPayload = hasDragType(event, "application/x-notation-component-id")
+  const hasModelNodePayload = hasDragType(event, "application/x-model-node-id")
+  if (!hasComponentPayload && !hasModelNodePayload) {
+    return
+  }
+
+  // Browsers can hide dataTransfer payload during dragover.
+  // Block only when we can reliably read an invalid model-node payload.
+  if (hasModelNodePayload) {
+    const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+    if (modelNodeId && !canDropModelNodeToDiagram(modelNodeId)) {
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "none"
+      }
+      return
+    }
+  }
+
   event.preventDefault()
 }
 
 const onDrop = (event: DragEvent) => {
   if (!props.activeDiagram) return
+  if (!isAllowedDropEvent(event)) return
   event.preventDefault()
   const { x, y } = normalizeDropCoordinates(event)
 
@@ -1457,6 +1518,51 @@ watch(
   () => updateSelection()
 )
 
+watch(
+  () => props.gridVisible,
+  (next) => {
+    if (next === gridVisible.value) return
+    gridVisible.value = next
+    gridOverlay?.setEnabled(next)
+    renderer?.markDirty()
+  }
+)
+
+watch(
+  () => props.miniMapVisible,
+  (next) => {
+    if (next === miniMapVisible.value) return
+    miniMapVisible.value = next
+    miniMap?.setEnabled(next)
+    renderer?.markDirty()
+  }
+)
+
+watch(
+  () => props.snapEnabled,
+  (next) => {
+    if (next === snapEnabled.value) return
+    snapEnabled.value = next
+    if (interactionManager) {
+      interactionManager.drag.setSnapToGrid(next)
+      interactionManager.resize.setSnapToGrid(next)
+    }
+  }
+)
+
+watch(
+  () => props.lockAnchorsEnabled,
+  (next) => {
+    if (next === lockAnchorsEnabled.value) return
+    lockAnchorsEnabled.value = next
+    if (!renderer) return
+    for (const [, edge] of renderer.edges) {
+      edge.lockAnchors = next
+    }
+    renderer.markDirty()
+  }
+)
+
 defineExpose({
   zoomIn,
   zoomOut,
@@ -1612,8 +1718,8 @@ defineExpose({
 
 .canvas-palette-toggle {
   position: absolute;
-  right: 24px;
-  top: 12px;
+  right: 5px;
+  top: 10px;
   width: 30px;
   height: 30px;
   border: 1px solid var(--border);
@@ -1635,8 +1741,8 @@ defineExpose({
 
 .canvas-palette {
   position: absolute;
-  right: 24px;
-  top: 12px;
+  right: 5px;
+  top: 10px;
   bottom: 12px;
   width: 152px;
   padding: 8px 6px;

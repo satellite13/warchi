@@ -43,7 +43,6 @@ const { currentUser } = useAuth()
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
-const showDiagramInfoModal = ref(false)
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
@@ -65,6 +64,49 @@ const snapEnabled = ref(false)
 const lockAnchorsEnabled = ref(true)
 const selectionSyncEnabled = ref(true)
 
+type ToolbarState = {
+  gridVisible: boolean
+  miniMapVisible: boolean
+  snapEnabled: boolean
+  lockAnchorsEnabled: boolean
+}
+
+const TOOLBAR_STATE_STORAGE_PREFIX = "warchi:model-editor:toolbar-state"
+
+const getToolbarStateStorageKey = (userId: string | null): string =>
+  userId ? `${TOOLBAR_STATE_STORAGE_PREFIX}:${userId}` : `${TOOLBAR_STATE_STORAGE_PREFIX}:anonymous`
+
+const readToolbarState = (userId: string | null): Partial<ToolbarState> | null => {
+  if (typeof window === "undefined") return null
+  const raw = window.localStorage.getItem(getToolbarStateStorageKey(userId))
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<ToolbarState>
+    return parsed && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
+  if (!stateValue) return
+  if (typeof stateValue.gridVisible === "boolean") gridVisible.value = stateValue.gridVisible
+  if (typeof stateValue.miniMapVisible === "boolean") miniMapVisible.value = stateValue.miniMapVisible
+  if (typeof stateValue.snapEnabled === "boolean") snapEnabled.value = stateValue.snapEnabled
+  if (typeof stateValue.lockAnchorsEnabled === "boolean") lockAnchorsEnabled.value = stateValue.lockAnchorsEnabled
+}
+
+const persistToolbarState = (userId: string | null) => {
+  if (typeof window === "undefined") return
+  const nextState: ToolbarState = {
+    gridVisible: gridVisible.value,
+    miniMapVisible: miniMapVisible.value,
+    snapEnabled: snapEnabled.value,
+    lockAnchorsEnabled: lockAnchorsEnabled.value
+  }
+  window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState))
+}
+
 const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
 
@@ -77,19 +119,23 @@ const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
 const fallbackNotationMetaLoading = ref(false)
 const fallbackNotationMetaError = ref<string | null>(null)
-const activeDiagramNotationLabel = computed(() => {
+const activeDiagramNotationName = computed(() => {
   const notationId = activeDiagram.value?.notationId
   if (!notationId) return ""
   const notation = state.value.notations.find((item) => item.id === notationId)
-  if (!notation) {
-    if (fallbackNotationMeta.value?.id === notationId) {
-      return `${fallbackNotationMeta.value.name} (${fallbackNotationMeta.value.version})`
-    }
-    if (fallbackNotationMetaLoading.value) return "Нотация загружается..."
-    if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
-    return "Нотация недоступна"
-  }
-  return `${notation.name} (${notation.version})`
+  if (notation) return notation.name
+  if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.name
+  if (fallbackNotationMetaLoading.value) return "Нотация загружается..."
+  if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
+  return "Нотация недоступна"
+})
+const activeDiagramNotationVersion = computed(() => {
+  const notationId = activeDiagram.value?.notationId
+  if (!notationId) return ""
+  const notation = state.value.notations.find((item) => item.id === notationId)
+  if (notation) return notation.version
+  if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.version
+  return ""
 })
 const activeDiagramNotationOwnerLabel = computed(() => {
   const notationId = activeDiagram.value?.notationId
@@ -97,6 +143,21 @@ const activeDiagramNotationOwnerLabel = computed(() => {
   if (fallbackNotationMeta.value?.id !== notationId) return ""
   return fallbackNotationMeta.value.ownerEmail
 })
+
+watch(
+  () => currentUser.value?.id ?? null,
+  (userId) => {
+    applyToolbarState(readToolbarState(userId))
+  },
+  { immediate: true }
+)
+
+watch(
+  [gridVisible, miniMapVisible, snapEnabled, lockAnchorsEnabled, () => currentUser.value?.id ?? null],
+  ([, , , , userId]) => {
+    persistToolbarState(userId as string | null)
+  }
+)
 
 watch(
   () => activeDiagram.value?.notationId ?? null,
@@ -315,11 +376,48 @@ const selectedNodeTypeName = computed(() => {
   return nonDirectoryNodeTypes.value.find((t) => t.id === newNodeTypeId.value)?.name ?? ""
 })
 
+const treeRootNodeId = computed<string | null>(() => {
+  const raw = model.value?.attrs
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const rootId = parsed.treeRootNodeId
+    return typeof rootId === "string" && rootId.trim().length > 0 ? rootId : null
+  } catch {
+    return null
+  }
+})
+
+const resolveTreeParentId = (parentNodeId: string | null): string | null =>
+  parentNodeId ?? treeRootNodeId.value ?? null
+
 const canCreateNodeFromModal = computed(() => {
   if (!newNodeName.value.trim()) return false
   if (createNodeModal.value.kind === "folder") return !!directoryNodeType.value
   return !!newNodeTypeId.value
 })
+
+const getNextTreeOrderForParent = (parentNodeId: string | null): number => {
+  const siblingOrders = state.value.nodes
+    .filter((node) => !node._isDeleted && node.parentNodeId === parentNodeId)
+    .map((node) => node.parsedAttrs.treeOrder ?? 0)
+  if (siblingOrders.length === 0) return 0
+  return Math.max(...siblingOrders) + 1
+}
+
+const reindexTreeOrders = () => {
+  const counters = new Map<string, number>()
+  for (const node of state.value.nodes) {
+    if (node._isDeleted) continue
+    const parentKey = node.parentNodeId ?? "__root__"
+    const nextOrder = counters.get(parentKey) ?? 0
+    counters.set(parentKey, nextOrder + 1)
+    if (node.parsedAttrs.treeOrder !== nextOrder) {
+      node.parsedAttrs.treeOrder = nextOrder
+      markNodeDirty(node.id)
+    }
+  }
+}
 
 const applyDefaultCustomValues = (
   target: Record<string, unknown>,
@@ -414,7 +512,7 @@ const openCreateFolder = (parentNodeId: string | null) => {
     setUiError("Тип Directory не найден. Невозможно создать папку.")
     return
   }
-  createNodeModal.value = { parentNodeId, kind: "folder" }
+  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: "folder" }
   newNodeName.value = ""
   newNodeTypeId.value = directoryNodeType.value.id
   uiError.value = null
@@ -426,7 +524,7 @@ const openCreateRegularNode = (parentNodeId: string | null) => {
     setUiError("Нет доступных типов нод, кроме Directory.")
     return
   }
-  createNodeModal.value = { parentNodeId, kind: "node" }
+  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: "node" }
   newNodeName.value = ""
   newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ""
   nodeTypeSearchQuery.value = ""
@@ -442,16 +540,20 @@ const createNode = () => {
       ? (directoryNodeType.value?.id ?? "")
       : newNodeTypeId.value
   if (!nodeTypeId) return
+  const parentNodeId = createNodeModal.value.parentNodeId ?? null
   state.value.nodes.push({
     id: createId(),
     name: newNodeName.value.trim(),
     modelId: state.value.modelId,
     ownerId: state.value.ownerId,
     nodeTypeId,
-    parentNodeId: createNodeModal.value.parentNodeId ?? null,
+    parentNodeId,
     createdAt: null,
     updatedAt: null,
-    parsedAttrs: parseNodeAttrs(null),
+    parsedAttrs: {
+      ...parseNodeAttrs(null),
+      treeOrder: getNextTreeOrderForParent(parentNodeId)
+    },
     _isNew: true
   })
   showCreateNodeModal.value = false
@@ -829,7 +931,10 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
   if (!diagram) return
   const node = state.value.nodes.find((item) => item.id === modelNodeId && !item._isDeleted)
   if (!node) return
-  ensureNodeBindingByNodeType(node)
+  const hasBinding = ensureNodeBindingByNodeType(node)
+  if (!hasBinding) {
+    return
+  }
 
   const notationId = activeNotationId.value
   const componentId = notationId
@@ -865,6 +970,7 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
   const nodeId = createId()
   const notationId = activeNotationId.value
   const parsedAttrs = parseNodeAttrs(null)
+  parsedAttrs.treeOrder = getNextTreeOrderForParent(diagram.nodeId)
   if (notationId) {
     parsedAttrs.notationComponents[notationId] = { componentId }
     const scopedDefaults: Record<string, unknown> = {}
@@ -1099,12 +1205,81 @@ const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
   markNodeDirty(node.id)
 }
 
-const handleMoveNode = (nodeId: string, newParentNodeId: string | null) => {
+const isDirectoryNode = (nodeId: string): boolean => {
   const node = state.value.nodes.find((item) => item.id === nodeId)
-  if (!node) return
-  if (node.parentNodeId === newParentNodeId) return
-  node.parentNodeId = newParentNodeId
-  markNodeDirty(node.id)
+  if (!node) return false
+  const nodeType = state.value.nodeTypes.find((type) => type.id === node.nodeTypeId)
+  return (nodeType?.name ?? "").trim().toLowerCase() === "directory"
+}
+
+const isDescendantNode = (nodeId: string, potentialParentId: string): boolean => {
+  const children = state.value.nodes.filter((item) => item.parentNodeId === potentialParentId && !item._isDeleted)
+  for (const child of children) {
+    if (child.id === nodeId) return true
+    if (isDescendantNode(nodeId, child.id)) return true
+  }
+  return false
+}
+
+const handleMoveNode = (
+  nodeId: string,
+  targetNodeId: string | null,
+  position: "above" | "below" | "inside"
+) => {
+  const nodes = state.value.nodes
+  const fromIndex = nodes.findIndex((item) => item.id === nodeId)
+  if (fromIndex < 0) return
+  const movingNode = nodes[fromIndex]!
+
+  if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
+
+  const targetNode = targetNodeId ? nodes.find((item) => item.id === targetNodeId) : null
+  if (targetNodeId && !targetNode) return
+
+  let newParentNodeId: string | null
+  let insertIndex: number
+
+  if (!targetNode) {
+    newParentNodeId = treeRootNodeId.value ?? null
+    const rootIndices = nodes
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.id !== nodeId && !item._isDeleted && !item.parentNodeId)
+      .map(({ index }) => index)
+    insertIndex = rootIndices.length > 0 ? rootIndices[rootIndices.length - 1]! + 1 : nodes.length
+  } else if (position === "inside" && isDirectoryNode(targetNode.id)) {
+    newParentNodeId = targetNode.id
+    const childIndices = nodes
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id)
+      .map(({ index }) => index)
+    insertIndex = childIndices.length > 0 ? childIndices[childIndices.length - 1]! + 1 : nodes.indexOf(targetNode) + 1
+  } else {
+    newParentNodeId = targetNode.parentNodeId ?? null
+    const targetIndex = nodes.indexOf(targetNode)
+    insertIndex = position === "above" ? targetIndex : targetIndex + 1
+  }
+
+  const parentChanged = movingNode.parentNodeId !== newParentNodeId
+  movingNode.parentNodeId = newParentNodeId
+
+  nodes.splice(fromIndex, 1)
+  if (fromIndex < insertIndex) insertIndex -= 1
+  insertIndex = Math.max(0, Math.min(insertIndex, nodes.length))
+  nodes.splice(insertIndex, 0, movingNode)
+
+  const orderChanged = fromIndex !== insertIndex
+  if (parentChanged || orderChanged) {
+    markNodeDirty(movingNode.id)
+    reindexTreeOrders()
+  }
+}
+
+const handleMoveDiagram = (diagramId: string, newNodeId: string) => {
+  const diagram = state.value.diagrams.find((item) => item.id === diagramId && !item._isDeleted)
+  if (!diagram) return
+  if (diagram.nodeId === newNodeId) return
+  diagram.nodeId = newNodeId
+  markDiagramDirty(diagram.id)
 }
 
 const handleRenameNode = (nodeId: string, newName: string) => {
@@ -1333,9 +1508,6 @@ const handleToolbarAction = async (event: string) => {
       break
     case "show-diagram-json":
       openDiagramJson()
-      break
-    case "show-diagram-info":
-      if (activeDiagram.value) showDiagramInfoModal.value = true
       break
   }
 }
@@ -1590,6 +1762,7 @@ onBeforeUnmount(() => {
   <MainLayout>
     <template #header>
       <ModelEditorHeader
+        hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :can-save="!isSaving"
         :model-name="model?.name"
@@ -1602,6 +1775,11 @@ onBeforeUnmount(() => {
         :can-undo="canUndo"
         :can-redo="canRedo"
         :can-share="canShareModel"
+        :diagram-name="activeDiagram?.name ?? ''"
+        :diagram-version="activeDiagram?.version ?? ''"
+        :notation-name="activeDiagram ? activeDiagramNotationName : ''"
+        :notation-version="activeDiagram ? activeDiagramNotationVersion : ''"
+        :notation-owner-info="activeDiagram ? activeDiagramNotationOwnerLabel : ''"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
         @share="showShareModal = true"
@@ -1615,6 +1793,7 @@ onBeforeUnmount(() => {
             :nodes="state.nodes"
             :diagrams="state.diagrams"
             :node-types="state.nodeTypes"
+            :tree-root-node-id="treeRootNodeId"
             :selected-node-id="selectedNodeId"
             :selected-diagram-id="selectedDiagramId"
             :model-name="model?.name"
@@ -1627,35 +1806,62 @@ onBeforeUnmount(() => {
             @delete-node="markNodeDeleted"
             @create-diagram="openCreateDiagram"
             @delete-diagram="markDiagramDeleted"
+            @move-diagram="handleMoveDiagram"
             @move-node="handleMoveNode"
             @rename-node="handleRenameNode"
           />
         </template>
 
-        <ModelDiagramCanvas
-          ref="diagramCanvasRef"
-          :active-diagram="activeDiagram"
-          :nodes="state.nodes"
-          :links="state.links"
-          :relations="state.relations"
-          :components="state.components"
-          :node-types="state.nodeTypes"
-          :selected-model-node-ids="selectedModelNodeIds"
-          :selected-model-link-id="selectedModelLinkId"
-          :connection-validator="canConnect"
-          @update-diagram="setDiagramAttrs"
-          @select-nodes="handleCanvasSelectNodes"
-          @select-link="selectedModelLinkId = $event; selectedModelNodeIds = []; selectedNodeId = null"
-          @create-node-from-component="createNodeFromPaletteComponent"
-          @add-existing-node="addExistingNodeToDiagram"
-          @connect-nodes="startConnectNodes"
-          @find-in-tree="handleFindInTree"
-          @node-label-change="handleNodeLabelChange"
-          @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"
-          @request-delete-link="handleRequestDeleteLink"
-          @select-canvas-element-id="selectedCanvasElementId = $event"
-          @canvas-context-change="handleCanvasContextChange"
-        />
+        <div class="model-canvas-area">
+          <div class="model-canvas-area__toolbar">
+            <ModelEditorHeader
+              canvas-mode
+              :has-unsaved-changes="hasUnsavedChanges"
+              :can-save="!isSaving"
+              :model-name="model?.name"
+              :model-version="model?.version"
+              :grid-visible="gridVisible"
+              :mini-map-visible="miniMapVisible"
+              :snap-enabled="snapEnabled"
+              :lock-anchors-enabled="lockAnchorsEnabled"
+              :has-active-diagram="!!activeDiagram"
+              :can-undo="canUndo"
+              :can-redo="canRedo"
+              :can-share="canShareModel"
+              @action="handleToolbarAction"
+              @rename-model="handleRenameModel"
+              @share="showShareModal = true"
+            />
+          </div>
+          <ModelDiagramCanvas
+            ref="diagramCanvasRef"
+            :active-diagram="activeDiagram"
+            :nodes="state.nodes"
+            :links="state.links"
+            :relations="state.relations"
+            :components="state.components"
+            :node-types="state.nodeTypes"
+            :grid-visible="gridVisible"
+            :mini-map-visible="miniMapVisible"
+            :snap-enabled="snapEnabled"
+            :lock-anchors-enabled="lockAnchorsEnabled"
+            :selected-model-node-ids="selectedModelNodeIds"
+            :selected-model-link-id="selectedModelLinkId"
+            :connection-validator="canConnect"
+            @update-diagram="setDiagramAttrs"
+            @select-nodes="handleCanvasSelectNodes"
+            @select-link="selectedModelLinkId = $event; selectedModelNodeIds = []; selectedNodeId = null"
+            @create-node-from-component="createNodeFromPaletteComponent"
+            @add-existing-node="addExistingNodeToDiagram"
+            @connect-nodes="startConnectNodes"
+            @find-in-tree="handleFindInTree"
+            @node-label-change="handleNodeLabelChange"
+            @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"
+            @request-delete-link="handleRequestDeleteLink"
+            @select-canvas-element-id="selectedCanvasElementId = $event"
+            @canvas-context-change="handleCanvasContextChange"
+          />
+        </div>
 
         <template #right>
           <div class="model-right-stack" :style="{ gridTemplateRows: rightStackRows }">
@@ -1724,6 +1930,7 @@ onBeforeUnmount(() => {
           v-model="newNodeName"
           class="field-input"
           :placeholder="createNodeModal.kind === 'folder' ? 'Новая папка' : 'Новая нода'"
+          @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
         >
       </label>
       <div v-if="createNodeModal.kind === 'node'" class="node-type-dropdown">
@@ -1916,31 +2123,6 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
-  <BaseModal
-    v-if="showDiagramInfoModal && activeDiagram"
-    title="Информация о диаграмме"
-    max-width="460px"
-    @close="showDiagramInfoModal = false"
-  >
-    <div class="diagram-info">
-      <div class="diagram-info__row">
-        <span class="diagram-info__label">Диаграмма</span>
-        <span class="diagram-info__value">{{ activeDiagram.name }} ({{ activeDiagram.version }})</span>
-      </div>
-      <div class="diagram-info__row">
-        <span class="diagram-info__label">Нотация</span>
-        <span class="diagram-info__value">{{ activeDiagramNotationLabel }}</span>
-      </div>
-      <div v-if="activeDiagramNotationOwnerLabel" class="diagram-info__row">
-        <span class="diagram-info__label">Владелец нотации</span>
-        <span class="diagram-info__value">{{ activeDiagramNotationOwnerLabel }}</span>
-      </div>
-    </div>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showDiagramInfoModal = false">Закрыть</button>
-    </template>
-  </BaseModal>
-
   <ShareAccessModal
     v-if="showShareModal && model"
     title="Доступ к модели"
@@ -2083,6 +2265,25 @@ onBeforeUnmount(() => {
   display: grid;
 }
 
+.model-canvas-area {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.model-canvas-area__toolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  pointer-events: none;
+}
+
+.model-canvas-area__toolbar :deep(*) {
+  pointer-events: auto;
+}
+
 .model-right-stack__top,
 .model-right-stack__bottom {
   min-height: 0;
@@ -2097,27 +2298,6 @@ onBeforeUnmount(() => {
 
 .model-right-stack__bottom--collapsed {
   min-height: 46px;
-}
-
-.diagram-info {
-  display: grid;
-  gap: 8px;
-}
-
-.diagram-info__row {
-  display: grid;
-  gap: 2px;
-}
-
-.diagram-info__label {
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
-.diagram-info__value {
-  font-size: 14px;
-  color: var(--base-text);
-  overflow-wrap: anywhere;
 }
 
 .save-toast {

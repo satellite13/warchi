@@ -14,6 +14,8 @@ const props = withDefaults(defineProps<{
   canUndo?: boolean;
   canRedo?: boolean;
   canShare?: boolean;
+  canvasMode?: boolean;
+  hideToolbar?: boolean;
 }>(), {
   hasUnsavedChanges: false,
   notationName: "",
@@ -23,7 +25,9 @@ const props = withDefaults(defineProps<{
   snapEnabled: false,
   canUndo: false,
   canRedo: false,
-  canShare: false
+  canShare: false,
+  canvasMode: false,
+  hideToolbar: false
 });
 
 const router = useRouter();
@@ -67,7 +71,10 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="notation-header">
+  <div v-if="canvasMode" class="notation-header-canvas">
+    <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)"/>
+  </div>
+  <header v-else class="notation-header" :class="{ 'notation-header--no-toolbar': hideToolbar }">
     <div class="notation-header__left">
       <button type="button" class="back-btn" title="К списку нотаций" @click="router.push({name: 'notations'})">
         <span class="material-symbols-outlined">arrow_back</span>
@@ -88,13 +95,12 @@ const emit = defineEmits<{
         @click="emit('share')"
       >
         <span class="material-symbols-outlined">share</span>
-        Поделиться
       </button>
     </div>
-    <div class="notation-header__center">
+    <div v-if="!hideToolbar" class="notation-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)"/>
     </div>
-    <div class="notation-header__right-spacer" />
+    <div v-if="!hideToolbar" class="notation-header__right-spacer" />
   </header>
 </template>
 
@@ -105,6 +111,27 @@ const emit = defineEmits<{
   align-items: center;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+}
+
+.notation-header--no-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.notation-header-canvas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.notation-header-canvas :deep(.icon-toolbar) {
+  padding: 2px 3px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
 }
 
 .notation-header__left {
@@ -192,20 +219,27 @@ const emit = defineEmits<{
 }
 
 .share-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--surface-strong);
   color: var(--text-muted);
-  padding: 4px 8px;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.share-btn .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .share-btn:hover {
   background: var(--primary-soft);
-  color: var(--primary);
   border-color: var(--primary);
+  color: var(--primary);
 }
 </style>

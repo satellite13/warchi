@@ -112,4 +112,12 @@ For public release preparation, see:
 
 ## License
 
-License is not finalized yet. Add `LICENSE` before public release.
+This project uses dual licensing:
+
+- `AGPL-3.0-or-later` for open-source usage
+- Commercial license for proprietary/closed-source commercial usage
+
+See:
+
+- `LICENSE`
+- `LICENSE_COMMERCIAL.md`

@@ -78,13 +78,13 @@ const MAX_ZOOM = 2.5
 const DEFAULT_NODE_WIDTH = 160
 const DEFAULT_NODE_HEIGHT = 56
 const COMPONENT_RADIUS = 8
+const EDGE_HIT_TOLERANCE_MIN = 8
 
 let renderer: DiagramRenderer | null = null
 let interactionManager: InteractionManager | null = null
 let gridOverlay: GridOverlay | null = null
 let miniMap: MiniMap | null = null
 let resizeObserver: ResizeObserver | null = null
-let cleanupSelectionOverlay: (() => void) | null = null
 let suppressSelectionEvent = false
 
 // Maps: papirus element ID → model entity
@@ -782,6 +782,50 @@ function updateSelection() {
   }
 }
 
+function findTopEdgeAtPoint(worldPoint: { x: number; y: number }): Edge | null {
+  if (!renderer) return null
+  const edges = Array.from(renderer.edges.values())
+  for (let i = edges.length - 1; i >= 0; i--) {
+    const edge = edges[i]
+    if (!edge || !edge.visible) continue
+    const baseTolerance = Math.max((edge.style.strokeWidth ?? 2) * 2, EDGE_HIT_TOLERANCE_MIN)
+    const tolerance = baseTolerance / Math.max(renderer.zoom, 0.0001)
+    if (edge.hitTestWithTolerance(worldPoint, tolerance)) {
+      return edge
+    }
+  }
+  return null
+}
+
+function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
+  if (!renderer || !interactionManager || !props.activeDiagram) return
+  if (event.ctrlKey || event.metaKey || event.shiftKey) return
+
+  const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
+  const hitEdge = findTopEdgeAtPoint(worldPoint)
+  if (!hitEdge) return
+
+  // Prevent InteractionManager click handler from re-selecting underlying node.
+  event.preventDefault()
+  event.stopImmediatePropagation()
+
+  const selection = interactionManager.selection
+  if (selection.selectedIds.size === 1 && selection.selectedIds.has(hitEdge.id)) return
+
+  suppressSelectionEvent = true
+  try {
+    selection.select(hitEdge.id)
+  } finally {
+    suppressSelectionEvent = false
+  }
+
+  emit("selectCanvasElementId", hitEdge.id)
+  const edgeEntity = edgeIdToInstance.get(hitEdge.id)
+  if (edgeEntity) {
+    emit("selectLink", edgeEntity.modelLinkId)
+  }
+}
+
 // ── Detect label changes from inline editing ──
 function detectLabelChanges() {
   if (!renderer) return
@@ -931,6 +975,7 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
 // ── Renderer init ──
 function initRenderer(r: DiagramRenderer) {
   renderer = r
+  r.getCanvas().addEventListener("click", handleCanvasClickPrioritizeEdge)
 
   // Grid overlay
   gridOverlay = new GridOverlay({ gridSize: 24, color: "#e2e8f0" })
@@ -947,36 +992,7 @@ function initRenderer(r: DiagramRenderer) {
   })
   r.use(miniMap)
 
-  // Selection outline overlay — registered BEFORE enableInteractions so it
-  // renders beneath anchor points and resize handles drawn by InteractionManager.
-  cleanupSelectionOverlay = r.addOverlayRenderer((ctx) => {
-    const selectedNodeIds = props.selectedModelNodeIds
-    if (selectedNodeIds.length === 0) return
-
-    const selectedSet = new Set(selectedNodeIds)
-    const zoom = renderer?.zoom || 1
-
-    ctx.save()
-
-    for (const [papId, entity] of nodeIdToInstance) {
-      if (!selectedSet.has(entity.modelNodeId)) continue
-      const node = renderer?.getNode(papId)
-      if (!node) continue
-      const bounds = node.getBounds()
-      ctx.shadowColor = "rgba(99, 102, 241, 0.45)"
-      ctx.shadowBlur = 12 / zoom
-      ctx.shadowOffsetX = 0
-      ctx.shadowOffsetY = 2 / zoom
-      ctx.fillStyle = "rgba(99, 102, 241, 0.08)"
-      ctx.beginPath()
-      ctx.roundRect(bounds.x - 2 / zoom, bounds.y - 2 / zoom, bounds.width + 4 / zoom, bounds.height + 4 / zoom, 4 / zoom)
-      ctx.fill()
-    }
-
-    ctx.restore()
-  })
-
-  // Enable interactions (after selection overlay so anchors render on top)
+  // Enable interactions
   interactionManager = r.enableInteractions({
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
@@ -1397,8 +1413,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
-  cleanupSelectionOverlay?.()
-  cleanupSelectionOverlay = null
+  renderer?.getCanvas().removeEventListener("click", handleCanvasClickPrioritizeEdge)
   renderer?.destroy()
   renderer = null
   interactionManager = null

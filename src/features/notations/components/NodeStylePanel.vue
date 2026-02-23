@@ -3,6 +3,7 @@
 import {ref, reactive, computed, watch} from "vue";
 import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
+import SketchColorField from "./SketchColorField.vue";
 import type {DiagramStyle} from "../notationAttrs";
 import {
   getAllComponentPresets,
@@ -1589,13 +1590,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Цвет</span>
-                  <div class="sp-color">
-                    <label class="sp-color__swatch">
-                      <input type="color" :value="edgeLabelColor" @input="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: edgeLabelColor }"></span>
-                    </label>
-                    <input type="text" class="sp-input sp-input--hex" :value="edgeLabelColor" @change="handleEdgeLabelColorChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <SketchColorField
+                    :model-value="edgeLabelColor"
+                    :alpha-value="edgeLabelOpacity"
+                    @update:model-value="handleEdgeLabelColorChange"
+                    @update:alpha="(value) => handleEdgeLabelOpacityChange(String(value))"
+                  />
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1621,13 +1621,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Фон</span>
-                  <div class="sp-color">
-                    <label class="sp-color__swatch">
-                      <input type="color" :value="edgeLabelBgColor" @input="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: edgeLabelBgColor }"></span>
-                    </label>
-                    <input type="text" class="sp-input sp-input--hex" :value="edgeLabelBgColor" @change="handleEdgeLabelBgColorChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <SketchColorField
+                    :model-value="edgeLabelBgColor"
+                    :alpha-value="edgeLabelBgOpacity"
+                    @update:model-value="handleEdgeLabelBgColorChange"
+                    @update:alpha="(value) => handleEdgeLabelBgOpacityChange(String(value))"
+                  />
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelBgOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1657,13 +1656,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
               <div v-if="edgeSection.line" class="sp-section__content">
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Цвет</span>
-                  <div class="sp-color">
-                    <label class="sp-color__swatch">
-                      <input type="color" :value="edgeStrokeColor" @input="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: edgeStrokeColor }"></span>
-                    </label>
-                    <input type="text" class="sp-input sp-input--hex" :value="edgeStrokeColor" @change="handleEdgeStrokeColorChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <SketchColorField
+                    :model-value="edgeStrokeColor"
+                    :alpha-value="edgeStrokeOpacity"
+                    @update:model-value="handleEdgeStrokeColorChange"
+                    @update:alpha="(value) => handleEdgeStrokeOpacityChange(String(value))"
+                  />
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="edgeStrokeOpacity" min="0" max="1" step="0.1" @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1746,13 +1744,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </div>
                     <div class="sp-field sp-field--row sp-field--indent">
                       <span class="sp-field__label">Заливка</span>
-                      <div class="sp-color">
-                        <label class="sp-color__swatch">
-                          <input type="color" :value="edgeStartMarkerFillColor" @input="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                          <span class="sp-color__preview" :style="{ background: edgeStartMarkerFillColor }"></span>
-                        </label>
-                        <input type="text" class="sp-input sp-input--hex" :value="edgeStartMarkerFillColor" @change="handleEdgeStartMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                      </div>
+                      <SketchColorField
+                        :model-value="edgeStartMarkerFillColor"
+                        :alpha-value="edgeStartMarkerFillOpacity"
+                        @update:model-value="handleEdgeStartMarkerFillColorChange"
+                        @update:alpha="(value) => handleEdgeStartMarkerFillOpacityChange(String(value))"
+                      />
                       <div class="sp-num-field">
                         <span class="sp-num-field__label">A</span>
                         <input type="number" class="sp-input sp-input--tiny" :value="edgeStartMarkerFillOpacity" min="0" max="1" step="0.1" @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1779,13 +1776,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </div>
                     <div class="sp-field sp-field--row sp-field--indent">
                       <span class="sp-field__label">Заливка</span>
-                      <div class="sp-color">
-                        <label class="sp-color__swatch">
-                          <input type="color" :value="edgeEndMarkerFillColor" @input="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                          <span class="sp-color__preview" :style="{ background: edgeEndMarkerFillColor }"></span>
-                        </label>
-                        <input type="text" class="sp-input sp-input--hex" :value="edgeEndMarkerFillColor" @change="handleEdgeEndMarkerFillColorChange(($event.target as HTMLInputElement).value)">
-                      </div>
+                      <SketchColorField
+                        :model-value="edgeEndMarkerFillColor"
+                        :alpha-value="edgeEndMarkerFillOpacity"
+                        @update:model-value="handleEdgeEndMarkerFillColorChange"
+                        @update:alpha="(value) => handleEdgeEndMarkerFillOpacityChange(String(value))"
+                      />
                       <div class="sp-num-field">
                         <span class="sp-num-field__label">A</span>
                         <input type="number" class="sp-input sp-input--tiny" :value="edgeEndMarkerFillOpacity" min="0" max="1" step="0.1" @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1819,13 +1815,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Цвет</span>
-                  <div class="sp-color">
-                    <label class="sp-color__swatch">
-                      <input type="color" :value="labelColor" @input="handleLabelColorChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: labelColor }"></span>
-                    </label>
-                    <input type="text" class="sp-input sp-input--hex" :value="labelColor" @change="handleLabelColorChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <SketchColorField
+                    :model-value="labelColor"
+                    :alpha-value="labelOpacity"
+                    @update:model-value="handleLabelColorChange"
+                    @update:alpha="(value) => handleLabelOpacityChange(String(value))"
+                  />
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="labelOpacity" min="0" max="1" step="0.1" @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1943,13 +1938,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
               <div v-if="nodeSection.fill" class="sp-section__content">
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Заливка</span>
-                  <div class="sp-color">
-                    <label class="sp-color__swatch">
-                      <input type="color" :value="fillColor" @input="handleFillChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: fillColor }"></span>
-                    </label>
-                    <input type="text" class="sp-input sp-input--hex" :value="fillColor" @change="handleFillChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <SketchColorField
+                    :model-value="fillColor"
+                    :alpha-value="fillOpacity"
+                    @update:model-value="handleFillChange"
+                    @update:alpha="(value) => handleFillOpacityChange(String(value))"
+                  />
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="fillOpacity" min="0" max="1" step="0.1" @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)">
@@ -1957,13 +1951,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">Обводка</span>
-                  <div class="sp-color">
-                    <label class="sp-color__swatch">
-                      <input type="color" :value="strokeColor" @input="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: strokeColor }"></span>
-                    </label>
-                    <input type="text" class="sp-input sp-input--hex" :value="strokeColor" @change="handleStrokeColorChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <SketchColorField
+                    :model-value="strokeColor"
+                    :alpha-value="strokeOpacity"
+                    @update:model-value="handleStrokeColorChange"
+                    @update:alpha="(value) => handleStrokeOpacityChange(String(value))"
+                  />
                   <div class="sp-num-field">
                     <span class="sp-num-field__label">A</span>
                     <input type="number" class="sp-input sp-input--tiny" :value="strokeOpacity" min="0" max="1" step="0.1" @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)">
@@ -2038,18 +2031,20 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </select>
                   </div>
                   <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">Цвета</span>
-                    <div class="sp-color">
-                      <label class="sp-color__swatch" title="Линии">
-                        <input type="color" :value="iconStrokeColor" @input="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
-                        <span class="sp-color__preview" :style="{ background: iconStrokeColor }"></span>
-                      </label>
-                      <input type="text" class="sp-input sp-input--hex" :value="iconStrokeColor" @change="handleIconStrokeColorChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <label class="sp-color__swatch" title="Заливка">
-                      <input type="color" :value="iconFillColor" @input="handleIconFillColorChange(($event.target as HTMLInputElement).value)">
-                      <span class="sp-color__preview" :style="{ background: iconFillColor }"></span>
-                    </label>
+                    <span class="sp-field__label">Линии</span>
+                    <SketchColorField
+                      :model-value="iconStrokeColor"
+                      title="Линии"
+                      @update:model-value="handleIconStrokeColorChange"
+                    />
+                  </div>
+                  <div class="sp-field sp-field--row">
+                    <span class="sp-field__label">Заливка</span>
+                    <SketchColorField
+                      :model-value="iconFillColor"
+                      title="Заливка"
+                      @update:model-value="handleIconFillColorChange"
+                    />
                   </div>
                   <div class="sp-field-grid sp-field-grid--2">
                     <div class="sp-num-field sp-num-field--stacked">
@@ -2480,57 +2475,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 .sp-select--flex {
   flex: 1;
   min-width: 0;
-}
-
-/* ---- Color picker ---- */
-.sp-color {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
-.sp-color__swatch {
-  position: relative;
-  width: var(--sp-h);
-  height: var(--sp-h);
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.sp-color__swatch input[type="color"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  border: none;
-  padding: 0;
-}
-
-.sp-color__preview {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  /* Checkerboard for transparency */
-  background-image:
-    linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
-    linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
-    linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
-  background-size: 8px 8px;
-  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
-}
-
-.sp-color__swatch:hover .sp-color__preview {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 /* ---- Number field with label ---- */

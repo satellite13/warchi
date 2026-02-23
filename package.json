@@ -13,9 +13,10 @@
     "lint:fix": "eslint src --ext .vue,.ts,.tsx --fix"
   },
   "dependencies": {
-    "@fontsource/material-symbols-outlined": "^5.2.35",
+    "@ckpack/vue-color": "^1.6.0",
+    "@fontsource/material-symbols-outlined": "^5.2.36",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "0.3.6",
+    "@ngroznykh/papirus": "^0.3.9",
     "marked": "^17.0.3",
     "vue": "^3.5.28",
     "vue-router": "^5.0.3"

@@ -79,6 +79,7 @@ const COLUMN_GAP = 60
 const ROW_GAP = 30
 const GRID_SIZE = 20
 const NO_ANCHORS = { top: 0, right: 0, bottom: 0, left: 0 }
+const DEFAULT_COMPONENT_ANCHORS = { top: 3, right: 1, bottom: 3, left: 1 }
 
 type ExtendedNotationNodeStyle = NodeStyle & {
   fillOpacity?: number
@@ -278,6 +279,21 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     }
   }
 
+  function resolveComponentAnchorPoints(ds?: DiagramStyle): { top: number; right: number; bottom: number; left: number } {
+    const normalize = (value: unknown, fallback: number): number => {
+      const parsed = Math.round(Number(value))
+      if (!Number.isFinite(parsed) || parsed < 0) return fallback
+      return parsed
+    }
+
+    return {
+      top: normalize(ds?.portsTop, DEFAULT_COMPONENT_ANCHORS.top),
+      right: normalize(ds?.portsRight, DEFAULT_COMPONENT_ANCHORS.right),
+      bottom: normalize(ds?.portsBottom, DEFAULT_COMPONENT_ANCHORS.bottom),
+      left: normalize(ds?.portsLeft, DEFAULT_COMPONENT_ANCHORS.left)
+    }
+  }
+
   function resolveLabelTemplate(
     template: string,
     name: string,
@@ -410,7 +426,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       height: visual.height,
       label: buildNodeLabel(item.name, ds, item.parsedAttrs.customProperties),
       style: visual.style,
-      anchorPoints: NO_ANCHORS,
+      anchorPoints: resolveComponentAnchorPoints(ds),
       ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
     }
     let node: DiagramNode
@@ -490,6 +506,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         }
         existing.width = visual.width
         existing.height = visual.height
+        existing.anchorPoints = resolveComponentAnchorPoints(ds)
         existing.style = {
           ...visual.style,
           ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
@@ -834,6 +851,16 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       gridSize: GRID_SIZE,
       keymap: { deleteKeys: [] }
     })
+    // Notation editor does not support interactive port-to-port connections.
+    const connectionManager =
+      interactionManager.connection as unknown as {
+        connectionValidator?: ((sourceNodeId: string, targetNodeId: string) => boolean) | null
+        tryStartConnectionAtPoint?: (event: unknown) => boolean
+        tryStartReconnection?: (event: unknown) => boolean
+      }
+    connectionManager.connectionValidator = () => false
+    connectionManager.tryStartConnectionAtPoint = () => false
+    connectionManager.tryStartReconnection = () => false
     interactionManagerRef.value = interactionManager
 
     const selectionManager = interactionManager.selection

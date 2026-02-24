@@ -12,7 +12,7 @@ import changelogRaw from "../../CHANGELOG.ru.md?raw"
 const router = useRouter()
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
-const appVersion = "0.0.11"
+const appVersion = "0.0.12"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()

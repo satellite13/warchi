@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.12] - 2026-02-24
+
+### Changed
+- Updated `@ngroznykh/papirus` dependency from `0.3.9` to `0.3.11`.
+- Notation diagram nodes now derive anchor/port counts from component style settings (`portsTop/Right/Bottom/Left`) with sane defaults.
+- Disabled interactive connection/reconnection start in notation editor canvas runtime to keep notation editing flow component-focused.
+
+### Release
+- Bumped application version to `0.0.12` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.12`.
+
 ## [0.0.11] - 2026-02-23
 
 ### Added

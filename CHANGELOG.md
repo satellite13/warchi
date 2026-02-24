@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.13] - 2026-02-24
+
+### Added
+- Added component palette grouping in notation attrs (`paletteGroup`) with editing support in notation custom properties.
+- Model editor palette now separates component groups with dividers and sorts components alphabetically within each group.
+
+### Changed
+- Note creation in model editor no longer opens the note text modal automatically.
+- Edge context menu now shows explicit note-link labeling and note-link-specific delete action text for diagram-only links.
+- "Palette Group" settings block now matches other collapsible sections in notation properties panel.
+
+### Fixed
+- Fixed palette grouping visual separation when the first component group is greater than `0` (components no longer appear in the same visual group as note).
+
+### Release
+- Bumped application version to `0.0.13` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.13`.
+
 ## [0.0.12] - 2026-02-24
 
 ### Changed

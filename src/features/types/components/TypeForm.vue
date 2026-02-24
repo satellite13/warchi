@@ -18,6 +18,7 @@ const emit = defineEmits<{
   addProperty: []
   removeProperty: [propertyId: string]
   updateName: [value: string]
+  updateDefaultDirectoryPath: [value: string]
   share: []
 }>()
 
@@ -103,6 +104,15 @@ const filteredCustomProperties = computed(() => {
         <div class="form-row">
           <label class="form-label">Автор</label>
           <div class="form-input form-input--readonly">{{ ownerDisplayName }}</div>
+        </div>
+        <div v-if="selectedType.kind === 'node'" class="form-row">
+          <label class="form-label">Директория</label>
+          <input
+            class="form-input"
+            :value="selectedType.parsedAttrs.defaultDirectoryPath ?? ''"
+            placeholder="Например: Домены/Продажи/Лиды"
+            @input="emit('updateDefaultDirectoryPath', ($event.target as HTMLInputElement).value)"
+          >
         </div>
       </div>
 

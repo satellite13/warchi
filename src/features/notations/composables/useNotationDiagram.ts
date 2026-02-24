@@ -11,6 +11,7 @@ import {
   AutoLayout,
   GridOverlay,
   MiniMap,
+  RulersOverlay,
   NavigationManager,
   SelectionManager,
   InteractionManager,
@@ -197,6 +198,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   const navigationManagerRef = shallowRef<NavigationManager | null>(null)
   const gridOverlayRef = shallowRef<GridOverlay | null>(null)
   const miniMapRef = shallowRef<MiniMap | null>(null)
+  const rulersOverlayRef = shallowRef<RulersOverlay | null>(null)
   const nodeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   const edgeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   let cleanupSelectionOutlineOverlay: (() => void) | null = null
@@ -579,7 +581,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         existingEdge.labelBackground = buildEdgeLabelBackground(ds)
         existingEdge.labelOffset = ds?.edgeLabelOffset ?? 18
         if (ds?.edgeType) {
-          existingEdge.type = ds.edgeType as "straight" | "polyline" | "bezier"
+          existingEdge.type = ds.edgeType as "straight" | "polyline" | "editable-polyline" | "bezier"
         }
         existingEdge.startMarker = buildMarker(ds?.startMarkerType, ds, "start")
         existingEdge.endMarker = buildMarker(ds?.endMarkerType, ds, "end")
@@ -693,7 +695,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         renderer.addNode(srcNode)
         renderer.addNode(tgtNode)
 
-        const edgeTypeVal = (ds?.edgeType as "straight" | "polyline" | "bezier") || "polyline"
+        const edgeTypeVal = (ds?.edgeType as "straight" | "polyline" | "editable-polyline" | "bezier") || "polyline"
         const startMarker = buildMarker(ds?.startMarkerType, ds, "start")
         const endMarker = buildMarker(ds?.endMarkerType, ds, "end")
 
@@ -842,6 +844,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     renderer.use(gridOverlay)
     gridOverlayRef.value = gridOverlay
 
+    const rulersOverlay = new RulersOverlay({ enabled: true })
+    renderer.use(rulersOverlay)
+    rulersOverlayRef.value = rulersOverlay
+
     const miniMap = new MiniMap({ width: 120, height: 60, padding: 20 })
     renderer.use(miniMap)
     miniMapRef.value = miniMap
@@ -849,6 +855,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const interactionManager = renderer.enableInteractions({
       snapToGrid: true,
       gridSize: GRID_SIZE,
+      alignToNodes: true,
       keymap: { deleteKeys: [] }
     })
     // Notation editor does not support interactive port-to-port connections.
@@ -1036,6 +1043,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     navigationManagerRef.value = null
     gridOverlayRef.value = null
     miniMapRef.value = null
+    rulersOverlayRef.value = null
     rendererRef.value = null
     nodeIdToEntity.clear()
     edgeIdToEntity.clear()
@@ -1046,6 +1054,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     interactionManagerRef,
     gridOverlayRef,
     miniMapRef,
+    rulersOverlayRef,
     initRenderer,
     destroyRenderer,
     fitToView,

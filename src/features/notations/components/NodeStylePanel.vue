@@ -531,7 +531,7 @@ const edgeStrokeOpacity = ref(1);
 const edgeStrokeWidth = ref(2);
 const edgeLineStyle = ref<"solid" | "dashed">("solid");
 const edgeLineDashPattern = ref("8,4");
-const edgeType = ref<"straight" | "polyline" | "bezier">("polyline");
+const edgeType = ref<"straight" | "polyline" | "editable-polyline" | "bezier">("polyline");
 const edgeEndMarker = ref<"none" | "arrow" | "open" | "diamond" | "circle">("open");
 const edgeStartMarker = ref<"none" | "arrow" | "open" | "diamond" | "circle">("none");
 const edgeOpacity = ref(1);
@@ -1229,7 +1229,7 @@ function handleEdgeLineDashChange(value: string) {
 }
 
 function handleEdgeTypeChange(value: string) {
-  const v = value as "straight" | "polyline" | "bezier";
+  const v = value as "straight" | "polyline" | "editable-polyline" | "bezier";
   edgeType.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1701,7 +1701,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <span class="sp-field__label">Тип</span>
                   <div class="sp-segmented">
                     <button
-                      v-for="t in ([{v:'straight',l:'Прямая',icon:'remove'},{v:'polyline',l:'Ломаная',icon:'timeline'},{v:'bezier',l:'Кривая',icon:'line_curve'}] as const)"
+                      v-for="t in ([{v:'straight',l:'Прямая',icon:'remove'},{v:'polyline',l:'Ломаная',icon:'timeline'},{v:'editable-polyline',l:'Редактируемая',icon:'polyline'},{v:'bezier',l:'Кривая',icon:'line_curve'}] as const)"
                       :key="t.v"
                       type="button"
                       class="sp-segmented__btn"

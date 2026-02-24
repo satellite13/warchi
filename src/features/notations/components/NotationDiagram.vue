@@ -33,6 +33,7 @@ const {
   interactionManagerRef,
   gridOverlayRef,
   miniMapRef,
+  rulersOverlayRef,
   rendererRef: diagramRendererRef,
   getNodeEntity
 } = useNotationDiagram({
@@ -112,6 +113,7 @@ defineExpose({
   interactionManagerRef,
   gridOverlayRef,
   miniMapRef,
+  rulersOverlayRef,
   rendererRef: diagramRendererRef,
   getNodeEntity
 });

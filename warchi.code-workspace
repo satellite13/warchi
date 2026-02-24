@@ -11,6 +11,7 @@
 		}
 	],
 	"settings": {
-		"liveServer.settings.multiRootWorkspaceName": "papirus"
+		"liveServer.settings.multiRootWorkspaceName": "papirus",
+		"liveServer.settings.port": 5501
 	}
 }

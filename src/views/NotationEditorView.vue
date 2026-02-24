@@ -194,13 +194,75 @@ const selectedDiagramStyle = computed(() => {
 const gridVisible = ref(true);
 const miniMapVisible = ref(true);
 const snapEnabled = ref(false);
+const alignEnabled = ref(true);
+const rulersEnabled = ref(true);
 const selectionSyncEnabled = ref(true);
+
+type ToolbarState = {
+  gridVisible: boolean;
+  miniMapVisible: boolean;
+  snapEnabled: boolean;
+  alignEnabled: boolean;
+  rulersEnabled: boolean;
+};
+
+const TOOLBAR_STATE_STORAGE_PREFIX = "warchi:notation-editor:toolbar-state";
+const getToolbarStateStorageKey = (userId: string | null): string =>
+  userId ? `${TOOLBAR_STATE_STORAGE_PREFIX}:${userId}` : `${TOOLBAR_STATE_STORAGE_PREFIX}:anonymous`;
+
+const readToolbarState = (userId: string | null): Partial<ToolbarState> | null => {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(getToolbarStateStorageKey(userId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ToolbarState>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
+  if (!stateValue) return;
+  if (typeof stateValue.gridVisible === "boolean") gridVisible.value = stateValue.gridVisible;
+  if (typeof stateValue.miniMapVisible === "boolean") miniMapVisible.value = stateValue.miniMapVisible;
+  if (typeof stateValue.snapEnabled === "boolean") snapEnabled.value = stateValue.snapEnabled;
+  if (typeof stateValue.alignEnabled === "boolean") alignEnabled.value = stateValue.alignEnabled;
+  if (typeof stateValue.rulersEnabled === "boolean") rulersEnabled.value = stateValue.rulersEnabled;
+};
+
+const persistToolbarState = (userId: string | null) => {
+  if (typeof window === "undefined") return;
+  const nextState: ToolbarState = {
+    gridVisible: gridVisible.value,
+    miniMapVisible: miniMapVisible.value,
+    snapEnabled: snapEnabled.value,
+    alignEnabled: alignEnabled.value,
+    rulersEnabled: rulersEnabled.value
+  };
+  window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState));
+};
 const PROPERTIES_PANEL_DEFAULT_HEIGHT = 240;
 const propertiesPanelHeight = ref(PROPERTIES_PANEL_DEFAULT_HEIGHT);
 
 const resetPropertiesPanelHeight = () => {
   propertiesPanelHeight.value = PROPERTIES_PANEL_DEFAULT_HEIGHT;
 };
+
+watch(
+  () => currentUser.value?.id ?? null,
+  (userId) => {
+    applyToolbarState(readToolbarState(userId));
+  },
+  { immediate: true }
+);
+
+watch(
+  [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, () => currentUser.value?.id ?? null],
+  ([, , , , , userId]) => {
+    persistToolbarState(userId as string | null);
+  }
+);
 
 const focusSelectedOnDiagram = (kind: "component" | "relation", id: string) => {
   if (!selectionSyncEnabled.value) return;
@@ -229,6 +291,15 @@ watch(interactionManager, (im) => {
   // Keep interaction managers in sync with toolbar state.
   im.drag.setSnapToGrid(snapEnabled.value);
   im.resize.setSnapToGrid(snapEnabled.value);
+  im.connection.setSnapToGrid(snapEnabled.value);
+  im.drag.setAlignmentEnabled(alignEnabled.value);
+  const overlayGrid = diagramRef.value?.gridOverlayRef;
+  overlayGrid?.setEnabled(gridVisible.value);
+  const overlayMiniMap = diagramRef.value?.miniMapRef;
+  overlayMiniMap?.setEnabled(miniMapVisible.value);
+  const overlayRulers = diagramRef.value?.rulersOverlayRef;
+  overlayRulers?.setEnabled(rulersEnabled.value);
+  diagramRenderer.value?.markDirty();
   im.history.on("change", () => {
     canUndo.value = im.history.canUndo;
     canRedo.value = im.history.canRedo;
@@ -828,6 +899,19 @@ const handleToolbarAction = async (event: string) => {
       snapEnabled.value = !snapEnabled.value;
       im?.drag.setSnapToGrid(snapEnabled.value);
       im?.resize.setSnapToGrid(snapEnabled.value);
+      im?.connection.setSnapToGrid(snapEnabled.value);
+      break;
+    }
+    case "toggle-align": {
+      alignEnabled.value = !alignEnabled.value;
+      im?.drag.setAlignmentEnabled(alignEnabled.value);
+      break;
+    }
+    case "toggle-rulers": {
+      rulersEnabled.value = !rulersEnabled.value;
+      const overlay = diagramRef.value?.rulersOverlayRef;
+      overlay?.setEnabled(rulersEnabled.value);
+      renderer?.markDirty();
       break;
     }
     case "show-attrs-json":
@@ -917,6 +1001,8 @@ onBeforeUnmount(() => {
         :grid-visible="gridVisible"
         :mini-map-visible="miniMapVisible"
         :snap-enabled="snapEnabled"
+        :align-enabled="alignEnabled"
+        :rulers-enabled="rulersEnabled"
         :can-undo="canUndo"
         :can-redo="canRedo"
         :can-share="canShareNotation"
@@ -953,6 +1039,8 @@ onBeforeUnmount(() => {
                 :grid-visible="gridVisible"
                 :mini-map-visible="miniMapVisible"
                 :snap-enabled="snapEnabled"
+                :align-enabled="alignEnabled"
+                :rulers-enabled="rulersEnabled"
                 :can-undo="canUndo"
                 :can-redo="canRedo"
                 :can-share="canShareNotation"

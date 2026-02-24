@@ -260,6 +260,7 @@ export type TypeAttrs = {
   width?: number;
   height?: number;
   cornerRadius?: number;
+  defaultDirectoryPath?: string;
   customProperties?: CustomProperty[];
 };
 
@@ -328,6 +329,12 @@ export const parseTypeAttrs = (attrs: string | null): TypeAttrs => {
     if (typeof record.cornerRadius === "number") {
       result.cornerRadius = record.cornerRadius;
     }
+    if (typeof record.defaultDirectoryPath === "string") {
+      const normalizedPath = record.defaultDirectoryPath.trim();
+      if (normalizedPath.length > 0) {
+        result.defaultDirectoryPath = normalizedPath;
+      }
+    }
 
     const customProperties = normalizeCustomProperties(record.customProperties);
     if (customProperties.length > 0) {
@@ -355,6 +362,9 @@ export const serializeTypeAttrs = (attrs: TypeAttrs): string => {
   }
   if (typeof attrs.cornerRadius === "number") {
     result.cornerRadius = attrs.cornerRadius;
+  }
+  if (typeof attrs.defaultDirectoryPath === "string" && attrs.defaultDirectoryPath.trim().length > 0) {
+    result.defaultDirectoryPath = attrs.defaultDirectoryPath.trim();
   }
   if (attrs.customProperties && attrs.customProperties.length > 0) {
     result.customProperties = stripInternalFlags(attrs.customProperties);

@@ -50,6 +50,16 @@ function handleTypeNameUpdate(value: string) {
   selectedType.value.name = value
 }
 
+function handleDefaultDirectoryPathUpdate(value: string) {
+  if (!selectedType.value || selectedType.value.kind !== "node") return
+  const normalized = value.trim()
+  if (!normalized) {
+    delete selectedType.value.parsedAttrs.defaultDirectoryPath
+    return
+  }
+  selectedType.value.parsedAttrs.defaultDirectoryPath = normalized
+}
+
 // --- Unsaved changes dialog ---
 const pendingSelectId = ref<string | null>(null)
 const showUnsavedDialog = ref(false)
@@ -180,6 +190,7 @@ const attrsJson = computed(() => {
             @save="handleSave"
             @delete="handleDelete"
             @update-name="handleTypeNameUpdate"
+            @update-default-directory-path="handleDefaultDirectoryPathUpdate"
             @add-property="addCustomProperty(selectedType)"
             @remove-property="removeCustomProperty(selectedType, $event)"
             @share="showShareModal = true"

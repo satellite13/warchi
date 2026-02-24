@@ -12,6 +12,7 @@ export interface TypeParsedAttrs {
   width?: number
   height?: number
   cornerRadius?: number
+  defaultDirectoryPath?: string
   customProperties?: CustomProperty[]
 }
 

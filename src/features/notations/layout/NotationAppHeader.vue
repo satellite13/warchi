@@ -11,6 +11,8 @@ const props = withDefaults(defineProps<{
   gridVisible?: boolean;
   miniMapVisible?: boolean;
   snapEnabled?: boolean;
+  alignEnabled?: boolean;
+  rulersEnabled?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
   canShare?: boolean;
@@ -23,6 +25,8 @@ const props = withDefaults(defineProps<{
   gridVisible: true,
   miniMapVisible: true,
   snapEnabled: false,
+  alignEnabled: true,
+  rulersEnabled: true,
   canUndo: false,
   canRedo: false,
   canShare: false,
@@ -44,7 +48,9 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   {icon: "separator", event: "sep2", separator: true},
   {icon: "grid_on", event: "toggle-grid", title: "Сетка", active: props.gridVisible},
   {icon: "map", event: "toggle-minimap", title: "Миникарта", active: props.miniMapVisible},
-  {icon: "straighten", event: "toggle-snap", title: "Привязка к сетке", active: props.snapEnabled},
+  {icon: "my_location", event: "toggle-snap", title: "Привязка к сетке", active: props.snapEnabled},
+  {icon: "align_horizontal_left", event: "toggle-align", title: "Умное выравнивание", active: props.alignEnabled},
+  {icon: "straighten", event: "toggle-rulers", title: "Линейка", active: props.rulersEnabled},
   {icon: "separator", event: "sep3", separator: true},
   {icon: "image", event: "export-diagram-png", title: "Экспорт диаграммы в PNG"},
   {icon: "description", event: "export-diagram-svg", title: "Экспорт диаграммы в SVG"},

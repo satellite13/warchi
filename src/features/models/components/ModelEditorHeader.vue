@@ -12,6 +12,8 @@ const props = withDefaults(defineProps<{
   gridVisible?: boolean
   miniMapVisible?: boolean
   snapEnabled?: boolean
+  alignEnabled?: boolean
+  rulersEnabled?: boolean
   lockAnchorsEnabled?: boolean
   hasActiveDiagram?: boolean
   canUndo?: boolean
@@ -22,8 +24,10 @@ const props = withDefaults(defineProps<{
   diagramName?: string
   diagramVersion?: string
   notationName?: string
+  notationId?: string
   notationVersion?: string
   notationOwnerInfo?: string
+  canOpenNotation?: boolean
 }>(), {
   hasUnsavedChanges: false,
   canSave: true,
@@ -32,6 +36,8 @@ const props = withDefaults(defineProps<{
   gridVisible: true,
   miniMapVisible: true,
   snapEnabled: false,
+  alignEnabled: true,
+  rulersEnabled: true,
   lockAnchorsEnabled: true,
   hasActiveDiagram: false,
   canUndo: false,
@@ -42,8 +48,10 @@ const props = withDefaults(defineProps<{
   diagramName: "",
   diagramVersion: "",
   notationName: "",
+  notationId: "",
   notationVersion: "",
-  notationOwnerInfo: ""
+  notationOwnerInfo: "",
+  canOpenNotation: false
 })
 
 const router = useRouter()
@@ -51,6 +59,7 @@ const emit = defineEmits<{
   action: [event: string]
   renameModel: [name: string]
   share: []
+  openNotation: [notationId: string]
 }>()
 
 const isRenamingModel = ref(false)
@@ -109,35 +118,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram
   },
   { icon: "restart_alt", event: "reset-view", title: "Сбросить масштаб", disabled: !props.hasActiveDiagram },
-  { icon: "separator", event: "sep1", separator: true },
-  {
-    icon: "grid_on",
-    event: "toggle-grid",
-    title: "Сетка",
-    active: props.gridVisible,
-    disabled: !props.hasActiveDiagram
-  },
-  {
-    icon: "map",
-    event: "toggle-minimap",
-    title: "Миникарта",
-    active: props.miniMapVisible,
-    disabled: !props.hasActiveDiagram
-  },
-  {
-    icon: "straighten",
-    event: "toggle-snap",
-    title: "Привязка к сетке",
-    active: props.snapEnabled,
-    disabled: !props.hasActiveDiagram
-  },
-  {
-    icon: "commit",
-    event: "toggle-lock-anchors",
-    title: "Закрепить точки связей",
-    active: props.lockAnchorsEnabled,
-    disabled: !props.hasActiveDiagram
-  },
   { icon: "separator", event: "sep2", separator: true },
   {
     icon: "image",
@@ -232,8 +212,20 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
       </template>
       <template v-if="notationName">
         <span class="model-header__info-label">Нотация:</span>
-        <span class="model-header__info-value">{{ notationName }}</span>
-        <span v-if="notationVersion" class="model-header__version">{{ notationVersion }}</span>
+        <button
+          v-if="canOpenNotation && notationId"
+          type="button"
+          class="model-header__info-link"
+          title="Открыть редактор нотации"
+          @click="emit('openNotation', notationId)"
+        >
+          <span class="model-header__info-value">{{ notationName }}</span>
+          <span v-if="notationVersion" class="model-header__version">{{ notationVersion }}</span>
+        </button>
+        <template v-else>
+          <span class="model-header__info-value">{{ notationName }}</span>
+          <span v-if="notationVersion" class="model-header__version">{{ notationVersion }}</span>
+        </template>
       </template>
       <span v-if="notationOwnerInfo" class="model-header__info-owner">{{ notationOwnerInfo }}</span>
       <span v-if="!diagramName" class="model-header__info-muted">Диаграмма не выбрана</span>
@@ -304,6 +296,21 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.model-header__info-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.model-header__info-link:hover .model-header__info-value {
+  color: var(--primary);
+  text-decoration: underline;
 }
 
 .model-header__info-owner,

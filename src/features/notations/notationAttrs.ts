@@ -253,6 +253,8 @@ export type EntityAttrs = {
   tags: string[];
   customProperties: CustomProperty[];
   diagramStyle?: DiagramStyle;
+  /** Группа в палитре (0 = note). По умолчанию 0. */
+  paletteGroup?: number;
 };
 
 export type TypeAttrs = {
@@ -282,6 +284,9 @@ export const parseEntityAttrs = (attrs: string | null): EntityAttrs => {
     if (diagramStyle) {
       result.diagramStyle = diagramStyle;
     }
+    if (typeof record.paletteGroup === "number" && Number.isInteger(record.paletteGroup) && record.paletteGroup >= 0) {
+      result.paletteGroup = record.paletteGroup;
+    }
     return result;
   } catch {
     return { tags: [], customProperties: [] };
@@ -299,6 +304,9 @@ export const serializeEntityAttrs = (attrs: EntityAttrs): string => {
   };
   if (attrs.diagramStyle) {
     result.diagramStyle = attrs.diagramStyle;
+  }
+  if (typeof attrs.paletteGroup === "number" && Number.isInteger(attrs.paletteGroup) && attrs.paletteGroup >= 0) {
+    result.paletteGroup = attrs.paletteGroup;
   }
   return JSON.stringify(result);
 };

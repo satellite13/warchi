@@ -51,6 +51,7 @@ const sameTags = (a: string[], b: string[]) =>
 
 const tagsDraft = ref("");
 const tagsExpanded = ref(false);
+const paletteGroupExpanded = ref(false);
 const labelTemplateExpanded = ref(false);
 const propertiesExpanded = ref(false);
 
@@ -113,6 +114,10 @@ const toggleTagsCollapse = () => {
   tagsExpanded.value = !tagsExpanded.value;
 };
 
+const togglePaletteGroupCollapse = () => {
+  paletteGroupExpanded.value = !paletteGroupExpanded.value;
+};
+
 const toggleLabelTemplateCollapse = () => {
   labelTemplateExpanded.value = !labelTemplateExpanded.value;
 };
@@ -172,6 +177,17 @@ const removeTag = (tag: string) => {
   if (!props.selectedItem) return;
   props.selectedItem.parsedAttrs.tags = props.selectedItem.parsedAttrs.tags.filter((item) => item !== tag);
   tagsDraft.value = props.selectedItem.parsedAttrs.tags.join(", ");
+  props.onItemChanged?.(props.selectedItem.id);
+};
+
+const handlePaletteGroupChange = (value: string) => {
+  if (!props.selectedItem || "linkTypeId" in props.selectedItem) return;
+  const num = parseInt(value, 10);
+  if (Number.isInteger(num) && num >= 0) {
+    props.selectedItem.parsedAttrs.paletteGroup = num;
+  } else if (value === "" || value === "-") {
+    delete props.selectedItem.parsedAttrs.paletteGroup;
+  }
   props.onItemChanged?.(props.selectedItem.id);
 };
 
@@ -625,6 +641,34 @@ onBeforeUnmount(() => {
               Тип нельзя изменить: связь уже используется в model links.
             </div>
           </template>
+        </template>
+      </div>
+
+      <div v-if="selectedItem && !('linkTypeId' in selectedItem)" class="properties-panel__palette-group">
+        <div
+          class="properties-panel__palette-group-header"
+          role="button"
+          tabindex="0"
+          @click="togglePaletteGroupCollapse"
+          @keydown.enter.prevent="togglePaletteGroupCollapse"
+          @keydown.space.prevent="togglePaletteGroupCollapse"
+        >
+          <span
+            class="material-symbols-outlined properties-panel__palette-group-chevron"
+            :class="{ 'properties-panel__palette-group-chevron--collapsed': !paletteGroupExpanded }"
+          >expand_more</span>
+          <span class="properties-panel__palette-group-label">Группа в палитре</span>
+        </div>
+        <template v-if="paletteGroupExpanded">
+          <input
+            type="number"
+            min="0"
+            class="property-input properties-panel__palette-group-input"
+            :value="selectedItem.parsedAttrs.paletteGroup ?? 0"
+            placeholder="0"
+            @input="handlePaletteGroupChange(($event.target as HTMLInputElement).value)"
+          >
+          <span class="properties-panel__palette-group-hint">0 = note, по умолчанию первая группа</span>
         </template>
       </div>
 
@@ -1307,6 +1351,50 @@ onBeforeUnmount(() => {
 .properties-panel__empty-icon {
   font-size: 24px;
   color: var(--border-strong);
+}
+
+.properties-panel__palette-group {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.properties-panel__palette-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.properties-panel__palette-group-chevron {
+  font-size: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.properties-panel__palette-group-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.properties-panel__palette-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.properties-panel__palette-group-input {
+  width: 80px;
+}
+
+.properties-panel__palette-group-hint {
+  font-size: 10px;
+  color: var(--text-subtle);
 }
 
 .properties-panel__tags {

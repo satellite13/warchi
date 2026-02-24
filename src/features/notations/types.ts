@@ -21,6 +21,8 @@ export interface EntityParsedAttrs {
   tags: string[]
   customProperties: CustomProperty[]
   diagramStyle?: DiagramStyle
+  /** Группа в палитре (0 = note). По умолчанию 0. */
+  paletteGroup?: number
 }
 
 // Editor state types with parsed attrs and change tracking flags

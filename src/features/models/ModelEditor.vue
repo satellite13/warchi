@@ -1252,7 +1252,7 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
       }
 
       const parsedAttrs = parseNodeAttrs(null)
-      parsedAttrs.treeOrder = getNextTreeOrderForParent(parentNodeId)
+      parsedAttrs.treeOrder = getNextTreeOrderForParent(parentNodeId ?? null)
       if (notationId) {
         parsedAttrs.notationComponents[notationId] = { componentId }
         const scopedDefaults: Record<string, unknown> = {}

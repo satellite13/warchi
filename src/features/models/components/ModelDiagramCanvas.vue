@@ -15,6 +15,7 @@ import {
   InteractionManager,
   TextLabel,
   type ContextMenuTarget,
+  type ContextMenuItem,
   type ArrowMarkerConfig,
   type NodeImageOptions,
   type TextStyle,
@@ -386,27 +387,6 @@ const reorderRendererNodesBySize = (orderedInstances: DiagramNodeInstance[]) => 
   nodesMap.clear()
   for (const node of orderedNodes) {
     nodesMap.set(node.id, node)
-  }
-}
-
-const persistNodeZOrder = (orderedInstances: DiagramNodeInstance[]) => {
-  if (!props.activeDiagram) return
-  const next = cloneDiagramAttrs()
-  const instanceById = new Map(next.instances.nodes.map((instance) => [instance.id, instance]))
-  let changed = false
-
-  for (const [zIndex, source] of orderedInstances.entries()) {
-    const target = instanceById.get(source.id)
-    if (!target) continue
-    const current = typeof target.attrs?.zIndex === "number" ? target.attrs.zIndex : null
-    if (current === zIndex) continue
-    if (!target.attrs) target.attrs = {}
-    target.attrs.zIndex = zIndex
-    changed = true
-  }
-
-  if (changed) {
-    emit("updateDiagram", next)
   }
 }
 
@@ -1300,7 +1280,7 @@ function initRenderer(r: DiagramRenderer) {
         const effStyle = getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)
         const currentType = ((effStyle?.edgeType as EdgePathType | undefined) ?? "bezier")
 
-        const items: Array<{ label: string; icon: string; action?: () => void; separator?: boolean; items?: unknown[]; enabled?: boolean }> = []
+        const items: ContextMenuItem[] = []
 
         if (isDiagramOnly) {
           items.push(
@@ -1618,35 +1598,45 @@ const paletteItems = computed(() => {
       const parsedAttrs = parseEntityAttrs(component.attrs ?? null)
       const iconName = parsedAttrs.diagramStyle?.iconName?.trim()
       const fillColor = parsedAttrs.diagramStyle?.fillColor?.trim()
+      const paletteGroup = typeof parsedAttrs.paletteGroup === "number" && parsedAttrs.paletteGroup >= 0
+        ? parsedAttrs.paletteGroup
+        : 0
       return {
         ...component,
         paletteIconName: iconName && iconName.length > 0 ? iconName : "component",
-        paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : "var(--accent)"
+        paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : "var(--accent)",
+        paletteGroup
       }
-    })
-    .sort((a, b) => {
-      const colorDiff = a.paletteFillColor.localeCompare(b.paletteFillColor, "ru", {
-        sensitivity: "base"
-      })
-      if (colorDiff !== 0) return colorDiff
-      return a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
     })
 })
 
-const paletteEntries = computed(() => {
-  const entries: Array<
-    | { kind: "divider"; colorKey: string }
-    | { kind: "item"; component: (typeof paletteItems.value)[number] }
-  > = []
-  let previousColorKey: string | null = null
+type PaletteEntry =
+  | { kind: "divider" }
+  | { kind: "item"; component: (typeof paletteItems.value)[number] }
 
-  for (const component of paletteItems.value) {
-    const colorKey = component.paletteFillColor.trim().toLowerCase()
-    if (previousColorKey !== null && colorKey !== previousColorKey) {
-      entries.push({ kind: "divider", colorKey })
+const paletteEntries = computed((): PaletteEntry[] => {
+  const items = paletteItems.value
+  if (items.length === 0) return []
+
+  const byGroup = new Map<number, typeof items>()
+  for (const item of items) {
+    const group = item.paletteGroup
+    if (!byGroup.has(group)) byGroup.set(group, [])
+    byGroup.get(group)!.push(item)
+  }
+
+  const sortedGroups = Array.from(byGroup.keys()).sort((a, b) => a - b)
+  const entries: PaletteEntry[] = []
+
+  for (let i = 0; i < sortedGroups.length; i++) {
+    const groupKey = sortedGroups[i]
+    if (groupKey === undefined) continue
+    if (i > 0 || groupKey > 0) entries.push({ kind: "divider" })
+    const groupItems = byGroup.get(groupKey)!
+    groupItems.sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" }))
+    for (const comp of groupItems) {
+      entries.push({ kind: "item", component: comp })
     }
-    entries.push({ kind: "item", component })
-    previousColorKey = colorKey
   }
 
   return entries
@@ -1917,7 +1907,7 @@ defineExpose({
           >
             <span class="material-symbols-outlined canvas-palette__note-icon">note</span>
           </button>
-          <template v-for="(entry, index) in paletteEntries" :key="entry.kind === 'item' ? entry.component.id : `divider-${entry.colorKey}-${index}`">
+          <template v-for="(entry, index) in paletteEntries" :key="entry.kind === 'item' ? entry.component.id : `divider-${index}`">
             <div v-if="entry.kind === 'divider'" class="canvas-palette__divider" />
             <button
               v-else

@@ -17,7 +17,8 @@ import ModelMainPanelLayout from "./layout/ModelMainPanelLayout.vue"
 import ModelTreePalettePanel from "./components/ModelTreePalettePanel.vue"
 import ModelDiagramCanvas from "./components/ModelDiagramCanvas.vue"
 import ModelPropertiesPanel from "./components/ModelPropertiesPanel.vue"
-import { parseEntityAttrs, type DiagramStyle } from "../notations/notationAttrs"
+import type { ToolbarButton } from "../notations/layout/IconToolbar.vue"
+import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from "../notations/notationAttrs"
 import NodeStylePanel from "../notations/components/NodeStylePanel.vue"
 import { bumpMinor, compareVersions } from "../../utils/version"
 import type { NotationMetaResponse } from "../../types/api"
@@ -47,6 +48,9 @@ const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
 const selectedCanvasElementId = ref<string | null>(null)
+const showNoteEditorModal = ref(false)
+const editingNoteInstanceId = ref<string | null>(null)
+const noteEditorText = ref("")
 const diagramRenderer = ref<any>(null)
 const diagramInteractionManager = ref<any>(null)
 const stylePanelCollapsed = ref(true)
@@ -61,14 +65,24 @@ const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null
 const gridVisible = ref(true)
 const miniMapVisible = ref(true)
 const snapEnabled = ref(false)
+const alignEnabled = ref(true)
+const rulersEnabled = ref(true)
 const lockAnchorsEnabled = ref(true)
 const selectionSyncEnabled = ref(true)
+const canvasSettingsVisible = ref(true)
+const paletteVisible = ref(true)
+const NOTE_NODE_PREFIX = "__diagram-note__:"
+const NOTE_EDGE_PREFIX = "__diagram-note-edge__:"
 
 type ToolbarState = {
   gridVisible: boolean
   miniMapVisible: boolean
   snapEnabled: boolean
+  alignEnabled: boolean
+  rulersEnabled: boolean
   lockAnchorsEnabled: boolean
+  canvasSettingsVisible: boolean
+  paletteVisible: boolean
 }
 
 const TOOLBAR_STATE_STORAGE_PREFIX = "warchi:model-editor:toolbar-state"
@@ -93,7 +107,11 @@ const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
   if (typeof stateValue.gridVisible === "boolean") gridVisible.value = stateValue.gridVisible
   if (typeof stateValue.miniMapVisible === "boolean") miniMapVisible.value = stateValue.miniMapVisible
   if (typeof stateValue.snapEnabled === "boolean") snapEnabled.value = stateValue.snapEnabled
+  if (typeof stateValue.alignEnabled === "boolean") alignEnabled.value = stateValue.alignEnabled
+  if (typeof stateValue.rulersEnabled === "boolean") rulersEnabled.value = stateValue.rulersEnabled
   if (typeof stateValue.lockAnchorsEnabled === "boolean") lockAnchorsEnabled.value = stateValue.lockAnchorsEnabled
+  if (typeof stateValue.canvasSettingsVisible === "boolean") canvasSettingsVisible.value = stateValue.canvasSettingsVisible
+  if (typeof stateValue.paletteVisible === "boolean") paletteVisible.value = stateValue.paletteVisible
 }
 
 const persistToolbarState = (userId: string | null) => {
@@ -102,13 +120,61 @@ const persistToolbarState = (userId: string | null) => {
     gridVisible: gridVisible.value,
     miniMapVisible: miniMapVisible.value,
     snapEnabled: snapEnabled.value,
-    lockAnchorsEnabled: lockAnchorsEnabled.value
+    alignEnabled: alignEnabled.value,
+    rulersEnabled: rulersEnabled.value,
+    lockAnchorsEnabled: lockAnchorsEnabled.value,
+    canvasSettingsVisible: canvasSettingsVisible.value,
+    paletteVisible: paletteVisible.value
   }
   window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState))
 }
 
 const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
+const canvasToggleButtons = computed<ToolbarButton[]>(() => [
+  {
+    icon: "grid_on",
+    event: "toggle-grid",
+    title: "Сетка",
+    active: gridVisible.value,
+    disabled: !activeDiagram.value
+  },
+  {
+    icon: "map",
+    event: "toggle-minimap",
+    title: "Миникарта",
+    active: miniMapVisible.value,
+    disabled: !activeDiagram.value
+  },
+  {
+    icon: "my_location",
+    event: "toggle-snap",
+    title: "Привязка к сетке",
+    active: snapEnabled.value,
+    disabled: !activeDiagram.value
+  },
+  {
+    icon: "align_horizontal_left",
+    event: "toggle-align",
+    title: "Умное выравнивание",
+    active: alignEnabled.value,
+    disabled: !activeDiagram.value
+  },
+  {
+    icon: "straighten",
+    event: "toggle-rulers",
+    title: "Линейка",
+    active: rulersEnabled.value,
+    disabled: !activeDiagram.value
+  },
+  {
+    icon: "commit",
+    event: "toggle-lock-anchors",
+    title: "Закрепить точки связей",
+    active: lockAnchorsEnabled.value,
+    disabled: !activeDiagram.value
+  }
+])
 
 const activeDiagram = computed(() =>
   selectedDiagramId.value
@@ -143,6 +209,12 @@ const activeDiagramNotationOwnerLabel = computed(() => {
   if (fallbackNotationMeta.value?.id !== notationId) return ""
   return fallbackNotationMeta.value.ownerEmail
 })
+const canOpenActiveDiagramNotation = computed(() => {
+  const notationId = activeDiagram.value?.notationId
+  if (!notationId) return false
+  if (state.value.notations.some((item) => item.id === notationId)) return true
+  return fallbackNotationMeta.value?.id === notationId
+})
 
 watch(
   () => currentUser.value?.id ?? null,
@@ -153,8 +225,8 @@ watch(
 )
 
 watch(
-  [gridVisible, miniMapVisible, snapEnabled, lockAnchorsEnabled, () => currentUser.value?.id ?? null],
-  ([, , , , userId]) => {
+  [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, lockAnchorsEnabled, canvasSettingsVisible, paletteVisible, () => currentUser.value?.id ?? null],
+  ([, , , , , , , , userId]) => {
     persistToolbarState(userId as string | null)
   }
 )
@@ -263,6 +335,9 @@ const handleRenameModel = (nextName: string) => {
   const error = renameModel(nextName)
   if (error) setUiError(error)
 }
+const handleOpenNotationEditor = (notationId: string) => {
+  router.push({ name: "notation-editor", params: { id: notationId } })
+}
 const createNodeModal = ref<{ parentNodeId: string | null; kind: "folder" | "node" }>({
   parentNodeId: null,
   kind: "node"
@@ -335,6 +410,8 @@ const pendingDeleteNodeCount = computed(() => pendingDeleteNodeIds.value.length)
 const pendingDeleteNodeSingleName = computed(() => {
   if (pendingDeleteNodeIds.value.length !== 1) return ""
   const nodeId = pendingDeleteNodeIds.value[0]
+  if (!nodeId) return ""
+  if (isDiagramNoteModelNodeId(nodeId)) return "Заметка"
   return state.value.nodes.find((item) => item.id === nodeId)?.name ?? ""
 })
 const pendingDeleteDiagramName = computed(() => {
@@ -377,6 +454,16 @@ const directoryNodeType = computed(
 const nonDirectoryNodeTypes = computed(() =>
   state.value.nodeTypes.filter((typeItem) => typeItem.name.trim().toLowerCase() !== "directory")
 )
+const nodeTypeDefaultDirectoryById = computed(() => {
+  const map = new Map<string, string>()
+  for (const nodeType of state.value.nodeTypes) {
+    const defaultDirectoryPath = parseTypeAttrs(nodeType.attrs ?? null).defaultDirectoryPath?.trim()
+    if (defaultDirectoryPath) {
+      map.set(nodeType.id, defaultDirectoryPath)
+    }
+  }
+  return map
+})
 const createNodeModalTitle = computed(() =>
   createNodeModal.value.kind === "folder" ? "Создать папку" : "Создать ноду"
 )
@@ -421,6 +508,59 @@ const getNextTreeOrderForParent = (parentNodeId: string | null): number => {
   return Math.max(...siblingOrders) + 1
 }
 
+const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
+  rawPath
+    .split(/[\\/]+/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
+
+const ensureDirectoryPath = (rawPath: string): { parentNodeId: string | null; createdDirectoryIds: string[] } => {
+  const directoryTypeId = directoryNodeType.value?.id
+  if (!directoryTypeId) return { parentNodeId: null, createdDirectoryIds: [] }
+
+  const segments = normalizeDirectoryPathSegments(rawPath)
+  if (segments.length === 0) return { parentNodeId: resolveTreeParentId(null), createdDirectoryIds: [] }
+
+  let currentParentNodeId = resolveTreeParentId(null)
+  const createdDirectoryIds: string[] = []
+
+  for (const segment of segments) {
+    const normalizedSegment = segment.toLowerCase()
+    const existingDirectory = state.value.nodes.find((node) => {
+      if (node._isDeleted) return false
+      if (node.nodeTypeId !== directoryTypeId) return false
+      if ((node.parentNodeId ?? null) !== (currentParentNodeId ?? null)) return false
+      return node.name.trim().toLowerCase() === normalizedSegment
+    })
+
+    if (existingDirectory) {
+      currentParentNodeId = existingDirectory.id
+      continue
+    }
+
+    const createdDirectoryId = createId()
+    state.value.nodes.push({
+      id: createdDirectoryId,
+      name: segment,
+      modelId: state.value.modelId,
+      ownerId: state.value.ownerId,
+      nodeTypeId: directoryTypeId,
+      parentNodeId: currentParentNodeId,
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: {
+        ...parseNodeAttrs(null),
+        treeOrder: getNextTreeOrderForParent(currentParentNodeId)
+      },
+      _isNew: true
+    })
+    createdDirectoryIds.push(createdDirectoryId)
+    currentParentNodeId = createdDirectoryId
+  }
+
+  return { parentNodeId: currentParentNodeId, createdDirectoryIds }
+}
+
 const reindexTreeOrders = () => {
   const counters = new Map<string, number>()
   for (const node of state.value.nodes) {
@@ -436,6 +576,15 @@ const reindexTreeOrders = () => {
 }
 
 const deepClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
+  modelNodeId.startsWith(NOTE_NODE_PREFIX)
+
+const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
+  modelLinkId.startsWith(NOTE_EDGE_PREFIX)
+
+const isNoteInstance = (instance: { attrs?: Record<string, unknown> }): boolean =>
+  instance.attrs?.isNote === true
 
 const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
@@ -625,6 +774,27 @@ const createDiagram = () => {
 const markNodeDeleted = (nodeId: string) => {
   const node = state.value.nodes.find((item) => item.id === nodeId)
   if (!node) return
+
+  for (const diagram of state.value.diagrams) {
+    if (diagram._isDeleted) continue
+    const removedInstanceIds = new Set(
+      diagram.parsedAttrs.instances.nodes
+        .filter((instance) => instance.modelNodeId === nodeId)
+        .map((instance) => instance.id)
+    )
+    if (removedInstanceIds.size === 0) continue
+
+    diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+      (instance) => !removedInstanceIds.has(instance.id)
+    )
+    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+      (edge) =>
+        !removedInstanceIds.has(edge.sourceInstanceId) &&
+        !removedInstanceIds.has(edge.targetInstanceId)
+    )
+    markDiagramDirty(diagram.id)
+  }
+
   if (node._isNew) {
     state.value.nodes = state.value.nodes.filter((item) => item.id !== nodeId)
   } else {
@@ -640,6 +810,9 @@ const markNodeDeleted = (nodeId: string) => {
       diagram._isDirty = true
     }
   })
+
+  selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== nodeId)
+  if (selectedNodeId.value === nodeId) selectedNodeId.value = null
 }
 
 const markDiagramDeleted = (diagramId: string) => {
@@ -916,6 +1089,15 @@ const removeLinkFromModel = () => {
     }
   }
 
+  if (isDiagramOnlyEdgeModelLinkId(linkId)) {
+    if (selectedModelLinkId.value === linkId) {
+      selectedModelLinkId.value = null
+      if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+    }
+    cancelLinkDelete()
+    return
+  }
+
   markLinkDeleted(linkId)
   cancelLinkDelete()
 }
@@ -1036,32 +1218,18 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
   if (!component) return
   const nodeId = createId()
   const notationId = activeNotationId.value
-  const parsedAttrs = parseNodeAttrs(null)
-  parsedAttrs.treeOrder = getNextTreeOrderForParent(diagram.nodeId)
-  if (notationId) {
-    parsedAttrs.notationComponents[notationId] = { componentId }
-    const scopedDefaults: Record<string, unknown> = {}
-    applyDefaultCustomValues(scopedDefaults, component.attrs)
-    parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
-  }
-  const newNode: EditorNode = {
-    id: nodeId,
-    name: component.name,
-    modelId: state.value.modelId,
-    ownerId: state.value.ownerId,
-    nodeTypeId: component.nodeTypeId,
-    parentNodeId: diagram.nodeId,
-    createdAt: null,
-    updatedAt: null,
-    parsedAttrs,
-    _isNew: true
+  const defaultDirectoryPath = nodeTypeDefaultDirectoryById.value.get(component.nodeTypeId) ?? ""
+  if (defaultDirectoryPath && !directoryNodeType.value) {
+    setUiError("Для автосоздания пути нужен тип узла Directory.")
+    return
   }
   const parsedComponentAttrs = parseEntityAttrs(component.attrs ?? null)
   const ds = parsedComponentAttrs.diagramStyle
   const width = typeof ds?.width === "number" ? ds.width : 160
   const height = typeof ds?.height === "number" ? ds.height : 56
+  const instanceId = createId()
   const newInstance = {
-    id: createId(),
+    id: instanceId,
     modelNodeId: nodeId,
     x,
     y,
@@ -1069,10 +1237,43 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     height,
     attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined
   }
+  let createdDirectoryIds: string[] = []
 
   executeDiagramHistoryCommand({
     execute: () => {
-      const hasNode = state.value.nodes.some((item) => item.id === newNode.id)
+      createdDirectoryIds = []
+      let parentNodeId = diagram.nodeId
+
+      if (defaultDirectoryPath) {
+        const ensuredPath = ensureDirectoryPath(defaultDirectoryPath)
+        if (!ensuredPath.parentNodeId) return
+        parentNodeId = ensuredPath.parentNodeId
+        createdDirectoryIds = ensuredPath.createdDirectoryIds
+      }
+
+      const parsedAttrs = parseNodeAttrs(null)
+      parsedAttrs.treeOrder = getNextTreeOrderForParent(parentNodeId)
+      if (notationId) {
+        parsedAttrs.notationComponents[notationId] = { componentId }
+        const scopedDefaults: Record<string, unknown> = {}
+        applyDefaultCustomValues(scopedDefaults, component.attrs)
+        parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
+      }
+
+      const newNode: EditorNode = {
+        id: nodeId,
+        name: component.name,
+        modelId: state.value.modelId,
+        ownerId: state.value.ownerId,
+        nodeTypeId: component.nodeTypeId,
+        parentNodeId,
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs,
+        _isNew: true
+      }
+
+      const hasNode = state.value.nodes.some((item) => item.id === nodeId)
       if (!hasNode) {
         state.value.nodes.push(deepClone(newNode))
       }
@@ -1083,15 +1284,78 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
       markDiagramDirty(diagram.id)
     },
     undo: () => {
-      state.value.nodes = state.value.nodes.filter((item) => item.id !== newNode.id)
+      state.value.nodes = state.value.nodes.filter(
+        (item) => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
+      )
       diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
         (item) => item.id !== newInstance.id
       )
       diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
         (edge) => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
       )
-      if (selectedModelNodeIds.value.includes(newNode.id)) {
-        selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== newNode.id)
+      if (selectedModelNodeIds.value.includes(nodeId)) {
+        selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== nodeId)
+      }
+      if (selectedNodeId.value === nodeId || createdDirectoryIds.includes(selectedNodeId.value ?? "")) {
+        selectedNodeId.value = null
+      }
+      markDiagramDirty(diagram.id)
+    }
+  })
+}
+
+const createDiagramNote = (x: number, y: number) => {
+  const diagram = activeDiagram.value
+  if (!diagram) return
+
+  const instanceId = createId()
+  const modelNodeId = `${NOTE_NODE_PREFIX}${instanceId}`
+  const noteInstance = {
+    id: instanceId,
+    modelNodeId,
+    x,
+    y,
+    width: 220,
+    height: 120,
+    attrs: {
+      isNote: true,
+      noteText: "Новая заметка",
+      diagramStyle: {
+        nodeShape: "rectangle",
+        fillColor: "#fff9c4",
+        strokeColor: "#e6c85b",
+        strokeWidth: 1.5,
+        labelColor: "#5a4600",
+        labelFontSize: 13,
+        labelAlign: "left",
+        labelPadding: 10,
+        labelPlacement: "center"
+      }
+    } as Record<string, unknown>
+  }
+
+  executeDiagramHistoryCommand({
+    execute: () => {
+      const exists = diagram.parsedAttrs.instances.nodes.some((item) => item.id === noteInstance.id)
+      if (!exists) {
+        diagram.parsedAttrs.instances.nodes.push(deepClone(noteInstance))
+      }
+      markDiagramDirty(diagram.id)
+    },
+    undo: () => {
+      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+        (item) => item.id !== noteInstance.id
+      )
+      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+        (edge) => edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
+      )
+      selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== modelNodeId)
+      if (selectedCanvasElementId.value === `instance-${noteInstance.id}`) {
+        selectedCanvasElementId.value = null
+      }
+      if (editingNoteInstanceId.value === noteInstance.id) {
+        showNoteEditorModal.value = false
+        editingNoteInstanceId.value = null
       }
       markDiagramDirty(diagram.id)
     }
@@ -1106,6 +1370,49 @@ const startConnectNodes = (
   sourcePortId?: string,
   targetPortId?: string
 ) => {
+  const diagram = activeDiagram.value
+  if (!diagram) return
+  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
+    const modelLinkId = `${NOTE_EDGE_PREFIX}${createId()}`
+    const edgeAttrs: Record<string, unknown> = {
+      isDiagramOnly: true,
+      diagramStyle: {
+        startMarkerType: "none",
+        endMarkerType: "none",
+        lineDash: [4, 4]
+      }
+    }
+    if (sourcePortId) edgeAttrs.fromPortId = sourcePortId
+    if (targetPortId) edgeAttrs.toPortId = targetPortId
+    const noteEdgeInstance = {
+      id: createId(),
+      modelLinkId,
+      sourceInstanceId,
+      targetInstanceId,
+      attrs: edgeAttrs
+    }
+    executeDiagramHistoryCommand({
+      execute: () => {
+        const hasEdge = diagram.parsedAttrs.instances.edges.some((edge) => edge.id === noteEdgeInstance.id)
+        if (!hasEdge) {
+          diagram.parsedAttrs.instances.edges.push(deepClone(noteEdgeInstance))
+        }
+        markDiagramDirty(diagram.id)
+      },
+      undo: () => {
+        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+          (edge) => edge.id !== noteEdgeInstance.id
+        )
+        if (selectedModelLinkId.value === modelLinkId) {
+          selectedModelLinkId.value = null
+          selectedCanvasElementId.value = null
+        }
+        markDiagramDirty(diagram.id)
+      }
+    })
+    return
+  }
+
   const notationId = activeNotationId.value
   if (!notationId) return
   const sourceNode = state.value.nodes.find((item) => item.id === sourceModelNodeId)
@@ -1266,6 +1573,9 @@ const createOrReuseLink = (linkId: string | null) => {
 }
 
 const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boolean => {
+  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
+    return true
+  }
   const notationId = activeNotationId.value
   if (!notationId) return false
   const sourceNode = state.value.nodes.find((item) => item.id === sourceModelNodeId)
@@ -1299,6 +1609,10 @@ const handleCanvasSelectNodes = (modelNodeIds: string[]) => {
   selectedModelLinkId.value = null
   if (!selectionSyncEnabled.value || modelNodeIds.length !== 1) return
   const modelNodeId = modelNodeIds[0]!
+  if (isDiagramNoteModelNodeId(modelNodeId)) {
+    selectedNodeId.value = null
+    return
+  }
   selectedNodeId.value = modelNodeId
   treePanelRef.value?.focusNode?.(modelNodeId)
 }
@@ -1481,6 +1795,37 @@ const handleRequestDeleteNodeFromDiagram = (modelNodeId: string) => {
   openNodeDeleteDialog([modelNodeId], "canvas")
 }
 
+const openNoteEditor = (instanceId: string) => {
+  const diagram = activeDiagram.value
+  if (!diagram) return
+  const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+  if (!instance || !isNoteInstance(instance)) return
+  const currentText = instance.attrs?.noteText
+  noteEditorText.value = typeof currentText === "string" ? currentText : "Новая заметка"
+  editingNoteInstanceId.value = instanceId
+  showNoteEditorModal.value = true
+}
+
+const saveNoteEditor = () => {
+  const diagram = activeDiagram.value
+  const instanceId = editingNoteInstanceId.value
+  if (!diagram || !instanceId) return
+  const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+  if (!instance || !isNoteInstance(instance)) return
+
+  const nextText = noteEditorText.value.trim()
+  if (!instance.attrs) instance.attrs = {}
+  instance.attrs.noteText = nextText.length > 0 ? nextText : "Новая заметка"
+  markDiagramDirty(diagram.id)
+  showNoteEditorModal.value = false
+  editingNoteInstanceId.value = null
+}
+
+const cancelNoteEditor = () => {
+  showNoteEditorModal.value = false
+  editingNoteInstanceId.value = null
+}
+
 const handleRequestDeleteLink = (linkId: string) => {
   selectedModelNodeIds.value = []
   selectedModelLinkId.value = linkId
@@ -1637,6 +1982,20 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     }
+    case "toggle-align": {
+      const next = diagramCanvasRef.value?.toggleAlign()
+      if (typeof next === "boolean") {
+        alignEnabled.value = next
+      }
+      break
+    }
+    case "toggle-rulers": {
+      const next = diagramCanvasRef.value?.toggleRulers()
+      if (typeof next === "boolean") {
+        rulersEnabled.value = next
+      }
+      break
+    }
     case "toggle-lock-anchors": {
       const next = diagramCanvasRef.value?.toggleLockAnchors()
       if (typeof next === "boolean") lockAnchorsEnabled.value = next
@@ -1780,12 +2139,14 @@ const hasDiagramStyleOverride = computed(() => {
   if (selectedElementId.startsWith("instance-")) {
     const instanceId = selectedElementId.slice("instance-".length)
     const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+    if (instance && isNoteInstance(instance)) return false
     return Boolean(instance?.attrs?.diagramStyle)
   }
 
   if (selectedElementId.startsWith("edge-")) {
     const edgeId = selectedElementId.slice("edge-".length)
     const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
+    if (edge?.attrs?.isDiagramOnly === true) return false
     return Boolean(edge?.attrs?.diagramStyle)
   }
 
@@ -1802,6 +2163,7 @@ const restoreStyleFromNotation = () => {
     const instanceId = selectedElementId.slice("instance-".length)
     const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
     if (!instance) return
+    if (isNoteInstance(instance)) return
 
     const modelNode = state.value.nodes.find((item) => item.id === instance.modelNodeId && !item._isDeleted)
     const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
@@ -1826,6 +2188,7 @@ const restoreStyleFromNotation = () => {
     const edgeId = selectedElementId.slice("edge-".length)
     const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
     if (!edge) return
+    if (edge.attrs?.isDiagramOnly === true) return
 
     const modelLink = state.value.links.find((item) => item.id === edge.modelLinkId && !item._isDeleted)
     const relationId = modelLink?.parsedAttrs.notationRelations[notationId]?.relationId
@@ -1923,6 +2286,8 @@ onBeforeUnmount(() => {
         :grid-visible="gridVisible"
         :mini-map-visible="miniMapVisible"
         :snap-enabled="snapEnabled"
+        :align-enabled="alignEnabled"
+        :rulers-enabled="rulersEnabled"
         :lock-anchors-enabled="lockAnchorsEnabled"
         :has-active-diagram="!!activeDiagram"
         :can-undo="canUndo"
@@ -1931,11 +2296,14 @@ onBeforeUnmount(() => {
         :diagram-name="activeDiagram?.name ?? ''"
         :diagram-version="activeDiagram?.version ?? ''"
         :notation-name="activeDiagram ? activeDiagramNotationName : ''"
+        :notation-id="activeDiagram?.notationId ?? ''"
         :notation-version="activeDiagram ? activeDiagramNotationVersion : ''"
         :notation-owner-info="activeDiagram ? activeDiagramNotationOwnerLabel : ''"
+        :can-open-notation="canOpenActiveDiagramNotation"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
         @share="showShareModal = true"
+        @open-notation="handleOpenNotationEditor"
       />
     </template>
     <template #default>
@@ -1966,6 +2334,46 @@ onBeforeUnmount(() => {
         </template>
 
         <div class="model-canvas-area">
+          <template v-if="activeDiagram">
+            <button
+              v-if="!canvasSettingsVisible"
+              type="button"
+              class="canvas-settings-toggle"
+              title="Показать настройки диаграммы"
+              @click="canvasSettingsVisible = true"
+            >
+              <span class="material-symbols-outlined">settings</span>
+            </button>
+            <div v-else class="canvas-settings">
+              <div class="canvas-settings__header">
+                <span class="material-symbols-outlined">tune</span>
+                <span>Настройки</span>
+                <button
+                  type="button"
+                  class="canvas-settings__hide"
+                  title="Скрыть настройки"
+                  @click="canvasSettingsVisible = false"
+                >
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+              </div>
+              <div class="canvas-settings__list">
+                <button
+                  v-for="button in canvasToggleButtons"
+                  :key="button.event"
+                  type="button"
+                  class="canvas-settings__item"
+                  :class="{ 'canvas-settings__item--active': button.active }"
+                  :title="button.title"
+                  :disabled="button.disabled"
+                  @click="handleToolbarAction(button.event)"
+                >
+                  <span class="material-symbols-outlined">{{ button.icon }}</span>
+                  <span>{{ button.title }}</span>
+                </button>
+              </div>
+            </div>
+          </template>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
               canvas-mode
@@ -1976,14 +2384,18 @@ onBeforeUnmount(() => {
               :grid-visible="gridVisible"
               :mini-map-visible="miniMapVisible"
               :snap-enabled="snapEnabled"
+              :align-enabled="alignEnabled"
+              :rulers-enabled="rulersEnabled"
               :lock-anchors-enabled="lockAnchorsEnabled"
               :has-active-diagram="!!activeDiagram"
               :can-undo="canUndo"
               :can-redo="canRedo"
               :can-share="canShareModel"
+              :can-open-notation="canOpenActiveDiagramNotation"
               @action="handleToolbarAction"
               @rename-model="handleRenameModel"
               @share="showShareModal = true"
+              @open-notation="handleOpenNotationEditor"
             />
           </div>
           <ModelDiagramCanvas
@@ -1997,6 +2409,9 @@ onBeforeUnmount(() => {
             :grid-visible="gridVisible"
             :mini-map-visible="miniMapVisible"
             :snap-enabled="snapEnabled"
+            :align-enabled="alignEnabled"
+            :rulers-enabled="rulersEnabled"
+            :palette-visible="paletteVisible"
             :lock-anchors-enabled="lockAnchorsEnabled"
             :selected-model-node-ids="selectedModelNodeIds"
             :selected-model-link-id="selectedModelLinkId"
@@ -2005,14 +2420,17 @@ onBeforeUnmount(() => {
             @select-nodes="handleCanvasSelectNodes"
             @select-link="selectedModelLinkId = $event; selectedModelNodeIds = []; selectedNodeId = null"
             @create-node-from-component="createNodeFromPaletteComponent"
+            @create-note="createDiagramNote"
             @add-existing-node="addExistingNodeToDiagram"
             @connect-nodes="startConnectNodes"
             @find-in-tree="handleFindInTree"
             @node-label-change="handleNodeLabelChange"
             @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"
+            @request-edit-note="openNoteEditor"
             @request-delete-link="handleRequestDeleteLink"
             @select-canvas-element-id="selectedCanvasElementId = $event"
             @canvas-context-change="handleCanvasContextChange"
+            @palette-visible-change="paletteVisible = $event"
           />
         </div>
 
@@ -2126,6 +2544,29 @@ onBeforeUnmount(() => {
       <button type="button" class="btn btn--primary" :disabled="!canCreateNodeFromModal" @click="createNode">
         Создать
       </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showNoteEditorModal"
+    title="Редактировать заметку"
+    max-width="560px"
+    @close="cancelNoteEditor"
+  >
+    <div class="form-grid">
+      <label>
+        <span>Текст</span>
+        <textarea
+          v-model="noteEditorText"
+          class="field-textarea"
+          rows="8"
+          placeholder="Введите текст заметки..."
+        />
+      </label>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="cancelNoteEditor">Отмена</button>
+      <button type="button" class="btn btn--primary" @click="saveNoteEditor">Сохранить</button>
     </template>
   </BaseModal>
 
@@ -2299,7 +2740,12 @@ onBeforeUnmount(() => {
       <button type="button" class="btn btn--secondary" @click="removeLinkFromCurrentDiagram">
         Удалить с диаграммы
       </button>
-      <button type="button" class="btn btn--danger" @click="removeLinkFromModel">
+      <button
+        v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId)"
+        type="button"
+        class="btn btn--danger"
+        @click="removeLinkFromModel"
+      >
         Удалить из модели
       </button>
     </template>
@@ -2370,6 +2816,16 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 13px;
+}
+
+.field-textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 140px;
 }
 
 .form-error-text {
@@ -2469,6 +2925,122 @@ onBeforeUnmount(() => {
   position: relative;
   height: 100%;
   min-height: 0;
+}
+
+.canvas-settings-toggle {
+  position: absolute;
+  left: 6px;
+  top: 10px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 12;
+}
+
+.canvas-settings-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.canvas-settings {
+  position: absolute;
+  left: 6px;
+  top: 10px;
+  width: 196px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 12;
+}
+
+.canvas-settings__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.canvas-settings__header .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.canvas-settings__hide {
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px 0 8px 0;
+  background: var(--surface);
+  color: var(--text-subtle);
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-settings__hide .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.canvas-settings__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.canvas-settings__item {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--base-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.canvas-settings__item:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.canvas-settings__item--active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.canvas-settings__item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.canvas-settings__item .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .model-canvas-area__toolbar {

@@ -11,6 +11,7 @@ import {
   Edge,
   GridOverlay,
   MiniMap,
+  RulersOverlay,
   InteractionManager,
   TextLabel,
   type ContextMenuTarget,
@@ -40,11 +41,17 @@ const props = withDefaults(defineProps<{
   gridVisible?: boolean
   miniMapVisible?: boolean
   snapEnabled?: boolean
+  alignEnabled?: boolean
+  rulersEnabled?: boolean
+  paletteVisible?: boolean
   lockAnchorsEnabled?: boolean
 }>(), {
   gridVisible: true,
   miniMapVisible: true,
   snapEnabled: false,
+  alignEnabled: true,
+  rulersEnabled: true,
+  paletteVisible: true,
   lockAnchorsEnabled: true
 })
 
@@ -55,6 +62,7 @@ const emit = defineEmits<{
   selectCanvasElementId: [elementId: string | null]
   canvasContextChange: [ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }]
   createNodeFromComponent: [componentId: string, x: number, y: number]
+  createNote: [x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
   connectNodes: [
     sourceModelNodeId: string,
@@ -67,16 +75,20 @@ const emit = defineEmits<{
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
   requestDeleteNodeFromDiagram: [modelNodeId: string]
+  requestEditNote: [instanceId: string]
   requestDeleteLink: [modelLinkId: string]
+  paletteVisibleChange: [visible: boolean]
 }>()
 
 // ── Refs ──
 const containerRef = ref<HTMLElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
-const paletteVisible = ref(true)
+const paletteVisible = ref(props.paletteVisible)
 const gridVisible = ref(props.gridVisible)
 const miniMapVisible = ref(props.miniMapVisible)
 const snapEnabled = ref(props.snapEnabled)
+const alignEnabled = ref(props.alignEnabled)
+const rulersEnabled = ref(props.rulersEnabled)
 const lockAnchorsEnabled = ref(props.lockAnchorsEnabled)
 const canUndo = ref(false)
 const canRedo = ref(false)
@@ -93,6 +105,7 @@ let renderer: DiagramRenderer | null = null
 let interactionManager: InteractionManager | null = null
 let gridOverlay: GridOverlay | null = null
 let miniMap: MiniMap | null = null
+let rulersOverlay: RulersOverlay | null = null
 let resizeObserver: ResizeObserver | null = null
 let suppressSelectionEvent = false
 
@@ -161,6 +174,39 @@ const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined
 
 const getPapEdgeLabelText = (edge: Edge): string =>
   typeof edge.label === "string" ? edge.label : edge.label?.text ?? ""
+
+type ControlPoint = { x: number; y: number }
+
+const readControlPointsFromAttrs = (attrs: Record<string, unknown> | undefined): ControlPoint[] => {
+  const raw = attrs?.controlPoints
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (point): point is { x: number; y: number } =>
+        Boolean(point) &&
+        typeof point === "object" &&
+        typeof (point as { x?: unknown }).x === "number" &&
+        typeof (point as { y?: unknown }).y === "number"
+    )
+    .map((point) => ({ x: point.x, y: point.y }))
+}
+
+const readControlPointsFromEdge = (edge: Edge): ControlPoint[] => {
+  const raw = (edge as unknown as { controlPoints?: unknown }).controlPoints
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (point): point is { x: number; y: number } =>
+        Boolean(point) &&
+        typeof point === "object" &&
+        typeof (point as { x?: unknown }).x === "number" &&
+        typeof (point as { y?: unknown }).y === "number"
+    )
+    .map((point) => ({ x: point.x, y: point.y }))
+}
+
+const areControlPointsEqual = (a: ControlPoint[], b: ControlPoint[]): boolean =>
+  a.length === b.length && a.every((point, index) => point.x === b[index]?.x && point.y === b[index]?.y)
 
 const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
   const text = labelText?.trim()
@@ -243,6 +289,13 @@ const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefi
     return instance.attrs.diagramStyle as DiagramStyle
   }
   return getBoundComponentStyle(instance.modelNodeId)
+}
+
+const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attrs?.isNote === true
+
+const getNoteText = (instance: DiagramNodeInstance): string => {
+  const value = instance.attrs?.noteText
+  return typeof value === "string" && value.trim().length > 0 ? value : "Новая заметка"
 }
 
 const getInstanceDimensions = (instance: { modelNodeId: string; width?: number; height?: number; attrs?: Record<string, unknown> }) => {
@@ -397,6 +450,18 @@ function createTrapezoidPath(width: number, height: number): Path2D {
   return path
 }
 
+function createStickyNotePath(width: number, height: number): Path2D {
+  const path = new Path2D()
+  const cut = Math.max(10, Math.min(width, height) * 0.2)
+  path.moveTo(0, 0)
+  path.lineTo(width - cut, 0)
+  path.lineTo(width, cut)
+  path.lineTo(width, height)
+  path.lineTo(0, height)
+  path.closePath()
+  return path
+}
+
 function getNodeScopedPropertyValues(modelNodeId: string): Record<string, unknown> {
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
@@ -529,6 +594,10 @@ function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
   return node instanceof CustomShapeNode
 }
 
+function isStickyNoteNode(node: DiagramNode): boolean {
+  return isCustomShapeNode(node) && (node as unknown as { noteShape?: boolean }).noteShape === true
+}
+
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
   if (node instanceof DiamondNode) return "diamond"
   if (node instanceof CircleNode) return "circle"
@@ -541,7 +610,9 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const ds = getEffectiveStyle(instance)
   const visual = resolveInstanceStyle(instance, ds)
   const shape = getComponentShape(ds)
-  const nodeName = nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
+  const nodeName = isNoteInstance(instance)
+    ? getNoteText(instance)
+    : nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
 
   const commonOptions = {
     id: `instance-${instance.id}`,
@@ -556,7 +627,15 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   }
 
   let node: DiagramNode
-  if (shape === "diamond") {
+  if (isNoteInstance(instance) && shape === "rectangle") {
+    const noteNode = new CustomShapeNode({
+      ...commonOptions,
+      path: (w, h) => createStickyNotePath(w, h)
+    })
+    noteNode.shapeType = "rectangle"
+    ;(noteNode as unknown as { noteShape?: boolean }).noteShape = true
+    node = noteNode
+  } else if (shape === "diamond") {
     node = new DiamondNode(commonOptions)
   } else if (shape === "circle") {
     node = new CircleNode(commonOptions)
@@ -603,6 +682,9 @@ function syncDiagram() {
 
   // Sync nodes
   for (const instance of orderedInstances) {
+    const modelNode = nodeById.value.get(instance.modelNodeId)
+    if (!isNoteInstance(instance) && (!modelNode || modelNode._isDeleted)) continue
+
     const papNodeId = `instance-${instance.id}`
     currentNodeIds.add(papNodeId)
     nodeIdToInstance.set(papNodeId, { modelNodeId: instance.modelNodeId, instanceId: instance.id })
@@ -612,8 +694,10 @@ function syncDiagram() {
       const ds = getEffectiveStyle(instance)
       const expectedShape = getComponentShape(ds)
       const existingShape = getNodeShapeFromNode(existing)
+      const shouldUseStickyNote = isNoteInstance(instance) && expectedShape === "rectangle"
+      const needsStickyNoteRebuild = shouldUseStickyNote && !isStickyNoteNode(existing)
 
-      if (expectedShape !== existingShape) {
+      if (expectedShape !== existingShape || needsStickyNoteRebuild) {
         renderer.removeNode(papNodeId)
         renderer.addNode(createInstanceNode(instance))
         continue
@@ -621,7 +705,9 @@ function syncDiagram() {
 
       // Update in-place
       const visual = resolveInstanceStyle(instance, ds)
-      const nodeName = nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
+      const nodeName = isNoteInstance(instance)
+        ? getNoteText(instance)
+        : nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
 
       existing.x = instance.x
       existing.y = instance.y
@@ -650,6 +736,10 @@ function syncDiagram() {
 
   // Sync edges
   for (const edge of instanceEdges.value) {
+    const modelLink = linkById.value.get(edge.modelLinkId)
+    const isDiagramOnlyEdge = edge.attrs?.isDiagramOnly === true
+    if (!isDiagramOnlyEdge && (!modelLink || modelLink._isDeleted)) continue
+
     const papEdgeId = `edge-${edge.id}`
     currentEdgeIds.add(papEdgeId)
     edgeIdToInstance.set(papEdgeId, { modelLinkId: edge.modelLinkId, edgeId: edge.id })
@@ -664,6 +754,7 @@ function syncDiagram() {
     const edgeLabel = getInstanceEdgeLabel(edge)
     const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
     const edgeLabelBackground = buildEdgeLabelBackground(ds)
+    const controlPoints = readControlPointsFromAttrs(edge.attrs)
 
     const existing = renderer.getEdge(papEdgeId)
     if (existing) {
@@ -683,6 +774,9 @@ function syncDiagram() {
       if (edgeOpts.type) existing.type = edgeOpts.type
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
       if (edgeOpts.endMarker !== undefined) existing.endMarker = edgeOpts.endMarker
+      if (!areControlPointsEqual(readControlPointsFromEdge(existing), controlPoints)) {
+        ;(existing as unknown as { controlPoints?: ControlPoint[] }).controlPoints = controlPoints
+      }
       existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
       existing.label = edgeLabelConfig
       if (existing.label) {
@@ -714,6 +808,7 @@ function syncDiagram() {
         ...(edgeLabelConfig !== undefined ? { label: edgeLabelConfig } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
+        ...(controlPoints.length > 0 ? { controlPoints } : {}),
         lockAnchors: lockAnchorsEnabled.value
       })
       if (newEdge.label) {
@@ -836,19 +931,38 @@ function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
   }
 }
 
+function handleCanvasMouseUpSyncEditablePolyline() {
+  detectEditablePolylineControlPointChanges()
+}
+
 // ── Detect label changes from inline editing ──
 function detectLabelChanges() {
   if (!renderer) return
+  const next = cloneDiagramAttrs()
+  let notesChanged = false
   for (const [papNodeId, entity] of nodeIdToInstance) {
     const papNode = renderer.getNode(papNodeId)
     if (!papNode) continue
     const labelText = typeof papNode.label === "string"
       ? papNode.label
       : papNode.label?.editableText ?? papNode.label?.text ?? ""
+    const instance = next.instances.nodes.find((item) => item.id === entity.instanceId)
+    if (instance && isNoteInstance(instance)) {
+      if (labelText !== getNoteText(instance)) {
+        if (!instance.attrs) instance.attrs = {}
+        instance.attrs.noteText = labelText
+        notesChanged = true
+      }
+      continue
+    }
+
     const modelNode = nodeById.value.get(entity.modelNodeId)
     if (modelNode && labelText !== modelNode.name) {
       emit("nodeLabelChange", entity.modelNodeId, labelText)
     }
+  }
+  if (notesChanged) {
+    emit("updateDiagram", next)
   }
 }
 
@@ -912,6 +1026,38 @@ function detectEdgePortChanges() {
     else delete edgeInst.attrs.fromPortId
     if (nextToPortId) edgeInst.attrs.toPortId = nextToPortId
     else delete edgeInst.attrs.toPortId
+
+    if (Object.keys(edgeInst.attrs).length === 0) {
+      delete edgeInst.attrs
+    }
+    changed = true
+  }
+
+  if (changed) {
+    emit("updateDiagram", next)
+  }
+}
+
+function detectEditablePolylineControlPointChanges() {
+  if (!renderer) return
+
+  const next = cloneDiagramAttrs()
+  let changed = false
+
+  for (const [papEdgeId, entity] of edgeIdToInstance) {
+    const papEdge = renderer.getEdge(papEdgeId)
+    if (!papEdge || papEdge.type !== "editable-polyline") continue
+
+    const edgeInst = next.instances.edges.find((edge) => edge.id === entity.edgeId)
+    if (!edgeInst) continue
+
+    const nextControlPoints = readControlPointsFromEdge(papEdge)
+    const currentControlPoints = readControlPointsFromAttrs(edgeInst.attrs)
+    if (areControlPointsEqual(nextControlPoints, currentControlPoints)) continue
+
+    if (!edgeInst.attrs) edgeInst.attrs = {}
+    if (nextControlPoints.length > 0) edgeInst.attrs.controlPoints = nextControlPoints
+    else delete edgeInst.attrs.controlPoints
 
     if (Object.keys(edgeInst.attrs).length === 0) {
       delete edgeInst.attrs
@@ -993,11 +1139,18 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
 function initRenderer(r: DiagramRenderer) {
   renderer = r
   r.getCanvas().addEventListener("click", handleCanvasClickPrioritizeEdge)
+  window.addEventListener("mouseup", handleCanvasMouseUpSyncEditablePolyline)
 
   // Grid overlay
   gridOverlay = new GridOverlay({ gridSize: 24, color: "#e2e8f0" })
   r.use(gridOverlay)
   gridOverlay.setEnabled(gridVisible.value)
+
+  // Rulers
+  rulersOverlay = new RulersOverlay({
+    enabled: rulersEnabled.value
+  })
+  r.use(rulersOverlay)
 
   // MiniMap
   miniMap = new MiniMap({
@@ -1005,7 +1158,7 @@ function initRenderer(r: DiagramRenderer) {
     width: 190,
     height: 128,
     padding: 12,
-    backgroundColor: "transparent",
+    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#f4f2ef",
     anchor: "bottom-left"
   })
   r.use(miniMap)
@@ -1014,8 +1167,10 @@ function initRenderer(r: DiagramRenderer) {
   interactionManager = r.enableInteractions({
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
+    alignToNodes: alignEnabled.value,
     keymap: { deleteKeys: [] }
   })
+  interactionManager.connection.setSnapToGrid(snapEnabled.value)
   // Warchi persists connections via model state/events.
   // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
   ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (edge: Edge) => {
@@ -1078,6 +1233,7 @@ function initRenderer(r: DiagramRenderer) {
     // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
     persistNodePositions(Array.from(nodeIdToInstance.keys()))
     detectEdgePortChanges()
+    detectEditablePolylineControlPointChanges()
     detectLabelChanges()
     detectEdgeLabelChanges()
   })
@@ -1096,6 +1252,7 @@ function initRenderer(r: DiagramRenderer) {
 
   interactionManager.connection.on("edgeReconnect", () => {
     detectEdgePortChanges()
+    detectEditablePolylineControlPointChanges()
   })
 
   // Context menu
@@ -1105,6 +1262,21 @@ function initRenderer(r: DiagramRenderer) {
         if (target.type !== "node") return []
         const entity = nodeIdToInstance.get(target.node.id)
         if (!entity) return []
+        const instance = instanceNodes.value.find((item) => item.id === entity.instanceId)
+        if (instance && isNoteInstance(instance)) {
+          return [
+            {
+              label: "Редактировать заметку",
+              icon: "edit_note",
+              action: () => emit("requestEditNote", entity.instanceId)
+            },
+            {
+              label: "Удалить заметку",
+              icon: "delete",
+              action: () => emit("requestDeleteNodeFromDiagram", entity.modelNodeId)
+            }
+          ]
+        }
         return [
           {
             label: "Найти в дереве",
@@ -1124,9 +1296,20 @@ function initRenderer(r: DiagramRenderer) {
         if (!entity) return []
 
         const edgeInst = instanceEdges.value.find((edge) => edge.id === entity.edgeId)
-        const currentType = ((getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)?.edgeType as EdgePathType | undefined) ?? "bezier")
+        const isDiagramOnly = edgeInst?.attrs?.isDiagramOnly === true
+        const effStyle = getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)
+        const currentType = ((effStyle?.edgeType as EdgePathType | undefined) ?? "bezier")
 
-        return [
+        const items: Array<{ label: string; icon: string; action?: () => void; separator?: boolean; items?: unknown[]; enabled?: boolean }> = []
+
+        if (isDiagramOnly) {
+          items.push(
+            { label: "Связь заметки", icon: "note", action: () => {} },
+            { separator: true }
+          )
+        }
+
+        items.push(
           {
             label: "Тип связи",
             icon: "conversion_path",
@@ -1144,6 +1327,12 @@ function initRenderer(r: DiagramRenderer) {
                 action: () => setEdgeTypeFromContext(entity.edgeId, "polyline")
               },
               {
+                label: "Редактируемая ломаная",
+                icon: "polyline",
+                enabled: currentType !== "editable-polyline",
+                action: () => setEdgeTypeFromContext(entity.edgeId, "editable-polyline")
+              },
+              {
                 label: "Безье",
                 icon: "line_curve",
                 enabled: currentType !== "bezier",
@@ -1151,15 +1340,15 @@ function initRenderer(r: DiagramRenderer) {
               }
             ]
           },
+          { separator: true },
           {
-            separator: true
-          },
-          {
-            label: "Удалить",
+            label: isDiagramOnly ? "Удалить связь заметки" : "Удалить",
             icon: "delete",
             action: () => emit("requestDeleteLink", entity.modelLinkId)
           }
-        ]
+        )
+
+        return items
       }
     }
   })
@@ -1262,11 +1451,29 @@ const toggleSnap = (): boolean => {
   if (interactionManager) {
     interactionManager.drag.setSnapToGrid(snapEnabled.value)
     interactionManager.resize.setSnapToGrid(snapEnabled.value)
+    interactionManager.connection.setSnapToGrid(snapEnabled.value)
   }
   return snapEnabled.value
 }
 
 const getSnapEnabled = () => snapEnabled.value
+
+const toggleAlign = (): boolean => {
+  alignEnabled.value = !alignEnabled.value
+  interactionManager?.drag.setAlignmentEnabled(alignEnabled.value)
+  return alignEnabled.value
+}
+
+const getAlignEnabled = () => alignEnabled.value
+
+const toggleRulers = (): boolean => {
+  rulersEnabled.value = !rulersEnabled.value
+  rulersOverlay?.setEnabled(rulersEnabled.value)
+  renderer?.markDirty()
+  return rulersEnabled.value
+}
+
+const getRulersEnabled = () => rulersEnabled.value
 
 const undo = () => {
   interactionManager?.history.undo()
@@ -1323,6 +1530,8 @@ const hasDragType = (event: DragEvent, type: string): boolean =>
 const isAllowedDropEvent = (event: DragEvent): boolean => {
   const componentId = event.dataTransfer?.getData("application/x-notation-component-id")
   if (componentId) return true
+  const notePayload = event.dataTransfer?.getData("application/x-model-diagram-note")
+  if (notePayload === "note") return true
   const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
   if (modelNodeId) return canDropModelNodeToDiagram(modelNodeId)
   return false
@@ -1343,7 +1552,8 @@ const onDragOver = (event: DragEvent) => {
 
   const hasComponentPayload = hasDragType(event, "application/x-notation-component-id")
   const hasModelNodePayload = hasDragType(event, "application/x-model-node-id")
-  if (!hasComponentPayload && !hasModelNodePayload) {
+  const hasNotePayload = hasDragType(event, "application/x-model-diagram-note")
+  if (!hasComponentPayload && !hasModelNodePayload && !hasNotePayload) {
     return
   }
 
@@ -1374,6 +1584,12 @@ const onDrop = (event: DragEvent) => {
     return
   }
 
+  const notePayload = event.dataTransfer?.getData("application/x-model-diagram-note")
+  if (notePayload === "note") {
+    emit("createNote", x, y)
+    return
+  }
+
   const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
   if (modelNodeId) {
     emit("addExistingNode", modelNodeId, x, y)
@@ -1383,6 +1599,12 @@ const onDrop = (event: DragEvent) => {
 const onDragComponentStart = (event: DragEvent, componentId: string) => {
   event.dataTransfer?.setData("application/x-notation-component-id", componentId)
   event.dataTransfer?.setData("text/plain", `component:${componentId}`)
+  event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
+}
+
+const onDragNoteStart = (event: DragEvent) => {
+  event.dataTransfer?.setData("application/x-model-diagram-note", "note")
+  event.dataTransfer?.setData("text/plain", "note")
   event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
 }
 
@@ -1453,6 +1675,12 @@ const handlePaletteIconError = (event: Event, iconName: string) => {
   img.src = "/icons/component.svg"
 }
 
+const setPaletteVisible = (visible: boolean) => {
+  if (paletteVisible.value === visible) return
+  paletteVisible.value = visible
+  emit("paletteVisibleChange", visible)
+}
+
 // ── Lifecycle ──
 onMounted(() => {
   const mount = () => {
@@ -1489,12 +1717,14 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
   renderer?.getCanvas().removeEventListener("click", handleCanvasClickPrioritizeEdge)
+  window.removeEventListener("mouseup", handleCanvasMouseUpSyncEditablePolyline)
   renderer?.destroy()
   renderer = null
   interactionManager = null
   emit("canvasContextChange", { renderer: null, interactionManager: null })
   gridOverlay = null
   miniMap = null
+  rulersOverlay = null
   nodeIdToInstance.clear()
   edgeIdToInstance.clear()
 })
@@ -1522,7 +1752,6 @@ watch(
     const orderedInstances = sortInstancesByZLayer(instanceNodes.value)
     reorderRendererNodesBySize(orderedInstances)
     renderer?.markDirty()
-    persistNodeZOrder(orderedInstances)
   },
   { deep: true }
 )
@@ -1560,7 +1789,35 @@ watch(
     if (interactionManager) {
       interactionManager.drag.setSnapToGrid(next)
       interactionManager.resize.setSnapToGrid(next)
+      interactionManager.connection.setSnapToGrid(next)
     }
+  }
+)
+
+watch(
+  () => props.alignEnabled,
+  (next) => {
+    if (next === alignEnabled.value) return
+    alignEnabled.value = next
+    interactionManager?.drag.setAlignmentEnabled(next)
+  }
+)
+
+watch(
+  () => props.rulersEnabled,
+  (next) => {
+    if (next === rulersEnabled.value) return
+    rulersEnabled.value = next
+    rulersOverlay?.setEnabled(next)
+    renderer?.markDirty()
+  }
+)
+
+watch(
+  () => props.paletteVisible,
+  (next) => {
+    if (next === paletteVisible.value) return
+    paletteVisible.value = next
   }
 )
 
@@ -1590,6 +1847,10 @@ defineExpose({
   getMiniMapVisible,
   toggleSnap,
   getSnapEnabled,
+  toggleAlign,
+  getAlignEnabled,
+  toggleRulers,
+  getRulersEnabled,
   toggleLockAnchors,
   getLockAnchorsEnabled,
   undo,
@@ -1625,7 +1886,7 @@ defineExpose({
         type="button"
         class="canvas-palette-toggle"
         title="Показать палитру нотации"
-        @click="paletteVisible = true"
+        @click="setPaletteVisible(true)"
       >
         <span class="material-symbols-outlined">palette</span>
       </button>
@@ -1638,15 +1899,24 @@ defineExpose({
             type="button"
             class="canvas-palette__hide"
             title="Скрыть палитру"
-            @click="paletteVisible = false"
+            @click="setPaletteVisible(false)"
           >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
         <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
-          В нотации нет компонентов
+          В нотации нет компонентов. Доступна только заметка.
         </div>
-        <div v-else class="canvas-palette__list">
+        <div class="canvas-palette__list">
+          <button
+            type="button"
+            class="canvas-palette__item canvas-palette__item--note"
+            title="Заметка"
+            draggable="true"
+            @dragstart="onDragNoteStart"
+          >
+            <span class="material-symbols-outlined canvas-palette__note-icon">note</span>
+          </button>
           <template v-for="(entry, index) in paletteEntries" :key="entry.kind === 'item' ? entry.component.id : `divider-${entry.colorKey}-${index}`">
             <div v-if="entry.kind === 'divider'" class="canvas-palette__divider" />
             <button
@@ -1840,6 +2110,15 @@ defineExpose({
 .canvas-palette__item:hover {
   border-color: var(--palette-item-fill, var(--accent));
   background: color-mix(in srgb, var(--palette-item-fill) 28%, var(--surface));
+}
+
+.canvas-palette__item--note {
+  --palette-item-fill: #f1c40f;
+}
+
+.canvas-palette__note-icon {
+  font-size: 18px;
+  color: #7a5a00;
 }
 
 .canvas-palette__icon {

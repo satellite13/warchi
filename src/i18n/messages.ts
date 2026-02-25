@@ -35,7 +35,8 @@ export const messages = {
       yes: "Да",
       no: "Нет",
       confirmDelete: "Вы уверены, что хотите удалить {entity}",
-      deleteIrreversible: "Это действие нельзя отменить."
+      deleteIrreversible: "Это действие нельзя отменить.",
+      newVersionAvailable: "Новая версия v{version} доступна. Обновление..."
     },
     toolbar: {
       undo: "Отменить",
@@ -549,7 +550,8 @@ export const messages = {
       yes: "Yes",
       no: "No",
       confirmDelete: "Are you sure you want to delete {entity}",
-      deleteIrreversible: "This action cannot be undone."
+      deleteIrreversible: "This action cannot be undone.",
+      newVersionAvailable: "New version v{version} available. Updating..."
     },
     toolbar: {
       undo: "Undo",

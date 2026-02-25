@@ -8,13 +8,16 @@ import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
 import { getUserDisplayName } from "../utils/userDisplay"
-import changelogRaw from "../../CHANGELOG.ru.md?raw"
+import changelogRu from "../../CHANGELOG.ru.md?raw"
+import changelogEn from "../../CHANGELOG.md?raw"
 
 const router = useRouter()
 const { t, locale } = useI18n()
+
+const changelogRaw = computed(() => (locale.value === "en" ? changelogEn : changelogRu))
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
-const appVersion = "0.0.14"
+const appVersion = "0.0.15"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -162,7 +165,7 @@ const goTo = (name: string) => router.push({ name })
 const releaseNotes = computed(() => {
   const escapedVersion = appVersion.replace(/\./g, "\\.")
   const sectionPattern = new RegExp(`## \\[${escapedVersion}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n## \\[|$)`)
-  const match = changelogRaw.match(sectionPattern)
+  const match = changelogRaw.value.match(sectionPattern)
   if (!match?.[1]) return [] as string[]
 
   return match[1]

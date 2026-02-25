@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.15] - 2026-02-25
+
+### Added
+- Auto-reload on blue-green deployment: app periodically checks `version.json` and on new version shows a toast, then reloads the page.
+- Vite plugin `vite-plugin-version` to generate `version.json` at build time.
+
+### Release
+- Bumped application version to `0.0.15` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.15`.
+
 ## [0.0.14] - 2026-02-25
 
 ### Added

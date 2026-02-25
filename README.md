@@ -79,8 +79,8 @@ Examples:
 ```bash
 ./deploy.sh
 BUILD_IMAGE=false ./deploy.sh
-BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.16 ./deploy.sh
-BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.16 ./deploy.sh
+BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.17 ./deploy.sh
+BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.17 ./deploy.sh
 ```
 
 ## Environment Variables

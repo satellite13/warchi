@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.17] - 2026-02-25
+
+### Added
+- Outline ON setting in model editor toolbar: attach edges to shape contour instead of ports (enabled by default).
+- Updated `@ngroznykh/papirus` dependency to `0.3.14`.
+
+### Release
+- Bumped application version to `0.0.17` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.17`.
+
 ## [0.0.16] - 2026-02-25
 
 ### Fixed

@@ -279,6 +279,10 @@ export const messages = {
     },
     docs: {
       sidebarTitle: "Документация",
+      notFound: "Раздел не найден",
+      notFoundDesc: "Запрашиваемый раздел документации не существует.",
+      loadError: "Ошибка загрузки",
+      loadErrorDesc: "Не удалось загрузить содержимое раздела.",
       sections: {
         overview: "Обзор системы",
         models: "Модели",
@@ -789,6 +793,10 @@ export const messages = {
     },
     docs: {
       sidebarTitle: "Documentation",
+      notFound: "Section not found",
+      notFoundDesc: "The requested documentation section does not exist.",
+      loadError: "Load error",
+      loadErrorDesc: "Failed to load section content.",
       sections: {
         overview: "System overview",
         models: "Models",

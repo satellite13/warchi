@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /* eslint-disable vue/no-mutating-props -- editing shared draft objects in notation editor */
 import {computed, reactive, ref, watch, onMounted, onBeforeUnmount} from "vue";
+import { useI18n } from "vue-i18n";
 import BaseModal from "../../../components/modals/BaseModal.vue";
 import {createId, type CustomProperty, type CustomPropertyType} from "../notationAttrs";
 import type {EditorComponent, EditorRelation, EditorRelationRule} from "../types";
@@ -26,6 +27,7 @@ const props = defineProps<{
 }>();
 
 const selectedItemComputed = computed(() => props.selectedItem);
+const { t } = useI18n();
 
 const {
   addCustomProperty,
@@ -238,7 +240,7 @@ const submitCreateNodeType = () => {
   if (!props.selectedItem || "linkTypeId" in props.selectedItem) return;
   const trimmedName = newNodeTypeName.value.trim();
   if (!trimmedName) {
-    newNodeTypeError.value = "Введите название типа узла.";
+    newNodeTypeError.value = t("types.enterNodeTypeName");
     return;
   }
   props.onCreateNodeType?.(props.selectedItem.id, trimmedName);
@@ -261,7 +263,7 @@ const submitCreateRelationType = () => {
   if (!props.selectedItem || !("linkTypeId" in props.selectedItem)) return;
   const trimmedName = newRelationTypeName.value.trim();
   if (!trimmedName) {
-    newRelationTypeError.value = "Введите название связи.";
+    newRelationTypeError.value = t("types.enterLinkTypeName");
     return;
   }
   props.onCreateRelationType?.(props.selectedItem.id, trimmedName);
@@ -346,10 +348,10 @@ const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string
 };
 
 const typeOptions: { value: CustomPropertyType; label: string }[] = [
-  {value: "string", label: "Строка"},
-  {value: "number", label: "Число"},
-  {value: "boolean", label: "Булев"},
-  {value: "enum", label: "Перечисление"}
+  {value: "string", label: t("types.propertyTypeString")},
+  {value: "number", label: t("types.propertyTypeNumber")},
+  {value: "boolean", label: t("types.propertyTypeBoolean")},
+  {value: "enum", label: t("types.propertyTypeEnum")}
 ];
 
 const handleTypeChange = (property: CustomProperty, value: string) => {
@@ -549,13 +551,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="properties-panel">
     <div class="properties-panel__header">
-      <h3 class="properties-panel__title">Свойства</h3>
+      <h3 class="properties-panel__title">{{ t("types.properties") }}</h3>
       <span v-if="selectedItem" class="properties-panel__entity-name">{{ selectedItem.name }}</span>
       <div class="properties-panel__size-controls">
         <button
           type="button"
           class="properties-panel__size-btn"
-          title="Восстановить размер панели по умолчанию"
+          :title="t('types.resetPanelSize')"
           @click="props.onResetPanelSize?.()"
         >
           <span class="material-symbols-outlined">restart_alt</span>
@@ -565,7 +567,7 @@ onBeforeUnmount(() => {
 
     <div v-if="!selectedItem" class="properties-panel__empty properties-panel__empty--centered">
       <span class="material-symbols-outlined properties-panel__empty-icon">edit_note</span>
-      <span>Выберите элемент для редактирования свойств</span>
+      <span>{{ t("diagram.selectElementToEditProperties") }}</span>
     </div>
 
     <div v-else class="properties-panel__content">
@@ -583,7 +585,7 @@ onBeforeUnmount(() => {
               class="material-symbols-outlined properties-panel__type-chevron"
               :class="{ 'properties-panel__type-chevron--collapsed': !nodeTypeExpanded }"
             >expand_more</span>
-            <span class="properties-panel__type-collapse-label">Тип узла</span>
+            <span class="properties-panel__type-collapse-label">{{ t("types.nodeType") }}</span>
           </div>
         </div>
         <template v-if="selectedItem && !('linkTypeId' in selectedItem) && nodeTypeExpanded">
@@ -593,7 +595,7 @@ onBeforeUnmount(() => {
             :disabled="props.isComponentTypeLocked"
             @change="handleComponentTypeChange(($event.target as HTMLSelectElement).value)"
           >
-            <option :value="CREATE_NODE_TYPE_VALUE">Создать новый тип...</option>
+            <option :value="CREATE_NODE_TYPE_VALUE">{{ t("types.createNewType") }}</option>
             <option
               v-for="typeItem in (props.nodeTypes ?? [])"
               :key="typeItem.id"
@@ -603,7 +605,7 @@ onBeforeUnmount(() => {
             </option>
           </select>
           <div v-if="props.isComponentTypeLocked" class="properties-panel__type-hint">
-            Тип нельзя изменить: компонент уже используется в model nodes.
+            {{ t("types.componentTypeLockedHint") }}
           </div>
         </template>
         <template v-else-if="selectedItem && 'linkTypeId' in selectedItem">
@@ -619,7 +621,7 @@ onBeforeUnmount(() => {
               class="material-symbols-outlined properties-panel__type-chevron"
               :class="{ 'properties-panel__type-chevron--collapsed': !relationTypeExpanded }"
             >expand_more</span>
-            <span class="properties-panel__type-collapse-label">Тип связи</span>
+            <span class="properties-panel__type-collapse-label">{{ t("types.linkType") }}</span>
           </div>
           <template v-if="relationTypeExpanded">
             <select
@@ -628,7 +630,7 @@ onBeforeUnmount(() => {
               :disabled="props.isRelationTypeLocked"
               @change="handleRelationTypeChange(($event.target as HTMLSelectElement).value)"
             >
-              <option :value="CREATE_RELATION_TYPE_VALUE">Создать новую связь...</option>
+              <option :value="CREATE_RELATION_TYPE_VALUE">{{ t("types.createNewLink") }}</option>
               <option
                 v-for="typeItem in (props.linkTypes ?? [])"
                 :key="typeItem.id"
@@ -638,7 +640,7 @@ onBeforeUnmount(() => {
               </option>
             </select>
             <div v-if="props.isRelationTypeLocked" class="properties-panel__type-hint">
-              Тип нельзя изменить: связь уже используется в model links.
+              {{ t("types.relationTypeLockedHint") }}
             </div>
           </template>
         </template>
@@ -657,7 +659,7 @@ onBeforeUnmount(() => {
             class="material-symbols-outlined properties-panel__palette-group-chevron"
             :class="{ 'properties-panel__palette-group-chevron--collapsed': !paletteGroupExpanded }"
           >expand_more</span>
-          <span class="properties-panel__palette-group-label">Группа в палитре</span>
+          <span class="properties-panel__palette-group-label">{{ t("diagram.paletteGroup") }}</span>
         </div>
         <template v-if="paletteGroupExpanded">
           <input
@@ -668,7 +670,7 @@ onBeforeUnmount(() => {
             placeholder="0"
             @input="handlePaletteGroupChange(($event.target as HTMLInputElement).value)"
           >
-          <span class="properties-panel__palette-group-hint">0 = note, по умолчанию первая группа</span>
+          <span class="properties-panel__palette-group-hint">{{ t("diagram.paletteGroupHint") }}</span>
         </template>
       </div>
 
@@ -685,14 +687,14 @@ onBeforeUnmount(() => {
             class="material-symbols-outlined properties-panel__tags-chevron"
             :class="{ 'properties-panel__tags-chevron--collapsed': !tagsExpanded }"
           >expand_more</span>
-          <label class="properties-panel__tags-label" for="entity-tags-input">Теги</label>
+          <label class="properties-panel__tags-label" for="entity-tags-input">{{ t("diagram.tags") }}</label>
         </div>
         <template v-if="tagsExpanded">
           <input
             id="entity-tags-input"
             class="properties-panel__tags-input"
             :value="tagsDraft"
-            placeholder="tag1, tag2"
+            :placeholder="t('diagram.tagsPlaceholder')"
             @input="handleTagsInput(($event.target as HTMLInputElement).value)"
             @blur="applyTagsDraft"
             @keydown.enter.prevent="applyTagsDraft"
@@ -726,18 +728,18 @@ onBeforeUnmount(() => {
             class="material-symbols-outlined properties-panel__label-template-chevron"
             :class="{ 'properties-panel__label-template-chevron--collapsed': !labelTemplateExpanded }"
           >expand_more</span>
-          <span class="properties-panel__label-template-label">Составная метка</span>
+          <span class="properties-panel__label-template-label">{{ t("diagram.compositeLabel") }}</span>
         </div>
         <template v-if="labelTemplateExpanded">
           <textarea
             class="properties-panel__label-template-input"
             :value="labelTemplateValue"
-            placeholder="${name} — ${status}"
+            :placeholder="t('diagram.compositeLabelPlaceholder')"
             rows="2"
             @input="handleLabelTemplateInput(($event.target as HTMLTextAreaElement).value)"
           ></textarea>
           <div v-if="labelTemplateValue" class="properties-panel__label-template-preview">
-            <span class="properties-panel__label-template-preview-label">Результат:</span>
+            <span class="properties-panel__label-template-preview-label">{{ t("diagram.resultLabel") }}:</span>
             <span class="properties-panel__label-template-preview-text">{{ labelTemplatePreview }}</span>
           </div>
         </template>
@@ -756,12 +758,12 @@ onBeforeUnmount(() => {
             class="material-symbols-outlined properties-panel__rules-chevron"
             :class="{ 'properties-panel__rules-chevron--collapsed': !relationRulesExpanded }"
           >expand_more</span>
-          <span class="properties-panel__rules-label">Правила связей</span>
+          <span class="properties-panel__rules-label">{{ t("diagram.linkRules") }}</span>
           <button
             type="button"
             class="link-btn link-btn--icon"
-            title="Добавить правило связи"
-            aria-label="Добавить правило связи"
+            :title="t('diagram.addLinkRule')"
+            :aria-label="t('diagram.addLinkRule')"
             @click.stop="addRelationRule"
           >
             <span class="material-symbols-outlined">add</span>
@@ -769,7 +771,7 @@ onBeforeUnmount(() => {
         </div>
         <template v-if="relationRulesExpanded">
           <div v-if="selectedComponentRelationRules.length === 0" class="properties-panel__rules-empty">
-            Нет правил.
+            {{ t("diagram.noRules") }}
           </div>
           <div v-else class="properties-panel__rules-list">
             <div
@@ -791,11 +793,11 @@ onBeforeUnmount(() => {
                 </button>
               </div>
               <div class="properties-panel__rule-row">
-                <label class="properties-panel__rule-row-label">Кому</label>
+                <label class="properties-panel__rule-row-label">{{ t("diagram.ruleTo") }}</label>
                 <div class="rule-target-dropdown">
                   <div class="rule-target-dropdown__control" @click.stop="toggleRuleTargetDropdown(rule.id)">
                     <span class="rule-target-dropdown__value">
-                      {{ activeComponents.find((c) => c.id === rule.toComponentId)?.name || 'Выберите компонент' }}
+                      {{ activeComponents.find((c) => c.id === rule.toComponentId)?.name || t("diagram.selectComponent") }}
                     </span>
                     <span class="material-symbols-outlined rule-target-dropdown__arrow">
                       {{ openRuleTargetDropdownId === rule.id ? 'expand_less' : 'expand_more' }}
@@ -806,7 +808,7 @@ onBeforeUnmount(() => {
                       v-model="ruleTargetSearchQuery"
                       class="rule-target-dropdown__search"
                       type="text"
-                      placeholder="Поиск компонента..."
+                      :placeholder="t('diagram.searchComponent')"
                       @click.stop
                     >
                     <div class="rule-target-dropdown__list">
@@ -818,19 +820,19 @@ onBeforeUnmount(() => {
                         :class="{ 'rule-target-dropdown__item--active': rule.toComponentId === component.id }"
                         @click.stop="selectRuleTarget(rule, component.id)"
                       >
-                        {{ component.name || 'Без имени' }}
+                        {{ component.name || t("common.unnamed") }}
                       </button>
                       <div v-if="filteredRuleTargetComponents.length === 0" class="rule-target-dropdown__empty">
-                        Ничего не найдено
+                        {{ t("common.nothingFound") }}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
               <div class="properties-panel__rule-row">
-                <label class="properties-panel__rule-row-label">Связи</label>
+                <label class="properties-panel__rule-row-label">{{ t("diagram.links") }}</label>
                 <div v-if="!allRelations || allRelations.length === 0" class="properties-panel__rules-empty">
-                  Нет связей нотации
+                  {{ t("diagram.noNotationLinks") }}
                 </div>
                 <div v-else class="properties-panel__rule-links">
                   <label
@@ -843,7 +845,7 @@ onBeforeUnmount(() => {
                       :checked="rule.allowedRelationIds.includes(relation.id)"
                       @change="toggleRelationRuleRelation(rule, relation.id, ($event.target as HTMLInputElement).checked)"
                     >
-                    <span>{{ relation.name || 'Без имени' }}</span>
+                    <span>{{ relation.name || t("common.unnamed") }}</span>
                   </label>
                 </div>
               </div>
@@ -865,7 +867,7 @@ onBeforeUnmount(() => {
             class="material-symbols-outlined properties-panel__custom-chevron"
             :class="{ 'properties-panel__custom-chevron--collapsed': !propertiesExpanded }"
           >expand_more</span>
-          <span class="properties-panel__custom-label">Свойства</span>
+          <span class="properties-panel__custom-label">{{ t("types.properties") }}</span>
           <div
             ref="addMenuRef"
             class="properties-panel__add-wrapper"
@@ -874,8 +876,8 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="link-btn link-btn--icon"
-              title="Добавить свойство"
-              aria-label="Добавить свойство"
+              :title="t('types.addProperty')"
+              :aria-label="t('types.addProperty')"
               @click="toggleAddMenu"
             >
               <span class="material-symbols-outlined">add</span>
@@ -883,10 +885,10 @@ onBeforeUnmount(() => {
             <div v-if="showAddMenu" class="add-menu">
               <button type="button" class="add-menu__item" @click="addNewProperty">
                 <span class="material-symbols-outlined">note_add</span>
-                Новое свойство
+                {{ t("types.newProperty") }}
               </button>
               <div class="add-menu__divider"></div>
-              <div class="add-menu__section-title">Недостающие из типа</div>
+              <div class="add-menu__section-title">{{ t("types.missingFromType") }}</div>
               <button
                 v-for="prop in missingTypeProperties"
                 :key="`missing-${prop.name}-${prop.type}`"
@@ -898,7 +900,7 @@ onBeforeUnmount(() => {
                 {{ prop.name }} ({{ typeLabel(prop.type) }})
               </button>
               <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">
-                Нет недостающих свойств
+                {{ t("types.noMissingProperties") }}
               </div>
             </div>
           </div>
@@ -909,7 +911,7 @@ onBeforeUnmount(() => {
             v-if="selectedItem.parsedAttrs.customProperties.length === 0"
             class="properties-panel__empty"
           >
-            Нет свойств.
+            {{ t("types.noProperties") }}
           </div>
 
           <div v-else class="properties-panel__list">
@@ -924,21 +926,21 @@ onBeforeUnmount(() => {
                   class="material-symbols-outlined property-row__chevron"
                   :class="{ 'property-row__chevron--collapsed': !expandedIds.has(property.id) }"
                 >expand_more</span>
-                <span class="property-row__name">{{ property.name || 'Без имени' }}</span>
+                <span class="property-row__name">{{ property.name || t("common.unnamed") }}</span>
                 <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
                 <span
                   v-if="property._fromType || isEquivalentToTypeProperty(property)"
                   class="property-row__from-type-badge"
-                  title="Унаследовано от типа"
+                  :title="t('types.inheritedFromType')"
                 >
                   <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
-                  Тип
+                  {{ t("types.typeShort") }}
                 </span>
-                <span v-if="property.required" class="property-row__required-badge">Обяз.</span>
+                <span v-if="property.required" class="property-row__required-badge">{{ t("types.requiredShort") }}</span>
                 <button
                   type="button"
                   class="property-remove-btn"
-                  title="Удалить свойство"
+                  :title="t('types.removeProperty')"
                   @click.stop="removeCustomProperty(property.id)"
                 >
                   <span class="material-symbols-outlined">close</span>
@@ -951,7 +953,7 @@ onBeforeUnmount(() => {
                     <input
                       class="property-input property-input--name"
                       :value="property.name"
-                      placeholder="Имя свойства"
+                      :placeholder="t('types.propertyNamePlaceholder')"
                       @input="handleNameChange(property, ($event.target as HTMLInputElement).value)"
                     >
                     <select
@@ -969,7 +971,7 @@ onBeforeUnmount(() => {
                         :checked="property.required"
                         @change="handleRequiredChange(property, ($event.target as HTMLInputElement).checked)"
                       >
-                      <span class="property-checkbox__label">Обяз.</span>
+                      <span class="property-checkbox__label">{{ t("types.requiredShort") }}</span>
                     </label>
                   </div>
 
@@ -977,14 +979,14 @@ onBeforeUnmount(() => {
                     <input
                       class="property-input property-input--sm"
                       :value="property.regex || ''"
-                      placeholder="Regex (необязательно)"
+                      :placeholder="t('types.regexOptional')"
                       @input="handleRegexChange(property, ($event.target as HTMLInputElement).value)"
                     >
                     <input
                       class="property-input property-input--num"
                       type="number"
                       :value="property.maxLength ?? ''"
-                      placeholder="Макс. длина"
+                      :placeholder="t('types.maxLength')"
                       min="0"
                       @input="handleMaxLengthChange(property, ($event.target as HTMLInputElement).value)"
                     >
@@ -993,7 +995,7 @@ onBeforeUnmount(() => {
                     <input
                       class="property-input property-input--sm"
                       :value="getRegexTestValue(property.id)"
-                      placeholder="Тестовое значение..."
+                      :placeholder="t('types.testValue')"
                       @input="setRegexTestValue(property.id, ($event.target as HTMLInputElement).value)"
                     >
                     <span
@@ -1004,7 +1006,7 @@ onBeforeUnmount(() => {
                       <span class="material-symbols-outlined">
                         {{ regexTestResult(property) ? 'check_circle' : 'cancel' }}
                       </span>
-                      {{ regexTestResult(property) ? 'Совпадает' : 'Не совпадает' }}
+                      {{ regexTestResult(property) ? t("types.regexMatch") : t("types.regexNoMatch") }}
                     </span>
                   </div>
 
@@ -1013,14 +1015,14 @@ onBeforeUnmount(() => {
                       class="property-input property-input--sm"
                       type="number"
                       :value="property.min ?? ''"
-                      placeholder="min"
+                      :placeholder="t('types.minValuePlaceholder')"
                       @input="handleMinChange(property, ($event.target as HTMLInputElement).value)"
                     >
                     <input
                       class="property-input property-input--sm"
                       type="number"
                       :value="property.max ?? ''"
-                      placeholder="max"
+                      :placeholder="t('types.maxValuePlaceholder')"
                       @input="handleMaxChange(property, ($event.target as HTMLInputElement).value)"
                     >
                   </div>
@@ -1029,49 +1031,49 @@ onBeforeUnmount(() => {
                     <input
                       class="property-input property-input--sm"
                       :value="(property.enumValues || []).join(', ')"
-                      placeholder="val1, val2, val3"
+                      :placeholder="t('types.enumValuesPlaceholder')"
                       @change="updateEnumValues(property, ($event.target as HTMLInputElement).value)"
                     >
                   </div>
                   <div v-if="property.type === 'string' && property.required" class="property-row__extra">
-                    <span class="property-row__label">По умолчанию</span>
+                    <span class="property-row__label">{{ t("types.defaultValue") }}</span>
                     <input
                       class="property-input property-input--sm"
                       :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
-                      placeholder="Значение по умолчанию"
+                      :placeholder="t('types.defaultStringValue')"
                       @input="handleDefaultStringChange(property, ($event.target as HTMLInputElement).value)"
                     >
                   </div>
                   <div v-if="property.type === 'number' && property.required" class="property-row__extra">
-                    <span class="property-row__label">По умолчанию</span>
+                    <span class="property-row__label">{{ t("types.defaultValue") }}</span>
                     <input
                       class="property-input property-input--sm"
                       type="number"
                       :value="typeof property.defaultValue === 'number' ? property.defaultValue : ''"
-                      placeholder="Число по умолчанию"
+                      :placeholder="t('types.defaultNumberValue')"
                       @input="handleDefaultNumberChange(property, ($event.target as HTMLInputElement).value)"
                     >
                   </div>
                   <div v-if="property.type === 'boolean' && property.required" class="property-row__extra">
-                    <span class="property-row__label">По умолчанию</span>
+                    <span class="property-row__label">{{ t("types.defaultValue") }}</span>
                     <select
                       class="property-select"
                       :value="typeof property.defaultValue === 'boolean' ? String(property.defaultValue) : ''"
                       @change="handleDefaultBooleanChange(property, ($event.target as HTMLSelectElement).value)"
                     >
-                      <option value="">— нет —</option>
+                      <option value="">{{ t("common.none") }}</option>
                       <option value="true">true</option>
                       <option value="false">false</option>
                     </select>
                   </div>
                   <div v-if="property.type === 'enum' && property.required && (property.enumValues || []).length > 0" class="property-row__extra">
-                    <span class="property-row__label">По умолчанию</span>
+                    <span class="property-row__label">{{ t("types.defaultValue") }}</span>
                     <select
                       class="property-select"
                       :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
                       @change="handleEnumDefaultChange(property, ($event.target as HTMLSelectElement).value)"
                     >
-                      <option value="">— нет —</option>
+                      <option value="">{{ t("common.none") }}</option>
                       <option v-for="val in property.enumValues" :key="val" :value="val">{{ val }}</option>
                     </select>
                   </div>
@@ -1092,19 +1094,19 @@ onBeforeUnmount(() => {
 
   <BaseModal
     v-if="showCreateNodeTypeDialog"
-    title="Создание типа узла"
+    :title="t('types.createNodeTypeTitle')"
     max-width="420px"
     @close="closeCreateNodeTypeDialog"
   >
     <div class="properties-panel__relation-type-dialog">
       <label class="properties-panel__relation-type-label" for="new-node-type-name">
-        Название типа узла
+        {{ t("types.nodeTypeName") }}
       </label>
       <input
         id="new-node-type-name"
         class="property-input"
         :value="newNodeTypeName"
-        placeholder="Например, Service"
+        :placeholder="t('types.nodeTypeNamePlaceholder')"
         @input="newNodeTypeName = ($event.target as HTMLInputElement).value"
         @keydown.enter.prevent="submitCreateNodeType"
       >
@@ -1114,29 +1116,29 @@ onBeforeUnmount(() => {
     </div>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="closeCreateNodeTypeDialog">
-        Отмена
+        {{ t("common.cancel") }}
       </button>
       <button type="button" class="btn btn--primary" @click="submitCreateNodeType">
-        Создать
+        {{ t("common.create") }}
       </button>
     </template>
   </BaseModal>
 
   <BaseModal
     v-if="showCreateRelationTypeDialog"
-    title="Создание типа связи"
+    :title="t('types.createLinkTypeTitle')"
     max-width="420px"
     @close="closeCreateRelationTypeDialog"
   >
     <div class="properties-panel__relation-type-dialog">
       <label class="properties-panel__relation-type-label" for="new-relation-type-name">
-        Название связи
+        {{ t("types.linkTypeName") }}
       </label>
       <input
         id="new-relation-type-name"
         class="property-input"
         :value="newRelationTypeName"
-        placeholder="Например, depends_on"
+        :placeholder="t('types.linkTypeNamePlaceholder')"
         @input="newRelationTypeName = ($event.target as HTMLInputElement).value"
         @keydown.enter.prevent="submitCreateRelationType"
       >
@@ -1146,10 +1148,10 @@ onBeforeUnmount(() => {
     </div>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="closeCreateRelationTypeDialog">
-        Отмена
+        {{ t("common.cancel") }}
       </button>
       <button type="button" class="btn btn--primary" @click="submitCreateRelationType">
-        Создать
+        {{ t("common.create") }}
       </button>
     </template>
   </BaseModal>

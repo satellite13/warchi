@@ -1,32 +1,34 @@
 <script setup lang="ts">
 import {RouterLink} from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
 
 const { isAdmin } = useAuth();
+const { t } = useI18n();
 </script>
 
 <template>
   <nav class="app-nav">
     <RouterLink to="/" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Главная">home</span>Главная
+      <span class="material-symbols-outlined" :title="t('nav.home')">home</span>{{ t("nav.home") }}
     </RouterLink>
     <RouterLink to="/models" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Модели">schema</span>Модели
+      <span class="material-symbols-outlined" :title="t('nav.models')">schema</span>{{ t("nav.models") }}
     </RouterLink>
     <RouterLink to="/notations" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Нотации">graph_3</span>Нотации
+      <span class="material-symbols-outlined" :title="t('nav.notations')">graph_3</span>{{ t("nav.notations") }}
     </RouterLink>
     <RouterLink to="/types" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Типы">category</span>Типы
+      <span class="material-symbols-outlined" :title="t('nav.types')">category</span>{{ t("nav.types") }}
     </RouterLink>
     <RouterLink to="/docs" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Документация">menu_book</span>Документация
+      <span class="material-symbols-outlined" :title="t('nav.docs')">menu_book</span>{{ t("nav.docs") }}
     </RouterLink>
     <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Профиль">account_circle</span>Профиль
+      <span class="material-symbols-outlined" :title="t('nav.profile')">account_circle</span>{{ t("nav.profile") }}
     </RouterLink>
     <RouterLink v-if="isAdmin" to="/admin/users" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" title="Администрирование">admin_panel_settings</span>Администрирование
+      <span class="material-symbols-outlined" :title="t('nav.admin')">admin_panel_settings</span>{{ t("nav.admin") }}
     </RouterLink>
   </nav>
 </template>

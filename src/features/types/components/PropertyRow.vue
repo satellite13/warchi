@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /* eslint-disable vue/no-mutating-props -- editing mutable draft passed from type editor */
 import { reactive } from "vue"
+import { useI18n } from "vue-i18n"
 import type { CustomProperty, CustomPropertyType } from "../../notations/notationAttrs"
 
 const props = defineProps<{
@@ -13,11 +14,12 @@ const emit = defineEmits<{
   remove: []
 }>()
 
+const { t } = useI18n()
 const typeOptions: { value: CustomPropertyType; label: string }[] = [
-  { value: "string", label: "Строка" },
-  { value: "number", label: "Число" },
-  { value: "boolean", label: "Булев" },
-  { value: "enum", label: "Перечисление" }
+  { value: "string", label: t("types.propertyTypeString") },
+  { value: "number", label: t("types.propertyTypeNumber") },
+  { value: "boolean", label: t("types.propertyTypeBoolean") },
+  { value: "enum", label: t("types.propertyTypeEnum") }
 ]
 
 const typeLabel = (type: CustomPropertyType) =>
@@ -99,13 +101,13 @@ const regexTestResult = (): null | boolean => {
         class="material-symbols-outlined property-row__chevron"
         :class="{ 'property-row__chevron--collapsed': !expanded }"
       >expand_more</span>
-      <span class="property-row__name">{{ property.name || 'Без имени' }}</span>
+      <span class="property-row__name">{{ property.name || t("common.unnamed") }}</span>
       <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
-      <span v-if="property.required" class="property-row__required-badge">Обяз.</span>
+      <span v-if="property.required" class="property-row__required-badge">{{ t("types.requiredShort") }}</span>
       <button
         type="button"
         class="property-remove-btn"
-        title="Удалить свойство"
+        :title="t('types.removeProperty')"
         @click.stop="emit('remove')"
       >
         <span class="material-symbols-outlined">close</span>
@@ -118,7 +120,7 @@ const regexTestResult = (): null | boolean => {
           <input
             class="form-input"
             v-model="property.name"
-            placeholder="Имя свойства"
+            :placeholder="t('types.propertyNamePlaceholder')"
           >
           <select
             class="form-select"
@@ -131,17 +133,17 @@ const regexTestResult = (): null | boolean => {
           </select>
           <label class="property-checkbox">
             <input type="checkbox" v-model="property.required">
-            <span class="property-checkbox__label">Обяз.</span>
+            <span class="property-checkbox__label">{{ t("types.requiredShort") }}</span>
           </label>
         </div>
 
         <div v-if="property.type === 'string'" class="property-row__extra">
-          <input class="form-input" v-model="property.regex" placeholder="Regex (необязательно)">
+          <input class="form-input" v-model="property.regex" :placeholder="t('types.regexOptional')">
           <input
             class="form-input form-input--num"
             type="number"
             :value="property.maxLength ?? ''"
-            placeholder="Макс. длина"
+            :placeholder="t('types.maxLength')"
             min="0"
             @input="property.maxLength = parseNumberInput(($event.target as HTMLInputElement).value)"
           >
@@ -150,7 +152,7 @@ const regexTestResult = (): null | boolean => {
           <input
             class="form-input"
             :value="getRegexTestValue()"
-            placeholder="Тестовое значение..."
+            :placeholder="t('types.testValue')"
             @input="setRegexTestValue(($event.target as HTMLInputElement).value)"
           >
           <span
@@ -161,7 +163,7 @@ const regexTestResult = (): null | boolean => {
             <span class="material-symbols-outlined">
               {{ regexTestResult() ? 'check_circle' : 'cancel' }}
             </span>
-            {{ regexTestResult() ? 'Совпадает' : 'Не совпадает' }}
+            {{ regexTestResult() ? t("types.regexMatch") : t("types.regexNoMatch") }}
           </span>
         </div>
 
@@ -170,14 +172,14 @@ const regexTestResult = (): null | boolean => {
             class="form-input form-input--num"
             type="number"
             :value="property.min ?? ''"
-            placeholder="min"
+            :placeholder="t('types.minValuePlaceholder')"
             @input="property.min = parseNumberInput(($event.target as HTMLInputElement).value)"
           >
           <input
             class="form-input form-input--num"
             type="number"
             :value="property.max ?? ''"
-            placeholder="max"
+            :placeholder="t('types.maxValuePlaceholder')"
             @input="property.max = parseNumberInput(($event.target as HTMLInputElement).value)"
           >
         </div>
@@ -186,55 +188,55 @@ const regexTestResult = (): null | boolean => {
           <input
             class="form-input"
             :value="(property.enumValues || []).join(', ')"
-            placeholder="val1, val2, val3"
+            :placeholder="t('types.enumValuesPlaceholder')"
             @change="updateEnumValues(($event.target as HTMLInputElement).value)"
           >
         </div>
 
         <div v-if="property.type === 'string' && property.required" class="property-row__extra">
-          <span class="property-row__label">По умолчанию</span>
+          <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <input
             class="form-input"
             :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
-            placeholder="Значение по умолчанию"
+            :placeholder="t('types.defaultStringValue')"
             @input="handleDefaultStringChange(($event.target as HTMLInputElement).value)"
           >
         </div>
         <div v-if="property.type === 'number' && property.required" class="property-row__extra">
-          <span class="property-row__label">По умолчанию</span>
+          <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <input
             class="form-input form-input--num"
             type="number"
             :value="typeof property.defaultValue === 'number' ? property.defaultValue : ''"
-            placeholder="Число по умолчанию"
+            :placeholder="t('types.defaultNumberValue')"
             @input="handleDefaultNumberChange(($event.target as HTMLInputElement).value)"
           >
         </div>
         <div v-if="property.type === 'boolean' && property.required" class="property-row__extra">
-          <span class="property-row__label">По умолчанию</span>
+          <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <select
             class="form-select"
             :value="typeof property.defaultValue === 'boolean' ? String(property.defaultValue) : ''"
             @change="handleDefaultBooleanChange(($event.target as HTMLSelectElement).value)"
           >
-            <option value="">— нет —</option>
+            <option value="">{{ t("common.none") }}</option>
             <option value="true">true</option>
             <option value="false">false</option>
           </select>
         </div>
         <div v-if="property.type === 'enum' && property.required && (property.enumValues || []).length > 0" class="property-row__extra">
-          <span class="property-row__label">По умолчанию</span>
+          <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <select
             class="form-select"
             :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
             @change="handleEnumDefaultChange(($event.target as HTMLSelectElement).value)"
           >
-            <option value="">— нет —</option>
+            <option value="">{{ t("common.none") }}</option>
             <option v-for="val in property.enumValues" :key="val" :value="val">{{ val }}</option>
           </select>
         </div>
         <div v-if="isRequiredDefaultMissing()" class="property-row__warning">
-          Для обязательного поля задайте значение по умолчанию.
+          {{ t("types.requiredNeedsDefault") }}
         </div>
       </div>
     </template>

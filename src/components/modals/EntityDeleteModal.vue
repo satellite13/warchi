@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   title: string;
   entityLabel: string;
   entityName?: string | null;
@@ -13,37 +15,43 @@ withDefaults(defineProps<{
 }>(), {
   entityName: null,
   error: null,
-  confirmLabel: "Удалить",
-  confirmingLabel: "Удаление...",
-  cancelLabel: "Отмена"
+  confirmLabel: undefined,
+  confirmingLabel: undefined,
+  cancelLabel: undefined
 });
 
 const emit = defineEmits<{
   close: [];
   confirm: [];
 }>();
+
+const { t } = useI18n();
+
+const resolvedConfirmLabel = computed(() => props.confirmLabel ?? t("common.delete"));
+const resolvedConfirmingLabel = computed(() => props.confirmingLabel ?? t("common.deleting"));
+const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel"));
 </script>
 
 <template>
-  <BaseModal :title="title" @close="emit('close')">
+  <BaseModal :title="props.title" @close="emit('close')">
     <div class="delete-modal">
       <p>
-        Вы уверены, что хотите удалить {{ entityLabel }}
-        <strong>{{ entityName }}</strong>?
+        {{ t("common.confirmDelete", { entity: props.entityLabel }) }}
+        <strong>{{ props.entityName }}</strong>?
       </p>
       <p class="delete-warning">
-        Это действие нельзя отменить.
+        {{ t("common.deleteIrreversible") }}
       </p>
-      <div v-if="error" class="form-error">
-        {{ error }}
+      <div v-if="props.error" class="form-error">
+        {{ props.error }}
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" :disabled="isDeleting" @click="emit('close')">
-        {{ cancelLabel }}
+      <button type="button" class="btn btn--secondary" :disabled="props.isDeleting" @click="emit('close')">
+        {{ resolvedCancelLabel }}
       </button>
-      <button type="button" class="btn btn--danger" :disabled="isDeleting" @click="emit('confirm')">
-        {{ isDeleting ? confirmingLabel : confirmLabel }}
+      <button type="button" class="btn btn--danger" :disabled="props.isDeleting" @click="emit('confirm')">
+        {{ props.isDeleting ? resolvedConfirmingLabel : resolvedConfirmLabel }}
       </button>
     </template>
   </BaseModal>

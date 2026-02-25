@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import AppFooter from "../components/layout/AppFooter.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import { apiGet } from "../composables/useApi";
@@ -7,6 +8,7 @@ import { useAuth } from "../composables/useAuth";
 import type { User } from "../types/entities";
 
 const { currentUser, updateMyProfile } = useAuth();
+const { t } = useI18n();
 
 const firstName = ref("");
 const lastName = ref("");
@@ -42,11 +44,11 @@ const loadProfile = async (): Promise<void> => {
 
 const saveProfile = async (): Promise<void> => {
   if (!firstName.value.trim()) {
-    errorMessage.value = "Введите имя";
+    errorMessage.value = t("auth.validationFirstNameRequired");
     return;
   }
   if (!lastName.value.trim()) {
-    errorMessage.value = "Введите фамилию";
+    errorMessage.value = t("auth.validationLastNameRequired");
     return;
   }
 
@@ -70,7 +72,7 @@ const saveProfile = async (): Promise<void> => {
   if (currentUser.value) {
     applyUser(currentUser.value);
   }
-  successMessage.value = "Профиль обновлён";
+  successMessage.value = t("profile.updated");
 };
 
 onMounted(() => {
@@ -88,24 +90,24 @@ onMounted(() => {
     </header>
     <main class="profile-page__body">
       <section class="card">
-        <h1>Мой профиль</h1>
-        <p>Обновите персональные данные пользователя.</p>
+        <h1>{{ t("profile.myProfile") }}</h1>
+        <p>{{ t("profile.subtitle") }}</p>
 
         <form class="form" @submit.prevent="saveProfile">
           <label class="field">
-            <span>Имя</span>
+            <span>{{ t("auth.labelFirstName") }}</span>
             <input v-model="firstName" type="text" :disabled="isLoading || isSaving">
           </label>
           <label class="field">
-            <span>Фамилия</span>
+            <span>{{ t("auth.labelLastName") }}</span>
             <input v-model="lastName" type="text" :disabled="isLoading || isSaving">
           </label>
           <label class="field">
-            <span>Отчество</span>
+            <span>{{ t("profile.middleName") }}</span>
             <input v-model="middleName" type="text" :disabled="isLoading || isSaving">
           </label>
           <label class="field">
-            <span>Должность</span>
+            <span>{{ t("profile.position") }}</span>
             <input v-model="position" type="text" :disabled="isLoading || isSaving">
           </label>
 
@@ -113,7 +115,7 @@ onMounted(() => {
           <div v-if="successMessage" class="msg msg--success">{{ successMessage }}</div>
 
           <button type="submit" class="btn" :disabled="isSaving || isLoading">
-            {{ isSaving ? "Сохранение..." : "Сохранить" }}
+            {{ isSaving ? t("common.saving") : t("common.save") }}
           </button>
         </form>
       </section>

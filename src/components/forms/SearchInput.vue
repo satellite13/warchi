@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+
 const model = defineModel<string>({ default: "" });
+const { t } = useI18n();
 
 defineProps<{
   placeholder?: string;
@@ -13,7 +16,7 @@ const clear = () => {
 <template>
   <div class="search-box">
     <span class="material-symbols-outlined search-icon">search</span>
-    <input v-model="model" type="text" class="search-input" :placeholder="placeholder || 'Поиск...'">
+    <input v-model="model" type="text" class="search-input" :placeholder="placeholder || t('common.search')">
     <button v-if="model" type="button" class="clear-button" @click="clear">
       <span class="material-symbols-outlined">cancel</span>
     </button>

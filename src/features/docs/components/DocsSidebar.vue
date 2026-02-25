@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router"
+import { useI18n } from "vue-i18n"
 import { sections } from "../composables/useDocsNavigation"
 
 defineProps<{ currentSection: string }>()
+const { t } = useI18n()
+
+const sectionTitle = (id: string): string => t(`docs.sections.${id}`)
 </script>
 
 <template>
   <aside class="docs-sidebar">
-    <div class="docs-sidebar__title">Документация</div>
+    <div class="docs-sidebar__title">{{ t("docs.sidebarTitle") }}</div>
     <nav class="docs-sidebar__nav">
       <RouterLink
         v-for="section in sections"
@@ -17,7 +21,7 @@ defineProps<{ currentSection: string }>()
         :class="{ 'docs-sidebar__link--active': currentSection === section.id }"
       >
         <span class="material-symbols-outlined docs-sidebar__icon">{{ section.icon }}</span>
-        {{ section.title }}
+        {{ sectionTitle(section.id) }}
       </RouterLink>
     </nav>
   </aside>

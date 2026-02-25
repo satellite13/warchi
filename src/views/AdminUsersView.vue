@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import AppFooter from "../components/layout/AppFooter.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import { apiGet, apiPut } from "../composables/useApi";
@@ -24,6 +25,7 @@ type UserUpdatePayload = {
 };
 
 const users = ref<EditableUser[]>([]);
+const { t, locale } = useI18n();
 const isLoading = ref(false);
 const isSavingId = ref<string | null>(null);
 const errorMessage = ref<string | null>(null);
@@ -119,7 +121,7 @@ const fullName = (user: EditableUser): string => {
   const parts = [user.lastName, user.firstName, user.middleName]
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join(" ") : "Профиль не заполнен";
+  return parts.length > 0 ? parts.join(" ") : t("adminUsers.profileNotFilled");
 };
 
 const openProfileEdit = (user: EditableUser): void => {
@@ -162,11 +164,11 @@ const submitProfileChange = async (user: EditableUser): Promise<void> => {
   const position = draft.position.trim();
 
   if (!firstName) {
-    errorMessage.value = "Введите имя";
+    errorMessage.value = t("auth.validationFirstNameRequired");
     return;
   }
   if (!lastName) {
-    errorMessage.value = "Введите фамилию";
+    errorMessage.value = t("auth.validationLastNameRequired");
     return;
   }
 
@@ -178,7 +180,7 @@ const submitProfileChange = async (user: EditableUser): Promise<void> => {
   });
 
   if (isSavingId.value === null && !errorMessage.value) {
-    successMessage.value = `Профиль пользователя ${user.email} обновлён`;
+    successMessage.value = t("adminUsers.profileUpdated", { email: user.email });
     closeProfileEdit();
   }
 };
@@ -199,21 +201,21 @@ const closePasswordEdit = (): void => {
 const submitPasswordChange = async (user: EditableUser): Promise<void> => {
   const nextPassword = (passwordDraft.value[user.id] ?? "").trim();
   if (nextPassword.length < 6) {
-    errorMessage.value = "Новый пароль должен быть не короче 6 символов";
+    errorMessage.value = t("adminUsers.passwordMinLength");
     return;
   }
 
   await updateUser(user.id, { password: nextPassword });
   if (isSavingId.value === null && !errorMessage.value) {
-    successMessage.value = `Пароль пользователя ${user.email} обновлён`;
+    successMessage.value = t("adminUsers.passwordUpdated", { email: user.email });
     closePasswordEdit();
   }
 };
 
 const formatDate = (raw?: string | null): string => {
-  if (!raw) return "—";
+  if (!raw) return t("common.loadingDash");
   try {
-    return new Date(raw).toLocaleDateString("ru-RU", {
+    return new Date(raw).toLocaleDateString(locale.value === "en" ? "en-US" : "ru-RU", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -243,8 +245,8 @@ onMounted(() => {
       <!-- Title bar -->
       <div class="title-bar">
         <div>
-          <h1 class="title-bar__heading">Пользователи</h1>
-          <p class="title-bar__sub">Управление ролями и доступом</p>
+          <h1 class="title-bar__heading">{{ t("adminUsers.title") }}</h1>
+          <p class="title-bar__sub">{{ t("adminUsers.subtitle") }}</p>
         </div>
 
         <form class="search" @submit.prevent="loadUsers">
@@ -257,7 +259,7 @@ onMounted(() => {
               v-model="searchEmail"
               class="search__input"
               type="text"
-              placeholder="Поиск по email..."
+              :placeholder="t('adminUsers.searchByEmail')"
               :disabled="isLoading"
             >
             <button
@@ -271,7 +273,7 @@ onMounted(() => {
               </svg>
             </button>
           </div>
-          <button type="submit" class="btn btn--primary btn--sm" :disabled="isLoading">Найти</button>
+          <button type="submit" class="btn btn--primary btn--sm" :disabled="isLoading">{{ t("common.find") }}</button>
         </form>
       </div>
 
@@ -279,19 +281,19 @@ onMounted(() => {
       <div class="stats-row">
         <div class="stat">
           <span class="stat__value">{{ stats.total }}</span>
-          <span class="stat__label">Всего</span>
+          <span class="stat__label">{{ t("adminUsers.total") }}</span>
         </div>
         <div class="stat stat--accent">
           <span class="stat__value">{{ stats.active }}</span>
-          <span class="stat__label">Активных</span>
+          <span class="stat__label">{{ t("adminUsers.active") }}</span>
         </div>
         <div class="stat stat--warn">
           <span class="stat__value">{{ stats.inactive }}</span>
-          <span class="stat__label">Неактивных</span>
+          <span class="stat__label">{{ t("adminUsers.inactive") }}</span>
         </div>
         <div class="stat stat--purple">
           <span class="stat__value">{{ stats.admins }}</span>
-          <span class="stat__label">Админов</span>
+          <span class="stat__label">{{ t("adminUsers.admins") }}</span>
         </div>
       </div>
 
@@ -320,7 +322,7 @@ onMounted(() => {
         <!-- Loading -->
         <div v-if="isLoading" class="empty-state">
           <div class="spinner"></div>
-          <span>Загрузка пользователей...</span>
+          <span>{{ t("adminUsers.loadingUsers") }}</span>
         </div>
 
         <!-- Empty -->
@@ -330,19 +332,19 @@ onMounted(() => {
             <circle cx="24" cy="20" r="6" stroke="currentColor" stroke-width="1.5" />
             <path d="M12 40c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="currentColor" stroke-width="1.5" />
           </svg>
-          <span>Пользователи не найдены</span>
+          <span>{{ t("adminUsers.usersNotFound") }}</span>
         </div>
 
         <!-- Table -->
         <table v-else class="table">
           <thead>
             <tr>
-              <th>Пользователь</th>
-              <th>Роль</th>
-              <th>Статус</th>
-              <th>Обновлён</th>
-              <th>Профиль</th>
-              <th>Пароль</th>
+              <th>{{ t("adminUsers.user") }}</th>
+              <th>{{ t("adminUsers.role") }}</th>
+              <th>{{ t("adminUsers.status") }}</th>
+              <th>{{ t("adminUsers.updated") }}</th>
+              <th>{{ t("adminUsers.profile") }}</th>
+              <th>{{ t("adminUsers.password") }}</th>
             </tr>
           </thead>
           <TransitionGroup tag="tbody" name="row">
@@ -389,7 +391,7 @@ onMounted(() => {
                   <span class="toggle__track">
                     <span class="toggle__thumb"></span>
                   </span>
-                  <span class="toggle__label">{{ user.isActive ? "Активен" : "Заблокирован" }}</span>
+                  <span class="toggle__label">{{ user.isActive ? t("adminUsers.statusActive") : t("adminUsers.statusBlocked") }}</span>
                 </button>
               </td>
               <td class="date-cell">{{ formatDate(user.updatedAt) }}</td>
@@ -398,7 +400,7 @@ onMounted(() => {
                   <template v-if="profileEditId !== user.id">
                     <div class="profile-meta">
                       <span class="profile-meta__name">{{ fullName(user) }}</span>
-                      <span class="profile-meta__position">{{ user.position || "—" }}</span>
+                      <span class="profile-meta__position">{{ user.position || t("common.loadingDash") }}</span>
                     </div>
                     <button
                       type="button"
@@ -406,7 +408,7 @@ onMounted(() => {
                       :disabled="isSavingId === user.id"
                       @click="openProfileEdit(user)"
                     >
-                      Изменить
+                      {{ t("common.edit") }}
                     </button>
                   </template>
 
@@ -419,36 +421,36 @@ onMounted(() => {
                       v-model="getProfileDraft(user.id).lastName"
                       class="profile-input"
                       type="text"
-                      placeholder="Фамилия"
+                      :placeholder="t('auth.labelLastName')"
                       :disabled="isSavingId === user.id"
                     >
                     <input
                       v-model="getProfileDraft(user.id).firstName"
                       class="profile-input"
                       type="text"
-                      placeholder="Имя"
+                      :placeholder="t('auth.labelFirstName')"
                       :disabled="isSavingId === user.id"
                     >
                     <input
                       v-model="getProfileDraft(user.id).middleName"
                       class="profile-input"
                       type="text"
-                      placeholder="Отчество"
+                      :placeholder="t('profile.middleName')"
                       :disabled="isSavingId === user.id"
                     >
                     <input
                       v-model="getProfileDraft(user.id).position"
                       class="profile-input"
                       type="text"
-                      placeholder="Должность"
+                      :placeholder="t('profile.position')"
                       :disabled="isSavingId === user.id"
                     >
                     <div class="profile-form__actions">
                       <button type="submit" class="btn btn--primary btn--xs" :disabled="isSavingId === user.id">
-                        Сохранить
+                        {{ t("common.save") }}
                       </button>
                       <button type="button" class="btn btn--ghost btn--xs" :disabled="isSavingId === user.id" @click="closeProfileEdit">
-                        Отмена
+                        {{ t("common.cancel") }}
                       </button>
                     </div>
                   </form>
@@ -463,7 +465,7 @@ onMounted(() => {
                     :disabled="isSavingId === user.id"
                     @click="openPasswordEdit(user.id)"
                   >
-                    Сменить пароль
+                    {{ t("adminUsers.changePassword") }}
                   </button>
 
                   <form
@@ -475,7 +477,7 @@ onMounted(() => {
                       v-model="passwordDraft[user.id]"
                       class="password-input"
                       type="password"
-                      placeholder="Новый пароль"
+                      :placeholder="t('adminUsers.newPassword')"
                       minlength="6"
                       :disabled="isSavingId === user.id"
                     >
@@ -485,7 +487,7 @@ onMounted(() => {
                         class="btn btn--primary btn--xs"
                         :disabled="isSavingId === user.id"
                       >
-                        Сохранить
+                        {{ t("common.save") }}
                       </button>
                       <button
                         type="button"
@@ -493,7 +495,7 @@ onMounted(() => {
                         :disabled="isSavingId === user.id"
                         @click="closePasswordEdit"
                       >
-                        Отмена
+                        {{ t("common.cancel") }}
                       </button>
                     </div>
                   </form>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
 import { apiGet } from "../../composables/useApi";
 import { useAccessShares } from "../../composables/useAccessShares";
@@ -11,6 +12,7 @@ const props = defineProps<{
   resourceType: ShareResourceType;
   resourceId: string;
 }>();
+const { t } = useI18n();
 
 const emit = defineEmits<{
   close: [];
@@ -49,7 +51,7 @@ const searchUsers = async (): Promise<void> => {
   searchResults.value = [];
 
   if (!email) {
-    searchError.value = "Введите email пользователя для поиска.";
+    searchError.value = t("share.enterEmailForSearch");
     return;
   }
 
@@ -118,10 +120,10 @@ onMounted(load);
   <BaseModal :title="title" max-width="640px" @close="emit('close')">
     <div class="share-modal">
       <div class="share-modal__block">
-        <h4 class="share-modal__subtitle">Выдать доступ</h4>
+        <h4 class="share-modal__subtitle">{{ t("share.grantAccess") }}</h4>
         <div class="share-modal__grid">
           <label class="share-modal__field">
-            <span>Email пользователя</span>
+            <span>{{ t("share.userEmail") }}</span>
             <div class="share-modal__inline">
               <input
                 v-model="userSearchEmail"
@@ -136,12 +138,12 @@ onMounted(load);
                 :disabled="isSubmitting || userSearchEmail.trim().length === 0"
                 @click="searchUsers"
               >
-                Найти
+                {{ t("common.find") }}
               </button>
             </div>
           </label>
           <label class="share-modal__field">
-            <span>Уровень доступа</span>
+            <span>{{ t("share.accessLevel") }}</span>
             <div class="share-modal__permission-group">
               <label class="share-modal__permission-option">
                 <input
@@ -150,7 +152,7 @@ onMounted(load);
                   value="VIEW"
                   :disabled="isSubmitting"
                 >
-                <span>Только просмотр</span>
+                <span>{{ t("share.viewOnly") }}</span>
               </label>
               <label class="share-modal__permission-option">
                 <input
@@ -159,18 +161,18 @@ onMounted(load);
                   value="EDIT"
                   :disabled="isSubmitting"
                 >
-                <span>Редактирование</span>
+                <span>{{ t("share.edit") }}</span>
               </label>
             </div>
           </label>
         </div>
 
         <div v-if="selectedUser" class="share-modal__found">
-          Найден пользователь: <strong>{{ selectedUser.email }}</strong>
+          {{ t("share.userFound") }}: <strong>{{ selectedUser.email }}</strong>
         </div>
         <div v-if="searchError" class="share-modal__error">{{ searchError }}</div>
         <div v-else-if="searchPerformed && searchResults.length === 0" class="share-modal__empty">
-          Пользователи не найдены
+          {{ t("share.usersNotFound") }}
         </div>
         <div v-else-if="searchResults.length > 0" class="share-modal__results">
           <button
@@ -191,15 +193,15 @@ onMounted(load);
       </div>
 
       <div class="share-modal__block">
-        <h4 class="share-modal__subtitle">Текущие доступы</h4>
-        <div v-if="isLoading" class="share-modal__empty">Загрузка...</div>
-        <div v-else-if="shares.length === 0" class="share-modal__empty">Доступы еще не выданы</div>
+        <h4 class="share-modal__subtitle">{{ t("share.currentAccess") }}</h4>
+        <div v-if="isLoading" class="share-modal__empty">{{ t("common.loading") }}</div>
+        <div v-else-if="shares.length === 0" class="share-modal__empty">{{ t("share.noAccessGranted") }}</div>
         <ul v-else class="share-modal__list">
           <li v-for="share in shares" :key="share.id" class="share-modal__list-item">
             <div class="share-modal__meta">
               <strong>{{ share.granteeDisplayName }}</strong>
-              <small>Уровень: {{ share.permissionLabel }}</small>
-              <small>Выдал: {{ share.grantedByDisplayName }}</small>
+              <small>{{ t("share.levelLabel") }}: {{ share.permissionLabel }}</small>
+              <small>{{ t("share.grantedByLabel") }}: {{ share.grantedByDisplayName }}</small>
             </div>
             <button
               type="button"
@@ -207,16 +209,16 @@ onMounted(load);
               :disabled="isSubmitting"
               @click="revoke(share.id)"
             >
-              Отозвать
+              {{ t("share.revoke") }}
             </button>
           </li>
         </ul>
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="emit('close')">Закрыть</button>
+      <button type="button" class="btn btn--secondary" @click="emit('close')">{{ t("common.close") }}</button>
       <button type="button" class="btn btn--primary" :disabled="!canSubmit" @click="submitShare">
-        Выдать доступ
+        {{ t("share.grantAccess") }}
       </button>
     </template>
   </BaseModal>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
 import { useRouter } from "vue-router"
+import { useI18n } from "vue-i18n"
 import AppLogo from "../../../components/layout/AppLogo.vue"
 import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
 
@@ -55,6 +56,7 @@ const props = withDefaults(defineProps<{
 })
 
 const router = useRouter()
+const { t } = useI18n()
 const emit = defineEmits<{
   action: [event: string]
   renameModel: [name: string]
@@ -95,54 +97,54 @@ const commitModelRename = () => {
 }
 
 const saveTitle = computed(() =>
-  props.hasUnsavedChanges ? "Сохранить изменения" : "Изменений нет"
+  props.hasUnsavedChanges ? t("toolbar.saveChanges") : t("toolbar.noChanges")
 )
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
-  { icon: "undo", event: "undo", title: "Отменить", disabled: !props.canUndo || !props.hasActiveDiagram },
-  { icon: "redo", event: "redo", title: "Повторить", disabled: !props.canRedo || !props.hasActiveDiagram },
+  { icon: "undo", event: "undo", title: t("toolbar.undo"), disabled: !props.canUndo || !props.hasActiveDiagram },
+  { icon: "redo", event: "redo", title: t("toolbar.redo"), disabled: !props.canRedo || !props.hasActiveDiagram },
   { icon: "separator", event: "sep0", separator: true },
-  { icon: "zoom_in", event: "zoom-in", title: "Приблизить", disabled: !props.hasActiveDiagram },
-  { icon: "zoom_out", event: "zoom-out", title: "Отдалить", disabled: !props.hasActiveDiagram },
-  { icon: "fit_screen", event: "fit-screen", title: "Вписать в экран", disabled: !props.hasActiveDiagram },
+  { icon: "zoom_in", event: "zoom-in", title: t("toolbar.zoomIn"), disabled: !props.hasActiveDiagram },
+  { icon: "zoom_out", event: "zoom-out", title: t("toolbar.zoomOut"), disabled: !props.hasActiveDiagram },
+  { icon: "fit_screen", event: "fit-screen", title: t("toolbar.fitScreen"), disabled: !props.hasActiveDiagram },
   {
     icon: "center_focus_strong",
     event: "zoom-selection",
-    title: "Масштабировать выделение",
+    title: t("toolbar.zoomSelection"),
     disabled: !props.hasActiveDiagram
   },
   {
     icon: "format_align_center",
     event: "auto-layout-nodes",
-    title: "Авторазмещение нод",
+    title: t("toolbar.autoLayoutNodes"),
     disabled: !props.hasActiveDiagram
   },
-  { icon: "restart_alt", event: "reset-view", title: "Сбросить масштаб", disabled: !props.hasActiveDiagram },
+  { icon: "restart_alt", event: "reset-view", title: t("toolbar.resetZoom"), disabled: !props.hasActiveDiagram },
   { icon: "separator", event: "sep2", separator: true },
   {
     icon: "image",
     event: "export-diagram-png",
-    title: "Экспорт диаграммы в PNG",
+    title: t("toolbar.exportDiagramPng"),
     disabled: !props.hasActiveDiagram
   },
   {
     icon: "description",
     event: "export-diagram-svg",
-    title: "Экспорт диаграммы в SVG",
+    title: t("toolbar.exportDiagramSvg"),
     disabled: !props.hasActiveDiagram
   },
   { icon: "separator", event: "sep3", separator: true },
   {
     icon: "close",
     event: "close-diagram",
-    title: "Закрыть диаграмму",
+    title: t("toolbar.closeDiagram"),
     disabled: !props.hasActiveDiagram
   },
   { icon: "separator", event: "sep4", separator: true },
   {
     icon: "data_object",
     event: "show-diagram-json",
-    title: "Просмотр JSON диаграммы",
+    title: t("toolbar.showDiagramJson"),
     disabled: !props.hasActiveDiagram
   },
   { icon: "separator", event: "sep5", separator: true },
@@ -163,7 +165,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   </div>
   <header v-else class="model-header" :class="{ 'model-header--no-toolbar': hideToolbar }">
     <div class="model-header__left">
-      <button type="button" class="back-btn" title="К списку моделей" @click="router.push({name: 'models'})">
+      <button type="button" class="back-btn" :title="t('toolbar.backToModels')" @click="router.push({name: 'models'})">
         <span class="material-symbols-outlined">arrow_back</span>
       </button>
       <AppLogo size="sm" />
@@ -182,15 +184,15 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
           v-else
           type="button"
           class="model-header__title-btn"
-          title="Переименовать модель"
+          :title="t('toolbar.renameModel')"
           @click="startModelRename"
         >
-          <span class="model-header__title">{{ modelName || "Редактор модели" }}</span>
+          <span class="model-header__title">{{ modelName || t("toolbar.modelEditor") }}</span>
           <span class="material-symbols-outlined model-header__title-edit-icon">edit</span>
         </button>
       </div>
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
-      <span v-if="hasUnsavedChanges" class="dirty-badge" title="Есть несохранённые изменения">
+      <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
         <span class="dirty-dot"></span>
         Не сохранено
       </span>
@@ -198,7 +200,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
         v-if="canShare"
         type="button"
         class="share-btn"
-        title="Поделиться доступом"
+        :title="t('toolbar.shareAccess')"
         @click="emit('share')"
       >
         <span class="material-symbols-outlined">share</span>
@@ -206,17 +208,17 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     </div>
     <div v-if="hideToolbar" class="model-header__info">
       <template v-if="diagramName">
-        <span class="model-header__info-label">Диаграмма:</span>
+        <span class="model-header__info-label">{{ t("toolbar.diagramLabel") }}:</span>
         <span class="model-header__info-value">{{ diagramName }}</span>
         <span v-if="diagramVersion" class="model-header__version">{{ diagramVersion }}</span>
       </template>
       <template v-if="notationName">
-        <span class="model-header__info-label">Нотация:</span>
+        <span class="model-header__info-label">{{ t("toolbar.notationLabel") }}:</span>
         <button
           v-if="canOpenNotation && notationId"
           type="button"
           class="model-header__info-link"
-          title="Открыть редактор нотации"
+          :title="t('toolbar.openNotationEditor')"
           @click="emit('openNotation', notationId)"
         >
           <span class="model-header__info-value">{{ notationName }}</span>

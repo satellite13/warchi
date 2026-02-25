@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { ComponentResponse, RelationResponse } from "../../../types/api"
 import type { EditorLink, EditorNode } from "../types"
 import { parseEntityAttrs, type CustomProperty } from "../../notations/notationAttrs"
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   setNodeScopedValue: [key: string, value: unknown]
   setLinkScopedValue: [key: string, value: unknown]
 }>()
+const { t } = useI18n()
 
 const selectedComponent = computed(() =>
   props.availableComponents.find((component) => component.id === props.nodeBindingComponentId) ?? null
@@ -65,8 +67,8 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
           <circle cx="24" cy="24" r="2" fill="currentColor" opacity="0.15"/>
         </svg>
       </div>
-      <span class="mp-empty__text">Выберите элемент</span>
-      <span class="mp-empty__hint">Нажмите на ноду или связь на диаграмме</span>
+      <span class="mp-empty__text">{{ t("diagram.selectElement") }}</span>
+      <span class="mp-empty__hint">{{ t("diagram.selectElementHint") }}</span>
     </div>
 
     <template v-else>
@@ -81,7 +83,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
           <rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
         </svg>
         <span class="mp-badge__label">
-          {{ currentMode === 'link' ? 'Связь' : (selectedNode?.name ?? 'Нода') }}
+          {{ currentMode === 'link' ? t("diagram.link") : (selectedNode?.name ?? t("diagram.node")) }}
         </span>
       </div>
 
@@ -91,14 +93,14 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
         <!-- NODE binding -->
         <template v-if="currentMode === 'node' && selectedNode">
           <section class="mp-section">
-            <span class="mp-section__title">Компонент нотации</span>
+            <span class="mp-section__title">{{ t("diagram.notationComponent") }}</span>
             <select
               class="mp-select"
               :disabled="!activeNotationId || availableComponents.length === 0"
               :value="nodeBindingComponentId || ''"
               @change="emit('bindNodeComponent', ($event.target as HTMLSelectElement).value)"
             >
-              <option value="" disabled>Выберите компонент...</option>
+              <option value="" disabled>{{ t("diagram.selectComponent") }}</option>
               <option v-for="component in availableComponents" :key="component.id" :value="component.id">
                 {{ component.name }}
               </option>
@@ -106,7 +108,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
           </section>
 
           <section v-if="nodeProperties.length > 0" class="mp-section">
-            <span class="mp-section__title">Свойства</span>
+            <span class="mp-section__title">{{ t("types.properties") }}</span>
             <div class="mp-fields">
               <div v-for="property in nodeProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
@@ -121,7 +123,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   >
                     <span class="mp-toggle__thumb"></span>
                   </button>
-                  <span class="mp-toggle__label">{{ Boolean(nodeScopedValues[property.name]) ? 'Да' : 'Нет' }}</span>
+                  <span class="mp-toggle__label">{{ Boolean(nodeScopedValues[property.name]) ? t("common.yes") : t("common.no") }}</span>
                 </div>
                 <select
                   v-else-if="property.type === 'enum'"
@@ -129,7 +131,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   :value="String(nodeScopedValues[property.name] ?? property.enumDefault ?? property.defaultValue ?? '')"
                   @change="emit('setNodeScopedValue', property.name, ($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="">Выберите значение...</option>
+                  <option value="">{{ t("diagram.selectValue") }}</option>
                   <option
                     v-for="enumValue in (property.enumValues ?? [])"
                     :key="`${property.id}-${enumValue}`"
@@ -151,21 +153,21 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
           </section>
 
           <div v-else-if="nodeBindingComponentId" class="mp-hint">
-            Нет настраиваемых свойств
+            {{ t("diagram.noConfigurableProperties") }}
           </div>
         </template>
 
         <!-- LINK binding -->
         <template v-if="currentMode === 'link' && selectedLink">
           <section class="mp-section">
-            <span class="mp-section__title">Relation нотации</span>
+            <span class="mp-section__title">{{ t("diagram.notationRelation") }}</span>
             <select
               class="mp-select"
               :disabled="!activeNotationId || availableRelations.length === 0"
               :value="linkBindingRelationId || ''"
               @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
             >
-              <option value="" disabled>Выберите relation...</option>
+              <option value="" disabled>{{ t("diagram.selectRelation") }}</option>
               <option v-for="relation in availableRelations" :key="relation.id" :value="relation.id">
                 {{ relation.name }}
               </option>
@@ -173,7 +175,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
           </section>
 
           <section v-if="linkProperties.length > 0" class="mp-section">
-            <span class="mp-section__title">Свойства</span>
+            <span class="mp-section__title">{{ t("types.properties") }}</span>
             <div class="mp-fields">
               <div v-for="property in linkProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
@@ -188,7 +190,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   >
                     <span class="mp-toggle__thumb"></span>
                   </button>
-                  <span class="mp-toggle__label">{{ Boolean(linkScopedValues[property.name]) ? 'Да' : 'Нет' }}</span>
+                  <span class="mp-toggle__label">{{ Boolean(linkScopedValues[property.name]) ? t("common.yes") : t("common.no") }}</span>
                 </div>
                 <select
                   v-else-if="property.type === 'enum'"
@@ -196,7 +198,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   :value="String(linkScopedValues[property.name] ?? property.enumDefault ?? property.defaultValue ?? '')"
                   @change="emit('setLinkScopedValue', property.name, ($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="">Выберите значение...</option>
+                  <option value="">{{ t("diagram.selectValue") }}</option>
                   <option
                     v-for="enumValue in (property.enumValues ?? [])"
                     :key="`${property.id}-${enumValue}`"
@@ -218,7 +220,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
           </section>
 
           <div v-else-if="linkBindingRelationId" class="mp-hint">
-            Нет настраиваемых свойств
+            {{ t("diagram.noConfigurableProperties") }}
           </div>
         </template>
       </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, computed, watch } from "vue"
+import { useI18n } from "vue-i18n"
 
 import { useTypeEditor } from "./composables/useTypeEditor"
 import { serializeTypeAttrs } from "../notations/notationAttrs"
@@ -30,6 +31,7 @@ const {
   isLoadingUsages,
   isDirty
 } = useTypeEditor()
+const { t } = useI18n()
 
 onMounted(() => {
   loadAll()
@@ -110,8 +112,8 @@ const shareResourceType = computed<ShareResourceType>(() =>
 const showShareModal = ref(false)
 const selectedTypeOwnerName = computed(() => {
   const type = selectedType.value
-  if (!type) return "Неизвестный пользователь"
-  return ownerDisplayNames.value.get(type.ownerId) ?? "Неизвестный пользователь"
+  if (!type) return t("common.unknownUser")
+  return ownerDisplayNames.value.get(type.ownerId) ?? t("common.unknownUser")
 })
 
 const toastError = ref<string | null>(null)
@@ -173,8 +175,8 @@ const attrsJson = computed(() => {
       <div v-if="!selectedType" class="type-editor__empty">
         <div class="empty-state">
           <span class="material-symbols-outlined empty-state__icon">edit_note</span>
-          <p class="empty-state__text">Выберите тип для редактирования</p>
-          <p class="empty-state__hint">или создайте новый, нажав + в боковой панели</p>
+          <p class="empty-state__text">{{ t("types.selectTypeToEdit") }}</p>
+          <p class="empty-state__hint">{{ t("types.orCreateNew") }}</p>
         </div>
       </div>
 
@@ -210,14 +212,14 @@ const attrsJson = computed(() => {
     <!-- Unsaved changes dialog -->
     <BaseModal
       v-if="showUnsavedDialog"
-      title="Несохранённые изменения"
+      :title="t('types.unsavedChangesTitle')"
       max-width="400px"
       @close="cancelSwitch"
     >
-      <p class="unsaved-dialog__text">У текущего типа есть несохранённые изменения. Отменить изменения и перейти?</p>
+      <p class="unsaved-dialog__text">{{ t("types.unsavedChangesText") }}</p>
       <template #footer>
-        <button type="button" class="btn btn--secondary" @click="cancelSwitch">Остаться</button>
-        <button type="button" class="btn btn--danger" @click="discardAndSwitch">Отменить и перейти</button>
+        <button type="button" class="btn btn--secondary" @click="cancelSwitch">{{ t("types.stay") }}</button>
+        <button type="button" class="btn btn--danger" @click="discardAndSwitch">{{ t("types.discardAndSwitch") }}</button>
       </template>
     </BaseModal>
 
@@ -232,7 +234,7 @@ const attrsJson = computed(() => {
 
     <ShareAccessModal
       v-if="showShareModal && selectedType"
-      title="Доступ к типу"
+      :title="t('types.accessTitle')"
       :resource-type="shareResourceType"
       :resource-id="selectedType.id"
       @close="showShareModal = false"

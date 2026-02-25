@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Papirus integration requires dynamic runtime node access */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from "vue-router"
+import { useI18n } from "vue-i18n"
 import { apiGet } from "../../composables/useApi"
 import MainLayout from "../../layouts/MainLayout.vue"
 import AppFooter from "../../components/layout/AppFooter.vue"
@@ -41,6 +42,7 @@ const {
   renameModel
 } = useModelEditor()
 const { currentUser } = useAuth()
+const { t } = useI18n()
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
@@ -135,42 +137,42 @@ const canvasToggleButtons = computed<ToolbarButton[]>(() => [
   {
     icon: "grid_on",
     event: "toggle-grid",
-    title: "Сетка",
+    title: t("toolbar.grid"),
     active: gridVisible.value,
     disabled: !activeDiagram.value
   },
   {
     icon: "map",
     event: "toggle-minimap",
-    title: "Миникарта",
+    title: t("toolbar.minimap"),
     active: miniMapVisible.value,
     disabled: !activeDiagram.value
   },
   {
     icon: "my_location",
     event: "toggle-snap",
-    title: "Привязка к сетке",
+    title: t("toolbar.snapToGrid"),
     active: snapEnabled.value,
     disabled: !activeDiagram.value
   },
   {
     icon: "align_horizontal_left",
     event: "toggle-align",
-    title: "Умное выравнивание",
+    title: t("toolbar.smartAlign"),
     active: alignEnabled.value,
     disabled: !activeDiagram.value
   },
   {
     icon: "straighten",
     event: "toggle-rulers",
-    title: "Линейка",
+    title: t("toolbar.rulers"),
     active: rulersEnabled.value,
     disabled: !activeDiagram.value
   },
   {
     icon: "commit",
     event: "toggle-lock-anchors",
-    title: "Закрепить точки связей",
+    title: t("toolbar.lockLinkAnchors"),
     active: lockAnchorsEnabled.value,
     disabled: !activeDiagram.value
   }
@@ -465,7 +467,7 @@ const nodeTypeDefaultDirectoryById = computed(() => {
   return map
 })
 const createNodeModalTitle = computed(() =>
-  createNodeModal.value.kind === "folder" ? "Создать папку" : "Создать ноду"
+  createNodeModal.value.kind === "folder" ? t("models.createFolderTitle") : t("models.createNodeTitle")
 )
 const nodeTypeSearchQuery = ref("")
 const nodeTypeDropdownOpen = ref(false)
@@ -2339,7 +2341,7 @@ onBeforeUnmount(() => {
               v-if="!canvasSettingsVisible"
               type="button"
               class="canvas-settings-toggle"
-              title="Показать настройки диаграммы"
+              :title="t('models.showDiagramSettings')"
               @click="canvasSettingsVisible = true"
             >
               <span class="material-symbols-outlined">settings</span>
@@ -2347,11 +2349,11 @@ onBeforeUnmount(() => {
             <div v-else class="canvas-settings">
               <div class="canvas-settings__header">
                 <span class="material-symbols-outlined">tune</span>
-                <span>Настройки</span>
+                <span>{{ t("common.settings") }}</span>
                 <button
                   type="button"
                   class="canvas-settings__hide"
-                  title="Скрыть настройки"
+                  :title="t('models.hideDiagramSettings')"
                   @click="canvasSettingsVisible = false"
                 >
                   <span class="material-symbols-outlined">chevron_left</span>
@@ -2480,11 +2482,11 @@ onBeforeUnmount(() => {
     <Transition name="toast">
       <div v-if="isSaving" class="save-toast save-toast--progress">
         <span class="material-symbols-outlined save-toast__icon spin">sync</span>
-        <span>{{ saveProgress || "Сохранение..." }}</span>
+        <span>{{ saveProgress || t("common.saving") }}</span>
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
         <span class="material-symbols-outlined save-toast__icon">check_circle</span>
-        <span>Сохранено</span>
+        <span>{{ t("common.saved") }}</span>
       </div>
       <div v-else-if="saveError || uiError" class="save-toast save-toast--error">
         <span class="material-symbols-outlined save-toast__icon">error</span>
@@ -2496,18 +2498,18 @@ onBeforeUnmount(() => {
   <BaseModal v-if="showCreateNodeModal" :title="createNodeModalTitle" max-width="440px" @close="showCreateNodeModal = false">
     <div class="form-grid">
       <label>
-        <span>Название</span>
+        <span>{{ t("common.name") }}</span>
         <input
           v-model="newNodeName"
           class="field-input"
-          :placeholder="createNodeModal.kind === 'folder' ? 'Новая папка' : 'Новая нода'"
+          :placeholder="createNodeModal.kind === 'folder' ? t('models.newFolderPlaceholder') : t('models.newNodePlaceholder')"
           @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
         >
       </label>
       <div v-if="createNodeModal.kind === 'node'" class="node-type-dropdown">
-        <span class="node-type-dropdown__label">Тип ноды</span>
+        <span class="node-type-dropdown__label">{{ t("models.nodeTypeLabel") }}</span>
         <div class="node-type-dropdown__control" @click="nodeTypeDropdownOpen = !nodeTypeDropdownOpen">
-          <span class="node-type-dropdown__value">{{ selectedNodeTypeName || 'Выберите тип' }}</span>
+          <span class="node-type-dropdown__value">{{ selectedNodeTypeName || t("models.selectType") }}</span>
           <span class="material-symbols-outlined node-type-dropdown__arrow">
             {{ nodeTypeDropdownOpen ? 'expand_less' : 'expand_more' }}
           </span>
@@ -2517,7 +2519,7 @@ onBeforeUnmount(() => {
             v-model="nodeTypeSearchQuery"
             class="node-type-dropdown__search"
             type="text"
-            placeholder="Поиск типа..."
+            :placeholder="t('models.typeSearchPlaceholder')"
             @click.stop
           >
           <div class="node-type-dropdown__list">
@@ -2532,56 +2534,56 @@ onBeforeUnmount(() => {
               {{ typeItem.name }}
             </button>
             <div v-if="filteredNodeTypes.length === 0" class="node-type-dropdown__empty">
-              Ничего не найдено
+              {{ t("common.nothingFound") }}
             </div>
           </div>
         </div>
       </div>
-      <div v-else class="form-hint">Будет использован тип <b>Directory</b>.</div>
+      <div v-else class="form-hint">{{ t("models.directoryTypeHint") }}</div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateNodeModal = false">Отмена</button>
+      <button type="button" class="btn btn--secondary" @click="showCreateNodeModal = false">{{ t("common.cancel") }}</button>
       <button type="button" class="btn btn--primary" :disabled="!canCreateNodeFromModal" @click="createNode">
-        Создать
+        {{ t("common.create") }}
       </button>
     </template>
   </BaseModal>
 
   <BaseModal
     v-if="showNoteEditorModal"
-    title="Редактировать заметку"
+    :title="t('diagram.editNote')"
     max-width="560px"
     @close="cancelNoteEditor"
   >
     <div class="form-grid">
       <label>
-        <span>Текст</span>
+        <span>{{ t("models.noteTextLabel") }}</span>
         <textarea
           v-model="noteEditorText"
           class="field-textarea"
           rows="8"
-          placeholder="Введите текст заметки..."
+          :placeholder="t('models.noteTextPlaceholder')"
         />
       </label>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNoteEditor">Отмена</button>
-      <button type="button" class="btn btn--primary" @click="saveNoteEditor">Сохранить</button>
+      <button type="button" class="btn btn--secondary" @click="cancelNoteEditor">{{ t("common.cancel") }}</button>
+      <button type="button" class="btn btn--primary" @click="saveNoteEditor">{{ t("common.save") }}</button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showCreateDiagramModal" title="Создать диаграмму" max-width="460px" @close="showCreateDiagramModal = false">
+  <BaseModal v-if="showCreateDiagramModal" :title="t('models.createDiagramTitle')" max-width="460px" @close="showCreateDiagramModal = false">
     <div class="form-grid">
       <label>
-        <span>Название</span>
-        <input v-model="newDiagramName" class="field-input" placeholder="Новая диаграмма">
+        <span>{{ t("common.name") }}</span>
+        <input v-model="newDiagramName" class="field-input" :placeholder="t('models.newDiagramPlaceholder')">
       </label>
       <label>
-        <span>Версия</span>
+        <span>{{ t("common.version") }}</span>
         <input v-model="newDiagramVersion" class="field-input" placeholder="1.0.0">
       </label>
       <label>
-        <span>Нотация</span>
+        <span>{{ t("models.notationLabel") }}</span>
         <select v-model="newDiagramNotationId" class="field-input">
           <option v-for="notation in state.notations" :key="notation.id" :value="notation.id">
             {{ notation.name }} ({{ notation.version }})
@@ -2589,23 +2591,23 @@ onBeforeUnmount(() => {
         </select>
       </label>
       <div v-if="hasDiagramNameVersionConflict" class="form-error-text">
-        Диаграмма с таким именем и версией уже существует в модели.
+        {{ t("models.diagramConflictMessage") }}
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateDiagramModal = false">Отмена</button>
+      <button type="button" class="btn btn--secondary" @click="showCreateDiagramModal = false">{{ t("common.cancel") }}</button>
       <button
         type="button"
         class="btn btn--primary"
         :disabled="hasDiagramNameVersionConflict"
         @click="createDiagram"
       >
-        Создать
+        {{ t("common.create") }}
       </button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showComponentChoiceModal" title="Выберите компонент" max-width="420px" @close="showComponentChoiceModal = false">
+  <BaseModal v-if="showComponentChoiceModal" :title="t('diagram.selectComponent')" max-width="420px" @close="showComponentChoiceModal = false">
     <div class="choice-list">
       <button
         v-for="option in componentChoiceOptions"
@@ -2624,7 +2626,7 @@ onBeforeUnmount(() => {
     </div>
   </BaseModal>
 
-  <BaseModal v-if="showRelationChoiceModal" title="Выберите relation" max-width="420px" @close="showRelationChoiceModal = false">
+  <BaseModal v-if="showRelationChoiceModal" :title="t('diagram.selectRelation')" max-width="420px" @close="showRelationChoiceModal = false">
     <div class="choice-list">
       <button
         v-for="option in relationChoiceOptions"
@@ -2638,7 +2640,7 @@ onBeforeUnmount(() => {
     </div>
   </BaseModal>
 
-  <BaseModal v-if="showReuseLinkModal" title="Найдены существующие связи" max-width="500px" @close="showReuseLinkModal = false">
+  <BaseModal v-if="showReuseLinkModal" :title="t('models.existingLinksFoundTitle')" max-width="500px" @close="showReuseLinkModal = false">
     <div class="choice-list">
       <button
         v-for="link in reuseLinkOptions"
@@ -2647,98 +2649,96 @@ onBeforeUnmount(() => {
         class="choice-item"
         @click="createOrReuseLink(link.id)"
       >
-        Использовать существующую ({{ formatReuseLinkOption(link) }})
+        {{ t("models.useExistingLink", { link: formatReuseLinkOption(link) }) }}
       </button>
       <button type="button" class="choice-item choice-item--primary" @click="createOrReuseLink(null)">
-        Создать новую связь
+        {{ t("models.createNewLink") }}
       </button>
     </div>
   </BaseModal>
 
   <BaseModal
     v-if="showDiagramSwitchModal"
-    title="Несохранённые изменения"
+    :title="t('models.unsavedChangesTitle')"
     max-width="500px"
     @close="cancelDiagramSwitch"
   >
     <p class="leave-text">
       {{
         pendingDiagramAction === "close"
-          ? "Есть несохранённые изменения. Сохранить их перед закрытием диаграммы?"
-          : "Есть несохранённые изменения. Сохранить их перед переключением на другую диаграмму?"
+          ? t("models.saveBeforeCloseDiagram")
+          : t("models.saveBeforeSwitchDiagram")
       }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">Отмена</button>
+      <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">{{ t("common.cancel") }}</button>
       <button type="button" class="btn btn--secondary" :disabled="isLoading || isSaving" @click="switchDiagramWithoutSave">
-        Не сохранять
+        {{ t("models.dontSave") }}
       </button>
       <button type="button" class="btn btn--primary" :disabled="isSaving" @click="saveAndSwitchDiagram">
-        {{ pendingDiagramAction === "close" ? "Сохранить и закрыть" : "Сохранить и переключить" }}
+        {{ pendingDiagramAction === "close" ? t("models.saveAndClose") : t("models.saveAndSwitch") }}
       </button>
     </template>
   </BaseModal>
 
   <BaseModal
     v-if="showNodeDeleteModal"
-    title="Удаление ноды"
+    :title="t('models.deleteNodeTitle')"
     max-width="500px"
     @close="cancelNodeDelete"
   >
     <p class="leave-text">
       <template v-if="pendingDeleteNodeSource === 'canvas'">
-        Удалить
         <template v-if="pendingDeleteNodeCount === 1">
-          ноду <b>{{ pendingDeleteNodeSingleName || "без имени" }}</b> с текущей диаграммы?
+          {{ t("models.deleteNodeFromDiagramSingle", { name: pendingDeleteNodeSingleName || t("common.unnamed") }) }}
         </template>
         <template v-else>
-          {{ pendingDeleteNodeCount }} нод(ы) с текущей диаграммы?
+          {{ t("models.deleteNodeFromDiagramMultiple", { count: pendingDeleteNodeCount }) }}
         </template>
       </template>
       <template v-else>
-        Удалить
         <template v-if="pendingDeleteNodeCount === 1">
-          ноду <b>{{ pendingDeleteNodeSingleName || "без имени" }}</b> из модели?
+          {{ t("models.deleteNodeFromModelSingle", { name: pendingDeleteNodeSingleName || t("common.unnamed") }) }}
         </template>
         <template v-else>
-          {{ pendingDeleteNodeCount }} нод(ы) из модели?
+          {{ t("models.deleteNodeFromModelMultiple", { count: pendingDeleteNodeCount }) }}
         </template>
       </template>
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">Отмена</button>
-      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">Удалить</button>
+      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">{{ t("common.cancel") }}</button>
+      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">{{ t("common.delete") }}</button>
     </template>
   </BaseModal>
 
   <BaseModal
     v-if="showDiagramDeleteModal"
-    title="Удаление диаграммы"
+    :title="t('models.deleteDiagramTitle')"
     max-width="500px"
     @close="cancelDiagramDelete"
   >
     <p class="leave-text">
-      Удалить диаграмму <b>{{ pendingDeleteDiagramName || "без имени" }}</b>?
+      {{ t("models.deleteDiagramConfirm", { name: pendingDeleteDiagramName || t("common.unnamed") }) }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">Отмена</button>
-      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">Удалить</button>
+      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">{{ t("common.cancel") }}</button>
+      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">{{ t("common.delete") }}</button>
     </template>
   </BaseModal>
 
   <BaseModal
     v-if="showLinkDeleteModal"
-    title="Удаление связи"
+    :title="t('models.deleteLinkTitle')"
     max-width="500px"
     @close="cancelLinkDelete"
   >
     <p class="leave-text">
-      Что сделать с выбранной связью?
+      {{ t("models.deleteLinkQuestion") }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLinkDelete">Отмена</button>
+      <button type="button" class="btn btn--secondary" @click="cancelLinkDelete">{{ t("common.cancel") }}</button>
       <button type="button" class="btn btn--secondary" @click="removeLinkFromCurrentDiagram">
-        Удалить с диаграммы
+        {{ t("models.removeLinkFromDiagram") }}
       </button>
       <button
         v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId)"
@@ -2746,38 +2746,38 @@ onBeforeUnmount(() => {
         class="btn btn--danger"
         @click="removeLinkFromModel"
       >
-        Удалить из модели
+        {{ t("models.removeLinkFromModel") }}
       </button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showLeaveDialog" title="Несохранённые изменения" max-width="400px" @close="cancelLeave">
+  <BaseModal v-if="showLeaveDialog" :title="t('models.unsavedChangesTitle')" max-width="400px" @close="cancelLeave">
     <p class="leave-text">
-      У вас есть несохранённые изменения. Если вы покинете страницу, они будут потеряны.
+      {{ t("models.leaveUnsavedText") }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLeave">Остаться</button>
-      <button type="button" class="btn btn--danger" @click="confirmLeave">Покинуть</button>
+      <button type="button" class="btn btn--secondary" @click="cancelLeave">{{ t("models.stay") }}</button>
+      <button type="button" class="btn btn--danger" @click="confirmLeave">{{ t("models.leave") }}</button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showDiagramJson" title="JSON диаграммы" max-width="600px" @close="showDiagramJson = false">
+  <BaseModal v-if="showDiagramJson" :title="t('models.diagramJsonTitle')" max-width="600px" @close="showDiagramJson = false">
     <pre class="json-viewer">{{ diagramJsonContent }}</pre>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="copyDiagramJson">Копировать</button>
-      <button type="button" class="btn btn--secondary" @click="showDiagramJson = false">Закрыть</button>
+      <button type="button" class="btn btn--secondary" @click="copyDiagramJson">{{ t("models.copy") }}</button>
+      <button type="button" class="btn btn--secondary" @click="showDiagramJson = false">{{ t("common.close") }}</button>
     </template>
   </BaseModal>
 
   <ShareAccessModal
     v-if="showShareModal && model"
-    title="Доступ к модели"
+    :title="t('models.accessTitle')"
     resource-type="MODEL"
     :resource-id="model.id"
     @close="showShareModal = false"
   />
 
-  <div v-if="isLoading" class="overlay-loading">Загрузка...</div>
+  <div v-if="isLoading" class="overlay-loading">{{ t("common.loading") }}</div>
   <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">{{ errorMessage }}</div>
 </template>
 
@@ -3045,7 +3045,7 @@ onBeforeUnmount(() => {
 
 .model-canvas-area__toolbar {
   position: absolute;
-  top: 10px;
+  top: 22px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;

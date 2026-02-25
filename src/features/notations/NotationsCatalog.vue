@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
 import { useEntityList } from "../../composables/useEntityList";
 import { apiPut } from "../../composables/useApi";
@@ -19,6 +20,7 @@ import BaseModal from "../../components/modals/BaseModal.vue";
 import ShareAccessModal from "../../components/modals/ShareAccessModal.vue";
 
 const router = useRouter();
+const { t } = useI18n();
 const { currentUser } = useAuth();
 
 const {
@@ -51,11 +53,11 @@ const {
   deleteItem
 } = useEntityList<NotationData>({
   endpoint: "notations",
-  entityName: "Нотация",
-  entityNamePlural: "нотации",
-  conflictMessage: "Нотация с таким именем и версией уже существует",
-  notFoundMessage: "Нотация не найдена",
-  createNotFoundMessage: "Владелец не найден"
+  entityName: t("notations.entityName"),
+  entityNamePlural: t("notations.entityNamePlural"),
+  conflictMessage: t("notations.conflictMessage"),
+  notFoundMessage: t("notations.notFoundMessage"),
+  createNotFoundMessage: t("notations.ownerNotFoundMessage")
 });
 
 const openNotation = (id: string) => {
@@ -88,7 +90,7 @@ const renameItem = async () => {
   if (!itemToRename.value) return;
   const trimmedName = renameName.value.trim();
   if (!trimmedName) {
-    renameError.value = "Введите название нотации";
+    renameError.value = t("notations.enterName");
     return;
   }
   const current = itemToRename.value;
@@ -103,7 +105,7 @@ const renameItem = async () => {
       item.name.trim().toLowerCase() === trimmedName.toLowerCase()
   );
   if (hasConflict) {
-    renameError.value = "Нотация с таким именем и версией уже существует";
+    renameError.value = t("notations.conflictMessage");
     return;
   }
 
@@ -119,7 +121,7 @@ const renameItem = async () => {
     const result = await apiPut<NotationData>(`/notations/${current.id}`, request);
     if (!result.success) {
       if (result.error.status === 409) {
-        throw new Error("Нотация с таким именем и версией уже существует");
+        throw new Error(t("notations.conflictMessage"));
       }
       throw new Error(result.error.message);
     }
@@ -134,7 +136,7 @@ const renameItem = async () => {
     }
     closeRenameModal();
   } catch (error) {
-    renameError.value = error instanceof Error ? error.message : "Не удалось переименовать нотацию";
+    renameError.value = error instanceof Error ? error.message : t("notations.renameFailed");
   } finally {
     isRenaming.value = false;
   }
@@ -145,7 +147,7 @@ const shareTargetId = ref<string | null>(null);
 
 const handleCreate = () => {
   if (currentUser.value) {
-    createItem(currentUser.value.id, getUserDisplayName(currentUser.value, "Неизвестный пользователь"));
+    createItem(currentUser.value.id, getUserDisplayName(currentUser.value, t("common.unknownUser")));
   }
 };
 
@@ -158,11 +160,11 @@ const openShareModal = (item: NotationData) => {
 <template>
   <main class="home">
     <header class="home-header">
-      <ListHeader v-model="searchQuery" placeholder="Поиск по названию..." :count="itemCount" :loading="isLoading"/>
+      <ListHeader v-model="searchQuery" :placeholder="t('notations.searchPlaceholder')" :count="itemCount" :loading="isLoading"/>
     </header>
 
     <section class="model-grid">
-      <CreateCard title="Создать нотацию" description="Новый набор правил" @click="openCreateModal"/>
+      <CreateCard :title="t('notations.createTitle')" :description="t('notations.createDescription')" @click="openCreateModal"/>
       <CardSkeleton v-if="isLoading" :count="4"/>
       <div v-else-if="errorMessage" class="error-state">
         {{ errorMessage }}
@@ -170,7 +172,7 @@ const openShareModal = (item: NotationData) => {
 
       <EmptyState
         v-else-if="filteredItems.length === 0 && searchQuery"
-        title="Нотации не найдены" description="Попробуйте изменить поисковый запрос" icon="search"
+        :title="t('notations.notFoundTitle')" :description="t('notations.notFoundDescription')" icon="search"
       />
 
       <EntityCard
@@ -194,7 +196,7 @@ const openShareModal = (item: NotationData) => {
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @version-change="handleVersionChange(group.name, $event)"
       >
-        <template #icon><span class="material-symbols-outlined" title="Нотация">graph_3</span></template>
+        <template #icon><span class="material-symbols-outlined" :title="t('notations.entityName')">graph_3</span></template>
       </EntityCard>
     </section>
 
@@ -203,10 +205,10 @@ const openShareModal = (item: NotationData) => {
       v-model:name="newItemName"
       v-model:version="newItemVersion"
       v-model:source-version-id="sourceVersionId"
-      title="Создать нотацию"
-      name-label="Название"
-      name-placeholder="Название нотации"
-      version-label="Версия"
+      :title="t('notations.createTitle')"
+      :name-label="t('common.name')"
+      :name-placeholder="t('notations.namePlaceholder')"
+      :version-label="t('common.version')"
       version-placeholder="1.0.0"
       name-id="notation-name"
       version-id="notation-version"
@@ -219,8 +221,8 @@ const openShareModal = (item: NotationData) => {
 
     <EntityDeleteModal
       v-if="showDeleteModal"
-      title="Удалить нотацию"
-      entity-label="нотацию"
+      :title="t('notations.deleteTitle')"
+      :entity-label="t('notations.entityLabelAccusative')"
       :entity-name="itemToDelete?.name"
       :is-deleting="isDeleting"
       :error="deleteError"
@@ -228,15 +230,15 @@ const openShareModal = (item: NotationData) => {
       @confirm="deleteItem"
     />
 
-    <BaseModal v-if="showRenameModal" title="Переименовать нотацию" @close="closeRenameModal">
+    <BaseModal v-if="showRenameModal" :title="t('notations.renameTitle')" @close="closeRenameModal">
       <form class="rename-form" @submit.prevent="renameItem">
         <label class="rename-form__field">
-          <span class="rename-form__label">Название</span>
+          <span class="rename-form__label">{{ t("common.name") }}</span>
           <input
             v-model="renameName"
             class="rename-form__input"
             type="text"
-            placeholder="Название нотации"
+            :placeholder="t('notations.namePlaceholder')"
             :disabled="isRenaming"
             autofocus
           >
@@ -244,10 +246,10 @@ const openShareModal = (item: NotationData) => {
         <div v-if="renameError" class="rename-form__error">{{ renameError }}</div>
         <div class="rename-form__actions">
           <button type="button" class="btn btn--secondary" :disabled="isRenaming" @click="closeRenameModal">
-            Отмена
+            {{ t("common.cancel") }}
           </button>
           <button type="submit" class="btn btn--primary" :disabled="!canSubmitRename">
-            {{ isRenaming ? "Сохранение..." : "Сохранить" }}
+            {{ isRenaming ? t("common.saving") : t("common.save") }}
           </button>
         </div>
       </form>
@@ -255,7 +257,7 @@ const openShareModal = (item: NotationData) => {
 
     <ShareAccessModal
       v-if="showShareModal && shareTargetId"
-      title="Доступ к нотации"
+      :title="t('notations.accessTitle')"
       resource-type="NOTATION"
       :resource-id="shareTargetId"
       @close="showShareModal = false; shareTargetId = null"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
+import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import { toAccessLabel } from "../../../utils/accessPermission"
 
@@ -17,10 +18,11 @@ const emit = defineEmits<{
 }>()
 
 const typeSearchQuery = ref("")
+const { t, locale } = useI18n()
 
 function sortTypes(types: TypeItem[]): TypeItem[] {
   return [...types].sort((a, b) =>
-    (a.name || "~~~").localeCompare((b.name || "~~~"), "ru", {
+    (a.name || "~~~").localeCompare((b.name || "~~~"), locale.value === "en" ? "en" : "ru", {
       sensitivity: "base",
       numeric: true
     })
@@ -48,7 +50,7 @@ const filteredLinkTypes = computed(() => {
   <aside class="sidebar">
     <div class="sidebar__header">
       <span class="material-symbols-outlined sidebar__header-icon">category</span>
-      <span class="sidebar__header-text">Типы</span>
+      <span class="sidebar__header-text">{{ t("types.title") }}</span>
     </div>
     <div class="sidebar__search">
       <span class="material-symbols-outlined sidebar__search-icon">search</span>
@@ -56,13 +58,13 @@ const filteredLinkTypes = computed(() => {
         v-model="typeSearchQuery"
         class="sidebar__search-input"
         type="text"
-        placeholder="Поиск типа..."
+        :placeholder="t('types.searchTypePlaceholder')"
       >
       <button
         v-if="typeSearchQuery"
         type="button"
         class="sidebar__clear-btn"
-        title="Очистить поиск"
+        :title="t('common.clearSearch')"
         @click="typeSearchQuery = ''"
       >
         <span class="material-symbols-outlined">close</span>
@@ -71,11 +73,11 @@ const filteredLinkTypes = computed(() => {
 
     <div class="type-section">
       <div class="type-section__header">
-        <h3 class="type-section__title">Типы узлов</h3>
+        <h3 class="type-section__title">{{ t("types.nodeTypes") }}</h3>
         <button
           type="button"
           class="type-section__add-btn"
-          title="Добавить тип узла"
+          :title="t('types.addNodeType')"
           @click="emit('addType', 'node')"
         >
           <span class="material-symbols-outlined">add</span>
@@ -83,11 +85,11 @@ const filteredLinkTypes = computed(() => {
       </div>
       <div v-if="isLoading" class="type-section__loading">
         <span class="loading-pulse"></span>
-        Загрузка...
+        {{ t("common.loading") }}
       </div>
       <template v-else>
-        <div v-if="nodeTypes.length === 0" class="type-section__empty">Нет типов</div>
-        <div v-else-if="filteredNodeTypes.length === 0" class="type-section__empty">Ничего не найдено</div>
+        <div v-if="nodeTypes.length === 0" class="type-section__empty">{{ t("types.noTypes") }}</div>
+        <div v-else-if="filteredNodeTypes.length === 0" class="type-section__empty">{{ t("common.nothingFound") }}</div>
         <ul v-else class="type-list">
           <li
             v-for="(t, idx) in filteredNodeTypes"
@@ -98,11 +100,11 @@ const filteredLinkTypes = computed(() => {
             @click="emit('selectType', t.id)"
           >
             <span class="material-symbols-outlined type-list__icon">category</span>
-            <span class="type-list__name">{{ t.name || 'Без имени' }}</span>
+            <span class="type-list__name">{{ t.name || $t("common.unnamed") }}</span>
             <span v-if="!t._isNew && toAccessLabel(t.accessPermission)" class="type-list__access-badge">
               {{ toAccessLabel(t.accessPermission) }}
             </span>
-            <span v-if="t._isNew" class="type-list__badge">новый</span>
+            <span v-if="t._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
           </li>
         </ul>
       </template>
@@ -110,11 +112,11 @@ const filteredLinkTypes = computed(() => {
 
     <div class="type-section">
       <div class="type-section__header">
-        <h3 class="type-section__title">Типы связей</h3>
+        <h3 class="type-section__title">{{ t("types.linkTypes") }}</h3>
         <button
           type="button"
           class="type-section__add-btn"
-          title="Добавить тип связи"
+          :title="t('types.addLinkType')"
           @click="emit('addType', 'link')"
         >
           <span class="material-symbols-outlined">add</span>
@@ -122,11 +124,11 @@ const filteredLinkTypes = computed(() => {
       </div>
       <div v-if="isLoading" class="type-section__loading">
         <span class="loading-pulse"></span>
-        Загрузка...
+        {{ t("common.loading") }}
       </div>
       <template v-else>
-        <div v-if="linkTypes.length === 0" class="type-section__empty">Нет типов</div>
-        <div v-else-if="filteredLinkTypes.length === 0" class="type-section__empty">Ничего не найдено</div>
+        <div v-if="linkTypes.length === 0" class="type-section__empty">{{ t("types.noTypes") }}</div>
+        <div v-else-if="filteredLinkTypes.length === 0" class="type-section__empty">{{ t("common.nothingFound") }}</div>
         <ul v-else class="type-list">
           <li
             v-for="(t, idx) in filteredLinkTypes"
@@ -137,11 +139,11 @@ const filteredLinkTypes = computed(() => {
             @click="emit('selectType', t.id)"
           >
             <span class="material-symbols-outlined type-list__icon">link</span>
-            <span class="type-list__name">{{ t.name || 'Без имени' }}</span>
+            <span class="type-list__name">{{ t.name || $t("common.unnamed") }}</span>
             <span v-if="!t._isNew && toAccessLabel(t.accessPermission)" class="type-list__access-badge">
               {{ toAccessLabel(t.accessPermission) }}
             </span>
-            <span v-if="t._isNew" class="type-list__badge">новый</span>
+            <span v-if="t._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
           </li>
         </ul>
       </template>

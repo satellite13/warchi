@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { marked } from "marked"
 
 const props = defineProps<{
   content: string
   isLoading: boolean
 }>()
+const { t } = useI18n()
 
 const BLOCKED_TAGS = new Set([
   "script",
@@ -61,7 +63,7 @@ const html = computed(() => {
   <div class="docs-content">
     <div v-if="isLoading" class="docs-content__loading">
       <span class="material-symbols-outlined docs-content__spinner">progress_activity</span>
-      Загрузка...
+      {{ t("common.loading") }}
     </div>
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-else class="docs-content__body" v-html="html" />

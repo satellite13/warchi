@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
 import NameVersionForm from "../forms/NameVersionForm.vue";
 import type { SourceVersion } from "../../composables/useEntityList";
@@ -27,12 +28,14 @@ const props = withDefaults(defineProps<{
   nameId: undefined,
   versionId: undefined,
   error: null,
-  submitLabel: "Создать",
-  submittingLabel: "Создание...",
-  cancelLabel: "Отмена",
+  submitLabel: undefined,
+  submittingLabel: undefined,
+  cancelLabel: undefined,
   sourceVersions: () => [],
   sourceVersionId: null
 });
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   close: [];
@@ -56,6 +59,10 @@ const sourceVersionModel = computed({
   get: () => props.sourceVersionId ?? "",
   set: (value) => emit("update:sourceVersionId", value || null)
 });
+
+const resolvedSubmitLabel = computed(() => props.submitLabel ?? t("common.create"));
+const resolvedSubmittingLabel = computed(() => props.submittingLabel ?? t("common.creating"));
+const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel"));
 </script>
 
 <template>
@@ -73,14 +80,14 @@ const sourceVersionModel = computed({
         :disabled="isSubmitting"
       />
       <div v-if="sourceVersions.length > 0" class="form-field">
-        <label class="form-label" for="source-version">Базовая версия</label>
+        <label class="form-label" for="source-version">{{ t("common.baseVersion") }}</label>
         <select
           id="source-version"
           v-model="sourceVersionModel"
           class="form-select"
           :disabled="isSubmitting"
         >
-          <option value="">Пустая нотация</option>
+          <option value="">{{ t("common.emptyNotation") }}</option>
           <option
             v-for="sv in sourceVersions"
             :key="sv.id"
@@ -95,10 +102,10 @@ const sourceVersionModel = computed({
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn--secondary" :disabled="isSubmitting" @click="emit('close')">
-          {{ cancelLabel }}
+          {{ resolvedCancelLabel }}
         </button>
         <button type="submit" class="btn btn--primary" :disabled="isSubmitting">
-          {{ isSubmitting ? submittingLabel : submitLabel }}
+          {{ isSubmitting ? resolvedSubmittingLabel : resolvedSubmitLabel }}
         </button>
       </div>
     </form>

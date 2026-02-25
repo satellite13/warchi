@@ -1253,7 +1253,7 @@ onBeforeUnmount(() => {
 
 .notation-canvas-area__toolbar {
   position: absolute;
-  top: 10px;
+  top: 22px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;

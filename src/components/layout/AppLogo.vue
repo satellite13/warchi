@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 
 defineProps<{
   size?: "sm" | "md" | "lg";
 }>();
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -10,7 +13,7 @@ defineProps<{
     <object class="logo__icon" data="/warchi.svg" type="image/svg+xml"/>
     <div class="logo__text">
       <span class="logo__title">wArchi</span>
-      <span v-if="size != 'sm'" class="logo__subtitle">Архитектурный репозиторий</span>
+      <span v-if="size != 'sm'" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
     </div>
   </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { useI18n } from "vue-i18n"
 
 const STORAGE_KEY = "warchi:model-editor:workspace"
 type WorkspaceSettings = {
@@ -11,6 +12,7 @@ type WorkspaceSettings = {
 
 const MIN_SIDE_WIDTH = 260
 const MAX_SIDE_WIDTH = 560
+const { t } = useI18n()
 type SideResizeTarget = "left" | "right"
 let resizingSide: SideResizeTarget | null = null
 let sideDragStartX = 0
@@ -128,7 +130,7 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
         :style="leftResizerStyle"
         role="separator"
         aria-orientation="vertical"
-        title="Потяните, чтобы изменить ширину левой панели"
+        :title="t('models.resizeLeftPanelWidth')"
         @mousedown.prevent="startSideResize('left', $event)"
       >
         <span class="model-panel__side-resizer-handle"></span>
@@ -139,7 +141,7 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
         :style="rightResizerStyle"
         role="separator"
         aria-orientation="vertical"
-        title="Потяните, чтобы изменить ширину правой панели"
+        :title="t('models.resizeRightPanelWidth')"
         @mousedown.prevent="startSideResize('right', $event)"
       >
         <span class="model-panel__side-resizer-handle"></span>
@@ -148,7 +150,7 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
     <button
       type="button"
       class="model-panel__collapse-btn model-panel__collapse-btn--left"
-      :title="leftCollapsed ? 'Показать левую панель' : 'Скрыть левую панель'"
+      :title="leftCollapsed ? t('models.showLeftPanel') : t('models.hideLeftPanel')"
       @click="leftCollapsed = !leftCollapsed"
     >
       <span class="material-symbols-outlined">{{ leftCollapsed ? "chevron_right" : "chevron_left" }}</span>
@@ -156,7 +158,7 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
     <button
       type="button"
       class="model-panel__collapse-btn model-panel__collapse-btn--right"
-      :title="rightCollapsed ? 'Показать правую панель' : 'Скрыть правую панель'"
+      :title="rightCollapsed ? t('models.showRightPanel') : t('models.hideRightPanel')"
       @click="rightCollapsed = !rightCollapsed"
     >
       <span class="material-symbols-outlined">{{ rightCollapsed ? "chevron_left" : "chevron_right" }}</span>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue"
+import { useI18n } from "vue-i18n"
 import BaseModal from "../../../components/modals/BaseModal.vue"
 
 defineProps<{
@@ -13,6 +14,7 @@ defineProps<{
 const showAttrs = ref(false)
 const showAttrsModal = ref(false)
 const showUsages = ref(true)
+const { t } = useI18n()
 </script>
 
 <template>
@@ -35,7 +37,7 @@ const showUsages = ref(true)
         <button
           type="button"
           class="aside-panel__expand-btn"
-          title="Открыть на весь экран"
+          :title="t('types.openFullscreen')"
           @click.stop="showAttrsModal = true"
         >
           <span class="material-symbols-outlined">open_in_full</span>
@@ -57,7 +59,7 @@ const showUsages = ref(true)
           class="material-symbols-outlined aside-panel__chevron"
           :class="{ 'aside-panel__chevron--collapsed': !showUsages }"
         >expand_more</span>
-        Использование
+        {{ t("types.usage") }}
         <span v-if="typeUsages.length > 0" class="aside-panel__count">
           {{ typeUsages.reduce((sum, g) => sum + g.elements.length, 0) }}
         </span>
@@ -66,13 +68,13 @@ const showUsages = ref(true)
       <template v-if="showUsages">
         <div v-if="isLoadingUsages" class="aside-panel__empty">
           <span class="loading-pulse"></span>
-          Загрузка...
+          {{ t("common.loading") }}
         </div>
         <div v-else-if="isNewType" class="aside-panel__empty">
-          Сохраните тип, чтобы увидеть использование
+          {{ t("types.saveTypeToSeeUsage") }}
         </div>
         <div v-else-if="typeUsages.length === 0" class="aside-panel__empty">
-          Не используется
+          {{ t("types.notUsed") }}
         </div>
         <div v-else class="usages-groups">
           <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
@@ -98,7 +100,7 @@ const showUsages = ref(true)
     <!-- Fullscreen modal -->
     <BaseModal
       v-if="showAttrsModal"
-      title="attrs"
+      :title="t('types.attrsTitle')"
       max-width="90vw"
       @close="showAttrsModal = false"
     >

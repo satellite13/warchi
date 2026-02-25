@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
 import {ref, reactive, computed, watch} from "vue";
+import { useI18n } from "vue-i18n";
 import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   (e: "restore-style"): void;
   (e: "toggle-collapse"): void;
 }>();
+const { t } = useI18n();
 
 type NodeShape =
   | "rectangle"
@@ -479,14 +481,21 @@ const AVAILABLE_ICONS = [
   "text", "value_stream", "value", "work_package"
 ] as const;
 
-const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; label: string }> = [
-  { value: "rectangle", label: "Прямоугольник" },
-  { value: "beveled-rectangle", label: "Прямоугольник с фаской" },
-  { value: "diamond", label: "Ромб" },
-  { value: "circle", label: "Круг" },
-  { value: "trapezoid", label: "Усеченная пирамида" },
-  { value: "slanted-rectangle", label: "Параллелограмм" }
+const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; labelKey: string }> = [
+  { value: "rectangle", labelKey: "nodeStyle.shapeRectangle" },
+  { value: "beveled-rectangle", labelKey: "nodeStyle.shapeBeveledRectangle" },
+  { value: "diamond", labelKey: "nodeStyle.shapeDiamond" },
+  { value: "circle", labelKey: "nodeStyle.shapeCircle" },
+  { value: "trapezoid", labelKey: "nodeStyle.shapeTrapezoid" },
+  { value: "slanted-rectangle", labelKey: "nodeStyle.shapeSlantedRectangle" }
 ];
+
+const EDGE_TYPE_OPTIONS = computed(() => ([
+  { v: "straight", l: t("diagram.linkTypeStraight"), icon: "remove" },
+  { v: "polyline", l: t("diagram.linkTypePolyline"), icon: "timeline" },
+  { v: "editable-polyline", l: t("diagram.linkTypeEditablePolyline"), icon: "polyline" },
+  { v: "bezier", l: t("diagram.linkTypeBezier"), icon: "line_curve" }
+] as const));
 
 // --- Node style state ---
 const iconName = ref("");
@@ -1470,7 +1479,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <path d="M24 18v-4M24 34v-4M18 24h-4M34 24h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.15"/>
         </svg>
       </div>
-      <span class="sp-empty__text">Выберите элемент на диаграмме</span>
+      <span class="sp-empty__text">{{ t("diagram.selectElementToEditProperties") }}</span>
     </div>
 
     <template v-else>
@@ -1485,13 +1494,13 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
             <rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
           </svg>
-          <span>{{ elementType === 'edge' ? 'Связь' : 'Фигура' }}</span>
+          <span>{{ elementType === 'edge' ? t("diagram.link") : t("nodeStyle.figure") }}</span>
         </div>
         <div v-if="showPanelActions" class="sp-header__actions">
           <button
             type="button"
             class="sp-header__btn"
-            title="Восстановить стиль из нотации"
+            :title="t('nodeStyle.restoreFromNotation')"
             :disabled="!selectedElementId || !canRestoreStyle"
             @click="emit('restore-style')"
           >
@@ -1500,7 +1509,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <button
             type="button"
             class="sp-header__btn"
-            :title="stylePanelCollapsed ? 'Развернуть панель стилей' : 'Свернуть панель стилей'"
+            :title="stylePanelCollapsed ? t('nodeStyle.expandStylePanel') : t('nodeStyle.collapseStylePanel')"
             @click="emit('toggle-collapse')"
           >
             <span class="material-symbols-outlined">
@@ -1519,8 +1528,8 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             ? (applyEdgePreset(($event.target as HTMLSelectElement).value), selectedRelationPreset = ($event.target as HTMLSelectElement).value)
             : (applyComponentPreset(($event.target as HTMLSelectElement).value), selectedComponentPreset = ($event.target as HTMLSelectElement).value)"
         >
-          <option value="custom">Пользовательский</option>
-          <optgroup label="Встроенные">
+          <option value="custom">{{ t("nodeStyle.customPreset") }}</option>
+          <optgroup :label="t('nodeStyle.builtInPresets')">
             <option
               v-for="preset in (elementType === 'edge' ? builtInRelationPresets : builtInComponentPresets)"
               :key="preset.name"
@@ -1529,7 +1538,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           </optgroup>
           <optgroup
             v-if="(elementType === 'edge' ? userRelationPresets : userComponentPresets).length"
-            label="Мои пресеты"
+            :label="t('nodeStyle.myPresets')"
           >
             <option
               v-for="preset in (elementType === 'edge' ? userRelationPresets : userComponentPresets)"
@@ -1538,14 +1547,14 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             >{{ preset.label }}</option>
           </optgroup>
         </select>
-        <button type="button" class="sp-preset__btn" title="Сохранить как пресет" @click="openSavePresetForm">
+        <button type="button" class="sp-preset__btn" :title="t('nodeStyle.saveAsPreset')" @click="openSavePresetForm">
           <span class="material-symbols-outlined">bookmark_add</span>
         </button>
         <button
           v-if="(elementType === 'edge' ? userRelationPresets : userComponentPresets).some(p => p.name === (elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset))"
           type="button"
           class="sp-preset__btn sp-preset__btn--danger"
-          title="Удалить пресет"
+          :title="t('nodeStyle.deletePreset')"
           @click="handleDeleteUserPreset(elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset, elementType === 'edge' ? 'relation' : 'component')"
         >
           <span class="material-symbols-outlined">delete_outline</span>
@@ -1558,7 +1567,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <input
             v-model="newPresetName"
             class="sp-input sp-save-form__input"
-            placeholder="Название пресета..."
+            :placeholder="t('nodeStyle.presetNamePlaceholder')"
             @keyup.enter="confirmSavePreset"
             @keyup.escape="cancelSavePreset"
           >
@@ -1581,15 +1590,15 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'label')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.label }">chevron_right</span>
-              <span class="sp-section__name">Метка</span>
+              <span class="sp-section__name">{{ t("nodeStyle.label") }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="edgeSection.label" class="sp-section__content">
                 <div class="sp-field">
-                  <input class="sp-input sp-input--full" :value="edgeLabel" placeholder="Текст метки..." @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
+                  <input class="sp-input sp-input--full" :value="edgeLabel" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Цвет</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
                   <SketchColorField
                     :model-value="edgeLabelColor"
                     :alpha-value="edgeLabelOpacity"
@@ -1602,25 +1611,25 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Размер</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field-grid sp-field-grid--2">
                   <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">Внутр.</span>
+                    <span class="sp-num-field__label">{{ t("nodeStyle.innerShort") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="edgeLabelPadding" min="0" max="60" step="1" @input="handleEdgeLabelPaddingChange(($event.target as HTMLInputElement).value)">
                   </div>
                   <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">Внешн.</span>
+                    <span class="sp-num-field__label">{{ t("nodeStyle.outerShort") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="edgeLabelMargin" min="0" max="60" step="1" @input="handleEdgeLabelMarginChange(($event.target as HTMLInputElement).value)">
                   </div>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Смещение</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.offset") }}</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Фон</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.background") }}</span>
                   <SketchColorField
                     :model-value="edgeLabelBgColor"
                     :alpha-value="edgeLabelBgOpacity"
@@ -1634,7 +1643,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field-grid sp-field-grid--2">
                   <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">Внутр. метки</span>
+                    <span class="sp-num-field__label">{{ t("nodeStyle.labelInnerShort") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="edgeLabelBgPadding" min="0" max="40" step="1" @input="handleEdgeLabelBgPaddingChange(($event.target as HTMLInputElement).value)">
                   </div>
                   <div class="sp-num-field sp-num-field--stacked">
@@ -1650,12 +1659,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'line')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.line }">chevron_right</span>
-              <span class="sp-section__name">Линия</span>
+              <span class="sp-section__name">{{ t("nodeStyle.line") }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="edgeSection.line" class="sp-section__content">
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Цвет</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
                   <SketchColorField
                     :model-value="edgeStrokeColor"
                     :alpha-value="edgeStrokeOpacity"
@@ -1668,12 +1677,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Толщина</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.thickness") }}</span>
                   <input type="range" class="sp-range" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
                   <input type="number" class="sp-input sp-input--tiny" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Стиль</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.style") }}</span>
                   <div class="sp-segmented">
                     <button
                       type="button"
@@ -1694,22 +1703,22 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </div>
                 <div v-if="edgeLineStyle === 'dashed'" class="sp-field sp-field--row">
-                  <span class="sp-field__label">Паттерн</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.pattern") }}</span>
                   <input type="text" class="sp-input sp-input--flex" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Тип</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.type") }}</span>
                   <div class="sp-segmented">
                     <button
-                      v-for="t in ([{v:'straight',l:'Прямая',icon:'remove'},{v:'polyline',l:'Ломаная',icon:'timeline'},{v:'editable-polyline',l:'Редактируемая',icon:'polyline'},{v:'bezier',l:'Кривая',icon:'line_curve'}] as const)"
-                      :key="t.v"
+                      v-for="edgeTypeOption in EDGE_TYPE_OPTIONS"
+                      :key="edgeTypeOption.v"
                       type="button"
                       class="sp-segmented__btn"
-                      :class="{ 'sp-segmented__btn--active': edgeType === t.v }"
-                      :title="t.l"
-                      @click="handleEdgeTypeChange(t.v)"
+                      :class="{ 'sp-segmented__btn--active': edgeType === edgeTypeOption.v }"
+                      :title="edgeTypeOption.l"
+                      @click="handleEdgeTypeChange(edgeTypeOption.v)"
                     >
-                      <span class="material-symbols-outlined">{{ t.icon }}</span>
+                      <span class="material-symbols-outlined">{{ edgeTypeOption.icon }}</span>
                     </button>
                   </div>
                 </div>
@@ -1721,29 +1730,29 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'markers')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.markers }">chevron_right</span>
-              <span class="sp-section__name">Маркеры</span>
+              <span class="sp-section__name">{{ t("nodeStyle.markers") }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="edgeSection.markers" class="sp-section__content">
                 <!-- Start marker -->
                 <div class="sp-marker-group">
                   <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">Начало</span>
+                    <span class="sp-field__label">{{ t("nodeStyle.start") }}</span>
                     <select class="sp-select sp-select--flex" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
-                      <option value="none">Нет</option>
-                      <option value="arrow">Стрелка</option>
-                      <option value="open">Открытая</option>
-                      <option value="diamond">Ромб</option>
-                      <option value="circle">Круг</option>
+                      <option value="none">{{ t("nodeStyle.none") }}</option>
+                      <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
+                      <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
+                      <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
+                      <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
                     </select>
                   </div>
                   <template v-if="edgeStartMarker !== 'none'">
                     <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">Размер</span>
+                      <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
                       <input type="number" class="sp-input sp-input--sm" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
                     </div>
                     <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">Заливка</span>
+                      <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
                       <SketchColorField
                         :model-value="edgeStartMarkerFillColor"
                         :alpha-value="edgeStartMarkerFillOpacity"
@@ -1760,22 +1769,22 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <!-- End marker -->
                 <div class="sp-marker-group">
                   <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">Конец</span>
+                    <span class="sp-field__label">{{ t("nodeStyle.end") }}</span>
                     <select class="sp-select sp-select--flex" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
-                      <option value="none">Нет</option>
-                      <option value="arrow">Стрелка</option>
-                      <option value="open">Открытая</option>
-                      <option value="diamond">Ромб</option>
-                      <option value="circle">Круг</option>
+                      <option value="none">{{ t("nodeStyle.none") }}</option>
+                      <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
+                      <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
+                      <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
+                      <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
                     </select>
                   </div>
                   <template v-if="edgeEndMarker !== 'none'">
                     <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">Размер</span>
+                      <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
                       <input type="number" class="sp-input sp-input--sm" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
                     </div>
                     <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">Заливка</span>
+                      <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
                       <SketchColorField
                         :model-value="edgeEndMarkerFillColor"
                         :alpha-value="edgeEndMarkerFillOpacity"
@@ -1802,19 +1811,19 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'label')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.label }">chevron_right</span>
-              <span class="sp-section__name">Метка</span>
+              <span class="sp-section__name">{{ t("nodeStyle.label") }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="nodeSection.label" class="sp-section__content">
                 <div class="sp-field">
-                  <input class="sp-input sp-input--full" :value="label" placeholder="Текст метки..." @input="handleLabelChange(($event.target as HTMLInputElement).value)">
+                  <input class="sp-input sp-input--full" :value="label" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field">
-                  <span class="sp-field__label">Шаблон</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
                   <input class="sp-input sp-input--full" :value="labelTemplate" placeholder="${name} — ${status}" @input="handleLabelTemplateChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Цвет</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
                   <SketchColorField
                     :model-value="labelColor"
                     :alpha-value="labelOpacity"
@@ -1828,35 +1837,35 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field-grid sp-field-grid--3">
                   <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">Размер</span>
+                    <span class="sp-num-field__label">{{ t("nodeStyle.size") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="labelFontSize" min="8" max="72" step="1" @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)">
                   </div>
                   <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">Внутр.</span>
+                    <span class="sp-num-field__label">{{ t("nodeStyle.innerShort") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="labelPadding" min="0" max="50" step="1" @input="handleLabelPaddingChange(($event.target as HTMLInputElement).value)">
                   </div>
                   <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">Внешн.</span>
+                    <span class="sp-num-field__label">{{ t("nodeStyle.outerShort") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="labelMargin" min="0" max="50" step="1" @input="handleLabelMarginChange(($event.target as HTMLInputElement).value)">
                   </div>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Позиция</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.position") }}</span>
                   <select class="sp-select sp-select--flex" :value="labelPlacement" @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)">
-                    <option value="auto">Авто</option>
-                    <option value="center">Центр</option>
-                    <option value="top">Сверху</option>
-                    <option value="bottom">Снизу</option>
-                    <option value="left">Слева</option>
-                    <option value="right">Справа</option>
+                    <option value="auto">{{ t("nodeStyle.positionAuto") }}</option>
+                    <option value="center">{{ t("nodeStyle.positionCenter") }}</option>
+                    <option value="top">{{ t("nodeStyle.positionTop") }}</option>
+                    <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
+                    <option value="left">{{ t("nodeStyle.positionLeft") }}</option>
+                    <option value="right">{{ t("nodeStyle.positionRight") }}</option>
                   </select>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Выравн.</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.align") }}</span>
                   <select class="sp-select sp-select--flex" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
-                    <option value="center">По центру</option>
-                    <option value="left">По левому</option>
-                    <option value="right">По правому</option>
+                    <option value="center">{{ t("nodeStyle.alignCenter") }}</option>
+                    <option value="left">{{ t("nodeStyle.alignLeft") }}</option>
+                    <option value="right">{{ t("nodeStyle.alignRight") }}</option>
                   </select>
                 </div>
               </div>
@@ -1867,7 +1876,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'shape')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.shape }">chevron_right</span>
-              <span class="sp-section__name">Фигура</span>
+              <span class="sp-section__name">{{ t("nodeStyle.figure") }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="nodeSection.shape" class="sp-section__content">
@@ -1879,7 +1888,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     type="button"
                     class="sp-shapes__item"
                     :class="{ 'sp-shapes__item--active': nodeShape === shape.value }"
-                    :title="shape.label"
+                    :title="t(shape.labelKey)"
                     @click="handleNodeShapeChange(shape.value)"
                   >
                     <svg width="28" height="20" viewBox="0 0 28 20">
@@ -1932,12 +1941,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'fill')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.fill }">chevron_right</span>
-              <span class="sp-section__name">Заливка и обводка</span>
+              <span class="sp-section__name">{{ t("nodeStyle.fillAndStroke") }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="nodeSection.fill" class="sp-section__content">
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Заливка</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
                   <SketchColorField
                     :model-value="fillColor"
                     :alpha-value="fillOpacity"
@@ -1950,7 +1959,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Обводка</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.stroke") }}</span>
                   <SketchColorField
                     :model-value="strokeColor"
                     :alpha-value="strokeOpacity"
@@ -1963,12 +1972,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Толщина</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.thickness") }}</span>
                   <input type="range" class="sp-range" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
                   <input type="number" class="sp-input sp-input--tiny" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Стиль</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.style") }}</span>
                   <div class="sp-segmented">
                     <button
                       type="button"
@@ -1989,7 +1998,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </div>
                 <div v-if="lineStyle === 'dashed'" class="sp-field sp-field--row">
-                  <span class="sp-field__label">Паттерн</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.pattern") }}</span>
                   <input type="text" class="sp-input sp-input--flex" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
                 </div>
               </div>
@@ -2000,16 +2009,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           <section class="sp-section">
             <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'icon')">
               <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.icon }">chevron_right</span>
-              <span class="sp-section__name">Иконка</span>
+              <span class="sp-section__name">{{ t("nodeStyle.icon") }}</span>
               <span v-if="iconName" class="sp-section__pill">{{ iconName }}</span>
             </button>
             <Transition name="sp-expand">
               <div v-if="nodeSection.icon" class="sp-section__content">
                 <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">Иконка</span>
+                  <span class="sp-field__label">{{ t("nodeStyle.icon") }}</span>
                   <div class="sp-icon-select">
                     <select class="sp-select sp-select--flex" :value="iconName" @change="handleIconChange(($event.target as HTMLSelectElement).value)">
-                      <option value="">Нет</option>
+                      <option value="">{{ t("nodeStyle.none") }}</option>
                       <option v-for="name in AVAILABLE_ICONS" :key="name" :value="name">{{ name }}</option>
                     </select>
                     <img v-if="iconName" class="sp-icon-select__preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
@@ -2017,32 +2026,32 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <template v-if="iconName">
                   <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">Позиция</span>
+                    <span class="sp-field__label">{{ t("nodeStyle.position") }}</span>
                     <select class="sp-select sp-select--flex" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
-                      <option value="top-left">Сверху слева</option>
-                      <option value="top-right">Сверху справа</option>
-                      <option value="bottom-left">Снизу слева</option>
-                      <option value="bottom-right">Снизу справа</option>
-                      <option value="center">По центру</option>
-                      <option value="top">Сверху</option>
-                      <option value="bottom">Снизу</option>
-                      <option value="left">Слева</option>
-                      <option value="right">Справа</option>
+                      <option value="top-left">{{ t("nodeStyle.positionTopLeft") }}</option>
+                      <option value="top-right">{{ t("nodeStyle.positionTopRight") }}</option>
+                      <option value="bottom-left">{{ t("nodeStyle.positionBottomLeft") }}</option>
+                      <option value="bottom-right">{{ t("nodeStyle.positionBottomRight") }}</option>
+                      <option value="center">{{ t("nodeStyle.alignCenter") }}</option>
+                      <option value="top">{{ t("nodeStyle.positionTop") }}</option>
+                      <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
+                      <option value="left">{{ t("nodeStyle.positionLeft") }}</option>
+                      <option value="right">{{ t("nodeStyle.positionRight") }}</option>
                     </select>
                   </div>
                   <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">Линии</span>
+                    <span class="sp-field__label">{{ t("nodeStyle.lines") }}</span>
                     <SketchColorField
                       :model-value="iconStrokeColor"
-                      title="Линии"
+                      :title="t('nodeStyle.lines')"
                       @update:model-value="handleIconStrokeColorChange"
                     />
                   </div>
                   <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">Заливка</span>
+                    <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
                     <SketchColorField
                       :model-value="iconFillColor"
-                      title="Заливка"
+                      :title="t('nodeStyle.fill')"
                       @update:model-value="handleIconFillColorChange"
                     />
                   </div>
@@ -2058,15 +2067,15 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                   <div class="sp-field-grid sp-field-grid--3">
                     <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">Внутр.</span>
+                      <span class="sp-num-field__label">{{ t("nodeStyle.innerShort") }}</span>
                       <input type="number" class="sp-input sp-input--sm" :value="iconPadding" min="0" max="100" step="1" @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)">
                     </div>
                     <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">Внешн.</span>
+                      <span class="sp-num-field__label">{{ t("nodeStyle.outerShort") }}</span>
                       <input type="number" class="sp-input sp-input--sm" :value="iconMargin" min="0" max="100" step="1" @input="handleIconMarginChange(($event.target as HTMLInputElement).value)">
                     </div>
                     <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">Зазор</span>
+                      <span class="sp-num-field__label">{{ t("nodeStyle.gap") }}</span>
                       <input type="number" class="sp-input sp-input--sm" :value="iconGap" min="0" max="100" step="1" @input="handleIconGapChange(($event.target as HTMLInputElement).value)">
                     </div>
                   </div>

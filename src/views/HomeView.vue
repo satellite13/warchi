@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useRouter } from "vue-router"
+import { useI18n } from "vue-i18n"
 import AppHeader from "../components/layout/AppHeader.vue"
 import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
@@ -10,66 +11,67 @@ import { getUserDisplayName } from "../utils/userDisplay"
 import changelogRaw from "../../CHANGELOG.ru.md?raw"
 
 const router = useRouter()
+const { t, locale } = useI18n()
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
 const appVersion = "0.0.13"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
-  if (hour < 6) return "Доброй ночи"
-  if (hour < 12) return "Доброе утро"
-  if (hour < 18) return "Добрый день"
-  return "Добрый вечер"
+  if (hour < 6) return t("home.greetingNight")
+  if (hour < 12) return t("home.greetingMorning")
+  if (hour < 18) return t("home.greetingDay")
+  return t("home.greetingEvening")
 })
 
 const userDisplayName = computed(() => {
-  return getUserDisplayName(currentUser.value, "пользователь")
+  return getUserDisplayName(currentUser.value, t("common.user"))
 })
 
 const statCards = computed(() => [
   {
     key: "models",
     icon: "schema",
-    label: "Модели",
+    label: t("home.models"),
     value: stats.value.models,
-    sub: `${totalVersions.value.models} версий`,
+    sub: t("home.versions", { count: totalVersions.value.models }),
     color: "#7c5cfc",
     route: "models"
   },
   {
     key: "notations",
     icon: "graph_3",
-    label: "Нотации",
+    label: t("home.notations"),
     value: stats.value.notations,
-    sub: `${totalVersions.value.notations} версий`,
+    sub: t("home.versions", { count: totalVersions.value.notations }),
     color: "#2bb896",
     route: "notations"
   },
   {
     key: "nodeTypes",
     icon: "category",
-    label: "Типы нод",
+    label: t("home.nodeTypes"),
     value: stats.value.nodeTypes,
-    sub: "определений",
+    sub: t("home.definitions"),
     color: "#f59e42",
     route: "types"
   },
   {
     key: "linkTypes",
     icon: "link",
-    label: "Типы связей",
+    label: t("home.linkTypes"),
     value: stats.value.linkTypes,
-    sub: "определений",
+    sub: t("home.definitions"),
     color: "#e05a9e",
     route: "types"
   }
 ])
 
-const quickActions = [
-  { icon: "add_circle", label: "Создать модель", route: "models", color: "#7c5cfc" },
-  { icon: "add_circle", label: "Создать нотацию", route: "notations", color: "#2bb896" },
-  { icon: "tune", label: "Редактор типов", route: "types", color: "#f59e42" }
-]
+const quickActions = computed(() => [
+  { icon: "add_circle", label: t("home.quickCreateModel"), route: "models", color: "#7c5cfc" },
+  { icon: "add_circle", label: t("home.quickCreateNotation"), route: "notations", color: "#2bb896" },
+  { icon: "tune", label: t("home.quickTypeEditor"), route: "types", color: "#f59e42" }
+])
 
 const gradientColors = [
   "linear-gradient(135deg, #7c5cfc 0%, #b06cff 100%)",
@@ -92,7 +94,8 @@ const formatDate = (dateStr?: string | null) => {
   if (!dateStr) return "—"
   const d = new Date(dateStr)
   if (Number.isNaN(d.getTime())) return "—"
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(d)
+  const dateLocale = locale.value === "en" ? "en-US" : "ru-RU"
+  return new Intl.DateTimeFormat(dateLocale, { dateStyle: "medium", timeStyle: "short" }).format(d)
 }
 
 const formatRelativeDate = (dateStr?: string | null) => {
@@ -102,20 +105,20 @@ const formatRelativeDate = (dateStr?: string | null) => {
   const now = Date.now()
   const diff = now - d.getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "только что"
-  if (mins < 60) return `${mins} мин назад`
+  if (mins < 1) return t("time.justNow")
+  if (mins < 60) return t("time.minutesAgo", { count: mins })
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} ч назад`
+  if (hours < 24) return t("time.hoursAgo", { count: hours })
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} дн назад`
+  if (days < 7) return t("time.daysAgo", { count: days })
   return formatDate(dateStr)
 }
 
 const operationLabel = (op: string) => {
   switch (op.toUpperCase()) {
-    case "INSERT": return "Создание"
-    case "UPDATE": return "Изменение"
-    case "DELETE": return "Удаление"
+    case "INSERT": return t("home.operationInsert")
+    case "UPDATE": return t("home.operationUpdate")
+    case "DELETE": return t("home.operationDelete")
     default: return op
   }
 }
@@ -140,16 +143,16 @@ const operationColor = (op: string) => {
 
 const tableLabel = (table: string) => {
   const map: Record<string, string> = {
-    models: "Модель",
-    notations: "Нотация",
-    diagrams: "Диаграмма",
-    nodes: "Нода",
-    links: "Связь",
-    components: "Компонент",
+    models: t("home.entityModel"),
+    notations: t("home.entityNotation"),
+    diagrams: t("home.entityDiagram"),
+    nodes: t("home.entityNode"),
+    links: t("home.entityLink"),
+    components: t("home.entityComponent"),
     relations: "Relation",
-    relation_rules: "Правило",
-    node_types: "Тип ноды",
-    link_types: "Тип связи"
+    relation_rules: t("home.entityRelationRule"),
+    node_types: t("home.entityNodeType"),
+    link_types: t("home.entityLinkType")
   }
   return map[table] ?? table
 }
@@ -183,7 +186,7 @@ const releaseNotes = computed(() => {
             <h1 class="hero__greeting">
               {{ greeting }}<span class="hero__name">, {{ userDisplayName }}</span>
             </h1>
-            <p class="hero__subtitle">Архитектурный репозиторий wArchi</p>
+            <p class="hero__subtitle">{{ t("home.subtitle") }}</p>
           </div>
           <div class="hero__decoration">
             <div class="hero__orb hero__orb--1" />
@@ -207,7 +210,7 @@ const releaseNotes = computed(() => {
             </div>
             <div class="stat-card__data">
               <span class="stat-card__value" :class="{ 'stat-card__value--loading': isLoading }">
-                {{ isLoading ? '—' : card.value }}
+                {{ isLoading ? t("common.loadingDash") : card.value }}
               </span>
               <span class="stat-card__label">{{ card.label }}</span>
               <span class="stat-card__sub">{{ isLoading ? '' : card.sub }}</span>
@@ -223,9 +226,9 @@ const releaseNotes = computed(() => {
             <section class="section">
               <div class="section__header">
                 <span class="material-symbols-outlined section__icon">schema</span>
-                <h2 class="section__title">Недавние модели</h2>
+                <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
                 <button type="button" class="section__link" @click="goTo('models')">
-                  Все модели
+                  {{ t("home.sectionAllModels") }}
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </button>
               </div>
@@ -234,7 +237,7 @@ const releaseNotes = computed(() => {
               </div>
               <div v-else-if="recentModels.length === 0" class="section__empty">
                 <span class="material-symbols-outlined">folder_off</span>
-                <span>Моделей пока нет</span>
+                <span>{{ t("home.sectionNoModels") }}</span>
               </div>
               <div v-else class="entity-list">
                 <button
@@ -258,9 +261,9 @@ const releaseNotes = computed(() => {
             <section class="section">
               <div class="section__header">
                 <span class="material-symbols-outlined section__icon">graph_3</span>
-                <h2 class="section__title">Недавние нотации</h2>
+                <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
                 <button type="button" class="section__link" @click="goTo('notations')">
-                  Все нотации
+                  {{ t("home.sectionAllNotations") }}
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </button>
               </div>
@@ -269,7 +272,7 @@ const releaseNotes = computed(() => {
               </div>
               <div v-else-if="recentNotations.length === 0" class="section__empty">
                 <span class="material-symbols-outlined">folder_off</span>
-                <span>Нотаций пока нет</span>
+                <span>{{ t("home.sectionNoNotations") }}</span>
               </div>
               <div v-else class="entity-list">
                 <button
@@ -292,7 +295,7 @@ const releaseNotes = computed(() => {
             <section class="section release-notes">
               <div class="section__header">
                 <span class="material-symbols-outlined section__icon">new_releases</span>
-                <h2 class="section__title">Изменения в версии v{{ appVersion }}</h2>
+                <h2 class="section__title">{{ t("home.sectionReleaseNotes", { version: appVersion }) }}</h2>
               </div>
               <ul v-if="releaseNotes.length > 0" class="release-notes__list">
                 <li v-for="(item, index) in releaseNotes" :key="`${index}-${item}`" class="release-notes__item">
@@ -301,7 +304,7 @@ const releaseNotes = computed(() => {
               </ul>
               <div v-else class="section__empty section__empty--compact">
                 <span class="material-symbols-outlined">description</span>
-                <span>Нет записей в changelog для текущей версии</span>
+                <span>{{ t("home.sectionReleaseNotesEmpty") }}</span>
               </div>
             </section>
           </div>
@@ -312,7 +315,7 @@ const releaseNotes = computed(() => {
             <section class="section section--compact">
               <div class="section__header">
                 <span class="material-symbols-outlined section__icon">bolt</span>
-                <h2 class="section__title">Быстрые действия</h2>
+                <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
               </div>
               <div class="actions-grid">
                 <button
@@ -333,14 +336,14 @@ const releaseNotes = computed(() => {
             <section class="section section--grow">
               <div class="section__header">
                 <span class="material-symbols-outlined section__icon">history</span>
-                <h2 class="section__title">Последние действия</h2>
+                <h2 class="section__title">{{ t("home.sectionRecentActivity") }}</h2>
               </div>
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 5" :key="i" class="skeleton-item skeleton-item--sm" />
               </div>
               <div v-else-if="recentActivity.length === 0" class="section__empty">
                 <span class="material-symbols-outlined">hourglass_empty</span>
-                <span>Действий пока нет</span>
+                <span>{{ t("home.sectionNoActivity") }}</span>
               </div>
               <div v-else class="activity-feed">
                 <div

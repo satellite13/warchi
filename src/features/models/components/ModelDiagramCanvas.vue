@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import {
   DiagramRenderer,
   RectangleNode,
@@ -80,6 +81,7 @@ const emit = defineEmits<{
   requestDeleteLink: [modelLinkId: string]
   paletteVisibleChange: [visible: boolean]
 }>()
+const { t } = useI18n()
 
 // ── Refs ──
 const containerRef = ref<HTMLElement | null>(null)
@@ -296,7 +298,7 @@ const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attr
 
 const getNoteText = (instance: DiagramNodeInstance): string => {
   const value = instance.attrs?.noteText
-  return typeof value === "string" && value.trim().length > 0 ? value : "Новая заметка"
+  return typeof value === "string" && value.trim().length > 0 ? value : t("diagram.newNote")
 }
 
 const getInstanceDimensions = (instance: { modelNodeId: string; width?: number; height?: number; attrs?: Record<string, unknown> }) => {
@@ -1246,12 +1248,12 @@ function initRenderer(r: DiagramRenderer) {
         if (instance && isNoteInstance(instance)) {
           return [
             {
-              label: "Редактировать заметку",
+              label: t("diagram.editNote"),
               icon: "edit_note",
               action: () => emit("requestEditNote", entity.instanceId)
             },
             {
-              label: "Удалить заметку",
+              label: t("diagram.deleteNote"),
               icon: "delete",
               action: () => emit("requestDeleteNodeFromDiagram", entity.modelNodeId)
             }
@@ -1259,12 +1261,12 @@ function initRenderer(r: DiagramRenderer) {
         }
         return [
           {
-            label: "Найти в дереве",
+            label: t("diagram.findInTree"),
             icon: "account_tree",
             action: () => emit("findInTree", entity.modelNodeId)
           },
           {
-            label: "Удалить с диаграммы",
+            label: t("diagram.removeFromDiagram"),
             icon: "delete",
             action: () => emit("requestDeleteNodeFromDiagram", entity.modelNodeId)
           }
@@ -1284,36 +1286,36 @@ function initRenderer(r: DiagramRenderer) {
 
         if (isDiagramOnly) {
           items.push(
-            { label: "Связь заметки", icon: "note", action: () => {} },
+            { label: t("diagram.noteLink"), icon: "note", action: () => {} },
             { separator: true }
           )
         }
 
         items.push(
           {
-            label: "Тип связи",
+            label: t("diagram.linkType"),
             icon: "conversion_path",
             items: [
               {
-                label: "Прямая",
+                label: t("diagram.linkTypeStraight"),
                 icon: "remove",
                 enabled: currentType !== "straight",
                 action: () => setEdgeTypeFromContext(entity.edgeId, "straight")
               },
               {
-                label: "Ломаная",
+                label: t("diagram.linkTypePolyline"),
                 icon: "timeline",
                 enabled: currentType !== "polyline",
                 action: () => setEdgeTypeFromContext(entity.edgeId, "polyline")
               },
               {
-                label: "Редактируемая ломаная",
+                label: t("diagram.linkTypeEditablePolyline"),
                 icon: "polyline",
                 enabled: currentType !== "editable-polyline",
                 action: () => setEdgeTypeFromContext(entity.edgeId, "editable-polyline")
               },
               {
-                label: "Безье",
+                label: t("diagram.linkTypeBezier"),
                 icon: "line_curve",
                 enabled: currentType !== "bezier",
                 action: () => setEdgeTypeFromContext(entity.edgeId, "bezier")
@@ -1322,7 +1324,7 @@ function initRenderer(r: DiagramRenderer) {
           },
           { separator: true },
           {
-            label: isDiagramOnly ? "Удалить связь заметки" : "Удалить",
+            label: isDiagramOnly ? t("diagram.deleteNoteLink") : t("common.delete"),
             icon: "delete",
             action: () => emit("requestDeleteLink", entity.modelLinkId)
           }
@@ -1866,8 +1868,8 @@ defineExpose({
 
     <div v-if="!activeDiagram" class="diagram-canvas__placeholder">
       <span class="material-symbols-outlined diagram-canvas__placeholder-icon">draw</span>
-      <span class="diagram-canvas__placeholder-text">Откройте или создайте диаграмму</span>
-      <span class="diagram-canvas__placeholder-hint">Выберите диаграмму в дереве слева</span>
+      <span class="diagram-canvas__placeholder-text">{{ t("diagram.openOrCreateDiagram") }}</span>
+      <span class="diagram-canvas__placeholder-hint">{{ t("diagram.selectDiagramInTree") }}</span>
     </div>
 
     <template v-if="activeDiagram">
@@ -1875,7 +1877,7 @@ defineExpose({
         v-if="!paletteVisible"
         type="button"
         class="canvas-palette-toggle"
-        title="Показать палитру нотации"
+        :title="t('diagram.showNotationPalette')"
         @click="setPaletteVisible(true)"
       >
         <span class="material-symbols-outlined">palette</span>
@@ -1884,24 +1886,24 @@ defineExpose({
       <div v-if="paletteVisible" class="canvas-palette">
         <div class="canvas-palette__header">
           <span class="material-symbols-outlined">palette</span>
-          <span>Палитра</span>
+          <span>{{ t("diagram.palette") }}</span>
           <button
             type="button"
             class="canvas-palette__hide"
-            title="Скрыть палитру"
+            :title="t('diagram.hidePalette')"
             @click="setPaletteVisible(false)"
           >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
         <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
-          В нотации нет компонентов. Доступна только заметка.
+          {{ t("diagram.noNotationComponents") }}
         </div>
         <div class="canvas-palette__list">
           <button
             type="button"
             class="canvas-palette__item canvas-palette__item--note"
-            title="Заметка"
+            :title="t('diagram.note')"
             draggable="true"
             @dragstart="onDragNoteStart"
           >

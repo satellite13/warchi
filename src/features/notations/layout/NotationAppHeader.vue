@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import {useRouter} from "vue-router";
+import { useI18n } from "vue-i18n";
 import AppLogo from "../../../components/layout/AppLogo.vue";
 import IconToolbar, {type ToolbarButton} from "./IconToolbar.vue";
 
@@ -35,35 +36,36 @@ const props = withDefaults(defineProps<{
 });
 
 const router = useRouter();
+const { t } = useI18n();
 const toolbarButtons = computed<ToolbarButton[]>(() => [
-  {icon: "undo", event: "undo", title: "Отменить", disabled: !props.canUndo},
-  {icon: "redo", event: "redo", title: "Повторить", disabled: !props.canRedo},
+  {icon: "undo", event: "undo", title: t("toolbar.undo"), disabled: !props.canUndo},
+  {icon: "redo", event: "redo", title: t("toolbar.redo"), disabled: !props.canRedo},
   {icon: "separator", event: "sep1", separator: true},
-  {icon: "zoom_in", event: "zoom-in", title: "Приблизить"},
-  {icon: "zoom_out", event: "zoom-out", title: "Отдалить"},
-  {icon: "fit_screen", event: "fit-screen", title: "Вписать в экран"},
-  {icon: "center_focus_strong", event: "zoom-selection", title: "Масштабировать выделение"},
-  {icon: "format_align_center", event: "auto-layout-components", title: "Авторазмещение компонентов"},
-  {icon: "restart_alt", event: "reset-view", title: "Сбросить масштаб"},
+  {icon: "zoom_in", event: "zoom-in", title: t("toolbar.zoomIn")},
+  {icon: "zoom_out", event: "zoom-out", title: t("toolbar.zoomOut")},
+  {icon: "fit_screen", event: "fit-screen", title: t("toolbar.fitScreen")},
+  {icon: "center_focus_strong", event: "zoom-selection", title: t("toolbar.zoomSelection")},
+  {icon: "format_align_center", event: "auto-layout-components", title: t("toolbar.autoLayoutComponents")},
+  {icon: "restart_alt", event: "reset-view", title: t("toolbar.resetZoom")},
   {icon: "separator", event: "sep2", separator: true},
-  {icon: "grid_on", event: "toggle-grid", title: "Сетка", active: props.gridVisible},
-  {icon: "map", event: "toggle-minimap", title: "Миникарта", active: props.miniMapVisible},
-  {icon: "my_location", event: "toggle-snap", title: "Привязка к сетке", active: props.snapEnabled},
-  {icon: "align_horizontal_left", event: "toggle-align", title: "Умное выравнивание", active: props.alignEnabled},
-  {icon: "straighten", event: "toggle-rulers", title: "Линейка", active: props.rulersEnabled},
+  {icon: "grid_on", event: "toggle-grid", title: t("toolbar.grid"), active: props.gridVisible},
+  {icon: "map", event: "toggle-minimap", title: t("toolbar.minimap"), active: props.miniMapVisible},
+  {icon: "my_location", event: "toggle-snap", title: t("toolbar.snapToGrid"), active: props.snapEnabled},
+  {icon: "align_horizontal_left", event: "toggle-align", title: t("toolbar.smartAlign"), active: props.alignEnabled},
+  {icon: "straighten", event: "toggle-rulers", title: t("toolbar.rulers"), active: props.rulersEnabled},
   {icon: "separator", event: "sep3", separator: true},
-  {icon: "image", event: "export-diagram-png", title: "Экспорт диаграммы в PNG"},
-  {icon: "description", event: "export-diagram-svg", title: "Экспорт диаграммы в SVG"},
+  {icon: "image", event: "export-diagram-png", title: t("toolbar.exportDiagramPng")},
+  {icon: "description", event: "export-diagram-svg", title: t("toolbar.exportDiagramSvg")},
   {icon: "separator", event: "sep4", separator: true},
-  {icon: "download", event: "export-notation", title: "Экспорт нотации"},
-  {icon: "upload", event: "import-notation", title: "Импорт нотации"},
+  {icon: "download", event: "export-notation", title: t("toolbar.exportNotation")},
+  {icon: "upload", event: "import-notation", title: t("toolbar.importNotation")},
   {icon: "separator", event: "sep5", separator: true},
-  {icon: "data_object", event: "show-attrs-json", title: "Просмотр JSON attrs"},
+  {icon: "data_object", event: "show-attrs-json", title: t("toolbar.showAttrsJson")},
   {icon: "separator", event: "sep6", separator: true},
   {
     icon: "save",
     event: "save",
-    title: props.hasUnsavedChanges ? "Сохранить (есть несохранённые изменения)" : "Сохранить",
+    title: props.hasUnsavedChanges ? t("toolbar.saveWithUnsaved") : t("toolbar.save"),
     badge: props.hasUnsavedChanges,
     disabled: !props.hasUnsavedChanges,
     variant: props.hasUnsavedChanges ? "primary" : "default"
@@ -82,14 +84,14 @@ const emit = defineEmits<{
   </div>
   <header v-else class="notation-header" :class="{ 'notation-header--no-toolbar': hideToolbar }">
     <div class="notation-header__left">
-      <button type="button" class="back-btn" title="К списку нотаций" @click="router.push({name: 'notations'})">
+      <button type="button" class="back-btn" :title="t('toolbar.backToNotations')" @click="router.push({name: 'notations'})">
         <span class="material-symbols-outlined">arrow_back</span>
       </button>
       <AppLogo size="sm"/>
       <span class="notation-header__divider">/</span>
-      <span class="notation-header__title">{{ notationName || "Редактор нотации" }}</span>
+      <span class="notation-header__title">{{ notationName || t("toolbar.notationEditor") }}</span>
       <span v-if="notationVersion" class="notation-header__version">{{ notationVersion }}</span>
-      <span v-if="hasUnsavedChanges" class="dirty-badge" title="Есть несохранённые изменения">
+      <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
         <span class="dirty-dot"></span>
         Не сохранено
       </span>
@@ -97,7 +99,7 @@ const emit = defineEmits<{
         v-if="canShare"
         type="button"
         class="share-btn"
-        title="Поделиться доступом"
+        :title="t('toolbar.shareAccess')"
         @click="emit('share')"
       >
         <span class="material-symbols-outlined">share</span>

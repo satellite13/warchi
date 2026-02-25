@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
 import { useEntityList } from "../../composables/useEntityList";
 import { apiPut } from "../../composables/useApi";
@@ -19,6 +20,7 @@ import BaseModal from "../../components/modals/BaseModal.vue";
 import ShareAccessModal from "../../components/modals/ShareAccessModal.vue";
 
 const router = useRouter();
+const { t } = useI18n();
 const { currentUser } = useAuth();
 
 const {
@@ -49,11 +51,11 @@ const {
   deleteItem
 } = useEntityList<ModelData>({
   endpoint: "models",
-  entityName: "Модель",
-  entityNamePlural: "модели",
-  conflictMessage: "Модель с таким именем и версией уже существует",
-  notFoundMessage: "Модель не найдена",
-  createNotFoundMessage: "Владелец не найден"
+  entityName: t("models.entityName"),
+  entityNamePlural: t("models.entityNamePlural"),
+  conflictMessage: t("models.conflictMessage"),
+  notFoundMessage: t("models.notFoundMessage"),
+  createNotFoundMessage: t("models.ownerNotFoundMessage")
 });
 
 const openModel = (id: string) => {
@@ -62,7 +64,7 @@ const openModel = (id: string) => {
 
 const handleCreate = () => {
   if (currentUser.value) {
-    createItem(currentUser.value.id, getUserDisplayName(currentUser.value, "Неизвестный пользователь"));
+    createItem(currentUser.value.id, getUserDisplayName(currentUser.value, t("common.unknownUser")));
   }
 };
 
@@ -95,7 +97,7 @@ const renameItem = async () => {
   if (!itemToRename.value) return;
   const trimmedName = renameName.value.trim();
   if (!trimmedName) {
-    renameError.value = "Введите название модели";
+    renameError.value = t("models.enterName");
     return;
   }
   const current = itemToRename.value;
@@ -109,7 +111,7 @@ const renameItem = async () => {
     item.name.trim().toLowerCase() === trimmedName.toLowerCase()
   );
   if (hasConflict) {
-    renameError.value = "Модель с таким именем и версией уже существует";
+    renameError.value = t("models.conflictMessage");
     return;
   }
 
@@ -125,7 +127,7 @@ const renameItem = async () => {
     const result = await apiPut<ModelData>(`/models/${current.id}`, request);
     if (!result.success) {
       if (result.error.status === 409) {
-        throw new Error("Модель с таким именем и версией уже существует");
+        throw new Error(t("models.conflictMessage"));
       }
       throw new Error(result.error.message);
     }
@@ -140,7 +142,7 @@ const renameItem = async () => {
     }
     closeRenameModal();
   } catch (error) {
-    renameError.value = error instanceof Error ? error.message : "Не удалось переименовать модель";
+    renameError.value = error instanceof Error ? error.message : t("models.renameFailed");
   } finally {
     isRenaming.value = false;
   }
@@ -157,20 +159,20 @@ const openShareModal = (item: ModelData) => {
     <header class="home-header">
       <ListHeader
         v-model="searchQuery"
-        placeholder="Поиск по названию..."
+        :placeholder="t('models.searchPlaceholder')"
         :count="itemCount"
         :loading="isLoading"
       />
     </header>
 
     <section class="model-grid">
-      <CreateCard title="Создать модель" description="Новая архитектурная модель" @click="openCreateModal"/>
+      <CreateCard :title="t('models.createTitle')" :description="t('models.createDescription')" @click="openCreateModal"/>
       <CardSkeleton v-if="isLoading" :count="4"/>
       <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
       <EmptyState
         v-else-if="filteredItems.length === 0 && searchQuery"
-        title="Модели не найдены"
-        description="Попробуйте изменить поисковый запрос"
+        :title="t('models.notFoundTitle')"
+        :description="t('models.notFoundDescription')"
         icon="search"
       />
 
@@ -195,7 +197,7 @@ const openShareModal = (item: ModelData) => {
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @version-change="handleVersionChange(group.name, $event)"
       >
-        <template #icon><span class="material-symbols-outlined" title="Модель">schema</span></template>
+        <template #icon><span class="material-symbols-outlined" :title="t('models.entityName')">schema</span></template>
       </EntityCard>
     </section>
 
@@ -203,10 +205,10 @@ const openShareModal = (item: ModelData) => {
       v-if="showCreateModal"
       v-model:name="newItemName"
       v-model:version="newItemVersion"
-      title="Создать модель"
-      name-label="Название"
-      name-placeholder="Название модели"
-      version-label="Версия"
+      :title="t('models.createTitle')"
+      :name-label="t('common.name')"
+      :name-placeholder="t('models.namePlaceholder')"
+      :version-label="t('common.version')"
       version-placeholder="1.0.0"
       name-id="model-name"
       version-id="model-version"
@@ -218,8 +220,8 @@ const openShareModal = (item: ModelData) => {
 
     <EntityDeleteModal
       v-if="showDeleteModal"
-      title="Удалить модель"
-      entity-label="модель"
+      :title="t('models.deleteTitle')"
+      :entity-label="t('models.entityLabelAccusative')"
       :entity-name="itemToDelete?.name"
       :is-deleting="isDeleting"
       :error="deleteError"
@@ -227,15 +229,15 @@ const openShareModal = (item: ModelData) => {
       @confirm="deleteItem"
     />
 
-    <BaseModal v-if="showRenameModal" title="Переименовать модель" @close="closeRenameModal">
+    <BaseModal v-if="showRenameModal" :title="t('models.renameTitle')" @close="closeRenameModal">
       <form class="rename-form" @submit.prevent="renameItem">
         <label class="rename-form__field">
-          <span class="rename-form__label">Название</span>
+          <span class="rename-form__label">{{ t("common.name") }}</span>
           <input
             v-model="renameName"
             class="rename-form__input"
             type="text"
-            placeholder="Название модели"
+            :placeholder="t('models.namePlaceholder')"
             :disabled="isRenaming"
             autofocus
           >
@@ -243,10 +245,10 @@ const openShareModal = (item: ModelData) => {
         <div v-if="renameError" class="rename-form__error">{{ renameError }}</div>
         <div class="rename-form__actions">
           <button type="button" class="btn btn--secondary" :disabled="isRenaming" @click="closeRenameModal">
-            Отмена
+            {{ t("common.cancel") }}
           </button>
           <button type="submit" class="btn btn--primary" :disabled="!canSubmitRename">
-            {{ isRenaming ? "Сохранение..." : "Сохранить" }}
+            {{ isRenaming ? t("common.saving") : t("common.save") }}
           </button>
         </div>
       </form>
@@ -254,7 +256,7 @@ const openShareModal = (item: ModelData) => {
 
     <ShareAccessModal
       v-if="showShareModal && shareTargetId"
-      title="Доступ к модели"
+      :title="t('models.accessTitle')"
       resource-type="MODEL"
       :resource-id="shareTargetId"
       @close="showShareModal = false; shareTargetId = null"

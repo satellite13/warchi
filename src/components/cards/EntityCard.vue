@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed} from "vue";
+import { useI18n } from "vue-i18n";
 import UserAvatar from "../layout/UserAvatar.vue";
 
 const props = defineProps<{
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   share: [];
   "version-change": [string];
 }>();
+const { t, locale } = useI18n();
 
 const gradientColors = [
   "linear-gradient(135deg, #7c5cfc 0%, #b06cff 100%)",
@@ -42,13 +44,13 @@ const cardColor = computed(() => {
 
 const formattedUpdatedAt = computed(() => {
   if (!props.updatedAt) {
-    return "—";
+    return t("common.loadingDash");
   }
   const date = new Date(props.updatedAt);
   if (Number.isNaN(date.getTime())) {
-    return "—";
+    return t("common.loadingDash");
   }
-  return new Intl.DateTimeFormat("ru-RU", {
+  return new Intl.DateTimeFormat(locale.value === "en" ? "en-US" : "ru-RU", {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
@@ -63,35 +65,35 @@ const formattedUpdatedAt = computed(() => {
       </div>
     </div>
     <div class="model-card__body">
-      <button class="model-card__delete" type="button" aria-label="Удалить модель" title="Удалить"
+      <button class="model-card__delete" type="button" :aria-label="t('common.delete')" :title="t('common.delete')"
               @click.stop="emit('delete')">
-        <span class="material-symbols-outlined" title="Удалить">delete</span>
+        <span class="material-symbols-outlined" :title="t('common.delete')">delete</span>
       </button>
-      <button class="model-card__rename" type="button" aria-label="Переименовать модель" title="Переименовать"
+      <button class="model-card__rename" type="button" :aria-label="t('common.rename')" :title="t('common.rename')"
               @click.stop="emit('rename')">
-        <span class="material-symbols-outlined" title="Переименовать">edit</span>
+        <span class="material-symbols-outlined" :title="t('common.rename')">edit</span>
       </button>
       <button
         v-if="canShare"
         class="model-card__share"
         type="button"
-        aria-label="Управлять доступом"
-        title="Поделиться"
+        :aria-label="t('share.manageAccess')"
+        :title="t('common.share')"
         @click.stop="emit('share')"
       >
-        <span class="material-symbols-outlined" title="Поделиться">share</span>
+        <span class="material-symbols-outlined" :title="t('common.share')">share</span>
       </button>
       <span class="model-card__title">{{ name }}</span>
       <div class="model-card__version">
         <span v-if="!versions || versions.length <= 1" class="model-card__badge">v{{ version }}</span>
         <label v-else class="model-card__select">
-          <span class="model-card__select-label">Версия</span>
+          <span class="model-card__select-label">{{ t("common.version") }}</span>
           <select :value="version" @click.stop
                   @change="emit('version-change', ($event.target as HTMLSelectElement).value)">
             <option v-for="ver in versions" :key="ver" :value="ver">v{{ ver }}</option>
           </select>
         </label>
-        <span class="model-card__updated">Обновлено: {{ formattedUpdatedAt }}</span>
+        <span class="model-card__updated">{{ t("common.updatedAt") }}: {{ formattedUpdatedAt }}</span>
       </div>
       <div v-if="accessLabel" class="model-card__access-badge">
         {{ accessLabel }}
@@ -99,7 +101,7 @@ const formattedUpdatedAt = computed(() => {
       <div class="model-card__owner">
         <UserAvatar :label="ownerEmail" size="md"/>
         <div class="owner-meta">
-          <span class="owner-email">{{ ownerEmail || 'Неизвестный пользователь' }}</span>
+          <span class="owner-email">{{ ownerEmail || t("common.unknownUser") }}</span>
         </div>
       </div>
     </div>

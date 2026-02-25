@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue"
+import { useI18n } from "vue-i18n"
 import type { NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   renameNode: [nodeId: string, name: string]
   toggleSyncSelection: []
 }>()
+const { t } = useI18n()
 
 const expandedNodes = ref<Set<string>>(new Set())
 const treeSearchQuery = ref("")
@@ -268,22 +270,22 @@ defineExpose({ expandToNode, focusNode })
     <div class="panel__header">
       <div class="panel__title-row">
         <span class="material-symbols-outlined">schema</span>
-        <span class="panel__title">{{ modelName || "Модель" }}</span>
+        <span class="panel__title">{{ modelName || t("models.entityName") }}</span>
       </div>
       <div class="panel__header-actions">
         <button
           type="button"
           class="mini-btn"
           :class="{ 'mini-btn--active': !!syncSelectionEnabled }"
-          :title="syncSelectionEnabled ? 'Отключить синхронизацию выбора' : 'Включить синхронизацию выбора'"
+          :title="syncSelectionEnabled ? t('models.disableSelectionSync') : t('models.enableSelectionSync')"
           @click="emit('toggleSyncSelection')"
         >
           <span class="material-symbols-outlined">{{ syncSelectionEnabled ? "link" : "link_off" }}</span>
         </button>
-        <button type="button" class="mini-btn" title="Добавить корневую папку" @click="emit('createFolder', null)">
+        <button type="button" class="mini-btn" :title="t('models.addRootFolder')" @click="emit('createFolder', null)">
           <span class="material-symbols-outlined">create_new_folder</span>
         </button>
-        <button type="button" class="mini-btn" title="Добавить корневую ноду" @click="emit('createNode', null)">
+        <button type="button" class="mini-btn" :title="t('models.addRootNode')" @click="emit('createNode', null)">
           <span class="material-symbols-outlined">add_box</span>
         </button>
       </div>
@@ -295,7 +297,7 @@ defineExpose({ expandToNode, focusNode })
         v-model="treeSearchQuery"
         type="text"
         class="tree-search__input"
-        placeholder="Поиск..."
+        :placeholder="t('common.search')"
       >
       <button
         v-if="treeSearchQuery"
@@ -314,8 +316,8 @@ defineExpose({ expandToNode, focusNode })
     >
       <div v-if="filteredRootNodes.length === 0" class="tree__empty">
         <span class="material-symbols-outlined tree__empty-icon">account_tree</span>
-        <span class="tree__empty-text">Нет нод</span>
-        <span class="tree__empty-hint">Создайте папку или ноду в шапке</span>
+        <span class="tree__empty-text">{{ t("models.noNodes") }}</span>
+        <span class="tree__empty-hint">{{ t("models.createFolderOrNodeHint") }}</span>
       </div>
       <template v-for="node in filteredRootNodes" :key="node.id">
         <div class="tree-node">
@@ -364,7 +366,7 @@ defineExpose({ expandToNode, focusNode })
                 v-if="isDirectory(node)"
                 type="button"
                 class="mini-btn"
-                title="Добавить дочернюю папку"
+                :title="t('models.addChildFolder')"
                 @click.stop="emit('createFolder', node.id)"
               >
                 <span class="material-symbols-outlined">create_new_folder</span>
@@ -373,7 +375,7 @@ defineExpose({ expandToNode, focusNode })
                 v-if="isDirectory(node)"
                 type="button"
                 class="mini-btn"
-                title="Добавить дочернюю ноду"
+                :title="t('models.addChildNode')"
                 @click.stop="emit('createNode', node.id)"
               >
                 <span class="material-symbols-outlined">add_box</span>
@@ -382,7 +384,7 @@ defineExpose({ expandToNode, focusNode })
                 v-if="isDirectory(node)"
                 type="button"
                 class="mini-btn"
-                title="Создать диаграмму"
+                :title="t('models.createDiagramTitle')"
                 @click.stop="emit('createDiagram', node.id)"
               >
                 <span class="material-symbols-outlined">add_chart</span>
@@ -391,12 +393,12 @@ defineExpose({ expandToNode, focusNode })
                 v-if="isDirectory(node)"
                 type="button"
                 class="mini-btn"
-                title="Переименовать папку"
+                :title="t('models.renameFolder')"
                 @click.stop="startRenameNode(node)"
               >
                 <span class="material-symbols-outlined">edit</span>
               </button>
-              <button type="button" class="mini-btn mini-btn--danger" title="Удалить" @click.stop="emit('deleteNode', node.id)">
+              <button type="button" class="mini-btn mini-btn--danger" :title="t('common.delete')" @click.stop="emit('deleteNode', node.id)">
                 <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
@@ -414,12 +416,12 @@ defineExpose({ expandToNode, focusNode })
               <button
                 type="button"
                 class="diagram-row__select"
-                title="Открыть диаграмму (двойной клик)"
+                :title="t('models.openDiagramDoubleClick')"
                 @dblclick="emit('openDiagram', diagram.id)"
               >
                 <span class="material-symbols-outlined">table_chart</span>
                 <span>{{ diagram.name }}</span>
-                <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">Открыта</span>
+                <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
               </button>
               <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
                 <span class="material-symbols-outlined">delete</span>
@@ -476,7 +478,7 @@ defineExpose({ expandToNode, focusNode })
                     v-if="isDirectory(child)"
                     type="button"
                     class="mini-btn"
-                    title="Добавить дочернюю папку"
+                    :title="t('models.addChildFolder')"
                     @click.stop="emit('createFolder', child.id)"
                   >
                     <span class="material-symbols-outlined">create_new_folder</span>
@@ -485,7 +487,7 @@ defineExpose({ expandToNode, focusNode })
                     v-if="isDirectory(child)"
                     type="button"
                     class="mini-btn"
-                    title="Добавить дочернюю ноду"
+                    :title="t('models.addChildNode')"
                     @click.stop="emit('createNode', child.id)"
                   >
                     <span class="material-symbols-outlined">add_box</span>
@@ -494,7 +496,7 @@ defineExpose({ expandToNode, focusNode })
                     v-if="isDirectory(child)"
                     type="button"
                     class="mini-btn"
-                    title="Переименовать папку"
+                    :title="t('models.renameFolder')"
                     @click.stop="startRenameNode(child)"
                   >
                     <span class="material-symbols-outlined">edit</span>
@@ -525,12 +527,12 @@ defineExpose({ expandToNode, focusNode })
                   <button
                     type="button"
                     class="diagram-row__select"
-                    title="Открыть диаграмму (двойной клик)"
+                    :title="t('models.openDiagramDoubleClick')"
                     @dblclick="emit('openDiagram', diagram.id)"
                   >
                     <span class="material-symbols-outlined">table_chart</span>
                     <span>{{ diagram.name }}</span>
-                    <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">Открыта</span>
+                    <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
                   </button>
                   <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
                     <span class="material-symbols-outlined">delete</span>
@@ -587,7 +589,7 @@ defineExpose({ expandToNode, focusNode })
                         v-if="isDirectory(grandchild)"
                         type="button"
                         class="mini-btn"
-                        title="Добавить дочернюю папку"
+                        :title="t('models.addChildFolder')"
                         @click.stop="emit('createFolder', grandchild.id)"
                       >
                         <span class="material-symbols-outlined">create_new_folder</span>
@@ -596,7 +598,7 @@ defineExpose({ expandToNode, focusNode })
                         v-if="isDirectory(grandchild)"
                         type="button"
                         class="mini-btn"
-                        title="Добавить дочернюю ноду"
+                        :title="t('models.addChildNode')"
                         @click.stop="emit('createNode', grandchild.id)"
                       >
                         <span class="material-symbols-outlined">add_box</span>
@@ -605,7 +607,7 @@ defineExpose({ expandToNode, focusNode })
                         v-if="isDirectory(grandchild)"
                         type="button"
                         class="mini-btn"
-                        title="Переименовать папку"
+                        :title="t('models.renameFolder')"
                         @click.stop="startRenameNode(grandchild)"
                       >
                         <span class="material-symbols-outlined">edit</span>

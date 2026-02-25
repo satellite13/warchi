@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue"
+import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import PropertyRow from "./PropertyRow.vue"
 
@@ -24,6 +25,7 @@ const emit = defineEmits<{
 
 const expandedIds = reactive(new Set<string>())
 const propertySearchQuery = ref("")
+const { t } = useI18n()
 
 const toggleCollapse = (id: string) => {
   if (expandedIds.has(id)) expandedIds.delete(id)
@@ -48,11 +50,11 @@ const filteredCustomProperties = computed(() => {
           </span>
         </div>
         <h2 class="type-form__title">
-          {{ selectedType.kind === 'node' ? 'Тип узла' : 'Тип связи' }}
+          {{ selectedType.kind === 'node' ? t('types.nodeType') : t('types.linkType') }}
         </h2>
-        <span v-if="isDirty" class="dirty-badge" title="Есть несохранённые изменения">
+        <span v-if="isDirty" class="dirty-badge" :title="t('types.unsavedChangesHint')">
           <span class="dirty-dot"></span>
-          Не сохранено
+          {{ t("types.notSaved") }}
         </span>
       </div>
       <div class="type-form__actions">
@@ -64,7 +66,7 @@ const filteredCustomProperties = computed(() => {
           @click="emit('share')"
         >
           <span class="material-symbols-outlined">share</span>
-          Поделиться
+          {{ t("common.share") }}
         </button>
         <button
           v-if="!isTypeInUse"
@@ -74,7 +76,7 @@ const filteredCustomProperties = computed(() => {
           @click="emit('delete')"
         >
           <span class="material-symbols-outlined">delete</span>
-          Удалить
+          {{ t("common.delete") }}
         </button>
         <button
           type="button"
@@ -83,7 +85,7 @@ const filteredCustomProperties = computed(() => {
           @click="emit('save')"
         >
           <span class="material-symbols-outlined">save</span>
-          {{ isSaving ? 'Сохранение...' : 'Сохранить' }}
+          {{ isSaving ? t("common.saving") : t("common.save") }}
         </button>
       </div>
     </div>
@@ -91,26 +93,26 @@ const filteredCustomProperties = computed(() => {
     <div class="type-form__body">
       <!-- Name -->
       <div class="form-section">
-        <h3 class="form-section__title">Основные</h3>
+        <h3 class="form-section__title">{{ t("types.main") }}</h3>
         <div class="form-row">
-          <label class="form-label">Имя</label>
+          <label class="form-label">{{ t("common.name") }}</label>
           <input
             class="form-input"
             :value="selectedType.name"
-            placeholder="Название типа"
+            :placeholder="t('types.typeNamePlaceholder')"
             @input="emit('updateName', ($event.target as HTMLInputElement).value)"
           >
         </div>
         <div class="form-row">
-          <label class="form-label">Автор</label>
+          <label class="form-label">{{ t("common.author") }}</label>
           <div class="form-input form-input--readonly">{{ ownerDisplayName }}</div>
         </div>
         <div v-if="selectedType.kind === 'node'" class="form-row">
-          <label class="form-label">Директория</label>
+          <label class="form-label">{{ t("types.directory") }}</label>
           <input
             class="form-input"
             :value="selectedType.parsedAttrs.defaultDirectoryPath ?? ''"
-            placeholder="Например: Домены/Продажи/Лиды"
+            :placeholder="t('types.directoryExample')"
             @input="emit('updateDefaultDirectoryPath', ($event.target as HTMLInputElement).value)"
           >
         </div>
@@ -119,11 +121,11 @@ const filteredCustomProperties = computed(() => {
       <!-- Custom Properties -->
       <div class="form-section">
         <div class="form-section__header">
-          <h3 class="form-section__title">Свойства</h3>
+          <h3 class="form-section__title">{{ t("types.properties") }}</h3>
           <button
             type="button"
             class="add-btn"
-            title="Добавить свойство"
+            :title="t('types.addProperty')"
             @click="emit('addProperty')"
           >
             <span class="material-symbols-outlined">add</span>
@@ -136,13 +138,13 @@ const filteredCustomProperties = computed(() => {
             v-model="propertySearchQuery"
             class="properties-search__input"
             type="text"
-            placeholder="Фильтр по имени свойства..."
+            :placeholder="t('types.filterByPropertyName')"
           >
           <button
             v-if="propertySearchQuery"
             type="button"
             class="properties-search__clear"
-            title="Очистить фильтр"
+            :title="t('types.clearFilter')"
             @click="propertySearchQuery = ''"
           >
             <span class="material-symbols-outlined">close</span>
@@ -153,11 +155,11 @@ const filteredCustomProperties = computed(() => {
           v-if="!selectedType.parsedAttrs.customProperties?.length"
           class="form-section__empty"
         >
-          Нет свойств.
+          {{ t("types.noProperties") }}
           <button
             type="button"
             class="link-btn--icon"
-            title="Добавить свойство"
+            :title="t('types.addProperty')"
             @click="emit('addProperty')"
           >
             <span class="material-symbols-outlined">add</span>
@@ -165,7 +167,7 @@ const filteredCustomProperties = computed(() => {
         </div>
 
         <div v-else-if="filteredCustomProperties.length === 0" class="form-section__empty">
-          По фильтру ничего не найдено.
+          {{ t("types.noPropertiesByFilter") }}
         </div>
 
         <div v-else class="properties-list">

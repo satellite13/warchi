@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import {computed} from "vue";
 import {useRouter} from "vue-router";
+import { useI18n } from "vue-i18n";
 import {useAuth} from "../../composables/useAuth";
 import {getUserDisplayName} from "../../utils/userDisplay";
 import AppLogo from "./AppLogo.vue";
 import UserAvatar from "./UserAvatar.vue";
 import NavigationMenu from "../menu/NavigationMenu.vue";
+import LanguageSwitcher from "./LanguageSwitcher.vue";
 
 const router = useRouter();
+const { t } = useI18n();
 const {currentUser, logout} = useAuth();
-const userDisplayName = computed(() => getUserDisplayName(currentUser.value, "Пользователь"));
+const userDisplayName = computed(() => getUserDisplayName(currentUser.value, t("common.user")));
 
 const handleLogout = () => {
   logout();
@@ -24,6 +27,7 @@ const handleLogout = () => {
       <NavigationMenu/>
     </div>
     <div class="user-info">
+      <LanguageSwitcher />
       <UserAvatar :label="userDisplayName" size="sm"/>
       <span class="user-email">{{ userDisplayName }}</span>
       <span v-if="currentUser?.role" class="user-role">{{ currentUser.role }}</span>

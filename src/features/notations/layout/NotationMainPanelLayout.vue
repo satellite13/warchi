@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue"
+import { useI18n } from "vue-i18n"
 
 const props = withDefaults(defineProps<{
   propertiesHeight?: number
@@ -10,6 +11,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: "update:propertiesHeight", value: number): void
 }>()
+const { t } = useI18n()
 
 const STORAGE_KEY = "warchi:notation-editor:workspace"
 type WorkspaceSettings = {
@@ -223,7 +225,7 @@ onBeforeUnmount(() => {
           class="notation-panel__resizer"
           role="separator"
           aria-orientation="horizontal"
-          title="Потяните, чтобы изменить высоту панели свойств"
+          :title="t('notations.resizePropertiesPanelHeight')"
           @mousedown.prevent="startDragging"
         >
           <span class="notation-panel__resizer-handle"></span>
@@ -241,7 +243,7 @@ onBeforeUnmount(() => {
         :style="leftResizerStyle"
         role="separator"
         aria-orientation="vertical"
-        title="Потяните, чтобы изменить ширину панели элементов"
+        :title="t('notations.resizeElementsPanelWidth')"
         @mousedown.prevent="startSideResize('left', $event)"
       >
         <span class="notation-panel__side-resizer-handle"></span>
@@ -252,7 +254,7 @@ onBeforeUnmount(() => {
         :style="rightResizerStyle"
         role="separator"
         aria-orientation="vertical"
-        title="Потяните, чтобы изменить ширину панели стилей"
+        :title="t('notations.resizeStylesPanelWidth')"
         @mousedown.prevent="startSideResize('right', $event)"
       >
         <span class="notation-panel__side-resizer-handle"></span>
@@ -261,7 +263,7 @@ onBeforeUnmount(() => {
     <button
       type="button"
       class="notation-panel__collapse-btn notation-panel__collapse-btn--left"
-      :title="leftCollapsed ? 'Показать панель элементов' : 'Скрыть панель элементов'"
+      :title="leftCollapsed ? t('notations.showElementsPanel') : t('notations.hideElementsPanel')"
       @click="toggleLeft"
     >
       <span class="material-symbols-outlined">{{ leftCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
@@ -269,7 +271,7 @@ onBeforeUnmount(() => {
     <button
       type="button"
       class="notation-panel__collapse-btn notation-panel__collapse-btn--right"
-      :title="rightCollapsed ? 'Показать панель стилей' : 'Скрыть панель стилей'"
+      :title="rightCollapsed ? t('notations.showStylesPanel') : t('notations.hideStylesPanel')"
       @click="toggleRight"
     >
       <span class="material-symbols-outlined">{{ rightCollapsed ? 'chevron_left' : 'chevron_right' }}</span>

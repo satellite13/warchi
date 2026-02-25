@@ -47,6 +47,7 @@ const props = withDefaults(defineProps<{
   rulersEnabled?: boolean
   paletteVisible?: boolean
   lockAnchorsEnabled?: boolean
+  attachToOutlineEnabled?: boolean
 }>(), {
   gridVisible: true,
   miniMapVisible: true,
@@ -54,7 +55,8 @@ const props = withDefaults(defineProps<{
   alignEnabled: true,
   rulersEnabled: true,
   paletteVisible: true,
-  lockAnchorsEnabled: true
+  lockAnchorsEnabled: true,
+  attachToOutlineEnabled: true
 })
 
 const emit = defineEmits<{
@@ -72,7 +74,9 @@ const emit = defineEmits<{
     sourceInstanceId: string,
     targetInstanceId: string,
     sourcePortId?: string,
-    targetPortId?: string
+    targetPortId?: string,
+    sourceOutlineParam?: number,
+    targetOutlineParam?: number
   ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
@@ -93,6 +97,7 @@ const snapEnabled = ref(props.snapEnabled)
 const alignEnabled = ref(props.alignEnabled)
 const rulersEnabled = ref(props.rulersEnabled)
 const lockAnchorsEnabled = ref(props.lockAnchorsEnabled)
+const attachToOutlineEnabled = ref(props.attachToOutlineEnabled)
 const canUndo = ref(false)
 const canRedo = ref(false)
 
@@ -740,18 +745,14 @@ function syncDiagram() {
 
     const existing = renderer.getEdge(papEdgeId)
     if (existing) {
-      if (existing.from.nodeId !== sourcePapId) {
-        existing.from = {
-          nodeId: sourcePapId,
-          portId: (edge.attrs?.fromPortId as string | undefined) ?? existing.from.portId
-        }
-      }
-      if (existing.to.nodeId !== targetPapId) {
-        existing.to = {
-          nodeId: targetPapId,
-          portId: (edge.attrs?.toPortId as string | undefined) ?? existing.to.portId
-        }
-      }
+      const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
+      const toOutline = edge.attrs?.toOutlineParam as number | undefined
+      existing.from = fromOutline !== undefined
+        ? { nodeId: sourcePapId, outlineParam: fromOutline }
+        : { nodeId: sourcePapId, portId: (edge.attrs?.fromPortId as string | undefined) ?? existing.from.portId }
+      existing.to = toOutline !== undefined
+        ? { nodeId: targetPapId, outlineParam: toOutline }
+        : { nodeId: targetPapId, portId: (edge.attrs?.toPortId as string | undefined) ?? existing.to.portId }
       if (edgeOpts.style) existing.style = { ...existing.style, ...edgeOpts.style }
       if (edgeOpts.type) existing.type = edgeOpts.type
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
@@ -778,10 +779,16 @@ function syncDiagram() {
       existing.lockAnchors = lockAnchorsEnabled.value
       ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground = edgeLabelBackground
     } else {
+      const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
+      const toOutline = edge.attrs?.toOutlineParam as number | undefined
       const newEdge = new Edge({
         id: papEdgeId,
-        from: { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
-        to: { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
+        from: fromOutline !== undefined
+          ? { nodeId: sourcePapId, outlineParam: fromOutline }
+          : { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
+        to: toOutline !== undefined
+          ? { nodeId: targetPapId, outlineParam: toOutline }
+          : { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
         type: edgeOpts.type ?? "bezier",
         arrowType: ds?.endMarkerType ? undefined : "single",
         style: edgeOpts.style,
@@ -982,7 +989,7 @@ function detectEdgeLabelChanges() {
 }
 
 function detectEdgePortChanges() {
-  if (!renderer || !lockAnchorsEnabled.value) return
+  if (!renderer) return
 
   const next = cloneDiagramAttrs()
   let changed = false
@@ -996,18 +1003,30 @@ function detectEdgePortChanges() {
 
     const nextFromPortId = papEdge.from.portId ?? undefined
     const nextToPortId = papEdge.to.portId ?? undefined
+    const nextFromOutline = papEdge.from.outlineParam
+    const nextToOutline = papEdge.to.outlineParam
     const currentFromPortId = edgeInst.attrs?.fromPortId as string | undefined
     const currentToPortId = edgeInst.attrs?.toPortId as string | undefined
+    const currentFromOutline = edgeInst.attrs?.fromOutlineParam as number | undefined
+    const currentToOutline = edgeInst.attrs?.toOutlineParam as number | undefined
 
-    if (nextFromPortId === currentFromPortId && nextToPortId === currentToPortId) {
-      continue
-    }
+    const portMatch = nextFromPortId === currentFromPortId && nextToPortId === currentToPortId
+    const outlineMatch = nextFromOutline === currentFromOutline && nextToOutline === currentToOutline
+    if (portMatch && outlineMatch) continue
 
     if (!edgeInst.attrs) edgeInst.attrs = {}
-    if (nextFromPortId) edgeInst.attrs.fromPortId = nextFromPortId
-    else delete edgeInst.attrs.fromPortId
-    if (nextToPortId) edgeInst.attrs.toPortId = nextToPortId
-    else delete edgeInst.attrs.toPortId
+    if (lockAnchorsEnabled.value) {
+      if (nextFromPortId) edgeInst.attrs.fromPortId = nextFromPortId
+      else delete edgeInst.attrs.fromPortId
+      if (nextToPortId) edgeInst.attrs.toPortId = nextToPortId
+      else delete edgeInst.attrs.toPortId
+    }
+    if (attachToOutlineEnabled.value) {
+      if (nextFromOutline !== undefined) edgeInst.attrs.fromOutlineParam = nextFromOutline
+      else delete edgeInst.attrs.fromOutlineParam
+      if (nextToOutline !== undefined) edgeInst.attrs.toOutlineParam = nextToOutline
+      else delete edgeInst.attrs.toOutlineParam
+    }
 
     if (Object.keys(edgeInst.attrs).length === 0) {
       delete edgeInst.attrs
@@ -1112,7 +1131,7 @@ function persistNodePositions(papNodeIds: string[]) {
 }
 
 function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
-  if (!renderer || !lockAnchorsEnabled.value) return
+  if (!renderer) return
   for (const edgeInst of diagramAttrs.instances.edges) {
     const papEdge = renderer.getEdge(`edge-${edgeInst.id}`)
     if (!papEdge) continue
@@ -1121,6 +1140,10 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
     else delete edgeInst.attrs.fromPortId
     if (papEdge.to.portId) edgeInst.attrs.toPortId = papEdge.to.portId
     else delete edgeInst.attrs.toPortId
+    if (papEdge.from.outlineParam !== undefined) edgeInst.attrs.fromOutlineParam = papEdge.from.outlineParam
+    else delete edgeInst.attrs.fromOutlineParam
+    if (papEdge.to.outlineParam !== undefined) edgeInst.attrs.toOutlineParam = papEdge.to.outlineParam
+    else delete edgeInst.attrs.toOutlineParam
   }
 }
 
@@ -1157,9 +1180,11 @@ function initRenderer(r: DiagramRenderer) {
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
     alignToNodes: alignEnabled.value,
+    attachToOutline: attachToOutlineEnabled.value,
     keymap: { deleteKeys: [] }
   })
   interactionManager.connection.setSnapToGrid(snapEnabled.value)
+  interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
   // Warchi persists connections via model state/events.
   // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
   ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (edge: Edge) => {
@@ -1233,7 +1258,9 @@ function initRenderer(r: DiagramRenderer) {
     const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
     if (sourceEntity && targetEntity) {
       emit("connectNodes", sourceEntity.modelNodeId, targetEntity.modelNodeId,
-           sourceEntity.instanceId, targetEntity.instanceId, edge.from.portId, edge.to.portId)
+           sourceEntity.instanceId, targetEntity.instanceId,
+           edge.from.portId ?? undefined, edge.to.portId ?? undefined,
+           edge.from.outlineParam, edge.to.outlineParam)
     }
     // Remove the edge papirus created — parent will add it through state
     renderer?.removeEdge(edge.id)
@@ -1830,6 +1857,16 @@ watch(
       edge.lockAnchors = next
     }
     renderer.markDirty()
+  }
+)
+
+watch(
+  () => props.attachToOutlineEnabled,
+  (next) => {
+    if (next === attachToOutlineEnabled.value) return
+    attachToOutlineEnabled.value = next
+    interactionManager?.connection.setAttachToOutline(next)
+    renderer?.markDirty()
   }
 )
 

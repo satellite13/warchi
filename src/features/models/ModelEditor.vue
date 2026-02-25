@@ -70,6 +70,7 @@ const snapEnabled = ref(false)
 const alignEnabled = ref(true)
 const rulersEnabled = ref(true)
 const lockAnchorsEnabled = ref(true)
+const attachToOutlineEnabled = ref(true)
 const selectionSyncEnabled = ref(true)
 const canvasSettingsVisible = ref(true)
 const paletteVisible = ref(true)
@@ -83,6 +84,7 @@ type ToolbarState = {
   alignEnabled: boolean
   rulersEnabled: boolean
   lockAnchorsEnabled: boolean
+  attachToOutlineEnabled: boolean
   canvasSettingsVisible: boolean
   paletteVisible: boolean
 }
@@ -112,6 +114,7 @@ const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
   if (typeof stateValue.alignEnabled === "boolean") alignEnabled.value = stateValue.alignEnabled
   if (typeof stateValue.rulersEnabled === "boolean") rulersEnabled.value = stateValue.rulersEnabled
   if (typeof stateValue.lockAnchorsEnabled === "boolean") lockAnchorsEnabled.value = stateValue.lockAnchorsEnabled
+  if (typeof stateValue.attachToOutlineEnabled === "boolean") attachToOutlineEnabled.value = stateValue.attachToOutlineEnabled
   if (typeof stateValue.canvasSettingsVisible === "boolean") canvasSettingsVisible.value = stateValue.canvasSettingsVisible
   if (typeof stateValue.paletteVisible === "boolean") paletteVisible.value = stateValue.paletteVisible
 }
@@ -125,6 +128,7 @@ const persistToolbarState = (userId: string | null) => {
     alignEnabled: alignEnabled.value,
     rulersEnabled: rulersEnabled.value,
     lockAnchorsEnabled: lockAnchorsEnabled.value,
+    attachToOutlineEnabled: attachToOutlineEnabled.value,
     canvasSettingsVisible: canvasSettingsVisible.value,
     paletteVisible: paletteVisible.value
   }
@@ -174,6 +178,13 @@ const canvasToggleButtons = computed<ToolbarButton[]>(() => [
     event: "toggle-lock-anchors",
     title: t("toolbar.lockLinkAnchors"),
     active: lockAnchorsEnabled.value,
+    disabled: !activeDiagram.value
+  },
+  {
+    icon: "route",
+    event: "toggle-outline",
+    title: t("toolbar.outline"),
+    active: attachToOutlineEnabled.value,
     disabled: !activeDiagram.value
   }
 ])
@@ -227,8 +238,8 @@ watch(
 )
 
 watch(
-  [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, lockAnchorsEnabled, canvasSettingsVisible, paletteVisible, () => currentUser.value?.id ?? null],
-  ([, , , , , , , , userId]) => {
+  [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, lockAnchorsEnabled, attachToOutlineEnabled, canvasSettingsVisible, paletteVisible, () => currentUser.value?.id ?? null],
+  ([, , , , , , , , , userId]) => {
     persistToolbarState(userId as string | null)
   }
 )
@@ -393,6 +404,8 @@ const pendingConnection = ref<{
   targetInstanceId: string
   sourcePortId?: string
   targetPortId?: string
+  sourceOutlineParam?: number
+  targetOutlineParam?: number
 } | null>(null)
 
 const showReuseLinkModal = ref(false)
@@ -1370,7 +1383,9 @@ const startConnectNodes = (
   sourceInstanceId: string,
   targetInstanceId: string,
   sourcePortId?: string,
-  targetPortId?: string
+  targetPortId?: string,
+  sourceOutlineParam?: number,
+  targetOutlineParam?: number
 ) => {
   const diagram = activeDiagram.value
   if (!diagram) return
@@ -1386,6 +1401,8 @@ const startConnectNodes = (
     }
     if (sourcePortId) edgeAttrs.fromPortId = sourcePortId
     if (targetPortId) edgeAttrs.toPortId = targetPortId
+    if (sourceOutlineParam !== undefined) edgeAttrs.fromOutlineParam = sourceOutlineParam
+    if (targetOutlineParam !== undefined) edgeAttrs.toOutlineParam = targetOutlineParam
     const noteEdgeInstance = {
       id: createId(),
       modelLinkId,
@@ -1448,7 +1465,9 @@ const startConnectNodes = (
     sourceInstanceId,
     targetInstanceId,
     sourcePortId,
-    targetPortId
+    targetPortId,
+    sourceOutlineParam,
+    targetOutlineParam
   }
   if (allowedRelations.length === 1) {
     finalizeConnection(allowedRelations[0]!.id)
@@ -1526,6 +1545,12 @@ const createOrReuseLink = (linkId: string | null) => {
   }
   if (connection.targetPortId) {
     edgeAttrs.toPortId = connection.targetPortId
+  }
+  if (connection.sourceOutlineParam !== undefined) {
+    edgeAttrs.fromOutlineParam = connection.sourceOutlineParam
+  }
+  if (connection.targetOutlineParam !== undefined) {
+    edgeAttrs.toOutlineParam = connection.targetOutlineParam
   }
   const newEdgeInstance = {
     id: createId(),
@@ -1998,6 +2023,10 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     }
+    case "toggle-outline": {
+      attachToOutlineEnabled.value = !attachToOutlineEnabled.value
+      break
+    }
     case "toggle-lock-anchors": {
       const next = diagramCanvasRef.value?.toggleLockAnchors()
       if (typeof next === "boolean") lockAnchorsEnabled.value = next
@@ -2426,6 +2455,7 @@ onBeforeUnmount(() => {
             :rulers-enabled="rulersEnabled"
             :palette-visible="paletteVisible"
             :lock-anchors-enabled="lockAnchorsEnabled"
+            :attach-to-outline-enabled="attachToOutlineEnabled"
             :selected-model-node-ids="selectedModelNodeIds"
             :selected-model-link-id="selectedModelLinkId"
             :connection-validator="canConnect"

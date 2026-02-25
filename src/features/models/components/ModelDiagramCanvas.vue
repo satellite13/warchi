@@ -1070,6 +1070,13 @@ function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) 
     ...baseStyle,
     edgeType
   }
+  // При смене с polyline/editable-polyline на bezier или straight удаляем промежуточные точки:
+  // они имеют другой формат/семантику и искажают отрисовку стрелки
+  const fromPolyline = currentType === "polyline" || currentType === "editable-polyline"
+  const toNonPolyline = edgeType === "bezier" || edgeType === "straight"
+  if (fromPolyline && toNonPolyline && edgeInst.attrs.controlPoints) {
+    delete edgeInst.attrs.controlPoints
+  }
   emit("updateDiagram", next)
 }
 

@@ -2096,7 +2096,18 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
 
   if (targetEdgeInstance) {
     if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
+    const baseStyle =
+      targetEdgeInstance.attrs.diagramStyle && typeof targetEdgeInstance.attrs.diagramStyle === "object"
+        ? (targetEdgeInstance.attrs.diagramStyle as Record<string, unknown>)
+        : {}
+    const currentType = (baseStyle.edgeType as string | undefined) ?? "bezier"
+    const newType = (style as Record<string, unknown>).edgeType as string | undefined
+    const fromPolyline = currentType === "polyline" || currentType === "editable-polyline"
+    const toNonPolyline = newType === "bezier" || newType === "straight"
     targetEdgeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
+    if (fromPolyline && toNonPolyline && targetEdgeInstance.attrs.controlPoints) {
+      delete targetEdgeInstance.attrs.controlPoints
+    }
     markDiagramDirty(diagram.id)
   }
 }

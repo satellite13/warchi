@@ -17,7 +17,7 @@ const { t, locale } = useI18n()
 const changelogRaw = computed(() => (locale.value === "en" ? changelogEn : changelogRu))
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
-const appVersion = "0.0.15"
+const appVersion = "0.0.16"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()

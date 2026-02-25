@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.16] - 2026-02-25
+
+### Fixed
+- When switching edge type from polyline or editable-polyline to bezier or straight, control points are now removed to prevent distorted arrow rendering.
+
+### Release
+- Bumped application version to `0.0.16` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.16`.
+
 ## [0.0.15] - 2026-02-25
 
 ### Added

@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.14] - 2026-02-25
+
+### Added
+- Full RU/EN localization of the interface with language switcher in the header.
+- Localized documentation: all help sections (overview, models, notations, diagrams, types, hotkeys, FAQ) and changelog available in both Russian and English.
+
+### Changed
+- Documentation content loads based on current locale; switching language updates docs content.
+
+### Release
+- Bumped application version to `0.0.14` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
+- Added and documented release tag `v0.0.14`.
+
 ## [0.0.13] - 2026-02-24
 
 ### Added

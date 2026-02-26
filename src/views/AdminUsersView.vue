@@ -5,6 +5,7 @@ import AppFooter from "../components/layout/AppFooter.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import { apiGet, apiPut } from "../composables/useApi";
 import type { PaginatedResponse, User, UserRole } from "../types/entities";
+import { formatDate } from "../utils/formatDate";
 import { normalizeUserRole } from "../utils/userRole";
 
 type EditableUser = User & {
@@ -212,19 +213,6 @@ const submitPasswordChange = async (user: EditableUser): Promise<void> => {
   }
 };
 
-const formatDate = (raw?: string | null): string => {
-  if (!raw) return t("common.loadingDash");
-  try {
-    return new Date(raw).toLocaleDateString(locale.value === "en" ? "en-US" : "ru-RU", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return raw;
-  }
-};
-
 const clearSearch = () => {
   searchEmail.value = "";
   loadUsers();
@@ -394,7 +382,7 @@ onMounted(() => {
                   <span class="toggle__label">{{ user.isActive ? t("adminUsers.statusActive") : t("adminUsers.statusBlocked") }}</span>
                 </button>
               </td>
-              <td class="date-cell">{{ formatDate(user.updatedAt) }}</td>
+              <td class="date-cell">{{ formatDate(user.updatedAt, locale, false) }}</td>
               <td>
                 <div class="profile-cell">
                   <template v-if="profileEditId !== user.id">
@@ -419,28 +407,28 @@ onMounted(() => {
                   >
                     <input
                       v-model="getProfileDraft(user.id).lastName"
-                      class="profile-input"
+                      class="form-input form-input--compact"
                       type="text"
                       :placeholder="t('auth.labelLastName')"
                       :disabled="isSavingId === user.id"
                     >
                     <input
                       v-model="getProfileDraft(user.id).firstName"
-                      class="profile-input"
+                      class="form-input form-input--compact"
                       type="text"
                       :placeholder="t('auth.labelFirstName')"
                       :disabled="isSavingId === user.id"
                     >
                     <input
                       v-model="getProfileDraft(user.id).middleName"
-                      class="profile-input"
+                      class="form-input form-input--compact"
                       type="text"
                       :placeholder="t('profile.middleName')"
                       :disabled="isSavingId === user.id"
                     >
                     <input
                       v-model="getProfileDraft(user.id).position"
-                      class="profile-input"
+                      class="form-input form-input--compact"
                       type="text"
                       :placeholder="t('profile.position')"
                       :disabled="isSavingId === user.id"
@@ -475,7 +463,7 @@ onMounted(() => {
                   >
                     <input
                       v-model="passwordDraft[user.id]"
-                      class="password-input"
+                      class="form-input form-input--compact"
                       type="password"
                       :placeholder="t('adminUsers.newPassword')"
                       minlength="6"
@@ -624,39 +612,6 @@ onMounted(() => {
   background: var(--border);
 }
 
-/* ─── Button ──────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  border-radius: 10px;
-}
-
-.btn--primary:hover:not(:disabled) {
-  box-shadow: 0 4px 16px rgba(124, 92, 252, 0.22);
-}
-
-.btn--sm {
-  padding: 9px 16px;
-  font-size: 13px;
-}
-
-.btn--xs {
-  padding: 6px 10px;
-  font-size: 12px;
-}
-
-.btn--ghost {
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.btn--ghost:hover:not(:disabled) {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
 
 /* ─── Stats row ───────────────────────────────── */
 .stats-row {
@@ -979,22 +934,6 @@ onMounted(() => {
   gap: 6px;
 }
 
-.profile-input {
-  width: 100%;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--base-text);
-  outline: none;
-}
-
-.profile-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
 
 .profile-form__actions {
   display: flex;
@@ -1008,22 +947,6 @@ onMounted(() => {
   gap: 8px;
 }
 
-.password-input {
-  width: 180px;
-  padding: 7px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--base-text);
-  outline: none;
-}
-
-.password-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
 
 .password-form__actions {
   display: flex;

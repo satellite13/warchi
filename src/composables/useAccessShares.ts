@@ -1,11 +1,11 @@
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { apiDelete, apiGet, apiPost } from "./useApi";
 import { getUserDisplayName } from "../utils/userDisplay";
 import type { UserInfo } from "../types/entities";
 import type {
   AccessShareRequest,
   AccessShareResponse,
-  SharePermission,
   ShareResourceType
 } from "../types/api";
 
@@ -16,6 +16,7 @@ export type AccessShareView = AccessShareResponse & {
 };
 
 export function useAccessShares() {
+  const { t } = useI18n();
   const shares = ref<AccessShareView[]>([]);
   const isLoading = ref(false);
   const isSubmitting = ref(false);
@@ -24,14 +25,15 @@ export function useAccessShares() {
   const userNameCache = new Map<string, string>();
 
   const resolveUserName = async (userId: string): Promise<string> => {
-    if (!userId) return "Неизвестный пользователь";
+    const fallback = t("common.unknownUser");
+    if (!userId) return fallback;
     const cached = userNameCache.get(userId);
     if (cached) return cached;
 
     const userResult = await apiGet<UserInfo>(`/users/${userId}/public`);
     const nextValue = userResult.success
       ? getUserDisplayName(userResult.data, userResult.data.email)
-      : "Неизвестный пользователь";
+      : fallback;
     userNameCache.set(userId, nextValue);
     return nextValue;
   };
@@ -54,13 +56,13 @@ export function useAccessShares() {
           ...share,
           granteeDisplayName: await resolveUserName(share.granteeUserId),
           grantedByDisplayName: await resolveUserName(share.grantedByUserId),
-          permissionLabel: permissionLabel(share.permission)
+          permissionLabel: share.permission === "EDIT" ? t("share.edit") : t("share.viewOnly")
         }))
       );
       shares.value = viewRows;
     } catch (error) {
       errorMessage.value =
-        error instanceof Error ? error.message : "Не удалось загрузить выданные доступы.";
+        error instanceof Error ? error.message : t("share.loadSharesError");
       shares.value = [];
     } finally {
       isLoading.value = false;
@@ -79,7 +81,7 @@ export function useAccessShares() {
       return true;
     } catch (error) {
       errorMessage.value =
-        error instanceof Error ? error.message : "Не удалось выдать доступ.";
+        error instanceof Error ? error.message : t("share.grantShareError");
       return false;
     } finally {
       isSubmitting.value = false;
@@ -102,7 +104,7 @@ export function useAccessShares() {
       return true;
     } catch (error) {
       errorMessage.value =
-        error instanceof Error ? error.message : "Не удалось отозвать доступ.";
+        error instanceof Error ? error.message : t("share.revokeShareError");
       return false;
     } finally {
       isSubmitting.value = false;
@@ -118,8 +120,4 @@ export function useAccessShares() {
     grantShare,
     revokeShare
   };
-}
-
-function permissionLabel(permission: SharePermission): string {
-  return permission === "EDIT" ? "Редактирование" : "Только просмотр";
 }

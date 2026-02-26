@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
+import type { CustomProperty } from "../../notations/notationAttrs"
 import PropertyRow from "./PropertyRow.vue"
 
 const props = defineProps<{
@@ -11,6 +12,7 @@ const props = defineProps<{
   isSaving: boolean
   isTypeInUse: boolean
   canShare: boolean
+  onMutateProperty?: (propertyId: string, apply: (p: CustomProperty) => void) => void
 }>()
 
 const emit = defineEmits<{
@@ -71,7 +73,7 @@ const filteredCustomProperties = computed(() => {
         <button
           v-if="!isTypeInUse"
           type="button"
-          class="btn btn--danger"
+          class="btn btn--soft-danger"
           :disabled="isSaving"
           @click="emit('delete')"
         >
@@ -176,6 +178,7 @@ const filteredCustomProperties = computed(() => {
             :key="property.id"
             :property="property"
             :expanded="expandedIds.has(property.id)"
+            :on-mutate-property="(apply) => props.onMutateProperty?.(property.id, apply)"
             :style="{ animationDelay: `${idx * 40}ms` }"
             @toggle="toggleCollapse(property.id)"
             @remove="emit('removeProperty', property.id)"
@@ -333,85 +336,6 @@ const filteredCustomProperties = computed(() => {
   gap: 10px;
 }
 
-.form-label {
-  flex: 0 0 80px;
-  font-size: 13px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.form-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-sizing: border-box;
-}
-
-.form-input--readonly {
-  display: flex;
-  align-items: center;
-  min-height: 34px;
-  color: var(--text-muted);
-  background: var(--surface-strong);
-}
-
-.form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
-
-.form-input::placeholder {
-  color: var(--text-subtle);
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  font-size: 13px;
-  border-radius: 10px;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-}
-
-.btn .material-symbols-outlined {
-  font-size: 18px;
-}
-
-.btn--primary {
-  box-shadow: 0 2px 8px var(--primary-soft);
-}
-
-.btn--primary:hover:not(:disabled) {
-  box-shadow: 0 4px 14px var(--primary-soft);
-  transform: translateY(-1px);
-}
-
-.btn--primary:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.btn--danger {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.btn--danger:hover:not(:disabled) {
-  background: var(--danger-soft);
-  filter: brightness(0.95);
-}
 
 .add-btn {
   display: flex;

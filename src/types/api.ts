@@ -305,14 +305,6 @@ export interface AuditLogResponse {
   changedAt?: string | null
 }
 
-// Error
-
-export interface ApiError {
-  status: number
-  message: string
-  timestamp: string
-}
-
 // Access shares
 
 export type ShareResourceType = "MODEL" | "NOTATION" | "NODE_TYPE" | "LINK_TYPE"

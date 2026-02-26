@@ -37,7 +37,7 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
         <span class="rename-form__label">{{ t("common.name") }}</span>
         <input
           v-model="nameModel"
-          class="rename-form__input"
+          class="form-input form-input--lg"
           type="text"
           :placeholder="namePlaceholder"
           :disabled="isRenaming"
@@ -74,24 +74,6 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
   font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
-}
-
-.rename-form__input {
-  padding: 10px 12px;
-  font-size: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--base-text);
-}
-
-.rename-form__input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.rename-form__input:disabled {
-  opacity: 0.6;
 }
 
 .rename-form__error {

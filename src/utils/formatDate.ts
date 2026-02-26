@@ -1,7 +1,10 @@
-export function formatDate(dateStr?: string | null, locale?: string): string {
+export function formatDate(dateStr?: string | null, locale?: string, includeTime = true): string {
   if (!dateStr) return "—"
   const d = new Date(dateStr)
   if (Number.isNaN(d.getTime())) return "—"
   const dateLocale = locale === "en" ? "en-US" : "ru-RU"
-  return new Intl.DateTimeFormat(dateLocale, { dateStyle: "medium", timeStyle: "short" }).format(d)
+  const options: Intl.DateTimeFormatOptions = includeTime
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { dateStyle: "medium" }
+  return new Intl.DateTimeFormat(dateLocale, options).format(d)
 }

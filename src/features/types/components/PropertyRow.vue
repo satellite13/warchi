@@ -1,13 +1,20 @@
 <script setup lang="ts">
-/* eslint-disable vue/no-mutating-props -- editing mutable draft passed from type editor */
-import { reactive } from "vue"
+import { computed, reactive } from "vue"
 import { useI18n } from "vue-i18n"
+import { parseNumberInput } from "@/utils/number"
 import type { CustomProperty, CustomPropertyType } from "../../notations/notationAttrs"
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   property: CustomProperty
   expanded: boolean
-}>()
+  onMutateProperty?: (apply: (p: CustomProperty) => void) => void
+  size?: "default" | "sm"
+  errors?: string[]
+  fromType?: boolean
+  isEquivalentToType?: boolean
+}>(), {
+  size: "default"
+})
 
 const emit = defineEmits<{
   toggle: []
@@ -25,36 +32,36 @@ const typeOptions: { value: CustomPropertyType; label: string }[] = [
 const typeLabel = (type: CustomPropertyType) =>
   typeOptions.find((o) => o.value === type)?.label ?? type
 
-const parseNumberInput = (value: string): number | null => {
-  if (!value.trim()) return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 const handleTypeChange = (value: string) => {
-  props.property.type = value as CustomPropertyType
-  props.property.defaultValue = undefined
-  props.property.enumDefault = undefined
+  props.onMutateProperty?.((p) => {
+    p.type = value as CustomPropertyType
+    p.defaultValue = undefined
+    p.enumDefault = undefined
+  })
 }
 
 const handleDefaultStringChange = (value: string) => {
-  props.property.defaultValue = value
+  props.onMutateProperty?.((p) => { p.defaultValue = value })
 }
 
 const handleDefaultNumberChange = (value: string) => {
-  props.property.defaultValue = parseNumberInput(value) ?? undefined
+  props.onMutateProperty?.((p) => { p.defaultValue = parseNumberInput(value) ?? undefined })
 }
 
 const handleDefaultBooleanChange = (value: string) => {
-  if (value === "true") { props.property.defaultValue = true; return }
-  if (value === "false") { props.property.defaultValue = false; return }
-  props.property.defaultValue = undefined
+  props.onMutateProperty?.((p) => {
+    if (value === "true") { p.defaultValue = true; return }
+    if (value === "false") { p.defaultValue = false; return }
+    p.defaultValue = undefined
+  })
 }
 
 const handleEnumDefaultChange = (value: string) => {
   const nextValue = value || undefined
-  props.property.defaultValue = nextValue
-  props.property.enumDefault = nextValue
+  props.onMutateProperty?.((p) => {
+    p.defaultValue = nextValue
+    p.enumDefault = nextValue
+  })
 }
 
 const hasDefaultValue = (): boolean => {
@@ -68,7 +75,9 @@ const isRequiredDefaultMissing = (): boolean =>
   props.property.required && !hasDefaultValue()
 
 const updateEnumValues = (value: string) => {
-  props.property.enumValues = value.split(",").map((item) => item.trim()).filter(Boolean)
+  props.onMutateProperty?.((p) => {
+    p.enumValues = value.split(",").map((item) => item.trim()).filter(Boolean)
+  })
 }
 
 // Regex tester
@@ -86,10 +95,16 @@ const regexTestResult = (): null | boolean => {
   if (!props.property.regex) return null
   try { return new RegExp(props.property.regex).test(testVal) } catch { return null }
 }
+
+const isSm = computed(() => props.size === "sm")
+const inputClass = computed(() => isSm.value ? "form-input form-input--sm" : "form-input")
+const inputNumClass = computed(() => isSm.value ? "form-input form-input--sm form-input--num" : "form-input form-input--num")
+const selectClass = computed(() => isSm.value ? "form-select form-select--sm" : "form-select")
+const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToType)
 </script>
 
 <template>
-  <div class="property-row">
+  <div class="property-row" :class="{ 'property-row--sm': isSm, 'property-row--error': errors && errors.length > 0 }">
     <div
       class="property-row__header"
       role="button"
@@ -103,6 +118,14 @@ const regexTestResult = (): null | boolean => {
       >expand_more</span>
       <span class="property-row__name">{{ property.name || t("common.unnamed") }}</span>
       <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
+      <span
+        v-if="showFromTypeBadge"
+        class="property-row__from-type-badge"
+        :title="t('types.inheritedFromType')"
+      >
+        <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
+        {{ t("types.typeShort") }}
+      </span>
       <span v-if="property.required" class="property-row__required-badge">{{ t("types.requiredShort") }}</span>
       <button
         type="button"
@@ -118,12 +141,13 @@ const regexTestResult = (): null | boolean => {
       <div class="property-row__body">
         <div class="property-row__main">
           <input
-            class="form-input"
-            v-model="property.name"
+            :class="inputClass"
+            :value="property.name"
             :placeholder="t('types.propertyNamePlaceholder')"
+            @input="onMutateProperty?.((p) => { p.name = ($event.target as HTMLInputElement).value })"
           >
           <select
-            class="form-select"
+            :class="selectClass"
             :value="property.type"
             @change="handleTypeChange(($event.target as HTMLSelectElement).value)"
           >
@@ -132,25 +156,34 @@ const regexTestResult = (): null | boolean => {
             </option>
           </select>
           <label class="property-checkbox">
-            <input type="checkbox" v-model="property.required">
+            <input
+              type="checkbox"
+              :checked="property.required"
+              @change="onMutateProperty?.((p) => { p.required = ($event.target as HTMLInputElement).checked })"
+            >
             <span class="property-checkbox__label">{{ t("types.requiredShort") }}</span>
           </label>
         </div>
 
         <div v-if="property.type === 'string'" class="property-row__extra">
-          <input class="form-input" v-model="property.regex" :placeholder="t('types.regexOptional')">
           <input
-            class="form-input form-input--num"
+            :class="inputClass"
+            :value="property.regex"
+            :placeholder="t('types.regexOptional')"
+            @input="onMutateProperty?.((p) => { p.regex = ($event.target as HTMLInputElement).value || undefined })"
+          >
+          <input
+            :class="inputNumClass"
             type="number"
             :value="property.maxLength ?? ''"
             :placeholder="t('types.maxLength')"
             min="0"
-            @input="property.maxLength = parseNumberInput(($event.target as HTMLInputElement).value)"
+            @input="onMutateProperty?.((p) => { p.maxLength = parseNumberInput(($event.target as HTMLInputElement).value) })"
           >
         </div>
         <div v-if="property.type === 'string' && property.regex" class="property-row__extra regex-test">
           <input
-            class="form-input"
+            :class="inputClass"
             :value="getRegexTestValue()"
             :placeholder="t('types.testValue')"
             @input="setRegexTestValue(($event.target as HTMLInputElement).value)"
@@ -169,24 +202,24 @@ const regexTestResult = (): null | boolean => {
 
         <div v-if="property.type === 'number'" class="property-row__extra">
           <input
-            class="form-input form-input--num"
+            :class="inputNumClass"
             type="number"
             :value="property.min ?? ''"
             :placeholder="t('types.minValuePlaceholder')"
-            @input="property.min = parseNumberInput(($event.target as HTMLInputElement).value)"
+            @input="onMutateProperty?.((p) => { p.min = parseNumberInput(($event.target as HTMLInputElement).value) })"
           >
           <input
-            class="form-input form-input--num"
+            :class="inputNumClass"
             type="number"
             :value="property.max ?? ''"
             :placeholder="t('types.maxValuePlaceholder')"
-            @input="property.max = parseNumberInput(($event.target as HTMLInputElement).value)"
+            @input="onMutateProperty?.((p) => { p.max = parseNumberInput(($event.target as HTMLInputElement).value) })"
           >
         </div>
 
         <div v-if="property.type === 'enum'" class="property-row__extra">
           <input
-            class="form-input"
+            :class="inputClass"
             :value="(property.enumValues || []).join(', ')"
             :placeholder="t('types.enumValuesPlaceholder')"
             @change="updateEnumValues(($event.target as HTMLInputElement).value)"
@@ -196,7 +229,7 @@ const regexTestResult = (): null | boolean => {
         <div v-if="property.type === 'string' && property.required" class="property-row__extra">
           <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <input
-            class="form-input"
+            :class="inputClass"
             :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
             :placeholder="t('types.defaultStringValue')"
             @input="handleDefaultStringChange(($event.target as HTMLInputElement).value)"
@@ -205,7 +238,7 @@ const regexTestResult = (): null | boolean => {
         <div v-if="property.type === 'number' && property.required" class="property-row__extra">
           <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <input
-            class="form-input form-input--num"
+            :class="inputNumClass"
             type="number"
             :value="typeof property.defaultValue === 'number' ? property.defaultValue : ''"
             :placeholder="t('types.defaultNumberValue')"
@@ -215,7 +248,7 @@ const regexTestResult = (): null | boolean => {
         <div v-if="property.type === 'boolean' && property.required" class="property-row__extra">
           <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <select
-            class="form-select"
+            :class="selectClass"
             :value="typeof property.defaultValue === 'boolean' ? String(property.defaultValue) : ''"
             @change="handleDefaultBooleanChange(($event.target as HTMLSelectElement).value)"
           >
@@ -227,7 +260,7 @@ const regexTestResult = (): null | boolean => {
         <div v-if="property.type === 'enum' && property.required && (property.enumValues || []).length > 0" class="property-row__extra">
           <span class="property-row__label">{{ t("types.defaultValue") }}</span>
           <select
-            class="form-select"
+            :class="selectClass"
             :value="typeof property.defaultValue === 'string' ? property.defaultValue : ''"
             @change="handleEnumDefaultChange(($event.target as HTMLSelectElement).value)"
           >
@@ -235,8 +268,11 @@ const regexTestResult = (): null | boolean => {
             <option v-for="val in property.enumValues" :key="val" :value="val">{{ val }}</option>
           </select>
         </div>
-        <div v-if="isRequiredDefaultMissing()" class="property-row__warning">
+        <div v-if="errors === undefined && isRequiredDefaultMissing()" class="property-row__warning">
           {{ t("types.requiredNeedsDefault") }}
+        </div>
+        <div v-if="errors && errors.length > 0" class="property-row__errors">
+          <span v-for="(err, i) in errors" :key="i" class="property-error">{{ err }}</span>
         </div>
       </div>
     </template>
@@ -258,6 +294,28 @@ const regexTestResult = (): null | boolean => {
   background: var(--surface-muted);
   border: 1px solid transparent;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.property-row--sm {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.property-row--sm .property-row__body {
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.property-row--sm .property-row__main {
+  gap: 6px;
+}
+
+.property-row--sm .property-row__extra {
+  gap: 6px;
+}
+
+.property-row--error {
+  border-color: rgba(220, 53, 69, 0.3);
 }
 
 .property-row:hover {
@@ -420,6 +478,28 @@ const regexTestResult = (): null | boolean => {
   white-space: nowrap;
 }
 
+.property-row__from-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.property-row--sm .property-row__from-type-badge {
+  padding: 1px 7px;
+}
+
+.property-row__from-type-icon {
+  font-size: 13px;
+}
+
 .property-row__warning {
   padding: 8px 10px;
   border-radius: 6px;
@@ -429,51 +509,15 @@ const regexTestResult = (): null | boolean => {
   font-size: 12px;
 }
 
-/* Form elements */
-.form-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-sizing: border-box;
+.property-row__errors {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+.property-error {
+  font-size: 11px;
+  color: var(--danger);
 }
 
-.form-input::placeholder {
-  color: var(--text-subtle);
-}
-
-.form-input--num {
-  width: 80px;
-  flex: 0 0 80px;
-}
-
-.form-select {
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
 </style>

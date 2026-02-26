@@ -1,16 +1,16 @@
 import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from "vue";
-import { apiGet, apiPost, apiDelete } from "./useApi";
+import { useI18n } from "vue-i18n";
+import { apiGet, apiPost, apiPut, apiDelete } from "./useApi";
 import { useAuth } from "./useAuth";
-import { getUserDisplayName } from "../utils/userDisplay";
+import { resolveOwnerDisplayNames } from "../utils/resolveOwnerNames";
 import { compareVersions, isValidVersion, bumpMinor } from "../utils/version";
 import type {
   VersionedEntity,
   EntityGroup,
-  UserInfo,
   PaginatedResponse
 } from "../types/entities";
 
-export interface EntityListConfig {
+export interface EntityListConfig<T extends VersionedEntity = VersionedEntity> {
   endpoint: string;
   entityName: string;
   entityNamePlural: string;
@@ -18,6 +18,12 @@ export interface EntityListConfig {
   notFoundMessage: string;
   /** Сообщение при 404 при создании (например, «Владелец не найден» по контракту API) */
   createNotFoundMessage?: string;
+  /** Сообщение «Введите название» для rename-модалки */
+  enterNameMessage?: string;
+  /** Сообщение при ошибке переименования */
+  renameFailedMessage?: string;
+  /** Построить тело PUT-запроса для переименования */
+  buildRenameRequest?: (item: T, newName: string) => unknown;
 }
 
 export interface SourceVersion {
@@ -48,6 +54,12 @@ export interface EntityListReturn<T extends VersionedEntity> {
   isDeleting: Ref<boolean>;
   deleteError: Ref<string | null>;
 
+  showRenameModal: Ref<boolean>;
+  itemToRename: Ref<T | null>;
+  renameName: Ref<string>;
+  renameError: Ref<string | null>;
+  isRenaming: Ref<boolean>;
+
   loadItems: () => Promise<void>;
   createItem: (ownerId: string, ownerDisplayName?: string) => Promise<T | null>;
   deleteItem: () => Promise<boolean>;
@@ -55,14 +67,18 @@ export interface EntityListReturn<T extends VersionedEntity> {
   closeCreateModal: () => void;
   openDeleteModal: (item: T) => void;
   closeDeleteModal: () => void;
+  openRenameModal: (item: T) => void;
+  closeRenameModal: () => void;
+  renameItem: () => Promise<void>;
   getSelectedItem: (group: EntityGroup<T>) => T | null;
   handleVersionChange: (groupName: string, version: string) => void;
   validateCreate: () => string | null;
 }
 
 export function useEntityList<T extends VersionedEntity>(
-  config: EntityListConfig
+  config: EntityListConfig<T>
 ): EntityListReturn<T> {
+  const { t } = useI18n();
   const { currentUser } = useAuth();
   const items = ref<T[]>([]) as Ref<T[]>;
   const ownerEmails = ref<Map<string, string>>(new Map());
@@ -82,6 +98,12 @@ export function useEntityList<T extends VersionedEntity>(
   const itemToDelete = ref<T | null>(null) as Ref<T | null>;
   const isDeleting = ref(false);
   const deleteError = ref<string | null>(null);
+
+  const showRenameModal = ref(false);
+  const itemToRename = ref<T | null>(null) as Ref<T | null>;
+  const renameName = ref("");
+  const renameError = ref<string | null>(null);
+  const isRenaming = ref(false);
 
   const groupedItems = computed(() => {
     const groups = new Map<string, T[]>();
@@ -142,33 +164,13 @@ export function useEntityList<T extends VersionedEntity>(
     return group.versions.map((item) => ({ id: item.id, version: item.version }));
   });
 
-  const loadOwnerEmails = async (ownerIds: string[]) => {
-    const uniqueIds = [...new Set(ownerIds)];
-    const emailMap = new Map<string, string>(ownerEmails.value);
-
-    if (currentUser.value?.id) {
-      emailMap.set(
-        currentUser.value.id,
-        getUserDisplayName(currentUser.value, "Неизвестный пользователь")
-      );
-    }
-
-    await Promise.all(
-      uniqueIds.map(async (id) => {
-        if (emailMap.has(id)) return;
-
-        const result = await apiGet<UserInfo>(`/users/${id}/public`);
-        if (result.success) {
-          emailMap.set(id, getUserDisplayName(result.data, "Неизвестный пользователь"));
-        } else if (currentUser.value?.id === id) {
-          emailMap.set(id, getUserDisplayName(currentUser.value, "Неизвестный пользователь"));
-        } else {
-          emailMap.set(id, "Неизвестный пользователь");
-        }
-      })
+  const loadOwnerEmails = async (ownerIds: string[], fallback: string) => {
+    ownerEmails.value = await resolveOwnerDisplayNames(
+      ownerIds,
+      ownerEmails.value,
+      currentUser.value,
+      fallback
     );
-
-    ownerEmails.value = emailMap;
   };
 
   const loadItems = async () => {
@@ -191,7 +193,7 @@ export function useEntityList<T extends VersionedEntity>(
       items.value = Array.isArray(result.data.content) ? result.data.content : [];
 
       const ownerIds = items.value.map((item) => item.ownerId);
-      await loadOwnerEmails(ownerIds);
+      await loadOwnerEmails(ownerIds, t("common.unknownUser"));
     } catch (error) {
       errorMessage.value =
         error instanceof Error
@@ -376,6 +378,77 @@ export function useEntityList<T extends VersionedEntity>(
     deleteError.value = null;
   };
 
+  const openRenameModal = (item: T) => {
+    itemToRename.value = item;
+    renameName.value = item.name;
+    renameError.value = null;
+    showRenameModal.value = true;
+  };
+
+  const closeRenameModal = () => {
+    showRenameModal.value = false;
+    itemToRename.value = null;
+    renameName.value = "";
+    renameError.value = null;
+    isRenaming.value = false;
+  };
+
+  const renameItem = async () => {
+    if (!itemToRename.value || !config.buildRenameRequest) return;
+    const trimmedName = renameName.value.trim();
+    if (!trimmedName) {
+      renameError.value = config.enterNameMessage ?? `Введите название`;
+      return;
+    }
+    const current = itemToRename.value;
+    if (trimmedName === current.name) {
+      closeRenameModal();
+      return;
+    }
+    const hasConflict = items.value.some(
+      (item) =>
+        item.id !== current.id &&
+        item.version === current.version &&
+        item.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (hasConflict) {
+      renameError.value = config.conflictMessage;
+      return;
+    }
+
+    isRenaming.value = true;
+    renameError.value = null;
+    try {
+      const body = config.buildRenameRequest(current, trimmedName);
+      const result = await apiPut<T>(`/${config.endpoint}/${current.id}`, body);
+      if (!result.success) {
+        if (result.error.status === 409) {
+          throw new Error(config.conflictMessage);
+        }
+        throw new Error(result.error.message);
+      }
+
+      const previousName = current.name;
+      items.value = items.value.map((item) =>
+        item.id === current.id ? result.data : item
+      );
+      if (selectedVersionByName.value[previousName] === current.version) {
+        const nextSelection = { ...selectedVersionByName.value };
+        delete nextSelection[previousName];
+        nextSelection[result.data.name] = result.data.version;
+        selectedVersionByName.value = nextSelection;
+      }
+      closeRenameModal();
+    } catch (error) {
+      renameError.value =
+        error instanceof Error
+          ? error.message
+          : (config.renameFailedMessage ?? `Не удалось переименовать`);
+    } finally {
+      isRenaming.value = false;
+    }
+  };
+
   const getSelectedItem = (group: EntityGroup<T>): T | null => {
     const selectedVersion = selectedVersionByName.value[group.name];
     const selected =
@@ -425,6 +498,12 @@ export function useEntityList<T extends VersionedEntity>(
     isDeleting,
     deleteError,
 
+    showRenameModal,
+    itemToRename,
+    renameName,
+    renameError,
+    isRenaming,
+
     loadItems,
     createItem,
     deleteItem,
@@ -432,6 +511,9 @@ export function useEntityList<T extends VersionedEntity>(
     closeCreateModal,
     openDeleteModal,
     closeDeleteModal,
+    openRenameModal,
+    closeRenameModal,
+    renameItem,
     getSelectedItem,
     handleVersionChange,
     validateCreate

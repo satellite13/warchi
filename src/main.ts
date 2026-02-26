@@ -7,6 +7,7 @@ import "@fontsource/outfit/700.css";
 import "@fontsource/material-symbols-outlined/400.css";
 import "./style.css";
 import "./assets/buttons.css";
+import "./assets/forms.css";
 import App from "./App.vue";
 import router from "./router";
 import i18n from "./i18n";

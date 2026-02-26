@@ -1,4 +1,5 @@
 import { computed, type ComputedRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { createId, type CustomProperty } from "../notationAttrs"
 import type { EditorComponent, EditorRelation } from "../types"
 
@@ -8,14 +9,14 @@ export interface CustomPropertiesReturn {
   addCustomPropertyFromType: (typeProperty: CustomProperty) => void
   removeCustomProperty: (id: string) => void
   updateEnumValues: (property: CustomProperty, value: string) => void
-  parseNumberInput: (value: string) => number | null
   propertyErrors: (property: CustomProperty) => string[]
 }
 
 export function useCustomProperties(
   selectedItem: ComputedRef<EditorComponent | EditorRelation | null>,
-  onItemChanged?: (id: string) => void
+  onMutateItem?: (id: string, apply: (item: EditorComponent | EditorRelation) => void) => void
 ): CustomPropertiesReturn {
+  const { t } = useI18n()
   const hasDefaultValue = (property: CustomProperty): boolean => {
     if (property.type === "number") {
       return typeof property.defaultValue === "number" && Number.isFinite(property.defaultValue)
@@ -29,14 +30,14 @@ export function useCustomProperties(
   const propertyErrors = (property: CustomProperty): string[] => {
     const errors: string[] = []
     if (!property.name.trim()) {
-      errors.push("Нужно указать имя свойства")
+      errors.push(t("types.validationNameRequired"))
     }
 
     if (property.regex) {
       try {
         new RegExp(property.regex)
       } catch {
-        errors.push("Регулярное выражение некорректно")
+        errors.push(t("types.validationRegexInvalid"))
       }
     }
 
@@ -46,18 +47,18 @@ export function useCustomProperties(
       property.max !== null &&
       property.min > property.max
     ) {
-      errors.push("min не может быть больше max")
+      errors.push(t("types.validationMinGtMax"))
     }
 
     if (
       property.type === "enum" &&
       (!property.enumValues || !property.enumValues.length)
     ) {
-      errors.push("Для enum нужно указать значения")
+      errors.push(t("types.validationEnumEmpty"))
     }
 
     if (property.required && !hasDefaultValue(property)) {
-      errors.push("Для обязательного поля нужно задать значение по умолчанию")
+      errors.push(t("types.validationRequiredDefault"))
     }
 
     return errors
@@ -88,22 +89,26 @@ export function useCustomProperties(
       enumValues: [],
       defaultValue: undefined
     }
-    selectedItem.value.parsedAttrs.customProperties.push(property)
-    if (onItemChanged) {
-      onItemChanged(selectedItem.value.id)
+    const itemId = selectedItem.value.id
+    if (onMutateItem) {
+      onMutateItem(itemId, (item) => {
+        item.parsedAttrs.customProperties.push(property)
+      })
     }
   }
 
-  const removeCustomProperty = (id: string) => {
+  const removeCustomProperty = (propertyId: string) => {
     if (!selectedItem.value) {
       return
     }
-    selectedItem.value.parsedAttrs.customProperties =
-      selectedItem.value.parsedAttrs.customProperties.filter(
-        (item) => item.id !== id
-      )
-    if (onItemChanged) {
-      onItemChanged(selectedItem.value.id)
+    const itemId = selectedItem.value.id
+    if (onMutateItem) {
+      onMutateItem(itemId, (item) => {
+        item.parsedAttrs.customProperties =
+          item.parsedAttrs.customProperties.filter(
+            (p) => p.id !== propertyId
+          )
+      })
     }
   }
 
@@ -117,28 +122,27 @@ export function useCustomProperties(
       enumValues: typeProperty.enumValues ? [...typeProperty.enumValues] : [],
       _fromType: true
     }
-    selectedItem.value.parsedAttrs.customProperties.push(property)
-    if (onItemChanged) {
-      onItemChanged(selectedItem.value.id)
+    const itemId = selectedItem.value.id
+    if (onMutateItem) {
+      onMutateItem(itemId, (item) => {
+        item.parsedAttrs.customProperties.push(property)
+      })
     }
   }
 
   const updateEnumValues = (property: CustomProperty, value: string) => {
-    property.enumValues = value
+    if (!selectedItem.value) return
+    const nextValues = value
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean)
-    if (selectedItem.value && onItemChanged) {
-      onItemChanged(selectedItem.value.id)
+    const propertyId = property.id
+    if (onMutateItem) {
+      onMutateItem(selectedItem.value.id, (item) => {
+        const p = item.parsedAttrs.customProperties.find(cp => cp.id === propertyId)
+        if (p) p.enumValues = nextValues
+      })
     }
-  }
-
-  const parseNumberInput = (value: string): number | null => {
-    if (!value.trim()) {
-      return null
-    }
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
   }
 
   return {
@@ -147,7 +151,6 @@ export function useCustomProperties(
     addCustomPropertyFromType,
     removeCustomProperty,
     updateEnumValues,
-    parseNumberInput,
     propertyErrors
   }
 }

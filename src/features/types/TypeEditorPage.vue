@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, computed, watch } from "vue"
 import { useI18n } from "vue-i18n"
 
 import { useTypeEditor } from "./composables/useTypeEditor"
-import { serializeTypeAttrs } from "../notations/notationAttrs"
+import { serializeTypeAttrs, type CustomProperty } from "../notations/notationAttrs"
 import { useCanShare } from "../../composables/useCanShare"
 import BaseModal from "../../components/modals/BaseModal.vue"
 import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
@@ -51,6 +51,12 @@ async function handleDelete() {
 function handleTypeNameUpdate(value: string) {
   if (!selectedType.value) return
   selectedType.value.name = value
+}
+
+function handleMutateProperty(propertyId: string, apply: (p: CustomProperty) => void) {
+  if (!selectedType.value) return
+  const p = selectedType.value.parsedAttrs.customProperties?.find(cp => cp.id === propertyId)
+  if (p) apply(p)
 }
 
 function handleDefaultDirectoryPathUpdate(value: string) {
@@ -193,6 +199,7 @@ const attrsJson = computed(() => {
             @delete="handleDelete"
             @update-name="handleTypeNameUpdate"
             @update-default-directory-path="handleDefaultDirectoryPathUpdate"
+            :on-mutate-property="handleMutateProperty"
             @add-property="addCustomProperty(selectedType)"
             @remove-property="removeCustomProperty(selectedType, $event)"
             @share="showShareModal = true"

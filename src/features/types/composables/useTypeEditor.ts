@@ -1,7 +1,8 @@
 import { ref, computed, watch, type Ref } from "vue"
+import { useI18n } from "vue-i18n"
 import { apiGet, apiPost, apiPut, apiDelete } from "../../../composables/useApi"
 import { useAuth } from "../../../composables/useAuth"
-import { getUserDisplayName } from "../../../utils/userDisplay"
+import { resolveOwnerDisplayNames } from "../../../utils/resolveOwnerNames"
 import { parseTypeAttrs, serializeTypeAttrs, createId } from "../../notations/notationAttrs"
 import type { TypeParsedAttrs } from "../../notations/types"
 import type {
@@ -14,7 +15,7 @@ import type {
   ComponentResponse,
   RelationResponse
 } from "../../../types/api"
-import type { AccessPermission, PaginatedResponse, NotationData, UserInfo } from "../../../types/entities"
+import type { AccessPermission, PaginatedResponse, NotationData } from "../../../types/entities"
 
 export type TypeKind = "node" | "link"
 
@@ -39,20 +40,23 @@ function toTypeItem(resp: NodeTypeResponse | LinkTypeResponse, kind: TypeKind): 
   }
 }
 
-function formatTypeOperationError(
-  operation: "сохранения" | "удаления",
-  status: number,
-  message: string
-): string {
-  if (status === 401 || status === 403) {
-    return "Недостаточно прав для редактирования типов. Войдите заново или обратитесь к администратору."
-  }
-  return `Ошибка ${operation} типа: ${message}`
-}
-
 export function useTypeEditor() {
+  const { t } = useI18n()
   const { currentUser } = useAuth()
   const currentUserId = computed(() => currentUser.value?.id ?? null)
+
+  function formatTypeOperationError(
+    operation: "save" | "delete",
+    status: number,
+    message: string
+  ): string {
+    if (status === 401 || status === 403) {
+      return t("types.errorInsufficientPermissions")
+    }
+    return operation === "save"
+      ? t("types.errorSaveType", { message })
+      : t("types.errorDeleteType", { message })
+  }
 
   const nodeTypes: Ref<TypeItem[]> = ref([])
   const linkTypes: Ref<TypeItem[]> = ref([])
@@ -128,29 +132,12 @@ export function useTypeEditor() {
   }
 
   async function loadOwnerDisplayNames(ownerIds: string[]): Promise<void> {
-    const uniqueIds = [...new Set(ownerIds)]
-    const nextMap = new Map(ownerDisplayNames.value)
-
-    if (currentUser.value?.id) {
-      nextMap.set(
-        currentUser.value.id,
-        getUserDisplayName(currentUser.value, currentUser.value.email ?? "Неизвестный пользователь")
-      )
-    }
-
-    await Promise.all(
-      uniqueIds.map(async (id) => {
-        if (!id || nextMap.has(id)) return
-        const result = await apiGet<UserInfo>(`/users/${id}/public`)
-        if (result.success) {
-          nextMap.set(id, getUserDisplayName(result.data, result.data.email))
-        } else {
-          nextMap.set(id, "Неизвестный пользователь")
-        }
-      })
+    ownerDisplayNames.value = await resolveOwnerDisplayNames(
+      ownerIds,
+      ownerDisplayNames.value,
+      currentUser.value,
+      t("common.unknownUser")
     )
-
-    ownerDisplayNames.value = nextMap
   }
 
   function selectType(id: string | null) {
@@ -193,7 +180,7 @@ export function useTypeEditor() {
           const result = await apiPost<NodeTypeResponse>("/node-types", body)
           if (!result.success) {
             saveError.value = formatTypeOperationError(
-              "сохранения",
+              "save",
               result.error.status,
               result.error.message
             )
@@ -216,7 +203,7 @@ export function useTypeEditor() {
           const result = await apiPost<LinkTypeResponse>("/link-types", body)
           if (!result.success) {
             saveError.value = formatTypeOperationError(
-              "сохранения",
+              "save",
               result.error.status,
               result.error.message
             )
@@ -237,7 +224,7 @@ export function useTypeEditor() {
           const result = await apiPut<NodeTypeResponse>(`/node-types/${item.id}`, body)
           if (!result.success) {
             saveError.value = formatTypeOperationError(
-              "сохранения",
+              "save",
               result.error.status,
               result.error.message
             )
@@ -252,7 +239,7 @@ export function useTypeEditor() {
           const result = await apiPut<LinkTypeResponse>(`/link-types/${item.id}`, body)
           if (!result.success) {
             saveError.value = formatTypeOperationError(
-              "сохранения",
+              "save",
               result.error.status,
               result.error.message
             )
@@ -285,7 +272,7 @@ export function useTypeEditor() {
       const result = await apiDelete<void>(path)
       if (!result.success) {
         saveError.value = formatTypeOperationError(
-          "удаления",
+          "delete",
           result.error.status,
           result.error.message
         )

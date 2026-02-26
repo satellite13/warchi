@@ -11,7 +11,7 @@ const trimOrNull = (value?: string | null): string | null => {
 
 export const getUserDisplayName = (
   user: UserNameSource | null | undefined,
-  fallback = "Неизвестный пользователь"
+  fallback = "?"
 ): string => {
   if (!user) return fallback;
 

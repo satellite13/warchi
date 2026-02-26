@@ -19,6 +19,8 @@ import {
 import type { EditorLink, EditorNode } from './types'
 import { useModelEditor } from './composables/useModelEditor'
 import { useAuth } from '../../composables/useAuth'
+import { getUserDisplayName } from '../../utils/userDisplay'
+import type { UserInfo } from '../../types/entities'
 import { useCanShare } from '../../composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
@@ -297,6 +299,7 @@ const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
 const fallbackNotationMetaLoading = ref(false)
 const fallbackNotationMetaError = ref<string | null>(null)
+const fallbackNotationOwnerDisplayName = ref('')
 const activeDiagramNotationName = computed(() => {
   const notationId = activeDiagram.value?.notationId
   if (!notationId) return ''
@@ -319,7 +322,7 @@ const activeDiagramNotationOwnerLabel = computed(() => {
   const notationId = activeDiagram.value?.notationId
   if (!notationId) return ''
   if (fallbackNotationMeta.value?.id !== notationId) return ''
-  return fallbackNotationMeta.value.ownerEmail
+  return fallbackNotationOwnerDisplayName.value || fallbackNotationMeta.value.ownerEmail
 })
 const canOpenActiveDiagramNotation = computed(() => {
   const notationId = activeDiagram.value?.notationId
@@ -378,6 +381,15 @@ watch(
       return
     }
     fallbackNotationMeta.value = result.data
+    // Resolve owner display name
+    fallbackNotationOwnerDisplayName.value = ''
+    const ownerResult = await apiGet<UserInfo>(`/users/${result.data.ownerId}/public`)
+    if (ownerResult.success) {
+      fallbackNotationOwnerDisplayName.value = getUserDisplayName(
+        ownerResult.data,
+        result.data.ownerEmail
+      )
+    }
   }
 )
 

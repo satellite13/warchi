@@ -205,35 +205,4 @@ const emit = defineEmits<{
   text-transform: none;
 }
 
-.btn {
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-  letter-spacing: 0.01em;
-}
-
-.btn--secondary {
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.btn--secondary:hover {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.btn--primary {
-  color: #fff;
-  background: var(--primary);
-  border: none;
-}
-
-.btn--primary:hover {
-  background: var(--primary-hover);
-}
 </style>

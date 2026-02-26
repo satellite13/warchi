@@ -629,21 +629,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: inherit;
   font-weight: 600;
-  border: none;
   border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s, transform 0.12s;
-}
-
-.btn--primary {
-  background: var(--primary);
-  color: #fff;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
   box-shadow: 0 4px 16px rgba(124, 92, 252, 0.22);
 }
 
@@ -666,11 +656,6 @@ onMounted(() => {
 .btn--ghost:hover:not(:disabled) {
   background: var(--surface-strong);
   color: var(--base-text);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ─── Stats row ───────────────────────────────── */

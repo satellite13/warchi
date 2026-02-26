@@ -93,7 +93,7 @@ const emit = defineEmits<{
       <span v-if="notationVersion" class="notation-header__version">{{ notationVersion }}</span>
       <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
         <span class="dirty-dot"></span>
-        Не сохранено
+        {{ t("types.notSaved") }}
       </span>
       <button
         v-if="canShare"

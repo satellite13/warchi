@@ -379,17 +379,11 @@ const filteredCustomProperties = computed(() => {
   gap: 6px;
   padding: 8px 18px;
   font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  border: none;
   border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
 .btn:disabled {
   opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .btn .material-symbols-outlined {
@@ -397,13 +391,10 @@ const filteredCustomProperties = computed(() => {
 }
 
 .btn--primary {
-  background: var(--primary);
-  color: #fff;
   box-shadow: 0 2px 8px var(--primary-soft);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
   box-shadow: 0 4px 14px var(--primary-soft);
   transform: translateY(-1px);
 }

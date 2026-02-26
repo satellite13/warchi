@@ -194,7 +194,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
       <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
         <span class="dirty-dot"></span>
-        Не сохранено
+        {{ t("types.notSaved") }}
       </span>
       <button
         v-if="canShare"

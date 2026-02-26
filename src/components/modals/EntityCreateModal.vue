@@ -172,46 +172,4 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
   gap: 12px;
   margin-top: 8px;
 }
-
-.btn {
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-  font-family: inherit;
-  letter-spacing: 0.01em;
-}
-
-.btn--secondary {
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.btn--secondary:hover:not(:disabled) {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.btn--secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn--primary {
-  color: #fff;
-  background: var(--primary);
-  border: none;
-}
-
-.btn--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.btn--primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 </style>

@@ -13,6 +13,7 @@ import { createId, parseLinkAttrs, parseNodeAttrs, resolveComponentByNodeType, r
 import type { EditorLink, EditorNode } from "./types"
 import { useModelEditor } from "./composables/useModelEditor"
 import { useAuth } from "../../composables/useAuth"
+import { useCanShare } from "../../composables/useCanShare"
 import ModelEditorHeader from "./components/ModelEditorHeader.vue"
 import ModelMainPanelLayout from "./layout/ModelMainPanelLayout.vue"
 import ModelTreePalettePanel from "./components/ModelTreePalettePanel.vue"
@@ -59,9 +60,7 @@ const stylePanelCollapsed = ref(true)
 const rightStackRows = computed(() =>
   stylePanelCollapsed.value ? "minmax(240px, 1fr) 46px" : "minmax(240px, 1fr) minmax(320px, 1fr)"
 )
-const canShareModel = computed(
-  () => !!model.value?.ownerId && !!currentUser.value?.id && model.value.ownerId === currentUser.value.id
-)
+const { canShare: canShareModel } = useCanShare(model, currentUser)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const gridVisible = ref(true)
@@ -2888,31 +2887,17 @@ onBeforeUnmount(() => {
 }
 
 .btn {
-  border: none;
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 13px;
-  cursor: pointer;
 }
 
 .btn:disabled {
   opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .btn--secondary {
   background: var(--surface-strong);
-  color: var(--text-muted);
-}
-
-.btn--primary {
-  background: var(--primary);
-  color: #fff;
-}
-
-.btn--danger {
-  background: var(--danger);
-  color: #fff;
 }
 
 .choice-list {

@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n"
 
 import { useTypeEditor } from "./composables/useTypeEditor"
 import { serializeTypeAttrs } from "../notations/notationAttrs"
+import { useCanShare } from "../../composables/useCanShare"
 import BaseModal from "../../components/modals/BaseModal.vue"
 import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
 import TypeSidebar from "./components/TypeSidebar.vue"
@@ -102,10 +103,9 @@ function cancelSwitch() {
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
-const canShareSelectedType = computed(() => {
-  const type = selectedType.value
-  return !!type && !type._isNew && !!currentUserId.value && type.ownerId === currentUserId.value
-})
+const currentUserObj = computed(() => currentUserId.value ? { id: currentUserId.value } : null)
+const { canShare: canShareBase } = useCanShare(selectedType, currentUserObj)
+const canShareSelectedType = computed(() => canShareBase.value && !selectedType.value?._isNew)
 const shareResourceType = computed<ShareResourceType>(() =>
   selectedType.value?.kind === "link" ? "LINK_TYPE" : "NODE_TYPE"
 )

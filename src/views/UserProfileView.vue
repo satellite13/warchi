@@ -212,18 +212,11 @@ onMounted(() => {
 
 .btn {
   margin-top: 4px;
-  border: none;
-  border-radius: var(--radius-sm);
   padding: 11px 16px;
-  background: var(--primary);
-  color: #fff;
   font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
 }
 
 .btn:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
 }
 </style>

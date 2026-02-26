@@ -364,22 +364,9 @@ onMounted(load);
 }
 
 .btn {
-  border: none;
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 13px;
-  cursor: pointer;
-}
-
-.btn--primary {
-  background: var(--primary);
-  color: #fff;
-}
-
-.btn--secondary {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
 }
 
 .btn--danger {

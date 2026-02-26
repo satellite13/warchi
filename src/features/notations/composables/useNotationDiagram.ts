@@ -848,7 +848,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     renderer.use(rulersOverlay)
     rulersOverlayRef.value = rulersOverlay
 
-    const miniMap = new MiniMap({ width: 120, height: 60, padding: 20 })
+    const miniMap = new MiniMap({ width: 120, height: 60, padding: 20, contentMargin: 200 })
     renderer.use(miniMap)
     miniMapRef.value = miniMap
 

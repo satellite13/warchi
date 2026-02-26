@@ -2,6 +2,8 @@
 import {computed} from "vue";
 import { useI18n } from "vue-i18n";
 import UserAvatar from "../layout/UserAvatar.vue";
+import { getGradient } from "@/utils/gradientColors";
+import { formatDate } from "@/utils/formatDate";
 
 const props = defineProps<{
   id: string;
@@ -23,37 +25,14 @@ const emit = defineEmits<{
 }>();
 const { t, locale } = useI18n();
 
-const gradientColors = [
-  "linear-gradient(135deg, #7c5cfc 0%, #b06cff 100%)",
-  "linear-gradient(135deg, #45e0b8 0%, #7c5cfc 100%)",
-  "linear-gradient(135deg, #f472b6 0%, #ec4899 100%)",
-  "linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)",
-  "linear-gradient(135deg, #fb923c 0%, #f472b6 100%)",
-  "linear-gradient(135deg, #34d399 0%, #38bdf8 100%)",
-  "linear-gradient(135deg, #fbbf24 0%, #fb923c 100%)",
-  "linear-gradient(135deg, #a78bfa 0%, #f472b6 100%)"
-];
-
-const cardColor = computed(() => {
-  let hash = 0;
-  for (let i = 0; i < props.id.length; i++) {
-    hash = props.id.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return gradientColors[Math.abs(hash) % gradientColors.length];
-});
+const cardColor = computed(() => getGradient(props.id));
 
 const formattedUpdatedAt = computed(() => {
   if (!props.updatedAt) {
     return t("common.loadingDash");
   }
-  const date = new Date(props.updatedAt);
-  if (Number.isNaN(date.getTime())) {
-    return t("common.loadingDash");
-  }
-  return new Intl.DateTimeFormat(locale.value === "en" ? "en-US" : "ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
+  const result = formatDate(props.updatedAt, locale.value);
+  return result === "—" ? t("common.loadingDash") : result;
 });
 </script>
 

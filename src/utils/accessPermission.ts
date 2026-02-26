@@ -1,11 +1,6 @@
 import type { AccessPermission } from "@/types/entities"
 
-export function toAccessLabel(permission?: AccessPermission | null): string {
-  const locale =
-    typeof window !== "undefined" && window.localStorage.getItem("warchi.locale") === "en"
-      ? "en"
-      : "ru"
-
+export function toAccessLabel(permission?: AccessPermission | null, locale?: string): string {
   switch (permission) {
     case "OWNER":
       return locale === "en" ? "Mine" : "Мой"

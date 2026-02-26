@@ -101,8 +101,8 @@ const filteredLinkTypes = computed(() => {
           >
             <span class="material-symbols-outlined type-list__icon">category</span>
             <span class="type-list__name">{{ t.name || $t("common.unnamed") }}</span>
-            <span v-if="!t._isNew && toAccessLabel(t.accessPermission)" class="type-list__access-badge">
-              {{ toAccessLabel(t.accessPermission) }}
+            <span v-if="!t._isNew && toAccessLabel(t.accessPermission, locale)" class="type-list__access-badge">
+              {{ toAccessLabel(t.accessPermission, locale) }}
             </span>
             <span v-if="t._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
           </li>
@@ -140,8 +140,8 @@ const filteredLinkTypes = computed(() => {
           >
             <span class="material-symbols-outlined type-list__icon">link</span>
             <span class="type-list__name">{{ t.name || $t("common.unnamed") }}</span>
-            <span v-if="!t._isNew && toAccessLabel(t.accessPermission)" class="type-list__access-badge">
-              {{ toAccessLabel(t.accessPermission) }}
+            <span v-if="!t._isNew && toAccessLabel(t.accessPermission, locale)" class="type-list__access-badge">
+              {{ toAccessLabel(t.accessPermission, locale) }}
             </span>
             <span v-if="t._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
           </li>

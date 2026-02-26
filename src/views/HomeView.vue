@@ -8,6 +8,8 @@ import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
 import { getUserDisplayName } from "../utils/userDisplay"
+import { getGradient } from "../utils/gradientColors"
+import { formatDate } from "../utils/formatDate"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
 
@@ -17,7 +19,7 @@ const { t, locale } = useI18n()
 const changelogRaw = computed(() => (locale.value === "en" ? changelogEn : changelogRu))
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
-const appVersion = "0.0.17"
+const appVersion = import.meta.env.APP_VERSION ?? "dev"
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -76,30 +78,6 @@ const quickActions = computed(() => [
   { icon: "tune", label: t("home.quickTypeEditor"), route: "types", color: "#f59e42" }
 ])
 
-const gradientColors = [
-  "linear-gradient(135deg, #7c5cfc 0%, #b06cff 100%)",
-  "linear-gradient(135deg, #45e0b8 0%, #7c5cfc 100%)",
-  "linear-gradient(135deg, #f472b6 0%, #ec4899 100%)",
-  "linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)",
-  "linear-gradient(135deg, #fb923c 0%, #f472b6 100%)",
-  "linear-gradient(135deg, #34d399 0%, #38bdf8 100%)",
-  "linear-gradient(135deg, #fbbf24 0%, #fb923c 100%)",
-  "linear-gradient(135deg, #a78bfa 0%, #f472b6 100%)"
-]
-
-const getGradient = (id: string) => {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash)
-  return gradientColors[Math.abs(hash) % gradientColors.length]
-}
-
-const formatDate = (dateStr?: string | null) => {
-  if (!dateStr) return "—"
-  const d = new Date(dateStr)
-  if (Number.isNaN(d.getTime())) return "—"
-  const dateLocale = locale.value === "en" ? "en-US" : "ru-RU"
-  return new Intl.DateTimeFormat(dateLocale, { dateStyle: "medium", timeStyle: "short" }).format(d)
-}
 
 const formatRelativeDate = (dateStr?: string | null) => {
   if (!dateStr) return ""
@@ -114,7 +92,7 @@ const formatRelativeDate = (dateStr?: string | null) => {
   if (hours < 24) return t("time.hoursAgo", { count: hours })
   const days = Math.floor(hours / 24)
   if (days < 7) return t("time.daysAgo", { count: days })
-  return formatDate(dateStr)
+  return formatDate(dateStr, locale.value)
 }
 
 const operationLabel = (op: string) => {

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Updated `@ngroznykh/papirus` dependency to `0.3.15`.
+- MiniMap: added `contentMargin: 200` for extended view panning in model and notation editors.
+
 ## [0.0.17] - 2026-02-25
 
 ### Added

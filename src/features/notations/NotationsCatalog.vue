@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
@@ -16,11 +16,11 @@ import CardSkeleton from "../../components/cards/CardSkeleton.vue";
 import EmptyState from "../../components/list/EmptyState.vue";
 import EntityCreateModal from "../../components/modals/EntityCreateModal.vue";
 import EntityDeleteModal from "../../components/modals/EntityDeleteModal.vue";
-import BaseModal from "../../components/modals/BaseModal.vue";
+import EntityRenameModal from "../../components/modals/EntityRenameModal.vue";
 import ShareAccessModal from "../../components/modals/ShareAccessModal.vue";
 
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { currentUser } = useAuth();
 
 const {
@@ -69,7 +69,7 @@ const itemToRename = ref<NotationData | null>(null);
 const renameName = ref("");
 const renameError = ref<string | null>(null);
 const isRenaming = ref(false);
-const canSubmitRename = computed(() => renameName.value.trim().length > 0 && !isRenaming.value);
+
 
 const openRenameModal = (item: NotationData) => {
   itemToRename.value = item;
@@ -183,7 +183,7 @@ const openShareModal = (item: NotationData) => {
         :version="getSelectedItem(group)?.version || ''"
         :versions="group.versions.map((notation) => notation.version)"
         :owner-email="ownerEmails.get(getSelectedItem(group)?.ownerId || '')"
-        :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission)"
+        :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission, locale)"
         :can-share="
           !!getSelectedItem(group)?.ownerId &&
           !!currentUser?.id &&
@@ -230,30 +230,17 @@ const openShareModal = (item: NotationData) => {
       @confirm="deleteItem"
     />
 
-    <BaseModal v-if="showRenameModal" :title="t('notations.renameTitle')" @close="closeRenameModal">
-      <form class="rename-form" @submit.prevent="renameItem">
-        <label class="rename-form__field">
-          <span class="rename-form__label">{{ t("common.name") }}</span>
-          <input
-            v-model="renameName"
-            class="rename-form__input"
-            type="text"
-            :placeholder="t('notations.namePlaceholder')"
-            :disabled="isRenaming"
-            autofocus
-          >
-        </label>
-        <div v-if="renameError" class="rename-form__error">{{ renameError }}</div>
-        <div class="rename-form__actions">
-          <button type="button" class="btn btn--secondary" :disabled="isRenaming" @click="closeRenameModal">
-            {{ t("common.cancel") }}
-          </button>
-          <button type="submit" class="btn btn--primary" :disabled="!canSubmitRename">
-            {{ isRenaming ? t("common.saving") : t("common.save") }}
-          </button>
-        </div>
-      </form>
-    </BaseModal>
+    <EntityRenameModal
+      v-if="showRenameModal"
+      :title="t('notations.renameTitle')"
+      :name="renameName"
+      :is-renaming="isRenaming"
+      :error="renameError"
+      :name-placeholder="t('notations.namePlaceholder')"
+      @close="closeRenameModal"
+      @submit="renameItem"
+      @update:name="renameName = $event"
+    />
 
     <ShareAccessModal
       v-if="showShareModal && shareTargetId"
@@ -303,96 +290,4 @@ const openShareModal = (item: NotationData) => {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-.rename-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.rename-form__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.rename-form__label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.rename-form__input {
-  padding: 10px 12px;
-  font-size: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--base-text);
-}
-
-.rename-form__input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.rename-form__input:disabled {
-  opacity: 0.6;
-}
-
-.rename-form__error {
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.rename-form__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.btn {
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-  font-family: inherit;
-  letter-spacing: 0.01em;
-}
-
-.btn--secondary {
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.btn--secondary:hover:not(:disabled) {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.btn--secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn--primary {
-  color: #fff;
-  background: var(--primary);
-  border: none;
-}
-
-.btn--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.btn--primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 </style>

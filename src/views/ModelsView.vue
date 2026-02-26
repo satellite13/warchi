@@ -1,13 +1,13 @@
 <script setup lang="ts">
 
-import ModelsViewLayout from "../layouts/ModelsViewLayout.vue";
+import MainLayout from "../layouts/MainLayout.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import ModelsCatalog from "../features/models/ModelsCatalog.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 </script>
 
 <template>
-  <ModelsViewLayout>
+  <MainLayout>
     <template #header>
       <AppHeader/>
     </template>
@@ -17,7 +17,7 @@ import AppFooter from "../components/layout/AppFooter.vue";
     <template #footer>
       <AppFooter/>
     </template>
-  </ModelsViewLayout>
+  </MainLayout>
 </template>
 
 <style scoped>

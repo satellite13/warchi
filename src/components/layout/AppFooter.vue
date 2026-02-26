@@ -1,5 +1,5 @@
 <script setup lang="ts">
-
+const appVersion = import.meta.env.APP_VERSION ?? "dev"
 </script>
 
 <template>
@@ -10,7 +10,7 @@
     <div class="app-footer__center">
     </div>
     <div class="app-footer__right">
-      Version: 0.0.17
+      Version: {{ appVersion }}
     </div>
   </footer>
 

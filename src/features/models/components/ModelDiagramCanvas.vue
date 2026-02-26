@@ -1167,10 +1167,10 @@ function initRenderer(r: DiagramRenderer) {
   // MiniMap
   miniMap = new MiniMap({
     enabled: miniMapVisible.value,
-    width: 190,
-    height: 128,
-    padding: 12,
-    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#f4f2ef",
+    width: 120,
+    height: 60,
+    padding: 20,
+    contentMargin: 200,
     anchor: "bottom-left"
   })
   r.use(miniMap)
@@ -2038,7 +2038,7 @@ defineExpose({
 
 .canvas-palette-toggle {
   position: absolute;
-  right: 5px;
+  right: 15px;
   top: 10px;
   width: 30px;
   height: 30px;
@@ -2061,11 +2061,11 @@ defineExpose({
 
 .canvas-palette {
   position: absolute;
-  right: 5px;
+  right: 15px;
   top: 10px;
   bottom: 12px;
-  width: 152px;
-  padding: 8px 6px;
+  width: 120px;
+  padding: 8px 6px 8px 6px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -2074,6 +2074,7 @@ defineExpose({
   flex-direction: column;
   gap: 8px;
   z-index: 6;
+  margin-bottom: 12px;
 }
 
 .canvas-palette__header {

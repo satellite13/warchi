@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {ref, computed, watch, onMounted, onBeforeUnmount, nextTick} from "vue";
 import {onBeforeRouteLeave, useRouter, type RouteLocationRaw} from "vue-router";
+import { useI18n } from "vue-i18n";
 
 const router = useRouter();
+const { t } = useI18n();
 import MainLayout from "../layouts/MainLayout.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 import BaseModal from "../components/modals/BaseModal.vue";
@@ -10,6 +12,7 @@ import ShareAccessModal from "../components/modals/ShareAccessModal.vue";
 import {ImageExporter, SvgExporter} from "@ngroznykh/papirus";
 import {apiGet} from "../composables/useApi";
 import {useAuth} from "../composables/useAuth";
+import {useCanShare} from "../composables/useCanShare";
 import NotationMainPanelLayout from "../features/notations/layout/NotationMainPanelLayout.vue";
 import NotationAppHeader from "../features/notations/layout/NotationAppHeader.vue";
 import NotationComponentList from "../features/notations/layout/NotationComponentList.vue";
@@ -46,9 +49,7 @@ const {
 } = useNotationEditor();
 const {currentUser} = useAuth();
 const showShareModal = ref(false);
-const canShareNotation = computed(
-  () => !!notation.value?.ownerId && !!currentUser.value?.id && notation.value.ownerId === currentUser.value.id
-);
+const { canShare: canShareNotation } = useCanShare(notation, currentUser);
 
 const {
   selectedEntity,
@@ -1102,7 +1103,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
         <span class="material-symbols-outlined save-toast__icon">check_circle</span>
-        <span>Сохранено</span>
+        <span>{{ t("common.saved") }}</span>
       </div>
       <div v-else-if="saveError" class="save-toast save-toast--error">
         <span class="material-symbols-outlined save-toast__icon">error</span>
@@ -1330,37 +1331,6 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-.btn {
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-  letter-spacing: 0.01em;
-}
-
-.btn--secondary {
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.btn--secondary:hover {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.btn--danger {
-  color: #fff;
-  background: var(--danger);
-  border: none;
-}
-
-.btn--danger:hover {
-  background: #c82333;
-}
 
 .json-viewer {
   margin: 0;

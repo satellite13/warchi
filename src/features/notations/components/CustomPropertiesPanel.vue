@@ -254,6 +254,12 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="properties-panel__content">
+      <CollapseSection
+        v-if="selectedItem && !('linkTypeId' in selectedItem)"
+        :label="t('diagram.documentation')"
+        :expanded="paletteGroupExpanded"
+        @toggle="paletteGroupExpanded = !paletteGroupExpanded"
+      >
       <button
         type="button"
         class="properties-panel__doc-btn"
@@ -265,8 +271,8 @@ onBeforeUnmount(() => {
           <span class="material-symbols-outlined">check_circle</span>
         </span>
       </button>
-
-      <TypeSelectSection
+      </CollapseSection>
+    <TypeSelectSection
         :selected-item="selectedItem"
         :node-types="nodeTypes"
         :link-types="linkTypes"
@@ -720,7 +726,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   width: 100%;
   padding: 8px 12px;
-  margin: 4px 0;
+  margin: 4px 0px;
   font-size: 12px;
   font-weight: 500;
   font-family: inherit;

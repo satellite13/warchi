@@ -23,6 +23,7 @@ const emit = defineEmits<{
   save: []
   loadVersions: []
   loadVersion: [versionNumber: number]
+  backToCurrent: []
 }>()
 
 const { t } = useI18n()
@@ -36,11 +37,16 @@ const editorLanguage = computed(() => {
 const isEditing = ref(false)
 const showPanel = ref(true)
 const showVersions = ref(false)
+const viewingOldVersion = ref(false)
+const viewingVersionNumber = ref<number | null>(null)
 
 const hasDocument = computed(() => !!props.fileId || props.content.length > 0)
-const canSave = computed(() => props.isDirty && !props.isSaving && !props.isLoading)
+const canSave = computed(
+  () => props.isDirty && !props.isSaving && !props.isLoading && !viewingOldVersion.value
+)
 
 function startEditing() {
+  if (viewingOldVersion.value) return
   isEditing.value = true
 }
 
@@ -49,10 +55,12 @@ function stopEditing() {
 }
 
 function handleContentChange(value: string) {
+  if (viewingOldVersion.value) return
   emit('update:content', value)
 }
 
 function handleSave() {
+  if (viewingOldVersion.value) return
   emit('save')
 }
 
@@ -66,7 +74,15 @@ function handleShowVersions() {
 function handleLoadVersion(versionNumber: number) {
   emit('loadVersion', versionNumber)
   showVersions.value = false
-  isEditing.value = true
+  isEditing.value = false
+  viewingOldVersion.value = true
+  viewingVersionNumber.value = versionNumber
+}
+
+function handleBackToCurrent() {
+  viewingOldVersion.value = false
+  viewingVersionNumber.value = null
+  emit('backToCurrent')
 }
 
 function formatDate(dateStr: string): string {
@@ -125,7 +141,14 @@ function formatSize(bytes: number): string {
       <!-- Editor / Preview / Empty -->
       <template v-else>
         <div class="doc-panel__actions">
-          <template v-if="isEditing">
+          <template v-if="viewingOldVersion">
+            <span class="doc-panel__version-label">v{{ viewingVersionNumber }}</span>
+            <button type="button" class="doc-btn doc-btn--primary" @click="handleBackToCurrent">
+              <span class="material-symbols-outlined">undo</span>
+              {{ t('types.docBackToCurrent') }}
+            </button>
+          </template>
+          <template v-else-if="isEditing">
             <button type="button" class="doc-btn doc-btn--secondary" @click="stopEditing">
               <span class="material-symbols-outlined">visibility</span>
               {{ t('types.docPreview') }}
@@ -150,7 +173,7 @@ function formatSize(bytes: number): string {
           </button>
 
           <button
-            v-if="isDirty"
+            v-if="isDirty && !viewingOldVersion"
             type="button"
             class="doc-btn doc-btn--primary"
             :disabled="!canSave"
@@ -187,8 +210,8 @@ function formatSize(bytes: number): string {
           </div>
         </div>
 
-        <!-- Editor mode -->
-        <div v-if="isEditing" class="doc-editor-wrap">
+        <!-- Editor mode (disabled when viewing old version) -->
+        <div v-if="isEditing && !viewingOldVersion" class="doc-editor-wrap">
           <MdEditor
             :model-value="content"
             :language="editorLanguage"
@@ -294,6 +317,16 @@ function formatSize(bytes: number): string {
 
 .doc-panel__icon {
   font-size: 16px;
+}
+
+.doc-panel__version-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .doc-panel__chevron {

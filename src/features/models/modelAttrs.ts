@@ -1,4 +1,4 @@
-import type { ComponentResponse, RelationResponse } from "../../types/api"
+import type { ComponentResponse, RelationResponse } from '../../types/api'
 
 export type JsonObject = Record<string, unknown>
 
@@ -14,6 +14,8 @@ export type ModelNodeAttrs = {
   treeOrder: number
   notationComponents: Record<string, NodeComponentBinding>
   componentProperties: Record<string, Record<string, Record<string, unknown>>>
+  /** UUID файла markdown-документации */
+  documentFileId?: string
 }
 
 export type ModelLinkAttrs = {
@@ -44,10 +46,12 @@ export type DiagramAttrs = {
     nodes: DiagramNodeInstance[]
     edges: DiagramEdgeInstance[]
   }
+  /** UUID файла markdown-документации */
+  documentFileId?: string
 }
 
 export const createId = (): string =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `id-${Math.random().toString(36).slice(2)}`
 
@@ -55,7 +59,7 @@ const parseJson = (raw: string | null | undefined): JsonObject => {
   if (!raw) return {}
   try {
     const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as JsonObject
     }
   } catch {
@@ -65,7 +69,7 @@ const parseJson = (raw: string | null | undefined): JsonObject => {
 }
 
 const toRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value)
+  value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {}
 
@@ -74,7 +78,7 @@ const toNodeBindings = (value: unknown): Record<string, NodeComponentBinding> =>
   const out: Record<string, NodeComponentBinding> = {}
   for (const [notationId, row] of Object.entries(source)) {
     const record = toRecord(row)
-    const componentId = typeof record.componentId === "string" ? record.componentId : ""
+    const componentId = typeof record.componentId === 'string' ? record.componentId : ''
     if (!componentId) continue
     out[notationId] = { componentId }
   }
@@ -86,16 +90,14 @@ const toLinkBindings = (value: unknown): Record<string, LinkRelationBinding> => 
   const out: Record<string, LinkRelationBinding> = {}
   for (const [notationId, row] of Object.entries(source)) {
     const record = toRecord(row)
-    const relationId = typeof record.relationId === "string" ? record.relationId : ""
+    const relationId = typeof record.relationId === 'string' ? record.relationId : ''
     if (!relationId) continue
     out[notationId] = { relationId }
   }
   return out
 }
 
-const toScopedMap = (
-  value: unknown
-): Record<string, Record<string, Record<string, unknown>>> => {
+const toScopedMap = (value: unknown): Record<string, Record<string, Record<string, unknown>>> => {
   const source = toRecord(value)
   const result: Record<string, Record<string, Record<string, unknown>>> = {}
   for (const [notationId, byEntity] of Object.entries(source)) {
@@ -112,36 +114,36 @@ const toScopedMap = (
 const toDiagramNodes = (value: unknown): DiagramNodeInstance[] => {
   if (!Array.isArray(value)) return []
   return value
-    .map((item) => toRecord(item))
-    .filter((item) => typeof item.id === "string" && typeof item.modelNodeId === "string")
-    .map((item) => ({
+    .map(item => toRecord(item))
+    .filter(item => typeof item.id === 'string' && typeof item.modelNodeId === 'string')
+    .map(item => ({
       id: item.id as string,
       modelNodeId: item.modelNodeId as string,
-      x: typeof item.x === "number" ? item.x : 80,
-      y: typeof item.y === "number" ? item.y : 80,
-      width: typeof item.width === "number" ? item.width : undefined,
-      height: typeof item.height === "number" ? item.height : undefined,
-      attrs: toRecord(item.attrs)
+      x: typeof item.x === 'number' ? item.x : 80,
+      y: typeof item.y === 'number' ? item.y : 80,
+      width: typeof item.width === 'number' ? item.width : undefined,
+      height: typeof item.height === 'number' ? item.height : undefined,
+      attrs: toRecord(item.attrs),
     }))
 }
 
 const toDiagramEdges = (value: unknown): DiagramEdgeInstance[] => {
   if (!Array.isArray(value)) return []
   return value
-    .map((item) => toRecord(item))
+    .map(item => toRecord(item))
     .filter(
-      (item) =>
-        typeof item.id === "string" &&
-        typeof item.modelLinkId === "string" &&
-        typeof item.sourceInstanceId === "string" &&
-        typeof item.targetInstanceId === "string"
+      item =>
+        typeof item.id === 'string' &&
+        typeof item.modelLinkId === 'string' &&
+        typeof item.sourceInstanceId === 'string' &&
+        typeof item.targetInstanceId === 'string'
     )
-    .map((item) => ({
+    .map(item => ({
       id: item.id as string,
       modelLinkId: item.modelLinkId as string,
       sourceInstanceId: item.sourceInstanceId as string,
       targetInstanceId: item.targetInstanceId as string,
-      attrs: toRecord(item.attrs)
+      attrs: toRecord(item.attrs),
     }))
 }
 
@@ -149,54 +151,59 @@ export const parseNodeAttrs = (raw: string | null | undefined): ModelNodeAttrs =
   const data = parseJson(raw)
   const rawTreeOrder = data.treeOrder
   const treeOrder =
-    typeof rawTreeOrder === "number" && Number.isFinite(rawTreeOrder) && rawTreeOrder >= 0
+    typeof rawTreeOrder === 'number' && Number.isFinite(rawTreeOrder) && rawTreeOrder >= 0
       ? Math.trunc(rawTreeOrder)
       : 0
-  return {
+  const result: ModelNodeAttrs = {
     treeOrder,
     notationComponents: toNodeBindings(data.notationComponents),
-    componentProperties: toScopedMap(data.componentProperties)
+    componentProperties: toScopedMap(data.componentProperties),
   }
+  if (typeof data.documentFileId === 'string' && data.documentFileId.trim().length > 0) {
+    result.documentFileId = data.documentFileId.trim()
+  }
+  return result
 }
 
 export const parseLinkAttrs = (raw: string | null | undefined): ModelLinkAttrs => {
   const data = parseJson(raw)
   return {
     notationRelations: toLinkBindings(data.notationRelations),
-    relationProperties: toScopedMap(data.relationProperties)
+    relationProperties: toScopedMap(data.relationProperties),
   }
 }
 
 export const parseDiagramAttrs = (raw: string | null | undefined): DiagramAttrs => {
   const data = parseJson(raw)
   const instances = toRecord(data.instances)
-  return {
+  const result: DiagramAttrs = {
     instances: {
       nodes: toDiagramNodes(instances.nodes),
-      edges: toDiagramEdges(instances.edges)
-    }
+      edges: toDiagramEdges(instances.edges),
+    },
   }
+  if (typeof data.documentFileId === 'string' && data.documentFileId.trim().length > 0) {
+    result.documentFileId = data.documentFileId.trim()
+  }
+  return result
 }
 
-export const serializeNodeAttrs = (attrs: ModelNodeAttrs): string =>
-  JSON.stringify(attrs)
+export const serializeNodeAttrs = (attrs: ModelNodeAttrs): string => JSON.stringify(attrs)
 
-export const serializeLinkAttrs = (attrs: ModelLinkAttrs): string =>
-  JSON.stringify(attrs)
+export const serializeLinkAttrs = (attrs: ModelLinkAttrs): string => JSON.stringify(attrs)
 
-export const serializeDiagramAttrs = (attrs: DiagramAttrs): string =>
-  JSON.stringify(attrs)
+export const serializeDiagramAttrs = (attrs: DiagramAttrs): string => JSON.stringify(attrs)
 
 export const resolveComponentByNodeType = (
   components: ComponentResponse[],
   notationId: string,
   nodeTypeId: string
 ): ComponentResponse[] =>
-  components.filter((item) => item.notationId === notationId && item.nodeTypeId === nodeTypeId)
+  components.filter(item => item.notationId === notationId && item.nodeTypeId === nodeTypeId)
 
 export const resolveRelationByLinkType = (
   relations: RelationResponse[],
   notationId: string,
   linkTypeId: string
 ): RelationResponse[] =>
-  relations.filter((item) => item.notationId === notationId && item.linkTypeId === linkTypeId)
+  relations.filter(item => item.notationId === notationId && item.linkTypeId === linkTypeId)

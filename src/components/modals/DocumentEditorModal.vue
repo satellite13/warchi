@@ -44,10 +44,14 @@ const {
   resetDocument,
 } = useTypeDocument()
 
-const isEditing = ref(true)
+const isEditing = ref(false)
 const showVersions = ref(false)
+const viewingOldVersion = ref(false)
+const viewingVersionNumber = ref<number | null>(null)
 
-const canSave = computed(() => isDocDirty.value && !isDocSaving.value && !isDocLoading.value)
+const canSave = computed(
+  () => isDocDirty.value && !isDocSaving.value && !isDocLoading.value && !viewingOldVersion.value
+)
 
 onMounted(() => {
   loadDocument(props.fileId ?? null)
@@ -57,14 +61,17 @@ onMounted(() => {
 })
 
 function togglePreview() {
+  if (viewingOldVersion.value) return
   isEditing.value = !isEditing.value
 }
 
 function handleContentChange(value: string) {
+  if (viewingOldVersion.value) return
   setDocumentContent(value)
 }
 
 async function handleSave() {
+  if (viewingOldVersion.value) return
   const fileId = await saveDocument()
   if (fileId) {
     emit('saved', fileId)
@@ -82,8 +89,17 @@ function handleLoadVersion(versionNumber: number) {
   if (documentFileId.value) {
     loadVersion(documentFileId.value, versionNumber)
     showVersions.value = false
-    isEditing.value = true
+    isEditing.value = false
+    viewingOldVersion.value = true
+    viewingVersionNumber.value = versionNumber
   }
+}
+
+function handleBackToCurrent() {
+  viewingOldVersion.value = false
+  viewingVersionNumber.value = null
+  isEditing.value = false
+  loadDocument(props.fileId ?? null)
 }
 
 function handleClose() {
@@ -115,17 +131,47 @@ function formatSize(bytes: number): string {
           <div class="doc-modal__header-left">
             <span class="material-symbols-outlined doc-modal__icon">description</span>
             <h2>{{ title }}</h2>
-            <span v-if="isDocDirty" class="doc-modal__dirty-badge">{{
+            <span v-if="isDocDirty && !viewingOldVersion" class="doc-modal__dirty-badge">{{
               t('types.docNotSaved')
             }}</span>
+            <span v-if="viewingOldVersion" class="doc-modal__version-badge">
+              v{{ viewingVersionNumber }}
+            </span>
           </div>
           <div class="doc-modal__header-actions">
-            <button type="button" class="doc-modal-btn doc-modal-btn--ghost" @click="togglePreview">
-              <span class="material-symbols-outlined">
-                {{ isEditing ? 'visibility' : 'edit' }}
-              </span>
-              {{ isEditing ? t('types.docPreview') : t('common.edit') }}
-            </button>
+            <template v-if="viewingOldVersion">
+              <button
+                type="button"
+                class="doc-modal-btn doc-modal-btn--primary"
+                @click="handleBackToCurrent"
+              >
+                <span class="material-symbols-outlined">undo</span>
+                {{ t('types.docBackToCurrent') }}
+              </button>
+            </template>
+            <template v-else>
+              <button
+                type="button"
+                class="doc-modal-btn doc-modal-btn--ghost"
+                @click="togglePreview"
+              >
+                <span class="material-symbols-outlined">
+                  {{ isEditing ? 'visibility' : 'edit' }}
+                </span>
+                {{ isEditing ? t('types.docPreview') : t('common.edit') }}
+              </button>
+
+              <button
+                v-if="isDocDirty"
+                type="button"
+                class="doc-modal-btn doc-modal-btn--primary"
+                :disabled="!canSave"
+                @click="handleSave"
+              >
+                <span class="material-symbols-outlined">save</span>
+                {{ isDocSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </template>
 
             <button
               v-if="documentFileId"
@@ -136,17 +182,6 @@ function formatSize(bytes: number): string {
             >
               <span class="material-symbols-outlined">history</span>
               {{ t('types.docVersions') }}
-            </button>
-
-            <button
-              v-if="isDocDirty"
-              type="button"
-              class="doc-modal-btn doc-modal-btn--primary"
-              :disabled="!canSave"
-              @click="handleSave"
-            >
-              <span class="material-symbols-outlined">save</span>
-              {{ isDocSaving ? t('common.saving') : t('common.save') }}
             </button>
 
             <button type="button" class="doc-modal__close" @click="handleClose">
@@ -193,8 +228,8 @@ function formatSize(bytes: number): string {
             {{ docError }}
           </div>
 
-          <!-- Editor -->
-          <div v-else-if="isEditing" class="doc-modal__editor">
+          <!-- Editor (disabled when viewing old version) -->
+          <div v-else-if="isEditing && !viewingOldVersion" class="doc-modal__editor">
             <MdEditor
               :model-value="documentContent"
               :language="editorLanguage"
@@ -336,6 +371,18 @@ function formatSize(bytes: number): string {
   font-weight: 500;
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 12%, transparent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.doc-modal__version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;

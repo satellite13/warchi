@@ -88,7 +88,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   { icon: 'upload', event: 'import-notation', title: t('toolbar.importNotation') },
   { icon: 'separator', event: 'sep5', separator: true },
   { icon: 'data_object', event: 'show-attrs-json', title: t('toolbar.showAttrsJson') },
-  { icon: 'article', event: 'open-notation-doc', title: t('notations.documentation') },
   { icon: 'separator', event: 'sep6', separator: true },
   {
     icon: 'save',
@@ -136,6 +135,14 @@ const emit = defineEmits<{
         @click="emit('share')"
       >
         <span class="material-symbols-outlined">share</span>
+      </button>
+      <button
+        type="button"
+        class="share-btn"
+        :title="t('notations.documentation')"
+        @click="emit('action', 'open-notation-doc')"
+      >
+        <span class="material-symbols-outlined">article</span>
       </button>
     </div>
     <div v-if="!hideToolbar" class="notation-header__center">

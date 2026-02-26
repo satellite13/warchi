@@ -50,7 +50,7 @@ export function useTypeDocument() {
     }
 
     try {
-      const response = await fetch(url, { method: 'GET', headers })
+      const response = await fetch(url, { method: 'GET', headers, cache: 'no-store' })
       if (!response.ok) {
         return null
       }
@@ -160,7 +160,9 @@ export function useTypeDocument() {
         method: 'GET',
       })
       if (result.success) {
-        docVersions.value = result.data ?? []
+        const versions = result.data ?? []
+        versions.sort((a, b) => b.versionNumber - a.versionNumber)
+        docVersions.value = versions
       }
     } finally {
       isLoadingVersions.value = false
@@ -182,7 +184,7 @@ export function useTypeDocument() {
         headers.Authorization = `Bearer ${accessToken}`
       }
 
-      const response = await fetch(url, { method: 'GET', headers })
+      const response = await fetch(url, { method: 'GET', headers, cache: 'no-store' })
       if (response.ok) {
         const content = await response.text()
         documentContent.value = content

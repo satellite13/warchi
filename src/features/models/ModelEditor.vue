@@ -1,30 +1,37 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any -- Papirus integration requires dynamic runtime node access */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from "vue-router"
-import { useI18n } from "vue-i18n"
-import { apiGet } from "../../composables/useApi"
-import MainLayout from "../../layouts/MainLayout.vue"
-import AppFooter from "../../components/layout/AppFooter.vue"
-import BaseModal from "../../components/modals/BaseModal.vue"
-import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
-import { ImageExporter, SvgExporter } from "@ngroznykh/papirus"
-import { createId, parseLinkAttrs, parseNodeAttrs, resolveComponentByNodeType, resolveRelationByLinkType } from "./modelAttrs"
-import type { EditorLink, EditorNode } from "./types"
-import { useModelEditor } from "./composables/useModelEditor"
-import { useAuth } from "../../composables/useAuth"
-import { useCanShare } from "../../composables/useCanShare"
-import ModelEditorHeader from "./components/ModelEditorHeader.vue"
-import ModelMainPanelLayout from "./layout/ModelMainPanelLayout.vue"
-import ModelTreePalettePanel from "./components/ModelTreePalettePanel.vue"
-import ModelDiagramCanvas from "./components/ModelDiagramCanvas.vue"
-import ModelPropertiesPanel from "./components/ModelPropertiesPanel.vue"
-import type { ToolbarButton } from "../notations/layout/IconToolbar.vue"
-import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from "../notations/notationAttrs"
-import NodeStylePanel from "../notations/components/NodeStylePanel.vue"
-import TabPanel from "../../components/layout/TabPanel.vue"
-import { bumpMinor, compareVersions } from "../../utils/version"
-import type { NotationMetaResponse } from "../../types/api"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { apiGet } from '../../composables/useApi'
+import MainLayout from '../../layouts/MainLayout.vue'
+import AppFooter from '../../components/layout/AppFooter.vue'
+import BaseModal from '../../components/modals/BaseModal.vue'
+import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
+import { ImageExporter, SvgExporter } from '@ngroznykh/papirus'
+import {
+  createId,
+  parseLinkAttrs,
+  parseNodeAttrs,
+  resolveComponentByNodeType,
+  resolveRelationByLinkType,
+} from './modelAttrs'
+import type { EditorLink, EditorNode } from './types'
+import { useModelEditor } from './composables/useModelEditor'
+import { useAuth } from '../../composables/useAuth'
+import { useCanShare } from '../../composables/useCanShare'
+import ModelEditorHeader from './components/ModelEditorHeader.vue'
+import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
+import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
+import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
+import type { ToolbarButton } from '../notations/layout/IconToolbar.vue'
+import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from '../notations/notationAttrs'
+import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
+import TabPanel from '../../components/layout/TabPanel.vue'
+import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
+import { bumpMinor, compareVersions } from '../../utils/version'
+import type { NotationMetaResponse } from '../../types/api'
 
 const {
   model,
@@ -41,26 +48,110 @@ const {
   markNodeDirty,
   markLinkDirty,
   markDiagramDirty,
-  renameModel
+  markModelDirty,
+  renameModel,
 } = useModelEditor()
 const { currentUser } = useAuth()
 const { t } = useI18n()
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
+
+// Document modal state
+const showDocModal = ref(false)
+const docModalTitle = ref('')
+const docModalFileId = ref<string | null>(null)
+const docModalTarget = ref<{ kind: 'model' | 'node' | 'diagram'; id: string } | null>(null)
+
+function getModelDocFileId(): string | null {
+  const raw = model.value?.attrs
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return typeof parsed.documentFileId === 'string' ? parsed.documentFileId : null
+  } catch {
+    return null
+  }
+}
+
+function setModelDocFileId(fileId: string) {
+  const raw = model.value?.attrs
+  let parsed: Record<string, unknown> = {}
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      parsed = {}
+    }
+  }
+  parsed.documentFileId = fileId
+  if (model.value) {
+    model.value.attrs = JSON.stringify(parsed)
+    markModelDirty()
+  }
+}
+
+function handleOpenModelDoc() {
+  docModalTarget.value = { kind: 'model', id: state.value.modelId }
+  docModalTitle.value = model.value?.name ?? t('models.entityName')
+  docModalFileId.value = getModelDocFileId()
+  showDocModal.value = true
+}
+
+function handleOpenNodeDoc(node: EditorNode) {
+  docModalTarget.value = { kind: 'node', id: node.id }
+  docModalTitle.value = node.name
+  docModalFileId.value = node.parsedAttrs.documentFileId ?? null
+  showDocModal.value = true
+}
+
+function handleOpenDiagramDoc() {
+  const diagram = state.value.diagrams.find(d => d.id === selectedDiagramId.value)
+  if (!diagram) return
+  docModalTarget.value = { kind: 'diagram', id: diagram.id }
+  docModalTitle.value = diagram.name
+  docModalFileId.value = diagram.parsedAttrs.documentFileId ?? null
+  showDocModal.value = true
+}
+
+function handleDocSaved(fileId: string) {
+  const target = docModalTarget.value
+  if (!target) return
+
+  if (target.kind === 'model') {
+    setModelDocFileId(fileId)
+  } else if (target.kind === 'node') {
+    const node = state.value.nodes.find(n => n.id === target.id)
+    if (node && !node.parsedAttrs.documentFileId) {
+      node.parsedAttrs.documentFileId = fileId
+      markNodeDirty(target.id)
+    }
+  } else if (target.kind === 'diagram') {
+    const diagram = state.value.diagrams.find(d => d.id === target.id)
+    if (diagram && !diagram.parsedAttrs.documentFileId) {
+      diagram.parsedAttrs.documentFileId = fileId
+      markDiagramDirty(target.id)
+    }
+  }
+}
+
+function handleDocModalClose() {
+  showDocModal.value = false
+  docModalTarget.value = null
+}
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
 const selectedCanvasElementId = ref<string | null>(null)
 const showNoteEditorModal = ref(false)
 const editingNoteInstanceId = ref<string | null>(null)
-const noteEditorText = ref("")
+const noteEditorText = ref('')
 const diagramRenderer = ref<any>(null)
 const diagramInteractionManager = ref<any>(null)
-const activeRightTab = ref("properties")
+const activeRightTab = ref('properties')
 const rightPanelTabs = computed(() => [
-  { id: "properties", label: t("models.propertiesTab"), icon: "tune" },
-  { id: "style", label: t("models.figureStyleTab"), icon: "palette" }
+  { id: 'properties', label: t('models.propertiesTab'), icon: 'tune' },
+  { id: 'style', label: t('models.figureStyleTab'), icon: 'palette' },
 ])
 const { canShare: canShareModel } = useCanShare(model, currentUser)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
@@ -75,8 +166,8 @@ const attachToOutlineEnabled = ref(true)
 const selectionSyncEnabled = ref(true)
 const canvasSettingsVisible = ref(true)
 const paletteVisible = ref(true)
-const NOTE_NODE_PREFIX = "__diagram-note__:"
-const NOTE_EDGE_PREFIX = "__diagram-note-edge__:"
+const NOTE_NODE_PREFIX = '__diagram-note__:'
+const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
 
 type ToolbarState = {
   gridVisible: boolean
@@ -90,18 +181,18 @@ type ToolbarState = {
   paletteVisible: boolean
 }
 
-const TOOLBAR_STATE_STORAGE_PREFIX = "warchi:model-editor:toolbar-state"
+const TOOLBAR_STATE_STORAGE_PREFIX = 'warchi:model-editor:toolbar-state'
 
 const getToolbarStateStorageKey = (userId: string | null): string =>
   userId ? `${TOOLBAR_STATE_STORAGE_PREFIX}:${userId}` : `${TOOLBAR_STATE_STORAGE_PREFIX}:anonymous`
 
 const readToolbarState = (userId: string | null): Partial<ToolbarState> | null => {
-  if (typeof window === "undefined") return null
+  if (typeof window === 'undefined') return null
   const raw = window.localStorage.getItem(getToolbarStateStorageKey(userId))
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as Partial<ToolbarState>
-    return parsed && typeof parsed === "object" ? parsed : null
+    return parsed && typeof parsed === 'object' ? parsed : null
   } catch {
     return null
   }
@@ -109,19 +200,24 @@ const readToolbarState = (userId: string | null): Partial<ToolbarState> | null =
 
 const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
   if (!stateValue) return
-  if (typeof stateValue.gridVisible === "boolean") gridVisible.value = stateValue.gridVisible
-  if (typeof stateValue.miniMapVisible === "boolean") miniMapVisible.value = stateValue.miniMapVisible
-  if (typeof stateValue.snapEnabled === "boolean") snapEnabled.value = stateValue.snapEnabled
-  if (typeof stateValue.alignEnabled === "boolean") alignEnabled.value = stateValue.alignEnabled
-  if (typeof stateValue.rulersEnabled === "boolean") rulersEnabled.value = stateValue.rulersEnabled
-  if (typeof stateValue.lockAnchorsEnabled === "boolean") lockAnchorsEnabled.value = stateValue.lockAnchorsEnabled
-  if (typeof stateValue.attachToOutlineEnabled === "boolean") attachToOutlineEnabled.value = stateValue.attachToOutlineEnabled
-  if (typeof stateValue.canvasSettingsVisible === "boolean") canvasSettingsVisible.value = stateValue.canvasSettingsVisible
-  if (typeof stateValue.paletteVisible === "boolean") paletteVisible.value = stateValue.paletteVisible
+  if (typeof stateValue.gridVisible === 'boolean') gridVisible.value = stateValue.gridVisible
+  if (typeof stateValue.miniMapVisible === 'boolean')
+    miniMapVisible.value = stateValue.miniMapVisible
+  if (typeof stateValue.snapEnabled === 'boolean') snapEnabled.value = stateValue.snapEnabled
+  if (typeof stateValue.alignEnabled === 'boolean') alignEnabled.value = stateValue.alignEnabled
+  if (typeof stateValue.rulersEnabled === 'boolean') rulersEnabled.value = stateValue.rulersEnabled
+  if (typeof stateValue.lockAnchorsEnabled === 'boolean')
+    lockAnchorsEnabled.value = stateValue.lockAnchorsEnabled
+  if (typeof stateValue.attachToOutlineEnabled === 'boolean')
+    attachToOutlineEnabled.value = stateValue.attachToOutlineEnabled
+  if (typeof stateValue.canvasSettingsVisible === 'boolean')
+    canvasSettingsVisible.value = stateValue.canvasSettingsVisible
+  if (typeof stateValue.paletteVisible === 'boolean')
+    paletteVisible.value = stateValue.paletteVisible
 }
 
 const persistToolbarState = (userId: string | null) => {
-  if (typeof window === "undefined") return
+  if (typeof window === 'undefined') return
   const nextState: ToolbarState = {
     gridVisible: gridVisible.value,
     miniMapVisible: miniMapVisible.value,
@@ -131,7 +227,7 @@ const persistToolbarState = (userId: string | null) => {
     lockAnchorsEnabled: lockAnchorsEnabled.value,
     attachToOutlineEnabled: attachToOutlineEnabled.value,
     canvasSettingsVisible: canvasSettingsVisible.value,
-    paletteVisible: paletteVisible.value
+    paletteVisible: paletteVisible.value,
   }
   window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState))
 }
@@ -140,59 +236,61 @@ const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
 const canvasToggleButtons = computed<ToolbarButton[]>(() => [
   {
-    icon: "grid_on",
-    event: "toggle-grid",
-    title: t("toolbar.grid"),
+    icon: 'grid_on',
+    event: 'toggle-grid',
+    title: t('toolbar.grid'),
     active: gridVisible.value,
-    disabled: !activeDiagram.value
+    disabled: !activeDiagram.value,
   },
   {
-    icon: "map",
-    event: "toggle-minimap",
-    title: t("toolbar.minimap"),
+    icon: 'map',
+    event: 'toggle-minimap',
+    title: t('toolbar.minimap'),
     active: miniMapVisible.value,
-    disabled: !activeDiagram.value
+    disabled: !activeDiagram.value,
   },
   {
-    icon: "my_location",
-    event: "toggle-snap",
-    title: t("toolbar.snapToGrid"),
+    icon: 'my_location',
+    event: 'toggle-snap',
+    title: t('toolbar.snapToGrid'),
     active: snapEnabled.value,
-    disabled: !activeDiagram.value
+    disabled: !activeDiagram.value,
   },
   {
-    icon: "align_horizontal_left",
-    event: "toggle-align",
-    title: t("toolbar.smartAlign"),
+    icon: 'align_horizontal_left',
+    event: 'toggle-align',
+    title: t('toolbar.smartAlign'),
     active: alignEnabled.value,
-    disabled: !activeDiagram.value
+    disabled: !activeDiagram.value,
   },
   {
-    icon: "straighten",
-    event: "toggle-rulers",
-    title: t("toolbar.rulers"),
+    icon: 'straighten',
+    event: 'toggle-rulers',
+    title: t('toolbar.rulers'),
     active: rulersEnabled.value,
-    disabled: !activeDiagram.value
+    disabled: !activeDiagram.value,
   },
   {
-    icon: "commit",
-    event: "toggle-lock-anchors",
-    title: t("toolbar.lockLinkAnchors"),
+    icon: 'commit',
+    event: 'toggle-lock-anchors',
+    title: t('toolbar.lockLinkAnchors'),
     active: lockAnchorsEnabled.value,
-    disabled: !activeDiagram.value
+    disabled: !activeDiagram.value,
   },
   {
-    icon: "route",
-    event: "toggle-outline",
-    title: t("toolbar.outline"),
+    icon: 'route',
+    event: 'toggle-outline',
+    title: t('toolbar.outline'),
     active: attachToOutlineEnabled.value,
-    disabled: !activeDiagram.value
-  }
+    disabled: !activeDiagram.value,
+  },
 ])
 
 const activeDiagram = computed(() =>
   selectedDiagramId.value
-    ? state.value.diagrams.find((diagram) => diagram.id === selectedDiagramId.value && !diagram._isDeleted) ?? null
+    ? (state.value.diagrams.find(
+        diagram => diagram.id === selectedDiagramId.value && !diagram._isDeleted
+      ) ?? null)
     : null
 )
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
@@ -201,45 +299,56 @@ const fallbackNotationMetaLoading = ref(false)
 const fallbackNotationMetaError = ref<string | null>(null)
 const activeDiagramNotationName = computed(() => {
   const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ""
-  const notation = state.value.notations.find((item) => item.id === notationId)
+  if (!notationId) return ''
+  const notation = state.value.notations.find(item => item.id === notationId)
   if (notation) return notation.name
   if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.name
-  if (fallbackNotationMetaLoading.value) return "Нотация загружается..."
+  if (fallbackNotationMetaLoading.value) return 'Нотация загружается...'
   if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
-  return "Нотация недоступна"
+  return 'Нотация недоступна'
 })
 const activeDiagramNotationVersion = computed(() => {
   const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ""
-  const notation = state.value.notations.find((item) => item.id === notationId)
+  if (!notationId) return ''
+  const notation = state.value.notations.find(item => item.id === notationId)
   if (notation) return notation.version
   if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.version
-  return ""
+  return ''
 })
 const activeDiagramNotationOwnerLabel = computed(() => {
   const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ""
-  if (fallbackNotationMeta.value?.id !== notationId) return ""
+  if (!notationId) return ''
+  if (fallbackNotationMeta.value?.id !== notationId) return ''
   return fallbackNotationMeta.value.ownerEmail
 })
 const canOpenActiveDiagramNotation = computed(() => {
   const notationId = activeDiagram.value?.notationId
   if (!notationId) return false
-  if (state.value.notations.some((item) => item.id === notationId)) return true
+  if (state.value.notations.some(item => item.id === notationId)) return true
   return fallbackNotationMeta.value?.id === notationId
 })
 
 watch(
   () => currentUser.value?.id ?? null,
-  (userId) => {
+  userId => {
     applyToolbarState(readToolbarState(userId))
   },
   { immediate: true }
 )
 
 watch(
-  [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, lockAnchorsEnabled, attachToOutlineEnabled, canvasSettingsVisible, paletteVisible, () => currentUser.value?.id ?? null],
+  [
+    gridVisible,
+    miniMapVisible,
+    snapEnabled,
+    alignEnabled,
+    rulersEnabled,
+    lockAnchorsEnabled,
+    attachToOutlineEnabled,
+    canvasSettingsVisible,
+    paletteVisible,
+    () => currentUser.value?.id ?? null,
+  ],
   ([, , , , , , , , , userId]) => {
     persistToolbarState(userId as string | null)
   }
@@ -247,12 +356,12 @@ watch(
 
 watch(
   () => activeDiagram.value?.notationId ?? null,
-  async (notationId) => {
+  async notationId => {
     fallbackNotationMeta.value = null
     fallbackNotationMetaError.value = null
     fallbackNotationMetaLoading.value = false
     if (!notationId) return
-    const hasNotationInState = state.value.notations.some((item) => item.id === notationId)
+    const hasNotationInState = state.value.notations.some(item => item.id === notationId)
     if (hasNotationInState) return
 
     fallbackNotationMetaLoading.value = true
@@ -262,10 +371,10 @@ watch(
     if (!result.success) {
       fallbackNotationMetaError.value =
         result.error.status === 404
-          ? "Метаданные нотации недоступны (backend не обновлён или нотация удалена)"
+          ? 'Метаданные нотации недоступны (backend не обновлён или нотация удалена)'
           : result.error.status === 403
-            ? "Нет доступа к нотации"
-            : "Не удалось загрузить нотацию"
+            ? 'Нет доступа к нотации'
+            : 'Не удалось загрузить нотацию'
       return
     }
     fallbackNotationMeta.value = result.data
@@ -274,19 +383,22 @@ watch(
 
 const selectedTreeNode = computed(() =>
   selectedNodeId.value
-    ? state.value.nodes.find((node) => node.id === selectedNodeId.value && !node._isDeleted) ?? null
+    ? (state.value.nodes.find(node => node.id === selectedNodeId.value && !node._isDeleted) ?? null)
     : null
 )
 const selectedDiagramNode = computed(() =>
   selectedModelNodeIds.value.length === 1
-    ? state.value.nodes.find((node) => node.id === selectedModelNodeIds.value[0] && !node._isDeleted) ?? null
+    ? (state.value.nodes.find(
+        node => node.id === selectedModelNodeIds.value[0] && !node._isDeleted
+      ) ?? null)
     : null
 )
 const selectedNode = computed(() => selectedDiagramNode.value ?? selectedTreeNode.value)
 
 const selectedLink = computed(() =>
   selectedModelLinkId.value
-    ? state.value.links.find((link) => link.id === selectedModelLinkId.value && !link._isDeleted) ?? null
+    ? (state.value.links.find(link => link.id === selectedModelLinkId.value && !link._isDeleted) ??
+      null)
     : null
 )
 
@@ -350,27 +462,27 @@ const handleRenameModel = (nextName: string) => {
   if (error) setUiError(error)
 }
 const handleOpenNotationEditor = (notationId: string) => {
-  router.push({ name: "notation-editor", params: { id: notationId } })
+  router.push({ name: 'notation-editor', params: { id: notationId } })
 }
-const createNodeModal = ref<{ parentNodeId: string | null; kind: "folder" | "node" }>({
+const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
   parentNodeId: null,
-  kind: "node"
+  kind: 'node',
 })
 const showCreateNodeModal = ref(false)
-const newNodeName = ref("")
-const newNodeTypeId = ref("")
+const newNodeName = ref('')
+const newNodeTypeId = ref('')
 
 const showCreateDiagramModal = ref(false)
 const createDiagramNodeId = ref<string | null>(null)
-const newDiagramName = ref("")
-const newDiagramVersion = ref("1.0.0")
-const newDiagramNotationId = ref("")
+const newDiagramName = ref('')
+const newDiagramVersion = ref('1.0.0')
+const newDiagramNotationId = ref('')
 
 const normalizedNewDiagramName = computed(() => newDiagramName.value.trim().toLowerCase())
-const normalizedNewDiagramVersion = computed(() => (newDiagramVersion.value || "1.0.0").trim())
+const normalizedNewDiagramVersion = computed(() => (newDiagramVersion.value || '1.0.0').trim())
 const hasDiagramNameVersionConflict = computed(() => {
   if (!normalizedNewDiagramName.value || !normalizedNewDiagramVersion.value) return false
-  return state.value.diagrams.some((diagram) => {
+  return state.value.diagrams.some(diagram => {
     if (diagram._isDeleted) return false
     return (
       diagram.name.trim().toLowerCase() === normalizedNewDiagramName.value &&
@@ -384,10 +496,13 @@ watch([normalizedNewDiagramName, () => newDiagramNotationId.value], () => {
   const notationId = newDiagramNotationId.value
   if (!name || !notationId) return
   const matching = state.value.diagrams.filter(
-    (d) => !d._isDeleted && d.name.trim().toLowerCase() === name && d.notationId === notationId
+    d => !d._isDeleted && d.name.trim().toLowerCase() === name && d.notationId === notationId
   )
   if (matching.length === 0) return
-  const maxVersion = matching.reduce((max, d) => (compareVersions(d.version, max) > 0 ? d.version : max), matching[0]!.version)
+  const maxVersion = matching.reduce(
+    (max, d) => (compareVersions(d.version, max) > 0 ? d.version : max),
+    matching[0]!.version
+  )
   const bumped = bumpMinor(maxVersion)
   if (bumped) newDiagramVersion.value = bumped
 })
@@ -416,59 +531,62 @@ const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
 const showNodeDeleteModal = ref(false)
 const pendingDeleteNodeIds = ref<string[]>([])
-const pendingDeleteNodeSource = ref<"canvas" | "tree">("tree")
+const pendingDeleteNodeSource = ref<'canvas' | 'tree'>('tree')
 const showDiagramDeleteModal = ref(false)
 const pendingDeleteDiagramId = ref<string | null>(null)
 const showDiagramSwitchModal = ref(false)
 const pendingDiagramSwitchId = ref<string | null>(null)
-const pendingDiagramAction = ref<"switch" | "close" | null>(null)
+const pendingDiagramAction = ref<'switch' | 'close' | null>(null)
 const pendingDeleteNodeCount = computed(() => pendingDeleteNodeIds.value.length)
 const pendingDeleteNodeSingleName = computed(() => {
-  if (pendingDeleteNodeIds.value.length !== 1) return ""
+  if (pendingDeleteNodeIds.value.length !== 1) return ''
   const nodeId = pendingDeleteNodeIds.value[0]
-  if (!nodeId) return ""
-  if (isDiagramNoteModelNodeId(nodeId)) return "Заметка"
-  return state.value.nodes.find((item) => item.id === nodeId)?.name ?? ""
+  if (!nodeId) return ''
+  if (isDiagramNoteModelNodeId(nodeId)) return 'Заметка'
+  return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
 })
 const pendingDeleteDiagramName = computed(() => {
   const diagramId = pendingDeleteDiagramId.value
-  if (!diagramId) return ""
-  return state.value.diagrams.find((item) => item.id === diagramId)?.name ?? ""
+  if (!diagramId) return ''
+  return state.value.diagrams.find(item => item.id === diagramId)?.name ?? ''
 })
 
 const getLinkTypeName = (linkTypeId: string): string =>
-  state.value.linkTypes.find((item) => item.id === linkTypeId)?.name ?? "Неизвестный тип"
+  state.value.linkTypes.find(item => item.id === linkTypeId)?.name ?? 'Неизвестный тип'
 
 const extractLinkLabelValue = (link: EditorLink): string => {
   const notationId = activeNotationId.value
-  if (!notationId) return "без метки"
+  if (!notationId) return 'без метки'
 
-  const relationId = link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
-  if (!relationId) return "без метки"
+  const relationId =
+    link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
+  if (!relationId) return 'без метки'
 
   const scopedValues = link.parsedAttrs.relationProperties[notationId]?.[relationId]
-  if (!scopedValues) return "без метки"
+  if (!scopedValues) return 'без метки'
 
-  for (const key of ["label", "name", "title", "метка"]) {
+  for (const key of ['label', 'name', 'title', 'метка']) {
     const value = scopedValues[key]
-    if (typeof value === "string" && value.trim()) return value.trim()
+    if (typeof value === 'string' && value.trim()) return value.trim()
   }
 
   for (const value of Object.values(scopedValues)) {
-    if (typeof value === "string" && value.trim()) return value.trim()
+    if (typeof value === 'string' && value.trim()) return value.trim()
   }
 
-  return "без метки"
+  return 'без метки'
 }
 
 const formatReuseLinkOption = (link: EditorLink): string =>
   `${getLinkTypeName(link.linkTypeId)}: ${extractLinkLabelValue(link)}`
 
 const directoryNodeType = computed(
-  () => state.value.nodeTypes.find((typeItem) => typeItem.name.trim().toLowerCase() === "directory") ?? null
+  () =>
+    state.value.nodeTypes.find(typeItem => typeItem.name.trim().toLowerCase() === 'directory') ??
+    null
 )
 const nonDirectoryNodeTypes = computed(() =>
-  state.value.nodeTypes.filter((typeItem) => typeItem.name.trim().toLowerCase() !== "directory")
+  state.value.nodeTypes.filter(typeItem => typeItem.name.trim().toLowerCase() !== 'directory')
 )
 const nodeTypeDefaultDirectoryById = computed(() => {
   const map = new Map<string, string>()
@@ -481,18 +599,20 @@ const nodeTypeDefaultDirectoryById = computed(() => {
   return map
 })
 const createNodeModalTitle = computed(() =>
-  createNodeModal.value.kind === "folder" ? t("models.createFolderTitle") : t("models.createNodeTitle")
+  createNodeModal.value.kind === 'folder'
+    ? t('models.createFolderTitle')
+    : t('models.createNodeTitle')
 )
-const nodeTypeSearchQuery = ref("")
+const nodeTypeSearchQuery = ref('')
 const nodeTypeDropdownOpen = ref(false)
 const filteredNodeTypes = computed(() => {
   const query = nodeTypeSearchQuery.value.trim().toLowerCase()
   if (!query) return nonDirectoryNodeTypes.value
-  return nonDirectoryNodeTypes.value.filter((t) => t.name.toLowerCase().includes(query))
+  return nonDirectoryNodeTypes.value.filter(t => t.name.toLowerCase().includes(query))
 })
 const selectedNodeTypeName = computed(() => {
-  if (!newNodeTypeId.value) return ""
-  return nonDirectoryNodeTypes.value.find((t) => t.id === newNodeTypeId.value)?.name ?? ""
+  if (!newNodeTypeId.value) return ''
+  return nonDirectoryNodeTypes.value.find(t => t.id === newNodeTypeId.value)?.name ?? ''
 })
 
 const treeRootNodeId = computed<string | null>(() => {
@@ -501,7 +621,7 @@ const treeRootNodeId = computed<string | null>(() => {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
     const rootId = parsed.treeRootNodeId
-    return typeof rootId === "string" && rootId.trim().length > 0 ? rootId : null
+    return typeof rootId === 'string' && rootId.trim().length > 0 ? rootId : null
   } catch {
     return null
   }
@@ -512,14 +632,14 @@ const resolveTreeParentId = (parentNodeId: string | null): string | null =>
 
 const canCreateNodeFromModal = computed(() => {
   if (!newNodeName.value.trim()) return false
-  if (createNodeModal.value.kind === "folder") return !!directoryNodeType.value
+  if (createNodeModal.value.kind === 'folder') return !!directoryNodeType.value
   return !!newNodeTypeId.value
 })
 
 const getNextTreeOrderForParent = (parentNodeId: string | null): number => {
   const siblingOrders = state.value.nodes
-    .filter((node) => !node._isDeleted && node.parentNodeId === parentNodeId)
-    .map((node) => node.parsedAttrs.treeOrder ?? 0)
+    .filter(node => !node._isDeleted && node.parentNodeId === parentNodeId)
+    .map(node => node.parsedAttrs.treeOrder ?? 0)
   if (siblingOrders.length === 0) return 0
   return Math.max(...siblingOrders) + 1
 }
@@ -527,22 +647,25 @@ const getNextTreeOrderForParent = (parentNodeId: string | null): number => {
 const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
   rawPath
     .split(/[\\/]+/)
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0)
+    .map(segment => segment.trim())
+    .filter(segment => segment.length > 0)
 
-const ensureDirectoryPath = (rawPath: string): { parentNodeId: string | null; createdDirectoryIds: string[] } => {
+const ensureDirectoryPath = (
+  rawPath: string
+): { parentNodeId: string | null; createdDirectoryIds: string[] } => {
   const directoryTypeId = directoryNodeType.value?.id
   if (!directoryTypeId) return { parentNodeId: null, createdDirectoryIds: [] }
 
   const segments = normalizeDirectoryPathSegments(rawPath)
-  if (segments.length === 0) return { parentNodeId: resolveTreeParentId(null), createdDirectoryIds: [] }
+  if (segments.length === 0)
+    return { parentNodeId: resolveTreeParentId(null), createdDirectoryIds: [] }
 
   let currentParentNodeId = resolveTreeParentId(null)
   const createdDirectoryIds: string[] = []
 
   for (const segment of segments) {
     const normalizedSegment = segment.toLowerCase()
-    const existingDirectory = state.value.nodes.find((node) => {
+    const existingDirectory = state.value.nodes.find(node => {
       if (node._isDeleted) return false
       if (node.nodeTypeId !== directoryTypeId) return false
       if ((node.parentNodeId ?? null) !== (currentParentNodeId ?? null)) return false
@@ -566,9 +689,9 @@ const ensureDirectoryPath = (rawPath: string): { parentNodeId: string | null; cr
       updatedAt: null,
       parsedAttrs: {
         ...parseNodeAttrs(null),
-        treeOrder: getNextTreeOrderForParent(currentParentNodeId)
+        treeOrder: getNextTreeOrderForParent(currentParentNodeId),
       },
-      _isNew: true
+      _isNew: true,
     })
     createdDirectoryIds.push(createdDirectoryId)
     currentParentNodeId = createdDirectoryId
@@ -581,7 +704,7 @@ const reindexTreeOrders = () => {
   const counters = new Map<string, number>()
   for (const node of state.value.nodes) {
     if (node._isDeleted) continue
-    const parentKey = node.parentNodeId ?? "__root__"
+    const parentKey = node.parentNodeId ?? '__root__'
     const nextOrder = counters.get(parentKey) ?? 0
     counters.set(parentKey, nextOrder + 1)
     if (node.parsedAttrs.treeOrder !== nextOrder) {
@@ -591,7 +714,7 @@ const reindexTreeOrders = () => {
   }
 }
 
-const deepClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
   modelNodeId.startsWith(NOTE_NODE_PREFIX)
@@ -604,7 +727,7 @@ const isNoteInstance = (instance: { attrs?: Record<string, unknown> }): boolean 
 
 const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
-  if (history && typeof history.execute === "function") {
+  if (history && typeof history.execute === 'function') {
     history.execute(command)
     return
   }
@@ -629,12 +752,13 @@ const syncDefaultsOnLoad = () => {
     for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
       const componentId = binding.componentId
       if (!componentId) continue
-      if (!node.parsedAttrs.componentProperties[notationId]) node.parsedAttrs.componentProperties[notationId] = {}
+      if (!node.parsedAttrs.componentProperties[notationId])
+        node.parsedAttrs.componentProperties[notationId] = {}
       if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
         node.parsedAttrs.componentProperties[notationId][componentId] = {}
       }
       const component = state.value.components.find(
-        (item) => item.id === componentId && item.notationId === notationId
+        item => item.id === componentId && item.notationId === notationId
       )
       if (component) {
         const target = node.parsedAttrs.componentProperties[notationId][componentId]!
@@ -648,12 +772,13 @@ const syncDefaultsOnLoad = () => {
     for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
       const relationId = binding.relationId
       if (!relationId) continue
-      if (!link.parsedAttrs.relationProperties[notationId]) link.parsedAttrs.relationProperties[notationId] = {}
+      if (!link.parsedAttrs.relationProperties[notationId])
+        link.parsedAttrs.relationProperties[notationId] = {}
       if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
         link.parsedAttrs.relationProperties[notationId][relationId] = {}
       }
       const relation = state.value.relations.find(
-        (item) => item.id === relationId && item.notationId === notationId
+        item => item.id === relationId && item.notationId === notationId
       )
       if (relation) {
         const target = link.parsedAttrs.relationProperties[notationId][relationId]!
@@ -669,32 +794,44 @@ const bindNodeComponent = (node: EditorNode, componentId: string) => {
   const notationId = activeNotationId.value
   if (!notationId) return
   node.parsedAttrs.notationComponents[notationId] = { componentId }
-  if (!node.parsedAttrs.componentProperties[notationId]) node.parsedAttrs.componentProperties[notationId] = {}
+  if (!node.parsedAttrs.componentProperties[notationId])
+    node.parsedAttrs.componentProperties[notationId] = {}
   if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
     node.parsedAttrs.componentProperties[notationId][componentId] = {}
   }
   const component = state.value.components.find(
-    (item) => item.id === componentId && item.notationId === notationId
+    item => item.id === componentId && item.notationId === notationId
   )
   if (component) {
-    applyDefaultCustomValues(node.parsedAttrs.componentProperties[notationId][componentId]!, component.attrs)
+    applyDefaultCustomValues(
+      node.parsedAttrs.componentProperties[notationId][componentId]!,
+      component.attrs
+    )
   }
   markNodeDirty(node.id)
 }
 
-const bindLinkRelation = (link: EditorLink, relationId: string, options?: { markDirty?: boolean }) => {
+const bindLinkRelation = (
+  link: EditorLink,
+  relationId: string,
+  options?: { markDirty?: boolean }
+) => {
   const notationId = activeNotationId.value
   if (!notationId) return
   link.parsedAttrs.notationRelations[notationId] = { relationId }
-  if (!link.parsedAttrs.relationProperties[notationId]) link.parsedAttrs.relationProperties[notationId] = {}
+  if (!link.parsedAttrs.relationProperties[notationId])
+    link.parsedAttrs.relationProperties[notationId] = {}
   if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
     link.parsedAttrs.relationProperties[notationId][relationId] = {}
   }
   const relation = state.value.relations.find(
-    (item) => item.id === relationId && item.notationId === notationId
+    item => item.id === relationId && item.notationId === notationId
   )
   if (relation) {
-    applyDefaultCustomValues(link.parsedAttrs.relationProperties[notationId][relationId]!, relation.attrs)
+    applyDefaultCustomValues(
+      link.parsedAttrs.relationProperties[notationId][relationId]!,
+      relation.attrs
+    )
   }
   if (options?.markDirty ?? true) {
     markLinkDirty(link.id)
@@ -703,11 +840,11 @@ const bindLinkRelation = (link: EditorLink, relationId: string, options?: { mark
 
 const openCreateFolder = (parentNodeId: string | null) => {
   if (!directoryNodeType.value) {
-    setUiError("Тип Directory не найден. Невозможно создать папку.")
+    setUiError('Тип Directory не найден. Невозможно создать папку.')
     return
   }
-  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: "folder" }
-  newNodeName.value = ""
+  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'folder' }
+  newNodeName.value = ''
   newNodeTypeId.value = directoryNodeType.value.id
   uiError.value = null
   showCreateNodeModal.value = true
@@ -715,13 +852,13 @@ const openCreateFolder = (parentNodeId: string | null) => {
 
 const openCreateRegularNode = (parentNodeId: string | null) => {
   if (nonDirectoryNodeTypes.value.length === 0) {
-    setUiError("Нет доступных типов нод, кроме Directory.")
+    setUiError('Нет доступных типов нод, кроме Directory.')
     return
   }
-  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: "node" }
-  newNodeName.value = ""
-  newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ""
-  nodeTypeSearchQuery.value = ""
+  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'node' }
+  newNodeName.value = ''
+  newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ''
+  nodeTypeSearchQuery.value = ''
   nodeTypeDropdownOpen.value = false
   uiError.value = null
   showCreateNodeModal.value = true
@@ -730,8 +867,8 @@ const openCreateRegularNode = (parentNodeId: string | null) => {
 const createNode = () => {
   if (!newNodeName.value.trim()) return
   const nodeTypeId =
-    createNodeModal.value.kind === "folder"
-      ? (directoryNodeType.value?.id ?? "")
+    createNodeModal.value.kind === 'folder'
+      ? (directoryNodeType.value?.id ?? '')
       : newNodeTypeId.value
   if (!nodeTypeId) return
   const parentNodeId = createNodeModal.value.parentNodeId ?? null
@@ -746,26 +883,27 @@ const createNode = () => {
     updatedAt: null,
     parsedAttrs: {
       ...parseNodeAttrs(null),
-      treeOrder: getNextTreeOrderForParent(parentNodeId)
+      treeOrder: getNextTreeOrderForParent(parentNodeId),
     },
-    _isNew: true
+    _isNew: true,
   })
   showCreateNodeModal.value = false
 }
 
 const openCreateDiagram = (nodeId: string) => {
   createDiagramNodeId.value = nodeId
-  newDiagramName.value = ""
-  newDiagramVersion.value = "1.0.0"
-  newDiagramNotationId.value = state.value.notations[0]?.id ?? ""
+  newDiagramName.value = ''
+  newDiagramVersion.value = '1.0.0'
+  newDiagramNotationId.value = state.value.notations[0]?.id ?? ''
   uiError.value = null
   showCreateDiagramModal.value = true
 }
 
 const createDiagram = () => {
-  if (!createDiagramNodeId.value || !newDiagramName.value.trim() || !newDiagramNotationId.value) return
+  if (!createDiagramNodeId.value || !newDiagramName.value.trim() || !newDiagramNotationId.value)
+    return
   if (hasDiagramNameVersionConflict.value) {
-    setUiError("Диаграмма с таким именем и версией уже существует в модели.")
+    setUiError('Диаграмма с таким именем и версией уже существует в модели.')
     return
   }
   uiError.value = null
@@ -773,7 +911,7 @@ const createDiagram = () => {
   state.value.diagrams.push({
     id,
     name: newDiagramName.value.trim(),
-    version: newDiagramVersion.value || "1.0.0",
+    version: newDiagramVersion.value || '1.0.0',
     ownerId: state.value.ownerId,
     modelId: state.value.modelId,
     nodeId: createDiagramNodeId.value,
@@ -781,30 +919,30 @@ const createDiagram = () => {
     createdAt: null,
     updatedAt: null,
     parsedAttrs: { instances: { nodes: [], edges: [] } },
-    _isNew: true
+    _isNew: true,
   })
   selectedDiagramId.value = id
   showCreateDiagramModal.value = false
 }
 
 const markNodeDeleted = (nodeId: string) => {
-  const node = state.value.nodes.find((item) => item.id === nodeId)
+  const node = state.value.nodes.find(item => item.id === nodeId)
   if (!node) return
 
   for (const diagram of state.value.diagrams) {
     if (diagram._isDeleted) continue
     const removedInstanceIds = new Set(
       diagram.parsedAttrs.instances.nodes
-        .filter((instance) => instance.modelNodeId === nodeId)
-        .map((instance) => instance.id)
+        .filter(instance => instance.modelNodeId === nodeId)
+        .map(instance => instance.id)
     )
     if (removedInstanceIds.size === 0) continue
 
     diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-      (instance) => !removedInstanceIds.has(instance.id)
+      instance => !removedInstanceIds.has(instance.id)
     )
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      (edge) =>
+      edge =>
         !removedInstanceIds.has(edge.sourceInstanceId) &&
         !removedInstanceIds.has(edge.targetInstanceId)
     )
@@ -812,12 +950,12 @@ const markNodeDeleted = (nodeId: string) => {
   }
 
   if (node._isNew) {
-    state.value.nodes = state.value.nodes.filter((item) => item.id !== nodeId)
+    state.value.nodes = state.value.nodes.filter(item => item.id !== nodeId)
   } else {
     node._isDeleted = true
     node._isDirty = true
   }
-  state.value.diagrams.forEach((diagram) => {
+  state.value.diagrams.forEach(diagram => {
     if (diagram.nodeId !== nodeId) return
     if (diagram._isNew) {
       diagram._isDeleted = true
@@ -827,15 +965,15 @@ const markNodeDeleted = (nodeId: string) => {
     }
   })
 
-  selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== nodeId)
+  selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== nodeId)
   if (selectedNodeId.value === nodeId) selectedNodeId.value = null
 }
 
 const markDiagramDeleted = (diagramId: string) => {
-  const row = state.value.diagrams.find((item) => item.id === diagramId)
+  const row = state.value.diagrams.find(item => item.id === diagramId)
   if (!row) return
   if (row._isNew) {
-    state.value.diagrams = state.value.diagrams.filter((item) => item.id !== diagramId)
+    state.value.diagrams = state.value.diagrams.filter(item => item.id !== diagramId)
   } else {
     row._isDeleted = true
     row._isDirty = true
@@ -843,7 +981,7 @@ const markDiagramDeleted = (diagramId: string) => {
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
 }
 
-const openNodeDeleteDialog = (nodeIds: string[], source: "canvas" | "tree") => {
+const openNodeDeleteDialog = (nodeIds: string[], source: 'canvas' | 'tree') => {
   if (nodeIds.length === 0) return
   pendingDeleteNodeIds.value = [...new Set(nodeIds)]
   pendingDeleteNodeSource.value = source
@@ -852,7 +990,7 @@ const openNodeDeleteDialog = (nodeIds: string[], source: "canvas" | "tree") => {
 
 const cancelNodeDelete = () => {
   pendingDeleteNodeIds.value = []
-  pendingDeleteNodeSource.value = "tree"
+  pendingDeleteNodeSource.value = 'tree'
   showNodeDeleteModal.value = false
 }
 
@@ -867,18 +1005,18 @@ const cancelDiagramDelete = () => {
 }
 
 const markLinkDeleted = (linkId: string) => {
-  const row = state.value.links.find((item) => item.id === linkId)
+  const row = state.value.links.find(item => item.id === linkId)
   if (!row) return
 
   if (row._isNew) {
-    state.value.links = state.value.links.filter((item) => item.id !== linkId)
+    state.value.links = state.value.links.filter(item => item.id !== linkId)
   } else {
     row._isDeleted = true
     row._isDirty = true
   }
 
   if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
-  if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+  if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
 }
 
 const applyDiagramSelection = (diagramId: string) => {
@@ -899,7 +1037,7 @@ const switchDiagramWithoutSave = async () => {
 
   await loadModel()
   syncDefaultsOnLoad()
-  if (action === "close") {
+  if (action === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
     selectedModelLinkId.value = null
@@ -912,9 +1050,11 @@ const switchDiagramWithoutSave = async () => {
     cancelDiagramSwitch()
     return
   }
-  const restoredTarget = state.value.diagrams.find((diagram) => diagram.id === targetDiagramId && !diagram._isDeleted)
+  const restoredTarget = state.value.diagrams.find(
+    diagram => diagram.id === targetDiagramId && !diagram._isDeleted
+  )
   if (!restoredTarget) {
-    setUiError("Не удалось открыть выбранную диаграмму после обновления данных.")
+    setUiError('Не удалось открыть выбранную диаграмму после обновления данных.')
     cancelDiagramSwitch()
     return
   }
@@ -924,15 +1064,15 @@ const switchDiagramWithoutSave = async () => {
 }
 
 const isRequiredPropertyFilled = (value: unknown, type: string): boolean => {
-  if (type === "boolean") return typeof value === "boolean"
-  if (type === "number") return typeof value === "number" && Number.isFinite(value)
-  if (typeof value === "string") return value.trim().length > 0
+  if (type === 'boolean') return typeof value === 'boolean'
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value)
+  if (typeof value === 'string') return value.trim().length > 0
   return value !== null && value !== undefined
 }
 
 const validateRequiredCustomProperties = (): string | null => {
-  const componentById = new Map(state.value.components.map((component) => [component.id, component]))
-  const relationById = new Map(state.value.relations.map((relation) => [relation.id, relation]))
+  const componentById = new Map(state.value.components.map(component => [component.id, component]))
+  const relationById = new Map(state.value.relations.map(relation => [relation.id, relation]))
 
   for (const node of state.value.nodes) {
     if (node._isDeleted) continue
@@ -942,11 +1082,12 @@ const validateRequiredCustomProperties = (): string | null => {
       if (!component || component.notationId !== notationId) continue
 
       const requiredProperties = parseEntityAttrs(component.attrs ?? null).customProperties.filter(
-        (property) => property.required
+        property => property.required
       )
       if (requiredProperties.length === 0) continue
 
-      const scopedValues = node.parsedAttrs.componentProperties[notationId]?.[binding.componentId] ?? {}
+      const scopedValues =
+        node.parsedAttrs.componentProperties[notationId]?.[binding.componentId] ?? {}
       for (const property of requiredProperties) {
         const value = scopedValues[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
@@ -964,11 +1105,12 @@ const validateRequiredCustomProperties = (): string | null => {
       if (!relation || relation.notationId !== notationId) continue
 
       const requiredProperties = parseEntityAttrs(relation.attrs ?? null).customProperties.filter(
-        (property) => property.required
+        property => property.required
       )
       if (requiredProperties.length === 0) continue
 
-      const scopedValues = link.parsedAttrs.relationProperties[notationId]?.[binding.relationId] ?? {}
+      const scopedValues =
+        link.parsedAttrs.relationProperties[notationId]?.[binding.relationId] ?? {}
       for (const property of requiredProperties) {
         const value = scopedValues[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
@@ -999,7 +1141,7 @@ const saveAndSwitchDiagram = async () => {
   if (!action) return
   const ok = await saveWithValidation()
   if (!ok) return
-  if (action === "close") {
+  if (action === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
     selectedModelLinkId.value = null
@@ -1019,7 +1161,7 @@ const saveAndSwitchDiagram = async () => {
 const selectDiagram = (diagramId: string) => {
   if (diagramId === selectedDiagramId.value) return
   if (activeDiagram.value && hasUnsavedChanges.value) {
-    pendingDiagramAction.value = "switch"
+    pendingDiagramAction.value = 'switch'
     pendingDiagramSwitchId.value = diagramId
     showDiagramSwitchModal.value = true
     return
@@ -1047,7 +1189,7 @@ const removeLinkFromCurrentDiagram = () => {
 
   const removedEdges = diagram.parsedAttrs.instances.edges
     .map((edge, index) => ({ index, edge: JSON.parse(JSON.stringify(edge)) }))
-    .filter((entry) => entry.edge.modelLinkId === linkId)
+    .filter(entry => entry.edge.modelLinkId === linkId)
   if (removedEdges.length === 0) {
     cancelLinkDelete()
     return
@@ -1055,17 +1197,17 @@ const removeLinkFromCurrentDiagram = () => {
 
   const applyRemoval = () => {
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      (edge) => edge.modelLinkId !== linkId
+      edge => edge.modelLinkId !== linkId
     )
     if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
-    if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+    if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
   }
 
   const restoreRemoved = () => {
     const currentEdges = [...diagram.parsedAttrs.instances.edges]
     for (const { index, edge } of removedEdges) {
-      const alreadyExists = currentEdges.some((item) => item.id === edge.id)
+      const alreadyExists = currentEdges.some(item => item.id === edge.id)
       if (alreadyExists) continue
       const safeIndex = Math.max(0, Math.min(index, currentEdges.length))
       currentEdges.splice(safeIndex, 0, JSON.parse(JSON.stringify(edge)))
@@ -1075,10 +1217,10 @@ const removeLinkFromCurrentDiagram = () => {
   }
 
   const history = diagramInteractionManager.value?.history
-  if (history && typeof history.execute === "function") {
+  if (history && typeof history.execute === 'function') {
     history.execute({
       execute: applyRemoval,
-      undo: restoreRemoved
+      undo: restoreRemoved,
     })
   } else {
     applyRemoval()
@@ -1098,7 +1240,7 @@ const removeLinkFromModel = () => {
     if (diagram._isDeleted) continue
     const initial = diagram.parsedAttrs.instances.edges.length
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      (edge) => edge.modelLinkId !== linkId
+      edge => edge.modelLinkId !== linkId
     )
     if (diagram.parsedAttrs.instances.edges.length !== initial) {
       markDiagramDirty(diagram.id)
@@ -1108,7 +1250,7 @@ const removeLinkFromModel = () => {
   if (isDiagramOnlyEdgeModelLinkId(linkId)) {
     if (selectedModelLinkId.value === linkId) {
       selectedModelLinkId.value = null
-      if (selectedCanvasElementId.value?.startsWith("edge-")) selectedCanvasElementId.value = null
+      if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
     }
     cancelLinkDelete()
     return
@@ -1122,17 +1264,18 @@ const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
   const target = event.target as HTMLElement | null
   if (!target) return false
   const tag = target.tagName
-  return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
+  return target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
 const onDeleteKeydown = (event: KeyboardEvent) => {
-  if (event.key !== "Delete" && event.key !== "Backspace") return
+  if (event.key !== 'Delete' && event.key !== 'Backspace') return
   if (!activeDiagram.value) return
-  if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event)) return
+  if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event))
+    return
 
   if (selectedModelNodeIds.value.length > 0) {
     event.preventDefault()
-    openNodeDeleteDialog(selectedModelNodeIds.value, "canvas")
+    openNodeDeleteDialog(selectedModelNodeIds.value, 'canvas')
     return
   }
 
@@ -1143,7 +1286,7 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
 
 watch(
   () => activeDiagram.value?.id ?? null,
-  (diagramId) => {
+  diagramId => {
     if (!diagramId) {
       selectedCanvasElementId.value = null
     }
@@ -1168,18 +1311,18 @@ const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
   }
   if (options.length > 1) {
     componentChoiceNodeId.value = node.id
-    componentChoiceOptions.value = options.map((item) => ({ id: item.id, name: item.name }))
+    componentChoiceOptions.value = options.map(item => ({ id: item.id, name: item.name }))
     showComponentChoiceModal.value = true
     return false
   }
-  setUiError("В выбранной нотации нет подходящего компонента для типа узла.")
+  setUiError('В выбранной нотации нет подходящего компонента для типа узла.')
   return false
 }
 
 const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => {
   const diagram = activeDiagram.value
   if (!diagram) return
-  const node = state.value.nodes.find((item) => item.id === modelNodeId && !item._isDeleted)
+  const node = state.value.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
   if (!node) return
   const hasBinding = ensureNodeBindingByNodeType(node)
   if (!hasBinding) {
@@ -1188,14 +1331,16 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
 
   const notationId = activeNotationId.value
   const componentId = notationId
-    ? node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+    ? (node.parsedAttrs.notationComponents[notationId]?.componentId ?? null)
     : null
   const component = componentId
-    ? state.value.components.find((item) => item.id === componentId && item.notationId === notationId)
+    ? state.value.components.find(item => item.id === componentId && item.notationId === notationId)
     : null
-  const diagramStyle = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
-  const width = typeof diagramStyle?.width === "number" ? diagramStyle.width : 160
-  const height = typeof diagramStyle?.height === "number" ? diagramStyle.height : 56
+  const diagramStyle = component
+    ? parseEntityAttrs(component.attrs ?? null).diagramStyle
+    : undefined
+  const width = typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160
+  const height = typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56
 
   const nodeInstance = {
     id: createId(),
@@ -1204,12 +1349,14 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
     y,
     width,
     height,
-    attrs: diagramStyle ? { diagramStyle: JSON.parse(JSON.stringify(diagramStyle)) } : undefined
+    attrs: diagramStyle ? { diagramStyle: JSON.parse(JSON.stringify(diagramStyle)) } : undefined,
   }
 
   executeDiagramHistoryCommand({
     execute: () => {
-      const alreadyExists = diagram.parsedAttrs.instances.nodes.some((item) => item.id === nodeInstance.id)
+      const alreadyExists = diagram.parsedAttrs.instances.nodes.some(
+        item => item.id === nodeInstance.id
+      )
       if (!alreadyExists) {
         diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
       }
@@ -1217,32 +1364,32 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
     },
     undo: () => {
       diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        (item) => item.id !== nodeInstance.id
+        item => item.id !== nodeInstance.id
       )
       markDiagramDirty(diagram.id)
-    }
+    },
   })
 }
 
 const createNodeFromPaletteComponent = (componentId: string, x: number, y: number) => {
   const diagram = activeDiagram.value
   if (!diagram || !diagram.nodeId) {
-    setUiError("Нельзя создать ноду без активной директории диаграммы.")
+    setUiError('Нельзя создать ноду без активной директории диаграммы.')
     return
   }
-  const component = state.value.components.find((item) => item.id === componentId)
+  const component = state.value.components.find(item => item.id === componentId)
   if (!component) return
   const nodeId = createId()
   const notationId = activeNotationId.value
-  const defaultDirectoryPath = nodeTypeDefaultDirectoryById.value.get(component.nodeTypeId) ?? ""
+  const defaultDirectoryPath = nodeTypeDefaultDirectoryById.value.get(component.nodeTypeId) ?? ''
   if (defaultDirectoryPath && !directoryNodeType.value) {
-    setUiError("Для автосоздания пути нужен тип узла Directory.")
+    setUiError('Для автосоздания пути нужен тип узла Directory.')
     return
   }
   const parsedComponentAttrs = parseEntityAttrs(component.attrs ?? null)
   const ds = parsedComponentAttrs.diagramStyle
-  const width = typeof ds?.width === "number" ? ds.width : 160
-  const height = typeof ds?.height === "number" ? ds.height : 56
+  const width = typeof ds?.width === 'number' ? ds.width : 160
+  const height = typeof ds?.height === 'number' ? ds.height : 56
   const instanceId = createId()
   const newInstance = {
     id: instanceId,
@@ -1251,7 +1398,7 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     y,
     width,
     height,
-    attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined
+    attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined,
   }
   let createdDirectoryIds: string[] = []
 
@@ -1286,14 +1433,16 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
         createdAt: null,
         updatedAt: null,
         parsedAttrs,
-        _isNew: true
+        _isNew: true,
       }
 
-      const hasNode = state.value.nodes.some((item) => item.id === nodeId)
+      const hasNode = state.value.nodes.some(item => item.id === nodeId)
       if (!hasNode) {
         state.value.nodes.push(deepClone(newNode))
       }
-      const hasInstance = diagram.parsedAttrs.instances.nodes.some((item) => item.id === newInstance.id)
+      const hasInstance = diagram.parsedAttrs.instances.nodes.some(
+        item => item.id === newInstance.id
+      )
       if (!hasInstance) {
         diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
       }
@@ -1301,22 +1450,25 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
     },
     undo: () => {
       state.value.nodes = state.value.nodes.filter(
-        (item) => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
+        item => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
       )
       diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        (item) => item.id !== newInstance.id
+        item => item.id !== newInstance.id
       )
       diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        (edge) => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
+        edge => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
       )
       if (selectedModelNodeIds.value.includes(nodeId)) {
-        selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== nodeId)
+        selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== nodeId)
       }
-      if (selectedNodeId.value === nodeId || createdDirectoryIds.includes(selectedNodeId.value ?? "")) {
+      if (
+        selectedNodeId.value === nodeId ||
+        createdDirectoryIds.includes(selectedNodeId.value ?? '')
+      ) {
         selectedNodeId.value = null
       }
       markDiagramDirty(diagram.id)
-    }
+    },
   })
 }
 
@@ -1335,24 +1487,24 @@ const createDiagramNote = (x: number, y: number) => {
     height: 120,
     attrs: {
       isNote: true,
-      noteText: "Новая заметка",
+      noteText: 'Новая заметка',
       diagramStyle: {
-        nodeShape: "rectangle",
-        fillColor: "#fff9c4",
-        strokeColor: "#e6c85b",
+        nodeShape: 'rectangle',
+        fillColor: '#fff9c4',
+        strokeColor: '#e6c85b',
         strokeWidth: 1.5,
-        labelColor: "#5a4600",
+        labelColor: '#5a4600',
         labelFontSize: 13,
-        labelAlign: "left",
+        labelAlign: 'left',
         labelPadding: 10,
-        labelPlacement: "center"
-      }
-    } as Record<string, unknown>
+        labelPlacement: 'center',
+      },
+    } as Record<string, unknown>,
   }
 
   executeDiagramHistoryCommand({
     execute: () => {
-      const exists = diagram.parsedAttrs.instances.nodes.some((item) => item.id === noteInstance.id)
+      const exists = diagram.parsedAttrs.instances.nodes.some(item => item.id === noteInstance.id)
       if (!exists) {
         diagram.parsedAttrs.instances.nodes.push(deepClone(noteInstance))
       }
@@ -1360,12 +1512,13 @@ const createDiagramNote = (x: number, y: number) => {
     },
     undo: () => {
       diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        (item) => item.id !== noteInstance.id
+        item => item.id !== noteInstance.id
       )
       diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        (edge) => edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
+        edge =>
+          edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
       )
-      selectedModelNodeIds.value = selectedModelNodeIds.value.filter((id) => id !== modelNodeId)
+      selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== modelNodeId)
       if (selectedCanvasElementId.value === `instance-${noteInstance.id}`) {
         selectedCanvasElementId.value = null
       }
@@ -1374,7 +1527,7 @@ const createDiagramNote = (x: number, y: number) => {
         editingNoteInstanceId.value = null
       }
       markDiagramDirty(diagram.id)
-    }
+    },
   })
 }
 
@@ -1395,10 +1548,10 @@ const startConnectNodes = (
     const edgeAttrs: Record<string, unknown> = {
       isDiagramOnly: true,
       diagramStyle: {
-        startMarkerType: "none",
-        endMarkerType: "none",
-        lineDash: [4, 4]
-      }
+        startMarkerType: 'none',
+        endMarkerType: 'none',
+        lineDash: [4, 4],
+      },
     }
     if (sourcePortId) edgeAttrs.fromPortId = sourcePortId
     if (targetPortId) edgeAttrs.toPortId = targetPortId
@@ -1409,11 +1562,13 @@ const startConnectNodes = (
       modelLinkId,
       sourceInstanceId,
       targetInstanceId,
-      attrs: edgeAttrs
+      attrs: edgeAttrs,
     }
     executeDiagramHistoryCommand({
       execute: () => {
-        const hasEdge = diagram.parsedAttrs.instances.edges.some((edge) => edge.id === noteEdgeInstance.id)
+        const hasEdge = diagram.parsedAttrs.instances.edges.some(
+          edge => edge.id === noteEdgeInstance.id
+        )
         if (!hasEdge) {
           diagram.parsedAttrs.instances.edges.push(deepClone(noteEdgeInstance))
         }
@@ -1421,43 +1576,45 @@ const startConnectNodes = (
       },
       undo: () => {
         diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          (edge) => edge.id !== noteEdgeInstance.id
+          edge => edge.id !== noteEdgeInstance.id
         )
         if (selectedModelLinkId.value === modelLinkId) {
           selectedModelLinkId.value = null
           selectedCanvasElementId.value = null
         }
         markDiagramDirty(diagram.id)
-      }
+      },
     })
     return
   }
 
   const notationId = activeNotationId.value
   if (!notationId) return
-  const sourceNode = state.value.nodes.find((item) => item.id === sourceModelNodeId)
-  const targetNode = state.value.nodes.find((item) => item.id === targetModelNodeId)
+  const sourceNode = state.value.nodes.find(item => item.id === sourceModelNodeId)
+  const targetNode = state.value.nodes.find(item => item.id === targetModelNodeId)
   if (!sourceNode || !targetNode) return
 
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
   if (!sourceComponentId || !targetComponentId) {
-    setUiError("Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.")
+    setUiError('Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.')
     return
   }
 
   const ruleRelationIds = state.value.relationRules
-    .filter((rule) => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId)
-    .map((rule) => rule.relationId)
+    .filter(
+      rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
+    )
+    .map(rule => rule.relationId)
   if (ruleRelationIds.length === 0) {
-    setUiError("Для этой пары компонентов нет разрешённых связей по правилам нотации.")
+    setUiError('Для этой пары компонентов нет разрешённых связей по правилам нотации.')
     return
   }
-  const allowedRelations = state.value.relations.filter((relation) =>
-    relation.notationId === notationId && ruleRelationIds.includes(relation.id)
+  const allowedRelations = state.value.relations.filter(
+    relation => relation.notationId === notationId && ruleRelationIds.includes(relation.id)
   )
   if (allowedRelations.length === 0) {
-    setUiError("Для этой пары компонентов нет доступных relation по правилам нотации.")
+    setUiError('Для этой пары компонентов нет доступных relation по правилам нотации.')
     return
   }
   pendingConnection.value = {
@@ -1468,16 +1625,16 @@ const startConnectNodes = (
     sourcePortId,
     targetPortId,
     sourceOutlineParam,
-    targetOutlineParam
+    targetOutlineParam,
   }
   if (allowedRelations.length === 1) {
     finalizeConnection(allowedRelations[0]!.id)
     return
   }
-  relationChoiceOptions.value = allowedRelations.map((relation) => ({
+  relationChoiceOptions.value = allowedRelations.map(relation => ({
     id: relation.id,
     name: relation.name,
-    linkTypeId: relation.linkTypeId
+    linkTypeId: relation.linkTypeId,
   }))
   showRelationChoiceModal.value = true
 }
@@ -1488,14 +1645,15 @@ const finalizeConnection = (relationId: string) => {
   const connection = pendingConnection.value
   if (!notationId || !diagram || !connection) return
   showRelationChoiceModal.value = false
-  const relation = state.value.relations.find((item) => item.id === relationId)
+  const relation = state.value.relations.find(item => item.id === relationId)
   if (!relation) return
 
-  const existing = state.value.links.filter((link) =>
-    !link._isDeleted &&
-    link.sourceId === connection.sourceModelNodeId &&
-    link.targetId === connection.targetModelNodeId &&
-    link.linkTypeId === relation.linkTypeId
+  const existing = state.value.links.filter(
+    link =>
+      !link._isDeleted &&
+      link.sourceId === connection.sourceModelNodeId &&
+      link.targetId === connection.targetModelNodeId &&
+      link.linkTypeId === relation.linkTypeId
   )
   pendingRelationId.value = relationId
   if (existing.length > 0) {
@@ -1512,12 +1670,12 @@ const createOrReuseLink = (linkId: string | null) => {
   const connection = pendingConnection.value
   const relationId = pendingRelationId.value
   if (!notationId || !diagram || !connection || !relationId) return
-  const relation = state.value.relations.find((item) => item.id === relationId)
+  const relation = state.value.relations.find(item => item.id === relationId)
   if (!relation) return
 
   const isNewLink = !linkId
   const resolvedLinkId = linkId ?? createId()
-  const existingLink = state.value.links.find((item) => item.id === resolvedLinkId) ?? null
+  const existingLink = state.value.links.find(item => item.id === resolvedLinkId) ?? null
   if (!isNewLink && !existingLink) return
   const previousParsedAttrs = existingLink ? deepClone(existingLink.parsedAttrs) : null
   const newLink: EditorLink | null = isNewLink
@@ -1531,7 +1689,7 @@ const createOrReuseLink = (linkId: string | null) => {
         createdAt: null,
         updatedAt: null,
         parsedAttrs: parseLinkAttrs(null),
-        _isNew: true
+        _isNew: true,
       }
     : null
 
@@ -1558,20 +1716,22 @@ const createOrReuseLink = (linkId: string | null) => {
     modelLinkId: resolvedLinkId,
     sourceInstanceId: connection.sourceInstanceId,
     targetInstanceId: connection.targetInstanceId,
-    attrs: Object.keys(edgeAttrs).length ? edgeAttrs : undefined
+    attrs: Object.keys(edgeAttrs).length ? edgeAttrs : undefined,
   }
 
   executeDiagramHistoryCommand({
     execute: () => {
-      let link = state.value.links.find((item) => item.id === resolvedLinkId) ?? null
+      let link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
       if (!link && newLink) {
         state.value.links.push(deepClone(newLink))
-        link = state.value.links.find((item) => item.id === resolvedLinkId) ?? null
+        link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
       }
       if (!link) return
 
       bindLinkRelation(link, relation.id)
-      const hasEdge = diagram.parsedAttrs.instances.edges.some((edge) => edge.id === newEdgeInstance.id)
+      const hasEdge = diagram.parsedAttrs.instances.edges.some(
+        edge => edge.id === newEdgeInstance.id
+      )
       if (!hasEdge) {
         diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
       }
@@ -1579,20 +1739,20 @@ const createOrReuseLink = (linkId: string | null) => {
     },
     undo: () => {
       diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        (edge) => edge.id !== newEdgeInstance.id
+        edge => edge.id !== newEdgeInstance.id
       )
 
       if (isNewLink) {
-        state.value.links = state.value.links.filter((item) => item.id !== resolvedLinkId)
+        state.value.links = state.value.links.filter(item => item.id !== resolvedLinkId)
       } else if (previousParsedAttrs) {
-        const link = state.value.links.find((item) => item.id === resolvedLinkId)
+        const link = state.value.links.find(item => item.id === resolvedLinkId)
         if (link) {
           link.parsedAttrs = deepClone(previousParsedAttrs)
           markLinkDirty(link.id)
         }
       }
       markDiagramDirty(diagram.id)
-    }
+    },
   })
 
   pendingConnection.value = null
@@ -1606,14 +1766,14 @@ const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boole
   }
   const notationId = activeNotationId.value
   if (!notationId) return false
-  const sourceNode = state.value.nodes.find((item) => item.id === sourceModelNodeId)
-  const targetNode = state.value.nodes.find((item) => item.id === targetModelNodeId)
+  const sourceNode = state.value.nodes.find(item => item.id === sourceModelNodeId)
+  const targetNode = state.value.nodes.find(item => item.id === targetModelNodeId)
   if (!sourceNode || !targetNode) return false
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
   if (!sourceComponentId || !targetComponentId) return false
   return state.value.relationRules.some(
-    (rule) => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
+    rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
   )
 }
 
@@ -1666,21 +1826,23 @@ const toggleSelectionSync = () => {
 }
 
 const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
-  const node = state.value.nodes.find((item) => item.id === modelNodeId)
+  const node = state.value.nodes.find(item => item.id === modelNodeId)
   if (!node || node.name === newLabel) return
   node.name = newLabel
   markNodeDirty(node.id)
 }
 
 const isDirectoryNode = (nodeId: string): boolean => {
-  const node = state.value.nodes.find((item) => item.id === nodeId)
+  const node = state.value.nodes.find(item => item.id === nodeId)
   if (!node) return false
-  const nodeType = state.value.nodeTypes.find((type) => type.id === node.nodeTypeId)
-  return (nodeType?.name ?? "").trim().toLowerCase() === "directory"
+  const nodeType = state.value.nodeTypes.find(type => type.id === node.nodeTypeId)
+  return (nodeType?.name ?? '').trim().toLowerCase() === 'directory'
 }
 
 const isDescendantNode = (nodeId: string, potentialParentId: string): boolean => {
-  const children = state.value.nodes.filter((item) => item.parentNodeId === potentialParentId && !item._isDeleted)
+  const children = state.value.nodes.filter(
+    item => item.parentNodeId === potentialParentId && !item._isDeleted
+  )
   for (const child of children) {
     if (child.id === nodeId) return true
     if (isDescendantNode(nodeId, child.id)) return true
@@ -1691,16 +1853,16 @@ const isDescendantNode = (nodeId: string, potentialParentId: string): boolean =>
 const handleMoveNode = (
   nodeId: string,
   targetNodeId: string | null,
-  position: "above" | "below" | "inside"
+  position: 'above' | 'below' | 'inside'
 ) => {
   const nodes = state.value.nodes
-  const fromIndex = nodes.findIndex((item) => item.id === nodeId)
+  const fromIndex = nodes.findIndex(item => item.id === nodeId)
   if (fromIndex < 0) return
   const movingNode = nodes[fromIndex]!
 
   if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
 
-  const targetNode = targetNodeId ? nodes.find((item) => item.id === targetNodeId) : null
+  const targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
   if (targetNodeId && !targetNode) return
 
   let newParentNodeId: string | null
@@ -1713,17 +1875,22 @@ const handleMoveNode = (
       .filter(({ item }) => item.id !== nodeId && !item._isDeleted && !item.parentNodeId)
       .map(({ index }) => index)
     insertIndex = rootIndices.length > 0 ? rootIndices[rootIndices.length - 1]! + 1 : nodes.length
-  } else if (position === "inside" && isDirectoryNode(targetNode.id)) {
+  } else if (position === 'inside' && isDirectoryNode(targetNode.id)) {
     newParentNodeId = targetNode.id
     const childIndices = nodes
       .map((item, index) => ({ item, index }))
-      .filter(({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id)
+      .filter(
+        ({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
+      )
       .map(({ index }) => index)
-    insertIndex = childIndices.length > 0 ? childIndices[childIndices.length - 1]! + 1 : nodes.indexOf(targetNode) + 1
+    insertIndex =
+      childIndices.length > 0
+        ? childIndices[childIndices.length - 1]! + 1
+        : nodes.indexOf(targetNode) + 1
   } else {
     newParentNodeId = targetNode.parentNodeId ?? null
     const targetIndex = nodes.indexOf(targetNode)
-    insertIndex = position === "above" ? targetIndex : targetIndex + 1
+    insertIndex = position === 'above' ? targetIndex : targetIndex + 1
   }
 
   const parentChanged = movingNode.parentNodeId !== newParentNodeId
@@ -1742,7 +1909,7 @@ const handleMoveNode = (
 }
 
 const handleMoveDiagram = (diagramId: string, newNodeId: string) => {
-  const diagram = state.value.diagrams.find((item) => item.id === diagramId && !item._isDeleted)
+  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
   if (!diagram) return
   if (diagram.nodeId === newNodeId) return
   diagram.nodeId = newNodeId
@@ -1750,7 +1917,7 @@ const handleMoveDiagram = (diagramId: string, newNodeId: string) => {
 }
 
 const handleRenameNode = (nodeId: string, newName: string) => {
-  const node = state.value.nodes.find((item) => item.id === nodeId)
+  const node = state.value.nodes.find(item => item.id === nodeId)
   if (!node || node.name === newName) return
   node.name = newName
   markNodeDirty(node.id)
@@ -1762,25 +1929,25 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
 
   const selectedSet = new Set(modelNodeIds)
   const removedNodes = diagram.parsedAttrs.instances.nodes
-    .filter((nodeInst) => selectedSet.has(nodeInst.modelNodeId))
-    .map((nodeInst) => JSON.parse(JSON.stringify(nodeInst)))
-  const removedInstanceIds = new Set(removedNodes.map((nodeInst) => nodeInst.id))
+    .filter(nodeInst => selectedSet.has(nodeInst.modelNodeId))
+    .map(nodeInst => JSON.parse(JSON.stringify(nodeInst)))
+  const removedInstanceIds = new Set(removedNodes.map(nodeInst => nodeInst.id))
   if (removedInstanceIds.size === 0) return
 
   const removedEdges = diagram.parsedAttrs.instances.edges
     .filter(
-      (edgeInst) =>
+      edgeInst =>
         removedInstanceIds.has(edgeInst.sourceInstanceId) ||
         removedInstanceIds.has(edgeInst.targetInstanceId)
     )
-    .map((edgeInst) => JSON.parse(JSON.stringify(edgeInst)))
+    .map(edgeInst => JSON.parse(JSON.stringify(edgeInst)))
 
   const applyRemoval = () => {
     diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-      (nodeInst) => !removedInstanceIds.has(nodeInst.id)
+      nodeInst => !removedInstanceIds.has(nodeInst.id)
     )
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      (edgeInst) => !removedEdges.some((removed) => removed.id === edgeInst.id)
+      edgeInst => !removedEdges.some(removed => removed.id === edgeInst.id)
     )
     selectedModelNodeIds.value = []
     selectedCanvasElementId.value = null
@@ -1788,14 +1955,18 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
   }
 
   const restoreRemoved = () => {
-    const existingNodeIds = new Set(diagram.parsedAttrs.instances.nodes.map((nodeInst) => nodeInst.id))
+    const existingNodeIds = new Set(
+      diagram.parsedAttrs.instances.nodes.map(nodeInst => nodeInst.id)
+    )
     for (const nodeInst of removedNodes) {
       if (!existingNodeIds.has(nodeInst.id)) {
         diagram.parsedAttrs.instances.nodes.push(JSON.parse(JSON.stringify(nodeInst)))
       }
     }
 
-    const existingEdgeIds = new Set(diagram.parsedAttrs.instances.edges.map((edgeInst) => edgeInst.id))
+    const existingEdgeIds = new Set(
+      diagram.parsedAttrs.instances.edges.map(edgeInst => edgeInst.id)
+    )
     for (const edgeInst of removedEdges) {
       if (!existingEdgeIds.has(edgeInst.id)) {
         diagram.parsedAttrs.instances.edges.push(JSON.parse(JSON.stringify(edgeInst)))
@@ -1806,10 +1977,10 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
   }
 
   const history = diagramInteractionManager.value?.history
-  if (history && typeof history.execute === "function") {
+  if (history && typeof history.execute === 'function') {
     history.execute({
       execute: applyRemoval,
-      undo: restoreRemoved
+      undo: restoreRemoved,
     })
     return
   }
@@ -1820,16 +1991,16 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
 const handleRequestDeleteNodeFromDiagram = (modelNodeId: string) => {
   selectedModelLinkId.value = null
   selectedModelNodeIds.value = [modelNodeId]
-  openNodeDeleteDialog([modelNodeId], "canvas")
+  openNodeDeleteDialog([modelNodeId], 'canvas')
 }
 
 const openNoteEditor = (instanceId: string) => {
   const diagram = activeDiagram.value
   if (!diagram) return
-  const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+  const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
   if (!instance || !isNoteInstance(instance)) return
   const currentText = instance.attrs?.noteText
-  noteEditorText.value = typeof currentText === "string" ? currentText : "Новая заметка"
+  noteEditorText.value = typeof currentText === 'string' ? currentText : 'Новая заметка'
   editingNoteInstanceId.value = instanceId
   showNoteEditorModal.value = true
 }
@@ -1838,12 +2009,12 @@ const saveNoteEditor = () => {
   const diagram = activeDiagram.value
   const instanceId = editingNoteInstanceId.value
   if (!diagram || !instanceId) return
-  const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+  const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
   if (!instance || !isNoteInstance(instance)) return
 
   const nextText = noteEditorText.value.trim()
   if (!instance.attrs) instance.attrs = {}
-  instance.attrs.noteText = nextText.length > 0 ? nextText : "Новая заметка"
+  instance.attrs.noteText = nextText.length > 0 ? nextText : 'Новая заметка'
   markDiagramDirty(diagram.id)
   showNoteEditorModal.value = false
   editingNoteInstanceId.value = null
@@ -1868,7 +2039,7 @@ const confirmNodeDelete = () => {
     return
   }
 
-  if (source === "canvas") {
+  if (source === 'canvas') {
     removeNodesFromCurrentDiagram(nodeIds)
   } else {
     for (const nodeId of nodeIds) {
@@ -1892,24 +2063,24 @@ const sanitizeFileName = (value: string): string =>
   value
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
+    .replace(/[^a-z0-9а-яё_-]+/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 
 const getDiagramExportBaseName = () => {
-  const modelName = model.value?.name?.trim() || "model"
-  const diagramName = activeDiagram.value?.name?.trim() || "diagram"
-  const modelPart = sanitizeFileName(modelName) || "model"
-  const diagramPart = sanitizeFileName(diagramName) || "diagram"
+  const modelName = model.value?.name?.trim() || 'model'
+  const diagramName = activeDiagram.value?.name?.trim() || 'diagram'
+  const modelPart = sanitizeFileName(modelName) || 'model'
+  const diagramPart = sanitizeFileName(diagramName) || 'diagram'
   return `${modelPart}-${diagramPart}`
 }
 
 const getDiagramExportBackgroundColor = () =>
-  getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#ffffff"
+  getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
 
 const exportActiveDiagramAsPng = async () => {
   if (!activeDiagram.value || !diagramRenderer.value) {
-    setUiError("Откройте диаграмму перед экспортом.")
+    setUiError('Откройте диаграмму перед экспортом.')
     return
   }
 
@@ -1917,13 +2088,13 @@ const exportActiveDiagramAsPng = async () => {
   await exporter.download(`${getDiagramExportBaseName()}.png`, {
     scale: 2,
     padding: 24,
-    backgroundColor: getDiagramExportBackgroundColor()
+    backgroundColor: getDiagramExportBackgroundColor(),
   })
 }
 
 const exportActiveDiagramAsSvg = () => {
   if (!activeDiagram.value || !diagramRenderer.value) {
-    setUiError("Откройте диаграмму перед экспортом.")
+    setUiError('Откройте диаграмму перед экспортом.')
     return
   }
 
@@ -1931,29 +2102,29 @@ const exportActiveDiagramAsSvg = () => {
   exporter.download(`${getDiagramExportBaseName()}.svg`, {
     includeBackground: true,
     backgroundColor: getDiagramExportBackgroundColor(),
-    padding: 24
+    padding: 24,
   })
 }
 
 const handleToolbarAction = async (event: string) => {
   switch (event) {
-    case "save": {
+    case 'save': {
       const openedBeforeSave = activeDiagram.value
         ? {
             name: activeDiagram.value.name,
             version: activeDiagram.value.version,
             nodeId: activeDiagram.value.nodeId ?? null,
-            notationId: activeDiagram.value.notationId
+            notationId: activeDiagram.value.notationId,
           }
         : null
       const ok = await saveWithValidation()
       if (!ok || !openedBeforeSave) break
       const stillOpened = state.value.diagrams.some(
-        (diagram) => diagram.id === selectedDiagramId.value && !diagram._isDeleted
+        diagram => diagram.id === selectedDiagramId.value && !diagram._isDeleted
       )
       if (stillOpened) break
       const restored = state.value.diagrams.find(
-        (diagram) =>
+        diagram =>
           !diagram._isDeleted &&
           diagram.name === openedBeforeSave.name &&
           diagram.version === openedBeforeSave.version &&
@@ -1965,83 +2136,83 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     }
-    case "undo":
+    case 'undo':
       diagramCanvasRef.value?.undo()
       break
-    case "redo":
+    case 'redo':
       diagramCanvasRef.value?.redo()
       break
-    case "zoom-in":
+    case 'zoom-in':
       diagramCanvasRef.value?.zoomIn()
       break
-    case "zoom-out":
+    case 'zoom-out':
       diagramCanvasRef.value?.zoomOut()
       break
-    case "fit-screen":
+    case 'fit-screen':
       diagramCanvasRef.value?.fitToView()
       break
-    case "zoom-selection":
+    case 'zoom-selection':
       diagramCanvasRef.value?.zoomToSelection()
       break
-    case "auto-layout-nodes":
+    case 'auto-layout-nodes':
       diagramCanvasRef.value?.autoLayoutNodes()
       break
-    case "reset-view":
+    case 'reset-view':
       diagramCanvasRef.value?.resetView()
       break
-    case "toggle-grid": {
+    case 'toggle-grid': {
       const next = diagramCanvasRef.value?.toggleGrid()
-      if (typeof next === "boolean") {
+      if (typeof next === 'boolean') {
         gridVisible.value = next
       }
       break
     }
-    case "toggle-minimap": {
+    case 'toggle-minimap': {
       const next = diagramCanvasRef.value?.toggleMiniMap()
-      if (typeof next === "boolean") {
+      if (typeof next === 'boolean') {
         miniMapVisible.value = next
       }
       break
     }
-    case "toggle-snap": {
+    case 'toggle-snap': {
       const next = diagramCanvasRef.value?.toggleSnap()
-      if (typeof next === "boolean") {
+      if (typeof next === 'boolean') {
         snapEnabled.value = next
       }
       break
     }
-    case "toggle-align": {
+    case 'toggle-align': {
       const next = diagramCanvasRef.value?.toggleAlign()
-      if (typeof next === "boolean") {
+      if (typeof next === 'boolean') {
         alignEnabled.value = next
       }
       break
     }
-    case "toggle-rulers": {
+    case 'toggle-rulers': {
       const next = diagramCanvasRef.value?.toggleRulers()
-      if (typeof next === "boolean") {
+      if (typeof next === 'boolean') {
         rulersEnabled.value = next
       }
       break
     }
-    case "toggle-outline": {
+    case 'toggle-outline': {
       attachToOutlineEnabled.value = !attachToOutlineEnabled.value
       break
     }
-    case "toggle-lock-anchors": {
+    case 'toggle-lock-anchors': {
       const next = diagramCanvasRef.value?.toggleLockAnchors()
-      if (typeof next === "boolean") lockAnchorsEnabled.value = next
+      if (typeof next === 'boolean') lockAnchorsEnabled.value = next
       break
     }
-    case "export-diagram-png":
+    case 'export-diagram-png':
       await exportActiveDiagramAsPng()
       break
-    case "export-diagram-svg":
+    case 'export-diagram-svg':
       exportActiveDiagramAsSvg()
       break
-    case "close-diagram":
+    case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
-        pendingDiagramAction.value = "close"
+        pendingDiagramAction.value = 'close'
         pendingDiagramSwitchId.value = null
         showDiagramSwitchModal.value = true
         break
@@ -2050,8 +2221,14 @@ const handleToolbarAction = async (event: string) => {
       selectedModelNodeIds.value = []
       selectedModelLinkId.value = null
       break
-    case "show-diagram-json":
+    case 'show-diagram-json':
       openDiagramJson()
+      break
+    case 'open-model-doc':
+      handleOpenModelDoc()
+      break
+    case 'open-diagram-doc':
+      handleOpenDiagramDoc()
       break
   }
 }
@@ -2061,7 +2238,8 @@ const setNodeScopedValue = (key: string, value: unknown) => {
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
   if (!notationId || !componentId || !node) return
-  if (!node.parsedAttrs.componentProperties[notationId]) node.parsedAttrs.componentProperties[notationId] = {}
+  if (!node.parsedAttrs.componentProperties[notationId])
+    node.parsedAttrs.componentProperties[notationId] = {}
   if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
     node.parsedAttrs.componentProperties[notationId][componentId] = {}
   }
@@ -2074,7 +2252,8 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   const relationId = linkBindingRelationId.value
   const link = selectedLink.value
   if (!notationId || !relationId || !link) return
-  if (!link.parsedAttrs.relationProperties[notationId]) link.parsedAttrs.relationProperties[notationId] = {}
+  if (!link.parsedAttrs.relationProperties[notationId])
+    link.parsedAttrs.relationProperties[notationId] = {}
   if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
     link.parsedAttrs.relationProperties[notationId][relationId] = {}
   }
@@ -2082,10 +2261,7 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   markLinkDirty(link.id)
 }
 
-const handleCanvasContextChange = (ctx: {
-  renderer: any
-  interactionManager: any
-}) => {
+const handleCanvasContextChange = (ctx: { renderer: any; interactionManager: any }) => {
   diagramRenderer.value = ctx.renderer
   diagramInteractionManager.value = ctx.interactionManager
 }
@@ -2098,30 +2274,34 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   let targetNodeInstance = null as (typeof diagram.parsedAttrs.instances.nodes)[number] | null
   let targetEdgeInstance = null as (typeof diagram.parsedAttrs.instances.edges)[number] | null
 
-  if (selectedElementId?.startsWith("instance-")) {
-    const instanceId = selectedElementId.slice("instance-".length)
-    targetNodeInstance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId) ?? null
-  } else if (selectedElementId?.startsWith("edge-")) {
-    const edgeId = selectedElementId.slice("edge-".length)
-    targetEdgeInstance = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId) ?? null
+  if (selectedElementId?.startsWith('instance-')) {
+    const instanceId = selectedElementId.slice('instance-'.length)
+    targetNodeInstance =
+      diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ?? null
+  } else if (selectedElementId?.startsWith('edge-')) {
+    const edgeId = selectedElementId.slice('edge-'.length)
+    targetEdgeInstance =
+      diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId) ?? null
   }
 
   if (!targetNodeInstance && !targetEdgeInstance && selectedModelNodeIds.value.length === 1) {
     const modelNodeId = selectedModelNodeIds.value[0]
     targetNodeInstance =
-      diagram.parsedAttrs.instances.nodes.find((item) => item.modelNodeId === modelNodeId) ?? null
+      diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId) ?? null
   }
 
   if (!targetNodeInstance && !targetEdgeInstance && selectedModelLinkId.value) {
     targetEdgeInstance =
-      diagram.parsedAttrs.instances.edges.find((item) => item.modelLinkId === selectedModelLinkId.value) ?? null
+      diagram.parsedAttrs.instances.edges.find(
+        item => item.modelLinkId === selectedModelLinkId.value
+      ) ?? null
   }
 
   if (targetNodeInstance) {
     if (!targetNodeInstance.attrs) targetNodeInstance.attrs = {}
     targetNodeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
-    if (typeof style.width === "number") targetNodeInstance.width = style.width
-    if (typeof style.height === "number") targetNodeInstance.height = style.height
+    if (typeof style.width === 'number') targetNodeInstance.width = style.width
+    if (typeof style.height === 'number') targetNodeInstance.height = style.height
     markDiagramDirty(diagram.id)
     return
   }
@@ -2129,13 +2309,14 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   if (targetEdgeInstance) {
     if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
     const baseStyle =
-      targetEdgeInstance.attrs.diagramStyle && typeof targetEdgeInstance.attrs.diagramStyle === "object"
+      targetEdgeInstance.attrs.diagramStyle &&
+      typeof targetEdgeInstance.attrs.diagramStyle === 'object'
         ? (targetEdgeInstance.attrs.diagramStyle as Record<string, unknown>)
         : {}
-    const currentType = (baseStyle.edgeType as string | undefined) ?? "bezier"
+    const currentType = (baseStyle.edgeType as string | undefined) ?? 'bezier'
     const newType = (style as Record<string, unknown>).edgeType as string | undefined
-    const fromPolyline = currentType === "polyline" || currentType === "editable-polyline"
-    const toNonPolyline = newType === "bezier" || newType === "straight"
+    const fromPolyline = currentType === 'polyline' || currentType === 'editable-polyline'
+    const toNonPolyline = newType === 'bezier' || newType === 'straight'
     targetEdgeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
     if (fromPolyline && toNonPolyline && targetEdgeInstance.attrs.controlPoints) {
       delete targetEdgeInstance.attrs.controlPoints
@@ -2149,26 +2330,26 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
   const selectedElementId = selectedCanvasElementId.value
   if (!diagram || !selectedElementId) return undefined
 
-  if (selectedElementId.startsWith("instance-")) {
-    const instanceId = selectedElementId.slice("instance-".length)
-    const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
-    if (instance?.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === "object") {
+  if (selectedElementId.startsWith('instance-')) {
+    const instanceId = selectedElementId.slice('instance-'.length)
+    const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+    if (instance?.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
       return instance.attrs.diagramStyle as DiagramStyle
     }
     const notationId = activeNotationId.value
     if (!notationId) return undefined
-    const modelNode = state.value.nodes.find((item) => item.id === instance?.modelNodeId)
+    const modelNode = state.value.nodes.find(item => item.id === instance?.modelNodeId)
     const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
     if (!componentId) return undefined
-    const component = state.value.components.find((item) => item.id === componentId)
+    const component = state.value.components.find(item => item.id === componentId)
     if (!component) return undefined
     return parseEntityAttrs(component.attrs ?? null).diagramStyle
   }
 
-  if (selectedElementId.startsWith("edge-")) {
-    const edgeId = selectedElementId.slice("edge-".length)
-    const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
-    if (edge?.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === "object") {
+  if (selectedElementId.startsWith('edge-')) {
+    const edgeId = selectedElementId.slice('edge-'.length)
+    const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+    if (edge?.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === 'object') {
       return edge.attrs.diagramStyle as DiagramStyle
     }
   }
@@ -2181,16 +2362,16 @@ const hasDiagramStyleOverride = computed(() => {
   const selectedElementId = selectedCanvasElementId.value
   if (!diagram || !selectedElementId) return false
 
-  if (selectedElementId.startsWith("instance-")) {
-    const instanceId = selectedElementId.slice("instance-".length)
-    const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+  if (selectedElementId.startsWith('instance-')) {
+    const instanceId = selectedElementId.slice('instance-'.length)
+    const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
     if (instance && isNoteInstance(instance)) return false
     return Boolean(instance?.attrs?.diagramStyle)
   }
 
-  if (selectedElementId.startsWith("edge-")) {
-    const edgeId = selectedElementId.slice("edge-".length)
-    const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
+  if (selectedElementId.startsWith('edge-')) {
+    const edgeId = selectedElementId.slice('edge-'.length)
+    const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
     if (edge?.attrs?.isDiagramOnly === true) return false
     return Boolean(edge?.attrs?.diagramStyle)
   }
@@ -2204,24 +2385,28 @@ const restoreStyleFromNotation = () => {
   const selectedElementId = selectedCanvasElementId.value
   if (!diagram || !notationId || !selectedElementId) return
 
-  if (selectedElementId.startsWith("instance-")) {
-    const instanceId = selectedElementId.slice("instance-".length)
-    const instance = diagram.parsedAttrs.instances.nodes.find((item) => item.id === instanceId)
+  if (selectedElementId.startsWith('instance-')) {
+    const instanceId = selectedElementId.slice('instance-'.length)
+    const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
     if (!instance) return
     if (isNoteInstance(instance)) return
 
-    const modelNode = state.value.nodes.find((item) => item.id === instance.modelNodeId && !item._isDeleted)
+    const modelNode = state.value.nodes.find(
+      item => item.id === instance.modelNodeId && !item._isDeleted
+    )
     const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
     const component = componentId
-      ? state.value.components.find((item) => item.id === componentId && item.notationId === notationId)
+      ? state.value.components.find(
+          item => item.id === componentId && item.notationId === notationId
+        )
       : null
 
     if (!component) {
-      setUiError("Для выбранной фигуры не найден компонент нотации.")
+      setUiError('Для выбранной фигуры не найден компонент нотации.')
       return
     }
 
-    if (instance.attrs && typeof instance.attrs === "object") {
+    if (instance.attrs && typeof instance.attrs === 'object') {
       delete instance.attrs.diagramStyle
       if (Object.keys(instance.attrs).length === 0) delete instance.attrs
     }
@@ -2229,24 +2414,26 @@ const restoreStyleFromNotation = () => {
     return
   }
 
-  if (selectedElementId.startsWith("edge-")) {
-    const edgeId = selectedElementId.slice("edge-".length)
-    const edge = diagram.parsedAttrs.instances.edges.find((item) => item.id === edgeId)
+  if (selectedElementId.startsWith('edge-')) {
+    const edgeId = selectedElementId.slice('edge-'.length)
+    const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
     if (!edge) return
     if (edge.attrs?.isDiagramOnly === true) return
 
-    const modelLink = state.value.links.find((item) => item.id === edge.modelLinkId && !item._isDeleted)
+    const modelLink = state.value.links.find(
+      item => item.id === edge.modelLinkId && !item._isDeleted
+    )
     const relationId = modelLink?.parsedAttrs.notationRelations[notationId]?.relationId
     const relation = relationId
-      ? state.value.relations.find((item) => item.id === relationId && item.notationId === notationId)
+      ? state.value.relations.find(item => item.id === relationId && item.notationId === notationId)
       : null
 
     if (!relation) {
-      setUiError("Для выбранной связи не найден relation нотации.")
+      setUiError('Для выбранной связи не найден relation нотации.')
       return
     }
 
-    if (edge.attrs && typeof edge.attrs === "object") {
+    if (edge.attrs && typeof edge.attrs === 'object') {
       delete edge.attrs.diagramStyle
       if (Object.keys(edge.attrs).length === 0) delete edge.attrs
     }
@@ -2255,7 +2442,7 @@ const restoreStyleFromNotation = () => {
 }
 
 const showDiagramJson = ref(false)
-const diagramJsonContent = ref("")
+const diagramJsonContent = ref('')
 
 const openDiagramJson = () => {
   const diagram = activeDiagram.value
@@ -2310,12 +2497,12 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(async () => {
   await loadModel()
   syncDefaultsOnLoad()
-  window.addEventListener("beforeunload", onBeforeUnload)
-  window.addEventListener("keydown", onDeleteKeydown)
+  window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener('keydown', onDeleteKeydown)
 })
 onBeforeUnmount(() => {
-  window.removeEventListener("beforeunload", onBeforeUnload)
-  window.removeEventListener("keydown", onDeleteKeydown)
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('keydown', onDeleteKeydown)
 })
 </script>
 
@@ -2392,7 +2579,7 @@ onBeforeUnmount(() => {
             <div v-else class="canvas-settings">
               <div class="canvas-settings__header">
                 <span class="material-symbols-outlined">tune</span>
-                <span>{{ t("common.settings") }}</span>
+                <span>{{ t('common.settings') }}</span>
                 <button
                   type="button"
                   class="canvas-settings__hide"
@@ -2464,7 +2651,13 @@ onBeforeUnmount(() => {
             :connection-validator="canConnect"
             @update-diagram="setDiagramAttrs"
             @select-nodes="handleCanvasSelectNodes"
-            @select-link="selectedModelLinkId = $event; selectedModelNodeIds = []; selectedNodeId = null"
+            @select-link="
+              ($event: string | null) => {
+                selectedModelLinkId = $event
+                selectedModelNodeIds = []
+                selectedNodeId = null
+              }
+            "
             @create-node-from-component="createNodeFromPaletteComponent"
             @create-note="createDiagramNote"
             @add-existing-node="addExistingNodeToDiagram"
@@ -2497,6 +2690,7 @@ onBeforeUnmount(() => {
               @bind-link-relation="selectedLink && bindLinkRelation(selectedLink, $event)"
               @set-node-scoped-value="setNodeScopedValue"
               @set-link-scoped-value="setLinkScopedValue"
+              :on-open-node-document="handleOpenNodeDoc"
             />
             <NodeStylePanel
               v-if="activeRightTab === 'style'"
@@ -2521,11 +2715,11 @@ onBeforeUnmount(() => {
     <Transition name="toast">
       <div v-if="isSaving" class="save-toast save-toast--progress">
         <span class="material-symbols-outlined save-toast__icon spin">sync</span>
-        <span>{{ saveProgress || t("common.saving") }}</span>
+        <span>{{ saveProgress || t('common.saving') }}</span>
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
         <span class="material-symbols-outlined save-toast__icon">check_circle</span>
-        <span>{{ t("common.saved") }}</span>
+        <span>{{ t('common.saved') }}</span>
       </div>
       <div v-else-if="saveError || uiError" class="save-toast save-toast--error">
         <span class="material-symbols-outlined save-toast__icon">error</span>
@@ -2534,21 +2728,35 @@ onBeforeUnmount(() => {
     </Transition>
   </Teleport>
 
-  <BaseModal v-if="showCreateNodeModal" :title="createNodeModalTitle" max-width="440px" @close="showCreateNodeModal = false">
+  <BaseModal
+    v-if="showCreateNodeModal"
+    :title="createNodeModalTitle"
+    max-width="440px"
+    @close="showCreateNodeModal = false"
+  >
     <div class="form-grid">
       <label>
-        <span>{{ t("common.name") }}</span>
+        <span>{{ t('common.name') }}</span>
         <input
           v-model="newNodeName"
           class="field-input"
-          :placeholder="createNodeModal.kind === 'folder' ? t('models.newFolderPlaceholder') : t('models.newNodePlaceholder')"
+          :placeholder="
+            createNodeModal.kind === 'folder'
+              ? t('models.newFolderPlaceholder')
+              : t('models.newNodePlaceholder')
+          "
           @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
-        >
+        />
       </label>
       <div v-if="createNodeModal.kind === 'node'" class="node-type-dropdown">
-        <span class="node-type-dropdown__label">{{ t("models.nodeTypeLabel") }}</span>
-        <div class="node-type-dropdown__control" @click="nodeTypeDropdownOpen = !nodeTypeDropdownOpen">
-          <span class="node-type-dropdown__value">{{ selectedNodeTypeName || t("models.selectType") }}</span>
+        <span class="node-type-dropdown__label">{{ t('models.nodeTypeLabel') }}</span>
+        <div
+          class="node-type-dropdown__control"
+          @click="nodeTypeDropdownOpen = !nodeTypeDropdownOpen"
+        >
+          <span class="node-type-dropdown__value">{{
+            selectedNodeTypeName || t('models.selectType')
+          }}</span>
           <span class="material-symbols-outlined node-type-dropdown__arrow">
             {{ nodeTypeDropdownOpen ? 'expand_less' : 'expand_more' }}
           </span>
@@ -2560,7 +2768,7 @@ onBeforeUnmount(() => {
             type="text"
             :placeholder="t('models.typeSearchPlaceholder')"
             @click.stop
-          >
+          />
           <div class="node-type-dropdown__list">
             <button
               v-for="typeItem in filteredNodeTypes"
@@ -2568,22 +2776,34 @@ onBeforeUnmount(() => {
               type="button"
               class="node-type-dropdown__item"
               :class="{ 'node-type-dropdown__item--active': newNodeTypeId === typeItem.id }"
-              @click="newNodeTypeId = typeItem.id; nodeTypeDropdownOpen = false"
+              @click="
+                () => {
+                  newNodeTypeId = typeItem.id
+                  nodeTypeDropdownOpen = false
+                }
+              "
             >
               {{ typeItem.name }}
             </button>
             <div v-if="filteredNodeTypes.length === 0" class="node-type-dropdown__empty">
-              {{ t("common.nothingFound") }}
+              {{ t('common.nothingFound') }}
             </div>
           </div>
         </div>
       </div>
-      <div v-else class="form-hint">{{ t("models.directoryTypeHint") }}</div>
+      <div v-else class="form-hint">{{ t('models.directoryTypeHint') }}</div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateNodeModal = false">{{ t("common.cancel") }}</button>
-      <button type="button" class="btn btn--primary" :disabled="!canCreateNodeFromModal" @click="createNode">
-        {{ t("common.create") }}
+      <button type="button" class="btn btn--secondary" @click="showCreateNodeModal = false">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        :disabled="!canCreateNodeFromModal"
+        @click="createNode"
+      >
+        {{ t('common.create') }}
       </button>
     </template>
   </BaseModal>
@@ -2596,7 +2816,7 @@ onBeforeUnmount(() => {
   >
     <div class="form-grid">
       <label>
-        <span>{{ t("models.noteTextLabel") }}</span>
+        <span>{{ t('models.noteTextLabel') }}</span>
         <textarea
           v-model="noteEditorText"
           class="field-textarea"
@@ -2606,23 +2826,36 @@ onBeforeUnmount(() => {
       </label>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNoteEditor">{{ t("common.cancel") }}</button>
-      <button type="button" class="btn btn--primary" @click="saveNoteEditor">{{ t("common.save") }}</button>
+      <button type="button" class="btn btn--secondary" @click="cancelNoteEditor">
+        {{ t('common.cancel') }}
+      </button>
+      <button type="button" class="btn btn--primary" @click="saveNoteEditor">
+        {{ t('common.save') }}
+      </button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showCreateDiagramModal" :title="t('models.createDiagramTitle')" max-width="460px" @close="showCreateDiagramModal = false">
+  <BaseModal
+    v-if="showCreateDiagramModal"
+    :title="t('models.createDiagramTitle')"
+    max-width="460px"
+    @close="showCreateDiagramModal = false"
+  >
     <div class="form-grid">
       <label>
-        <span>{{ t("common.name") }}</span>
-        <input v-model="newDiagramName" class="field-input" :placeholder="t('models.newDiagramPlaceholder')">
+        <span>{{ t('common.name') }}</span>
+        <input
+          v-model="newDiagramName"
+          class="field-input"
+          :placeholder="t('models.newDiagramPlaceholder')"
+        />
       </label>
       <label>
-        <span>{{ t("common.version") }}</span>
-        <input v-model="newDiagramVersion" class="field-input" placeholder="1.0.0">
+        <span>{{ t('common.version') }}</span>
+        <input v-model="newDiagramVersion" class="field-input" placeholder="1.0.0" />
       </label>
       <label>
-        <span>{{ t("models.notationLabel") }}</span>
+        <span>{{ t('models.notationLabel') }}</span>
         <select v-model="newDiagramNotationId" class="field-input">
           <option v-for="notation in state.notations" :key="notation.id" :value="notation.id">
             {{ notation.name }} ({{ notation.version }})
@@ -2630,23 +2863,30 @@ onBeforeUnmount(() => {
         </select>
       </label>
       <div v-if="hasDiagramNameVersionConflict" class="form-error-text">
-        {{ t("models.diagramConflictMessage") }}
+        {{ t('models.diagramConflictMessage') }}
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateDiagramModal = false">{{ t("common.cancel") }}</button>
+      <button type="button" class="btn btn--secondary" @click="showCreateDiagramModal = false">
+        {{ t('common.cancel') }}
+      </button>
       <button
         type="button"
         class="btn btn--primary"
         :disabled="hasDiagramNameVersionConflict"
         @click="createDiagram"
       >
-        {{ t("common.create") }}
+        {{ t('common.create') }}
       </button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showComponentChoiceModal" :title="t('diagram.selectComponent')" max-width="420px" @close="showComponentChoiceModal = false">
+  <BaseModal
+    v-if="showComponentChoiceModal"
+    :title="t('diagram.selectComponent')"
+    max-width="420px"
+    @close="showComponentChoiceModal = false"
+  >
     <div class="choice-list">
       <button
         v-for="option in componentChoiceOptions"
@@ -2654,10 +2894,13 @@ onBeforeUnmount(() => {
         type="button"
         class="choice-item"
         @click="
-          componentChoiceNodeId &&
-          state.nodes.find((node) => node.id === componentChoiceNodeId) &&
-          bindNodeComponent(state.nodes.find((node) => node.id === componentChoiceNodeId)!, option.id);
-          showComponentChoiceModal = false
+          () => {
+            if (componentChoiceNodeId) {
+              const node = state.nodes.find(n => n.id === componentChoiceNodeId)
+              if (node) bindNodeComponent(node, option.id)
+            }
+            showComponentChoiceModal = false
+          }
         "
       >
         {{ option.name }}
@@ -2665,7 +2908,12 @@ onBeforeUnmount(() => {
     </div>
   </BaseModal>
 
-  <BaseModal v-if="showRelationChoiceModal" :title="t('diagram.selectRelation')" max-width="420px" @close="showRelationChoiceModal = false">
+  <BaseModal
+    v-if="showRelationChoiceModal"
+    :title="t('diagram.selectRelation')"
+    max-width="420px"
+    @close="showRelationChoiceModal = false"
+  >
     <div class="choice-list">
       <button
         v-for="option in relationChoiceOptions"
@@ -2679,7 +2927,12 @@ onBeforeUnmount(() => {
     </div>
   </BaseModal>
 
-  <BaseModal v-if="showReuseLinkModal" :title="t('models.existingLinksFoundTitle')" max-width="500px" @close="showReuseLinkModal = false">
+  <BaseModal
+    v-if="showReuseLinkModal"
+    :title="t('models.existingLinksFoundTitle')"
+    max-width="500px"
+    @close="showReuseLinkModal = false"
+  >
     <div class="choice-list">
       <button
         v-for="link in reuseLinkOptions"
@@ -2688,10 +2941,14 @@ onBeforeUnmount(() => {
         class="choice-item"
         @click="createOrReuseLink(link.id)"
       >
-        {{ t("models.useExistingLink", { link: formatReuseLinkOption(link) }) }}
+        {{ t('models.useExistingLink', { link: formatReuseLinkOption(link) }) }}
       </button>
-      <button type="button" class="choice-item choice-item--primary" @click="createOrReuseLink(null)">
-        {{ t("models.createNewLink") }}
+      <button
+        type="button"
+        class="choice-item choice-item--primary"
+        @click="createOrReuseLink(null)"
+      >
+        {{ t('models.createNewLink') }}
       </button>
     </div>
   </BaseModal>
@@ -2704,18 +2961,32 @@ onBeforeUnmount(() => {
   >
     <p class="leave-text">
       {{
-        pendingDiagramAction === "close"
-          ? t("models.saveBeforeCloseDiagram")
-          : t("models.saveBeforeSwitchDiagram")
+        pendingDiagramAction === 'close'
+          ? t('models.saveBeforeCloseDiagram')
+          : t('models.saveBeforeSwitchDiagram')
       }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">{{ t("common.cancel") }}</button>
-      <button type="button" class="btn btn--secondary" :disabled="isLoading || isSaving" @click="switchDiagramWithoutSave">
-        {{ t("models.dontSave") }}
+      <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">
+        {{ t('common.cancel') }}
       </button>
-      <button type="button" class="btn btn--primary" :disabled="isSaving" @click="saveAndSwitchDiagram">
-        {{ pendingDiagramAction === "close" ? t("models.saveAndClose") : t("models.saveAndSwitch") }}
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="isLoading || isSaving"
+        @click="switchDiagramWithoutSave"
+      >
+        {{ t('models.dontSave') }}
+      </button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        :disabled="isSaving"
+        @click="saveAndSwitchDiagram"
+      >
+        {{
+          pendingDiagramAction === 'close' ? t('models.saveAndClose') : t('models.saveAndSwitch')
+        }}
       </button>
     </template>
   </BaseModal>
@@ -2729,24 +3000,36 @@ onBeforeUnmount(() => {
     <p class="leave-text">
       <template v-if="pendingDeleteNodeSource === 'canvas'">
         <template v-if="pendingDeleteNodeCount === 1">
-          {{ t("models.deleteNodeFromDiagramSingle", { name: pendingDeleteNodeSingleName || t("common.unnamed") }) }}
+          {{
+            t('models.deleteNodeFromDiagramSingle', {
+              name: pendingDeleteNodeSingleName || t('common.unnamed'),
+            })
+          }}
         </template>
         <template v-else>
-          {{ t("models.deleteNodeFromDiagramMultiple", { count: pendingDeleteNodeCount }) }}
+          {{ t('models.deleteNodeFromDiagramMultiple', { count: pendingDeleteNodeCount }) }}
         </template>
       </template>
       <template v-else>
         <template v-if="pendingDeleteNodeCount === 1">
-          {{ t("models.deleteNodeFromModelSingle", { name: pendingDeleteNodeSingleName || t("common.unnamed") }) }}
+          {{
+            t('models.deleteNodeFromModelSingle', {
+              name: pendingDeleteNodeSingleName || t('common.unnamed'),
+            })
+          }}
         </template>
         <template v-else>
-          {{ t("models.deleteNodeFromModelMultiple", { count: pendingDeleteNodeCount }) }}
+          {{ t('models.deleteNodeFromModelMultiple', { count: pendingDeleteNodeCount }) }}
         </template>
       </template>
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">{{ t("common.cancel") }}</button>
-      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">{{ t("common.delete") }}</button>
+      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">
+        {{ t('common.cancel') }}
+      </button>
+      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">
+        {{ t('common.delete') }}
+      </button>
     </template>
   </BaseModal>
 
@@ -2757,11 +3040,17 @@ onBeforeUnmount(() => {
     @close="cancelDiagramDelete"
   >
     <p class="leave-text">
-      {{ t("models.deleteDiagramConfirm", { name: pendingDeleteDiagramName || t("common.unnamed") }) }}
+      {{
+        t('models.deleteDiagramConfirm', { name: pendingDeleteDiagramName || t('common.unnamed') })
+      }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">{{ t("common.cancel") }}</button>
-      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">{{ t("common.delete") }}</button>
+      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">
+        {{ t('common.cancel') }}
+      </button>
+      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">
+        {{ t('common.delete') }}
+      </button>
     </template>
   </BaseModal>
 
@@ -2772,12 +3061,14 @@ onBeforeUnmount(() => {
     @close="cancelLinkDelete"
   >
     <p class="leave-text">
-      {{ t("models.deleteLinkQuestion") }}
+      {{ t('models.deleteLinkQuestion') }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLinkDelete">{{ t("common.cancel") }}</button>
+      <button type="button" class="btn btn--secondary" @click="cancelLinkDelete">
+        {{ t('common.cancel') }}
+      </button>
       <button type="button" class="btn btn--secondary" @click="removeLinkFromCurrentDiagram">
-        {{ t("models.removeLinkFromDiagram") }}
+        {{ t('models.removeLinkFromDiagram') }}
       </button>
       <button
         v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId)"
@@ -2785,26 +3076,44 @@ onBeforeUnmount(() => {
         class="btn btn--danger"
         @click="removeLinkFromModel"
       >
-        {{ t("models.removeLinkFromModel") }}
+        {{ t('models.removeLinkFromModel') }}
       </button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showLeaveDialog" :title="t('models.unsavedChangesTitle')" max-width="400px" @close="cancelLeave">
+  <BaseModal
+    v-if="showLeaveDialog"
+    :title="t('models.unsavedChangesTitle')"
+    max-width="400px"
+    @close="cancelLeave"
+  >
     <p class="leave-text">
-      {{ t("models.leaveUnsavedText") }}
+      {{ t('models.leaveUnsavedText') }}
     </p>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLeave">{{ t("models.stay") }}</button>
-      <button type="button" class="btn btn--danger" @click="confirmLeave">{{ t("models.leave") }}</button>
+      <button type="button" class="btn btn--secondary" @click="cancelLeave">
+        {{ t('models.stay') }}
+      </button>
+      <button type="button" class="btn btn--danger" @click="confirmLeave">
+        {{ t('models.leave') }}
+      </button>
     </template>
   </BaseModal>
 
-  <BaseModal v-if="showDiagramJson" :title="t('models.diagramJsonTitle')" max-width="600px" @close="showDiagramJson = false">
+  <BaseModal
+    v-if="showDiagramJson"
+    :title="t('models.diagramJsonTitle')"
+    max-width="600px"
+    @close="showDiagramJson = false"
+  >
     <pre class="json-viewer">{{ diagramJsonContent }}</pre>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="copyDiagramJson">{{ t("models.copy") }}</button>
-      <button type="button" class="btn btn--secondary" @click="showDiagramJson = false">{{ t("common.close") }}</button>
+      <button type="button" class="btn btn--secondary" @click="copyDiagramJson">
+        {{ t('models.copy') }}
+      </button>
+      <button type="button" class="btn btn--secondary" @click="showDiagramJson = false">
+        {{ t('common.close') }}
+      </button>
     </template>
   </BaseModal>
 
@@ -2816,8 +3125,18 @@ onBeforeUnmount(() => {
     @close="showShareModal = false"
   />
 
-  <div v-if="isLoading" class="overlay-loading">{{ t("common.loading") }}</div>
-  <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">{{ errorMessage }}</div>
+  <DocumentEditorModal
+    v-if="showDocModal"
+    :title="docModalTitle"
+    :file-id="docModalFileId"
+    @saved="handleDocSaved"
+    @close="handleDocModalClose"
+  />
+
+  <div v-if="isLoading" class="overlay-loading">{{ t('common.loading') }}</div>
+  <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">
+    {{ errorMessage }}
+  </div>
 </template>
 
 <style scoped>
@@ -3118,13 +3437,19 @@ onBeforeUnmount(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .toast-enter-from,

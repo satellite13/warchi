@@ -1,59 +1,62 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue"
-import { useRouter } from "vue-router"
-import { useI18n } from "vue-i18n"
-import AppLogo from "../../../components/layout/AppLogo.vue"
-import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
+import { computed, nextTick, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import AppLogo from '../../../components/layout/AppLogo.vue'
+import IconToolbar, { type ToolbarButton } from '../../notations/layout/IconToolbar.vue'
 
-const props = withDefaults(defineProps<{
-  hasUnsavedChanges?: boolean
-  canSave?: boolean
-  modelName?: string
-  modelVersion?: string
-  gridVisible?: boolean
-  miniMapVisible?: boolean
-  snapEnabled?: boolean
-  alignEnabled?: boolean
-  rulersEnabled?: boolean
-  lockAnchorsEnabled?: boolean
-  hasActiveDiagram?: boolean
-  canUndo?: boolean
-  canRedo?: boolean
-  canShare?: boolean
-  canvasMode?: boolean
-  hideToolbar?: boolean
-  diagramName?: string
-  diagramVersion?: string
-  notationName?: string
-  notationId?: string
-  notationVersion?: string
-  notationOwnerInfo?: string
-  canOpenNotation?: boolean
-}>(), {
-  hasUnsavedChanges: false,
-  canSave: true,
-  modelName: "",
-  modelVersion: "",
-  gridVisible: true,
-  miniMapVisible: true,
-  snapEnabled: false,
-  alignEnabled: true,
-  rulersEnabled: true,
-  lockAnchorsEnabled: true,
-  hasActiveDiagram: false,
-  canUndo: false,
-  canRedo: false,
-  canShare: false,
-  canvasMode: false,
-  hideToolbar: false,
-  diagramName: "",
-  diagramVersion: "",
-  notationName: "",
-  notationId: "",
-  notationVersion: "",
-  notationOwnerInfo: "",
-  canOpenNotation: false
-})
+const props = withDefaults(
+  defineProps<{
+    hasUnsavedChanges?: boolean
+    canSave?: boolean
+    modelName?: string
+    modelVersion?: string
+    gridVisible?: boolean
+    miniMapVisible?: boolean
+    snapEnabled?: boolean
+    alignEnabled?: boolean
+    rulersEnabled?: boolean
+    lockAnchorsEnabled?: boolean
+    hasActiveDiagram?: boolean
+    canUndo?: boolean
+    canRedo?: boolean
+    canShare?: boolean
+    canvasMode?: boolean
+    hideToolbar?: boolean
+    diagramName?: string
+    diagramVersion?: string
+    notationName?: string
+    notationId?: string
+    notationVersion?: string
+    notationOwnerInfo?: string
+    canOpenNotation?: boolean
+  }>(),
+  {
+    hasUnsavedChanges: false,
+    canSave: true,
+    modelName: '',
+    modelVersion: '',
+    gridVisible: true,
+    miniMapVisible: true,
+    snapEnabled: false,
+    alignEnabled: true,
+    rulersEnabled: true,
+    lockAnchorsEnabled: true,
+    hasActiveDiagram: false,
+    canUndo: false,
+    canRedo: false,
+    canShare: false,
+    canvasMode: false,
+    hideToolbar: false,
+    diagramName: '',
+    diagramVersion: '',
+    notationName: '',
+    notationId: '',
+    notationVersion: '',
+    notationOwnerInfo: '',
+    canOpenNotation: false,
+  }
+)
 
 const router = useRouter()
 const { t } = useI18n()
@@ -65,19 +68,19 @@ const emit = defineEmits<{
 }>()
 
 const isRenamingModel = ref(false)
-const editableModelName = ref("")
+const editableModelName = ref('')
 const modelNameInputRef = ref<HTMLInputElement | null>(null)
 
 watch(
   () => props.modelName,
-  (name) => {
-    if (!isRenamingModel.value) editableModelName.value = name || ""
+  name => {
+    if (!isRenamingModel.value) editableModelName.value = name || ''
   },
   { immediate: true }
 )
 
 const startModelRename = async () => {
-  editableModelName.value = props.modelName || ""
+  editableModelName.value = props.modelName || ''
   isRenamingModel.value = true
   await nextTick()
   modelNameInputRef.value?.focus()
@@ -86,76 +89,112 @@ const startModelRename = async () => {
 
 const cancelModelRename = () => {
   isRenamingModel.value = false
-  editableModelName.value = props.modelName || ""
+  editableModelName.value = props.modelName || ''
 }
 
 const commitModelRename = () => {
   const nextName = editableModelName.value.trim()
   isRenamingModel.value = false
-  if (!nextName || nextName === (props.modelName || "").trim()) return
-  emit("renameModel", nextName)
+  if (!nextName || nextName === (props.modelName || '').trim()) return
+  emit('renameModel', nextName)
 }
 
 const saveTitle = computed(() =>
-  props.hasUnsavedChanges ? t("toolbar.saveChanges") : t("toolbar.noChanges")
+  props.hasUnsavedChanges ? t('toolbar.saveChanges') : t('toolbar.noChanges')
 )
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
-  { icon: "undo", event: "undo", title: t("toolbar.undo"), disabled: !props.canUndo || !props.hasActiveDiagram },
-  { icon: "redo", event: "redo", title: t("toolbar.redo"), disabled: !props.canRedo || !props.hasActiveDiagram },
-  { icon: "separator", event: "sep0", separator: true },
-  { icon: "zoom_in", event: "zoom-in", title: t("toolbar.zoomIn"), disabled: !props.hasActiveDiagram },
-  { icon: "zoom_out", event: "zoom-out", title: t("toolbar.zoomOut"), disabled: !props.hasActiveDiagram },
-  { icon: "fit_screen", event: "fit-screen", title: t("toolbar.fitScreen"), disabled: !props.hasActiveDiagram },
   {
-    icon: "center_focus_strong",
-    event: "zoom-selection",
-    title: t("toolbar.zoomSelection"),
-    disabled: !props.hasActiveDiagram
+    icon: 'undo',
+    event: 'undo',
+    title: t('toolbar.undo'),
+    disabled: !props.canUndo || !props.hasActiveDiagram,
   },
   {
-    icon: "format_align_center",
-    event: "auto-layout-nodes",
-    title: t("toolbar.autoLayoutNodes"),
-    disabled: !props.hasActiveDiagram
+    icon: 'redo',
+    event: 'redo',
+    title: t('toolbar.redo'),
+    disabled: !props.canRedo || !props.hasActiveDiagram,
   },
-  { icon: "restart_alt", event: "reset-view", title: t("toolbar.resetZoom"), disabled: !props.hasActiveDiagram },
-  { icon: "separator", event: "sep2", separator: true },
+  { icon: 'separator', event: 'sep0', separator: true },
   {
-    icon: "image",
-    event: "export-diagram-png",
-    title: t("toolbar.exportDiagramPng"),
-    disabled: !props.hasActiveDiagram
+    icon: 'zoom_in',
+    event: 'zoom-in',
+    title: t('toolbar.zoomIn'),
+    disabled: !props.hasActiveDiagram,
   },
   {
-    icon: "description",
-    event: "export-diagram-svg",
-    title: t("toolbar.exportDiagramSvg"),
-    disabled: !props.hasActiveDiagram
+    icon: 'zoom_out',
+    event: 'zoom-out',
+    title: t('toolbar.zoomOut'),
+    disabled: !props.hasActiveDiagram,
   },
-  { icon: "separator", event: "sep3", separator: true },
   {
-    icon: "close",
-    event: "close-diagram",
-    title: t("toolbar.closeDiagram"),
-    disabled: !props.hasActiveDiagram
+    icon: 'fit_screen',
+    event: 'fit-screen',
+    title: t('toolbar.fitScreen'),
+    disabled: !props.hasActiveDiagram,
   },
-  { icon: "separator", event: "sep4", separator: true },
   {
-    icon: "data_object",
-    event: "show-diagram-json",
-    title: t("toolbar.showDiagramJson"),
-    disabled: !props.hasActiveDiagram
+    icon: 'center_focus_strong',
+    event: 'zoom-selection',
+    title: t('toolbar.zoomSelection'),
+    disabled: !props.hasActiveDiagram,
   },
-  { icon: "separator", event: "sep5", separator: true },
   {
-    icon: "save",
-    event: "save",
+    icon: 'format_align_center',
+    event: 'auto-layout-nodes',
+    title: t('toolbar.autoLayoutNodes'),
+    disabled: !props.hasActiveDiagram,
+  },
+  {
+    icon: 'restart_alt',
+    event: 'reset-view',
+    title: t('toolbar.resetZoom'),
+    disabled: !props.hasActiveDiagram,
+  },
+  { icon: 'separator', event: 'sep2', separator: true },
+  {
+    icon: 'image',
+    event: 'export-diagram-png',
+    title: t('toolbar.exportDiagramPng'),
+    disabled: !props.hasActiveDiagram,
+  },
+  {
+    icon: 'description',
+    event: 'export-diagram-svg',
+    title: t('toolbar.exportDiagramSvg'),
+    disabled: !props.hasActiveDiagram,
+  },
+  { icon: 'separator', event: 'sep3', separator: true },
+  {
+    icon: 'close',
+    event: 'close-diagram',
+    title: t('toolbar.closeDiagram'),
+    disabled: !props.hasActiveDiagram,
+  },
+  { icon: 'separator', event: 'sep4', separator: true },
+  {
+    icon: 'data_object',
+    event: 'show-diagram-json',
+    title: t('toolbar.showDiagramJson'),
+    disabled: !props.hasActiveDiagram,
+  },
+  {
+    icon: 'article',
+    event: 'open-diagram-doc',
+    title: t('models.diagramDocumentation'),
+    disabled: !props.hasActiveDiagram,
+  },
+  { icon: 'separator', event: 'sep5', separator: true },
+  {
+    icon: 'save',
+    event: 'save',
     title: saveTitle.value,
     badge: props.hasUnsavedChanges,
-    variant: props.hasUnsavedChanges ? "primary" : "default",
-    disabled: !props.canSave || !props.hasUnsavedChanges
-  }
+    variant: props.hasUnsavedChanges ? 'primary' : 'default',
+    disabled: !props.canSave || !props.hasUnsavedChanges,
+  },
 ])
 </script>
 
@@ -165,7 +204,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   </div>
   <header v-else class="model-header" :class="{ 'model-header--no-toolbar': hideToolbar }">
     <div class="model-header__left">
-      <button type="button" class="back-btn" :title="t('toolbar.backToModels')" @click="router.push({name: 'models'})">
+      <button
+        type="button"
+        class="back-btn"
+        :title="t('toolbar.backToModels')"
+        @click="router.push({ name: 'models' })"
+      >
         <span class="material-symbols-outlined">arrow_back</span>
       </button>
       <AppLogo size="sm" />
@@ -179,7 +223,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
           @blur="commitModelRename"
           @keydown.enter.prevent="commitModelRename"
           @keydown.esc.prevent="cancelModelRename"
-        >
+        />
         <button
           v-else
           type="button"
@@ -187,14 +231,14 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
           :title="t('toolbar.renameModel')"
           @click="startModelRename"
         >
-          <span class="model-header__title">{{ modelName || t("toolbar.modelEditor") }}</span>
+          <span class="model-header__title">{{ modelName || t('toolbar.modelEditor') }}</span>
           <span class="material-symbols-outlined model-header__title-edit-icon">edit</span>
         </button>
       </div>
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
       <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
         <span class="dirty-dot"></span>
-        {{ t("types.notSaved") }}
+        {{ t('types.notSaved') }}
       </span>
       <button
         v-if="canShare"
@@ -205,15 +249,23 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
       >
         <span class="material-symbols-outlined">share</span>
       </button>
+      <button
+        type="button"
+        class="share-btn"
+        :title="t('models.documentation')"
+        @click="emit('action', 'open-model-doc')"
+      >
+        <span class="material-symbols-outlined">article</span>
+      </button>
     </div>
     <div v-if="hideToolbar" class="model-header__info">
       <template v-if="diagramName">
-        <span class="model-header__info-label">{{ t("toolbar.diagramLabel") }}:</span>
+        <span class="model-header__info-label">{{ t('toolbar.diagramLabel') }}:</span>
         <span class="model-header__info-value">{{ diagramName }}</span>
         <span v-if="diagramVersion" class="model-header__version">{{ diagramVersion }}</span>
       </template>
       <template v-if="notationName">
-        <span class="model-header__info-label">{{ t("toolbar.notationLabel") }}:</span>
+        <span class="model-header__info-label">{{ t('toolbar.notationLabel') }}:</span>
         <button
           v-if="canOpenNotation && notationId"
           type="button"
@@ -429,7 +481,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   border-radius: 6px;
 }
 
-
 .dirty-badge {
   display: inline-flex;
   align-items: center;
@@ -453,13 +504,22 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .share-btn {

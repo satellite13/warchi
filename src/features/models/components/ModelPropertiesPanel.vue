@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue"
-import { useI18n } from "vue-i18n"
-import type { ComponentResponse, RelationResponse } from "../../../types/api"
-import type { EditorLink, EditorNode } from "../types"
-import { parseEntityAttrs, type CustomProperty } from "../../notations/notationAttrs"
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { ComponentResponse, RelationResponse } from '../../../types/api'
+import type { EditorLink, EditorNode } from '../types'
+import { parseEntityAttrs, type CustomProperty } from '../../notations/notationAttrs'
 
 const props = defineProps<{
   activeNotationId: string | null
@@ -15,6 +15,7 @@ const props = defineProps<{
   availableRelations: RelationResponse[]
   nodeScopedValues: Record<string, unknown>
   linkScopedValues: Record<string, unknown>
+  onOpenNodeDocument?: (node: EditorNode) => void
 }>()
 
 const emit = defineEmits<{
@@ -25,29 +26,36 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-const selectedComponent = computed(() =>
-  props.availableComponents.find((component) => component.id === props.nodeBindingComponentId) ?? null
+const selectedComponent = computed(
+  () =>
+    props.availableComponents.find(component => component.id === props.nodeBindingComponentId) ??
+    null
 )
-const selectedRelation = computed(() =>
-  props.availableRelations.find((relation) => relation.id === props.linkBindingRelationId) ?? null
+const selectedRelation = computed(
+  () =>
+    props.availableRelations.find(relation => relation.id === props.linkBindingRelationId) ?? null
 )
 
 const nodeProperties = computed<CustomProperty[]>(() =>
-  selectedComponent.value ? parseEntityAttrs(selectedComponent.value.attrs ?? null).customProperties : []
+  selectedComponent.value
+    ? parseEntityAttrs(selectedComponent.value.attrs ?? null).customProperties
+    : []
 )
 const linkProperties = computed<CustomProperty[]>(() =>
-  selectedRelation.value ? parseEntityAttrs(selectedRelation.value.attrs ?? null).customProperties : []
+  selectedRelation.value
+    ? parseEntityAttrs(selectedRelation.value.attrs ?? null).customProperties
+    : []
 )
 
-const currentMode = computed<"node" | "link" | "empty">(() => {
-  if (props.selectedNode) return "node"
-  if (props.selectedLink) return "link"
-  return "empty"
+const currentMode = computed<'node' | 'link' | 'empty'>(() => {
+  if (props.selectedNode) return 'node'
+  if (props.selectedLink) return 'link'
+  return 'empty'
 })
 
 const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): unknown => {
-  if (property.type === "boolean") return Boolean(checked)
-  if (property.type === "number") {
+  if (property.type === 'boolean') return Boolean(checked)
+  if (property.type === 'number') {
     const parsed = Number(raw)
     return Number.isFinite(parsed) ? parsed : null
   }
@@ -61,54 +69,110 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
     <div v-if="currentMode === 'empty'" class="mp-empty">
       <div class="mp-empty__graphic">
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect x="10" y="14" width="12" height="10" rx="2.5" stroke="currentColor" stroke-width="1.4" opacity="0.25"/>
-          <rect x="26" y="24" width="12" height="10" rx="2.5" stroke="currentColor" stroke-width="1.4" opacity="0.25"/>
-          <path d="M22 22L26 26" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 2" opacity="0.18"/>
-          <circle cx="24" cy="24" r="2" fill="currentColor" opacity="0.15"/>
+          <rect
+            x="10"
+            y="14"
+            width="12"
+            height="10"
+            rx="2.5"
+            stroke="currentColor"
+            stroke-width="1.4"
+            opacity="0.25"
+          />
+          <rect
+            x="26"
+            y="24"
+            width="12"
+            height="10"
+            rx="2.5"
+            stroke="currentColor"
+            stroke-width="1.4"
+            opacity="0.25"
+          />
+          <path
+            d="M22 22L26 26"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linecap="round"
+            stroke-dasharray="3 2"
+            opacity="0.18"
+          />
+          <circle cx="24" cy="24" r="2" fill="currentColor" opacity="0.15" />
         </svg>
       </div>
-      <span class="mp-empty__text">{{ t("diagram.selectElement") }}</span>
-      <span class="mp-empty__hint">{{ t("diagram.selectElementHint") }}</span>
+      <span class="mp-empty__text">{{ t('diagram.selectElement') }}</span>
+      <span class="mp-empty__hint">{{ t('diagram.selectElementHint') }}</span>
     </div>
 
     <template v-else>
       <!-- Type badge -->
       <div class="mp-badge" :class="currentMode === 'link' ? 'mp-badge--link' : 'mp-badge--node'">
-        <svg v-if="currentMode === 'link'" class="mp-badge__icon" width="15" height="15" viewBox="0 0 16 16" fill="none">
-          <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.2"/>
-          <circle cx="13" cy="3" r="2" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M4.5 11.5L11.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <svg
+          v-if="currentMode === 'link'"
+          class="mp-badge__icon"
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="none"
+        >
+          <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.2" />
+          <circle cx="13" cy="3" r="2" stroke="currentColor" stroke-width="1.2" />
+          <path
+            d="M4.5 11.5L11.5 4.5"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linecap="round"
+          />
         </svg>
         <svg v-else class="mp-badge__icon" width="15" height="15" viewBox="0 0 16 16" fill="none">
-          <rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
+          <rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.2" />
         </svg>
         <span class="mp-badge__label">
-          {{ currentMode === 'link' ? t("diagram.link") : (selectedNode?.name ?? t("diagram.node")) }}
+          {{
+            currentMode === 'link' ? t('diagram.link') : (selectedNode?.name ?? t('diagram.node'))
+          }}
         </span>
       </div>
 
+      <!-- Documentation button (node only) -->
+      <button
+        v-if="currentMode === 'node' && selectedNode"
+        type="button"
+        class="mp-doc-btn"
+        @click="onOpenNodeDocument?.(selectedNode)"
+      >
+        <span class="material-symbols-outlined">description</span>
+        {{ t('models.documentation') }}
+        <span v-if="selectedNode.parsedAttrs.documentFileId" class="mp-doc-btn__badge">
+          <span class="material-symbols-outlined">check_circle</span>
+        </span>
+      </button>
+
       <!-- Scrollable content -->
       <div class="mp-body">
-
         <!-- NODE binding -->
         <template v-if="currentMode === 'node' && selectedNode">
           <section class="mp-section">
-            <span class="mp-section__title">{{ t("diagram.notationComponent") }}</span>
+            <span class="mp-section__title">{{ t('diagram.notationComponent') }}</span>
             <select
               class="mp-select"
               :disabled="!activeNotationId || availableComponents.length === 0"
               :value="nodeBindingComponentId || ''"
               @change="emit('bindNodeComponent', ($event.target as HTMLSelectElement).value)"
             >
-              <option value="" disabled>{{ t("diagram.selectComponent") }}</option>
-              <option v-for="component in availableComponents" :key="component.id" :value="component.id">
+              <option value="" disabled>{{ t('diagram.selectComponent') }}</option>
+              <option
+                v-for="component in availableComponents"
+                :key="component.id"
+                :value="component.id"
+              >
                 {{ component.name }}
               </option>
             </select>
           </section>
 
           <section v-if="nodeProperties.length > 0" class="mp-section">
-            <span class="mp-section__title">{{ t("types.properties") }}</span>
+            <span class="mp-section__title">{{ t('types.properties') }}</span>
             <div class="mp-fields">
               <div v-for="property in nodeProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
@@ -119,21 +183,42 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     :class="{ 'mp-toggle__track--on': Boolean(nodeScopedValues[property.name]) }"
                     role="switch"
                     :aria-checked="Boolean(nodeScopedValues[property.name])"
-                    @click="emit('setNodeScopedValue', property.name, !Boolean(nodeScopedValues[property.name]))"
+                    @click="
+                      emit(
+                        'setNodeScopedValue',
+                        property.name,
+                        !Boolean(nodeScopedValues[property.name])
+                      )
+                    "
                   >
                     <span class="mp-toggle__thumb"></span>
                   </button>
-                  <span class="mp-toggle__label">{{ Boolean(nodeScopedValues[property.name]) ? t("common.yes") : t("common.no") }}</span>
+                  <span class="mp-toggle__label">{{
+                    Boolean(nodeScopedValues[property.name]) ? t('common.yes') : t('common.no')
+                  }}</span>
                 </div>
                 <select
                   v-else-if="property.type === 'enum'"
                   class="mp-select"
-                  :value="String(nodeScopedValues[property.name] ?? property.enumDefault ?? property.defaultValue ?? '')"
-                  @change="emit('setNodeScopedValue', property.name, ($event.target as HTMLSelectElement).value)"
+                  :value="
+                    String(
+                      nodeScopedValues[property.name] ??
+                        property.enumDefault ??
+                        property.defaultValue ??
+                        ''
+                    )
+                  "
+                  @change="
+                    emit(
+                      'setNodeScopedValue',
+                      property.name,
+                      ($event.target as HTMLSelectElement).value
+                    )
+                  "
                 >
-                  <option value="">{{ t("diagram.selectValue") }}</option>
+                  <option value="">{{ t('diagram.selectValue') }}</option>
                   <option
-                    v-for="enumValue in (property.enumValues ?? [])"
+                    v-for="enumValue in property.enumValues ?? []"
                     :key="`${property.id}-${enumValue}`"
                     :value="enumValue"
                   >
@@ -146,36 +231,46 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   :type="property.type === 'number' ? 'number' : 'text'"
                   :placeholder="property.name"
                   :value="String(nodeScopedValues[property.name] ?? '')"
-                  @input="emit('setNodeScopedValue', property.name, coerceValue(property, ($event.target as HTMLInputElement).value))"
-                >
+                  @input="
+                    emit(
+                      'setNodeScopedValue',
+                      property.name,
+                      coerceValue(property, ($event.target as HTMLInputElement).value)
+                    )
+                  "
+                />
               </div>
             </div>
           </section>
 
           <div v-else-if="nodeBindingComponentId" class="mp-hint">
-            {{ t("diagram.noConfigurableProperties") }}
+            {{ t('diagram.noConfigurableProperties') }}
           </div>
         </template>
 
         <!-- LINK binding -->
         <template v-if="currentMode === 'link' && selectedLink">
           <section class="mp-section">
-            <span class="mp-section__title">{{ t("diagram.notationRelation") }}</span>
+            <span class="mp-section__title">{{ t('diagram.notationRelation') }}</span>
             <select
               class="mp-select"
               :disabled="!activeNotationId || availableRelations.length === 0"
               :value="linkBindingRelationId || ''"
               @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
             >
-              <option value="" disabled>{{ t("diagram.selectRelation") }}</option>
-              <option v-for="relation in availableRelations" :key="relation.id" :value="relation.id">
+              <option value="" disabled>{{ t('diagram.selectRelation') }}</option>
+              <option
+                v-for="relation in availableRelations"
+                :key="relation.id"
+                :value="relation.id"
+              >
                 {{ relation.name }}
               </option>
             </select>
           </section>
 
           <section v-if="linkProperties.length > 0" class="mp-section">
-            <span class="mp-section__title">{{ t("types.properties") }}</span>
+            <span class="mp-section__title">{{ t('types.properties') }}</span>
             <div class="mp-fields">
               <div v-for="property in linkProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
@@ -186,21 +281,42 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     :class="{ 'mp-toggle__track--on': Boolean(linkScopedValues[property.name]) }"
                     role="switch"
                     :aria-checked="Boolean(linkScopedValues[property.name])"
-                    @click="emit('setLinkScopedValue', property.name, !Boolean(linkScopedValues[property.name]))"
+                    @click="
+                      emit(
+                        'setLinkScopedValue',
+                        property.name,
+                        !Boolean(linkScopedValues[property.name])
+                      )
+                    "
                   >
                     <span class="mp-toggle__thumb"></span>
                   </button>
-                  <span class="mp-toggle__label">{{ Boolean(linkScopedValues[property.name]) ? t("common.yes") : t("common.no") }}</span>
+                  <span class="mp-toggle__label">{{
+                    Boolean(linkScopedValues[property.name]) ? t('common.yes') : t('common.no')
+                  }}</span>
                 </div>
                 <select
                   v-else-if="property.type === 'enum'"
                   class="mp-select"
-                  :value="String(linkScopedValues[property.name] ?? property.enumDefault ?? property.defaultValue ?? '')"
-                  @change="emit('setLinkScopedValue', property.name, ($event.target as HTMLSelectElement).value)"
+                  :value="
+                    String(
+                      linkScopedValues[property.name] ??
+                        property.enumDefault ??
+                        property.defaultValue ??
+                        ''
+                    )
+                  "
+                  @change="
+                    emit(
+                      'setLinkScopedValue',
+                      property.name,
+                      ($event.target as HTMLSelectElement).value
+                    )
+                  "
                 >
-                  <option value="">{{ t("diagram.selectValue") }}</option>
+                  <option value="">{{ t('diagram.selectValue') }}</option>
                   <option
-                    v-for="enumValue in (property.enumValues ?? [])"
+                    v-for="enumValue in property.enumValues ?? []"
                     :key="`${property.id}-${enumValue}`"
                     :value="enumValue"
                   >
@@ -213,14 +329,20 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   :type="property.type === 'number' ? 'number' : 'text'"
                   :placeholder="property.name"
                   :value="String(linkScopedValues[property.name] ?? '')"
-                  @input="emit('setLinkScopedValue', property.name, coerceValue(property, ($event.target as HTMLInputElement).value))"
-                >
+                  @input="
+                    emit(
+                      'setLinkScopedValue',
+                      property.name,
+                      coerceValue(property, ($event.target as HTMLInputElement).value)
+                    )
+                  "
+                />
               </div>
             </div>
           </section>
 
           <div v-else-if="linkBindingRelationId" class="mp-hint">
-            {{ t("diagram.noConfigurableProperties") }}
+            {{ t('diagram.noConfigurableProperties') }}
           </div>
         </template>
       </div>
@@ -361,7 +483,9 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
   font-family: inherit;
   padding: 0 8px;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .mp-select:focus,
@@ -444,5 +568,41 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
   padding: 14px var(--mp-pad);
   font-size: 11px;
   color: var(--text-subtle);
+}
+
+/* ---- Documentation button ---- */
+.mp-doc-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% - var(--mp-pad) * 2);
+  margin: 6px var(--mp-pad);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.mp-doc-btn:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.mp-doc-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+.mp-doc-btn__badge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: var(--success, #22c55e);
+}
+.mp-doc-btn__badge .material-symbols-outlined {
+  font-size: 14px;
 }
 </style>

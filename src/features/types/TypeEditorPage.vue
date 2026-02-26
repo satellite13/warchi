@@ -272,6 +272,7 @@ const attrsJson = computed(() => {
               @save="handleDocumentSave"
               @load-versions="handleDocumentLoadVersions"
               @load-version="handleDocumentLoadVersion"
+              @back-to-current="loadDocument(selectedType?.parsedAttrs.documentFileId)"
             />
           </div>
 

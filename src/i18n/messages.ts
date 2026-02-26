@@ -320,6 +320,7 @@ export const messages = {
       notationAccessTitle: 'Доступ к нотации',
       propertiesTab: 'Свойства',
       figureStyleTab: 'Стиль фигуры',
+      documentation: 'Документация',
     },
     docs: {
       sidebarTitle: 'Документация',
@@ -900,6 +901,7 @@ export const messages = {
       notationAccessTitle: 'Notation access',
       propertiesTab: 'Properties',
       figureStyleTab: 'Figure Style',
+      documentation: 'Documentation',
     },
     docs: {
       sidebarTitle: 'Documentation',

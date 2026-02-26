@@ -1,260 +1,271 @@
 <script setup lang="ts">
-import {computed, reactive, ref, watch, onMounted, onBeforeUnmount} from "vue";
-import { useI18n } from "vue-i18n";
-import PropertyRow from "../../types/components/PropertyRow.vue";
-import CollapseSection from "./CollapseSection.vue";
-import TypeSelectSection from "./TypeSelectSection.vue";
-import RelationRulesSection from "./RelationRulesSection.vue";
-import type {CustomProperty, CustomPropertyType} from "../notationAttrs";
-import type {EditorComponent, EditorRelation, EditorRelationRule} from "../types";
-import {useCustomProperties} from "../composables/useCustomProperties";
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
+import PropertyRow from '../../types/components/PropertyRow.vue'
+import CollapseSection from './CollapseSection.vue'
+import TypeSelectSection from './TypeSelectSection.vue'
+import RelationRulesSection from './RelationRulesSection.vue'
+import type { CustomProperty, CustomPropertyType } from '../notationAttrs'
+import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
+import { useCustomProperties } from '../composables/useCustomProperties'
 
 const props = defineProps<{
-  selectedItem: EditorComponent | EditorRelation | null;
-  nodeTypes?: Array<{ id: string; name: string }>;
-  linkTypes?: Array<{ id: string; name: string }>;
-  typeProperties?: CustomProperty[];
-  allComponents?: EditorComponent[];
-  allRelations?: EditorRelation[];
-  relationRules?: EditorRelationRule[];
-  isComponentTypeLocked?: boolean;
-  isRelationTypeLocked?: boolean;
-  onComponentTypeChange?: (componentId: string, nodeTypeId: string) => void;
-  onRelationTypeChange?: (relationId: string, linkTypeId: string) => void;
-  onCreateNodeType?: (componentId: string, nodeTypeName: string) => void;
-  onCreateRelationType?: (relationId: string, linkTypeName: string) => void;
-  onMutateItem?: (id: string, apply: (item: EditorComponent | EditorRelation) => void) => void;
-  onMutateRelationRules?: (apply: (rules: EditorRelationRule[]) => void) => void;
-}>();
+  selectedItem: EditorComponent | EditorRelation | null
+  nodeTypes?: Array<{ id: string; name: string }>
+  linkTypes?: Array<{ id: string; name: string }>
+  typeProperties?: CustomProperty[]
+  allComponents?: EditorComponent[]
+  allRelations?: EditorRelation[]
+  relationRules?: EditorRelationRule[]
+  isComponentTypeLocked?: boolean
+  isRelationTypeLocked?: boolean
+  onComponentTypeChange?: (componentId: string, nodeTypeId: string) => void
+  onRelationTypeChange?: (relationId: string, linkTypeId: string) => void
+  onCreateNodeType?: (componentId: string, nodeTypeName: string) => void
+  onCreateRelationType?: (relationId: string, linkTypeName: string) => void
+  onMutateItem?: (id: string, apply: (item: EditorComponent | EditorRelation) => void) => void
+  onMutateRelationRules?: (apply: (rules: EditorRelationRule[]) => void) => void
+  onOpenDocument?: (item: EditorComponent | EditorRelation) => void
+}>()
 
-const selectedItemComputed = computed(() => props.selectedItem);
-const { t } = useI18n();
+const selectedItemComputed = computed(() => props.selectedItem)
+const { t } = useI18n()
 
-const {
-  addCustomProperty,
-  addCustomPropertyFromType,
-  removeCustomProperty,
-  propertyErrors
-} = useCustomProperties(selectedItemComputed, props.onMutateItem);
+const { addCustomProperty, addCustomPropertyFromType, removeCustomProperty, propertyErrors } =
+  useCustomProperties(selectedItemComputed, props.onMutateItem)
 
 const parseTagsInput = (value: string) =>
   Array.from(
     new Set(
       value
-        .split(",")
-        .map((tag) => tag.trim())
+        .split(',')
+        .map(tag => tag.trim())
         .filter(Boolean)
     )
-  );
+  )
 
 const sameTags = (a: string[], b: string[]) =>
-  a.length === b.length && a.every((tag, idx) => tag === b[idx]);
+  a.length === b.length && a.every((tag, idx) => tag === b[idx])
 
-const tagsDraft = ref("");
-const tagsExpanded = ref(false);
-const paletteGroupExpanded = ref(false);
-const labelTemplateExpanded = ref(false);
-const propertiesExpanded = ref(false);
+const tagsDraft = ref('')
+const tagsExpanded = ref(false)
+const paletteGroupExpanded = ref(false)
+const labelTemplateExpanded = ref(false)
+const propertiesExpanded = ref(false)
 
 watch(
-  () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join("|") ?? ""],
+  () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join('|') ?? ''],
   () => {
-    tagsDraft.value = props.selectedItem?.parsedAttrs.tags.join(", ") ?? "";
+    tagsDraft.value = props.selectedItem?.parsedAttrs.tags.join(', ') ?? ''
   },
-  {immediate: true}
-);
+  { immediate: true }
+)
 
 const handleTagsInput = (value: string) => {
-  tagsDraft.value = value;
-};
+  tagsDraft.value = value
+}
 
 const labelTemplateValue = computed(() => {
-  if (!props.selectedItem) return "";
-  return props.selectedItem.parsedAttrs.diagramStyle?.labelTemplate ?? "";
-});
+  if (!props.selectedItem) return ''
+  return props.selectedItem.parsedAttrs.diagramStyle?.labelTemplate ?? ''
+})
 
 const labelTemplatePreview = computed(() => {
-  const item = props.selectedItem;
-  if (!item) return "";
-  const template = item.parsedAttrs.diagramStyle?.labelTemplate;
-  if (!template) return item.name;
-  return template.replace(/\$\{(\w+)\}/g, (_match: string, key: string) => {
-    if (key === "name") return item.name;
-    const prop = item.parsedAttrs.customProperties.find((p) => p.name === key);
-    if (prop) {
-      const val = prop.defaultValue;
-      return val != null ? String(val) : "";
-    }
-    return "";
-  }).replace(/\\n/g, "\n");
-});
+  const item = props.selectedItem
+  if (!item) return ''
+  const template = item.parsedAttrs.diagramStyle?.labelTemplate
+  if (!template) return item.name
+  return template
+    .replace(/\$\{(\w+)\}/g, (_match: string, key: string) => {
+      if (key === 'name') return item.name
+      const prop = item.parsedAttrs.customProperties.find(p => p.name === key)
+      if (prop) {
+        const val = prop.defaultValue
+        return val != null ? String(val) : ''
+      }
+      return ''
+    })
+    .replace(/\\n/g, '\n')
+})
 
 const handleLabelTemplateInput = (value: string) => {
-  if (!props.selectedItem) return;
-  props.onMutateItem?.(props.selectedItem.id, (item) => {
+  if (!props.selectedItem) return
+  props.onMutateItem?.(props.selectedItem.id, item => {
     if (!item.parsedAttrs.diagramStyle) {
-      item.parsedAttrs.diagramStyle = {};
+      item.parsedAttrs.diagramStyle = {}
     }
     if (value) {
-      item.parsedAttrs.diagramStyle.labelTemplate = value;
+      item.parsedAttrs.diagramStyle.labelTemplate = value
     } else {
-      delete item.parsedAttrs.diagramStyle.labelTemplate;
+      delete item.parsedAttrs.diagramStyle.labelTemplate
     }
-  });
-};
+  })
+}
 
 const applyTagsDraft = () => {
-  if (!props.selectedItem) return;
-  const nextTags = parseTagsInput(tagsDraft.value);
-  const currentTags = props.selectedItem.parsedAttrs.tags ?? [];
+  if (!props.selectedItem) return
+  const nextTags = parseTagsInput(tagsDraft.value)
+  const currentTags = props.selectedItem.parsedAttrs.tags ?? []
   if (sameTags(currentTags, nextTags)) {
-    tagsDraft.value = currentTags.join(", ");
-    return;
+    tagsDraft.value = currentTags.join(', ')
+    return
   }
-  tagsDraft.value = nextTags.join(", ");
-  props.onMutateItem?.(props.selectedItem.id, (item) => {
-    item.parsedAttrs.tags = nextTags;
-  });
-};
+  tagsDraft.value = nextTags.join(', ')
+  props.onMutateItem?.(props.selectedItem.id, item => {
+    item.parsedAttrs.tags = nextTags
+  })
+}
 
 const removeTag = (tag: string) => {
-  if (!props.selectedItem) return;
-  const nextTags = props.selectedItem.parsedAttrs.tags.filter((item) => item !== tag);
-  tagsDraft.value = nextTags.join(", ");
-  props.onMutateItem?.(props.selectedItem.id, (item) => {
-    item.parsedAttrs.tags = nextTags;
-  });
-};
+  if (!props.selectedItem) return
+  const nextTags = props.selectedItem.parsedAttrs.tags.filter(item => item !== tag)
+  tagsDraft.value = nextTags.join(', ')
+  props.onMutateItem?.(props.selectedItem.id, item => {
+    item.parsedAttrs.tags = nextTags
+  })
+}
 
 const handlePaletteGroupChange = (value: string) => {
-  if (!props.selectedItem || "linkTypeId" in props.selectedItem) return;
-  const num = parseInt(value, 10);
-  props.onMutateItem?.(props.selectedItem.id, (item) => {
+  if (!props.selectedItem || 'linkTypeId' in props.selectedItem) return
+  const num = parseInt(value, 10)
+  props.onMutateItem?.(props.selectedItem.id, item => {
     if (Number.isInteger(num) && num >= 0) {
-      item.parsedAttrs.paletteGroup = num;
-    } else if (value === "" || value === "-") {
-      delete item.parsedAttrs.paletteGroup;
+      item.parsedAttrs.paletteGroup = num
+    } else if (value === '' || value === '-') {
+      delete item.parsedAttrs.paletteGroup
     }
-  });
-};
+  })
+}
 
-const expandedIds = reactive(new Set<string>());
+const expandedIds = reactive(new Set<string>())
 
 const toggleCollapse = (id: string) => {
   if (expandedIds.has(id)) {
-    expandedIds.delete(id);
+    expandedIds.delete(id)
   } else {
-    expandedIds.add(id);
+    expandedIds.add(id)
   }
-};
+}
 
 const createMutator = (propertyId: string) => {
   return (apply: (p: CustomProperty) => void) => {
-    if (!props.selectedItem) return;
-    props.onMutateItem?.(props.selectedItem.id, (item) => {
-      const p = item.parsedAttrs.customProperties.find(cp => cp.id === propertyId);
-      if (p) apply(p);
-    });
-  };
-};
+    if (!props.selectedItem) return
+    props.onMutateItem?.(props.selectedItem.id, item => {
+      const p = item.parsedAttrs.customProperties.find(cp => cp.id === propertyId)
+      if (p) apply(p)
+    })
+  }
+}
 
 const typeOptions: { value: CustomPropertyType; label: string }[] = [
-  {value: "string", label: t("types.propertyTypeString")},
-  {value: "number", label: t("types.propertyTypeNumber")},
-  {value: "boolean", label: t("types.propertyTypeBoolean")},
-  {value: "enum", label: t("types.propertyTypeEnum")}
-];
+  { value: 'string', label: t('types.propertyTypeString') },
+  { value: 'number', label: t('types.propertyTypeNumber') },
+  { value: 'boolean', label: t('types.propertyTypeBoolean') },
+  { value: 'enum', label: t('types.propertyTypeEnum') },
+]
 
 const typeLabel = (type: CustomPropertyType) =>
-  typeOptions.find(o => o.value === type)?.label ?? type;
+  typeOptions.find(o => o.value === type)?.label ?? type
 
-const showAddMenu = ref(false);
-const addMenuRef = ref<HTMLElement | null>(null);
+const showAddMenu = ref(false)
+const addMenuRef = ref<HTMLElement | null>(null)
 
 const sameStringArray = (a?: string[], b?: string[]) => {
-  const aa = a ?? [];
-  const bb = b ?? [];
-  if (aa.length !== bb.length) return false;
-  return aa.every((value, idx) => value === bb[idx]);
-};
+  const aa = a ?? []
+  const bb = b ?? []
+  if (aa.length !== bb.length) return false
+  return aa.every((value, idx) => value === bb[idx])
+}
 
 const isEquivalentProperty = (a: CustomProperty, b: CustomProperty) =>
   a.name === b.name &&
   a.type === b.type &&
   a.required === b.required &&
-  (a.regex ?? "") === (b.regex ?? "") &&
+  (a.regex ?? '') === (b.regex ?? '') &&
   a.min === b.min &&
   a.max === b.max &&
   (a.maxLength ?? null) === (b.maxLength ?? null) &&
   sameStringArray(a.enumValues, b.enumValues) &&
-  (a.defaultValue ?? "") === (b.defaultValue ?? "") &&
-  (a.enumDefault ?? "") === (b.enumDefault ?? "");
+  (a.defaultValue ?? '') === (b.defaultValue ?? '') &&
+  (a.enumDefault ?? '') === (b.enumDefault ?? '')
 
 const isEquivalentToTypeProperty = (property: CustomProperty) => {
-  const typeProps = props.typeProperties ?? [];
-  return typeProps.some((typeProp) => isEquivalentProperty(property, typeProp));
-};
+  const typeProps = props.typeProperties ?? []
+  return typeProps.some(typeProp => isEquivalentProperty(property, typeProp))
+}
 
 const missingTypeProperties = computed(() => {
-  if (!props.selectedItem) return [];
-  const current = props.selectedItem.parsedAttrs.customProperties;
-  const typeProps = props.typeProperties ?? [];
-  return typeProps.filter((typeProp) => !current.some((prop) => isEquivalentProperty(prop, typeProp)));
-});
+  if (!props.selectedItem) return []
+  const current = props.selectedItem.parsedAttrs.customProperties
+  const typeProps = props.typeProperties ?? []
+  return typeProps.filter(typeProp => !current.some(prop => isEquivalentProperty(prop, typeProp)))
+})
 
 const toggleAddMenu = () => {
-  showAddMenu.value = !showAddMenu.value;
-};
+  showAddMenu.value = !showAddMenu.value
+}
 
 const addNewProperty = () => {
-  addCustomProperty();
-  showAddMenu.value = false;
-};
+  addCustomProperty()
+  showAddMenu.value = false
+}
 
 const addMissingTypeProperty = (property: CustomProperty) => {
-  addCustomPropertyFromType(property);
-  showAddMenu.value = false;
-};
+  addCustomPropertyFromType(property)
+  showAddMenu.value = false
+}
 
 const closeAddMenuOnOutsideClick = (event: MouseEvent) => {
-  if (!showAddMenu.value) return;
-  const target = event.target as Node | null;
-  if (!target) return;
+  if (!showAddMenu.value) return
+  const target = event.target as Node | null
+  if (!target) return
   if (!addMenuRef.value?.contains(target)) {
-    showAddMenu.value = false;
+    showAddMenu.value = false
   }
-};
+}
 
 const closeAddMenuOnEscape = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    showAddMenu.value = false;
+  if (event.key === 'Escape') {
+    showAddMenu.value = false
   }
-};
+}
 
 onMounted(() => {
-  document.addEventListener("mousedown", closeAddMenuOnOutsideClick);
-  document.addEventListener("keydown", closeAddMenuOnEscape);
-});
+  document.addEventListener('mousedown', closeAddMenuOnOutsideClick)
+  document.addEventListener('keydown', closeAddMenuOnEscape)
+})
 
 onBeforeUnmount(() => {
-  document.removeEventListener("mousedown", closeAddMenuOnOutsideClick);
-  document.removeEventListener("keydown", closeAddMenuOnEscape);
-});
+  document.removeEventListener('mousedown', closeAddMenuOnOutsideClick)
+  document.removeEventListener('keydown', closeAddMenuOnEscape)
+})
 </script>
 
 <template>
   <div class="properties-panel">
     <div class="properties-panel__header">
-      <h3 class="properties-panel__title">{{ t("types.properties") }}</h3>
+      <h3 class="properties-panel__title">{{ t('types.properties') }}</h3>
       <span v-if="selectedItem" class="properties-panel__entity-name">{{ selectedItem.name }}</span>
     </div>
 
     <div v-if="!selectedItem" class="properties-panel__empty properties-panel__empty--centered">
       <span class="material-symbols-outlined properties-panel__empty-icon">edit_note</span>
-      <span>{{ t("diagram.selectElementToEditProperties") }}</span>
+      <span>{{ t('diagram.selectElementToEditProperties') }}</span>
     </div>
 
     <div v-else class="properties-panel__content">
+      <button
+        type="button"
+        class="properties-panel__doc-btn"
+        @click="onOpenDocument?.(selectedItem)"
+      >
+        <span class="material-symbols-outlined">description</span>
+        {{ t('notations.documentation') }}
+        <span v-if="selectedItem.parsedAttrs.documentFileId" class="properties-panel__doc-badge">
+          <span class="material-symbols-outlined">check_circle</span>
+        </span>
+      </button>
+
       <TypeSelectSection
         :selected-item="selectedItem"
         :node-types="nodeTypes"
@@ -280,8 +291,10 @@ onBeforeUnmount(() => {
           :value="selectedItem.parsedAttrs.paletteGroup ?? 0"
           placeholder="0"
           @input="handlePaletteGroupChange(($event.target as HTMLInputElement).value)"
-        >
-        <span class="properties-panel__palette-group-hint">{{ t("diagram.paletteGroupHint") }}</span>
+        />
+        <span class="properties-panel__palette-group-hint">{{
+          t('diagram.paletteGroupHint')
+        }}</span>
       </CollapseSection>
 
       <CollapseSection
@@ -297,7 +310,7 @@ onBeforeUnmount(() => {
           @input="handleTagsInput(($event.target as HTMLInputElement).value)"
           @blur="applyTagsDraft"
           @keydown.enter.prevent="applyTagsDraft"
-        >
+        />
         <div v-if="selectedItem.parsedAttrs.tags.length > 0" class="properties-panel__tags-list">
           <button
             v-for="tag in selectedItem.parsedAttrs.tags"
@@ -327,8 +340,12 @@ onBeforeUnmount(() => {
           @input="handleLabelTemplateInput(($event.target as HTMLTextAreaElement).value)"
         ></textarea>
         <div v-if="labelTemplateValue" class="properties-panel__label-template-preview">
-          <span class="properties-panel__label-template-preview-label">{{ t("diagram.resultLabel") }}:</span>
-          <span class="properties-panel__label-template-preview-text">{{ labelTemplatePreview }}</span>
+          <span class="properties-panel__label-template-preview-label"
+            >{{ t('diagram.resultLabel') }}:</span
+          >
+          <span class="properties-panel__label-template-preview-text">{{
+            labelTemplatePreview
+          }}</span>
         </div>
       </CollapseSection>
 
@@ -346,11 +363,7 @@ onBeforeUnmount(() => {
         @toggle="propertiesExpanded = !propertiesExpanded"
       >
         <template #header-extra>
-          <div
-            ref="addMenuRef"
-            class="properties-panel__add-wrapper"
-            @click.stop
-          >
+          <div ref="addMenuRef" class="properties-panel__add-wrapper" @click.stop>
             <button
               type="button"
               class="link-btn link-btn--icon"
@@ -363,10 +376,10 @@ onBeforeUnmount(() => {
             <div v-if="showAddMenu" class="add-menu">
               <button type="button" class="add-menu__item" @click="addNewProperty">
                 <span class="material-symbols-outlined">note_add</span>
-                {{ t("types.newProperty") }}
+                {{ t('types.newProperty') }}
               </button>
               <div class="add-menu__divider"></div>
-              <div class="add-menu__section-title">{{ t("types.missingFromType") }}</div>
+              <div class="add-menu__section-title">{{ t('types.missingFromType') }}</div>
               <button
                 v-for="prop in missingTypeProperties"
                 :key="`missing-${prop.name}-${prop.type}`"
@@ -378,7 +391,7 @@ onBeforeUnmount(() => {
                 {{ prop.name }} ({{ typeLabel(prop.type) }})
               </button>
               <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">
-                {{ t("types.noMissingProperties") }}
+                {{ t('types.noMissingProperties') }}
               </div>
             </div>
           </div>
@@ -388,7 +401,7 @@ onBeforeUnmount(() => {
           v-if="selectedItem.parsedAttrs.customProperties.length === 0"
           class="properties-panel__empty"
         >
-          {{ t("types.noProperties") }}
+          {{ t('types.noProperties') }}
         </div>
 
         <div v-else class="properties-panel__list">
@@ -568,7 +581,10 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 .properties-panel__tags-input:focus {
@@ -621,7 +637,10 @@ onBeforeUnmount(() => {
   font-family: monospace;
   outline: none;
   resize: vertical;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 .properties-panel__label-template-input:focus {
@@ -693,5 +712,40 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.properties-panel__doc-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 4px 0;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.properties-panel__doc-btn:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.properties-panel__doc-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+.properties-panel__doc-badge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: var(--success, #22c55e);
+}
+.properties-panel__doc-badge .material-symbols-outlined {
+  font-size: 14px;
 }
 </style>

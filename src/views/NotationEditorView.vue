@@ -1,38 +1,42 @@
 <script setup lang="ts">
-import {ref, computed, watch, onMounted, onBeforeUnmount, nextTick} from "vue";
-import {onBeforeRouteLeave, useRouter, type RouteLocationRaw} from "vue-router";
-import { useI18n } from "vue-i18n";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { onBeforeRouteLeave, useRouter, type RouteLocationRaw } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
-const router = useRouter();
-const { t } = useI18n();
-import MainLayout from "../layouts/MainLayout.vue";
-import AppFooter from "../components/layout/AppFooter.vue";
-import BaseModal from "../components/modals/BaseModal.vue";
-import ShareAccessModal from "../components/modals/ShareAccessModal.vue";
-import {apiGet} from "../composables/useApi";
-import {useAuth} from "../composables/useAuth";
-import {useCanShare} from "../composables/useCanShare";
-import NotationMainPanelLayout from "../features/notations/layout/NotationMainPanelLayout.vue";
-import NotationAppHeader from "../features/notations/layout/NotationAppHeader.vue";
-import NotationComponentList from "../features/notations/layout/NotationComponentList.vue";
-import NotationDiagram from "../features/notations/components/NotationDiagram.vue";
-import NotationEntityModal from "../features/notations/components/NotationEntityModal.vue";
-import CustomPropertiesPanel from "../features/notations/components/CustomPropertiesPanel.vue";
-import NodeStylePanel from "../features/notations/components/NodeStylePanel.vue";
-import TabPanel from "../components/layout/TabPanel.vue";
-import {useNotationEditor} from "../features/notations/composables/useNotationEditor";
-import {useNotationEntity, appendTagValue} from "../features/notations/composables/useNotationEntity";
-import {useNotationToolbarState} from "../features/notations/composables/useNotationToolbarState";
-import {useNotationExport} from "../features/notations/composables/useNotationExport";
-import type {DiagramStyle} from "../features/notations/notationAttrs";
-import {createId} from "../features/notations/notationAttrs";
-import type {NodeResponse, LinkResponse} from "../types/api";
+const router = useRouter()
+const { t } = useI18n()
+import MainLayout from '../layouts/MainLayout.vue'
+import AppFooter from '../components/layout/AppFooter.vue'
+import BaseModal from '../components/modals/BaseModal.vue'
+import ShareAccessModal from '../components/modals/ShareAccessModal.vue'
+import { apiGet } from '../composables/useApi'
+import { useAuth } from '../composables/useAuth'
+import { useCanShare } from '../composables/useCanShare'
+import NotationMainPanelLayout from '../features/notations/layout/NotationMainPanelLayout.vue'
+import NotationAppHeader from '../features/notations/layout/NotationAppHeader.vue'
+import NotationComponentList from '../features/notations/layout/NotationComponentList.vue'
+import NotationDiagram from '../features/notations/components/NotationDiagram.vue'
+import NotationEntityModal from '../features/notations/components/NotationEntityModal.vue'
+import CustomPropertiesPanel from '../features/notations/components/CustomPropertiesPanel.vue'
+import NodeStylePanel from '../features/notations/components/NodeStylePanel.vue'
+import TabPanel from '../components/layout/TabPanel.vue'
+import DocumentEditorModal from '../components/modals/DocumentEditorModal.vue'
+import { useNotationEditor } from '../features/notations/composables/useNotationEditor'
+import {
+  useNotationEntity,
+  appendTagValue,
+} from '../features/notations/composables/useNotationEntity'
+import { useNotationToolbarState } from '../features/notations/composables/useNotationToolbarState'
+import { useNotationExport } from '../features/notations/composables/useNotationExport'
+import type { DiagramStyle } from '../features/notations/notationAttrs'
+import { createId } from '../features/notations/notationAttrs'
+import type { NodeResponse, LinkResponse } from '../types/api'
 import type {
   EditorComponent,
   EditorRelation,
-  EditorRelationRule
-} from "../features/notations/types";
-import type {PaginatedResponse} from "../types/entities";
+  EditorRelationRule,
+} from '../features/notations/types'
+import type { PaginatedResponse } from '../types/entities'
 
 const {
   notation,
@@ -44,11 +48,95 @@ const {
   saveProgress,
   hasUnsavedChanges,
   loadNotation,
-  saveChanges
-} = useNotationEditor();
-const {currentUser} = useAuth();
-const showShareModal = ref(false);
-const { canShare: canShareNotation } = useCanShare(notation, currentUser);
+  saveChanges,
+} = useNotationEditor()
+const { currentUser } = useAuth()
+const showShareModal = ref(false)
+const { canShare: canShareNotation } = useCanShare(notation, currentUser)
+
+// Document modal state
+const showDocModal = ref(false)
+const docModalTitle = ref('')
+const docModalFileId = ref<string | null>(null)
+const docModalTarget = ref<{ kind: 'notation' | 'component' | 'relation'; id: string } | null>(null)
+
+function getNotationDocFileId(): string | null {
+  const raw = notation.value?.attrs
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return typeof parsed.documentFileId === 'string' ? parsed.documentFileId : null
+  } catch {
+    return null
+  }
+}
+
+function setNotationDocFileId(fileId: string) {
+  const raw = notation.value?.attrs
+  let parsed: Record<string, unknown> = {}
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      parsed = {}
+    }
+  }
+  parsed.documentFileId = fileId
+  if (notation.value) {
+    notation.value.attrs = JSON.stringify(parsed)
+  }
+}
+
+function openDocModal(
+  target: { kind: 'notation' | 'component' | 'relation'; id: string },
+  title: string,
+  fileId: string | null
+) {
+  docModalTarget.value = target
+  docModalTitle.value = title
+  docModalFileId.value = fileId
+  showDocModal.value = true
+}
+
+function handleOpenEntityDoc(item: EditorComponent | EditorRelation) {
+  const isRelation = 'linkTypeId' in item
+  const kind = isRelation ? ('relation' as const) : ('component' as const)
+  openDocModal({ kind, id: item.id }, item.name, item.parsedAttrs.documentFileId ?? null)
+}
+
+function handleOpenNotationDoc() {
+  openDocModal(
+    { kind: 'notation', id: state.value.notationId },
+    notation.value?.name ?? t('notations.entityName'),
+    getNotationDocFileId()
+  )
+}
+
+function handleDocSaved(fileId: string) {
+  const target = docModalTarget.value
+  if (!target) return
+
+  if (target.kind === 'notation') {
+    setNotationDocFileId(fileId)
+  } else if (target.kind === 'component') {
+    const component = state.value.components.find(c => c.id === target.id)
+    if (component && !component.parsedAttrs.documentFileId) {
+      component.parsedAttrs.documentFileId = fileId
+      markComponentDirty(target.id)
+    }
+  } else if (target.kind === 'relation') {
+    const relation = state.value.relations.find(r => r.id === target.id)
+    if (relation && !relation.parsedAttrs.documentFileId) {
+      relation.parsedAttrs.documentFileId = fileId
+      markRelationDirty(target.id)
+    }
+  }
+}
+
+function handleDocModalClose() {
+  showDocModal.value = false
+  docModalTarget.value = null
+}
 
 const {
   selectedEntity,
@@ -84,123 +172,126 @@ const {
   markComponentDirty,
   markRelationDirty,
   removeComponent,
-  removeRelation
-} = useNotationEntity(state);
+  removeRelation,
+} = useNotationEntity(state)
 
-const NEW_TYPE_VALUE = "__new__";
+const NEW_TYPE_VALUE = '__new__'
 
-const userId = computed(() => currentUser.value?.id ?? null);
+const userId = computed(() => currentUser.value?.id ?? null)
 
-const {
-  gridVisible,
-  miniMapVisible,
-  snapEnabled,
-  alignEnabled,
-  rulersEnabled
-} = useNotationToolbarState(userId);
+const { gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled } =
+  useNotationToolbarState(userId)
 
-const diagramRef = ref<InstanceType<typeof NotationDiagram> | null>(null);
-const canUndo = ref(false);
-const canRedo = ref(false);
+const diagramRef = ref<InstanceType<typeof NotationDiagram> | null>(null)
+const canUndo = ref(false)
+const canRedo = ref(false)
 
-const selectedEntityId = computed(() => selectedEntity.value?.id ?? null);
+const selectedEntityId = computed(() => selectedEntity.value?.id ?? null)
 const selectedItemTypeProperties = computed(() => {
-  const entity = selectedEntity.value;
-  if (!entity) return [];
-  if (entity.kind === "component") {
-    const item = state.value.components.find((c) => c.id === entity.id);
-    if (!item) return [];
-    const nodeType = state.value.nodeTypes.find((t) => t.id === item.nodeTypeId);
-    return nodeType?.parsedAttrs.customProperties ?? [];
+  const entity = selectedEntity.value
+  if (!entity) return []
+  if (entity.kind === 'component') {
+    const item = state.value.components.find(c => c.id === entity.id)
+    if (!item) return []
+    const nodeType = state.value.nodeTypes.find(t => t.id === item.nodeTypeId)
+    return nodeType?.parsedAttrs.customProperties ?? []
   }
-  const item = state.value.relations.find((r) => r.id === entity.id);
-  if (!item) return [];
-  const linkType = state.value.linkTypes.find((t) => t.id === item.linkTypeId);
-  return linkType?.parsedAttrs.customProperties ?? [];
-});
+  const item = state.value.relations.find(r => r.id === entity.id)
+  if (!item) return []
+  const linkType = state.value.linkTypes.find(t => t.id === item.linkTypeId)
+  return linkType?.parsedAttrs.customProperties ?? []
+})
 
-const modelNodes = ref<NodeResponse[]>([]);
-const modelLinks = ref<LinkResponse[]>([]);
+const modelNodes = ref<NodeResponse[]>([])
+const modelLinks = ref<LinkResponse[]>([])
 
 const parseJsonObject = (raw: string | null | undefined): Record<string, unknown> => {
-  if (!raw) return {};
+  if (!raw) return {}
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+    const parsed = JSON.parse(raw) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
     }
   } catch {
     // ignore malformed attrs
   }
-  return {};
-};
+  return {}
+}
 
 const loadModelUsage = async () => {
-  const query = new URLSearchParams({size: "2000"});
+  const query = new URLSearchParams({ size: '2000' })
   const [nodesResult, linksResult] = await Promise.all([
     apiGet<PaginatedResponse<NodeResponse>>(`/nodes?${query.toString()}`),
-    apiGet<PaginatedResponse<LinkResponse>>(`/links?${query.toString()}`)
-  ]);
-  modelNodes.value = nodesResult.success ? (nodesResult.data.content ?? []) : [];
-  modelLinks.value = linksResult.success ? (linksResult.data.content ?? []) : [];
-};
+    apiGet<PaginatedResponse<LinkResponse>>(`/links?${query.toString()}`),
+  ])
+  modelNodes.value = nodesResult.success ? (nodesResult.data.content ?? []) : []
+  modelLinks.value = linksResult.success ? (linksResult.data.content ?? []) : []
+}
 
 const selectedComponentUsedInModelNodes = computed(() => {
-  if (selectedEntity.value?.kind !== "component") return false;
-  const componentId = selectedEntity.value.id;
-  const notationId = state.value.notationId;
-  return modelNodes.value.some((node) => {
-    const attrs = parseJsonObject(node.attrs);
-    const componentBindings = attrs.componentBindings;
-    if (!componentBindings || typeof componentBindings !== "object" || Array.isArray(componentBindings)) {
-      return false;
+  if (selectedEntity.value?.kind !== 'component') return false
+  const componentId = selectedEntity.value.id
+  const notationId = state.value.notationId
+  return modelNodes.value.some(node => {
+    const attrs = parseJsonObject(node.attrs)
+    const componentBindings = attrs.componentBindings
+    if (
+      !componentBindings ||
+      typeof componentBindings !== 'object' ||
+      Array.isArray(componentBindings)
+    ) {
+      return false
     }
-    const byNotation = (componentBindings as Record<string, unknown>)[notationId];
-    if (!byNotation || typeof byNotation !== "object" || Array.isArray(byNotation)) return false;
-    return (byNotation as Record<string, unknown>).componentId === componentId;
-  });
-});
+    const byNotation = (componentBindings as Record<string, unknown>)[notationId]
+    if (!byNotation || typeof byNotation !== 'object' || Array.isArray(byNotation)) return false
+    return (byNotation as Record<string, unknown>).componentId === componentId
+  })
+})
 
 const selectedRelationUsedInModelLinks = computed(() => {
-  if (selectedEntity.value?.kind !== "relation") return false;
-  const relationId = selectedEntity.value.id;
-  const notationId = state.value.notationId;
-  return modelLinks.value.some((link) => {
-    const attrs = parseJsonObject(link.attrs);
-    const relationBindings = attrs.relationBindings;
-    if (!relationBindings || typeof relationBindings !== "object" || Array.isArray(relationBindings)) {
-      return false;
+  if (selectedEntity.value?.kind !== 'relation') return false
+  const relationId = selectedEntity.value.id
+  const notationId = state.value.notationId
+  return modelLinks.value.some(link => {
+    const attrs = parseJsonObject(link.attrs)
+    const relationBindings = attrs.relationBindings
+    if (
+      !relationBindings ||
+      typeof relationBindings !== 'object' ||
+      Array.isArray(relationBindings)
+    ) {
+      return false
     }
-    const byNotation = (relationBindings as Record<string, unknown>)[notationId];
-    if (!byNotation || typeof byNotation !== "object" || Array.isArray(byNotation)) return false;
-    return (byNotation as Record<string, unknown>).relationId === relationId;
-  });
-});
+    const byNotation = (relationBindings as Record<string, unknown>)[notationId]
+    if (!byNotation || typeof byNotation !== 'object' || Array.isArray(byNotation)) return false
+    return (byNotation as Record<string, unknown>).relationId === relationId
+  })
+})
 
 // Compute the diagram element ID for the selected entity (for the style panel)
 // Components use node ID, relations use edge ID
 const selectedDiagramElementId = computed(() => {
-  const entity = selectedEntity.value;
-  if (!entity) return null;
-  if (entity.kind === "relation") {
-    return `relation-edge-${entity.id}`;
+  const entity = selectedEntity.value
+  if (!entity) return null
+  if (entity.kind === 'relation') {
+    return `relation-edge-${entity.id}`
   }
-  return `component-${entity.id}`;
-});
+  return `component-${entity.id}`
+})
 
-const interactionManager = computed(() => diagramRef.value?.interactionManagerRef ?? null);
-const diagramRenderer = computed(() => diagramRef.value?.rendererRef ?? null);
+const interactionManager = computed(() => diagramRef.value?.interactionManagerRef ?? null)
+const diagramRenderer = computed(() => diagramRef.value?.rendererRef ?? null)
 
 const selectedDiagramStyle = computed(() => {
-  const entity = selectedEntity.value;
-  if (!entity) return undefined;
-  if (entity.kind === "component") {
-    return state.value.components.find(c => c.id === entity.id)?.parsedAttrs.diagramStyle;
+  const entity = selectedEntity.value
+  if (!entity) return undefined
+  if (entity.kind === 'component') {
+    return state.value.components.find(c => c.id === entity.id)?.parsedAttrs.diagramStyle
   }
-  return state.value.relations.find(r => r.id === entity.id)?.parsedAttrs.diagramStyle;
-});
+  return state.value.relations.find(r => r.id === entity.id)?.parsedAttrs.diagramStyle
+})
 
-const importNotationInputRef = ref<HTMLInputElement | null>(null);
+const importNotationInputRef = ref<HTMLInputElement | null>(null)
 
 const {
   showAttrsJson,
@@ -211,354 +302,381 @@ const {
   triggerNotationImport,
   handleNotationImportChange,
   openAttrsJson,
-  copyAttrsJson
-} = useNotationExport(notation, state, selectedEntity, diagramRenderer, saveError, saveSuccess, importNotationInputRef);
+  copyAttrsJson,
+} = useNotationExport(
+  notation,
+  state,
+  selectedEntity,
+  diagramRenderer,
+  saveError,
+  saveSuccess,
+  importNotationInputRef
+)
 
-const selectionSyncEnabled = ref(true);
+const selectionSyncEnabled = ref(true)
 
-const activeRightTab = ref("properties");
+const activeRightTab = ref('properties')
 
 const rightPanelTabs = computed(() => [
-  { id: "properties", label: t("notations.propertiesTab"), icon: "tune" },
-  { id: "style", label: t("notations.figureStyleTab"), icon: "palette" }
-]);
+  { id: 'properties', label: t('notations.propertiesTab'), icon: 'tune' },
+  { id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' },
+])
 
-const focusSelectedOnDiagram = (kind: "component" | "relation", id: string) => {
-  if (!selectionSyncEnabled.value) return;
-  const renderer = diagramRef.value?.rendererRef;
-  const navigation = diagramRef.value?.interactionManagerRef?.navigation;
-  if (!renderer || !navigation || typeof navigation.zoomToRect !== "function") return;
+const focusSelectedOnDiagram = (kind: 'component' | 'relation', id: string) => {
+  if (!selectionSyncEnabled.value) return
+  const renderer = diagramRef.value?.rendererRef
+  const navigation = diagramRef.value?.interactionManagerRef?.navigation
+  if (!renderer || !navigation || typeof navigation.zoomToRect !== 'function') return
 
-  if (kind === "component") {
-    const node = renderer.getNode?.(`component-${id}`);
-    const bounds = node?.getBounds?.();
+  if (kind === 'component') {
+    const node = renderer.getNode?.(`component-${id}`)
+    const bounds = node?.getBounds?.()
     if (bounds) {
-      navigation.zoomToRect(bounds, 64);
+      navigation.zoomToRect(bounds, 64)
     }
-    return;
+    return
   }
 
-  const edge = renderer.getEdge?.(`relation-edge-${id}`);
-  const bounds = edge?.getBounds?.();
+  const edge = renderer.getEdge?.(`relation-edge-${id}`)
+  const bounds = edge?.getBounds?.()
   if (bounds) {
-    navigation.zoomToRect(bounds, 64);
+    navigation.zoomToRect(bounds, 64)
   }
-};
+}
 
-watch(interactionManager, (im) => {
-  if (!im) return;
-  // Keep interaction managers in sync with toolbar state.
-  im.drag.setSnapToGrid(snapEnabled.value);
-  im.resize.setSnapToGrid(snapEnabled.value);
-  im.connection.setSnapToGrid(snapEnabled.value);
-  im.drag.setAlignmentEnabled(alignEnabled.value);
-  const overlayGrid = diagramRef.value?.gridOverlayRef;
-  overlayGrid?.setEnabled(gridVisible.value);
-  const overlayMiniMap = diagramRef.value?.miniMapRef;
-  overlayMiniMap?.setEnabled(miniMapVisible.value);
-  const overlayRulers = diagramRef.value?.rulersOverlayRef;
-  overlayRulers?.setEnabled(rulersEnabled.value);
-  diagramRenderer.value?.markDirty();
-  im.history.on("change", () => {
-    canUndo.value = im.history.canUndo;
-    canRedo.value = im.history.canRedo;
-  });
-}, { immediate: true });
+watch(
+  interactionManager,
+  im => {
+    if (!im) return
+    // Keep interaction managers in sync with toolbar state.
+    im.drag.setSnapToGrid(snapEnabled.value)
+    im.resize.setSnapToGrid(snapEnabled.value)
+    im.connection.setSnapToGrid(snapEnabled.value)
+    im.drag.setAlignmentEnabled(alignEnabled.value)
+    const overlayGrid = diagramRef.value?.gridOverlayRef
+    overlayGrid?.setEnabled(gridVisible.value)
+    const overlayMiniMap = diagramRef.value?.miniMapRef
+    overlayMiniMap?.setEnabled(miniMapVisible.value)
+    const overlayRulers = diagramRef.value?.rulersOverlayRef
+    overlayRulers?.setEnabled(rulersEnabled.value)
+    diagramRenderer.value?.markDirty()
+    im.history.on('change', () => {
+      canUndo.value = im.history.canUndo
+      canRedo.value = im.history.canRedo
+    })
+  },
+  { immediate: true }
+)
 
 const handleStyleChange = (style: DiagramStyle) => {
-  const entity = selectedEntity.value;
-  if (!entity) return;
+  const entity = selectedEntity.value
+  if (!entity) return
 
-  if (entity.kind === "component") {
-    const item = state.value.components.find(c => c.id === entity.id);
+  if (entity.kind === 'component') {
+    const item = state.value.components.find(c => c.id === entity.id)
     if (item) {
-      item.parsedAttrs.diagramStyle = style;
-      markComponentDirty(entity.id);
+      item.parsedAttrs.diagramStyle = style
+      markComponentDirty(entity.id)
     }
   } else {
-    const item = state.value.relations.find(r => r.id === entity.id);
+    const item = state.value.relations.find(r => r.id === entity.id)
     if (item) {
-      item.parsedAttrs.diagramStyle = style;
-      markRelationDirty(entity.id);
+      item.parsedAttrs.diagramStyle = style
+      markRelationDirty(entity.id)
     }
   }
-};
+}
 
 const handleMutateItem = (id: string, apply: (item: EditorComponent | EditorRelation) => void) => {
-  const comp = state.value.components.find(c => c.id === id);
-  if (comp) { apply(comp); markComponentDirty(id); return; }
-  const rel = state.value.relations.find(r => r.id === id);
-  if (rel) { apply(rel); markRelationDirty(id); }
-};
+  const comp = state.value.components.find(c => c.id === id)
+  if (comp) {
+    apply(comp)
+    markComponentDirty(id)
+    return
+  }
+  const rel = state.value.relations.find(r => r.id === id)
+  if (rel) {
+    apply(rel)
+    markRelationDirty(id)
+  }
+}
 
 const handleMutateRelationRules = (apply: (rules: EditorRelationRule[]) => void) => {
-  apply(state.value.relationRules);
-  handleRelationRulesChanged();
-};
+  apply(state.value.relationRules)
+  handleRelationRulesChanged()
+}
 
 const handleComponentTypeChanged = (componentId: string, nodeTypeId: string) => {
-  const component = state.value.components.find((item) => item.id === componentId);
-  if (!component || component.nodeTypeId === nodeTypeId) return;
-  component.nodeTypeId = nodeTypeId;
-  markComponentDirty(componentId);
-};
+  const component = state.value.components.find(item => item.id === componentId)
+  if (!component || component.nodeTypeId === nodeTypeId) return
+  component.nodeTypeId = nodeTypeId
+  markComponentDirty(componentId)
+}
 
 const handleCreateNodeType = (componentId: string, nodeTypeName: string) => {
-  const trimmedName = nodeTypeName.trim();
-  if (!trimmedName) return;
+  const trimmedName = nodeTypeName.trim()
+  if (!trimmedName) return
 
   const existingType = state.value.nodeTypes.find(
-    (item) => item.name.trim().toLowerCase() === trimmedName.toLowerCase()
-  );
+    item => item.name.trim().toLowerCase() === trimmedName.toLowerCase()
+  )
 
-  const nodeTypeId = existingType?.id ?? createId();
+  const nodeTypeId = existingType?.id ?? createId()
   if (!existingType) {
     state.value.nodeTypes.push({
       id: nodeTypeId,
       ownerId: state.value.ownerId,
       name: trimmedName,
       parsedAttrs: {},
-      _isNew: true
-    });
+      _isNew: true,
+    })
   }
 
-  handleComponentTypeChanged(componentId, nodeTypeId);
-};
+  handleComponentTypeChanged(componentId, nodeTypeId)
+}
 
 const handleRelationTypeChanged = (relationId: string, linkTypeId: string) => {
-  const relation = state.value.relations.find((item) => item.id === relationId);
-  if (!relation || relation.linkTypeId === linkTypeId) return;
-  relation.linkTypeId = linkTypeId;
-  markRelationDirty(relationId);
-};
+  const relation = state.value.relations.find(item => item.id === relationId)
+  if (!relation || relation.linkTypeId === linkTypeId) return
+  relation.linkTypeId = linkTypeId
+  markRelationDirty(relationId)
+}
 
 const handleCreateRelationType = (relationId: string, linkTypeName: string) => {
-  const trimmedName = linkTypeName.trim();
-  if (!trimmedName) return;
+  const trimmedName = linkTypeName.trim()
+  if (!trimmedName) return
 
   const existingType = state.value.linkTypes.find(
-    (item) => item.name.trim().toLowerCase() === trimmedName.toLowerCase()
-  );
+    item => item.name.trim().toLowerCase() === trimmedName.toLowerCase()
+  )
 
-  const linkTypeId = existingType?.id ?? createId();
+  const linkTypeId = existingType?.id ?? createId()
   if (!existingType) {
     state.value.linkTypes.push({
       id: linkTypeId,
       ownerId: state.value.ownerId,
       name: trimmedName,
       parsedAttrs: {},
-      _isNew: true
-    });
+      _isNew: true,
+    })
   }
 
-  handleRelationTypeChanged(relationId, linkTypeId);
-};
+  handleRelationTypeChanged(relationId, linkTypeId)
+}
 
 const handleRelationRulesChanged = () => {
-  state.value.relationRules.forEach((rule) => {
+  state.value.relationRules.forEach(rule => {
     if (!rule._isNew) {
-      rule._isDirty = true;
+      rule._isDirty = true
     }
-  });
-};
+  })
+}
 
-const handleSelect = (kind: "component" | "relation", id: string, source: "list" | "diagram" = "list") => {
-  if (kind === "component") {
-    selectComponent(id);
+const handleSelect = (
+  kind: 'component' | 'relation',
+  id: string,
+  source: 'list' | 'diagram' = 'list'
+) => {
+  if (kind === 'component') {
+    selectComponent(id)
   } else {
-    selectRelation(id);
+    selectRelation(id)
   }
-  if (source === "list") {
+  if (source === 'list') {
     nextTick(() => {
-      focusSelectedOnDiagram(kind, id);
-    });
+      focusSelectedOnDiagram(kind, id)
+    })
   }
-};
+}
 
-const handleDiagramSelect = (id: string, kind: "component" | "relation") => {
-  handleSelect(kind, id, "diagram");
-};
+const handleDiagramSelect = (id: string, kind: 'component' | 'relation') => {
+  handleSelect(kind, id, 'diagram')
+}
 
 const toggleSelectionSync = () => {
-  selectionSyncEnabled.value = !selectionSyncEnabled.value;
-  if (!selectionSyncEnabled.value) return;
-  const entity = selectedEntity.value;
-  if (!entity) return;
+  selectionSyncEnabled.value = !selectionSyncEnabled.value
+  if (!selectionSyncEnabled.value) return
+  const entity = selectedEntity.value
+  if (!entity) return
   nextTick(() => {
-    focusSelectedOnDiagram(entity.kind, entity.id);
-  });
-};
+    focusSelectedOnDiagram(entity.kind, entity.id)
+  })
+}
 
 // Remove item confirmation
-const showRemoveDialog = ref(false);
-const pendingRemove = ref<{ kind: "component" | "relation"; id: string; name: string } | null>(null);
+const showRemoveDialog = ref(false)
+const pendingRemove = ref<{ kind: 'component' | 'relation'; id: string; name: string } | null>(null)
 
-const handleRemoveItem = (kind: "component" | "relation", id: string) => {
-  const item = kind === "component"
-    ? state.value.components.find(c => c.id === id)
-    : state.value.relations.find(r => r.id === id);
-  pendingRemove.value = { kind, id, name: item?.name || "" };
-  showRemoveDialog.value = true;
-};
+const handleRemoveItem = (kind: 'component' | 'relation', id: string) => {
+  const item =
+    kind === 'component'
+      ? state.value.components.find(c => c.id === id)
+      : state.value.relations.find(r => r.id === id)
+  pendingRemove.value = { kind, id, name: item?.name || '' }
+  showRemoveDialog.value = true
+}
 
 const confirmRemove = () => {
   if (pendingRemove.value) {
-    const { kind, id } = pendingRemove.value;
-    if (kind === "component") {
-      removeComponent(id);
+    const { kind, id } = pendingRemove.value
+    if (kind === 'component') {
+      removeComponent(id)
     } else {
-      removeRelation(id);
+      removeRelation(id)
     }
   }
-  showRemoveDialog.value = false;
-  pendingRemove.value = null;
-};
+  showRemoveDialog.value = false
+  pendingRemove.value = null
+}
 
 const cancelRemove = () => {
-  showRemoveDialog.value = false;
-  pendingRemove.value = null;
-};
+  showRemoveDialog.value = false
+  pendingRemove.value = null
+}
 
 // Toolbar actions
 const handleToolbarAction = async (event: string) => {
-  const im = interactionManager.value;
-  const renderer = diagramRenderer.value;
+  const im = interactionManager.value
+  const renderer = diagramRenderer.value
 
   switch (event) {
-    case "save":
-      if (!hasUnsavedChanges.value) break;
-      await saveChanges(false);
-      break;
-    case "undo":
-      im?.history.undo();
-      break;
-    case "redo":
-      im?.history.redo();
-      break;
-    case "zoom-in":
+    case 'save':
+      if (!hasUnsavedChanges.value) break
+      await saveChanges(false)
+      break
+    case 'undo':
+      im?.history.undo()
+      break
+    case 'redo':
+      im?.history.redo()
+      break
+    case 'zoom-in':
       if (renderer) {
-        const center = {x: renderer.width / 2, y: renderer.height / 2};
-        im?.navigation.setZoom(renderer.zoom * 1.2, center);
+        const center = { x: renderer.width / 2, y: renderer.height / 2 }
+        im?.navigation.setZoom(renderer.zoom * 1.2, center)
       }
-      break;
-    case "zoom-out":
+      break
+    case 'zoom-out':
       if (renderer) {
-        const center = {x: renderer.width / 2, y: renderer.height / 2};
-        im?.navigation.setZoom(renderer.zoom / 1.2, center);
+        const center = { x: renderer.width / 2, y: renderer.height / 2 }
+        im?.navigation.setZoom(renderer.zoom / 1.2, center)
       }
-      break;
-    case "fit-screen":
-      diagramRef.value?.fitToView();
-      break;
-    case "zoom-selection":
-      im?.zoomToSelection();
-      break;
-    case "auto-layout-components":
-      diagramRef.value?.autoLayoutComponents();
-      break;
-    case "reset-view":
-      diagramRef.value?.resetView();
-      break;
-    case "toggle-grid": {
-      gridVisible.value = !gridVisible.value;
-      const overlay = diagramRef.value?.gridOverlayRef;
-      overlay?.setEnabled(gridVisible.value);
-      renderer?.markDirty();
-      break;
+      break
+    case 'fit-screen':
+      diagramRef.value?.fitToView()
+      break
+    case 'zoom-selection':
+      im?.zoomToSelection()
+      break
+    case 'auto-layout-components':
+      diagramRef.value?.autoLayoutComponents()
+      break
+    case 'reset-view':
+      diagramRef.value?.resetView()
+      break
+    case 'toggle-grid': {
+      gridVisible.value = !gridVisible.value
+      const overlay = diagramRef.value?.gridOverlayRef
+      overlay?.setEnabled(gridVisible.value)
+      renderer?.markDirty()
+      break
     }
-    case "toggle-minimap": {
-      miniMapVisible.value = !miniMapVisible.value;
-      const overlay = diagramRef.value?.miniMapRef;
-      overlay?.setEnabled(miniMapVisible.value);
-      renderer?.markDirty();
-      break;
+    case 'toggle-minimap': {
+      miniMapVisible.value = !miniMapVisible.value
+      const overlay = diagramRef.value?.miniMapRef
+      overlay?.setEnabled(miniMapVisible.value)
+      renderer?.markDirty()
+      break
     }
-    case "toggle-snap": {
-      snapEnabled.value = !snapEnabled.value;
-      im?.drag.setSnapToGrid(snapEnabled.value);
-      im?.resize.setSnapToGrid(snapEnabled.value);
-      im?.connection.setSnapToGrid(snapEnabled.value);
-      break;
+    case 'toggle-snap': {
+      snapEnabled.value = !snapEnabled.value
+      im?.drag.setSnapToGrid(snapEnabled.value)
+      im?.resize.setSnapToGrid(snapEnabled.value)
+      im?.connection.setSnapToGrid(snapEnabled.value)
+      break
     }
-    case "toggle-align": {
-      alignEnabled.value = !alignEnabled.value;
-      im?.drag.setAlignmentEnabled(alignEnabled.value);
-      break;
+    case 'toggle-align': {
+      alignEnabled.value = !alignEnabled.value
+      im?.drag.setAlignmentEnabled(alignEnabled.value)
+      break
     }
-    case "toggle-rulers": {
-      rulersEnabled.value = !rulersEnabled.value;
-      const overlay = diagramRef.value?.rulersOverlayRef;
-      overlay?.setEnabled(rulersEnabled.value);
-      renderer?.markDirty();
-      break;
+    case 'toggle-rulers': {
+      rulersEnabled.value = !rulersEnabled.value
+      const overlay = diagramRef.value?.rulersOverlayRef
+      overlay?.setEnabled(rulersEnabled.value)
+      renderer?.markDirty()
+      break
     }
-    case "show-attrs-json":
-      openAttrsJson();
-      break;
-    case "export-notation":
-      exportNotation();
-      break;
-    case "export-diagram-png":
-      await exportDiagramAsPng();
-      break;
-    case "export-diagram-svg":
-      exportDiagramAsSvg();
-      break;
-    case "import-notation":
-      triggerNotationImport();
-      break;
+    case 'show-attrs-json':
+      openAttrsJson()
+      break
+    case 'export-notation':
+      exportNotation()
+      break
+    case 'export-diagram-png':
+      await exportDiagramAsPng()
+      break
+    case 'export-diagram-svg':
+      exportDiagramAsSvg()
+      break
+    case 'import-notation':
+      triggerNotationImport()
+      break
+    case 'open-notation-doc':
+      handleOpenNotationDoc()
+      break
   }
-};
+}
 
 // Unsaved changes confirmation dialog
-const showLeaveDialog = ref(false);
-const allowLeave = ref(false);
-let pendingRoute: RouteLocationRaw | null = null;
+const showLeaveDialog = ref(false)
+const allowLeave = ref(false)
+let pendingRoute: RouteLocationRaw | null = null
 
 const confirmLeave = () => {
-  showLeaveDialog.value = false;
-  allowLeave.value = true;
+  showLeaveDialog.value = false
+  allowLeave.value = true
   if (pendingRoute) {
-    router.push(pendingRoute);
-    pendingRoute = null;
+    router.push(pendingRoute)
+    pendingRoute = null
   }
-};
+}
 
 const cancelLeave = () => {
-  showLeaveDialog.value = false;
-  pendingRoute = null;
-};
+  showLeaveDialog.value = false
+  pendingRoute = null
+}
 
 // Guard Vue Router navigation
-onBeforeRouteLeave((to) => {
+onBeforeRouteLeave(to => {
   if (allowLeave.value) {
-    allowLeave.value = false;
-    return true;
+    allowLeave.value = false
+    return true
   }
   if (hasUnsavedChanges.value) {
-    showLeaveDialog.value = true;
-    pendingRoute = to.fullPath;
-    return false;
+    showLeaveDialog.value = true
+    pendingRoute = to.fullPath
+    return false
   }
-  return true;
-});
+  return true
+})
 
 // Guard browser close / refresh
 const onBeforeUnload = (e: BeforeUnloadEvent) => {
   if (hasUnsavedChanges.value) {
-    e.preventDefault();
+    e.preventDefault()
   }
-};
+}
 
 onMounted(() => {
-  loadNotation();
-  loadModelUsage();
-  window.addEventListener("beforeunload", onBeforeUnload);
-});
+  loadNotation()
+  loadModelUsage()
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
 
 onBeforeUnmount(() => {
-  window.removeEventListener("beforeunload", onBeforeUnload);
-});
+  window.removeEventListener('beforeunload', onBeforeUnload)
+})
 </script>
 
 <template>
@@ -568,7 +686,7 @@ onBeforeUnmount(() => {
     type="file"
     accept=".json,application/json"
     @change="handleNotationImportChange"
-  >
+  />
   <MainLayout>
     <template #header>
       <NotationAppHeader
@@ -651,6 +769,7 @@ onBeforeUnmount(() => {
               :on-create-relation-type="handleCreateRelationType"
               :on-mutate-item="handleMutateItem"
               :on-mutate-relation-rules="handleMutateRelationRules"
+              :on-open-document="handleOpenEntityDoc"
             />
             <NodeStylePanel
               v-if="activeRightTab === 'style'"
@@ -665,7 +784,7 @@ onBeforeUnmount(() => {
       </NotationMainPanelLayout>
     </template>
     <template #footer>
-      <AppFooter/>
+      <AppFooter />
     </template>
   </MainLayout>
 
@@ -678,7 +797,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
         <span class="material-symbols-outlined save-toast__icon">check_circle</span>
-        <span>{{ t("common.saved") }}</span>
+        <span>{{ t('common.saved') }}</span>
       </div>
       <div v-else-if="saveError" class="save-toast save-toast--error">
         <span class="material-symbols-outlined save-toast__icon">error</span>
@@ -715,9 +834,14 @@ onBeforeUnmount(() => {
     @close="cancelRemove"
   >
     <p class="leave-dialog__text">
-      {{ pendingRemove?.kind === 'component'
-        ? t('notations.removeComponentConfirm', { name: pendingRemove?.name || t('common.unnamed') })
-        : t('notations.removeRelationConfirm', { name: pendingRemove?.name || t('common.unnamed') })
+      {{
+        pendingRemove?.kind === 'component'
+          ? t('notations.removeComponentConfirm', {
+              name: pendingRemove?.name || t('common.unnamed'),
+            })
+          : t('notations.removeRelationConfirm', {
+              name: pendingRemove?.name || t('common.unnamed'),
+            })
       }}
     </p>
     <template #footer>
@@ -739,11 +863,7 @@ onBeforeUnmount(() => {
   >
     <pre class="json-viewer">{{ attrsJsonContent }}</pre>
     <template #footer>
-      <button
-        type="button"
-        class="btn btn--secondary"
-        @click="copyAttrsJson"
-      >
+      <button type="button" class="btn btn--secondary" @click="copyAttrsJson">
         {{ t('notations.copyButton') }}
       </button>
       <button type="button" class="btn btn--secondary" @click="showAttrsJson = false">
@@ -819,6 +939,14 @@ onBeforeUnmount(() => {
     :resource-id="notation.id"
     @close="showShareModal = false"
   />
+
+  <DocumentEditorModal
+    v-if="showDocModal"
+    :title="docModalTitle"
+    :file-id="docModalFileId"
+    @saved="handleDocSaved"
+    @close="handleDocModalClose"
+  />
 </template>
 
 <style scoped>
@@ -885,13 +1013,19 @@ onBeforeUnmount(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .toast-enter-from,
@@ -906,7 +1040,6 @@ onBeforeUnmount(() => {
   line-height: 1.6;
   color: var(--text-muted);
 }
-
 
 .json-viewer {
   margin: 0;

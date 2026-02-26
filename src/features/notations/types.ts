@@ -24,6 +24,8 @@ export interface EntityParsedAttrs {
   diagramStyle?: DiagramStyle
   /** Группа в палитре (0 = note). По умолчанию 0. */
   paletteGroup?: number
+  /** UUID файла markdown-документации */
+  documentFileId?: string
 }
 
 // Editor state types with parsed attrs and change tracking flags

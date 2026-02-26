@@ -237,6 +237,8 @@ export type EntityAttrs = {
   diagramStyle?: DiagramStyle
   /** Группа в палитре (0 = note). По умолчанию 0. */
   paletteGroup?: number
+  /** UUID файла markdown-документации */
+  documentFileId?: string
 }
 
 export type TypeAttrs = {
@@ -274,6 +276,9 @@ export const parseEntityAttrs = (attrs: string | null): EntityAttrs => {
     ) {
       result.paletteGroup = record.paletteGroup
     }
+    if (typeof record.documentFileId === 'string' && record.documentFileId.trim().length > 0) {
+      result.documentFileId = record.documentFileId.trim()
+    }
     return result
   } catch {
     return { tags: [], customProperties: [] }
@@ -298,6 +303,9 @@ export const serializeEntityAttrs = (attrs: EntityAttrs): string => {
     attrs.paletteGroup >= 0
   ) {
     result.paletteGroup = attrs.paletteGroup
+  }
+  if (typeof attrs.documentFileId === 'string' && attrs.documentFileId.trim().length > 0) {
+    result.documentFileId = attrs.documentFileId.trim()
   }
   return JSON.stringify(result)
 }

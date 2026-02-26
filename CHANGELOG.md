@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.19] - 2026-02-26
+
+### Added
+- DocumentEditorModal for editing markdown documents with version history.
+- mdEditor config (mdEditor.ts) for shared editor configuration.
+- TypeDocumentPanel version history support.
+
+### Changed
+- CustomPropertiesPanel, NotationAppHeader, notationAttrs, types.
+- i18n messages for document/version UI.
+
 ## [0.0.18] - 2026-02-26
 
 ### Added

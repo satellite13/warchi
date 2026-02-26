@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
+import { useLocale } from '../../../composables/useLocale'
 import type { FileVersionResponse } from '../../../types/api'
 
 const props = defineProps<{
@@ -25,6 +26,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { currentLocale } = useLocale()
+
+const editorLanguage = computed(() => {
+  const map: Record<string, string> = { ru: 'ru-RU', en: 'en-US' }
+  return map[currentLocale.value] ?? 'en-US'
+})
 
 const isEditing = ref(false)
 const showPanel = ref(true)
@@ -184,7 +191,7 @@ function formatSize(bytes: number): string {
         <div v-if="isEditing" class="doc-editor-wrap">
           <MdEditor
             :model-value="content"
-            language="en-US"
+            :language="editorLanguage"
             :preview="false"
             :toolbars="[
               'bold',
@@ -221,7 +228,7 @@ function formatSize(bytes: number): string {
             {{ t('types.docEmpty') }}
           </div>
           <div v-else class="doc-preview-wrap">
-            <MdPreview :model-value="content" />
+            <MdPreview :model-value="content" :language="editorLanguage" />
           </div>
         </template>
       </template>

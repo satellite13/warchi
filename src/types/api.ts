@@ -221,7 +221,7 @@ export interface NodeTypeResponse {
   id: string
   name: string
   ownerId: string
-  accessPermission?: "OWNER" | "EDIT" | "VIEW" | "ADMIN" | null
+  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
   attrs?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -245,7 +245,7 @@ export interface LinkTypeResponse {
   id: string
   name: string
   ownerId: string
-  accessPermission?: "OWNER" | "EDIT" | "VIEW" | "ADMIN" | null
+  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
   attrs?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -307,8 +307,8 @@ export interface AuditLogResponse {
 
 // Access shares
 
-export type ShareResourceType = "MODEL" | "NOTATION" | "NODE_TYPE" | "LINK_TYPE"
-export type SharePermission = "VIEW" | "EDIT"
+export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE'
+export type SharePermission = 'VIEW' | 'EDIT'
 
 export interface AccessShareRequest {
   resourceType: ShareResourceType
@@ -326,4 +326,26 @@ export interface AccessShareResponse {
   permission: SharePermission
   createdAt?: string | null
   updatedAt?: string | null
+}
+
+// Files
+
+export interface FileUploadResponse {
+  id: string
+  url: string
+  filename: string
+  contentType: string
+  size: number
+}
+
+export interface UploadMarkdownRequest {
+  content: string
+  filename?: string
+}
+
+export interface FileVersionResponse {
+  versionNumber: number
+  createdAt: string
+  createdBy: string
+  size: number
 }

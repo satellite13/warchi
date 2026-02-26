@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, watch } from "vue"
-import { useI18n } from "vue-i18n"
+import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import { useTypeEditor } from "./composables/useTypeEditor"
-import { serializeTypeAttrs, type CustomProperty } from "../notations/notationAttrs"
-import { useCanShare } from "../../composables/useCanShare"
-import BaseModal from "../../components/modals/BaseModal.vue"
-import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
-import TypeSidebar from "./components/TypeSidebar.vue"
-import TypeForm from "./components/TypeForm.vue"
-import TypeAside from "./components/TypeAside.vue"
-import type { ShareResourceType } from "../../types/api"
+import { useTypeEditor } from './composables/useTypeEditor'
+import { useTypeDocument } from './composables/useTypeDocument'
+import { serializeTypeAttrs, type CustomProperty } from '../notations/notationAttrs'
+import { useCanShare } from '../../composables/useCanShare'
+import BaseModal from '../../components/modals/BaseModal.vue'
+import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
+import TypeSidebar from './components/TypeSidebar.vue'
+import TypeForm from './components/TypeForm.vue'
+import TypeAside from './components/TypeAside.vue'
+import TypeDocumentPanel from './components/TypeDocumentPanel.vue'
+import type { ShareResourceType } from '../../types/api'
 
 const {
   currentUserId,
@@ -30,13 +32,63 @@ const {
   removeCustomProperty,
   typeUsages,
   isLoadingUsages,
-  isDirty
+  isDirty,
 } = useTypeEditor()
+
+const {
+  documentContent,
+  documentFileId,
+  isDocLoading,
+  isDocSaving,
+  docError,
+  docVersions,
+  isLoadingVersions,
+  isDocDirty,
+  setDocumentContent,
+  loadDocument,
+  saveDocument,
+  loadVersions,
+  loadVersion,
+  resetDocument,
+} = useTypeDocument()
+
 const { t } = useI18n()
 
 onMounted(() => {
   loadAll()
 })
+
+// Load document when selected type changes
+watch(selectedType, item => {
+  if (item && !item._isNew) {
+    loadDocument(item.parsedAttrs.documentFileId)
+  } else {
+    resetDocument()
+  }
+})
+
+async function handleDocumentSave() {
+  if (!selectedType.value) return
+
+  const fileId = await saveDocument()
+  if (fileId && !selectedType.value.parsedAttrs.documentFileId) {
+    // First save: persist fileId into type attrs
+    selectedType.value.parsedAttrs.documentFileId = fileId
+    await saveType(selectedType.value)
+  }
+}
+
+function handleDocumentLoadVersions() {
+  if (documentFileId.value) {
+    loadVersions(documentFileId.value)
+  }
+}
+
+function handleDocumentLoadVersion(versionNumber: number) {
+  if (documentFileId.value) {
+    loadVersion(documentFileId.value, versionNumber)
+  }
+}
 
 async function handleSave() {
   if (!selectedType.value) return
@@ -60,7 +112,7 @@ function handleMutateProperty(propertyId: string, apply: (p: CustomProperty) => 
 }
 
 function handleDefaultDirectoryPathUpdate(value: string) {
-  if (!selectedType.value || selectedType.value.kind !== "node") return
+  if (!selectedType.value || selectedType.value.kind !== 'node') return
   const normalized = value.trim()
   if (!normalized) {
     delete selectedType.value.parsedAttrs.defaultDirectoryPath
@@ -109,24 +161,24 @@ function cancelSwitch() {
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
-const currentUserObj = computed(() => currentUserId.value ? { id: currentUserId.value } : null)
+const currentUserObj = computed(() => (currentUserId.value ? { id: currentUserId.value } : null))
 const { canShare: canShareBase } = useCanShare(selectedType, currentUserObj)
 const canShareSelectedType = computed(() => canShareBase.value && !selectedType.value?._isNew)
 const shareResourceType = computed<ShareResourceType>(() =>
-  selectedType.value?.kind === "link" ? "LINK_TYPE" : "NODE_TYPE"
+  selectedType.value?.kind === 'link' ? 'LINK_TYPE' : 'NODE_TYPE'
 )
 const showShareModal = ref(false)
 const selectedTypeOwnerName = computed(() => {
   const type = selectedType.value
-  if (!type) return t("common.unknownUser")
-  return ownerDisplayNames.value.get(type.ownerId) ?? t("common.unknownUser")
+  if (!type) return t('common.unknownUser')
+  return ownerDisplayNames.value.get(type.ownerId) ?? t('common.unknownUser')
 })
 
 const toastError = ref<string | null>(null)
 const isToastVisible = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-watch(saveError, (value) => {
+watch(saveError, value => {
   if (toastTimer) {
     clearTimeout(toastTimer)
     toastTimer = null
@@ -153,7 +205,7 @@ onBeforeUnmount(() => {
 
 // --- JSON preview ---
 const attrsJson = computed(() => {
-  if (!selectedType.value) return ""
+  if (!selectedType.value) return ''
   const raw = serializeTypeAttrs(selectedType.value.parsedAttrs)
   try {
     return JSON.stringify(JSON.parse(raw), null, 2)
@@ -181,29 +233,47 @@ const attrsJson = computed(() => {
       <div v-if="!selectedType" class="type-editor__empty">
         <div class="empty-state">
           <span class="material-symbols-outlined empty-state__icon">edit_note</span>
-          <p class="empty-state__text">{{ t("types.selectTypeToEdit") }}</p>
-          <p class="empty-state__hint">{{ t("types.orCreateNew") }}</p>
+          <p class="empty-state__text">{{ t('types.selectTypeToEdit') }}</p>
+          <p class="empty-state__hint">{{ t('types.orCreateNew') }}</p>
         </div>
       </div>
 
       <template v-else>
         <div class="type-editor__content">
-          <TypeForm
-            :selected-type="selectedType"
-            :owner-display-name="selectedTypeOwnerName"
-            :is-dirty="isDirty"
-            :is-saving="isSaving"
-            :is-type-in-use="isTypeInUse"
-            :can-share="canShareSelectedType"
-            @save="handleSave"
-            @delete="handleDelete"
-            @update-name="handleTypeNameUpdate"
-            @update-default-directory-path="handleDefaultDirectoryPathUpdate"
-            :on-mutate-property="handleMutateProperty"
-            @add-property="addCustomProperty(selectedType)"
-            @remove-property="removeCustomProperty(selectedType, $event)"
-            @share="showShareModal = true"
-          />
+          <div class="type-editor__center">
+            <TypeForm
+              :selected-type="selectedType"
+              :owner-display-name="selectedTypeOwnerName"
+              :is-dirty="isDirty"
+              :is-saving="isSaving"
+              :is-type-in-use="isTypeInUse"
+              :can-share="canShareSelectedType"
+              @save="handleSave"
+              @delete="handleDelete"
+              @update-name="handleTypeNameUpdate"
+              @update-default-directory-path="handleDefaultDirectoryPathUpdate"
+              :on-mutate-property="handleMutateProperty"
+              @add-property="addCustomProperty(selectedType)"
+              @remove-property="removeCustomProperty(selectedType, $event)"
+              @share="showShareModal = true"
+            />
+
+            <TypeDocumentPanel
+              :content="documentContent"
+              :file-id="documentFileId"
+              :is-loading="isDocLoading"
+              :is-saving="isDocSaving"
+              :is-dirty="isDocDirty"
+              :is-new-type="!!selectedType._isNew"
+              :versions="docVersions"
+              :is-loading-versions="isLoadingVersions"
+              :error="docError"
+              @update:content="setDocumentContent"
+              @save="handleDocumentSave"
+              @load-versions="handleDocumentLoadVersions"
+              @load-version="handleDocumentLoadVersion"
+            />
+          </div>
 
           <TypeAside
             :attrs-json="attrsJson"
@@ -223,10 +293,14 @@ const attrsJson = computed(() => {
       max-width="400px"
       @close="cancelSwitch"
     >
-      <p class="unsaved-dialog__text">{{ t("types.unsavedChangesText") }}</p>
+      <p class="unsaved-dialog__text">{{ t('types.unsavedChangesText') }}</p>
       <template #footer>
-        <button type="button" class="btn btn--secondary" @click="cancelSwitch">{{ t("types.stay") }}</button>
-        <button type="button" class="btn btn--danger" @click="discardAndSwitch">{{ t("types.discardAndSwitch") }}</button>
+        <button type="button" class="btn btn--secondary" @click="cancelSwitch">
+          {{ t('types.stay') }}
+        </button>
+        <button type="button" class="btn btn--danger" @click="discardAndSwitch">
+          {{ t('types.discardAndSwitch') }}
+        </button>
       </template>
     </BaseModal>
 
@@ -251,8 +325,12 @@ const attrsJson = computed(() => {
 
 <style scoped>
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Layout */
@@ -276,6 +354,14 @@ const attrsJson = computed(() => {
   gap: 28px;
   align-items: flex-start;
   animation: fadeIn 0.25s ease;
+}
+
+.type-editor__center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 /* Empty state */
@@ -388,7 +474,9 @@ const attrsJson = computed(() => {
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .toast-enter-from,

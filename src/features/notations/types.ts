@@ -2,7 +2,7 @@ import type {
   NodeTypeResponse,
   LinkTypeResponse,
   ComponentResponse,
-  RelationResponse
+  RelationResponse,
 } from '../../types/api'
 import type { CustomProperty, DiagramStyle, NodeStyle } from './notationAttrs'
 
@@ -13,6 +13,7 @@ export interface TypeParsedAttrs {
   height?: number
   cornerRadius?: number
   defaultDirectoryPath?: string
+  documentFileId?: string
   customProperties?: CustomProperty[]
 }
 
@@ -79,5 +80,5 @@ export const createEmptyEditorState = (): NotationEditorState => ({
   linkTypes: [],
   components: [],
   relations: [],
-  relationRules: []
+  relationRules: [],
 })

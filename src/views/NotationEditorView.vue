@@ -9,7 +9,6 @@ import MainLayout from "../layouts/MainLayout.vue";
 import AppFooter from "../components/layout/AppFooter.vue";
 import BaseModal from "../components/modals/BaseModal.vue";
 import ShareAccessModal from "../components/modals/ShareAccessModal.vue";
-import {ImageExporter, SvgExporter} from "@ngroznykh/papirus";
 import {apiGet} from "../composables/useApi";
 import {useAuth} from "../composables/useAuth";
 import {useCanShare} from "../composables/useCanShare";
@@ -20,15 +19,15 @@ import NotationDiagram from "../features/notations/components/NotationDiagram.vu
 import NotationEntityModal from "../features/notations/components/NotationEntityModal.vue";
 import CustomPropertiesPanel from "../features/notations/components/CustomPropertiesPanel.vue";
 import NodeStylePanel from "../features/notations/components/NodeStylePanel.vue";
+import TabPanel from "../components/layout/TabPanel.vue";
 import {useNotationEditor} from "../features/notations/composables/useNotationEditor";
 import {useNotationEntity, appendTagValue} from "../features/notations/composables/useNotationEntity";
+import {useNotationToolbarState} from "../features/notations/composables/useNotationToolbarState";
+import {useNotationExport} from "../features/notations/composables/useNotationExport";
 import type {DiagramStyle} from "../features/notations/notationAttrs";
-import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../features/notations/notationAttrs";
+import {createId} from "../features/notations/notationAttrs";
 import type {NodeResponse, LinkResponse} from "../types/api";
 import type {
-  NotationEditorState,
-  EditorNodeType,
-  EditorLinkType,
   EditorComponent,
   EditorRelation,
   EditorRelationRule
@@ -89,6 +88,16 @@ const {
 } = useNotationEntity(state);
 
 const NEW_TYPE_VALUE = "__new__";
+
+const userId = computed(() => currentUser.value?.id ?? null);
+
+const {
+  gridVisible,
+  miniMapVisible,
+  snapEnabled,
+  alignEnabled,
+  rulersEnabled
+} = useNotationToolbarState(userId);
 
 const diagramRef = ref<InstanceType<typeof NotationDiagram> | null>(null);
 const canUndo = ref(false);
@@ -191,79 +200,28 @@ const selectedDiagramStyle = computed(() => {
   return state.value.relations.find(r => r.id === entity.id)?.parsedAttrs.diagramStyle;
 });
 
-// Toggle states
-const gridVisible = ref(true);
-const miniMapVisible = ref(true);
-const snapEnabled = ref(false);
-const alignEnabled = ref(true);
-const rulersEnabled = ref(true);
+const importNotationInputRef = ref<HTMLInputElement | null>(null);
+
+const {
+  showAttrsJson,
+  attrsJsonContent,
+  exportNotation,
+  exportDiagramAsPng,
+  exportDiagramAsSvg,
+  triggerNotationImport,
+  handleNotationImportChange,
+  openAttrsJson,
+  copyAttrsJson
+} = useNotationExport(notation, state, selectedEntity, diagramRenderer, saveError, saveSuccess, importNotationInputRef);
+
 const selectionSyncEnabled = ref(true);
 
-type ToolbarState = {
-  gridVisible: boolean;
-  miniMapVisible: boolean;
-  snapEnabled: boolean;
-  alignEnabled: boolean;
-  rulersEnabled: boolean;
-};
+const activeRightTab = ref("properties");
 
-const TOOLBAR_STATE_STORAGE_PREFIX = "warchi:notation-editor:toolbar-state";
-const getToolbarStateStorageKey = (userId: string | null): string =>
-  userId ? `${TOOLBAR_STATE_STORAGE_PREFIX}:${userId}` : `${TOOLBAR_STATE_STORAGE_PREFIX}:anonymous`;
-
-const readToolbarState = (userId: string | null): Partial<ToolbarState> | null => {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(getToolbarStateStorageKey(userId));
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<ToolbarState>;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-
-const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
-  if (!stateValue) return;
-  if (typeof stateValue.gridVisible === "boolean") gridVisible.value = stateValue.gridVisible;
-  if (typeof stateValue.miniMapVisible === "boolean") miniMapVisible.value = stateValue.miniMapVisible;
-  if (typeof stateValue.snapEnabled === "boolean") snapEnabled.value = stateValue.snapEnabled;
-  if (typeof stateValue.alignEnabled === "boolean") alignEnabled.value = stateValue.alignEnabled;
-  if (typeof stateValue.rulersEnabled === "boolean") rulersEnabled.value = stateValue.rulersEnabled;
-};
-
-const persistToolbarState = (userId: string | null) => {
-  if (typeof window === "undefined") return;
-  const nextState: ToolbarState = {
-    gridVisible: gridVisible.value,
-    miniMapVisible: miniMapVisible.value,
-    snapEnabled: snapEnabled.value,
-    alignEnabled: alignEnabled.value,
-    rulersEnabled: rulersEnabled.value
-  };
-  window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState));
-};
-const PROPERTIES_PANEL_DEFAULT_HEIGHT = 240;
-const propertiesPanelHeight = ref(PROPERTIES_PANEL_DEFAULT_HEIGHT);
-
-const resetPropertiesPanelHeight = () => {
-  propertiesPanelHeight.value = PROPERTIES_PANEL_DEFAULT_HEIGHT;
-};
-
-watch(
-  () => currentUser.value?.id ?? null,
-  (userId) => {
-    applyToolbarState(readToolbarState(userId));
-  },
-  { immediate: true }
-);
-
-watch(
-  [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, () => currentUser.value?.id ?? null],
-  ([, , , , , userId]) => {
-    persistToolbarState(userId as string | null);
-  }
-);
+const rightPanelTabs = computed(() => [
+  { id: "properties", label: t("notations.propertiesTab"), icon: "tune" },
+  { id: "style", label: t("notations.figureStyleTab"), icon: "palette" }
+]);
 
 const focusSelectedOnDiagram = (kind: "component" | "relation", id: string) => {
   if (!selectionSyncEnabled.value) return;
@@ -307,391 +265,6 @@ watch(interactionManager, (im) => {
   });
 }, { immediate: true });
 
-// JSON attrs dialog
-const showAttrsJson = ref(false);
-const attrsJsonContent = ref("");
-const importNotationInputRef = ref<HTMLInputElement | null>(null);
-
-type NotationExportPayloadV1 = {
-  format: "warchi-notation-export";
-  version: 1;
-  exportedAt: string;
-  notation: {
-    id: string;
-    name: string;
-    version: string;
-  };
-  state: NotationEditorState;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const toStringOr = (value: unknown, fallback: string): string =>
-  typeof value === "string" && value.trim().length > 0 ? value : fallback;
-
-const toObjectArray = (value: unknown): Record<string, unknown>[] =>
-  Array.isArray(value) ? value.filter(isRecord) : [];
-
-const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-
-const sanitizeFileName = (value: string): string =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-const buildExportState = (): NotationEditorState => {
-  const source = cloneJson(state.value);
-  const components = source.components.filter((component) => !component._isDeleted);
-  const relations = source.relations.filter((relation) => !relation._isDeleted);
-
-  const componentIds = new Set(components.map((component) => component.id));
-  const relationIds = new Set(relations.map((relation) => relation.id));
-  const usedNodeTypeIds = new Set(components.map((component) => component.nodeTypeId));
-  const usedLinkTypeIds = new Set(relations.map((relation) => relation.linkTypeId));
-
-  const relationRules = source.relationRules
-    .filter(
-      (rule) =>
-        !rule._isDeleted &&
-        componentIds.has(rule.fromComponentId) &&
-        componentIds.has(rule.toComponentId)
-    )
-    .map((rule) => ({
-      ...rule,
-      allowedRelationIds: Array.from(
-        new Set(rule.allowedRelationIds.filter((relationId) => relationIds.has(relationId)))
-      )
-    }))
-    .filter((rule) => rule.allowedRelationIds.length > 0);
-
-  return {
-    ...source,
-    nodeTypes: source.nodeTypes.filter((typeItem) => usedNodeTypeIds.has(typeItem.id)),
-    linkTypes: source.linkTypes.filter((typeItem) => usedLinkTypeIds.has(typeItem.id)),
-    components,
-    relations,
-    relationRules
-  };
-};
-
-const exportNotation = () => {
-  const currentNotation = notation.value;
-  const fallbackNotationId = state.value.notationId || "notation";
-
-  const payload: NotationExportPayloadV1 = {
-    format: "warchi-notation-export",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    notation: {
-      id: currentNotation?.id ?? fallbackNotationId,
-      name: currentNotation?.name ?? "Notation",
-      version: currentNotation?.version ?? "1.0.0"
-    },
-    state: buildExportState()
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json;charset=utf-8"
-  });
-  const url = URL.createObjectURL(blob);
-  const fileNameBase = sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || "notation";
-  const fileName = `${fileNameBase}-export.json`;
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
-
-const getDiagramExportBaseName = () => {
-  const currentNotation = notation.value;
-  const fallbackNotationId = state.value.notationId || "notation";
-  return sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || "notation";
-};
-
-const getDiagramExportBackgroundColor = () =>
-  getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#ffffff";
-
-const exportDiagramAsPng = async () => {
-  const renderer = diagramRenderer.value;
-  if (!renderer) {
-    saveError.value = "Диаграмма еще не готова к экспорту";
-    return;
-  }
-
-  const exporter = new ImageExporter(renderer);
-  const fileName = `${getDiagramExportBaseName()}.png`;
-  await exporter.download(fileName, {
-    scale: 2,
-    padding: 24,
-    backgroundColor: getDiagramExportBackgroundColor()
-  });
-};
-
-const exportDiagramAsSvg = () => {
-  const renderer = diagramRenderer.value;
-  if (!renderer) {
-    saveError.value = "Диаграмма еще не готова к экспорту";
-    return;
-  }
-
-  const exporter = new SvgExporter(renderer);
-  const fileName = `${getDiagramExportBaseName()}.svg`;
-  exporter.download(fileName, {
-    includeBackground: true,
-    backgroundColor: getDiagramExportBackgroundColor(),
-    padding: 24
-  });
-};
-
-const normalizeImportedState = (raw: unknown): NotationEditorState => {
-  const source = isRecord(raw) && isRecord(raw.state) ? raw.state : raw;
-  if (!isRecord(source)) {
-    throw new Error("Некорректный формат файла импорта");
-  }
-
-  const baseOwnerId = state.value.ownerId;
-  const baseNotationId = state.value.notationId;
-
-  const nodeTypeIdMap = new Map<string, string>();
-  const linkTypeIdMap = new Map<string, string>();
-  const componentIdMap = new Map<string, string>();
-  const relationIdMap = new Map<string, string>();
-
-  const nodeTypes: EditorNodeType[] = toObjectArray(source.nodeTypes).map((item) => {
-    const importedId = toStringOr(item.id, createId());
-    const id = createId();
-    nodeTypeIdMap.set(importedId, id);
-    return {
-      id,
-      name: toStringOr(item.name, "Новый тип узла"),
-      ownerId: toStringOr(item.ownerId, baseOwnerId),
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {})),
-      _isNew: true
-    };
-  });
-
-  const linkTypes: EditorLinkType[] = toObjectArray(source.linkTypes).map((item) => {
-    const importedId = toStringOr(item.id, createId());
-    const id = createId();
-    linkTypeIdMap.set(importedId, id);
-    return {
-      id,
-      name: toStringOr(item.name, "Новый тип связи"),
-      ownerId: toStringOr(item.ownerId, baseOwnerId),
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {})),
-      _isNew: true
-    };
-  });
-
-  if (nodeTypes.length === 0) {
-    nodeTypes.push({
-      id: createId(),
-      name: "Новый тип узла",
-      ownerId: baseOwnerId,
-      parsedAttrs: {},
-      _isNew: true
-    });
-  }
-  if (linkTypes.length === 0) {
-    linkTypes.push({
-      id: createId(),
-      name: "Новый тип связи",
-      ownerId: baseOwnerId,
-      parsedAttrs: {},
-      _isNew: true
-    });
-  }
-
-  const nodeTypeIds = new Set(nodeTypes.map((item) => item.id));
-  const linkTypeIds = new Set(linkTypes.map((item) => item.id));
-  const defaultNodeTypeId = nodeTypes[0]!.id;
-  const defaultLinkTypeId = linkTypes[0]!.id;
-
-  const components: EditorComponent[] = toObjectArray(source.components).map((item) => {
-    const importedComponentId = toStringOr(item.id, createId());
-    const importedNodeTypeId = toStringOr(item.nodeTypeId, defaultNodeTypeId);
-    const mappedNodeTypeId = nodeTypeIdMap.get(importedNodeTypeId) ?? importedNodeTypeId;
-    const id = createId();
-    componentIdMap.set(importedComponentId, id);
-    return {
-      id,
-      name: toStringOr(item.name, "Новый компонент"),
-      version: toStringOr(item.version, "1.0.0"),
-      notationId: baseNotationId,
-      ownerId: toStringOr(item.ownerId, baseOwnerId),
-      nodeTypeId: nodeTypeIds.has(mappedNodeTypeId) ? mappedNodeTypeId : defaultNodeTypeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {})),
-      _isNew: true,
-      _isDirty: false,
-      _isDeleted: false
-    };
-  });
-
-  const relations: EditorRelation[] = toObjectArray(source.relations).map((item) => {
-    const importedRelationId = toStringOr(item.id, createId());
-    const importedLinkTypeId = toStringOr(item.linkTypeId, defaultLinkTypeId);
-    const mappedLinkTypeId = linkTypeIdMap.get(importedLinkTypeId) ?? importedLinkTypeId;
-    const id = createId();
-    relationIdMap.set(importedRelationId, id);
-    return {
-      id,
-      name: toStringOr(item.name, "Новая связь"),
-      version: toStringOr(item.version, "1.0.0"),
-      notationId: baseNotationId,
-      ownerId: toStringOr(item.ownerId, baseOwnerId),
-      linkTypeId: linkTypeIds.has(mappedLinkTypeId) ? mappedLinkTypeId : defaultLinkTypeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {})),
-      _isNew: true,
-      _isDirty: false,
-      _isDeleted: false
-    };
-  });
-
-  const relationRules: EditorRelationRule[] = toObjectArray(source.relationRules).reduce<EditorRelationRule[]>(
-    (acc, item) => {
-      const importedFromId = toStringOr(item.fromComponentId, "");
-      const importedToId = toStringOr(item.toComponentId, "");
-      const fromComponentId = componentIdMap.get(importedFromId);
-      const toComponentId = componentIdMap.get(importedToId);
-      if (!fromComponentId || !toComponentId) return acc;
-
-      const rawRelationIds = Array.isArray(item.allowedRelationIds)
-        ? item.allowedRelationIds
-        : Array.isArray(item.allowedLinkTypeIds)
-          ? item.allowedLinkTypeIds
-          : [];
-
-      const allowedRelationIds = Array.from(
-        new Set(
-          rawRelationIds
-            .filter((relationId): relationId is string => typeof relationId === "string")
-            .map((relationId) => relationIdMap.get(relationId) ?? relationId)
-            .filter((relationId) => relations.some((relation) => relation.id === relationId))
-        )
-      );
-
-      acc.push({
-        id: createId(),
-        fromComponentId,
-        toComponentId,
-        allowedRelationIds,
-        _isNew: true,
-        _isDirty: false,
-        _isDeleted: false
-      });
-      return acc;
-    },
-    []
-  );
-
-  return {
-    notationId: baseNotationId,
-    ownerId: baseOwnerId,
-    nodeTypes,
-    linkTypes,
-    components,
-    relations,
-    relationRules
-  };
-};
-
-const triggerNotationImport = () => {
-  const input = importNotationInputRef.value;
-  if (!input) return;
-  input.value = "";
-  const inputWithShowPicker = input as HTMLInputElement & { showPicker?: () => void };
-  if (typeof inputWithShowPicker.showPicker === "function") {
-    inputWithShowPicker.showPicker();
-    return;
-  }
-  input.click();
-};
-
-const resetImportInput = () => {
-  if (importNotationInputRef.value) {
-    importNotationInputRef.value.value = "";
-  }
-};
-
-const handleNotationImportChange = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text) as unknown;
-    state.value = normalizeImportedState(parsed);
-    saveError.value = null;
-    saveSuccess.value = false;
-  } catch (error) {
-    saveError.value =
-      error instanceof Error
-        ? `Ошибка импорта: ${error.message}`
-        : "Ошибка импорта: не удалось прочитать файл";
-  } finally {
-    resetImportInput();
-  }
-};
-
-const openAttrsJson = () => {
-  const entity = selectedEntity.value;
-  if (!entity) {
-    // Show full state summary
-    const data = {
-      nodeTypes: state.value.nodeTypes.map(t => ({
-        id: t.id, name: t.name,
-        attrs: JSON.parse(serializeTypeAttrs(t.parsedAttrs))
-      })),
-      linkTypes: state.value.linkTypes.map(t => ({
-        id: t.id, name: t.name,
-        attrs: JSON.parse(serializeTypeAttrs(t.parsedAttrs))
-      })),
-      components: state.value.components.filter(c => !c._isDeleted).map(c => ({
-        id: c.id, name: c.name,
-        attrs: JSON.parse(serializeEntityAttrs(c.parsedAttrs))
-      })),
-      relations: state.value.relations.filter(r => !r._isDeleted).map(r => ({
-        id: r.id, name: r.name,
-        attrs: JSON.parse(serializeEntityAttrs(r.parsedAttrs))
-      }))
-    };
-    attrsJsonContent.value = JSON.stringify(data, null, 2);
-  } else if (entity.kind === "component") {
-    const item = state.value.components.find(c => c.id === entity.id);
-    if (item) {
-      attrsJsonContent.value = serializeEntityAttrs(item.parsedAttrs);
-      // Pretty print
-      attrsJsonContent.value = JSON.stringify(JSON.parse(attrsJsonContent.value), null, 2);
-    }
-  } else {
-    const item = state.value.relations.find(r => r.id === entity.id);
-    if (item) {
-      attrsJsonContent.value = serializeEntityAttrs(item.parsedAttrs);
-      attrsJsonContent.value = JSON.stringify(JSON.parse(attrsJsonContent.value), null, 2);
-    }
-  }
-  showAttrsJson.value = true;
-};
-
-const copyAttrsJson = () => {
-  navigator.clipboard.writeText(attrsJsonContent.value);
-};
-
 const handleStyleChange = (style: DiagramStyle) => {
   const entity = selectedEntity.value;
   if (!entity) return;
@@ -711,12 +284,16 @@ const handleStyleChange = (style: DiagramStyle) => {
   }
 };
 
-const handleItemChanged = (id: string) => {
-  if (selectedEntity.value?.kind === "component") {
-    markComponentDirty(id);
-  } else if (selectedEntity.value?.kind === "relation") {
-    markRelationDirty(id);
-  }
+const handleMutateItem = (id: string, apply: (item: EditorComponent | EditorRelation) => void) => {
+  const comp = state.value.components.find(c => c.id === id);
+  if (comp) { apply(comp); markComponentDirty(id); return; }
+  const rel = state.value.relations.find(r => r.id === id);
+  if (rel) { apply(rel); markRelationDirty(id); }
+};
+
+const handleMutateRelationRules = (apply: (rules: EditorRelationRule[]) => void) => {
+  apply(state.value.relationRules);
+  handleRelationRulesChanged();
 };
 
 const handleComponentTypeChanged = (componentId: string, nodeTypeId: string) => {
@@ -1012,10 +589,7 @@ onBeforeUnmount(() => {
       />
     </template>
     <template #default>
-      <NotationMainPanelLayout
-        :properties-height="propertiesPanelHeight"
-        @update:properties-height="propertiesPanelHeight = $event"
-      >
+      <NotationMainPanelLayout>
         <template #left>
           <NotationComponentList
             v-if="!isLoading"
@@ -1058,34 +632,35 @@ onBeforeUnmount(() => {
             />
           </div>
         </template>
-        <template #bottom>
-          <CustomPropertiesPanel
-            :selected-item="selectedItem"
-            :node-types="state.nodeTypes"
-            :link-types="state.linkTypes"
-            :type-properties="selectedItemTypeProperties"
-            :all-components="state.components"
-            :all-relations="state.relations"
-            :relation-rules="state.relationRules"
-            :is-component-type-locked="selectedComponentUsedInModelNodes"
-            :is-relation-type-locked="selectedRelationUsedInModelLinks"
-            :on-component-type-change="handleComponentTypeChanged"
-            :on-relation-type-change="handleRelationTypeChanged"
-            :on-create-node-type="handleCreateNodeType"
-            :on-create-relation-type="handleCreateRelationType"
-            :on-item-changed="handleItemChanged"
-            :on-relation-rules-changed="handleRelationRulesChanged"
-            :on-reset-panel-size="resetPropertiesPanelHeight"
-          />
-        </template>
         <template #right>
-          <NodeStylePanel
-            :selected-element-id="selectedDiagramElementId"
-            :interaction-manager="interactionManager"
-            :renderer="diagramRenderer"
-            :current-diagram-style="selectedDiagramStyle"
-            @style-change="handleStyleChange"
-          />
+          <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
+            <CustomPropertiesPanel
+              v-if="activeRightTab === 'properties'"
+              :selected-item="selectedItem"
+              :node-types="state.nodeTypes"
+              :link-types="state.linkTypes"
+              :type-properties="selectedItemTypeProperties"
+              :all-components="state.components"
+              :all-relations="state.relations"
+              :relation-rules="state.relationRules"
+              :is-component-type-locked="selectedComponentUsedInModelNodes"
+              :is-relation-type-locked="selectedRelationUsedInModelLinks"
+              :on-component-type-change="handleComponentTypeChanged"
+              :on-relation-type-change="handleRelationTypeChanged"
+              :on-create-node-type="handleCreateNodeType"
+              :on-create-relation-type="handleCreateRelationType"
+              :on-mutate-item="handleMutateItem"
+              :on-mutate-relation-rules="handleMutateRelationRules"
+            />
+            <NodeStylePanel
+              v-if="activeRightTab === 'style'"
+              :selected-element-id="selectedDiagramElementId"
+              :interaction-manager="interactionManager"
+              :renderer="diagramRenderer"
+              :current-diagram-style="selectedDiagramStyle"
+              @style-change="handleStyleChange"
+            />
+          </TabPanel>
         </template>
       </NotationMainPanelLayout>
     </template>
@@ -1099,7 +674,7 @@ onBeforeUnmount(() => {
     <Transition name="toast">
       <div v-if="isSaving" class="save-toast save-toast--progress">
         <span class="material-symbols-outlined save-toast__icon spin">sync</span>
-        <span>{{ saveProgress || 'Сохранение...' }}</span>
+        <span>{{ saveProgress || t('common.saving') }}</span>
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
         <span class="material-symbols-outlined save-toast__icon">check_circle</span>
@@ -1115,19 +690,19 @@ onBeforeUnmount(() => {
   <!-- Unsaved changes confirmation -->
   <BaseModal
     v-if="showLeaveDialog"
-    title="Несохранённые изменения"
+    :title="t('notations.unsavedChangesTitle')"
     max-width="400px"
     @close="cancelLeave"
   >
     <p class="leave-dialog__text">
-      У вас есть несохранённые изменения. Если вы покинете страницу, они будут потеряны.
+      {{ t('notations.unsavedChangesText') }}
     </p>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="cancelLeave">
-        Остаться
+        {{ t('notations.stayButton') }}
       </button>
       <button type="button" class="btn btn--danger" @click="confirmLeave">
-        Покинуть
+        {{ t('notations.leaveButton') }}
       </button>
     </template>
   </BaseModal>
@@ -1135,21 +710,22 @@ onBeforeUnmount(() => {
   <!-- Remove item confirmation -->
   <BaseModal
     v-if="showRemoveDialog"
-    title="Удаление элемента"
+    :title="t('notations.removeElementTitle')"
     max-width="400px"
     @close="cancelRemove"
   >
     <p class="leave-dialog__text">
-      Удалить {{ pendingRemove?.kind === 'component' ? 'компонент' : 'отношение' }}
-      <b>{{ pendingRemove?.name || 'Без имени' }}</b>?
-      Изменения применятся после сохранения нотации.
+      {{ pendingRemove?.kind === 'component'
+        ? t('notations.removeComponentConfirm', { name: pendingRemove?.name || t('common.unnamed') })
+        : t('notations.removeRelationConfirm', { name: pendingRemove?.name || t('common.unnamed') })
+      }}
     </p>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="cancelRemove">
-        Отмена
+        {{ t('common.cancel') }}
       </button>
       <button type="button" class="btn btn--danger" @click="confirmRemove">
-        Удалить
+        {{ t('common.delete') }}
       </button>
     </template>
   </BaseModal>
@@ -1168,10 +744,10 @@ onBeforeUnmount(() => {
         class="btn btn--secondary"
         @click="copyAttrsJson"
       >
-        Копировать
+        {{ t('notations.copyButton') }}
       </button>
       <button type="button" class="btn btn--secondary" @click="showAttrsJson = false">
-        Закрыть
+        {{ t('common.close') }}
       </button>
     </template>
   </BaseModal>
@@ -1184,20 +760,20 @@ onBeforeUnmount(() => {
     v-model:type-selection="componentTypeSelection"
     v-model:new-type-name="componentNewTypeName"
     v-model:style-preset="componentStylePreset"
-    title="Новый компонент"
+    :title="t('notations.newComponentTitle')"
     form-id="component-form"
-    name-label="Название компонента"
+    :name-label="t('notations.componentNameLabel')"
     name-placeholder="Component name"
-    version-label="Версия"
+    :version-label="t('notations.versionLabel')"
     version-placeholder="1.0.0"
-    tags-label="Теги"
+    :tags-label="t('notations.tagsLabel')"
     tags-placeholder="tag1, tag2"
-    type-label="Тип узла"
+    :type-label="t('notations.nodeTypeLabel')"
     :type-options="state.nodeTypes"
     :new-type-value="NEW_TYPE_VALUE"
-    new-type-label="Новый тип узла"
-    new-type-placeholder="Название типа"
-    style-label="Стиль фигуры"
+    :new-type-label="t('notations.newNodeTypeLabel')"
+    :new-type-placeholder="t('notations.typeNamePlaceholder')"
+    :style-label="t('notations.figureStyleLabel')"
     :style-presets="componentStylePresets"
     :suggestions="componentTagSuggestions"
     :error="componentFormError"
@@ -1214,20 +790,20 @@ onBeforeUnmount(() => {
     v-model:type-selection="relationTypeSelection"
     v-model:new-type-name="relationNewTypeName"
     v-model:style-preset="relationStylePreset"
-    title="Новое отношение"
+    :title="t('notations.newRelationTitle')"
     form-id="relation-form"
-    name-label="Название отношения"
+    :name-label="t('notations.relationNameLabel')"
     name-placeholder="Relation name"
-    version-label="Версия"
+    :version-label="t('notations.versionLabel')"
     version-placeholder="1.0.0"
-    tags-label="Теги"
+    :tags-label="t('notations.tagsLabel')"
     tags-placeholder="tag1, tag2"
-    type-label="Тип связи"
+    :type-label="t('notations.linkTypeLabel')"
     :type-options="state.linkTypes"
     :new-type-value="NEW_TYPE_VALUE"
-    new-type-label="Новый тип связи"
-    new-type-placeholder="Название типа"
-    style-label="Стиль связи"
+    :new-type-label="t('notations.newLinkTypeLabel')"
+    :new-type-placeholder="t('notations.typeNamePlaceholder')"
+    :style-label="t('notations.linkStyleLabel')"
     :style-presets="relationStylePresets"
     :suggestions="relationTagSuggestions"
     :error="relationFormError"
@@ -1238,7 +814,7 @@ onBeforeUnmount(() => {
 
   <ShareAccessModal
     v-if="showShareModal && notation"
-    title="Доступ к нотации"
+    :title="t('notations.notationAccessTitle')"
     resource-type="NOTATION"
     :resource-id="notation.id"
     @close="showShareModal = false"

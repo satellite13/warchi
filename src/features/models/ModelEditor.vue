@@ -22,6 +22,7 @@ import ModelPropertiesPanel from "./components/ModelPropertiesPanel.vue"
 import type { ToolbarButton } from "../notations/layout/IconToolbar.vue"
 import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from "../notations/notationAttrs"
 import NodeStylePanel from "../notations/components/NodeStylePanel.vue"
+import TabPanel from "../../components/layout/TabPanel.vue"
 import { bumpMinor, compareVersions } from "../../utils/version"
 import type { NotationMetaResponse } from "../../types/api"
 
@@ -56,10 +57,11 @@ const editingNoteInstanceId = ref<string | null>(null)
 const noteEditorText = ref("")
 const diagramRenderer = ref<any>(null)
 const diagramInteractionManager = ref<any>(null)
-const stylePanelCollapsed = ref(true)
-const rightStackRows = computed(() =>
-  stylePanelCollapsed.value ? "minmax(240px, 1fr) 46px" : "minmax(240px, 1fr) minmax(320px, 1fr)"
-)
+const activeRightTab = ref("properties")
+const rightPanelTabs = computed(() => [
+  { id: "properties", label: t("models.propertiesTab"), icon: "tune" },
+  { id: "style", label: t("models.figureStyleTab"), icon: "palette" }
+])
 const { canShare: canShareModel } = useCanShare(model, currentUser)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
@@ -2118,6 +2120,8 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   if (targetNodeInstance) {
     if (!targetNodeInstance.attrs) targetNodeInstance.attrs = {}
     targetNodeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
+    if (typeof style.width === "number") targetNodeInstance.width = style.width
+    if (typeof style.height === "number") targetNodeInstance.height = style.height
     markDiagramDirty(diagram.id)
     return
   }
@@ -2477,39 +2481,34 @@ onBeforeUnmount(() => {
         </div>
 
         <template #right>
-          <div class="model-right-stack" :style="{ gridTemplateRows: rightStackRows }">
-            <div class="model-right-stack__top">
-              <ModelPropertiesPanel
-                :active-notation-id="activeNotationId"
-                :selected-node="selectedNode"
-                :selected-link="selectedLink"
-                :node-binding-component-id="nodeBindingComponentId"
-                :link-binding-relation-id="linkBindingRelationId"
-                :available-components="availableNodeComponents"
-                :available-relations="availableLinkRelations"
-                :node-scoped-values="nodeScopedValues"
-                :link-scoped-values="linkScopedValues"
-                @bind-node-component="selectedNode && bindNodeComponent(selectedNode, $event)"
-                @bind-link-relation="selectedLink && bindLinkRelation(selectedLink, $event)"
-                @set-node-scoped-value="setNodeScopedValue"
-                @set-link-scoped-value="setLinkScopedValue"
-              />
-            </div>
-            <div class="model-right-stack__bottom" :class="{ 'model-right-stack__bottom--collapsed': stylePanelCollapsed }">
-              <NodeStylePanel
-                :selected-element-id="selectedCanvasElementId"
-                :interaction-manager="diagramInteractionManager"
-                :renderer="diagramRenderer"
-                :current-diagram-style="selectedElementDiagramStyle"
-                :show-panel-actions="true"
-                :style-panel-collapsed="stylePanelCollapsed"
-                :can-restore-style="hasDiagramStyleOverride"
-                @style-change="handleDiagramElementStyleChange"
-                @restore-style="restoreStyleFromNotation"
-                @toggle-collapse="stylePanelCollapsed = !stylePanelCollapsed"
-              />
-            </div>
-          </div>
+          <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
+            <ModelPropertiesPanel
+              v-if="activeRightTab === 'properties'"
+              :active-notation-id="activeNotationId"
+              :selected-node="selectedNode"
+              :selected-link="selectedLink"
+              :node-binding-component-id="nodeBindingComponentId"
+              :link-binding-relation-id="linkBindingRelationId"
+              :available-components="availableNodeComponents"
+              :available-relations="availableLinkRelations"
+              :node-scoped-values="nodeScopedValues"
+              :link-scoped-values="linkScopedValues"
+              @bind-node-component="selectedNode && bindNodeComponent(selectedNode, $event)"
+              @bind-link-relation="selectedLink && bindLinkRelation(selectedLink, $event)"
+              @set-node-scoped-value="setNodeScopedValue"
+              @set-link-scoped-value="setLinkScopedValue"
+            />
+            <NodeStylePanel
+              v-if="activeRightTab === 'style'"
+              :selected-element-id="selectedCanvasElementId"
+              :interaction-manager="diagramInteractionManager"
+              :renderer="diagramRenderer"
+              :current-diagram-style="selectedElementDiagramStyle"
+              :can-restore-style="hasDiagramStyleOverride"
+              @style-change="handleDiagramElementStyleChange"
+              @restore-style="restoreStyleFromNotation"
+            />
+          </TabPanel>
         </template>
       </ModelMainPanelLayout>
     </template>
@@ -2941,12 +2940,6 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 
-.model-right-stack {
-  height: 100%;
-  min-height: 0;
-  display: grid;
-}
-
 .model-canvas-area {
   position: relative;
   height: 100%;
@@ -3080,22 +3073,6 @@ onBeforeUnmount(() => {
 
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
-}
-
-.model-right-stack__top,
-.model-right-stack__bottom {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.model-right-stack__bottom {
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-}
-
-.model-right-stack__bottom--collapsed {
-  min-height: 46px;
 }
 
 .save-toast {

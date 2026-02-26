@@ -174,7 +174,10 @@ export const messages = {
       noAccessGranted: "Доступы еще не выданы",
       levelLabel: "Уровень",
       grantedByLabel: "Выдал",
-      revoke: "Отозвать"
+      revoke: "Отозвать",
+      loadSharesError: "Не удалось загрузить выданные доступы.",
+      grantShareError: "Не удалось выдать доступ.",
+      revokeShareError: "Не удалось отозвать доступ."
     },
     models: {
       entityName: "Модель",
@@ -251,7 +254,9 @@ export const messages = {
       stay: "Остаться",
       leave: "Покинуть",
       diagramJsonTitle: "JSON диаграммы",
-      copy: "Копировать"
+      copy: "Копировать",
+      propertiesTab: "Свойства",
+      figureStyleTab: "Стиль фигуры"
     },
     notations: {
       entityName: "Нотация",
@@ -277,7 +282,38 @@ export const messages = {
       showElementsPanel: "Показать панель элементов",
       hideElementsPanel: "Скрыть панель элементов",
       showStylesPanel: "Показать панель стилей",
-      hideStylesPanel: "Скрыть панель стилей"
+      hideStylesPanel: "Скрыть панель стилей",
+      diagramNotReady: "Диаграмма еще не готова к экспорту",
+      importFormatError: "Некорректный формат файла импорта",
+      importError: "Ошибка импорта: {message}",
+      importReadError: "Ошибка импорта: не удалось прочитать файл",
+      defaultNodeTypeName: "Новый тип узла",
+      defaultLinkTypeName: "Новый тип связи",
+      defaultRelationName: "Новая связь",
+      unsavedChangesTitle: "Несохранённые изменения",
+      unsavedChangesText: "У вас есть несохранённые изменения. Если вы покинете страницу, они будут потеряны.",
+      stayButton: "Остаться",
+      leaveButton: "Покинуть",
+      removeElementTitle: "Удаление элемента",
+      removeComponentConfirm: "Удалить компонент {name}? Изменения применятся после сохранения нотации.",
+      removeRelationConfirm: "Удалить отношение {name}? Изменения применятся после сохранения нотации.",
+      copyButton: "Копировать",
+      newComponentTitle: "Новый компонент",
+      componentNameLabel: "Название компонента",
+      versionLabel: "Версия",
+      tagsLabel: "Теги",
+      nodeTypeLabel: "Тип узла",
+      newNodeTypeLabel: "Новый тип узла",
+      typeNamePlaceholder: "Название типа",
+      figureStyleLabel: "Стиль фигуры",
+      newRelationTitle: "Новое отношение",
+      relationNameLabel: "Название отношения",
+      linkTypeLabel: "Тип связи",
+      newLinkTypeLabel: "Новый тип связи",
+      linkStyleLabel: "Стиль связи",
+      notationAccessTitle: "Доступ к нотации",
+      propertiesTab: "Свойства",
+      figureStyleTab: "Стиль фигуры"
     },
     docs: {
       sidebarTitle: "Документация",
@@ -366,7 +402,15 @@ export const messages = {
       missingFromType: "Недостающие из типа",
       noMissingProperties: "Нет недостающих свойств",
       inheritedFromType: "Унаследовано от типа",
-      typeShort: "Тип"
+      typeShort: "Тип",
+      validationNameRequired: "Нужно указать имя свойства",
+      validationRegexInvalid: "Регулярное выражение некорректно",
+      validationMinGtMax: "min не может быть больше max",
+      validationEnumEmpty: "Для enum нужно указать значения",
+      validationRequiredDefault: "Для обязательного поля нужно задать значение по умолчанию",
+      errorInsufficientPermissions: "Недостаточно прав для редактирования типов. Войдите заново или обратитесь к администратору.",
+      errorSaveType: "Ошибка сохранения типа: {message}",
+      errorDeleteType: "Ошибка удаления типа: {message}"
     },
     diagram: {
       selectElementToEditProperties: "Выберите элемент на диаграмме",
@@ -690,7 +734,10 @@ export const messages = {
       noAccessGranted: "No access granted yet",
       levelLabel: "Level",
       grantedByLabel: "Granted by",
-      revoke: "Revoke"
+      revoke: "Revoke",
+      loadSharesError: "Failed to load granted access.",
+      grantShareError: "Failed to grant access.",
+      revokeShareError: "Failed to revoke access."
     },
     models: {
       entityName: "Model",
@@ -767,7 +814,9 @@ export const messages = {
       stay: "Stay",
       leave: "Leave",
       diagramJsonTitle: "Diagram JSON",
-      copy: "Copy"
+      copy: "Copy",
+      propertiesTab: "Properties",
+      figureStyleTab: "Figure Style"
     },
     notations: {
       entityName: "Notation",
@@ -793,7 +842,38 @@ export const messages = {
       showElementsPanel: "Show elements panel",
       hideElementsPanel: "Hide elements panel",
       showStylesPanel: "Show styles panel",
-      hideStylesPanel: "Hide styles panel"
+      hideStylesPanel: "Hide styles panel",
+      diagramNotReady: "Diagram is not ready for export",
+      importFormatError: "Invalid import file format",
+      importError: "Import error: {message}",
+      importReadError: "Import error: failed to read file",
+      defaultNodeTypeName: "New node type",
+      defaultLinkTypeName: "New link type",
+      defaultRelationName: "New relation",
+      unsavedChangesTitle: "Unsaved changes",
+      unsavedChangesText: "You have unsaved changes. If you leave this page, they will be lost.",
+      stayButton: "Stay",
+      leaveButton: "Leave",
+      removeElementTitle: "Remove element",
+      removeComponentConfirm: "Delete component {name}? Changes will apply after saving the notation.",
+      removeRelationConfirm: "Delete relation {name}? Changes will apply after saving the notation.",
+      copyButton: "Copy",
+      newComponentTitle: "New component",
+      componentNameLabel: "Component name",
+      versionLabel: "Version",
+      tagsLabel: "Tags",
+      nodeTypeLabel: "Node type",
+      newNodeTypeLabel: "New node type",
+      typeNamePlaceholder: "Type name",
+      figureStyleLabel: "Figure style",
+      newRelationTitle: "New relation",
+      relationNameLabel: "Relation name",
+      linkTypeLabel: "Link type",
+      newLinkTypeLabel: "New link type",
+      linkStyleLabel: "Link style",
+      notationAccessTitle: "Notation access",
+      propertiesTab: "Properties",
+      figureStyleTab: "Figure Style"
     },
     docs: {
       sidebarTitle: "Documentation",
@@ -882,7 +962,15 @@ export const messages = {
       missingFromType: "Missing from type",
       noMissingProperties: "No missing properties",
       inheritedFromType: "Inherited from type",
-      typeShort: "Type"
+      typeShort: "Type",
+      validationNameRequired: "Property name is required",
+      validationRegexInvalid: "Invalid regular expression",
+      validationMinGtMax: "min cannot be greater than max",
+      validationEnumEmpty: "Enum values are required",
+      validationRequiredDefault: "Required field needs a default value",
+      errorInsufficientPermissions: "Insufficient permissions to edit types. Please sign in again or contact an administrator.",
+      errorSaveType: "Failed to save type: {message}",
+      errorDeleteType: "Failed to delete type: {message}"
     },
     diagram: {
       selectElementToEditProperties: "Select an element on the diagram",

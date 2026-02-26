@@ -1,16 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue"
+import { ref, computed, watch, onBeforeUnmount } from "vue"
 import { useI18n } from "vue-i18n"
 
-const props = withDefaults(defineProps<{
-  propertiesHeight?: number
-}>(), {
-  propertiesHeight: 240
-})
-
-const emit = defineEmits<{
-  (e: "update:propertiesHeight", value: number): void
-}>()
 const { t } = useI18n()
 
 const STORAGE_KEY = "warchi:notation-editor:workspace"
@@ -19,7 +10,6 @@ type WorkspaceSettings = {
   rightCollapsed: boolean
   leftWidth: number
   rightWidth: number
-  propertiesHeight: number
 }
 
 function readWorkspaceSettings(): Partial<WorkspaceSettings> {
@@ -40,8 +30,7 @@ function persistWorkspaceSettings(): void {
     leftCollapsed: leftCollapsed.value,
     rightCollapsed: rightCollapsed.value,
     leftWidth: leftWidth.value,
-    rightWidth: rightWidth.value,
-    propertiesHeight: props.propertiesHeight ?? 240
+    rightWidth: rightWidth.value
   }
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -78,21 +67,12 @@ function toggleLeft() {
   leftCollapsed.value = !leftCollapsed.value
 }
 
-const MIN_HEIGHT = 180
-const MAX_HEIGHT = 520
-const MIN_DIAGRAM_HEIGHT = 180
-const RESIZER_HEIGHT = 10
-let dragStartY = 0
-let dragStartHeight = 240
-let dragging = false
 const MIN_SIDE_WIDTH = 260
 const MAX_SIDE_WIDTH = 560
 type SideResizeTarget = "left" | "right"
 let resizingSide: SideResizeTarget | null = null
 let sideDragStartX = 0
 let sideDragStartWidth = 0
-const centerRef = ref<HTMLElement | null>(null)
-let centerResizeObserver: ResizeObserver | null = null
 
 function clampSideWidth(value: number): number {
   return Math.max(MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, value))
@@ -102,48 +82,6 @@ leftWidth.value =
   typeof savedSettings.leftWidth === "number" ? clampSideWidth(savedSettings.leftWidth) : leftWidth.value
 rightWidth.value =
   typeof savedSettings.rightWidth === "number" ? clampSideWidth(savedSettings.rightWidth) : rightWidth.value
-
-function getDynamicMaxHeight(): number {
-  const centerHeight = centerRef.value?.clientHeight ?? 0
-  if (centerHeight <= 0) return MAX_HEIGHT
-  const byAvailableSpace = centerHeight - MIN_DIAGRAM_HEIGHT - RESIZER_HEIGHT
-  return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, byAvailableSpace))
-}
-
-function clampHeight(value: number): number {
-  const dynamicMaxHeight = getDynamicMaxHeight()
-  return Math.max(MIN_HEIGHT, Math.min(dynamicMaxHeight, value))
-}
-
-function enforceHeightBounds() {
-  const current = props.propertiesHeight ?? 240
-  const clamped = clampHeight(current)
-  if (clamped !== current) {
-    emit("update:propertiesHeight", clamped)
-  }
-}
-
-function onMouseMove(event: MouseEvent) {
-  if (!dragging) return
-  const deltaY = event.clientY - dragStartY
-  const nextHeight = clampHeight(dragStartHeight - deltaY)
-  emit("update:propertiesHeight", nextHeight)
-}
-
-function stopDragging() {
-  if (!dragging) return
-  dragging = false
-  window.removeEventListener("mousemove", onMouseMove)
-  window.removeEventListener("mouseup", stopDragging)
-}
-
-function startDragging(event: MouseEvent) {
-  dragging = true
-  dragStartY = event.clientY
-  dragStartHeight = clampHeight(props.propertiesHeight ?? 240)
-  window.addEventListener("mousemove", onMouseMove)
-  window.addEventListener("mouseup", stopDragging)
-}
 
 function onSideResizeMove(event: MouseEvent) {
   if (!resizingSide) return
@@ -175,39 +113,12 @@ function startSideResize(target: SideResizeTarget, event: MouseEvent) {
   window.addEventListener("mouseup", stopSideResize)
 }
 
-onMounted(() => {
-  const storedHeight =
-    typeof savedSettings.propertiesHeight === "number" ? clampHeight(savedSettings.propertiesHeight) : null
-  if (storedHeight !== null && storedHeight !== props.propertiesHeight) {
-    emit("update:propertiesHeight", storedHeight)
-  }
-  enforceHeightBounds()
-  if (centerRef.value) {
-    centerResizeObserver = new ResizeObserver(() => {
-      enforceHeightBounds()
-    })
-    centerResizeObserver.observe(centerRef.value)
-  }
-})
-
-watch(
-  () => props.propertiesHeight,
-  () => {
-    enforceHeightBounds()
-  }
-)
-
-watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth, () => props.propertiesHeight], () => {
+watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
   persistWorkspaceSettings()
 })
 
 onBeforeUnmount(() => {
-  stopDragging()
   stopSideResize()
-  if (centerResizeObserver) {
-    centerResizeObserver.disconnect()
-    centerResizeObserver = null
-  }
 })
 </script>
 
@@ -217,22 +128,8 @@ onBeforeUnmount(() => {
       <aside class="notation-panel__left" :class="{ 'notation-panel__left--collapsed': leftCollapsed }">
         <slot name="left" />
       </aside>
-      <section ref="centerRef" class="notation-panel__center">
-        <div class="notation-panel__diagram">
-          <slot />
-        </div>
-        <div
-          class="notation-panel__resizer"
-          role="separator"
-          aria-orientation="horizontal"
-          :title="t('notations.resizePropertiesPanelHeight')"
-          @mousedown.prevent="startDragging"
-        >
-          <span class="notation-panel__resizer-handle"></span>
-        </div>
-        <div class="notation-panel__properties" :style="{ height: `${propertiesHeight}px` }">
-          <slot name="bottom" />
-        </div>
+      <section class="notation-panel__center">
+        <slot />
       </section>
       <aside class="notation-panel__right" :class="{ 'notation-panel__right--collapsed': rightCollapsed }">
         <slot name="right" />
@@ -363,56 +260,6 @@ onBeforeUnmount(() => {
 }
 
 .notation-panel__side-resizer:hover .notation-panel__side-resizer-handle {
-  opacity: 1;
-  background: var(--primary);
-}
-
-.notation-panel__diagram {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.notation-panel__properties {
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-  overflow: visible;
-  position: relative;
-}
-
-.notation-panel__resizer {
-  height: 10px;
-  margin-top: -5px;
-  margin-bottom: -5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: row-resize;
-  z-index: 3;
-  position: relative;
-}
-
-.notation-panel__resizer::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: var(--border);
-  transform: translateY(-50%);
-}
-
-.notation-panel__resizer-handle {
-  width: 42px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--text-subtle);
-  opacity: 0.55;
-  transition: opacity 0.15s ease, background 0.15s ease;
-}
-
-.notation-panel__resizer:hover .notation-panel__resizer-handle {
   opacity: 1;
   background: var(--primary);
 }

@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
+import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
 import type {DiagramStyle} from "../notationAttrs";
 import {
   getAllComponentPresets,
@@ -21,8 +22,6 @@ const props = defineProps<{
   selectedElementId: string | null;
   interactionManager: InteractionManager | null;
   renderer: DiagramRenderer | null;
-  showPanelActions?: boolean;
-  stylePanelCollapsed?: boolean;
   canRestoreStyle?: boolean;
   currentDiagramStyle?: DiagramStyle;
 }>();
@@ -30,7 +29,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
   (e: "restore-style"): void;
-  (e: "toggle-collapse"): void;
 }>();
 const { t } = useI18n();
 
@@ -480,6 +478,8 @@ const AVAILABLE_ICONS = [
   "role", "rounded_rectangle", "service", "stakeholder", "system_software",
   "text", "value_stream", "value", "work_package"
 ] as const;
+
+const AVAILABLE_ICON_OPTIONS = AVAILABLE_ICONS.map((name) => ({ id: name, label: name }));
 
 const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; labelKey: string }> = [
   { value: "rectangle", labelKey: "nodeStyle.shapeRectangle" },
@@ -1496,7 +1496,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           </svg>
           <span>{{ elementType === 'edge' ? t("diagram.link") : t("nodeStyle.figure") }}</span>
         </div>
-        <div v-if="showPanelActions" class="sp-header__actions">
+        <div v-if="canRestoreStyle" class="sp-header__actions">
           <button
             type="button"
             class="sp-header__btn"
@@ -1506,21 +1506,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           >
             <span class="material-symbols-outlined">restart_alt</span>
           </button>
-          <button
-            type="button"
-            class="sp-header__btn"
-            :title="stylePanelCollapsed ? t('nodeStyle.expandStylePanel') : t('nodeStyle.collapseStylePanel')"
-            @click="emit('toggle-collapse')"
-          >
-            <span class="material-symbols-outlined">
-              {{ stylePanelCollapsed ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}
-            </span>
-          </button>
         </div>
       </div>
 
       <!-- Preset bar -->
-      <div v-show="!stylePanelCollapsed" class="sp-preset">
+      <div  class="sp-preset">
         <select
           class="sp-select sp-select--preset"
           :value="elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset"
@@ -1563,7 +1553,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
       <!-- Save preset inline form -->
       <Transition name="sp-slide">
-        <div v-if="showSavePresetForm && !stylePanelCollapsed" class="sp-save-form">
+        <div v-if="showSavePresetForm" class="sp-save-form">
           <input
             v-model="newPresetName"
             class="sp-input sp-save-form__input"
@@ -1581,7 +1571,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </Transition>
 
       <!-- Scrollable body -->
-      <div v-show="!stylePanelCollapsed" class="sp-body">
+      <div  class="sp-body">
 
         <!-- ==================== EDGE PANEL ==================== -->
         <template v-if="elementType === 'edge'">
@@ -2017,10 +2007,23 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.icon") }}</span>
                   <div class="sp-icon-select">
-                    <select class="sp-select sp-select--flex" :value="iconName" @change="handleIconChange(($event.target as HTMLSelectElement).value)">
-                      <option value="">{{ t("nodeStyle.none") }}</option>
-                      <option v-for="name in AVAILABLE_ICONS" :key="name" :value="name">{{ name }}</option>
-                    </select>
+                    <SearchableSelect
+                      :model-value="iconName"
+                      :options="AVAILABLE_ICON_OPTIONS"
+                      allow-empty
+                      :empty-label="t('nodeStyle.none')"
+                      :placeholder="t('nodeStyle.none')"
+                      :search-placeholder="t('common.search')"
+                      :empty-text="t('common.nothingFound')"
+                      @update:model-value="handleIconChange"
+                    >
+                      <template #option="{ option }">
+                        <span class="sp-icon-option">
+                          <img class="sp-icon-option__preview" :src="`/icons/${option.id}.svg`" :alt="option.label">
+                          {{ option.label }}
+                        </span>
+                      </template>
+                    </SearchableSelect>
                     <img v-if="iconName" class="sp-icon-select__preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
                   </div>
                 </div>
@@ -2657,6 +2660,19 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 .sp-icon-select__preview {
   width: 22px;
   height: 22px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.sp-icon-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-icon-option__preview {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   opacity: 0.7;
 }

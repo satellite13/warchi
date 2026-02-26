@@ -4,9 +4,26 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.18] - 2026-02-26
+
+### Added
+- SearchableSelect component with search, custom slots, and `allowEmpty` support.
+- TabPanel component with icon tabs and active tab underline.
+- Tabbed right panel in notation editor (Properties + Figure Style tabs), replacing the bottom resizable properties panel.
+- Tabbed right panel in model editor, replacing the collapsible stack layout.
+- CollapseSection, EntityCatalog shared components.
+- `useNotationExport`, `useNotationToolbarState` composables.
+- Utility modules: `number.ts`, `resolveOwnerNames.ts`, `forms.css`.
+
 ### Changed
-- Updated `@ngroznykh/papirus` dependency to `0.3.15`.
-- MiniMap: added `contentMargin: 200` for extended view panning in model and notation editors.
+- TypeSelectSection: replaced native `<select>` with SearchableSelect (with "Create new type" option).
+- NodeStylePanel: replaced icon `<select>` with SearchableSelect featuring SVG icon previews; removed collapse logic.
+- RelationRulesSection: replaced inline dropdown with SearchableSelect, removed ~115 lines of CSS.
+- NotationMainPanelLayout: removed bottom slot, resizer, and properties height logic.
+- Refactored ModelsCatalog and NotationsCatalog to use shared EntityCatalog.
+- Refactored PropertyRow, TypeForm, useTypeEditor, useCustomProperties.
+- Simplified AdminUsersView, EntityRenameModal, useAccessShares.
+- Updated `@ngroznykh/papirus` to `0.3.16`, `vue` to `3.5.29`, and dev dependencies.
 
 ## [0.0.17] - 2026-02-25
 

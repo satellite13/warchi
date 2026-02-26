@@ -1,86 +1,98 @@
 <script setup lang="ts">
-import {ref, computed, onMounted, onBeforeUnmount, nextTick} from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 
-export type SelectOption = { id: string; label: string };
+export type SelectOption = { id: string; label: string }
 
-const props = withDefaults(defineProps<{
-  modelValue: string;
-  options: SelectOption[];
-  placeholder?: string;
-  searchPlaceholder?: string;
-  emptyText?: string;
-  disabled?: boolean;
-  allowEmpty?: boolean;
-  emptyLabel?: string;
-}>(), {
-  placeholder: "",
-  searchPlaceholder: "",
-  emptyText: "",
-  emptyLabel: ""
-});
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    options: SelectOption[]
+    placeholder?: string
+    searchPlaceholder?: string
+    emptyText?: string
+    disabled?: boolean
+    allowEmpty?: boolean
+    emptyLabel?: string
+  }>(),
+  {
+    placeholder: '',
+    searchPlaceholder: '',
+    emptyText: '',
+    emptyLabel: '',
+  }
+)
 
 const emit = defineEmits<{
-  (e: "update:modelValue", value: string): void;
-}>();
+  (e: 'update:modelValue', value: string): void
+}>()
 
 defineSlots<{
-  option?(props: { option: SelectOption; active: boolean }): unknown;
-}>();
+  option?(props: { option: SelectOption; active: boolean }): unknown
+  selected?(props: { option: SelectOption }): unknown
+}>()
 
-const isOpen = ref(false);
-const searchQuery = ref("");
-const searchInputRef = ref<HTMLInputElement | null>(null);
+const isOpen = ref(false)
+const searchQuery = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
 
 const filteredOptions = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase();
-  if (!query) return props.options;
-  return props.options.filter((o) => o.label.toLowerCase().includes(query));
-});
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return props.options
+  return props.options.filter(o => o.label.toLowerCase().includes(query))
+})
+
+const selectedOption = computed(() =>
+  props.modelValue ? (props.options.find(o => o.id === props.modelValue) ?? null) : null
+)
 
 const displayLabel = computed(() => {
-  if (!props.modelValue) return props.placeholder;
-  if (props.allowEmpty && !props.modelValue) return props.emptyLabel || props.placeholder;
-  const option = props.options.find((o) => o.id === props.modelValue);
-  return option?.label ?? props.placeholder;
-});
+  if (!props.modelValue) return props.placeholder
+  if (props.allowEmpty && !props.modelValue) return props.emptyLabel || props.placeholder
+  return selectedOption.value?.label ?? props.placeholder
+})
 
 const toggle = () => {
-  if (props.disabled) return;
+  if (props.disabled) return
   if (isOpen.value) {
-    isOpen.value = false;
+    isOpen.value = false
   } else {
-    isOpen.value = true;
-    searchQuery.value = "";
-    nextTick(() => searchInputRef.value?.focus());
+    isOpen.value = true
+    searchQuery.value = ''
+    nextTick(() => searchInputRef.value?.focus())
   }
-};
+}
 
 const selectOption = (id: string) => {
-  emit("update:modelValue", id);
-  isOpen.value = false;
-};
+  emit('update:modelValue', id)
+  isOpen.value = false
+}
 
 const handleClickOutside = (e: MouseEvent) => {
-  if (!isOpen.value) return;
-  const target = e.target as HTMLElement;
-  if (!target.closest(".searchable-select")) {
-    isOpen.value = false;
+  if (!isOpen.value) return
+  const target = e.target as HTMLElement
+  if (!target.closest('.searchable-select')) {
+    isOpen.value = false
   }
-};
+}
 
 onMounted(() => {
-  document.addEventListener("click", handleClickOutside);
-});
+  document.addEventListener('click', handleClickOutside)
+})
 
 onBeforeUnmount(() => {
-  document.removeEventListener("click", handleClickOutside);
-});
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <template>
   <div class="searchable-select" :class="{ 'searchable-select--disabled': disabled }">
     <div class="searchable-select__control" @click.stop="toggle">
-      <span class="searchable-select__value">{{ displayLabel }}</span>
+      <span class="searchable-select__value">
+        <slot v-if="selectedOption" name="selected" :option="selectedOption">
+          {{ displayLabel }}
+        </slot>
+        <template v-else>{{ displayLabel }}</template>
+      </span>
       <span class="material-symbols-outlined searchable-select__arrow">
         {{ isOpen ? 'expand_less' : 'expand_more' }}
       </span>
@@ -93,7 +105,7 @@ onBeforeUnmount(() => {
         type="text"
         :placeholder="searchPlaceholder"
         @click.stop
-      >
+      />
       <div class="searchable-select__list">
         <button
           v-if="allowEmpty"

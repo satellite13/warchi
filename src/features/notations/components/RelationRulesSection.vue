@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import {computed, ref} from "vue";
-import {useI18n} from "vue-i18n";
-import CollapseSection from "./CollapseSection.vue";
-import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
-import {createId} from "../notationAttrs";
-import type {EditorComponent, EditorRelation, EditorRelationRule} from "../types";
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import CollapseSection from './CollapseSection.vue'
+import SearchableSelect from '../../../components/forms/SearchableSelect.vue'
+import MultiSelect from '../../../components/forms/MultiSelect.vue'
+import { createId } from '../notationAttrs'
+import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null
@@ -12,89 +13,106 @@ const props = defineProps<{
   allRelations?: EditorRelation[]
   relationRules?: EditorRelationRule[]
   onMutateRelationRules?: (apply: (rules: EditorRelationRule[]) => void) => void
-}>();
+}>()
 
-const {t} = useI18n();
+const { t } = useI18n()
 
-const relationRulesExpanded = ref(false);
+const relationRulesExpanded = ref(false)
 
 const activeComponents = computed(() =>
-  (props.allComponents ?? []).filter((item) => !item._isDeleted)
-);
+  (props.allComponents ?? []).filter(item => !item._isDeleted)
+)
 
 const componentOptions = computed(() =>
-  activeComponents.value.map((c) => ({ id: c.id, label: c.name || t("common.unnamed") }))
-);
+  activeComponents.value.map(c => ({ id: c.id, label: c.name || t('common.unnamed') }))
+)
+
+const componentIconMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const c of activeComponents.value) {
+    const iconName = c.parsedAttrs.diagramStyle?.iconName?.trim()
+    if (iconName) map.set(c.id, iconName)
+  }
+  return map
+})
+
+const buildIconUrl = (iconName: string): string => {
+  if (iconName.startsWith('/')) return iconName
+  if (iconName.toLowerCase().endsWith('.svg')) return `/icons/${iconName}`
+  return `/icons/${iconName}.svg`
+}
+
+const activeRelations = computed(() => (props.allRelations ?? []).filter(item => !item._isDeleted))
+
+const relationOptions = computed(() =>
+  activeRelations.value.map(r => ({ id: r.id, label: r.name || t('common.unnamed') }))
+)
 
 const selectedComponentRelationRules = computed(() => {
-  if (!props.selectedItem || !props.relationRules) return [];
-  if ("linkTypeId" in props.selectedItem) return [];
-  return props.relationRules.filter((rule) => rule.fromComponentId === props.selectedItem?.id && !rule._isDeleted);
-});
+  if (!props.selectedItem || !props.relationRules) return []
+  if ('linkTypeId' in props.selectedItem) return []
+  return props.relationRules.filter(
+    rule => rule.fromComponentId === props.selectedItem?.id && !rule._isDeleted
+  )
+})
 
 const toggleRelationRulesCollapse = () => {
-  relationRulesExpanded.value = !relationRulesExpanded.value;
-};
+  relationRulesExpanded.value = !relationRulesExpanded.value
+}
 
 const setRelationRuleTarget = (rule: EditorRelationRule, targetId: string) => {
-  const ruleId = rule.id;
-  const isNew = rule._isNew;
-  props.onMutateRelationRules?.((rules) => {
-    const r = rules.find((item) => item.id === ruleId);
-    if (!r) return;
-    r.toComponentId = targetId;
-    if (!isNew) r._isDirty = true;
-  });
-};
+  const ruleId = rule.id
+  const isNew = rule._isNew
+  props.onMutateRelationRules?.(rules => {
+    const r = rules.find(item => item.id === ruleId)
+    if (!r) return
+    r.toComponentId = targetId
+    if (!isNew) r._isDirty = true
+  })
+}
+
+const setRelationRuleRelations = (rule: EditorRelationRule, relationIds: string[]) => {
+  const ruleId = rule.id
+  const isNew = rule._isNew
+  props.onMutateRelationRules?.(rules => {
+    const r = rules.find(item => item.id === ruleId)
+    if (!r) return
+    r.allowedRelationIds = relationIds
+    if (!isNew) r._isDirty = true
+  })
+}
 
 const addRelationRule = () => {
-  if (!props.selectedItem || !props.relationRules) return;
-  if ("linkTypeId" in props.selectedItem) return;
-  const componentId = props.selectedItem.id;
-  props.onMutateRelationRules?.((rules) => {
+  if (!props.selectedItem || !props.relationRules) return
+  if ('linkTypeId' in props.selectedItem) return
+  const componentId = props.selectedItem.id
+  props.onMutateRelationRules?.(rules => {
     rules.push({
       id: createId(),
       fromComponentId: componentId,
       toComponentId: componentId,
       allowedRelationIds: [],
-      _isNew: true
-    });
-  });
-  relationRulesExpanded.value = true;
-};
+      _isNew: true,
+    })
+  })
+  relationRulesExpanded.value = true
+}
 
 const removeRelationRule = (rule: EditorRelationRule) => {
-  if (!props.relationRules) return;
-  const ruleId = rule.id;
-  const isNew = rule._isNew;
-  props.onMutateRelationRules?.((rules) => {
-    const idx = rules.findIndex((item) => item.id === ruleId);
-    if (idx === -1) return;
+  if (!props.relationRules) return
+  const ruleId = rule.id
+  const isNew = rule._isNew
+  props.onMutateRelationRules?.(rules => {
+    const idx = rules.findIndex(item => item.id === ruleId)
+    if (idx === -1) return
     if (isNew) {
-      rules.splice(idx, 1);
+      rules.splice(idx, 1)
     } else {
-      rules[idx]!._isDeleted = true;
-      rules[idx]!._isDirty = true;
+      rules[idx]!._isDeleted = true
+      rules[idx]!._isDirty = true
     }
-  });
-};
-
-const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string, checked: boolean) => {
-  const ruleId = rule.id;
-  const isNew = rule._isNew;
-  props.onMutateRelationRules?.((rules) => {
-    const r = rules.find((item) => item.id === ruleId);
-    if (!r) return;
-    const next = new Set(r.allowedRelationIds);
-    if (checked) {
-      next.add(relationId);
-    } else {
-      next.delete(relationId);
-    }
-    r.allowedRelationIds = Array.from(next.values());
-    if (!isNew) r._isDirty = true;
-  });
-};
+  })
+}
 </script>
 
 <template>
@@ -117,58 +135,59 @@ const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string
     </template>
 
     <div v-if="selectedComponentRelationRules.length === 0" class="rules-section__empty">
-      {{ t("diagram.noRules") }}
+      {{ t('diagram.noRules') }}
     </div>
     <div v-else class="rules-section__list">
-      <div
-        v-for="rule in selectedComponentRelationRules"
-        :key="rule.id"
-        class="rules-section__card"
-      >
-        <div class="rules-section__card-header">
-          <span class="rules-section__card-title">
-            {{ selectedItem.name || 'A' }} →
-            {{ allComponents?.find((item) => item.id === rule.toComponentId)?.name || 'B' }}
-          </span>
-          <button
-            type="button"
-            class="rules-section__remove-btn"
-            @click="removeRelationRule(rule)"
-          >
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div class="rules-section__row">
-          <label class="rules-section__row-label">{{ t("diagram.ruleTo") }}</label>
-          <SearchableSelect
-            :model-value="rule.toComponentId"
-            :options="componentOptions"
-            :placeholder="t('diagram.selectComponent')"
-            :search-placeholder="t('diagram.searchComponent')"
-            :empty-text="t('common.nothingFound')"
-            @update:model-value="setRelationRuleTarget(rule, $event)"
-          />
-        </div>
-        <div class="rules-section__row">
-          <label class="rules-section__row-label">{{ t("diagram.links") }}</label>
-          <div v-if="!allRelations || allRelations.length === 0" class="rules-section__empty">
-            {{ t("diagram.noNotationLinks") }}
-          </div>
-          <div v-else class="rules-section__links">
-            <label
-              v-for="relation in allRelations.filter((item) => !item._isDeleted)"
-              :key="`${rule.id}-${relation.id}`"
-              class="rules-section__link-item"
-            >
-              <input
-                type="checkbox"
-                :checked="rule.allowedRelationIds.includes(relation.id)"
-                @change="toggleRelationRuleRelation(rule, relation.id, ($event.target as HTMLInputElement).checked)"
-              >
-              <span>{{ relation.name || t("common.unnamed") }}</span>
-            </label>
-          </div>
-        </div>
+      <div v-for="rule in selectedComponentRelationRules" :key="rule.id" class="rules-section__row">
+        <SearchableSelect
+          class="rules-section__target"
+          :model-value="rule.toComponentId"
+          :options="componentOptions"
+          :placeholder="t('diagram.selectComponent')"
+          :search-placeholder="t('diagram.searchComponent')"
+          :empty-text="t('common.nothingFound')"
+          @update:model-value="setRelationRuleTarget(rule, $event)"
+        >
+          <template #selected="{ option }">
+            <span class="rules-section__icon-option">
+              <img
+                v-if="componentIconMap.get(option.id)"
+                class="rules-section__icon"
+                :src="buildIconUrl(componentIconMap.get(option.id)!)"
+                :alt="option.label"
+              />
+              {{ option.label }}
+            </span>
+          </template>
+          <template #option="{ option }">
+            <span class="rules-section__icon-option">
+              <img
+                v-if="componentIconMap.get(option.id)"
+                class="rules-section__icon"
+                :src="buildIconUrl(componentIconMap.get(option.id)!)"
+                :alt="option.label"
+              />
+              {{ option.label }}
+            </span>
+          </template>
+        </SearchableSelect>
+        <MultiSelect
+          class="rules-section__relations"
+          :model-value="rule.allowedRelationIds"
+          :options="relationOptions"
+          :placeholder="t('diagram.selectLinks')"
+          :search-placeholder="t('diagram.searchLink')"
+          :empty-text="t('diagram.noNotationLinks')"
+          @update:model-value="setRelationRuleRelations(rule, $event)"
+        />
+        <button
+          type="button"
+          class="rules-section__remove-btn"
+          :title="t('common.delete')"
+          @click="removeRelationRule(rule)"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
     </div>
   </CollapseSection>
@@ -183,34 +202,24 @@ const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string
 .rules-section__list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.rules-section__card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-}
-
-.rules-section__card:hover {
-  border-color: var(--border-strong);
-}
-
-.rules-section__card-header {
+.rules-section__row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+  min-height: 28px;
 }
 
-.rules-section__card-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--base-text);
+.rules-section__target {
+  flex: 1;
+  min-width: 0;
+}
+
+.rules-section__relations {
+  flex: 1;
+  min-width: 0;
 }
 
 .rules-section__remove-btn {
@@ -226,49 +235,18 @@ const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string
   color: var(--text-subtle);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .rules-section__remove-btn .material-symbols-outlined {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .rules-section__remove-btn:hover {
   background: var(--danger-soft);
   color: var(--danger);
-}
-
-.rules-section__row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.rules-section__row-label {
-  width: 46px;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.8;
-}
-
-.rules-section__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-}
-
-.rules-section__link-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--base-text);
-  cursor: pointer;
-}
-
-.rules-section__link-item input {
-  accent-color: var(--primary);
 }
 
 .link-btn {
@@ -309,5 +287,29 @@ const toggleRelationRuleRelation = (rule: EditorRelationRule, relationId: string
   background: var(--primary-soft);
   border-color: var(--primary);
   color: var(--primary);
+}
+
+/* Compact overrides for SearchableSelect inside rows */
+.rules-section__target :deep(.searchable-select__control) {
+  padding: 3px 6px;
+  font-size: 12px;
+  min-height: 24px;
+}
+
+.rules-section__icon-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rules-section__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 </style>

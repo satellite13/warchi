@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.20] - 2026-02-27
+
+### Added
+- Document management in model editor: open and save documents for models, nodes, and diagrams.
+- Document version display and version-switching UI in DocumentEditorModal and TypeDocumentPanel.
+
+### Changed
+- DocumentEditorModal: improved version handling and editing state management.
+- Model editor: refactored document-related flows and UI for better maintainability.
+- CustomPropertiesPanel, useNotationEditor, useModelEditor, useTypeDocument updates.
+
 ## [0.0.19] - 2026-02-26
 
 ### Added

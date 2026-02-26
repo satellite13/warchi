@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.21] - 2026-02-27
+
+### Added
+- Owner display name resolution in model editor: diagram notation info now shows owner name (fallback to email).
+
+### Changed
+- Model editor: clearer ownership information for diagrams.
+
 ## [0.0.20] - 2026-02-27
 
 ### Added

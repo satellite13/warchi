@@ -92,19 +92,19 @@ const filteredLinkTypes = computed(() => {
         <div v-else-if="filteredNodeTypes.length === 0" class="type-section__empty">{{ t("common.nothingFound") }}</div>
         <ul v-else class="type-list">
           <li
-            v-for="(t, idx) in filteredNodeTypes"
-            :key="t.id"
+            v-for="(typeItem, idx) in filteredNodeTypes"
+            :key="typeItem.id"
             class="type-list__item"
-            :class="{ 'type-list__item--selected': selectedTypeId === t.id }"
+            :class="{ 'type-list__item--selected': selectedTypeId === typeItem.id }"
             :style="{ animationDelay: `${idx * 30}ms` }"
-            @click="emit('selectType', t.id)"
+            @click="emit('selectType', typeItem.id)"
           >
             <span class="material-symbols-outlined type-list__icon">category</span>
-            <span class="type-list__name">{{ t.name || $t("common.unnamed") }}</span>
-            <span v-if="!t._isNew && toAccessLabel(t.accessPermission, locale)" class="type-list__access-badge">
-              {{ toAccessLabel(t.accessPermission, locale) }}
+            <span class="type-list__name">{{ typeItem.name || $t("common.unnamed") }}</span>
+            <span v-if="!typeItem._isNew && toAccessLabel(typeItem.accessPermission, locale)" class="type-list__access-badge">
+              {{ toAccessLabel(typeItem.accessPermission, locale) }}
             </span>
-            <span v-if="t._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
+            <span v-if="typeItem._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
           </li>
         </ul>
       </template>
@@ -131,19 +131,19 @@ const filteredLinkTypes = computed(() => {
         <div v-else-if="filteredLinkTypes.length === 0" class="type-section__empty">{{ t("common.nothingFound") }}</div>
         <ul v-else class="type-list">
           <li
-            v-for="(t, idx) in filteredLinkTypes"
-            :key="t.id"
+            v-for="(typeItem, idx) in filteredLinkTypes"
+            :key="typeItem.id"
             class="type-list__item"
-            :class="{ 'type-list__item--selected': selectedTypeId === t.id }"
+            :class="{ 'type-list__item--selected': selectedTypeId === typeItem.id }"
             :style="{ animationDelay: `${idx * 30}ms` }"
-            @click="emit('selectType', t.id)"
+            @click="emit('selectType', typeItem.id)"
           >
             <span class="material-symbols-outlined type-list__icon">link</span>
-            <span class="type-list__name">{{ t.name || $t("common.unnamed") }}</span>
-            <span v-if="!t._isNew && toAccessLabel(t.accessPermission, locale)" class="type-list__access-badge">
-              {{ toAccessLabel(t.accessPermission, locale) }}
+            <span class="type-list__name">{{ typeItem.name || $t("common.unnamed") }}</span>
+            <span v-if="!typeItem._isNew && toAccessLabel(typeItem.accessPermission, locale)" class="type-list__access-badge">
+              {{ toAccessLabel(typeItem.accessPermission, locale) }}
             </span>
-            <span v-if="t._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
+            <span v-if="typeItem._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
           </li>
         </ul>
       </template>

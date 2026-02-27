@@ -16,6 +16,20 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src")
       }
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "vue-vendor": ["vue", "vue-router", "vue-i18n"],
+            papirus: ["@ngroznykh/papirus"],
+            "md-editor": ["md-editor-v3"],
+            "color-picker": ["@ckpack/vue-color"],
+            marked: ["marked"]
+          }
+        }
+      },
+      chunkSizeWarningLimit: 900
+    },
     server: {
       proxy: {
         "/api": {

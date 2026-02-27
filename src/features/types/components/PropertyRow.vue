@@ -13,6 +13,8 @@ const props = withDefaults(defineProps<{
   fromType?: boolean
   isEquivalentToType?: boolean
 }>(), {
+  onMutateProperty: undefined,
+  errors: () => [] as string[],
   size: "default"
 })
 

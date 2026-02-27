@@ -1510,7 +1510,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </div>
 
       <!-- Preset bar -->
-      <div  class="sp-preset">
+      <div class="sp-preset">
         <select
           class="sp-select sp-select--preset"
           :value="elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset"
@@ -1571,7 +1571,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       </Transition>
 
       <!-- Scrollable body -->
-      <div  class="sp-body">
+      <div class="sp-body">
 
         <!-- ==================== EDGE PANEL ==================== -->
         <template v-if="elementType === 'edge'">

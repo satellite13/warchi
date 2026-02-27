@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { useI18n } from "vue-i18n"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   DiagramRenderer,
   RectangleNode,
@@ -23,48 +23,58 @@ import {
   type TextLabelOptions,
   type LabelPlacement,
   type EdgePathType,
-  type EdgeStyle
-} from "@ngroznykh/papirus"
-import type { ComponentResponse, NodeTypeResponse, RelationResponse } from "../../../types/api"
-import { parseEntityAttrs, type CustomProperty, type DiagramStyle } from "../../notations/notationAttrs"
-import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from "../modelAttrs"
-import type { EditorDiagram, EditorLink, EditorNode } from "../types"
+  type EdgeStyle,
+} from '@ngroznykh/papirus'
+import type { ComponentResponse, NodeTypeResponse, RelationResponse } from '../../../types/api'
+import {
+  parseEntityAttrs,
+  type CustomProperty,
+  type DiagramStyle,
+} from '../../notations/notationAttrs'
+import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
+import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 
-const props = withDefaults(defineProps<{
-  activeDiagram: EditorDiagram | null
-  nodes: EditorNode[]
-  links: EditorLink[]
-  relations: RelationResponse[]
-  components: ComponentResponse[]
-  nodeTypes: NodeTypeResponse[]
-  selectedModelNodeIds: string[]
-  selectedModelLinkId: string | null
-  connectionValidator?: ((sourceModelNodeId: string, targetModelNodeId: string) => boolean) | null
-  gridVisible?: boolean
-  miniMapVisible?: boolean
-  snapEnabled?: boolean
-  alignEnabled?: boolean
-  rulersEnabled?: boolean
-  paletteVisible?: boolean
-  lockAnchorsEnabled?: boolean
-  attachToOutlineEnabled?: boolean
-}>(), {
-  gridVisible: true,
-  miniMapVisible: true,
-  snapEnabled: false,
-  alignEnabled: true,
-  rulersEnabled: true,
-  paletteVisible: true,
-  lockAnchorsEnabled: true,
-  attachToOutlineEnabled: true
-})
+const props = withDefaults(
+  defineProps<{
+    activeDiagram: EditorDiagram | null
+    nodes: EditorNode[]
+    links: EditorLink[]
+    relations: RelationResponse[]
+    components: ComponentResponse[]
+    nodeTypes: NodeTypeResponse[]
+    selectedModelNodeIds: string[]
+    selectedModelLinkId: string | null
+    connectionValidator?: ((sourceModelNodeId: string, targetModelNodeId: string) => boolean) | null
+    gridVisible?: boolean
+    miniMapVisible?: boolean
+    snapEnabled?: boolean
+    alignEnabled?: boolean
+    rulersEnabled?: boolean
+    paletteVisible?: boolean
+    lockAnchorsEnabled?: boolean
+    attachToOutlineEnabled?: boolean
+  }>(),
+  {
+    connectionValidator: null,
+    gridVisible: true,
+    miniMapVisible: true,
+    snapEnabled: false,
+    alignEnabled: true,
+    rulersEnabled: true,
+    paletteVisible: true,
+    lockAnchorsEnabled: true,
+    attachToOutlineEnabled: true,
+  }
+)
 
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs]
   selectNodes: [modelNodeIds: string[]]
   selectLink: [modelLinkId: string]
   selectCanvasElementId: [elementId: string | null]
-  canvasContextChange: [ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }]
+  canvasContextChange: [
+    ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null },
+  ]
   createNodeFromComponent: [componentId: string, x: number, y: number]
   createNote: [x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
@@ -76,7 +86,7 @@ const emit = defineEmits<{
     sourcePortId?: string,
     targetPortId?: string,
     sourceOutlineParam?: number,
-    targetOutlineParam?: number
+    targetOutlineParam?: number,
   ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
@@ -122,9 +132,8 @@ const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: stri
 const edgeIdToInstance = new Map<string, { modelLinkId: string; edgeId: string }>()
 
 // ── Computed ──
-const nodeById = computed(() => new Map(props.nodes.map((node) => [node.id, node])))
+const nodeById = computed(() => new Map(props.nodes.map(node => [node.id, node])))
 const activeNotationId = computed(() => props.activeDiagram?.notationId ?? null)
-
 
 const instanceNodes = computed(() => props.activeDiagram?.parsedAttrs.instances.nodes ?? [])
 const instanceEdges = computed(() => props.activeDiagram?.parsedAttrs.instances.edges ?? [])
@@ -165,7 +174,7 @@ const getBoundRelationStyle = (modelLinkId: string): DiagramStyle | undefined =>
 }
 
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
-  if (edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === "object") {
+  if (edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object') {
     return edgeInst.attrs.diagramStyle as DiagramStyle
   }
   return getBoundRelationStyle(edgeInst.modelLinkId)
@@ -173,15 +182,15 @@ const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | un
 
 const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined => {
   const raw = edgeInst.attrs?.label
-  if (typeof raw === "string") return raw
-  if (raw && typeof raw === "object" && typeof (raw as { text?: unknown }).text === "string") {
+  if (typeof raw === 'string') return raw
+  if (raw && typeof raw === 'object' && typeof (raw as { text?: unknown }).text === 'string') {
     return (raw as { text: string }).text
   }
   return undefined
 }
 
 const getPapEdgeLabelText = (edge: Edge): string =>
-  typeof edge.label === "string" ? edge.label : edge.label?.text ?? ""
+  typeof edge.label === 'string' ? edge.label : (edge.label?.text ?? '')
 
 type ControlPoint = { x: number; y: number }
 
@@ -192,11 +201,11 @@ const readControlPointsFromAttrs = (attrs: Record<string, unknown> | undefined):
     .filter(
       (point): point is { x: number; y: number } =>
         Boolean(point) &&
-        typeof point === "object" &&
-        typeof (point as { x?: unknown }).x === "number" &&
-        typeof (point as { y?: unknown }).y === "number"
+        typeof point === 'object' &&
+        typeof (point as { x?: unknown }).x === 'number' &&
+        typeof (point as { y?: unknown }).y === 'number'
     )
-    .map((point) => ({ x: point.x, y: point.y }))
+    .map(point => ({ x: point.x, y: point.y }))
 }
 
 const readControlPointsFromEdge = (edge: Edge): ControlPoint[] => {
@@ -206,15 +215,16 @@ const readControlPointsFromEdge = (edge: Edge): ControlPoint[] => {
     .filter(
       (point): point is { x: number; y: number } =>
         Boolean(point) &&
-        typeof point === "object" &&
-        typeof (point as { x?: unknown }).x === "number" &&
-        typeof (point as { y?: unknown }).y === "number"
+        typeof point === 'object' &&
+        typeof (point as { x?: unknown }).x === 'number' &&
+        typeof (point as { y?: unknown }).y === 'number'
     )
-    .map((point) => ({ x: point.x, y: point.y }))
+    .map(point => ({ x: point.x, y: point.y }))
 }
 
 const areControlPointsEqual = (a: ControlPoint[], b: ControlPoint[]): boolean =>
-  a.length === b.length && a.every((point, index) => point.x === b[index]?.x && point.y === b[index]?.y)
+  a.length === b.length &&
+  a.every((point, index) => point.x === b[index]?.x && point.y === b[index]?.y)
 
 const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
   const text = labelText?.trim()
@@ -222,10 +232,19 @@ const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
   return text
 }
 
-const buildEdgeLabelWithStyle = (labelText: string | undefined, ds?: DiagramStyle): string | TextLabel | undefined => {
+const buildEdgeLabelWithStyle = (
+  labelText: string | undefined,
+  ds?: DiagramStyle
+): string | TextLabel | undefined => {
   const text = labelText?.trim()
   if (!text) return undefined
-  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
+  if (
+    !ds?.labelColor &&
+    ds?.labelOpacity == null &&
+    !ds?.labelFontSize &&
+    ds?.labelPadding == null &&
+    ds?.labelMargin == null
+  ) {
     return text
   }
   const opts: TextLabelOptions = { text }
@@ -239,7 +258,9 @@ const buildEdgeLabelWithStyle = (labelText: string | undefined, ds?: DiagramStyl
   return new TextLabel(opts)
 }
 
-const buildEdgeLabelBackground = (ds?: DiagramStyle): { color?: string; opacity?: number; padding?: number; borderRadius?: number } | undefined => {
+const buildEdgeLabelBackground = (
+  ds?: DiagramStyle
+): { color?: string; opacity?: number; padding?: number; borderRadius?: number } | undefined => {
   if (!ds) return undefined
 
   const background: Record<string, unknown> = {}
@@ -251,9 +272,23 @@ const buildEdgeLabelBackground = (ds?: DiagramStyle): { color?: string; opacity?
   return Object.keys(background).length > 0 ? background : undefined
 }
 
-const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig; labelOffset: number }> => {
+const resolveEdgeOptions = (
+  ds?: DiagramStyle
+): Partial<{
+  type: EdgePathType
+  style: EdgeStyle
+  startMarker: ArrowMarkerConfig
+  endMarker: ArrowMarkerConfig
+  labelOffset: number
+}> => {
   if (!ds) return {}
-  const opts: Partial<{ type: EdgePathType; style: EdgeStyle; startMarker: ArrowMarkerConfig; endMarker: ArrowMarkerConfig; labelOffset: number }> = {}
+  const opts: Partial<{
+    type: EdgePathType
+    style: EdgeStyle
+    startMarker: ArrowMarkerConfig
+    endMarker: ArrowMarkerConfig
+    labelOffset: number
+  }> = {}
   const style: EdgeStyle = {}
   if (ds.strokeColor) style.strokeColor = ds.strokeColor
   if (ds.strokeWidth != null) style.strokeWidth = ds.strokeWidth
@@ -264,18 +299,18 @@ const resolveEdgeOptions = (ds?: DiagramStyle): Partial<{ type: EdgePathType; st
   if (ds.edgeType) opts.type = ds.edgeType as EdgePathType
   if (ds.startMarkerType) {
     opts.startMarker = {
-      type: ds.startMarkerType as ArrowMarkerConfig["type"],
+      type: ds.startMarkerType as ArrowMarkerConfig['type'],
       ...(ds.startMarkerSize != null && { size: ds.startMarkerSize }),
       ...(ds.startMarkerFillColor && { fillColor: ds.startMarkerFillColor }),
-      ...(ds.startMarkerFillOpacity != null && { fillOpacity: ds.startMarkerFillOpacity })
+      ...(ds.startMarkerFillOpacity != null && { fillOpacity: ds.startMarkerFillOpacity }),
     }
   }
   if (ds.endMarkerType) {
     opts.endMarker = {
-      type: ds.endMarkerType as ArrowMarkerConfig["type"],
+      type: ds.endMarkerType as ArrowMarkerConfig['type'],
       ...(ds.endMarkerSize != null && { size: ds.endMarkerSize }),
       ...(ds.endMarkerFillColor && { fillColor: ds.endMarkerFillColor }),
-      ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity })
+      ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity }),
     }
   }
   if (ds.edgeLabelOffset != null) opts.labelOffset = ds.edgeLabelOffset
@@ -293,7 +328,7 @@ const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined =
 }
 
 const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefined => {
-  if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === "object") {
+  if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
     return instance.attrs.diagramStyle as DiagramStyle
   }
   return getBoundComponentStyle(instance.modelNodeId)
@@ -303,24 +338,29 @@ const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attr
 
 const getNoteText = (instance: DiagramNodeInstance): string => {
   const value = instance.attrs?.noteText
-  return typeof value === "string" && value.trim().length > 0 ? value : t("diagram.newNote")
+  return typeof value === 'string' && value.trim().length > 0 ? value : t('diagram.newNote')
 }
 
-const getInstanceDimensions = (instance: { modelNodeId: string; width?: number; height?: number; attrs?: Record<string, unknown> }) => {
+const getInstanceDimensions = (instance: {
+  modelNodeId: string
+  width?: number
+  height?: number
+  attrs?: Record<string, unknown>
+}) => {
   const ds = (instance as DiagramNodeInstance).attrs?.diagramStyle
     ? getEffectiveStyle(instance as DiagramNodeInstance)
     : getBoundComponentStyle(instance.modelNodeId)
   return {
-    width: instance.width ?? (typeof ds?.width === "number" ? ds.width : DEFAULT_NODE_WIDTH),
-    height: instance.height ?? (typeof ds?.height === "number" ? ds.height : DEFAULT_NODE_HEIGHT)
+    width: instance.width ?? (typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH),
+    height: instance.height ?? (typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT),
   }
 }
 
 const getComponentMinDimensions = (modelNodeId: string) => {
   const ds = getBoundComponentStyle(modelNodeId)
   return {
-    width: typeof ds?.width === "number" ? ds.width : DEFAULT_NODE_WIDTH,
-    height: typeof ds?.height === "number" ? ds.height : DEFAULT_NODE_HEIGHT
+    width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
+    height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
   }
 }
 
@@ -331,12 +371,18 @@ function applyMinSizeConstraint(node: DiagramNode, modelNodeId: string) {
     const compMin = getComponentMinDimensions(modelNodeId)
     return {
       width: Math.max(contentMin.width, compMin.width),
-      height: Math.max(contentMin.height, compMin.height)
+      height: Math.max(contentMin.height, compMin.height),
     }
   }
 }
 
-type ComponentShape = "rectangle" | "beveled-rectangle" | "diamond" | "circle" | "trapezoid" | "slanted-rectangle"
+type ComponentShape =
+  | 'rectangle'
+  | 'beveled-rectangle'
+  | 'diamond'
+  | 'circle'
+  | 'trapezoid'
+  | 'slanted-rectangle'
 
 const getInstanceArea = (instance: DiagramNodeInstance): number => {
   const { width, height } = getInstanceDimensions(instance)
@@ -345,7 +391,7 @@ const getInstanceArea = (instance: DiagramNodeInstance): number => {
 
 const getInstanceZIndex = (instance: DiagramNodeInstance): number | null => {
   const raw = instance.attrs?.zIndex
-  if (typeof raw === "number" && Number.isFinite(raw)) {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
     return raw
   }
   return null
@@ -369,7 +415,7 @@ const sortInstancesByZLayer = (instances: DiagramNodeInstance[]): DiagramNodeIns
 const reorderRendererNodesBySize = (orderedInstances: DiagramNodeInstance[]) => {
   if (!renderer) return
   const nodesMap = renderer.nodes as Map<string, DiagramNode>
-  const orderedNodeIds = orderedInstances.map((instance) => `instance-${instance.id}`)
+  const orderedNodeIds = orderedInstances.map(instance => `instance-${instance.id}`)
   const orderedNodes: DiagramNode[] = []
   const orderedIdSet = new Set(orderedNodeIds)
 
@@ -384,7 +430,7 @@ const reorderRendererNodesBySize = (orderedInstances: DiagramNodeInstance[]) => 
   }
 
   const currentOrder = Array.from(nodesMap.keys())
-  const nextOrder = orderedNodes.map((node) => node.id)
+  const nextOrder = orderedNodes.map(node => node.id)
   const sameOrder =
     currentOrder.length === nextOrder.length &&
     currentOrder.every((id, index) => id === nextOrder[index])
@@ -400,14 +446,14 @@ const reorderRendererNodesBySize = (orderedInstances: DiagramNodeInstance[]) => 
 function getComponentShape(ds?: DiagramStyle): ComponentShape {
   const shape = ds?.nodeShape as ComponentShape | undefined
   switch (shape) {
-    case "beveled-rectangle":
-    case "diamond":
-    case "circle":
-    case "trapezoid":
-    case "slanted-rectangle":
+    case 'beveled-rectangle':
+    case 'diamond':
+    case 'circle':
+    case 'trapezoid':
+    case 'slanted-rectangle':
       return shape
     default:
-      return "rectangle"
+      return 'rectangle'
   }
 }
 
@@ -464,7 +510,7 @@ function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[]
   if (!node || !notationId) return []
   const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
   if (!componentId) return []
-  const component = props.components.find((c) => c.id === componentId)
+  const component = props.components.find(c => c.id === componentId)
   if (!component) return []
   return parseEntityAttrs(component.attrs ?? null).customProperties
 }
@@ -475,18 +521,24 @@ function resolveLabelTemplate(
   customProperties: CustomProperty[],
   scopedValues: Record<string, unknown>
 ): string {
-  return template.replace(/\$\{(\w+)\}/g, (_match, key: string) => {
-    if (key === "name") return name
-    const prop = customProperties.find((p) => p.name === key)
-    if (prop) {
-      const val = scopedValues[key] ?? prop.defaultValue
-      return val != null ? String(val) : ""
-    }
-    return ""
-  }).replace(/\\n/g, "\n")
+  return template
+    .replace(/\$\{(\w+)\}/g, (_match, key: string) => {
+      if (key === 'name') return name
+      const prop = customProperties.find(p => p.name === key)
+      if (prop) {
+        const val = scopedValues[key] ?? prop.defaultValue
+        return val != null ? String(val) : ''
+      }
+      return ''
+    })
+    .replace(/\\n/g, '\n')
 }
 
-function buildNodeLabel(name: string, ds?: DiagramStyle, modelNodeId?: string): string | TextLabelOptions {
+function buildNodeLabel(
+  name: string,
+  ds?: DiagramStyle,
+  modelNodeId?: string
+): string | TextLabelOptions {
   const hasTemplate = !!ds?.labelTemplate
   let displayText = name
   if (hasTemplate && modelNodeId) {
@@ -495,7 +547,14 @@ function buildNodeLabel(name: string, ds?: DiagramStyle, modelNodeId?: string): 
     displayText = resolveLabelTemplate(ds!.labelTemplate!, name, customProps, scopedValues)
   }
 
-  const hasStyle = !!(ds?.labelColor || ds?.labelOpacity != null || ds?.labelFontSize || ds?.labelPadding != null || ds?.labelMargin != null || ds?.labelAlign)
+  const hasStyle = !!(
+    ds?.labelColor ||
+    ds?.labelOpacity != null ||
+    ds?.labelFontSize ||
+    ds?.labelPadding != null ||
+    ds?.labelMargin != null ||
+    ds?.labelAlign
+  )
 
   if (!hasStyle && !hasTemplate) {
     return displayText
@@ -508,7 +567,7 @@ function buildNodeLabel(name: string, ds?: DiagramStyle, modelNodeId?: string): 
   if (ds?.labelColor) style.color = ds.labelColor
   if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
   if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
-  if (ds?.labelAlign) style.align = ds.labelAlign as TextStyle["align"]
+  if (ds?.labelAlign) style.align = ds.labelAlign as TextStyle['align']
   if (Object.keys(style).length) opts.style = style
   if (ds?.labelPadding != null) opts.padding = ds.labelPadding
   if (ds?.labelMargin != null) opts.margin = ds.labelMargin
@@ -518,38 +577,38 @@ function buildNodeLabel(name: string, ds?: DiagramStyle, modelNodeId?: string): 
 function buildNodeIcon(ds?: DiagramStyle) {
   if (!ds?.iconName) return undefined
   const placement = ds.iconPlacement
-  const resolvedPlacement: NodeImageOptions["placement"] =
-    placement === "center" ||
-    placement === "top" ||
-    placement === "bottom" ||
-    placement === "left" ||
-    placement === "right" ||
-    placement === "top-left" ||
-    placement === "top-right" ||
-    placement === "bottom-left" ||
-    placement === "bottom-right"
+  const resolvedPlacement: NodeImageOptions['placement'] =
+    placement === 'center' ||
+    placement === 'top' ||
+    placement === 'bottom' ||
+    placement === 'left' ||
+    placement === 'right' ||
+    placement === 'top-left' ||
+    placement === 'top-right' ||
+    placement === 'bottom-left' ||
+    placement === 'bottom-right'
       ? placement
-      : "left"
+      : 'left'
   return {
     source: `/icons/${ds.iconName}.svg`,
     placement: resolvedPlacement,
     width: ds.iconWidth ?? 20,
     height: ds.iconHeight ?? 20,
-    fit: "contain" as const,
+    fit: 'contain' as const,
     ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
     ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
     ...(ds.iconGap != null ? { gap: ds.iconGap } : {}),
     ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
-    ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
+    ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {}),
   }
 }
 
 function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) {
   const dims = getInstanceDimensions(instance)
   const style: Record<string, unknown> = {
-    fillColor: ds?.fillColor ?? "#ffffff",
-    strokeColor: ds?.strokeColor ?? "#d1d5db",
-    strokeWidth: ds?.strokeWidth ?? 1
+    fillColor: ds?.fillColor ?? '#ffffff',
+    strokeColor: ds?.strokeColor ?? '#d1d5db',
+    strokeWidth: ds?.strokeWidth ?? 1,
   }
   if (ds?.fillOpacity != null) style.fillOpacity = ds.fillOpacity
   if (ds?.strokeOpacity != null) style.strokeOpacity = ds.strokeOpacity
@@ -559,22 +618,27 @@ function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) 
     width: dims.width,
     height: dims.height,
     style,
-    cornerRadius: ds?.cornerRadius ?? COMPONENT_RADIUS
+    cornerRadius: ds?.cornerRadius ?? COMPONENT_RADIUS,
   }
 }
 
-function resolveAnchorPoints(ds?: DiagramStyle): { top: number; bottom: number; left: number; right: number } {
+function resolveAnchorPoints(ds?: DiagramStyle): {
+  top: number
+  bottom: number
+  left: number
+  right: number
+} {
   const normalize = (value: unknown, fallback: number): number => {
-    const parsed = Math.round(Number(value));
-    if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-    return parsed;
-  };
+    const parsed = Math.round(Number(value))
+    if (!Number.isFinite(parsed) || parsed < 0) return fallback
+    return parsed
+  }
   return {
     top: normalize(ds?.portsTop, 3),
     bottom: normalize(ds?.portsBottom, 3),
     left: normalize(ds?.portsLeft, 1),
-    right: normalize(ds?.portsRight, 1)
-  };
+    right: normalize(ds?.portsRight, 1),
+  }
 }
 
 function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
@@ -586,10 +650,10 @@ function isStickyNoteNode(node: DiagramNode): boolean {
 }
 
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
-  if (node instanceof DiamondNode) return "diamond"
-  if (node instanceof CircleNode) return "circle"
-  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? "rectangle"
-  return "rectangle"
+  if (node instanceof DiamondNode) return 'diamond'
+  if (node instanceof CircleNode) return 'circle'
+  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? 'rectangle'
+  return 'rectangle'
 }
 
 // ── Node creation ──
@@ -599,7 +663,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const shape = getComponentShape(ds)
   const nodeName = isNoteInstance(instance)
     ? getNoteText(instance)
-    : nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
+    : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
 
   const commonOptions = {
     id: `instance-${instance.id}`,
@@ -610,41 +674,41 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     label: buildNodeLabel(nodeName, ds, instance.modelNodeId),
     style: visual.style,
     anchorPoints: resolveAnchorPoints(ds),
-    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
+    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
   }
 
   let node: DiagramNode
-  if (isNoteInstance(instance) && shape === "rectangle") {
+  if (isNoteInstance(instance) && shape === 'rectangle') {
     const noteNode = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => createStickyNotePath(w, h)
+      path: (w, h) => createStickyNotePath(w, h),
     })
-    noteNode.shapeType = "rectangle"
+    noteNode.shapeType = 'rectangle'
     ;(noteNode as unknown as { noteShape?: boolean }).noteShape = true
     node = noteNode
-  } else if (shape === "diamond") {
+  } else if (shape === 'diamond') {
     node = new DiamondNode(commonOptions)
-  } else if (shape === "circle") {
+  } else if (shape === 'circle') {
     node = new CircleNode(commonOptions)
-  } else if (shape === "beveled-rectangle") {
+  } else if (shape === 'beveled-rectangle') {
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => createBeveledRectanglePath(w, h)
+      path: (w, h) => createBeveledRectanglePath(w, h),
     })
-  } else if (shape === "trapezoid") {
+  } else if (shape === 'trapezoid') {
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => createTrapezoidPath(w, h)
+      path: (w, h) => createTrapezoidPath(w, h),
     })
-  } else if (shape === "slanted-rectangle") {
+  } else if (shape === 'slanted-rectangle') {
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => ShapeFactories.parallelogram(w, h)
+      path: (w, h) => ShapeFactories.parallelogram(w, h),
     })
   } else {
     node = new RectangleNode({
       ...commonOptions,
-      cornerRadius: visual.cornerRadius
+      cornerRadius: visual.cornerRadius,
     })
   }
 
@@ -674,14 +738,17 @@ function syncDiagram() {
 
     const papNodeId = `instance-${instance.id}`
     currentNodeIds.add(papNodeId)
-    nodeIdToInstance.set(papNodeId, { modelNodeId: instance.modelNodeId, instanceId: instance.id })
+    nodeIdToInstance.set(papNodeId, {
+      modelNodeId: instance.modelNodeId,
+      instanceId: instance.id,
+    })
 
     const existing = renderer.getNode(papNodeId)
     if (existing) {
       const ds = getEffectiveStyle(instance)
       const expectedShape = getComponentShape(ds)
       const existingShape = getNodeShapeFromNode(existing)
-      const shouldUseStickyNote = isNoteInstance(instance) && expectedShape === "rectangle"
+      const shouldUseStickyNote = isNoteInstance(instance) && expectedShape === 'rectangle'
       const needsStickyNoteRebuild = shouldUseStickyNote && !isStickyNoteNode(existing)
 
       if (expectedShape !== existingShape || needsStickyNoteRebuild) {
@@ -694,7 +761,7 @@ function syncDiagram() {
       const visual = resolveInstanceStyle(instance, ds)
       const nodeName = isNoteInstance(instance)
         ? getNoteText(instance)
-        : nodeById.value.get(instance.modelNodeId)?.name ?? "Node"
+        : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
 
       existing.x = instance.x
       existing.y = instance.y
@@ -703,7 +770,7 @@ function syncDiagram() {
       existing.style = visual.style
       existing.anchorPoints = resolveAnchorPoints(ds)
       const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId)
-      if (typeof newLabel === "string") {
+      if (typeof newLabel === 'string') {
         existing.label = newLabel
       } else {
         existing.label = new TextLabel(newLabel)
@@ -747,12 +814,20 @@ function syncDiagram() {
     if (existing) {
       const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
       const toOutline = edge.attrs?.toOutlineParam as number | undefined
-      existing.from = fromOutline !== undefined
-        ? { nodeId: sourcePapId, outlineParam: fromOutline }
-        : { nodeId: sourcePapId, portId: (edge.attrs?.fromPortId as string | undefined) ?? existing.from.portId }
-      existing.to = toOutline !== undefined
-        ? { nodeId: targetPapId, outlineParam: toOutline }
-        : { nodeId: targetPapId, portId: (edge.attrs?.toPortId as string | undefined) ?? existing.to.portId }
+      existing.from =
+        fromOutline !== undefined
+          ? { nodeId: sourcePapId, outlineParam: fromOutline }
+          : {
+              nodeId: sourcePapId,
+              portId: (edge.attrs?.fromPortId as string | undefined) ?? existing.from.portId,
+            }
+      existing.to =
+        toOutline !== undefined
+          ? { nodeId: targetPapId, outlineParam: toOutline }
+          : {
+              nodeId: targetPapId,
+              portId: (edge.attrs?.toPortId as string | undefined) ?? existing.to.portId,
+            }
       if (edgeOpts.style) existing.style = { ...existing.style, ...edgeOpts.style }
       if (edgeOpts.type) existing.type = edgeOpts.type
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
@@ -767,7 +842,7 @@ function syncDiagram() {
           ...(existing.label.style || {}),
           ...(ds?.labelColor ? { color: ds.labelColor } : {}),
           ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
+          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
         }
       }
       if (existing.label && ds?.labelPadding != null) {
@@ -777,20 +852,23 @@ function syncDiagram() {
         existing.label.margin = ds.labelMargin
       }
       existing.lockAnchors = lockAnchorsEnabled.value
-      ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground = edgeLabelBackground
+      ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground =
+        edgeLabelBackground
     } else {
       const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
       const toOutline = edge.attrs?.toOutlineParam as number | undefined
       const newEdge = new Edge({
         id: papEdgeId,
-        from: fromOutline !== undefined
-          ? { nodeId: sourcePapId, outlineParam: fromOutline }
-          : { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
-        to: toOutline !== undefined
-          ? { nodeId: targetPapId, outlineParam: toOutline }
-          : { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
-        type: edgeOpts.type ?? "bezier",
-        arrowType: ds?.endMarkerType ? undefined : "single",
+        from:
+          fromOutline !== undefined
+            ? { nodeId: sourcePapId, outlineParam: fromOutline }
+            : { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
+        to:
+          toOutline !== undefined
+            ? { nodeId: targetPapId, outlineParam: toOutline }
+            : { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
+        type: edgeOpts.type ?? 'bezier',
+        arrowType: ds?.endMarkerType ? undefined : 'single',
         style: edgeOpts.style,
         startMarker: edgeOpts.startMarker,
         endMarker: edgeOpts.endMarker,
@@ -798,14 +876,14 @@ function syncDiagram() {
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),
-        lockAnchors: lockAnchorsEnabled.value
+        lockAnchors: lockAnchorsEnabled.value,
       })
       if (newEdge.label) {
         newEdge.label.style = {
           ...(newEdge.label.style || {}),
           ...(ds?.labelColor ? { color: ds.labelColor } : {}),
           ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {})
+          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
         }
       }
       renderer.addEdge(newEdge)
@@ -854,8 +932,8 @@ function updateSelection() {
 
   if (targetPapIds.length > 0) {
     const currentIds = selectionManager.selectedIds
-    const needsSync = targetPapIds.length !== currentIds.size ||
-      targetPapIds.some((id) => !currentIds.has(id))
+    const needsSync =
+      targetPapIds.length !== currentIds.size || targetPapIds.some(id => !currentIds.has(id))
     if (needsSync) {
       suppressSelectionEvent = true
       try {
@@ -913,10 +991,10 @@ function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
     suppressSelectionEvent = false
   }
 
-  emit("selectCanvasElementId", hitEdge.id)
+  emit('selectCanvasElementId', hitEdge.id)
   const edgeEntity = edgeIdToInstance.get(hitEdge.id)
   if (edgeEntity) {
-    emit("selectLink", edgeEntity.modelLinkId)
+    emit('selectLink', edgeEntity.modelLinkId)
   }
 }
 
@@ -932,10 +1010,11 @@ function detectLabelChanges() {
   for (const [papNodeId, entity] of nodeIdToInstance) {
     const papNode = renderer.getNode(papNodeId)
     if (!papNode) continue
-    const labelText = typeof papNode.label === "string"
-      ? papNode.label
-      : papNode.label?.editableText ?? papNode.label?.text ?? ""
-    const instance = next.instances.nodes.find((item) => item.id === entity.instanceId)
+    const labelText =
+      typeof papNode.label === 'string'
+        ? papNode.label
+        : (papNode.label?.editableText ?? papNode.label?.text ?? '')
+    const instance = next.instances.nodes.find(item => item.id === entity.instanceId)
     if (instance && isNoteInstance(instance)) {
       if (labelText !== getNoteText(instance)) {
         if (!instance.attrs) instance.attrs = {}
@@ -947,11 +1026,11 @@ function detectLabelChanges() {
 
     const modelNode = nodeById.value.get(entity.modelNodeId)
     if (modelNode && labelText !== modelNode.name) {
-      emit("nodeLabelChange", entity.modelNodeId, labelText)
+      emit('nodeLabelChange', entity.modelNodeId, labelText)
     }
   }
   if (notesChanged) {
-    emit("updateDiagram", next)
+    emit('updateDiagram', next)
   }
 }
 
@@ -965,11 +1044,11 @@ function detectEdgeLabelChanges() {
     const papEdge = renderer.getEdge(papEdgeId)
     if (!papEdge) continue
 
-    const edgeInst = next.instances.edges.find((edge) => edge.id === entity.edgeId)
+    const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
 
     const nextLabel = getPapEdgeLabelText(papEdge)
-    const currentLabel = getInstanceEdgeLabel(edgeInst) ?? ""
+    const currentLabel = getInstanceEdgeLabel(edgeInst) ?? ''
     if (nextLabel === currentLabel) continue
 
     if (!edgeInst.attrs) edgeInst.attrs = {}
@@ -984,7 +1063,7 @@ function detectEdgeLabelChanges() {
 
   if (changed) {
     syncEdgePortIds(next)
-    emit("updateDiagram", next)
+    emit('updateDiagram', next)
   }
 }
 
@@ -998,7 +1077,7 @@ function detectEdgePortChanges() {
     const papEdge = renderer.getEdge(papEdgeId)
     if (!papEdge) continue
 
-    const edgeInst = next.instances.edges.find((edge) => edge.id === entity.edgeId)
+    const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
 
     const nextFromPortId = papEdge.from.portId ?? undefined
@@ -1011,7 +1090,8 @@ function detectEdgePortChanges() {
     const currentToOutline = edgeInst.attrs?.toOutlineParam as number | undefined
 
     const portMatch = nextFromPortId === currentFromPortId && nextToPortId === currentToPortId
-    const outlineMatch = nextFromOutline === currentFromOutline && nextToOutline === currentToOutline
+    const outlineMatch =
+      nextFromOutline === currentFromOutline && nextToOutline === currentToOutline
     if (portMatch && outlineMatch) continue
 
     if (!edgeInst.attrs) edgeInst.attrs = {}
@@ -1035,7 +1115,7 @@ function detectEdgePortChanges() {
   }
 
   if (changed) {
-    emit("updateDiagram", next)
+    emit('updateDiagram', next)
   }
 }
 
@@ -1047,9 +1127,9 @@ function detectEditablePolylineControlPointChanges() {
 
   for (const [papEdgeId, entity] of edgeIdToInstance) {
     const papEdge = renderer.getEdge(papEdgeId)
-    if (!papEdge || papEdge.type !== "editable-polyline") continue
+    if (!papEdge || papEdge.type !== 'editable-polyline') continue
 
-    const edgeInst = next.instances.edges.find((edge) => edge.id === entity.edgeId)
+    const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
 
     const nextControlPoints = readControlPointsFromEdge(papEdge)
@@ -1067,36 +1147,36 @@ function detectEditablePolylineControlPointChanges() {
   }
 
   if (changed) {
-    emit("updateDiagram", next)
+    emit('updateDiagram', next)
   }
 }
 
 function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) {
   const next = cloneDiagramAttrs()
-  const edgeInst = next.instances.edges.find((edge) => edge.id === edgeInstanceId)
+  const edgeInst = next.instances.edges.find(edge => edge.id === edgeInstanceId)
   if (!edgeInst) return
 
   const baseStyle =
-    edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === "object"
+    edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object'
       ? (edgeInst.attrs.diagramStyle as Record<string, unknown>)
       : {}
 
-  const currentType = (baseStyle.edgeType as EdgePathType | undefined) ?? "bezier"
+  const currentType = (baseStyle.edgeType as EdgePathType | undefined) ?? 'bezier'
   if (currentType === edgeType) return
 
   if (!edgeInst.attrs) edgeInst.attrs = {}
   edgeInst.attrs.diagramStyle = {
     ...baseStyle,
-    edgeType
+    edgeType,
   }
   // При смене с polyline/editable-polyline на bezier или straight удаляем промежуточные точки:
   // они имеют другой формат/семантику и искажают отрисовку стрелки
-  const fromPolyline = currentType === "polyline" || currentType === "editable-polyline"
-  const toNonPolyline = edgeType === "bezier" || edgeType === "straight"
+  const fromPolyline = currentType === 'polyline' || currentType === 'editable-polyline'
+  const toNonPolyline = edgeType === 'bezier' || edgeType === 'straight'
   if (fromPolyline && toNonPolyline && edgeInst.attrs.controlPoints) {
     delete edgeInst.attrs.controlPoints
   }
-  emit("updateDiagram", next)
+  emit('updateDiagram', next)
 }
 
 // ── Persist positions from papirus back to model ──
@@ -1109,7 +1189,7 @@ function persistNodePositions(papNodeIds: string[]) {
     if (!entity) continue
     const papNode = renderer.getNode(papNodeId)
     if (!papNode) continue
-    const instance = next.instances.nodes.find((n) => n.id === entity.instanceId)
+    const instance = next.instances.nodes.find(n => n.id === entity.instanceId)
     if (!instance) continue
     if (
       instance.x !== papNode.x ||
@@ -1126,7 +1206,7 @@ function persistNodePositions(papNodeIds: string[]) {
   }
   if (changed) {
     syncEdgePortIds(next)
-    emit("updateDiagram", next)
+    emit('updateDiagram', next)
   }
 }
 
@@ -1140,9 +1220,11 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
     else delete edgeInst.attrs.fromPortId
     if (papEdge.to.portId) edgeInst.attrs.toPortId = papEdge.to.portId
     else delete edgeInst.attrs.toPortId
-    if (papEdge.from.outlineParam !== undefined) edgeInst.attrs.fromOutlineParam = papEdge.from.outlineParam
+    if (papEdge.from.outlineParam !== undefined)
+      edgeInst.attrs.fromOutlineParam = papEdge.from.outlineParam
     else delete edgeInst.attrs.fromOutlineParam
-    if (papEdge.to.outlineParam !== undefined) edgeInst.attrs.toOutlineParam = papEdge.to.outlineParam
+    if (papEdge.to.outlineParam !== undefined)
+      edgeInst.attrs.toOutlineParam = papEdge.to.outlineParam
     else delete edgeInst.attrs.toOutlineParam
   }
 }
@@ -1150,17 +1232,17 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
 // ── Renderer init ──
 function initRenderer(r: DiagramRenderer) {
   renderer = r
-  r.getCanvas().addEventListener("click", handleCanvasClickPrioritizeEdge)
-  window.addEventListener("mouseup", handleCanvasMouseUpSyncEditablePolyline)
+  r.getCanvas().addEventListener('click', handleCanvasClickPrioritizeEdge)
+  window.addEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
 
   // Grid overlay
-  gridOverlay = new GridOverlay({ gridSize: 24, color: "#e2e8f0" })
+  gridOverlay = new GridOverlay({ gridSize: 24, color: '#e2e8f0' })
   r.use(gridOverlay)
   gridOverlay.setEnabled(gridVisible.value)
 
   // Rulers
   rulersOverlay = new RulersOverlay({
-    enabled: rulersEnabled.value
+    enabled: rulersEnabled.value,
   })
   r.use(rulersOverlay)
 
@@ -1171,7 +1253,7 @@ function initRenderer(r: DiagramRenderer) {
     height: 60,
     padding: 20,
     contentMargin: 200,
-    anchor: "bottom-left"
+    anchor: 'bottom-left',
   })
   r.use(miniMap)
 
@@ -1181,25 +1263,27 @@ function initRenderer(r: DiagramRenderer) {
     gridSize: GRID_SIZE,
     alignToNodes: alignEnabled.value,
     attachToOutline: attachToOutlineEnabled.value,
-    keymap: { deleteKeys: [] }
+    keymap: { deleteKeys: [] },
   })
   interactionManager.connection.setSnapToGrid(snapEnabled.value)
   interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
   // Warchi persists connections via model state/events.
   // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
-  ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (edge: Edge) => {
+  ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
+    edge: Edge
+  ) => {
     r.addEdge(edge)
   }
-  emit("canvasContextChange", { renderer: r, interactionManager })
+  emit('canvasContextChange', { renderer: r, interactionManager })
 
   // Selection events → emit selectNodes/selectLink
-  interactionManager.selection.on("select", (elementIds: string[]) => {
+  interactionManager.selection.on('select', (elementIds: string[]) => {
     if (suppressSelectionEvent) return
     if (elementIds.length === 0) {
-      emit("selectCanvasElementId", null)
+      emit('selectCanvasElementId', null)
       return
     }
-    emit("selectCanvasElementId", elementIds[0] ?? null)
+    emit('selectCanvasElementId', elementIds[0] ?? null)
 
     const modelNodeIds: string[] = []
     for (const elementId of elementIds) {
@@ -1209,30 +1293,33 @@ function initRenderer(r: DiagramRenderer) {
       }
     }
     if (modelNodeIds.length > 0) {
-      emit("selectNodes", modelNodeIds)
+      emit('selectNodes', modelNodeIds)
       return
     }
 
     if (elementIds.length === 1) {
       const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
       if (edgeEntity) {
-        emit("selectLink", edgeEntity.modelLinkId)
+        emit('selectLink', edgeEntity.modelLinkId)
       }
     }
   })
 
   // Drag end → persist position changes
-  interactionManager.drag.on("dragend", (nodeIds: string[]) => {
+  interactionManager.drag.on('dragend', (nodeIds: string[]) => {
     persistNodePositions(nodeIds)
   })
 
   // Resize end → persist size changes
-  interactionManager.resize.on("resizeEnd", (nodeId: string) => {
+  interactionManager.resize.on('resizeEnd', (nodeId: string) => {
     persistNodePositions([nodeId])
   })
 
   // Connection validator: translate papirus node IDs to model node IDs and delegate
-  interactionManager.connection.connectionValidator = (sourcePapId: string, targetPapId: string) => {
+  interactionManager.connection.connectionValidator = (
+    sourcePapId: string,
+    targetPapId: string
+  ) => {
     if (!props.connectionValidator) return true
     const sourceEntity = nodeIdToInstance.get(sourcePapId)
     const targetEntity = nodeIdToInstance.get(targetPapId)
@@ -1241,7 +1328,7 @@ function initRenderer(r: DiagramRenderer) {
   }
 
   // History → sync canUndo/canRedo + detect label changes
-  interactionManager.history.on("change", () => {
+  interactionManager.history.on('change', () => {
     canUndo.value = interactionManager!.history.canUndo
     canRedo.value = interactionManager!.history.canRedo
     // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
@@ -1253,20 +1340,27 @@ function initRenderer(r: DiagramRenderer) {
   })
 
   // Connection → emit connectNodes
-  interactionManager.connection.on("connect", (edge: Edge) => {
+  interactionManager.connection.on('connect', (edge: Edge) => {
     const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
     const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
     if (sourceEntity && targetEntity) {
-      emit("connectNodes", sourceEntity.modelNodeId, targetEntity.modelNodeId,
-           sourceEntity.instanceId, targetEntity.instanceId,
-           edge.from.portId ?? undefined, edge.to.portId ?? undefined,
-           edge.from.outlineParam, edge.to.outlineParam)
+      emit(
+        'connectNodes',
+        sourceEntity.modelNodeId,
+        targetEntity.modelNodeId,
+        sourceEntity.instanceId,
+        targetEntity.instanceId,
+        edge.from.portId ?? undefined,
+        edge.to.portId ?? undefined,
+        edge.from.outlineParam,
+        edge.to.outlineParam
+      )
     }
     // Remove the edge papirus created — parent will add it through state
     renderer?.removeEdge(edge.id)
   })
 
-  interactionManager.connection.on("edgeReconnect", () => {
+  interactionManager.connection.on('edgeReconnect', () => {
     detectEdgePortChanges()
     detectEditablePolylineControlPointChanges()
   })
@@ -1275,98 +1369,98 @@ function initRenderer(r: DiagramRenderer) {
   r.enableContextMenu({
     menu: {
       node: (target: ContextMenuTarget) => {
-        if (target.type !== "node") return []
+        if (target.type !== 'node') return []
         const entity = nodeIdToInstance.get(target.node.id)
         if (!entity) return []
-        const instance = instanceNodes.value.find((item) => item.id === entity.instanceId)
+        const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
         if (instance && isNoteInstance(instance)) {
           return [
             {
-              label: t("diagram.editNote"),
-              icon: "edit_note",
-              action: () => emit("requestEditNote", entity.instanceId)
+              label: t('diagram.editNote'),
+              icon: 'edit_note',
+              action: () => emit('requestEditNote', entity.instanceId),
             },
             {
-              label: t("diagram.deleteNote"),
-              icon: "delete",
-              action: () => emit("requestDeleteNodeFromDiagram", entity.modelNodeId)
-            }
+              label: t('diagram.deleteNote'),
+              icon: 'delete',
+              action: () => emit('requestDeleteNodeFromDiagram', entity.modelNodeId),
+            },
           ]
         }
         return [
           {
-            label: t("diagram.findInTree"),
-            icon: "account_tree",
-            action: () => emit("findInTree", entity.modelNodeId)
+            label: t('diagram.findInTree'),
+            icon: 'account_tree',
+            action: () => emit('findInTree', entity.modelNodeId),
           },
           {
-            label: t("diagram.removeFromDiagram"),
-            icon: "delete",
-            action: () => emit("requestDeleteNodeFromDiagram", entity.modelNodeId)
-          }
+            label: t('diagram.removeFromDiagram'),
+            icon: 'delete',
+            action: () => emit('requestDeleteNodeFromDiagram', entity.modelNodeId),
+          },
         ]
       },
       edge: (target: ContextMenuTarget) => {
-        if (target.type !== "edge") return []
+        if (target.type !== 'edge') return []
         const entity = edgeIdToInstance.get(target.edge.id)
         if (!entity) return []
 
-        const edgeInst = instanceEdges.value.find((edge) => edge.id === entity.edgeId)
+        const edgeInst = instanceEdges.value.find(edge => edge.id === entity.edgeId)
         const isDiagramOnly = edgeInst?.attrs?.isDiagramOnly === true
         const effStyle = getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)
-        const currentType = ((effStyle?.edgeType as EdgePathType | undefined) ?? "bezier")
+        const currentType = (effStyle?.edgeType as EdgePathType | undefined) ?? 'bezier'
 
         const items: ContextMenuItem[] = []
 
         if (isDiagramOnly) {
           items.push(
-            { label: t("diagram.noteLink"), icon: "note", action: () => {} },
+            { label: t('diagram.noteLink'), icon: 'note', action: () => {} },
             { separator: true }
           )
         }
 
         items.push(
           {
-            label: t("diagram.linkType"),
-            icon: "conversion_path",
+            label: t('diagram.linkType'),
+            icon: 'conversion_path',
             items: [
               {
-                label: t("diagram.linkTypeStraight"),
-                icon: "remove",
-                enabled: currentType !== "straight",
-                action: () => setEdgeTypeFromContext(entity.edgeId, "straight")
+                label: t('diagram.linkTypeStraight'),
+                icon: 'remove',
+                enabled: currentType !== 'straight',
+                action: () => setEdgeTypeFromContext(entity.edgeId, 'straight'),
               },
               {
-                label: t("diagram.linkTypePolyline"),
-                icon: "timeline",
-                enabled: currentType !== "polyline",
-                action: () => setEdgeTypeFromContext(entity.edgeId, "polyline")
+                label: t('diagram.linkTypePolyline'),
+                icon: 'timeline',
+                enabled: currentType !== 'polyline',
+                action: () => setEdgeTypeFromContext(entity.edgeId, 'polyline'),
               },
               {
-                label: t("diagram.linkTypeEditablePolyline"),
-                icon: "polyline",
-                enabled: currentType !== "editable-polyline",
-                action: () => setEdgeTypeFromContext(entity.edgeId, "editable-polyline")
+                label: t('diagram.linkTypeEditablePolyline'),
+                icon: 'polyline',
+                enabled: currentType !== 'editable-polyline',
+                action: () => setEdgeTypeFromContext(entity.edgeId, 'editable-polyline'),
               },
               {
-                label: t("diagram.linkTypeBezier"),
-                icon: "line_curve",
-                enabled: currentType !== "bezier",
-                action: () => setEdgeTypeFromContext(entity.edgeId, "bezier")
-              }
-            ]
+                label: t('diagram.linkTypeBezier'),
+                icon: 'line_curve',
+                enabled: currentType !== 'bezier',
+                action: () => setEdgeTypeFromContext(entity.edgeId, 'bezier'),
+              },
+            ],
           },
           { separator: true },
           {
-            label: isDiagramOnly ? t("diagram.deleteNoteLink") : t("common.delete"),
-            icon: "delete",
-            action: () => emit("requestDeleteLink", entity.modelLinkId)
+            label: isDiagramOnly ? t('diagram.deleteNoteLink') : t('common.delete'),
+            icon: 'delete',
+            action: () => emit('requestDeleteLink', entity.modelLinkId),
           }
         )
 
         return items
-      }
-    }
+      },
+    },
   })
 
   syncDiagram()
@@ -1407,10 +1501,13 @@ const zoomToSelection = () => {
   if (!interactionManager || !renderer) return
   if (props.selectedModelNodeIds.length === 0) return
   const selectedSet = new Set(props.selectedModelNodeIds)
-  const selectedInstances = instanceNodes.value.filter((node) => selectedSet.has(node.modelNodeId))
+  const selectedInstances = instanceNodes.value.filter(node => selectedSet.has(node.modelNodeId))
   if (selectedInstances.length === 0) return
 
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity
   for (const instance of selectedInstances) {
     const dims = getInstanceDimensions(instance)
     minX = Math.min(minX, instance.x)
@@ -1440,7 +1537,7 @@ const autoLayoutNodes = () => {
     node.x = paddingX + col * (width + columnGap)
     node.y = paddingY + row * (height + rowGap)
   })
-  emit("updateDiagram", next)
+  emit('updateDiagram', next)
   requestAnimationFrame(() => fitToView())
 }
 
@@ -1525,18 +1622,18 @@ const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
   const notationId = activeNotationId.value
   if (!notationId) return false
 
-  const node = props.nodes.find((item) => item.id === modelNodeId && !item._isDeleted)
+  const node = props.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
   if (!node) return false
 
   const existingComponentId = node.parsedAttrs.notationComponents[notationId]?.componentId
   if (existingComponentId) {
     return props.components.some(
-      (component) => component.id === existingComponentId && component.notationId === notationId
+      component => component.id === existingComponentId && component.notationId === notationId
     )
   }
 
   return props.components.some(
-    (component) => component.notationId === notationId && component.nodeTypeId === node.nodeTypeId
+    component => component.notationId === notationId && component.nodeTypeId === node.nodeTypeId
   )
 }
 
@@ -1544,11 +1641,11 @@ const hasDragType = (event: DragEvent, type: string): boolean =>
   Boolean(event.dataTransfer?.types?.includes(type))
 
 const isAllowedDropEvent = (event: DragEvent): boolean => {
-  const componentId = event.dataTransfer?.getData("application/x-notation-component-id")
+  const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) return true
-  const notePayload = event.dataTransfer?.getData("application/x-model-diagram-note")
-  if (notePayload === "note") return true
-  const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+  const notePayload = event.dataTransfer?.getData('application/x-model-diagram-note')
+  if (notePayload === 'note') return true
+  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) return canDropModelNodeToDiagram(modelNodeId)
   return false
 }
@@ -1556,19 +1653,20 @@ const isAllowedDropEvent = (event: DragEvent): boolean => {
 const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } => {
   if (!renderer) return { x: 0, y: 0 }
   const world = renderer.screenToWorld(event.clientX, event.clientY)
-  const snapTo = (value: number) => snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  const snapTo = (value: number) =>
+    snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
   return {
     x: Math.max(24, snapTo(world.x - 70)),
-    y: Math.max(24, snapTo(world.y - 28))
+    y: Math.max(24, snapTo(world.y - 28)),
   }
 }
 
 const onDragOver = (event: DragEvent) => {
   if (!props.activeDiagram) return
 
-  const hasComponentPayload = hasDragType(event, "application/x-notation-component-id")
-  const hasModelNodePayload = hasDragType(event, "application/x-model-node-id")
-  const hasNotePayload = hasDragType(event, "application/x-model-diagram-note")
+  const hasComponentPayload = hasDragType(event, 'application/x-notation-component-id')
+  const hasModelNodePayload = hasDragType(event, 'application/x-model-node-id')
+  const hasNotePayload = hasDragType(event, 'application/x-model-diagram-note')
   if (!hasComponentPayload && !hasModelNodePayload && !hasNotePayload) {
     return
   }
@@ -1576,10 +1674,10 @@ const onDragOver = (event: DragEvent) => {
   // Browsers can hide dataTransfer payload during dragover.
   // Block only when we can reliably read an invalid model-node payload.
   if (hasModelNodePayload) {
-    const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+    const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
     if (modelNodeId && !canDropModelNodeToDiagram(modelNodeId)) {
       if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "none"
+        event.dataTransfer.dropEffect = 'none'
       }
       return
     }
@@ -1594,33 +1692,33 @@ const onDrop = (event: DragEvent) => {
   event.preventDefault()
   const { x, y } = normalizeDropCoordinates(event)
 
-  const componentId = event.dataTransfer?.getData("application/x-notation-component-id")
+  const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) {
-    emit("createNodeFromComponent", componentId, x, y)
+    emit('createNodeFromComponent', componentId, x, y)
     return
   }
 
-  const notePayload = event.dataTransfer?.getData("application/x-model-diagram-note")
-  if (notePayload === "note") {
-    emit("createNote", x, y)
+  const notePayload = event.dataTransfer?.getData('application/x-model-diagram-note')
+  if (notePayload === 'note') {
+    emit('createNote', x, y)
     return
   }
 
-  const modelNodeId = event.dataTransfer?.getData("application/x-model-node-id")
+  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) {
-    emit("addExistingNode", modelNodeId, x, y)
+    emit('addExistingNode', modelNodeId, x, y)
   }
 }
 
 const onDragComponentStart = (event: DragEvent, componentId: string) => {
-  event.dataTransfer?.setData("application/x-notation-component-id", componentId)
-  event.dataTransfer?.setData("text/plain", `component:${componentId}`)
+  event.dataTransfer?.setData('application/x-notation-component-id', componentId)
+  event.dataTransfer?.setData('text/plain', `component:${componentId}`)
   event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
 }
 
 const onDragNoteStart = (event: DragEvent) => {
-  event.dataTransfer?.setData("application/x-model-diagram-note", "note")
-  event.dataTransfer?.setData("text/plain", "note")
+  event.dataTransfer?.setData('application/x-model-diagram-note', 'note')
+  event.dataTransfer?.setData('text/plain', 'note')
   event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
 }
 
@@ -1629,26 +1727,27 @@ const paletteItems = computed(() => {
   const notationId = props.activeDiagram?.notationId
   if (!notationId) return []
   return props.components
-    .filter((component) => component.notationId === notationId)
-    .map((component) => {
+    .filter(component => component.notationId === notationId)
+    .map(component => {
       const parsedAttrs = parseEntityAttrs(component.attrs ?? null)
       const iconName = parsedAttrs.diagramStyle?.iconName?.trim()
       const fillColor = parsedAttrs.diagramStyle?.fillColor?.trim()
-      const paletteGroup = typeof parsedAttrs.paletteGroup === "number" && parsedAttrs.paletteGroup >= 0
-        ? parsedAttrs.paletteGroup
-        : 0
+      const paletteGroup =
+        typeof parsedAttrs.paletteGroup === 'number' && parsedAttrs.paletteGroup >= 0
+          ? parsedAttrs.paletteGroup
+          : 0
       return {
         ...component,
-        paletteIconName: iconName && iconName.length > 0 ? iconName : "component",
-        paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : "var(--accent)",
-        paletteGroup
+        paletteIconName: iconName && iconName.length > 0 ? iconName : 'component',
+        paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : 'var(--accent)',
+        paletteGroup,
       }
     })
 })
 
 type PaletteEntry =
-  | { kind: "divider" }
-  | { kind: "item"; component: (typeof paletteItems.value)[number] }
+  | { kind: 'divider' }
+  | { kind: 'item'; component: (typeof paletteItems.value)[number] }
 
 const paletteEntries = computed((): PaletteEntry[] => {
   const items = paletteItems.value
@@ -1667,11 +1766,11 @@ const paletteEntries = computed((): PaletteEntry[] => {
   for (let i = 0; i < sortedGroups.length; i++) {
     const groupKey = sortedGroups[i]
     if (groupKey === undefined) continue
-    if (i > 0 || groupKey > 0) entries.push({ kind: "divider" })
+    if (i > 0 || groupKey > 0) entries.push({ kind: 'divider' })
     const groupItems = byGroup.get(groupKey)!
-    groupItems.sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" }))
+    groupItems.sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
     for (const comp of groupItems) {
-      entries.push({ kind: "item", component: comp })
+      entries.push({ kind: 'item', component: comp })
     }
   }
 
@@ -1680,31 +1779,31 @@ const paletteEntries = computed((): PaletteEntry[] => {
 
 const buildIconUrl = (iconName: string): string => {
   const normalized = iconName.trim()
-  if (!normalized) return "/icons/component.svg"
-  if (normalized.startsWith("/")) return normalized
-  if (normalized.toLowerCase().endsWith(".svg")) return `/icons/${normalized}`
+  if (!normalized) return '/icons/component.svg'
+  if (normalized.startsWith('/')) return normalized
+  if (normalized.toLowerCase().endsWith('.svg')) return `/icons/${normalized}`
   return `/icons/${normalized}.svg`
 }
 
 const handlePaletteIconError = (event: Event, iconName: string) => {
   const img = event.target as HTMLImageElement | null
   if (!img) return
-  const triedAltPath = img.dataset.iconFallbackTried === "1"
+  const triedAltPath = img.dataset.iconFallbackTried === '1'
   if (!triedAltPath) {
-    img.dataset.iconFallbackTried = "1"
+    img.dataset.iconFallbackTried = '1'
     const normalized = iconName.trim()
-    img.src = normalized.toLowerCase().endsWith(".svg")
+    img.src = normalized.toLowerCase().endsWith('.svg')
       ? `/icon/${normalized}`
       : `/icon/${normalized}.svg`
     return
   }
-  img.src = "/icons/component.svg"
+  img.src = '/icons/component.svg'
 }
 
 const setPaletteVisible = (visible: boolean) => {
   if (paletteVisible.value === visible) return
   paletteVisible.value = visible
-  emit("paletteVisibleChange", visible)
+  emit('paletteVisibleChange', visible)
 }
 
 // ── Lifecycle ──
@@ -1719,14 +1818,15 @@ onMounted(() => {
     const width = containerRef.value.clientWidth
     const height = containerRef.value.clientHeight
 
-    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || "#f4f2ef"
+    const bgColor =
+      getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#f4f2ef'
     const r = new DiagramRenderer(canvasRef.value, {
       width,
       height,
       backgroundColor: bgColor,
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
-      scrollbarOverlay: true
+      scrollbarOverlay: true,
     })
     initRenderer(r)
 
@@ -1742,12 +1842,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
-  renderer?.getCanvas().removeEventListener("click", handleCanvasClickPrioritizeEdge)
-  window.removeEventListener("mouseup", handleCanvasMouseUpSyncEditablePolyline)
+  renderer?.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
+  window.removeEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
   renderer?.destroy()
   renderer = null
   interactionManager = null
-  emit("canvasContextChange", { renderer: null, interactionManager: null })
+  emit('canvasContextChange', { renderer: null, interactionManager: null })
   gridOverlay = null
   miniMap = null
   rulersOverlay = null
@@ -1757,7 +1857,11 @@ onBeforeUnmount(() => {
 
 // Watch for data changes
 watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
-watch(() => props.nodes, () => syncDiagram(), { deep: true })
+watch(
+  () => props.nodes,
+  () => syncDiagram(),
+  { deep: true }
+)
 
 watch(
   () => [props.activeDiagram?.id, props.activeDiagram?.notationId],
@@ -1789,7 +1893,7 @@ watch(
 
 watch(
   () => props.gridVisible,
-  (next) => {
+  next => {
     if (next === gridVisible.value) return
     gridVisible.value = next
     gridOverlay?.setEnabled(next)
@@ -1799,7 +1903,7 @@ watch(
 
 watch(
   () => props.miniMapVisible,
-  (next) => {
+  next => {
     if (next === miniMapVisible.value) return
     miniMapVisible.value = next
     miniMap?.setEnabled(next)
@@ -1809,7 +1913,7 @@ watch(
 
 watch(
   () => props.snapEnabled,
-  (next) => {
+  next => {
     if (next === snapEnabled.value) return
     snapEnabled.value = next
     if (interactionManager) {
@@ -1822,7 +1926,7 @@ watch(
 
 watch(
   () => props.alignEnabled,
-  (next) => {
+  next => {
     if (next === alignEnabled.value) return
     alignEnabled.value = next
     interactionManager?.drag.setAlignmentEnabled(next)
@@ -1831,7 +1935,7 @@ watch(
 
 watch(
   () => props.rulersEnabled,
-  (next) => {
+  next => {
     if (next === rulersEnabled.value) return
     rulersEnabled.value = next
     rulersOverlay?.setEnabled(next)
@@ -1841,7 +1945,7 @@ watch(
 
 watch(
   () => props.paletteVisible,
-  (next) => {
+  next => {
     if (next === paletteVisible.value) return
     paletteVisible.value = next
   }
@@ -1849,7 +1953,7 @@ watch(
 
 watch(
   () => props.lockAnchorsEnabled,
-  (next) => {
+  next => {
     if (next === lockAnchorsEnabled.value) return
     lockAnchorsEnabled.value = next
     if (!renderer) return
@@ -1862,7 +1966,7 @@ watch(
 
 watch(
   () => props.attachToOutlineEnabled,
-  (next) => {
+  next => {
     if (next === attachToOutlineEnabled.value) return
     attachToOutlineEnabled.value = next
     interactionManager?.connection.setAttachToOutline(next)
@@ -1892,7 +1996,7 @@ defineExpose({
   undo,
   redo,
   getCanUndo,
-  getCanRedo
+  getCanRedo,
 })
 </script>
 
@@ -1912,8 +2016,8 @@ defineExpose({
 
     <div v-if="!activeDiagram" class="diagram-canvas__placeholder">
       <span class="material-symbols-outlined diagram-canvas__placeholder-icon">draw</span>
-      <span class="diagram-canvas__placeholder-text">{{ t("diagram.openOrCreateDiagram") }}</span>
-      <span class="diagram-canvas__placeholder-hint">{{ t("diagram.selectDiagramInTree") }}</span>
+      <span class="diagram-canvas__placeholder-text">{{ t('diagram.openOrCreateDiagram') }}</span>
+      <span class="diagram-canvas__placeholder-hint">{{ t('diagram.selectDiagramInTree') }}</span>
     </div>
 
     <template v-if="activeDiagram">
@@ -1930,7 +2034,7 @@ defineExpose({
       <div v-if="paletteVisible" class="canvas-palette">
         <div class="canvas-palette__header">
           <span class="material-symbols-outlined">palette</span>
-          <span>{{ t("diagram.palette") }}</span>
+          <span>{{ t('diagram.palette') }}</span>
           <button
             type="button"
             class="canvas-palette__hide"
@@ -1941,7 +2045,7 @@ defineExpose({
           </button>
         </div>
         <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
-          {{ t("diagram.noNotationComponents") }}
+          {{ t('diagram.noNotationComponents') }}
         </div>
         <div class="canvas-palette__list">
           <button
@@ -1953,7 +2057,10 @@ defineExpose({
           >
             <span class="material-symbols-outlined canvas-palette__note-icon">note</span>
           </button>
-          <template v-for="(entry, index) in paletteEntries" :key="entry.kind === 'item' ? entry.component.id : `divider-${index}`">
+          <template
+            v-for="(entry, index) in paletteEntries"
+            :key="entry.kind === 'item' ? entry.component.id : `divider-${index}`"
+          >
             <div v-if="entry.kind === 'divider'" class="canvas-palette__divider" />
             <button
               v-else
@@ -1970,7 +2077,7 @@ defineExpose({
                 :alt="entry.component.name"
                 draggable="false"
                 @error="handlePaletteIconError($event, entry.component.paletteIconName)"
-              >
+              />
             </button>
           </template>
         </div>
@@ -2032,8 +2139,12 @@ defineExpose({
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .canvas-palette-toggle {

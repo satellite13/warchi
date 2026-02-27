@@ -7,6 +7,7 @@ import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/p
 import SketchColorField from "./SketchColorField.vue";
 import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
 import type {DiagramStyle} from "../notationAttrs";
+import { AVAILABLE_ICON_OPTIONS } from "@/config/availableIcons";
 import {
   getAllComponentPresets,
   getAllRelationPresets,
@@ -465,21 +466,6 @@ function applyEdgePreset(presetName: string) {
   
   emitEdgeStyle();
 }
-
-const AVAILABLE_ICONS = [
-  "actor", "artifact", "assessment", "capability", "circle", "collaboration",
-  "communication_network", "component_group", "component", "constraint",
-  "contract", "course_of_action", "deliverable", "device",
-  "distribution_network", "driver", "equipment", "event", "facility",
-  "function", "gap", "goal", "group", "grouping", "hidden_rectangle", "interaction",
-  "interface", "location", "material", "meaning", "node", "object", "octagon",
-  "outcome", "path", "plateau", "principle", "process", "product",
-  "rectangle", "representation", "requirement", "resource", "rhombus",
-  "role", "rounded_rectangle", "service", "stakeholder", "system_software",
-  "text", "value_stream", "value", "work_package"
-] as const;
-
-const AVAILABLE_ICON_OPTIONS = AVAILABLE_ICONS.map((name) => ({ id: name, label: name }));
 
 const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; labelKey: string }> = [
   { value: "rectangle", labelKey: "nodeStyle.shapeRectangle" },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 
 export type SelectOption = { id: string; label: string }
 
@@ -34,6 +34,18 @@ defineSlots<{
 const isOpen = ref(false)
 const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const controlRef = ref<HTMLDivElement | null>(null)
+const panelPosition = ref({ top: 0, left: 0, width: 0 })
+
+function updatePanelPosition(): void {
+  if (!controlRef.value) return
+  const rect = controlRef.value.getBoundingClientRect()
+  panelPosition.value = {
+    top: rect.bottom + 4,
+    left: rect.left,
+    width: rect.width,
+  }
+}
 
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -58,7 +70,10 @@ const toggle = () => {
   } else {
     isOpen.value = true
     searchQuery.value = ''
-    nextTick(() => searchInputRef.value?.focus())
+    nextTick(() => {
+      updatePanelPosition()
+      searchInputRef.value?.focus()
+    })
   }
 }
 
@@ -70,10 +85,20 @@ const selectOption = (id: string) => {
 const handleClickOutside = (e: MouseEvent) => {
   if (!isOpen.value) return
   const target = e.target as HTMLElement
-  if (!target.closest('.searchable-select')) {
+  if (!target.closest('.searchable-select') && !target.closest('.searchable-select-panel')) {
     isOpen.value = false
   }
 }
+
+watch(isOpen, (open) => {
+  if (open) {
+    window.addEventListener('scroll', updatePanelPosition, true)
+    window.addEventListener('resize', updatePanelPosition)
+  } else {
+    window.removeEventListener('scroll', updatePanelPosition, true)
+    window.removeEventListener('resize', updatePanelPosition)
+  }
+})
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
@@ -81,12 +106,14 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('scroll', updatePanelPosition, true)
+  window.removeEventListener('resize', updatePanelPosition)
 })
 </script>
 
 <template>
   <div class="searchable-select" :class="{ 'searchable-select--disabled': disabled }">
-    <div class="searchable-select__control" @click.stop="toggle">
+    <div ref="controlRef" class="searchable-select__control" @click.stop="toggle">
       <span class="searchable-select__value">
         <slot v-if="selectedOption" name="selected" :option="selectedOption">
           {{ displayLabel }}
@@ -97,42 +124,52 @@ onBeforeUnmount(() => {
         {{ isOpen ? 'expand_less' : 'expand_more' }}
       </span>
     </div>
-    <div v-if="isOpen" class="searchable-select__panel">
-      <input
-        ref="searchInputRef"
-        v-model="searchQuery"
-        class="searchable-select__search"
-        type="text"
-        :placeholder="searchPlaceholder"
-        @click.stop
-      />
-      <div class="searchable-select__list">
-        <button
-          v-if="allowEmpty"
-          type="button"
-          class="searchable-select__item"
-          :class="{ 'searchable-select__item--active': !modelValue }"
-          @click.stop="selectOption('')"
+    <Teleport to="body">
+      <div
+        v-if="isOpen"
+        class="searchable-select-panel searchable-select__panel"
+        :style="{
+          top: `${panelPosition.top}px`,
+          left: `${panelPosition.left}px`,
+          width: `${panelPosition.width}px`,
+        }"
+      >
+        <input
+          ref="searchInputRef"
+          v-model="searchQuery"
+          class="searchable-select__search"
+          type="text"
+          :placeholder="searchPlaceholder"
+          @click.stop
         >
-          {{ emptyLabel || '—' }}
-        </button>
-        <button
-          v-for="option in filteredOptions"
-          :key="option.id"
-          type="button"
-          class="searchable-select__item"
-          :class="{ 'searchable-select__item--active': modelValue === option.id }"
-          @click.stop="selectOption(option.id)"
-        >
-          <slot name="option" :option="option" :active="modelValue === option.id">
-            {{ option.label }}
-          </slot>
-        </button>
-        <div v-if="filteredOptions.length === 0" class="searchable-select__empty">
-          {{ emptyText || '—' }}
+        <div class="searchable-select__list">
+          <button
+            v-if="allowEmpty"
+            type="button"
+            class="searchable-select__item"
+            :class="{ 'searchable-select__item--active': !modelValue }"
+            @click.stop="selectOption('')"
+          >
+            {{ emptyLabel || '—' }}
+          </button>
+          <button
+            v-for="option in filteredOptions"
+            :key="option.id"
+            type="button"
+            class="searchable-select__item"
+            :class="{ 'searchable-select__item--active': modelValue === option.id }"
+            @click.stop="selectOption(option.id)"
+          >
+            <slot name="option" :option="option" :active="modelValue === option.id">
+              {{ option.label }}
+            </slot>
+          </button>
+          <div v-if="filteredOptions.length === 0" class="searchable-select__empty">
+            {{ emptyText || '—' }}
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -183,15 +220,12 @@ onBeforeUnmount(() => {
 }
 
 .searchable-select__panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  position: fixed;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  z-index: 100;
+  z-index: 10000;
   overflow: hidden;
 }
 

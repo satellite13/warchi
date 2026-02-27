@@ -247,6 +247,8 @@ export type TypeAttrs = {
   height?: number
   cornerRadius?: number
   defaultDirectoryPath?: string
+  /** SVG icon name from public/icons/ for tree display (e.g. actor, component, service) */
+  icon?: string
   documentFileId?: string
   customProperties?: CustomProperty[]
 }
@@ -342,6 +344,9 @@ export const parseTypeAttrs = (attrs: string | null): TypeAttrs => {
         result.defaultDirectoryPath = normalizedPath
       }
     }
+    if (typeof record.icon === 'string' && record.icon.trim().length > 0) {
+      result.icon = record.icon.trim()
+    }
     if (typeof record.documentFileId === 'string' && record.documentFileId.trim().length > 0) {
       result.documentFileId = record.documentFileId.trim()
     }
@@ -378,6 +383,9 @@ export const serializeTypeAttrs = (attrs: TypeAttrs): string => {
     attrs.defaultDirectoryPath.trim().length > 0
   ) {
     result.defaultDirectoryPath = attrs.defaultDirectoryPath.trim()
+  }
+  if (typeof attrs.icon === 'string' && attrs.icon.trim().length > 0) {
+    result.icon = attrs.icon.trim()
   }
   if (typeof attrs.documentFileId === 'string' && attrs.documentFileId.trim().length > 0) {
     result.documentFileId = attrs.documentFileId.trim()

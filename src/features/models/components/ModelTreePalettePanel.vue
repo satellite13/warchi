@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue"
 import { useI18n } from "vue-i18n"
+import { parseTypeAttrs } from "../../notations/notationAttrs"
 import type { NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 
@@ -36,6 +37,16 @@ const treeSearchQuery = ref("")
 const nodeTypeNameById = computed(() => {
   const map = new Map<string, string>()
   for (const type of props.nodeTypes) map.set(type.id, type.name)
+  return map
+})
+
+const nodeTypeIconById = computed(() => {
+  const map = new Map<string, string>()
+  for (const type of props.nodeTypes) {
+    const attrs = parseTypeAttrs(type.attrs ?? null)
+    const icon = attrs.icon?.trim()
+    if (icon) map.set(type.id, icon)
+  }
   return map
 })
 
@@ -347,7 +358,13 @@ defineExpose({ expandToNode, focusNode })
               @click="emit('selectNode', node.id)"
               @dblclick="isDirectory(node) && toggleNode(node.id)"
             >
-              <span class="material-symbols-outlined">{{ isDirectory(node) ? "folder" : "category" }}</span>
+              <img
+                v-if="nodeTypeIconById.get(node.nodeTypeId)"
+                class="tree-node__icon-img"
+                :src="`/icons/${nodeTypeIconById.get(node.nodeTypeId)}.svg`"
+                :alt="nodeTypeNameById.get(node.nodeTypeId) ?? ''"
+              >
+              <span v-else class="material-symbols-outlined">{{ isDirectory(node) ? 'folder' : 'category' }}</span>
               <input
                 v-if="renamingNodeId === node.id"
                 v-model="renamingNodeName"
@@ -459,7 +476,13 @@ defineExpose({ expandToNode, focusNode })
                   @click="emit('selectNode', child.id)"
                   @dblclick="isDirectory(child) && toggleNode(child.id)"
                 >
-                  <span class="material-symbols-outlined">{{ isDirectory(child) ? "folder" : "category" }}</span>
+                  <img
+                    v-if="nodeTypeIconById.get(child.nodeTypeId)"
+                    class="tree-node__icon-img"
+                    :src="`/icons/${nodeTypeIconById.get(child.nodeTypeId)}.svg`"
+                    :alt="nodeTypeNameById.get(child.nodeTypeId) ?? ''"
+                  >
+                  <span v-else class="material-symbols-outlined">{{ isDirectory(child) ? 'folder' : 'category' }}</span>
                   <input
                     v-if="renamingNodeId === child.id"
                     v-model="renamingNodeName"
@@ -570,7 +593,13 @@ defineExpose({ expandToNode, focusNode })
                       @click="emit('selectNode', grandchild.id)"
                       @dblclick="isDirectory(grandchild) && toggleNode(grandchild.id)"
                     >
-                      <span class="material-symbols-outlined">{{ isDirectory(grandchild) ? "folder" : "category" }}</span>
+                      <img
+                        v-if="nodeTypeIconById.get(grandchild.nodeTypeId)"
+                        class="tree-node__icon-img"
+                        :src="`/icons/${nodeTypeIconById.get(grandchild.nodeTypeId)}.svg`"
+                        :alt="nodeTypeNameById.get(grandchild.nodeTypeId) ?? ''"
+                      >
+                      <span v-else class="material-symbols-outlined">{{ isDirectory(grandchild) ? 'folder' : 'category' }}</span>
                       <input
                         v-if="renamingNodeId === grandchild.id"
                         v-model="renamingNodeName"
@@ -920,6 +949,13 @@ defineExpose({ expandToNode, focusNode })
   font-family: inherit;
   padding: 2px 6px;
   outline: none;
+}
+
+.tree-node__icon-img {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .tree-node__type {

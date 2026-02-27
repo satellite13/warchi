@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.22] - 2026-02-27
+
+### Added
+- IconPicker component for selecting SVG icons in type editor (NodeStylePanel, TypeForm).
+- Icon field for node types (notationAttrs): tree display in model palette with custom icons from public/icons.
+- availableIcons config with pre-defined icon options.
+
+### Changed
+- User profile: save button aligned with design system (btn--primary, save icon), active only when profile has unsaved changes.
+- SearchableSelect enhancements for IconPicker integration.
+
 ## [0.0.21] - 2026-02-27
 
 ### Added

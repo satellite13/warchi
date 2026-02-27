@@ -121,6 +121,16 @@ function handleDefaultDirectoryPathUpdate(value: string) {
   selectedType.value.parsedAttrs.defaultDirectoryPath = normalized
 }
 
+function handleIconUpdate(value: string) {
+  if (!selectedType.value || selectedType.value.kind !== 'node') return
+  const normalized = value.trim()
+  if (!normalized) {
+    delete selectedType.value.parsedAttrs.icon
+    return
+  }
+  selectedType.value.parsedAttrs.icon = normalized
+}
+
 // --- Unsaved changes dialog ---
 const pendingSelectId = ref<string | null>(null)
 const showUnsavedDialog = ref(false)
@@ -252,6 +262,7 @@ const attrsJson = computed(() => {
               @delete="handleDelete"
               @update-name="handleTypeNameUpdate"
               @update-default-directory-path="handleDefaultDirectoryPathUpdate"
+              @update-icon="handleIconUpdate"
               :on-mutate-property="handleMutateProperty"
               @add-property="addCustomProperty(selectedType)"
               @remove-property="removeCustomProperty(selectedType, $event)"

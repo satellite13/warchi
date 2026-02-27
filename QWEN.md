@@ -116,7 +116,7 @@ npm run lint:fix          # Auto-fix linting issues
 ./deploy.sh
 
 # Blue/Green mode
-BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.21 ./deploy.sh
+BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./deploy.sh
 
 # Build image flag
 BUILD_IMAGE=false ./deploy.sh

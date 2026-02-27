@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFooter from "../components/layout/AppFooter.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
@@ -19,12 +19,29 @@ const isSaving = ref(false);
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
 
+const savedFirstName = ref("");
+const savedLastName = ref("");
+const savedMiddleName = ref("");
+const savedPosition = ref("");
+
 const applyUser = (user: User): void => {
   firstName.value = user.firstName ?? "";
   lastName.value = user.lastName ?? "";
   middleName.value = user.middleName ?? "";
   position.value = user.position ?? "";
+  savedFirstName.value = firstName.value;
+  savedLastName.value = lastName.value;
+  savedMiddleName.value = middleName.value;
+  savedPosition.value = position.value;
 };
+
+const isDirty = computed(
+  () =>
+    firstName.value !== savedFirstName.value ||
+    lastName.value !== savedLastName.value ||
+    middleName.value !== savedMiddleName.value ||
+    position.value !== savedPosition.value
+);
 
 const loadProfile = async (): Promise<void> => {
   isLoading.value = true;
@@ -69,6 +86,10 @@ const saveProfile = async (): Promise<void> => {
     return;
   }
 
+  savedFirstName.value = firstName.value.trim();
+  savedLastName.value = lastName.value.trim();
+  savedMiddleName.value = middleName.value.trim();
+  savedPosition.value = position.value.trim();
   if (currentUser.value) {
     applyUser(currentUser.value);
   }
@@ -114,7 +135,8 @@ onMounted(() => {
           <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
           <div v-if="successMessage" class="msg msg--success">{{ successMessage }}</div>
 
-          <button type="submit" class="btn" :disabled="isSaving || isLoading">
+          <button type="submit" class="btn btn--primary profile-form__save" :disabled="isSaving || isLoading || !isDirty">
+            <span class="material-symbols-outlined">save</span>
             {{ isSaving ? t("common.saving") : t("common.save") }}
           </button>
         </form>
@@ -210,13 +232,7 @@ onMounted(() => {
   color: var(--success);
 }
 
-.btn {
+.profile-form__save {
   margin-top: 4px;
-  padding: 11px 16px;
-  font-weight: 600;
-}
-
-.btn:disabled {
-  opacity: 0.55;
 }
 </style>

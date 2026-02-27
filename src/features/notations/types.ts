@@ -13,6 +13,8 @@ export interface TypeParsedAttrs {
   height?: number
   cornerRadius?: number
   defaultDirectoryPath?: string
+  /** SVG icon name from public/icons/ for tree display */
+  icon?: string
   documentFileId?: string
   customProperties?: CustomProperty[]
 }

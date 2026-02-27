@@ -152,8 +152,12 @@ export const useModelEditor = (): ModelEditorReturn => {
           `/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`
         ),
         apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
-        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(
+          `/node-types?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
+        ),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(
+          `/link-types?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
+        ),
         apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
         apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
         apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`),

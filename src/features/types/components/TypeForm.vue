@@ -3,6 +3,7 @@ import { computed, reactive, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import type { CustomProperty } from "../../notations/notationAttrs"
+import IconPicker from "@/components/forms/IconPicker.vue"
 import PropertyRow from "./PropertyRow.vue"
 
 const props = defineProps<{
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   removeProperty: [propertyId: string]
   updateName: [value: string]
   updateDefaultDirectoryPath: [value: string]
+  updateIcon: [value: string]
   share: []
 }>()
 
@@ -108,6 +110,13 @@ const filteredCustomProperties = computed(() => {
         <div class="form-row">
           <label class="form-label">{{ t("common.author") }}</label>
           <div class="form-input form-input--readonly">{{ ownerDisplayName }}</div>
+        </div>
+        <div v-if="selectedType.kind === 'node'" class="form-row">
+          <label class="form-label">{{ t("types.icon") }}</label>
+          <IconPicker
+            :model-value="selectedType.parsedAttrs.icon ?? ''"
+            @update:model-value="emit('updateIcon', $event)"
+          />
         </div>
         <div v-if="selectedType.kind === 'node'" class="form-row">
           <label class="form-label">{{ t("types.directory") }}</label>

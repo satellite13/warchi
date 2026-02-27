@@ -364,7 +364,7 @@ docker build --build-arg VITE_API_BASE_URL=/api -t warchi:latest .
 ./deploy.sh
 
 # Blue/Green deployment
-BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.21 ./deploy.sh
+BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./deploy.sh
 ```
 
 Environment variables for deployment:

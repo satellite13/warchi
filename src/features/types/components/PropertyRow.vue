@@ -128,6 +128,7 @@ const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToT
         <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
         {{ t("types.typeShort") }}
       </span>
+      <span v-if="property.system" class="property-row__system-badge">{{ t("types.systemShort") }}</span>
       <span v-if="property.required" class="property-row__required-badge">{{ t("types.requiredShort") }}</span>
       <button
         type="button"
@@ -164,6 +165,14 @@ const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToT
               @change="onMutateProperty?.((p) => { p.required = ($event.target as HTMLInputElement).checked })"
             >
             <span class="property-checkbox__label">{{ t("types.requiredShort") }}</span>
+          </label>
+          <label class="property-checkbox">
+            <input
+              type="checkbox"
+              :checked="property.system"
+              @change="onMutateProperty?.((p) => { p.system = ($event.target as HTMLInputElement).checked })"
+            >
+            <span class="property-checkbox__label">{{ t("types.systemShort") }}</span>
           </label>
         </div>
 
@@ -370,6 +379,17 @@ const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToT
   font-weight: 500;
   color: var(--warning);
   background: var(--warning-soft);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.property-row__system-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--info, #0ea5e9);
+  background: var(--info-soft, rgba(14, 165, 233, 0.12));
   padding: 2px 8px;
   border-radius: 6px;
   white-space: nowrap;

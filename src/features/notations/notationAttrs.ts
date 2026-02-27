@@ -5,6 +5,7 @@ export type CustomProperty = {
   name: string
   type: CustomPropertyType
   required: boolean
+  system?: boolean
   regex?: string
   min: number | null
   max: number | null
@@ -134,6 +135,7 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
       name: typeof record.name === 'string' ? record.name : '',
       type,
       required: Boolean(record.required),
+      system: Boolean(record.system),
       regex: typeof record.regex === 'string' ? record.regex : undefined,
       min: typeof record.min === 'number' ? record.min : null,
       max: typeof record.max === 'number' ? record.max : null,

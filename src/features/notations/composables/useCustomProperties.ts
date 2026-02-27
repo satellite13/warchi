@@ -83,6 +83,7 @@ export function useCustomProperties(
       name: "",
       type: "string",
       required: false,
+      system: false,
       regex: "",
       min: null,
       max: null,

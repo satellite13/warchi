@@ -1720,15 +1720,39 @@ const startConnectNodes = (
     sourceOutlineParam,
     targetOutlineParam,
   }
-  if (allowedRelations.length === 1) {
-    finalizeConnection(allowedRelations[0]!.id)
-    return
-  }
+
+  // Сохраняем доступные relations для возможного выбора позже
   relationChoiceOptions.value = allowedRelations.map(relation => ({
     id: relation.id,
     name: relation.name,
     linkTypeId: relation.linkTypeId,
   }))
+
+  // Собираем все существующие связи для всех allowedRelations
+  const existingLinks: EditorLink[] = []
+  for (const relation of allowedRelations) {
+    const links = state.value.links.filter(
+      link =>
+        !link._isDeleted &&
+        link.sourceId === sourceModelNodeId &&
+        link.targetId === targetModelNodeId &&
+        link.linkTypeId === relation.linkTypeId
+    )
+    existingLinks.push(...links)
+  }
+
+  // Если есть существующие связи, показываем их первым делом
+  if (existingLinks.length > 0) {
+    reuseLinkOptions.value = existingLinks
+    showReuseLinkModal.value = true
+    return
+  }
+
+  // Если нет существующих связей, показываем выбор relation (если > 1)
+  if (allowedRelations.length === 1) {
+    finalizeConnection(allowedRelations[0]!.id)
+    return
+  }
   showRelationChoiceModal.value = true
 }
 
@@ -1741,20 +1765,36 @@ const finalizeConnection = (relationId: string) => {
   const relation = state.value.relations.find(item => item.id === relationId)
   if (!relation) return
 
-  const existing = state.value.links.filter(
-    link =>
-      !link._isDeleted &&
-      link.sourceId === connection.sourceModelNodeId &&
-      link.targetId === connection.targetModelNodeId &&
-      link.linkTypeId === relation.linkTypeId
-  )
   pendingRelationId.value = relationId
-  if (existing.length > 0) {
-    reuseLinkOptions.value = existing
-    showReuseLinkModal.value = true
+  createOrReuseLink(null)
+}
+
+const handleCreateNewLinkFromReuseModal = () => {
+  showReuseLinkModal.value = false
+
+  // Если есть только один relation, используем его сразу
+  if (relationChoiceOptions.value.length === 1) {
+    finalizeConnection(relationChoiceOptions.value[0]!.id)
     return
   }
-  createOrReuseLink(null)
+
+  // Иначе показываем выбор relation
+  showRelationChoiceModal.value = true
+}
+
+const handleSelectExistingLink = (linkId: string) => {
+  const notationId = activeNotationId.value
+  const link = state.value.links.find(item => item.id === linkId)
+  if (!notationId || !link) return
+
+  // Находим relationId по linkTypeId и notationId
+  const relation = state.value.relations.find(
+    item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
+  )
+  if (!relation) return
+
+  pendingRelationId.value = relation.id
+  createOrReuseLink(linkId)
 }
 
 const createOrReuseLink = (linkId: string | null) => {
@@ -3219,14 +3259,14 @@ onBeforeUnmount(() => {
         :key="link.id"
         type="button"
         class="choice-item"
-        @click="createOrReuseLink(link.id)"
+        @click="handleSelectExistingLink(link.id)"
       >
         {{ t('models.useExistingLink', { link: formatReuseLinkOption(link) }) }}
       </button>
       <button
         type="button"
         class="choice-item choice-item--primary"
-        @click="createOrReuseLink(null)"
+        @click="handleCreateNewLinkFromReuseModal"
       >
         {{ t('models.createNewLink') }}
       </button>

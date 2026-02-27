@@ -18,9 +18,9 @@ let focusedIndex = 0
 const getButtons = (): HTMLElement[] => {
   const footer = footerRef.value
   if (!footer) return []
-  return Array.from(footer.querySelectorAll('.btn, button[type="button"], button[type="submit"]')).filter((el): el is HTMLElement => {
-    const htmlEl = el as HTMLElement
-    return htmlEl.offsetParent !== null && !htmlEl.disabled
+  return Array.from(footer.querySelectorAll('.btn, button[type="button"], button[type="submit"]')).filter((el): el is HTMLButtonElement => {
+    const btnEl = el as HTMLButtonElement
+    return btnEl.offsetParent !== null && !btnEl.disabled
   })
 }
 
@@ -95,10 +95,10 @@ onMounted(() => {
     buttons = getButtons()
     if (buttons.length > 0) {
       // Try to find primary/submit button, otherwise last button
-      const submitBtn = buttons.find(btn => btn.type === 'submit')
-      const primaryBtn = buttons.find(btn => btn.classList.contains('btn--primary'))
+      const submitBtn = buttons.find(btn => (btn as HTMLButtonElement).type === 'submit')
+      const primaryBtn = buttons.find(btn => (btn as HTMLButtonElement).classList.contains('btn--primary'))
       const defaultBtn = submitBtn || primaryBtn || buttons[buttons.length - 1]
-      const index = buttons.indexOf(defaultBtn)
+      const index = defaultBtn ? buttons.indexOf(defaultBtn) : 0
       focusButton(index)
     }
   }, 50)

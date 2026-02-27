@@ -101,10 +101,19 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
         {{ error }}
       </div>
       <div class="form-actions">
-        <button type="button" class="btn btn--secondary" :disabled="isSubmitting" @click="emit('close')">
+        <button
+          type="button"
+          class="btn btn--secondary"
+          :disabled="isSubmitting"
+          @click="emit('close')"
+        >
           {{ resolvedCancelLabel }}
         </button>
-        <button type="submit" class="btn btn--primary" :disabled="isSubmitting">
+        <button
+          type="submit"
+          class="btn btn--primary"
+          :disabled="isSubmitting"
+        >
           {{ isSubmitting ? resolvedSubmittingLabel : resolvedSubmitLabel }}
         </button>
       </div>

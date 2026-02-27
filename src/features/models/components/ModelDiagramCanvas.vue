@@ -1300,6 +1300,39 @@ function initRenderer(r: DiagramRenderer) {
   ) => {
     r.addEdge(edge)
   }
+
+  // Permanently patch getElementAtPoint to check edges before nodes.
+  // This fixes the issue where double-clicking on an edge that passes over a node
+  // would select the node instead of editing the edge label.
+  r.getElementAtPoint = (point: { x: number; y: number }) => {
+    // Check edges first (in reverse order for top-to-bottom)
+    const edges = Array.from(r.edges.values())
+    for (let i = edges.length - 1; i >= 0; i--) {
+      const edge = edges[i]
+      if (!edge || !edge.visible) continue
+      const baseTolerance = Math.max((edge.style.strokeWidth ?? 2) * 2, EDGE_HIT_TOLERANCE_MIN)
+      const tolerance = baseTolerance / Math.max(r.zoom, 0.0001)
+      if (edge.hitTestWithTolerance(point, tolerance)) {
+        return edge
+      }
+    }
+    // Then nodes
+    const nodes = Array.from(r.nodes.values())
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const node = nodes[i]
+      if (node?.visible && node.hitTest(point)) {
+        return node
+      }
+    }
+    // Then groups
+    for (const group of r.groups.values()) {
+      if (group.visible && group.hitTest(point)) {
+        return group
+      }
+    }
+    return undefined
+  }
+
   emit('canvasContextChange', { renderer: r, interactionManager })
 
   // Selection events → emit selectNodes/selectLink

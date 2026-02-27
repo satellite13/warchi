@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import '@/config/mdEditor'
 import { MdEditor, MdPreview } from 'md-editor-v3'
@@ -107,6 +107,28 @@ function handleClose() {
   resetDocument()
   emit('close')
 }
+
+// Keyboard handling for modal
+const handleKeydown = (event: KeyboardEvent) => {
+  // Only handle Escape when not editing in the markdown editor
+  if (event.key === 'Escape') {
+    // Check if focus is inside the markdown editor
+    const activeElement = document.activeElement
+    const isInEditor = activeElement?.closest('.md-editor') !== null
+    if (isInEditor) return
+
+    event.preventDefault()
+    handleClose()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 
 function formatDate(dateStr: string): string {
   try {

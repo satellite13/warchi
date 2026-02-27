@@ -47,10 +47,20 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" :disabled="props.isDeleting" @click="emit('close')">
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="props.isDeleting"
+        @click="emit('close')"
+      >
         {{ resolvedCancelLabel }}
       </button>
-      <button type="button" class="btn btn--danger" :disabled="props.isDeleting" @click="emit('confirm')">
+      <button
+        type="submit"
+        class="btn btn--danger"
+        :disabled="props.isDeleting"
+        @click="emit('confirm')"
+      >
         {{ props.isDeleting ? resolvedConfirmingLabel : resolvedConfirmLabel }}
       </button>
     </template>

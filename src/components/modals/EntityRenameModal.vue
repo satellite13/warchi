@@ -46,10 +46,19 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
       </label>
       <div v-if="error" class="rename-form__error">{{ error }}</div>
       <div class="rename-form__actions">
-        <button type="button" class="btn btn--secondary" :disabled="isRenaming" @click="emit('close')">
+        <button
+          type="button"
+          class="btn btn--secondary"
+          :disabled="isRenaming"
+          @click="emit('close')"
+        >
           {{ t("common.cancel") }}
         </button>
-        <button type="submit" class="btn btn--primary" :disabled="!canSubmit">
+        <button
+          type="submit"
+          class="btn btn--primary"
+          :disabled="!canSubmit"
+        >
           {{ isRenaming ? t("common.saving") : t("common.save") }}
         </button>
       </div>

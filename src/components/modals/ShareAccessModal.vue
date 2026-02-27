@@ -216,8 +216,19 @@ onMounted(load);
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="emit('close')">{{ t("common.close") }}</button>
-      <button type="button" class="btn btn--primary" :disabled="!canSubmit" @click="submitShare">
+      <button
+        type="button"
+        class="btn btn--secondary"
+        @click="emit('close')"
+      >
+        {{ t("common.close") }}
+      </button>
+      <button
+        type="submit"
+        class="btn btn--primary"
+        :disabled="!canSubmit"
+        @click="submitShare"
+      >
         {{ t("share.grantAccess") }}
       </button>
     </template>

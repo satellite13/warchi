@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+
 defineProps<{
   title: string;
   maxWidth?: string;
@@ -8,9 +10,103 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const footerRef = ref<HTMLElement | null>(null)
+
+let buttons: HTMLElement[] = []
+let focusedIndex = 0
+
+const getButtons = (): HTMLElement[] => {
+  const footer = footerRef.value
+  if (!footer) return []
+  return Array.from(footer.querySelectorAll('.btn, button[type="button"], button[type="submit"]')).filter((el): el is HTMLElement => {
+    const htmlEl = el as HTMLElement
+    return htmlEl.offsetParent !== null && !htmlEl.disabled
+  })
+}
+
+const focusButton = (index: number) => {
+  buttons = getButtons()
+  if (buttons.length === 0) return
+  focusedIndex = Math.max(0, Math.min(index, buttons.length - 1))
+  buttons[focusedIndex]?.focus()
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  buttons = getButtons()
+  if (buttons.length === 0) return
+
+  // Don't handle navigation if user is typing in an input
+  const activeElement = document.activeElement
+  const isTextInput =
+    activeElement instanceof HTMLInputElement ||
+    activeElement instanceof HTMLTextAreaElement ||
+    activeElement instanceof HTMLSelectElement
+
+  switch (event.key) {
+    case 'ArrowRight': {
+      if (isTextInput) return
+      event.preventDefault()
+      const nextIndex = (focusedIndex + 1) % buttons.length
+      focusButton(nextIndex)
+      break
+    }
+
+    case 'ArrowLeft': {
+      if (isTextInput) return
+      event.preventDefault()
+      const prevIndex = focusedIndex <= 0 ? buttons.length - 1 : focusedIndex - 1
+      focusButton(prevIndex)
+      break
+    }
+
+    case 'Enter': {
+      // If a button is focused, click it
+      if (activeElement && buttons.includes(activeElement as HTMLElement)) {
+        event.preventDefault()
+        ;(activeElement as HTMLElement).click()
+      }
+      break
+    }
+
+    case 'Escape': {
+      // For text inputs with content, require Shift+Escape to close
+      if (isTextInput) {
+        const input = activeElement as HTMLInputElement | HTMLTextAreaElement
+        if (input.value.length > 0 && !event.shiftKey) {
+          return
+        }
+      }
+      event.preventDefault()
+      emit('close')
+      break
+    }
+  }
+}
+
 const handleOverlayClick = () => {
   emit("close");
 };
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+  
+  // Focus first button after modal opens
+  setTimeout(() => {
+    buttons = getButtons()
+    if (buttons.length > 0) {
+      // Try to find primary/submit button, otherwise last button
+      const submitBtn = buttons.find(btn => btn.type === 'submit')
+      const primaryBtn = buttons.find(btn => btn.classList.contains('btn--primary'))
+      const defaultBtn = submitBtn || primaryBtn || buttons[buttons.length - 1]
+      const index = buttons.indexOf(defaultBtn)
+      focusButton(index)
+    }
+  }, 50)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -26,7 +122,7 @@ const handleOverlayClick = () => {
         <div class="modal-body">
           <slot/>
         </div>
-        <div v-if="$slots.footer" class="modal-footer">
+        <div v-if="$slots.footer" ref="footerRef" class="modal-footer">
           <slot name="footer"/>
         </div>
       </div>

@@ -184,6 +184,59 @@ const getBoundRelationStyle = (modelLinkId: string): DiagramStyle | undefined =>
   return relationDiagramStyleById.value.get(relationId)
 }
 
+const getBoundRelation = (modelLinkId: string): RelationResponse | undefined => {
+  const link = linkById.value.get(modelLinkId)
+  const notationId = activeNotationId.value
+  if (!link || !notationId) return undefined
+  const relationId = link.parsedAttrs.notationRelations[notationId]?.relationId
+  if (!relationId) return undefined
+  return props.relations.find(r => r.id === relationId)
+}
+
+const hasGroupProperty = (relation: RelationResponse | undefined): boolean => {
+  if (!relation) return false
+  const parsed = parseEntityAttrs(relation.attrs ?? null)
+  return parsed.customProperties.some(
+    p => p.name === 'group' && p.type === 'boolean' && p.defaultValue === true
+  )
+}
+
+const isTargetInsideSource = (
+  sourceInstanceId: string,
+  targetInstanceId: string
+): boolean => {
+  const sourceInst = instanceNodes.value.find(i => i.id === sourceInstanceId)
+  const targetInst = instanceNodes.value.find(i => i.id === targetInstanceId)
+  if (!sourceInst || !targetInst) return false
+
+  const sourceDims = getInstanceDimensions(sourceInst)
+  const targetDims = getInstanceDimensions(targetInst)
+
+  const sourceLeft = sourceInst.x
+  const sourceRight = sourceInst.x + sourceDims.width
+  const sourceTop = sourceInst.y
+  const sourceBottom = sourceInst.y + sourceDims.height
+
+  const targetLeft = targetInst.x
+  const targetRight = targetInst.x + targetDims.width
+  const targetTop = targetInst.y
+  const targetBottom = targetInst.y + targetDims.height
+
+  // Check if target is fully inside source
+  return (
+    targetLeft >= sourceLeft &&
+    targetRight <= sourceRight &&
+    targetTop >= sourceTop &&
+    targetBottom <= sourceBottom
+  )
+}
+
+const shouldSkipEdgeRendering = (edge: DiagramEdgeInstance): boolean => {
+  const relation = getBoundRelation(edge.modelLinkId)
+  if (!hasGroupProperty(relation)) return false
+  return isTargetInsideSource(edge.sourceInstanceId, edge.targetInstanceId)
+}
+
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
   if (edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object') {
     return edgeInst.attrs.diagramStyle as DiagramStyle
@@ -804,6 +857,9 @@ function syncDiagram() {
     const modelLink = linkById.value.get(edge.modelLinkId)
     const isDiagramOnlyEdge = edge.attrs?.isDiagramOnly === true
     if (!isDiagramOnlyEdge && (!modelLink || modelLink._isDeleted)) continue
+
+    // Skip rendering if relation has group=true and target is inside source
+    if (shouldSkipEdgeRendering(edge)) continue
 
     const papEdgeId = `edge-${edge.id}`
     currentEdgeIds.add(papEdgeId)

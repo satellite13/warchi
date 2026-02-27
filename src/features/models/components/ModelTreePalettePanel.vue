@@ -105,6 +105,20 @@ const filteredChildNodes = (nodeId: string): EditorNode[] => {
 const nodeDiagrams = (nodeId: string): EditorDiagram[] =>
   props.diagrams.filter((diagram) => diagram.nodeId === nodeId && !diagram._isDeleted)
 
+// Track which nodes are used in any diagram instance
+const usedNodeIds = computed(() => {
+  const used = new Set<string>()
+  for (const diagram of props.diagrams) {
+    if (diagram._isDeleted) continue
+    for (const instance of diagram.parsedAttrs.instances.nodes) {
+      used.add(instance.modelNodeId)
+    }
+  }
+  return used
+})
+
+const isNodeUsed = (nodeId: string): boolean => usedNodeIds.value.has(nodeId)
+
 const toggleNode = (nodeId: string) => {
   const next = new Set(expandedNodes.value)
   if (next.has(nodeId)) next.delete(nodeId)
@@ -355,6 +369,7 @@ defineExpose({ expandToNode, focusNode })
             <button
               type="button"
               class="tree-node__select"
+              :class="{ 'tree-node__select--unused': !isDirectory(node) && !isNodeUsed(node.id) }"
               @click="emit('selectNode', node.id)"
               @dblclick="isDirectory(node) && toggleNode(node.id)"
             >
@@ -473,6 +488,7 @@ defineExpose({ expandToNode, focusNode })
                 <button
                   type="button"
                   class="tree-node__select"
+                  :class="{ 'tree-node__select--unused': !isDirectory(child) && !isNodeUsed(child.id) }"
                   @click="emit('selectNode', child.id)"
                   @dblclick="isDirectory(child) && toggleNode(child.id)"
                 >
@@ -590,6 +606,7 @@ defineExpose({ expandToNode, focusNode })
                     <button
                       type="button"
                       class="tree-node__select"
+                      :class="{ 'tree-node__select--unused': !isDirectory(grandchild) && !isNodeUsed(grandchild.id) }"
                       @click="emit('selectNode', grandchild.id)"
                       @dblclick="isDirectory(grandchild) && toggleNode(grandchild.id)"
                     >
@@ -929,6 +946,11 @@ defineExpose({ expandToNode, focusNode })
   gap: 6px;
   color: var(--base-text);
   cursor: pointer;
+}
+
+.tree-node__select--unused .tree-node__name {
+  font-style: italic;
+  color: var(--text-subtle);
 }
 
 .tree-node__name {

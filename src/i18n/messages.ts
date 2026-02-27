@@ -262,6 +262,7 @@ export const messages = {
       copy: 'Копировать',
       propertiesTab: 'Свойства',
       figureStyleTab: 'Стиль фигуры',
+      defaultLinkType: 'Тип линии по умолчанию',
     },
     notations: {
       entityName: 'Нотация',
@@ -909,6 +910,7 @@ export const messages = {
       notationAccessTitle: 'Notation access',
       propertiesTab: 'Properties',
       figureStyleTab: 'Figure Style',
+      defaultLinkType: 'Default link type',
       documentation: 'Documentation',
     },
     docs: {

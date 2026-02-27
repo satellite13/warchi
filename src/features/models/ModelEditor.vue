@@ -143,7 +143,9 @@ function handleDocModalClose() {
 }
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
+const selectedInstanceIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
+const selectedEdgeInstanceId = ref<string | null>(null)
 const selectedCanvasElementId = ref<string | null>(null)
 const showNoteEditorModal = ref(false)
 const editingNoteInstanceId = ref<string | null>(null)
@@ -168,6 +170,8 @@ const attachToOutlineEnabled = ref(true)
 const selectionSyncEnabled = ref(true)
 const canvasSettingsVisible = ref(true)
 const paletteVisible = ref(true)
+type EdgePathType = 'straight' | 'polyline' | 'editable-polyline' | 'bezier'
+const defaultEdgeType = ref<EdgePathType>('bezier')
 const NOTE_NODE_PREFIX = '__diagram-note__:'
 const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
 
@@ -181,6 +185,7 @@ type ToolbarState = {
   attachToOutlineEnabled: boolean
   canvasSettingsVisible: boolean
   paletteVisible: boolean
+  defaultEdgeType: EdgePathType
 }
 
 const TOOLBAR_STATE_STORAGE_PREFIX = 'warchi:model-editor:toolbar-state'
@@ -216,6 +221,13 @@ const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
     canvasSettingsVisible.value = stateValue.canvasSettingsVisible
   if (typeof stateValue.paletteVisible === 'boolean')
     paletteVisible.value = stateValue.paletteVisible
+  const validEdgeTypes: EdgePathType[] = ['straight', 'polyline', 'editable-polyline', 'bezier']
+  if (
+    typeof stateValue.defaultEdgeType === 'string' &&
+    validEdgeTypes.includes(stateValue.defaultEdgeType as EdgePathType)
+  ) {
+    defaultEdgeType.value = stateValue.defaultEdgeType as EdgePathType
+  }
 }
 
 const persistToolbarState = (userId: string | null) => {
@@ -230,6 +242,7 @@ const persistToolbarState = (userId: string | null) => {
     attachToOutlineEnabled: attachToOutlineEnabled.value,
     canvasSettingsVisible: canvasSettingsVisible.value,
     paletteVisible: paletteVisible.value,
+    defaultEdgeType: defaultEdgeType.value,
   }
   window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState))
 }
@@ -286,6 +299,13 @@ const canvasToggleButtons = computed<ToolbarButton[]>(() => [
     active: attachToOutlineEnabled.value,
     disabled: !activeDiagram.value,
   },
+])
+
+const defaultLinkTypeOptions = computed<{ value: EdgePathType; label: string; icon: string }[]>(() => [
+  { value: 'straight', label: t('diagram.linkTypeStraight'), icon: 'remove' },
+  { value: 'polyline', label: t('diagram.linkTypePolyline'), icon: 'timeline' },
+  { value: 'editable-polyline', label: t('diagram.linkTypeEditablePolyline'), icon: 'polyline' },
+  { value: 'bezier', label: t('diagram.linkTypeBezier'), icon: 'line_curve' },
 ])
 
 const activeDiagram = computed(() =>
@@ -350,9 +370,10 @@ watch(
     attachToOutlineEnabled,
     canvasSettingsVisible,
     paletteVisible,
+    defaultEdgeType,
     () => currentUser.value?.id ?? null,
   ],
-  ([, , , , , , , , , userId]) => {
+  ([, , , , , , , , , , userId]) => {
     persistToolbarState(userId as string | null)
   }
 )
@@ -541,17 +562,34 @@ const reuseLinkOptions = ref<EditorLink[]>([])
 const pendingRelationId = ref<string | null>(null)
 const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
+const pendingDeleteEdgeInstanceId = ref<string | null>(null)
 const showNodeDeleteModal = ref(false)
 const pendingDeleteNodeIds = ref<string[]>([])
+const pendingDeleteInstanceIds = ref<string[]>([])
 const pendingDeleteNodeSource = ref<'canvas' | 'tree'>('tree')
 const showDiagramDeleteModal = ref(false)
 const pendingDeleteDiagramId = ref<string | null>(null)
 const showDiagramSwitchModal = ref(false)
 const pendingDiagramSwitchId = ref<string | null>(null)
 const pendingDiagramAction = ref<'switch' | 'close' | null>(null)
-const pendingDeleteNodeCount = computed(() => pendingDeleteNodeIds.value.length)
+const pendingDeleteNodeCount = computed(() =>
+  pendingDeleteInstanceIds.value.length > 0
+    ? pendingDeleteInstanceIds.value.length
+    : pendingDeleteNodeIds.value.length
+)
 const pendingDeleteNodeSingleName = computed(() => {
-  if (pendingDeleteNodeIds.value.length !== 1) return ''
+  const count = pendingDeleteNodeCount.value
+  if (count !== 1) return ''
+  if (pendingDeleteInstanceIds.value.length > 0) {
+    const instanceId = pendingDeleteInstanceIds.value[0]
+    if (!instanceId) return ''
+    const instance = activeDiagram.value?.parsedAttrs.instances.nodes.find(
+      item => item.id === instanceId
+    )
+    if (!instance) return ''
+    if (isNoteInstance(instance)) return 'Заметка'
+    return state.value.nodes.find(item => item.id === instance.modelNodeId)?.name ?? ''
+  }
   const nodeId = pendingDeleteNodeIds.value[0]
   if (!nodeId) return ''
   if (isDiagramNoteModelNodeId(nodeId)) return 'Заметка'
@@ -993,15 +1031,27 @@ const markDiagramDeleted = (diagramId: string) => {
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
 }
 
-const openNodeDeleteDialog = (nodeIds: string[], source: 'canvas' | 'tree') => {
-  if (nodeIds.length === 0) return
-  pendingDeleteNodeIds.value = [...new Set(nodeIds)]
+const openNodeDeleteDialog = (
+  nodeIds: string[],
+  source: 'canvas' | 'tree',
+  instanceIds: string[] = []
+) => {
+  if (source === 'canvas' && instanceIds.length > 0) {
+    pendingDeleteInstanceIds.value = [...new Set(instanceIds)]
+    pendingDeleteNodeIds.value = []
+  } else if (nodeIds.length > 0) {
+    pendingDeleteNodeIds.value = [...new Set(nodeIds)]
+    pendingDeleteInstanceIds.value = []
+  } else {
+    return
+  }
   pendingDeleteNodeSource.value = source
   showNodeDeleteModal.value = true
 }
 
 const cancelNodeDelete = () => {
   pendingDeleteNodeIds.value = []
+  pendingDeleteInstanceIds.value = []
   pendingDeleteNodeSource.value = 'tree'
   showNodeDeleteModal.value = false
 }
@@ -1027,14 +1077,19 @@ const markLinkDeleted = (linkId: string) => {
     row._isDirty = true
   }
 
-  if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
+  if (selectedModelLinkId.value === linkId) {
+    selectedModelLinkId.value = null
+    selectedEdgeInstanceId.value = null
+  }
   if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
 }
 
 const applyDiagramSelection = (diagramId: string) => {
   selectedDiagramId.value = diagramId
   selectedModelNodeIds.value = []
+  selectedInstanceIds.value = []
   selectedModelLinkId.value = null
+  selectedEdgeInstanceId.value = null
 }
 
 const cancelDiagramSwitch = () => {
@@ -1052,7 +1107,9 @@ const switchDiagramWithoutSave = async () => {
   if (action === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
+    selectedInstanceIds.value = []
     selectedModelLinkId.value = null
+    selectedEdgeInstanceId.value = null
     cancelDiagramSwitch()
     return
   }
@@ -1156,7 +1213,9 @@ const saveAndSwitchDiagram = async () => {
   if (action === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
+    selectedInstanceIds.value = []
     selectedModelLinkId.value = null
+    selectedEdgeInstanceId.value = null
     cancelDiagramSwitch()
     return
   }
@@ -1183,16 +1242,19 @@ const selectDiagram = (diagramId: string) => {
 
 const cancelLinkDelete = () => {
   pendingDeleteLinkId.value = null
+  pendingDeleteEdgeInstanceId.value = null
   showLinkDeleteModal.value = false
 }
 
-const openLinkDeleteDialog = (linkId: string) => {
+const openLinkDeleteDialog = (linkId: string, edgeInstanceId?: string) => {
   pendingDeleteLinkId.value = linkId
+  pendingDeleteEdgeInstanceId.value = edgeInstanceId ?? null
   showLinkDeleteModal.value = true
 }
 
 const removeLinkFromCurrentDiagram = () => {
   const linkId = pendingDeleteLinkId.value
+  const edgeInstanceId = pendingDeleteEdgeInstanceId.value
   const diagram = activeDiagram.value
   if (!linkId || !diagram) {
     cancelLinkDelete()
@@ -1201,17 +1263,26 @@ const removeLinkFromCurrentDiagram = () => {
 
   const removedEdges = diagram.parsedAttrs.instances.edges
     .map((edge, index) => ({ index, edge: JSON.parse(JSON.stringify(edge)) }))
-    .filter(entry => entry.edge.modelLinkId === linkId)
+    .filter(
+      entry =>
+        entry.edge.modelLinkId === linkId &&
+        (edgeInstanceId == null || entry.edge.id === edgeInstanceId)
+    )
   if (removedEdges.length === 0) {
     cancelLinkDelete()
     return
   }
 
+  const idsToRemove = new Set(removedEdges.map(e => e.edge.id))
+
   const applyRemoval = () => {
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      edge => edge.modelLinkId !== linkId
+      edge => !idsToRemove.has(edge.id)
     )
-    if (selectedModelLinkId.value === linkId) selectedModelLinkId.value = null
+    if (selectedModelLinkId.value === linkId) {
+      selectedModelLinkId.value = null
+      selectedEdgeInstanceId.value = null
+    }
     if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
   }
@@ -1262,6 +1333,7 @@ const removeLinkFromModel = () => {
   if (isDiagramOnlyEdgeModelLinkId(linkId)) {
     if (selectedModelLinkId.value === linkId) {
       selectedModelLinkId.value = null
+      selectedEdgeInstanceId.value = null
       if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
     }
     cancelLinkDelete()
@@ -1285,15 +1357,22 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
   if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event))
     return
 
-  if (selectedModelNodeIds.value.length > 0) {
+  if (selectedModelNodeIds.value.length > 0 || selectedInstanceIds.value.length > 0) {
     event.preventDefault()
-    openNodeDeleteDialog(selectedModelNodeIds.value, 'canvas')
+    openNodeDeleteDialog(
+      selectedModelNodeIds.value,
+      'canvas',
+      selectedInstanceIds.value.length > 0 ? selectedInstanceIds.value : []
+    )
     return
   }
 
   if (!selectedModelLinkId.value) return
   event.preventDefault()
-  openLinkDeleteDialog(selectedModelLinkId.value)
+  openLinkDeleteDialog(
+    selectedModelLinkId.value,
+    selectedEdgeInstanceId.value ?? undefined
+  )
 }
 
 watch(
@@ -1560,6 +1639,7 @@ const startConnectNodes = (
     const edgeAttrs: Record<string, unknown> = {
       isDiagramOnly: true,
       diagramStyle: {
+        edgeType: defaultEdgeType.value,
         startMarkerType: 'none',
         endMarkerType: 'none',
         lineDash: [4, 4],
@@ -1592,6 +1672,7 @@ const startConnectNodes = (
         )
         if (selectedModelLinkId.value === modelLinkId) {
           selectedModelLinkId.value = null
+          selectedEdgeInstanceId.value = null
           selectedCanvasElementId.value = null
         }
         markDiagramDirty(diagram.id)
@@ -1708,8 +1789,12 @@ const createOrReuseLink = (linkId: string | null) => {
   const relParsed = parseEntityAttrs(relation.attrs ?? null)
   const relationDs = relParsed.diagramStyle
   const edgeAttrs: Record<string, unknown> = {}
-  if (relationDs) {
-    edgeAttrs.diagramStyle = JSON.parse(JSON.stringify(relationDs))
+  const diagramStyle: Record<string, unknown> = relationDs
+    ? JSON.parse(JSON.stringify(relationDs))
+    : {}
+  diagramStyle.edgeType = defaultEdgeType.value
+  if (Object.keys(diagramStyle).length > 0) {
+    edgeAttrs.diagramStyle = diagramStyle
   }
   if (connection.sourcePortId) {
     edgeAttrs.fromPortId = connection.sourcePortId
@@ -1789,6 +1874,84 @@ const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boole
   )
 }
 
+const handleReconnectEdge = (
+  edgeInstanceId: string,
+  endpoint: 'start' | 'end',
+  newInstanceId: string,
+  portId?: string,
+  outlineParam?: number
+) => {
+  const diagram = activeDiagram.value
+  if (!diagram) return
+
+  const edgeInst = diagram.parsedAttrs.instances.edges.find(edge => edge.id === edgeInstanceId)
+  if (!edgeInst) return
+
+  const newNodeInstance = diagram.parsedAttrs.instances.nodes.find(n => n.id === newInstanceId)
+  if (!newNodeInstance) return
+
+  const prevSourceId = edgeInst.sourceInstanceId
+  const prevTargetId = edgeInst.targetInstanceId
+  const prevAttrs = edgeInst.attrs ? deepClone(edgeInst.attrs) : undefined
+
+  const link = !isDiagramOnlyEdgeModelLinkId(edgeInst.modelLinkId)
+    ? state.value.links.find(l => l.id === edgeInst.modelLinkId && !l._isDeleted)
+    : null
+
+  const prevInstanceId = endpoint === 'start' ? prevSourceId : prevTargetId
+  const prevInstance = diagram.parsedAttrs.instances.nodes.find(n => n.id === prevInstanceId)
+  const prevModelNodeId = prevInstance?.modelNodeId
+  const newModelNodeId = newNodeInstance.modelNodeId
+
+  const prevLinkSourceId = link?.sourceId
+  const prevLinkTargetId = link?.targetId
+
+  executeDiagramHistoryCommand({
+    execute: () => {
+      if (endpoint === 'start') {
+        edgeInst.sourceInstanceId = newInstanceId
+        if (!edgeInst.attrs) edgeInst.attrs = {}
+        if (portId !== undefined) edgeInst.attrs.fromPortId = portId
+        else delete edgeInst.attrs.fromPortId
+        if (outlineParam !== undefined) edgeInst.attrs.fromOutlineParam = outlineParam
+        else delete edgeInst.attrs.fromOutlineParam
+      } else {
+        edgeInst.targetInstanceId = newInstanceId
+        if (!edgeInst.attrs) edgeInst.attrs = {}
+        if (portId !== undefined) edgeInst.attrs.toPortId = portId
+        else delete edgeInst.attrs.toPortId
+        if (outlineParam !== undefined) edgeInst.attrs.toOutlineParam = outlineParam
+        else delete edgeInst.attrs.toOutlineParam
+      }
+      if (Object.keys(edgeInst.attrs).length === 0) delete edgeInst.attrs
+
+      if (link && prevModelNodeId !== newModelNodeId) {
+        if (endpoint === 'start') {
+          link.sourceId = newModelNodeId
+        } else {
+          link.targetId = newModelNodeId
+        }
+        markLinkDirty(link.id)
+      }
+
+      markDiagramDirty(diagram.id)
+    },
+    undo: () => {
+      edgeInst.sourceInstanceId = prevSourceId
+      edgeInst.targetInstanceId = prevTargetId
+      edgeInst.attrs = prevAttrs ? deepClone(prevAttrs) : undefined
+
+      if (link && prevLinkSourceId !== undefined && prevLinkTargetId !== undefined) {
+        link.sourceId = prevLinkSourceId
+        link.targetId = prevLinkTargetId
+        markLinkDirty(link.id)
+      }
+
+      markDiagramDirty(diagram.id)
+    },
+  })
+}
+
 const handleFindInTree = (modelNodeId: string) => {
   selectedNodeId.value = modelNodeId
   treePanelRef.value?.focusNode?.(modelNodeId)
@@ -1798,6 +1961,8 @@ const handleTreeSelectNode = (nodeId: string) => {
   selectedNodeId.value = nodeId
   if (!selectionSyncEnabled.value) return
   selectedModelLinkId.value = null
+  selectedEdgeInstanceId.value = null
+  selectedInstanceIds.value = []
   selectedModelNodeIds.value = [nodeId]
   nextTick(() => {
     diagramCanvasRef.value?.zoomToSelection()
@@ -1807,6 +1972,7 @@ const handleTreeSelectNode = (nodeId: string) => {
 const handleCanvasSelectNodes = (modelNodeIds: string[]) => {
   selectedModelNodeIds.value = modelNodeIds
   selectedModelLinkId.value = null
+  selectedEdgeInstanceId.value = null
   if (!selectionSyncEnabled.value || modelNodeIds.length !== 1) return
   const modelNodeId = modelNodeIds[0]!
   if (isDiagramNoteModelNodeId(modelNodeId)) {
@@ -1830,6 +1996,7 @@ const toggleSelectionSync = () => {
 
   if (selectedNodeId.value) {
     selectedModelLinkId.value = null
+    selectedEdgeInstanceId.value = null
     selectedModelNodeIds.value = [selectedNodeId.value]
     nextTick(() => {
       diagramCanvasRef.value?.zoomToSelection()
@@ -1935,13 +2102,13 @@ const handleRenameNode = (nodeId: string, newName: string) => {
   markNodeDirty(node.id)
 }
 
-const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
+const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
   const diagram = activeDiagram.value
-  if (!diagram || modelNodeIds.length === 0) return
+  if (!diagram || instanceIds.length === 0) return
 
-  const selectedSet = new Set(modelNodeIds)
+  const instanceIdSet = new Set(instanceIds)
   const removedNodes = diagram.parsedAttrs.instances.nodes
-    .filter(nodeInst => selectedSet.has(nodeInst.modelNodeId))
+    .filter(nodeInst => instanceIdSet.has(nodeInst.id))
     .map(nodeInst => JSON.parse(JSON.stringify(nodeInst)))
   const removedInstanceIds = new Set(removedNodes.map(nodeInst => nodeInst.id))
   if (removedInstanceIds.size === 0) return
@@ -1962,6 +2129,7 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
       edgeInst => !removedEdges.some(removed => removed.id === edgeInst.id)
     )
     selectedModelNodeIds.value = []
+    selectedInstanceIds.value = []
     selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
   }
@@ -2000,10 +2168,76 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
   applyRemoval()
 }
 
-const handleRequestDeleteNodeFromDiagram = (modelNodeId: string) => {
+const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
+  const diagram = activeDiagram.value
+  if (!diagram || modelNodeIds.length === 0) return
+
+  const selectedSet = new Set(modelNodeIds)
+  const removedNodes = diagram.parsedAttrs.instances.nodes
+    .filter(nodeInst => selectedSet.has(nodeInst.modelNodeId))
+    .map(nodeInst => JSON.parse(JSON.stringify(nodeInst)))
+  const removedInstanceIds = new Set(removedNodes.map(nodeInst => nodeInst.id))
+  if (removedInstanceIds.size === 0) return
+
+  const removedEdges = diagram.parsedAttrs.instances.edges
+    .filter(
+      edgeInst =>
+        removedInstanceIds.has(edgeInst.sourceInstanceId) ||
+        removedInstanceIds.has(edgeInst.targetInstanceId)
+    )
+    .map(edgeInst => JSON.parse(JSON.stringify(edgeInst)))
+
+  const applyRemoval = () => {
+    diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+      nodeInst => !removedInstanceIds.has(nodeInst.id)
+    )
+    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+      edgeInst => !removedEdges.some(removed => removed.id === edgeInst.id)
+    )
+    selectedModelNodeIds.value = []
+    selectedInstanceIds.value = []
+    selectedCanvasElementId.value = null
+    markDiagramDirty(diagram.id)
+  }
+
+  const restoreRemoved = () => {
+    const existingNodeIds = new Set(
+      diagram.parsedAttrs.instances.nodes.map(nodeInst => nodeInst.id)
+    )
+    for (const nodeInst of removedNodes) {
+      if (!existingNodeIds.has(nodeInst.id)) {
+        diagram.parsedAttrs.instances.nodes.push(JSON.parse(JSON.stringify(nodeInst)))
+      }
+    }
+
+    const existingEdgeIds = new Set(
+      diagram.parsedAttrs.instances.edges.map(edgeInst => edgeInst.id)
+    )
+    for (const edgeInst of removedEdges) {
+      if (!existingEdgeIds.has(edgeInst.id)) {
+        diagram.parsedAttrs.instances.edges.push(JSON.parse(JSON.stringify(edgeInst)))
+      }
+    }
+
+    markDiagramDirty(diagram.id)
+  }
+
+  const history = diagramInteractionManager.value?.history
+  if (history && typeof history.execute === 'function') {
+    history.execute({
+      execute: applyRemoval,
+      undo: restoreRemoved,
+    })
+    return
+  }
+
+  applyRemoval()
+}
+
+const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {
   selectedModelLinkId.value = null
-  selectedModelNodeIds.value = [modelNodeId]
-  openNodeDeleteDialog([modelNodeId], 'canvas')
+  selectedEdgeInstanceId.value = null
+  openNodeDeleteDialog([], 'canvas', [instanceId])
 }
 
 const openNoteEditor = (instanceId: string) => {
@@ -2037,22 +2271,29 @@ const cancelNoteEditor = () => {
   editingNoteInstanceId.value = null
 }
 
-const handleRequestDeleteLink = (linkId: string) => {
+const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
   selectedModelNodeIds.value = []
+  selectedInstanceIds.value = []
   selectedModelLinkId.value = linkId
-  openLinkDeleteDialog(linkId)
+  selectedEdgeInstanceId.value = edgeInstanceId ?? null
+  openLinkDeleteDialog(linkId, edgeInstanceId)
 }
 
 const confirmNodeDelete = () => {
   const nodeIds = pendingDeleteNodeIds.value
+  const instanceIds = pendingDeleteInstanceIds.value
   const source = pendingDeleteNodeSource.value
-  if (nodeIds.length === 0) {
+  if (nodeIds.length === 0 && instanceIds.length === 0) {
     cancelNodeDelete()
     return
   }
 
   if (source === 'canvas') {
-    removeNodesFromCurrentDiagram(nodeIds)
+    if (instanceIds.length > 0) {
+      removeNodesFromCurrentDiagramByInstances(instanceIds)
+    } else {
+      removeNodesFromCurrentDiagram(nodeIds)
+    }
   } else {
     for (const nodeId of nodeIds) {
       markNodeDeleted(nodeId)
@@ -2231,7 +2472,9 @@ const handleToolbarAction = async (event: string) => {
       }
       selectedDiagramId.value = null
       selectedModelNodeIds.value = []
+      selectedInstanceIds.value = []
       selectedModelLinkId.value = null
+      selectedEdgeInstanceId.value = null
       break
     case 'show-diagram-json':
       openDiagramJson()
@@ -2615,6 +2858,24 @@ onBeforeUnmount(() => {
                   <span class="material-symbols-outlined">{{ button.icon }}</span>
                   <span>{{ button.title }}</span>
                 </button>
+                <div class="canvas-settings__row">
+                  <label class="canvas-settings__label">{{ t('models.defaultLinkType') }}</label>
+                  <div class="canvas-settings__link-type-group">
+                    <button
+                      v-for="opt in defaultLinkTypeOptions"
+                      :key="opt.value"
+                      type="button"
+                      class="canvas-settings__item canvas-settings__item--link-type"
+                      :class="{ 'canvas-settings__item--active': defaultEdgeType === opt.value }"
+                      :title="opt.label"
+                      :disabled="!activeDiagram"
+                      @click="defaultEdgeType = opt.value"
+                    >
+                      <span class="material-symbols-outlined">{{ opt.icon }}</span>
+                      <span>{{ opt.label }}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </template>
@@ -2660,13 +2921,19 @@ onBeforeUnmount(() => {
             :attach-to-outline-enabled="attachToOutlineEnabled"
             :selected-model-node-ids="selectedModelNodeIds"
             :selected-model-link-id="selectedModelLinkId"
+            :selected-edge-instance-id="selectedEdgeInstanceId"
+            :selected-instance-ids="selectedInstanceIds"
             :connection-validator="canConnect"
             @update-diagram="setDiagramAttrs"
             @select-nodes="handleCanvasSelectNodes"
+            @select-instance-ids="(ids) => (selectedInstanceIds = ids)"
+            @select-edge-instance-id="(id) => (selectedEdgeInstanceId = id)"
             @select-link="
               ($event: string | null) => {
                 selectedModelLinkId = $event
                 selectedModelNodeIds = []
+                selectedInstanceIds = []
+                selectedEdgeInstanceId = null
                 selectedNodeId = null
               }
             "
@@ -2674,6 +2941,7 @@ onBeforeUnmount(() => {
             @create-note="createDiagramNote"
             @add-existing-node="addExistingNodeToDiagram"
             @connect-nodes="startConnectNodes"
+            @reconnect-edge="handleReconnectEdge"
             @find-in-tree="handleFindInTree"
             @node-label-change="handleNodeLabelChange"
             @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"
@@ -3391,6 +3659,27 @@ onBeforeUnmount(() => {
 
 .canvas-settings__item .material-symbols-outlined {
   font-size: 16px;
+}
+
+.canvas-settings__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.canvas-settings__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.canvas-settings__link-type-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.canvas-settings__item--link-type {
+  width: 100%;
 }
 
 .model-canvas-area__toolbar {

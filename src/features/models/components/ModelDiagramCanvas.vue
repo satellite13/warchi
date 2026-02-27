@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   DiagramRenderer,
@@ -44,6 +44,8 @@ const props = withDefaults(
     nodeTypes: NodeTypeResponse[]
     selectedModelNodeIds: string[]
     selectedModelLinkId: string | null
+    selectedEdgeInstanceId?: string | null
+    selectedInstanceIds?: string[]
     connectionValidator?: ((sourceModelNodeId: string, targetModelNodeId: string) => boolean) | null
     gridVisible?: boolean
     miniMapVisible?: boolean
@@ -70,7 +72,9 @@ const props = withDefaults(
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs]
   selectNodes: [modelNodeIds: string[]]
+  selectInstanceIds: [instanceIds: string[]]
   selectLink: [modelLinkId: string]
+  selectEdgeInstanceId: [edgeInstanceId: string | null]
   selectCanvasElementId: [elementId: string | null]
   canvasContextChange: [
     ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null },
@@ -88,11 +92,18 @@ const emit = defineEmits<{
     sourceOutlineParam?: number,
     targetOutlineParam?: number,
   ]
+  reconnectEdge: [
+    edgeInstanceId: string,
+    endpoint: 'start' | 'end',
+    newInstanceId: string,
+    portId?: string,
+    outlineParam?: number,
+  ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
-  requestDeleteNodeFromDiagram: [modelNodeId: string]
+  requestDeleteNodeFromDiagram: [instanceId: string]
   requestEditNote: [instanceId: string]
-  requestDeleteLink: [modelLinkId: string]
+  requestDeleteLink: [modelLinkId: string, edgeInstanceId?: string]
   paletteVisibleChange: [visible: boolean]
 }>()
 const { t } = useI18n()
@@ -910,16 +921,30 @@ function updateSelection() {
 
   // Sync selection from props
   const selectedNodeIds = props.selectedModelNodeIds
+  const selectedInstanceIds = props.selectedInstanceIds ?? []
   const selectedLinkId = props.selectedModelLinkId
+  const selectedEdgeInstanceId = props.selectedEdgeInstanceId ?? null
 
   const targetPapIds: string[] = []
 
-  if (selectedNodeIds.length > 0) {
+  if (selectedInstanceIds.length > 0) {
+    const instanceSet = new Set(selectedInstanceIds)
+    for (const [papId, entity] of nodeIdToInstance) {
+      if (instanceSet.has(entity.instanceId)) {
+        targetPapIds.push(papId)
+      }
+    }
+  } else if (selectedNodeIds.length > 0) {
     const selectedSet = new Set(selectedNodeIds)
     for (const [papId, entity] of nodeIdToInstance) {
       if (selectedSet.has(entity.modelNodeId)) {
         targetPapIds.push(papId)
       }
+    }
+  } else if (selectedEdgeInstanceId) {
+    const papId = `edge-${selectedEdgeInstanceId}`
+    if (edgeIdToInstance.has(papId)) {
+      targetPapIds.push(papId)
     }
   } else if (selectedLinkId) {
     for (const [papId, entity] of edgeIdToInstance) {
@@ -995,6 +1020,7 @@ function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
   const edgeEntity = edgeIdToInstance.get(hitEdge.id)
   if (edgeEntity) {
     emit('selectLink', edgeEntity.modelLinkId)
+    emit('selectEdgeInstanceId', edgeEntity.edgeId)
   }
 }
 
@@ -1280,27 +1306,34 @@ function initRenderer(r: DiagramRenderer) {
   interactionManager.selection.on('select', (elementIds: string[]) => {
     if (suppressSelectionEvent) return
     if (elementIds.length === 0) {
+      emit('selectInstanceIds', [])
+      emit('selectEdgeInstanceId', null)
       emit('selectCanvasElementId', null)
       return
     }
     emit('selectCanvasElementId', elementIds[0] ?? null)
 
     const modelNodeIds: string[] = []
+    const instanceIds: string[] = []
     for (const elementId of elementIds) {
       const nodeEntity = nodeIdToInstance.get(elementId)
       if (nodeEntity) {
         modelNodeIds.push(nodeEntity.modelNodeId)
+        instanceIds.push(nodeEntity.instanceId)
       }
     }
     if (modelNodeIds.length > 0) {
       emit('selectNodes', modelNodeIds)
+      emit('selectInstanceIds', instanceIds)
       return
     }
 
     if (elementIds.length === 1) {
       const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
       if (edgeEntity) {
+        emit('selectInstanceIds', [])
         emit('selectLink', edgeEntity.modelLinkId)
+        emit('selectEdgeInstanceId', edgeEntity.edgeId)
       }
     }
   })
@@ -1360,9 +1393,49 @@ function initRenderer(r: DiagramRenderer) {
     renderer?.removeEdge(edge.id)
   })
 
-  interactionManager.connection.on('edgeReconnect', () => {
-    detectEdgePortChanges()
-    detectEditablePolylineControlPointChanges()
+  interactionManager.connection.on('edgeReconnect', (edge: Edge, endpoint: 'start' | 'end') => {
+    const entity = edgeIdToInstance.get(edge.id)
+    if (!entity) return
+
+    const newPapNodeId = endpoint === 'start' ? edge.from.nodeId : edge.to.nodeId
+    const newInstanceId = newPapNodeId.startsWith('instance-')
+      ? newPapNodeId.slice('instance-'.length)
+      : null
+    if (!newInstanceId) return
+
+    const otherPapNodeId = endpoint === 'start' ? edge.to.nodeId : edge.from.nodeId
+    const sourceEntity =
+      endpoint === 'start'
+        ? nodeIdToInstance.get(newPapNodeId)
+        : nodeIdToInstance.get(otherPapNodeId)
+    const targetEntity =
+      endpoint === 'start'
+        ? nodeIdToInstance.get(otherPapNodeId)
+        : nodeIdToInstance.get(newPapNodeId)
+    if (!sourceEntity || !targetEntity) return
+
+    if (props.connectionValidator) {
+      const allowed = props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
+      if (!allowed) {
+        syncDiagram()
+        return
+      }
+    }
+
+    const portId =
+      endpoint === 'start'
+        ? (edge.from.portId ?? undefined)
+        : (edge.to.portId ?? undefined)
+    const outlineParam =
+      endpoint === 'start'
+        ? (edge.from.outlineParam ?? undefined)
+        : (edge.to.outlineParam ?? undefined)
+
+    emit('reconnectEdge', entity.edgeId, endpoint, newInstanceId, portId, outlineParam)
+    nextTick(() => {
+      detectEdgePortChanges()
+      detectEditablePolylineControlPointChanges()
+    })
   })
 
   // Context menu
@@ -1383,7 +1456,7 @@ function initRenderer(r: DiagramRenderer) {
             {
               label: t('diagram.deleteNote'),
               icon: 'delete',
-              action: () => emit('requestDeleteNodeFromDiagram', entity.modelNodeId),
+              action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
             },
           ]
         }
@@ -1396,7 +1469,7 @@ function initRenderer(r: DiagramRenderer) {
           {
             label: t('diagram.removeFromDiagram'),
             icon: 'delete',
-            action: () => emit('requestDeleteNodeFromDiagram', entity.modelNodeId),
+            action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
           },
         ]
       },
@@ -1454,7 +1527,7 @@ function initRenderer(r: DiagramRenderer) {
           {
             label: isDiagramOnly ? t('diagram.deleteNoteLink') : t('common.delete'),
             icon: 'delete',
-            action: () => emit('requestDeleteLink', entity.modelLinkId),
+            action: () => emit('requestDeleteLink', entity.modelLinkId, entity.edgeId),
           }
         )
 
@@ -1876,7 +1949,7 @@ watch(
 )
 
 watch(
-  () => props.selectedModelNodeIds,
+  () => [props.selectedModelNodeIds, props.selectedInstanceIds, props.selectedModelLinkId, props.selectedEdgeInstanceId],
   () => {
     updateSelection()
     const orderedInstances = sortInstancesByZLayer(instanceNodes.value)

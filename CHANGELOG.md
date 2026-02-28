@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.24] - 2026-02-28
+
+### Added
+- Diagram versioning and baseline: create a new diagram version (baseline) from the current one via ModelEditor.
+- Version switcher in diagram editor for viewing and switching between diagram versions (read-only for non-latest).
+
+### Changed
+- Model editor: baseline creation flow and version display.
+
 ## [0.0.23] - 2026-02-28
 
 ### Added

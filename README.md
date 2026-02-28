@@ -18,9 +18,8 @@ Frontend SPA for architectural modeling workflows: managing models, notations, v
 - Vue 3 (`<script setup>`, Composition API)
 - TypeScript (strict mode)
 - Vite
-- Vue Router 4
+- Vue Router 5
 - Vitest
-- Playwright
 
 ## Requirements
 
@@ -49,7 +48,6 @@ App runs on `http://localhost:5173` and proxies `/api/*` to backend.
 | `npm run preview` | Preview built app |
 | `npm run test` | Run unit tests |
 | `npm run test:watch` | Run unit tests in watch mode |
-| `npm run test:e2e` | Run Playwright tests |
 
 ## Deployment (`deploy.sh`)
 
@@ -105,7 +103,6 @@ Configured via `.env.local`:
 
 For public release preparation, see:
 
-- `docs/OPEN_SOURCE_PREPARATION.md`
 - `CONTRIBUTING.md`
 - `SECURITY.md`
 - `CODE_OF_CONDUCT.md`

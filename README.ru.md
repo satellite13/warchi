@@ -18,9 +18,8 @@ English version: `README.md`
 - Vue 3 (`<script setup>`, Composition API)
 - TypeScript (strict mode)
 - Vite
-- Vue Router 4
+- Vue Router 5
 - Vitest
-- Playwright
 
 ## Требования
 
@@ -49,7 +48,6 @@ npm run dev
 | `npm run preview` | Предпросмотр собранного приложения |
 | `npm run test` | Запуск юнит-тестов |
 | `npm run test:watch` | Тесты в watch-режиме |
-| `npm run test:e2e` | E2E-тесты Playwright |
 
 ## Деплой (`deploy.sh`)
 
@@ -105,7 +103,6 @@ BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./deploy.sh
 
 Для подготовки публичного релиза используйте:
 
-- `docs/OPEN_SOURCE_PREPARATION.ru.md`
 - `CONTRIBUTING.ru.md`
 - `SECURITY.ru.md`
 - `CODE_OF_CONDUCT.ru.md`

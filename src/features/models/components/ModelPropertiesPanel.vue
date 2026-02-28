@@ -36,16 +36,16 @@ const selectedRelation = computed(
     props.availableRelations.find(relation => relation.id === props.linkBindingRelationId) ?? null
 )
 
-const nodeProperties = computed<CustomProperty[]>(() =>
-  selectedComponent.value
-    ? parseEntityAttrs(selectedComponent.value.attrs ?? null).customProperties
-    : []
-)
-const linkProperties = computed<CustomProperty[]>(() =>
-  selectedRelation.value
-    ? parseEntityAttrs(selectedRelation.value.attrs ?? null).customProperties
-    : []
-)
+const nodeProperties = computed<CustomProperty[]>(() => {
+  if (!selectedComponent.value) return []
+  const props = parseEntityAttrs(selectedComponent.value.attrs ?? null).customProperties
+  return props.filter(p => !p.system)
+})
+const linkProperties = computed<CustomProperty[]>(() => {
+  if (!selectedRelation.value) return []
+  const props = parseEntityAttrs(selectedRelation.value.attrs ?? null).customProperties
+  return props.filter(p => !p.system)
+})
 
 const currentMode = computed<'node' | 'link' | 'empty'>(() => {
   if (props.selectedNode) return 'node'

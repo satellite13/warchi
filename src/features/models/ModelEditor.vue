@@ -1165,7 +1165,7 @@ const validateRequiredCustomProperties = (): string | null => {
       if (!component || component.notationId !== notationId) continue
 
       const requiredProperties = parseEntityAttrs(component.attrs ?? null).customProperties.filter(
-        property => property.required
+        property => property.required && !property.system
       )
       if (requiredProperties.length === 0) continue
 
@@ -1188,7 +1188,7 @@ const validateRequiredCustomProperties = (): string | null => {
       if (!relation || relation.notationId !== notationId) continue
 
       const requiredProperties = parseEntityAttrs(relation.attrs ?? null).customProperties.filter(
-        property => property.required
+        property => property.required && !property.system
       )
       if (requiredProperties.length === 0) continue
 

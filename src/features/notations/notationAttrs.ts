@@ -48,6 +48,13 @@ export type NodeStyle = {
   cornerRadius?: number
 }
 
+export type InsetSides = {
+  top?: number
+  right?: number
+  bottom?: number
+  left?: number
+}
+
 export type DiagramStyle = {
   fillColor?: string
   fillOpacity?: number
@@ -64,11 +71,11 @@ export type DiagramStyle = {
   labelColor?: string
   labelOpacity?: number
   labelFontSize?: number
-  // Label spacing
-  labelPadding?: number
-  labelMargin?: number
+  labelInset?: number | InsetSides
   labelPlacement?: string
   labelAlign?: string
+  labelVerticalAlign?: string
+  contentInset?: number | InsetSides
   // Edge label background
   labelBgColor?: string
   labelBgOpacity?: number
@@ -87,6 +94,9 @@ export type DiagramStyle = {
   iconPlacement?: string
   iconWidth?: number
   iconHeight?: number
+  iconInset?: number | InsetSides
+  iconOffsetX?: number
+  iconOffsetY?: number
   iconPadding?: number
   iconMargin?: number
   iconGap?: number
@@ -200,10 +210,14 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.labelColor === 'string') style.labelColor = value.labelColor
   if (typeof value.labelOpacity === 'number') style.labelOpacity = value.labelOpacity
   if (typeof value.labelFontSize === 'number') style.labelFontSize = value.labelFontSize
-  if (typeof value.labelPadding === 'number') style.labelPadding = value.labelPadding
-  if (typeof value.labelMargin === 'number') style.labelMargin = value.labelMargin
+  if (typeof value.labelInset === 'number') style.labelInset = value.labelInset
+  else if (isInsetSides(value.labelInset)) style.labelInset = normalizeInsetSides(value.labelInset)
   if (typeof value.labelPlacement === 'string') style.labelPlacement = value.labelPlacement
   if (typeof value.labelAlign === 'string') style.labelAlign = value.labelAlign
+  if (typeof value.labelVerticalAlign === 'string') style.labelVerticalAlign = value.labelVerticalAlign
+  if (typeof value.contentInset === 'number') style.contentInset = value.contentInset
+  else if (isInsetSides(value.contentInset))
+    style.contentInset = normalizeInsetSides(value.contentInset)
   if (typeof value.labelBgColor === 'string') style.labelBgColor = value.labelBgColor
   if (typeof value.labelBgOpacity === 'number') style.labelBgOpacity = value.labelBgOpacity
   if (typeof value.labelBgPadding === 'number') style.labelBgPadding = value.labelBgPadding
@@ -224,6 +238,10 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.iconPlacement === 'string') style.iconPlacement = value.iconPlacement
   if (typeof value.iconWidth === 'number') style.iconWidth = value.iconWidth
   if (typeof value.iconHeight === 'number') style.iconHeight = value.iconHeight
+  if (typeof value.iconInset === 'number') style.iconInset = value.iconInset
+  else if (isInsetSides(value.iconInset)) style.iconInset = normalizeInsetSides(value.iconInset)
+  if (typeof value.iconOffsetX === 'number') style.iconOffsetX = value.iconOffsetX
+  if (typeof value.iconOffsetY === 'number') style.iconOffsetY = value.iconOffsetY
   if (typeof value.iconPadding === 'number') style.iconPadding = value.iconPadding
   if (typeof value.iconMargin === 'number') style.iconMargin = value.iconMargin
   if (typeof value.iconGap === 'number') style.iconGap = value.iconGap
@@ -244,6 +262,22 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.customShapeId === 'string') style.customShapeId = value.customShapeId
   if (typeof value.labelTemplate === 'string') style.labelTemplate = value.labelTemplate
   return Object.keys(style).length ? style : undefined
+}
+
+const isInsetSides = (value: unknown): value is InsetSides =>
+  isRecord(value) &&
+  (typeof value.top === 'number' ||
+    typeof value.right === 'number' ||
+    typeof value.bottom === 'number' ||
+    typeof value.left === 'number')
+
+const normalizeInsetSides = (value: InsetSides): InsetSides => {
+  const result: InsetSides = {}
+  if (typeof value.top === 'number') result.top = value.top
+  if (typeof value.right === 'number') result.right = value.right
+  if (typeof value.bottom === 'number') result.bottom = value.bottom
+  if (typeof value.left === 'number') result.left = value.left
+  return result
 }
 
 function normalizeOutlineSegments(arr: unknown[]): OutlineSegment[] {

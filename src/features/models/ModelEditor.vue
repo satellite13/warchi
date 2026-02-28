@@ -1674,7 +1674,7 @@ const createDiagramNote = (x: number, y: number) => {
         labelColor: '#5a4600',
         labelFontSize: 13,
         labelAlign: 'left',
-        labelPadding: 10,
+        labelInset: 10,
         labelPlacement: 'center',
       },
     } as Record<string, unknown>,

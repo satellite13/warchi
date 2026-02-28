@@ -5,7 +5,9 @@ import { useI18n } from "vue-i18n";
 import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
+import ColorWithAlphaField from "./ColorWithAlphaField.vue";
 import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
+import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import type { DiagramStyle } from "../notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { AVAILABLE_ICON_OPTIONS } from "@/config/availableIcons";
@@ -54,6 +56,73 @@ type IconPlacement =
   | "bottom-left"
   | "bottom-right";
 
+const ICON_PLACEMENT_OPTIONS: readonly IconPlacement[] = [
+  "center",
+  "top",
+  "bottom",
+  "left",
+  "right",
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right"
+];
+
+type InsetSides = { top: number; right: number; bottom: number; left: number };
+type InsetInput = number | { top?: number; right?: number; bottom?: number; left?: number };
+
+type TextLabelWithSpacing = {
+  inset?: InsetInput;
+};
+
+function normalizeIconPlacement(value: unknown, fallback: IconPlacement = "top-left"): IconPlacement {
+  if (typeof value !== "string") return fallback;
+  return (ICON_PLACEMENT_OPTIONS as readonly string[]).includes(value)
+    ? (value as IconPlacement)
+    : fallback;
+}
+
+function toInsetSides(value: unknown, fallback = 0): InsetSides {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return { top: value, right: value, bottom: value, left: value };
+  }
+  if (value && typeof value === "object") {
+    const raw = value as { top?: unknown; right?: unknown; bottom?: unknown; left?: unknown };
+    const top = typeof raw.top === "number" && Number.isFinite(raw.top) ? raw.top : fallback;
+    const right = typeof raw.right === "number" && Number.isFinite(raw.right) ? raw.right : fallback;
+    const bottom = typeof raw.bottom === "number" && Number.isFinite(raw.bottom) ? raw.bottom : fallback;
+    const left = typeof raw.left === "number" && Number.isFinite(raw.left) ? raw.left : fallback;
+    return { top, right, bottom, left };
+  }
+  return { top: fallback, right: fallback, bottom: fallback, left: fallback };
+}
+
+function toInsetNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value && typeof value === "object") {
+    const raw = value as { top?: unknown; right?: unknown; bottom?: unknown; left?: unknown };
+    if (typeof raw.top === "number" && Number.isFinite(raw.top)) return raw.top;
+    if (typeof raw.right === "number" && Number.isFinite(raw.right)) return raw.right;
+    if (typeof raw.bottom === "number" && Number.isFinite(raw.bottom)) return raw.bottom;
+    if (typeof raw.left === "number" && Number.isFinite(raw.left)) return raw.left;
+  }
+  return fallback;
+}
+
+function insetToPlain(value: InsetSides): InsetInput {
+  return { top: value.top, right: value.right, bottom: value.bottom, left: value.left };
+}
+
+function getLabelSpacing(label: unknown): TextLabelWithSpacing {
+  return label && typeof label === "object" ? (label as TextLabelWithSpacing) : {};
+}
+
+function setLabelSpacing(label: unknown, spacing: { inset?: InsetInput }) {
+  if (!label || typeof label !== "object") return;
+  const target = label as TextLabelWithSpacing;
+  if (spacing.inset != null) target.inset = spacing.inset;
+}
+
 function emitNodeStyle() {
   const style: DiagramStyle = {
     nodeShape: nodeShape.value,
@@ -70,13 +139,13 @@ function emitNodeStyle() {
     labelColor: labelColor.value,
     labelOpacity: labelOpacity.value,
     labelFontSize: labelFontSize.value,
-    labelPadding: labelPadding.value,
-    labelMargin: labelMargin.value,
-    labelPlacement: labelPlacement.value,
+    labelInset: insetToPlain(labelInset.value),
     labelAlign: labelAlign.value,
+    labelVerticalAlign: labelVerticalAlign.value,
     ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
     width: nodeWidth.value,
     height: nodeHeight.value,
+    contentInset: insetToPlain(contentInset.value),
     portsTop: nodePortsTop.value,
     portsBottom: nodePortsBottom.value,
     portsLeft: nodePortsLeft.value,
@@ -87,9 +156,7 @@ function emitNodeStyle() {
           iconPlacement: iconPlacement.value,
           iconWidth: iconWidth.value,
           iconHeight: iconHeight.value,
-          iconPadding: iconPadding.value,
-          iconMargin: iconMargin.value,
-          iconGap: iconGap.value,
+          iconInset: iconInset.value,
           iconStrokeColor: iconStrokeColor.value,
           iconFillColor: iconFillColor.value
         }
@@ -114,12 +181,10 @@ function emitEdgeStyle() {
     labelColor: edgeLabelColor.value,
     labelOpacity: edgeLabelOpacity.value,
     labelFontSize: edgeLabelFontSize.value,
-    labelPadding: edgeLabelPadding.value,
-    labelMargin: edgeLabelMargin.value,
+    labelInset: insetToPlain(edgeLabelInset.value),
     edgeLabelOffset: edgeLabelOffset.value,
     labelBgColor: edgeLabelBgColor.value,
     labelBgOpacity: edgeLabelBgOpacity.value,
-    labelBgPadding: edgeLabelBgPadding.value,
     labelBgBorderRadius: edgeLabelBgBorderRadius.value,
     startMarkerSize: edgeStartMarkerSize.value,
     startMarkerFillColor: edgeStartMarkerFillColor.value,
@@ -197,12 +262,10 @@ function confirmSavePreset() {
       labelColor: edgeLabelColor.value,
       labelOpacity: edgeLabelOpacity.value,
       labelFontSize: edgeLabelFontSize.value,
-      labelPadding: edgeLabelPadding.value,
-      labelMargin: edgeLabelMargin.value,
+      labelInset: insetToPlain(edgeLabelInset.value),
       edgeLabelOffset: edgeLabelOffset.value,
       labelBgColor: edgeLabelBgColor.value,
       labelBgOpacity: edgeLabelBgOpacity.value,
-      labelBgPadding: edgeLabelBgPadding.value,
       labelBgBorderRadius: edgeLabelBgBorderRadius.value,
       startMarkerSize: edgeStartMarkerSize.value,
       startMarkerFillColor: edgeStartMarkerFillColor.value,
@@ -230,12 +293,12 @@ function confirmSavePreset() {
       labelColor: labelColor.value,
       labelOpacity: labelOpacity.value,
       labelFontSize: labelFontSize.value,
-      labelPadding: labelPadding.value,
-      labelMargin: labelMargin.value,
-      labelPlacement: labelPlacement.value,
+      labelInset: insetToPlain(labelInset.value),
       labelAlign: labelAlign.value,
+      labelVerticalAlign: labelVerticalAlign.value,
       width: nodeWidth.value,
       height: nodeHeight.value,
+      contentInset: insetToPlain(contentInset.value),
       portsTop: nodePortsTop.value,
       portsBottom: nodePortsBottom.value,
       portsLeft: nodePortsLeft.value,
@@ -246,9 +309,7 @@ function confirmSavePreset() {
             iconPlacement: iconPlacement.value,
             iconWidth: iconWidth.value,
             iconHeight: iconHeight.value,
-            iconPadding: iconPadding.value,
-            iconMargin: iconMargin.value,
-            iconGap: iconGap.value,
+            iconInset: iconInset.value,
             iconStrokeColor: iconStrokeColor.value,
             iconFillColor: iconFillColor.value
           }
@@ -313,12 +374,12 @@ function applyComponentPreset(presetName: string) {
   labelColor.value = style.labelColor ?? "#333333";
   labelOpacity.value = style.labelOpacity ?? 1;
   labelFontSize.value = style.labelFontSize ?? 14;
-  labelPadding.value = style.labelPadding ?? 8;
-  labelMargin.value = style.labelMargin ?? 0;
-  labelPlacement.value = (style.labelPlacement as any) ?? "auto";
+  labelInset.value = toInsetSides(style.labelInset, 8);
+  labelVerticalAlign.value = (style.labelVerticalAlign as "top" | "middle" | "bottom") ?? "middle";
   // Only update dimensions if explicitly specified in preset
   if (style.width !== undefined) nodeWidth.value = style.width;
   if (style.height !== undefined) nodeHeight.value = style.height;
+  contentInset.value = toInsetSides(style.contentInset, 0);
   nodePortsTop.value = style.portsTop ?? 3;
   nodePortsBottom.value = style.portsBottom ?? 3;
   nodePortsLeft.value = style.portsLeft ?? 1;
@@ -334,12 +395,13 @@ function applyComponentPreset(presetName: string) {
   
   if (style.iconName) {
     iconName.value = style.iconName;
-    iconPlacement.value = (style.iconPlacement as IconPlacement) ?? "top-left";
+    iconPlacement.value = normalizeIconPlacement(style.iconPlacement, "top-left");
     iconWidth.value = style.iconWidth ?? 20;
     iconHeight.value = style.iconHeight ?? 20;
-    iconPadding.value = style.iconPadding ?? 8;
-    iconMargin.value = style.iconMargin ?? 0;
-    iconGap.value = style.iconGap ?? 6;
+    iconInset.value = toInsetNumber(
+      style.iconInset ?? style.iconPadding ?? style.iconMargin ?? style.iconGap,
+      6
+    );
     iconStrokeColor.value = style.iconStrokeColor ?? "#000000";
     iconFillColor.value = style.iconFillColor ?? "#000000";
   } else {
@@ -365,12 +427,12 @@ function applyComponentPreset(presetName: string) {
         ...(node.label.style || {}),
         color: labelColor.value,
         fontSize: labelFontSize.value,
-        opacity: labelOpacity.value
+        opacity: labelOpacity.value,
+        verticalAlign: labelVerticalAlign.value
       } as any;
-      (node.label as any)._padding = labelPadding.value;
-      (node.label as any)._margin = labelMargin.value;
+      setLabelSpacing(node.label, { inset: insetToPlain(labelInset.value) });
     }
-    (node as any).labelPlacement = labelPlacement.value;
+    (node as any).contentInset = insetToPlain(contentInset.value);
     
     // Apply dimensions and corner radius
     node.width = nodeWidth.value;
@@ -390,9 +452,7 @@ function applyComponentPreset(presetName: string) {
         width: iconWidth.value,
         height: iconHeight.value,
         fit: "contain",
-        padding: iconPadding.value,
-        margin: iconMargin.value,
-        gap: iconGap.value,
+        inset: iconInset.value,
         strokeColor: iconStrokeColor.value,
         fillColor: iconFillColor.value
       };
@@ -422,12 +482,10 @@ function applyEdgePreset(presetName: string) {
   edgeLabelColor.value = style.labelColor ?? "#333333";
   edgeLabelOpacity.value = style.labelOpacity ?? 1;
   edgeLabelFontSize.value = style.labelFontSize ?? 14;
-  edgeLabelPadding.value = style.labelPadding ?? 8;
-  edgeLabelMargin.value = style.labelMargin ?? 0;
+  edgeLabelInset.value = toInsetSides(style.labelInset, 8);
   edgeLabelOffset.value = style.edgeLabelOffset ?? edgeLabelOffset.value;
   edgeLabelBgColor.value = style.labelBgColor ?? "#ffffff";
   edgeLabelBgOpacity.value = style.labelBgOpacity ?? 1;
-  edgeLabelBgPadding.value = style.labelBgPadding ?? 4;
   edgeLabelBgBorderRadius.value = style.labelBgBorderRadius ?? 2;
   
   if (style.lineDash && style.lineDash.length > 0) {
@@ -467,14 +525,12 @@ function applyEdgePreset(presetName: string) {
         fontSize: edgeLabelFontSize.value,
         opacity: edgeLabelOpacity.value
       } as any;
-      edge.label.padding = edgeLabelPadding.value;
-      edge.label.margin = edgeLabelMargin.value;
+      setLabelSpacing(edge.label, { inset: insetToPlain(edgeLabelInset.value) });
     }
     edge.labelOffset = edgeLabelOffset.value;
     (edge as any).labelBackground = { 
       color: edgeLabelBgColor.value,
       opacity: edgeLabelBgOpacity.value,
-      padding: edgeLabelBgPadding.value,
       borderRadius: edgeLabelBgBorderRadius.value
     };
   });
@@ -518,9 +574,7 @@ const iconName = ref("");
 const iconPlacement = ref<IconPlacement>("top-left");
 const iconWidth = ref(20);
 const iconHeight = ref(20);
-const iconPadding = ref(8);
-const iconMargin = ref(0);
-const iconGap = ref(6);
+const iconInset = ref(6);
 const iconStrokeColor = ref("#000000");
 const iconFillColor = ref("#000000");
 const nodeShape = ref<NodeShape>("rectangle");
@@ -538,12 +592,12 @@ const labelTemplate = ref("");
 const labelColor = ref("#333333");
 const labelOpacity = ref(1);
 const labelFontSize = ref(14);
-const labelPadding = ref(8);
-const labelMargin = ref(0);
-const labelPlacement = ref<"auto" | "center" | "top" | "bottom" | "left" | "right">("auto");
+const labelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 });
 const labelAlign = ref<"center" | "left" | "right">("center");
+const labelVerticalAlign = ref<"top" | "middle" | "bottom">("middle");
 const nodeWidth = ref(140);
 const nodeHeight = ref(50);
+const contentInset = ref<InsetSides>({ top: 0, right: 0, bottom: 0, left: 0 });
 const nodePortsTop = ref(3);
 const nodePortsBottom = ref(3);
 const nodePortsLeft = ref(1);
@@ -565,12 +619,10 @@ const edgeOpacity = ref(1);
 const edgeLabelColor = ref("#333333");
 const edgeLabelOpacity = ref(1);
 const edgeLabelFontSize = ref(14);
-const edgeLabelPadding = ref(8);
-const edgeLabelMargin = ref(0);
+const edgeLabelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 });
 const edgeLabelOffset = ref(0);
 const edgeLabelBgColor = ref("#ffffff");
 const edgeLabelBgOpacity = ref(1);
-const edgeLabelBgPadding = ref(4);
 const edgeLabelBgBorderRadius = ref(2);
 const edgeStartMarkerSize = ref(12);
 const edgeStartMarkerFillColor = ref("#000000");
@@ -602,12 +654,16 @@ function loadNodeProps() {
     iconName.value = "";
   }
   const iconOptions = (node as any).icon?.options as Record<string, unknown> | undefined;
-  iconPlacement.value = (iconOptions?.placement as IconPlacement) ?? "top-left";
+  iconPlacement.value = normalizeIconPlacement(
+    iconOptions?.placement,
+    normalizeIconPlacement(props.currentDiagramStyle?.iconPlacement, "top-left")
+  );
   iconWidth.value = Math.round(Number(iconOptions?.width ?? 20));
   iconHeight.value = Math.round(Number(iconOptions?.height ?? 20));
-  iconPadding.value = Number(iconOptions?.padding ?? 8);
-  iconMargin.value = Number(iconOptions?.margin ?? 0);
-  iconGap.value = Number(iconOptions?.gap ?? 6);
+  iconInset.value = toInsetNumber(
+    iconOptions?.inset ?? iconOptions?.padding ?? iconOptions?.margin ?? iconOptions?.gap,
+    6
+  );
   iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? "#000000";
   iconFillColor.value = (iconOptions?.fillColor as string) ?? "#000000";
 
@@ -665,15 +721,16 @@ function loadNodeProps() {
   labelColor.value = labelStyle?.color || "#333333";
   labelOpacity.value = (labelStyle as any)?.opacity ?? 1;
   labelFontSize.value = labelStyle?.fontSize ?? 14;
-  labelPadding.value = node.label?.padding ?? 8;
-  labelMargin.value = node.label?.margin ?? 0;
-  labelPlacement.value = (node as any).labelPlacement ?? "auto";
+  const nodeLabelSpacing = getLabelSpacing(node.label);
+  labelInset.value = toInsetSides(nodeLabelSpacing.inset, 8);
   labelAlign.value = (labelStyle?.align as "center" | "left" | "right") ?? "center";
+  labelVerticalAlign.value = ((labelStyle as any)?.verticalAlign as "top" | "middle" | "bottom") ?? "middle";
   labelTemplate.value = props.currentDiagramStyle?.labelTemplate ?? "";
 
   // Load node dimensions
   nodeWidth.value = Math.round(node.width ?? 140);
   nodeHeight.value = Math.round(node.height ?? 50);
+  contentInset.value = toInsetSides((node as any).contentInset ?? props.currentDiagramStyle?.contentInset, 0);
   const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, unknown>;
   nodePortsTop.value = Math.max(0, Math.round(Number(anchorPoints.top ?? 3)));
   nodePortsBottom.value = Math.max(0, Math.round(Number(anchorPoints.bottom ?? 3)));
@@ -704,12 +761,11 @@ function loadEdgeProps() {
   edgeLabelColor.value = eLabelStyle?.color || "#333333";
   edgeLabelOpacity.value = (eLabelStyle as any)?.opacity ?? 1;
   edgeLabelFontSize.value = eLabelStyle?.fontSize ?? 14;
-  edgeLabelPadding.value = edge.label?.padding ?? 8;
-  edgeLabelMargin.value = edge.label?.margin ?? 0;
+  const edgeLabelSpacing = getLabelSpacing(edge.label);
+  edgeLabelInset.value = toInsetSides(edgeLabelSpacing.inset, 8);
   edgeLabelOffset.value = edge.labelOffset ?? 0;
   edgeLabelBgColor.value = (edge as any).labelBackground?.color || "#ffffff";
   edgeLabelBgOpacity.value = ((edge as any).labelBackground as any)?.opacity ?? 1;
-  edgeLabelBgPadding.value = ((edge as any).labelBackground as any)?.padding ?? 4;
   edgeLabelBgBorderRadius.value = ((edge as any).labelBackground as any)?.borderRadius ?? 2;
   edgeStartMarkerSize.value = edge.startMarker?.size ?? 12;
   edgeStartMarkerFillColor.value = edge.startMarker?.fillColor || "#000000";
@@ -737,6 +793,9 @@ watch(
   () => props.currentDiagramStyle,
   (style) => {
     if (!style || elementType.value !== "node") return;
+    if (style.iconName) {
+      iconPlacement.value = normalizeIconPlacement(style.iconPlacement, iconPlacement.value);
+    }
     if (style.nodeShape === "custom") {
       nodeShape.value = "custom";
       customOutlineRef.value = style.customOutline ?? undefined;
@@ -889,9 +948,7 @@ function applyNodeIcon() {
         width: iconWidth.value,
         height: iconHeight.value,
         fit: "contain",
-        padding: iconPadding.value,
-        margin: iconMargin.value,
-        gap: iconGap.value,
+        inset: iconInset.value,
         strokeColor: iconStrokeColor.value,
         fillColor: iconFillColor.value
       };
@@ -926,28 +983,10 @@ function handleIconHeightChange(value: string) {
   emitNodeStyle();
 }
 
-function handleIconPaddingChange(value: string) {
+function handleIconInsetChange(value: string) {
   const v = parseFloat(value);
   if (!Number.isFinite(v) || v < 0) return;
-  iconPadding.value = v;
-  resetComponentPreset();
-  applyNodeIcon();
-  emitNodeStyle();
-}
-
-function handleIconMarginChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v) || v < 0) return;
-  iconMargin.value = v;
-  resetComponentPreset();
-  applyNodeIcon();
-  emitNodeStyle();
-}
-
-function handleIconGapChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v) || v < 0) return;
-  iconGap.value = v;
+  iconInset.value = v;
   resetComponentPreset();
   applyNodeIcon();
   emitNodeStyle();
@@ -1116,38 +1155,11 @@ function handleLabelFontSizeChange(value: string) {
   emitNodeStyle();
 }
 
-function handleLabelPaddingChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v)) return;
-  labelPadding.value = v;
+function handleLabelInsetChange(value: InsetSides) {
+  labelInset.value = value;
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    if (node.label) {
-      (node.label as any)._padding = v;
-    }
-  });
-  emitNodeStyle();
-}
-
-function handleLabelMarginChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v)) return;
-  labelMargin.value = v;
-  if (!props.selectedElementId || !props.interactionManager) return;
-  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    if (node.label) {
-      (node.label as any)._margin = v;
-    }
-  });
-  emitNodeStyle();
-}
-
-function handleLabelPlacementChange(value: string) {
-  const v = value as "auto" | "center" | "top" | "bottom" | "left" | "right";
-  labelPlacement.value = v;
-  if (!props.selectedElementId || !props.interactionManager) return;
-  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    (node as any).labelPlacement = v;
+    if (node.label) setLabelSpacing(node.label, { inset: insetToPlain(labelInset.value) });
   });
   emitNodeStyle();
 }
@@ -1158,6 +1170,16 @@ function handleLabelAlignChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (node.label) node.label.style = { ...node.label.style, align: v };
+  });
+  emitNodeStyle();
+}
+
+function handleLabelVerticalAlignChange(value: string) {
+  const v = value as "top" | "middle" | "bottom";
+  labelVerticalAlign.value = v;
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    if (node.label) node.label.style = { ...node.label.style, verticalAlign: v } as any;
   });
   emitNodeStyle();
 }
@@ -1182,6 +1204,16 @@ function handleHeightChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     node.height = v;
+  });
+  emitNodeStyle();
+}
+
+function handleContentInsetChange(value: InsetSides) {
+  contentInset.value = value;
+  resetComponentPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    (node as any).contentInset = insetToPlain(contentInset.value);
   });
   emitNodeStyle();
 }
@@ -1257,8 +1289,7 @@ function handleEdgeLabelChange(value: string) {
       } else {
         edge.label = new TextLabel({
           text: value,
-          padding: edgeLabelPadding.value,
-          margin: edgeLabelMargin.value
+          inset: insetToPlain(edgeLabelInset.value)
         });
       }
     } else {
@@ -1390,30 +1421,12 @@ function handleEdgeLabelFontSizeChange(value: string) {
   emitEdgeStyle();
 }
 
-function handleEdgeLabelPaddingChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v) || v < 0) return;
-  edgeLabelPadding.value = v;
+function handleEdgeLabelInsetChange(value: InsetSides) {
+  edgeLabelInset.value = value;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    if (edge.label) {
-      edge.label.padding = v;
-    }
-  });
-  emitEdgeStyle();
-}
-
-function handleEdgeLabelMarginChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v) || v < 0) return;
-  edgeLabelMargin.value = v;
-  resetRelationPreset();
-  if (!props.selectedElementId || !props.interactionManager) return;
-  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    if (edge.label) {
-      edge.label.margin = v;
-    }
+    if (edge.label) setLabelSpacing(edge.label, { inset: insetToPlain(edgeLabelInset.value) });
   });
   emitEdgeStyle();
 }
@@ -1448,18 +1461,6 @@ function handleEdgeLabelBgOpacityChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     (edge as any).labelBackground = {...((edge as any).labelBackground || {}), opacity: v};
-  });
-  emitEdgeStyle();
-}
-
-function handleEdgeLabelBgPaddingChange(value: string) {
-  const v = parseFloat(value);
-  if (!Number.isFinite(v) || v < 0) return;
-  edgeLabelBgPadding.value = v;
-  resetRelationPreset();
-  if (!props.selectedElementId || !props.interactionManager) return;
-  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), padding: v};
   });
   emitEdgeStyle();
 }
@@ -1670,53 +1671,38 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
-                  <SketchColorField
+                  <ColorWithAlphaField
                     :model-value="edgeLabelColor"
                     :alpha-value="edgeLabelOpacity"
                     @update:model-value="handleEdgeLabelColorChange"
                     @update:alpha="(value) => handleEdgeLabelOpacityChange(String(value))"
                   />
-                  <div class="sp-num-field">
-                    <span class="sp-num-field__label">A</span>
-                    <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelOpacityChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
                 </div>
-                <div class="sp-field-grid sp-field-grid--2">
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">{{ t("nodeStyle.innerShort") }}</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelPadding" min="0" max="60" step="1" @input="handleEdgeLabelPaddingChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">{{ t("nodeStyle.outerShort") }}</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelMargin" min="0" max="60" step="1" @input="handleEdgeLabelMarginChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                </div>
+                <InsetSidesInput
+                  :model-value="edgeLabelInset"
+                  :min="0"
+                  :max="60"
+                  :step="1"
+                  @update:model-value="handleEdgeLabelInsetChange"
+                />
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.offset") }}</span>
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.background") }}</span>
-                  <SketchColorField
+                  <ColorWithAlphaField
                     :model-value="edgeLabelBgColor"
                     :alpha-value="edgeLabelBgOpacity"
                     @update:model-value="handleEdgeLabelBgColorChange"
                     @update:alpha="(value) => handleEdgeLabelBgOpacityChange(String(value))"
                   />
-                  <div class="sp-num-field">
-                    <span class="sp-num-field__label">A</span>
-                    <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelBgOpacity" min="0" max="1" step="0.1" @input="handleEdgeLabelBgOpacityChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
                 <div class="sp-field-grid sp-field-grid--2">
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">{{ t("nodeStyle.labelInnerShort") }}</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelBgPadding" min="0" max="40" step="1" @input="handleEdgeLabelBgPaddingChange(($event.target as HTMLInputElement).value)">
-                  </div>
                   <div class="sp-num-field sp-num-field--stacked">
                     <span class="sp-num-field__label">R</span>
                     <input type="number" class="sp-input sp-input--sm" :value="edgeLabelBgBorderRadius" min="0" max="40" step="1" @input="handleEdgeLabelBgBorderRadiusChange(($event.target as HTMLInputElement).value)">
@@ -1736,16 +1722,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
               <div v-if="edgeSection.line" class="sp-section__content">
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
-                  <SketchColorField
+                  <ColorWithAlphaField
                     :model-value="edgeStrokeColor"
                     :alpha-value="edgeStrokeOpacity"
                     @update:model-value="handleEdgeStrokeColorChange"
                     @update:alpha="(value) => handleEdgeStrokeOpacityChange(String(value))"
                   />
-                  <div class="sp-num-field">
-                    <span class="sp-num-field__label">A</span>
-                    <input type="number" class="sp-input sp-input--tiny" :value="edgeStrokeOpacity" min="0" max="1" step="0.1" @input="handleEdgeStrokeOpacityChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.thickness") }}</span>
@@ -1824,16 +1806,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </div>
                     <div class="sp-field sp-field--row sp-field--indent">
                       <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
-                      <SketchColorField
+                      <ColorWithAlphaField
                         :model-value="edgeStartMarkerFillColor"
                         :alpha-value="edgeStartMarkerFillOpacity"
                         @update:model-value="handleEdgeStartMarkerFillColorChange"
                         @update:alpha="(value) => handleEdgeStartMarkerFillOpacityChange(String(value))"
                       />
-                      <div class="sp-num-field">
-                        <span class="sp-num-field__label">A</span>
-                        <input type="number" class="sp-input sp-input--tiny" :value="edgeStartMarkerFillOpacity" min="0" max="1" step="0.1" @input="handleEdgeStartMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
-                      </div>
                     </div>
                   </template>
                 </div>
@@ -1856,16 +1834,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </div>
                     <div class="sp-field sp-field--row sp-field--indent">
                       <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
-                      <SketchColorField
+                      <ColorWithAlphaField
                         :model-value="edgeEndMarkerFillColor"
                         :alpha-value="edgeEndMarkerFillOpacity"
                         @update:model-value="handleEdgeEndMarkerFillColorChange"
                         @update:alpha="(value) => handleEdgeEndMarkerFillOpacityChange(String(value))"
                       />
-                      <div class="sp-num-field">
-                        <span class="sp-num-field__label">A</span>
-                        <input type="number" class="sp-input sp-input--tiny" :value="edgeEndMarkerFillOpacity" min="0" max="1" step="0.1" @input="handleEdgeEndMarkerFillOpacityChange(($event.target as HTMLInputElement).value)">
-                      </div>
                     </div>
                   </template>
                 </div>
@@ -1895,48 +1869,40 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
-                  <SketchColorField
+                  <ColorWithAlphaField
                     :model-value="labelColor"
                     :alpha-value="labelOpacity"
                     @update:model-value="handleLabelColorChange"
                     @update:alpha="(value) => handleLabelOpacityChange(String(value))"
                   />
-                  <div class="sp-num-field">
-                    <span class="sp-num-field__label">A</span>
-                    <input type="number" class="sp-input sp-input--tiny" :value="labelOpacity" min="0" max="1" step="0.1" @input="handleLabelOpacityChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
-                <div class="sp-field-grid sp-field-grid--3">
+                <div class="sp-field-grid sp-field-grid--2">
                   <div class="sp-num-field sp-num-field--stacked">
                     <span class="sp-num-field__label">{{ t("nodeStyle.size") }}</span>
                     <input type="number" class="sp-input sp-input--sm" :value="labelFontSize" min="8" max="72" step="1" @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)">
                   </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">{{ t("nodeStyle.innerShort") }}</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="labelPadding" min="0" max="50" step="1" @input="handleLabelPaddingChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">{{ t("nodeStyle.outerShort") }}</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="labelMargin" min="0" max="50" step="1" @input="handleLabelMarginChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.position") }}</span>
-                  <select class="sp-select sp-select--flex" :value="labelPlacement" @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)">
-                    <option value="auto">{{ t("nodeStyle.positionAuto") }}</option>
-                    <option value="center">{{ t("nodeStyle.positionCenter") }}</option>
-                    <option value="top">{{ t("nodeStyle.positionTop") }}</option>
-                    <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
-                    <option value="left">{{ t("nodeStyle.positionLeft") }}</option>
-                    <option value="right">{{ t("nodeStyle.positionRight") }}</option>
-                  </select>
-                </div>
+                <InsetSidesInput
+                  :model-value="labelInset"
+                  :min="0"
+                  :max="50"
+                  :step="1"
+                  @update:model-value="handleLabelInsetChange"
+                />
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.align") }}</span>
                   <select class="sp-select sp-select--flex" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="center">{{ t("nodeStyle.alignCenter") }}</option>
                     <option value="left">{{ t("nodeStyle.alignLeft") }}</option>
                     <option value="right">{{ t("nodeStyle.alignRight") }}</option>
+                  </select>
+                </div>
+                <div class="sp-field sp-field--row">
+                  <span class="sp-field__label">{{ t("nodeStyle.verticalAlign") }}</span>
+                  <select class="sp-select sp-select--flex" :value="labelVerticalAlign" @change="handleLabelVerticalAlignChange(($event.target as HTMLSelectElement).value)">
+                    <option value="top">{{ t("nodeStyle.positionTop") }}</option>
+                    <option value="middle">{{ t("nodeStyle.alignCenter") }}</option>
+                    <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
                   </select>
                 </div>
               </div>
@@ -2002,6 +1968,13 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <input type="number" class="sp-input sp-input--sm" :value="cornerRadius" min="0" max="50" step="1" @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)">
                   </div>
                 </div>
+                <InsetSidesInput
+                  :model-value="contentInset"
+                  :min="0"
+                  :max="100"
+                  :step="1"
+                  @update:model-value="handleContentInsetChange"
+                />
                 <div class="sp-field-grid sp-field-grid--dims">
                   <div class="sp-num-field sp-num-field--stacked">
                     <span class="sp-num-field__label">PT</span>
@@ -2034,29 +2007,21 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
               <div v-if="nodeSection.fill" class="sp-section__content">
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
-                  <SketchColorField
+                  <ColorWithAlphaField
                     :model-value="fillColor"
                     :alpha-value="fillOpacity"
                     @update:model-value="handleFillChange"
                     @update:alpha="(value) => handleFillOpacityChange(String(value))"
                   />
-                  <div class="sp-num-field">
-                    <span class="sp-num-field__label">A</span>
-                    <input type="number" class="sp-input sp-input--tiny" :value="fillOpacity" min="0" max="1" step="0.1" @input="handleFillOpacityChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.stroke") }}</span>
-                  <SketchColorField
+                  <ColorWithAlphaField
                     :model-value="strokeColor"
                     :alpha-value="strokeOpacity"
                     @update:model-value="handleStrokeColorChange"
                     @update:alpha="(value) => handleStrokeOpacityChange(String(value))"
                   />
-                  <div class="sp-num-field">
-                    <span class="sp-num-field__label">A</span>
-                    <input type="number" class="sp-input sp-input--tiny" :value="strokeOpacity" min="0" max="1" step="0.1" @input="handleStrokeOpacityChange(($event.target as HTMLInputElement).value)">
-                  </div>
                 </div>
                 <div class="sp-field sp-field--row">
                   <span class="sp-field__label">{{ t("nodeStyle.thickness") }}</span>
@@ -2155,7 +2120,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       @update:model-value="handleIconFillColorChange"
                     />
                   </div>
-                  <div class="sp-field-grid sp-field-grid--2">
+                  <div class="sp-field-grid sp-field-grid--3">
                     <div class="sp-num-field sp-num-field--stacked">
                       <span class="sp-num-field__label">W</span>
                       <input type="number" class="sp-input sp-input--sm" :value="iconWidth" min="1" max="200" step="1" @input="handleIconWidthChange(($event.target as HTMLInputElement).value)">
@@ -2164,19 +2129,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <span class="sp-num-field__label">H</span>
                       <input type="number" class="sp-input sp-input--sm" :value="iconHeight" min="1" max="200" step="1" @input="handleIconHeightChange(($event.target as HTMLInputElement).value)">
                     </div>
-                  </div>
-                  <div class="sp-field-grid sp-field-grid--3">
                     <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">{{ t("nodeStyle.innerShort") }}</span>
-                      <input type="number" class="sp-input sp-input--sm" :value="iconPadding" min="0" max="100" step="1" @input="handleIconPaddingChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">{{ t("nodeStyle.outerShort") }}</span>
-                      <input type="number" class="sp-input sp-input--sm" :value="iconMargin" min="0" max="100" step="1" @input="handleIconMarginChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">{{ t("nodeStyle.gap") }}</span>
-                      <input type="number" class="sp-input sp-input--sm" :value="iconGap" min="0" max="100" step="1" @input="handleIconGapChange(($event.target as HTMLInputElement).value)">
+                      <span class="sp-num-field__label">{{ t("nodeStyle.inset") }}</span>
+                      <input type="number" class="sp-input sp-input--sm" :value="iconInset" min="0" max="100" step="1" @input="handleIconInsetChange(($event.target as HTMLInputElement).value)">
                     </div>
                   </div>
                 </template>

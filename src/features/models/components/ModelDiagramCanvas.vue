@@ -20,7 +20,6 @@ import {
   type NodeImageOptions,
   type TextStyle,
   type TextLabelOptions,
-  type LabelPlacement,
   type EdgePathType,
   type EdgeStyle,
 } from '@ngroznykh/papirus'
@@ -583,12 +582,12 @@ const buildEdgeLabelWithStyle = (
 ): string | TextLabel | undefined => {
   const text = labelText?.trim()
   if (!text) return undefined
+  const labelInset = ds?.labelInset
   if (
     !ds?.labelColor &&
     ds?.labelOpacity == null &&
     !ds?.labelFontSize &&
-    ds?.labelPadding == null &&
-    ds?.labelMargin == null
+    labelInset == null
   ) {
     return text
   }
@@ -598,8 +597,7 @@ const buildEdgeLabelWithStyle = (
   if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
   if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
   if (Object.keys(style).length) opts.style = style
-  if (ds?.labelPadding != null) opts.padding = ds.labelPadding
-  if (ds?.labelMargin != null) opts.margin = ds.labelMargin
+  if (labelInset != null) opts.inset = labelInset
   return new TextLabel(opts)
 }
 
@@ -856,13 +854,14 @@ function buildNodeLabel(
     displayText = resolveLabelTemplate(ds!.labelTemplate!, name, customProps, scopedValues)
   }
 
+  const labelInset = ds?.labelInset
   const hasStyle = !!(
     ds?.labelColor ||
     ds?.labelOpacity != null ||
     ds?.labelFontSize ||
-    ds?.labelPadding != null ||
-    ds?.labelMargin != null ||
-    ds?.labelAlign
+    labelInset != null ||
+    ds?.labelAlign ||
+    ds?.labelVerticalAlign
   )
 
   if (!hasStyle && !hasTemplate) {
@@ -877,9 +876,10 @@ function buildNodeLabel(
   if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
   if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
   if (ds?.labelAlign) style.align = ds.labelAlign as TextStyle['align']
+  if (ds?.labelVerticalAlign)
+    style.verticalAlign = ds.labelVerticalAlign as TextStyle['verticalAlign']
   if (Object.keys(style).length) opts.style = style
-  if (ds?.labelPadding != null) opts.padding = ds.labelPadding
-  if (ds?.labelMargin != null) opts.margin = ds.labelMargin
+  if (labelInset != null) opts.inset = labelInset
   return opts
 }
 
@@ -898,15 +898,16 @@ function buildNodeIcon(ds?: DiagramStyle) {
     placement === 'bottom-right'
       ? placement
       : 'left'
+  const iconInset = ds.iconInset ?? ds.iconPadding ?? ds.iconMargin ?? ds.iconGap
   return {
     source: `/icons/${ds.iconName}.svg`,
     placement: resolvedPlacement,
     width: ds.iconWidth ?? 20,
     height: ds.iconHeight ?? 20,
     fit: 'contain' as const,
-    ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
-    ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
-    ...(ds.iconGap != null ? { gap: ds.iconGap } : {}),
+    ...(iconInset != null ? { inset: iconInset as unknown as number } : {}),
+    ...(ds.iconOffsetX != null ? { offsetX: ds.iconOffsetX } : {}),
+    ...(ds.iconOffsetY != null ? { offsetY: ds.iconOffsetY } : {}),
     ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
     ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {}),
   }
@@ -983,6 +984,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     label: buildNodeLabel(nodeName, ds, instance.modelNodeId),
     style: visual.style,
     anchorPoints: resolveAnchorPoints(ds),
+    contentInset: (ds?.contentInset ?? 0) as unknown as number,
     ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
   }
 
@@ -1041,7 +1043,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     node.shapeType = shape
   }
   if (ds?.labelPlacement) {
-    node.labelPlacement = ds.labelPlacement as LabelPlacement
+    ;(node as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
   }
   applyMinSizeConstraint(node, instance.modelNodeId)
   return node
@@ -1104,8 +1106,9 @@ function syncDiagram() {
         existing.cornerRadius = visual.cornerRadius
       }
       existing.icon = buildNodeIcon(ds)
+      existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
       if (ds?.labelPlacement) {
-        existing.labelPlacement = ds.labelPlacement as LabelPlacement
+        ;(existing as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
       }
       applyMinSizeConstraint(existing, instance.modelNodeId)
     } else {
@@ -1174,11 +1177,9 @@ function syncDiagram() {
           ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
         }
       }
-      if (existing.label && ds?.labelPadding != null) {
-        existing.label.padding = ds.labelPadding
-      }
-      if (existing.label && ds?.labelMargin != null) {
-        existing.label.margin = ds.labelMargin
+      const inset = ds?.labelInset
+      if (existing.label && inset != null) {
+        ;(existing.label as unknown as { inset?: unknown }).inset = inset
       }
       existing.lockAnchors = lockAnchorsEnabled.value
       ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground =

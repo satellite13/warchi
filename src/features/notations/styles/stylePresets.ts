@@ -106,8 +106,7 @@ export function getDefaultComponentStyle(): DiagramStyle {
     opacity: 1,
     labelColor: "#1e3a5f",
     labelFontSize: 14,
-    labelPadding: 8,
-    labelMargin: 0,
+    labelInset: 8,
     labelPlacement: "center"
   };
 }

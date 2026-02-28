@@ -17,7 +17,6 @@ import {
   TextLabel,
   type ElementState,
   type TextLabelOptions,
-  type LabelPlacement,
   type TextStyle,
   type NodeImageOptions,
   type EdgeStyle as PapirusEdgeStyle,
@@ -103,6 +102,30 @@ type AnchorRelationMeta = {
   relationName: string
   edgeStyle: RelationEdgeStyle
   diagramStyle?: DiagramStyle
+}
+
+type NodeWithLabelPlacement = DiagramNode & { labelPlacement?: string }
+type InsetSides = { top?: number; right?: number; bottom?: number; left?: number }
+type TextLabelWithSpacing = TextLabel & {
+  inset?: number | InsetSides
+  padding?: number
+  margin?: number
+}
+
+function setNodeLabelPlacement(node: DiagramNode, placement: string | undefined): void {
+  if (!placement) return
+  ;(node as NodeWithLabelPlacement).labelPlacement = placement
+}
+
+function setTextLabelSpacing(
+  label: TextLabel | undefined,
+  options: { inset?: number | InsetSides; padding?: number; margin?: number }
+): void {
+  if (!label) return
+  const withSpacing = label as TextLabelWithSpacing
+  if (options.inset != null) withSpacing.inset = options.inset
+  if (options.padding != null) withSpacing.padding = options.padding
+  if (options.margin != null) withSpacing.margin = options.margin
 }
 
 
@@ -302,7 +325,15 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [])
       : name
 
-    const hasStyle = !!(ds?.labelColor || ds?.labelOpacity != null || ds?.labelFontSize || ds?.labelPadding != null || ds?.labelMargin != null || ds?.labelAlign)
+    const labelInset = ds?.labelInset
+    const hasStyle = !!(
+      ds?.labelColor ||
+      ds?.labelOpacity != null ||
+      ds?.labelFontSize ||
+      labelInset != null ||
+      ds?.labelAlign ||
+      ds?.labelVerticalAlign
+    )
 
     if (!hasStyle && !hasTemplate) {
       return displayText
@@ -316,24 +347,25 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
     if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
     if (ds?.labelAlign) style.align = ds.labelAlign as TextStyle["align"]
+    if (ds?.labelVerticalAlign)
+      style.verticalAlign = ds.labelVerticalAlign as TextStyle["verticalAlign"]
     if (Object.keys(style).length) opts.style = style
-    if (ds?.labelPadding != null) opts.padding = ds.labelPadding
-    if (ds?.labelMargin != null) opts.margin = ds.labelMargin
+    if (labelInset != null) opts.inset = labelInset
     return opts
   }
 
   function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && ds?.labelPadding == null && ds?.labelMargin == null) {
+    const labelInset = ds?.labelInset
+    if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && labelInset == null) {
       return name
     }
     const opts: TextLabelOptions = { text: name }
     const style: TextStyle = {}
-    if (ds.labelColor) style.color = ds.labelColor
-    if (ds.labelOpacity != null) style.opacity = ds.labelOpacity
-    if (ds.labelFontSize) style.fontSize = ds.labelFontSize
+    if (ds?.labelColor) style.color = ds.labelColor
+    if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
+    if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
     if (Object.keys(style).length) opts.style = style
-  if (ds.labelPadding != null) opts.padding = ds.labelPadding
-  if (ds.labelMargin != null) opts.margin = ds.labelMargin
+    if (labelInset != null) opts.inset = labelInset
     return opts
   }
 
@@ -361,15 +393,16 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       placement === "bottom-right"
         ? placement
         : "top-left"
+    const iconInset = ds.iconInset ?? ds.iconPadding ?? ds.iconMargin ?? ds.iconGap
     return {
       source: `/icons/${ds.iconName}.svg`,
       placement: resolvedPlacement,
       width: ds.iconWidth ?? 20,
       height: ds.iconHeight ?? 20,
       fit: "contain" as const,
-      ...(ds.iconPadding != null ? { padding: ds.iconPadding } : {}),
-      ...(ds.iconMargin != null ? { margin: ds.iconMargin } : {}),
-      ...(ds.iconGap != null ? { gap: ds.iconGap } : {}),
+      ...(iconInset != null ? { inset: iconInset as unknown as number } : {}),
+      ...(ds.iconOffsetX != null ? { offsetX: ds.iconOffsetX } : {}),
+      ...(ds.iconOffsetY != null ? { offsetY: ds.iconOffsetY } : {}),
       ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
       ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
     }
@@ -409,6 +442,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       label: buildNodeLabel(item.name, ds, item.parsedAttrs.customProperties),
       style: visual.style,
       anchorPoints: resolveComponentAnchorPoints(ds),
+      contentInset: (ds?.contentInset ?? 0) as unknown as number,
       ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
     }
     const beveledFactory = diagramShapeFactories["beveled-rectangle"]
@@ -454,9 +488,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     if (node instanceof CustomShapeNode) {
       node.shapeType = shape
     }
-    if (ds?.labelPlacement) {
-      node.labelPlacement = ds.labelPlacement as LabelPlacement
-    }
+    setNodeLabelPlacement(node, ds?.labelPlacement)
     disableTransformerFrame(node)
     return node
   }
@@ -514,9 +546,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           existing.cornerRadius = visual.cornerRadius
         }
         existing.icon = buildNodeIcon(ds)
-        if (ds?.labelPlacement) {
-          existing.labelPlacement = ds.labelPlacement as LabelPlacement
-        }
+        existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
+        setNodeLabelPlacement(existing, ds?.labelPlacement)
       } else {
         componentNodes.push(createComponentNode(component, 0, 0))
       }
@@ -558,12 +589,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
             ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {})
           }
         }
-        if (existingEdge.label && ds?.labelPadding != null) {
-          existingEdge.label.padding = ds.labelPadding
-        }
-        if (existingEdge.label && ds?.labelMargin != null) {
-          existingEdge.label.margin = ds.labelMargin
-        }
+        setTextLabelSpacing(existingEdge.label, {
+          inset: ds?.labelInset
+        })
         // Update edge style
         existingEdge.style = {
           strokeColor: edgeStyle.strokeColor,

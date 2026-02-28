@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.25] - 2026-02-28
+
+### Changed
+- Updated `@ngroznykh/papirus` to `0.3.22`.
+- Refined model editor/canvas synchronization and validation behavior for links and diagram interactions.
+
+### Fixed
+- Fixed edge label text propagation when restoring links during diagram open/sync (newly created runtime edges no longer lose label text).
+- Fixed edge style panel label input binding to correctly display label text for both string and object label forms.
+
 ## [0.0.24] - 2026-02-28
 
 ### Added

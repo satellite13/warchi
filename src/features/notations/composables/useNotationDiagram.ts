@@ -5,7 +5,6 @@ import {
   CircleNode,
   DiamondNode,
   CustomShapeNode,
-  ShapeFactories,
   Node as DiagramNode,
   Edge,
   AutoLayout,
@@ -24,6 +23,7 @@ import {
   type EdgeStyle as PapirusEdgeStyle,
   type ArrowMarkerType
 } from "@ngroznykh/papirus"
+import { diagramShapeFactories } from "@/utils/diagramShapes"
 import type { DiagramStyle, NodeStyle, CustomProperty } from "../notationAttrs"
 import type {
   NotationEditorState,
@@ -137,32 +137,6 @@ function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
   if (node instanceof CircleNode) return "circle"
   if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? "rectangle"
   return "rectangle"
-}
-
-function createBeveledRectanglePath(width: number, height: number): Path2D {
-  const path = new Path2D()
-  const cut = Math.min(width, height) * 0.16
-  path.moveTo(cut, 0)
-  path.lineTo(width - cut, 0)
-  path.lineTo(width, cut)
-  path.lineTo(width, height - cut)
-  path.lineTo(width - cut, height)
-  path.lineTo(cut, height)
-  path.lineTo(0, height - cut)
-  path.lineTo(0, cut)
-  path.closePath()
-  return path
-}
-
-function createTrapezoidPath(width: number, height: number): Path2D {
-  const path = new Path2D()
-  const topInset = width * 0.18
-  path.moveTo(topInset, 0)
-  path.lineTo(width - topInset, 0)
-  path.lineTo(width, height)
-  path.lineTo(0, height)
-  path.closePath()
-  return path
 }
 
 function normalizeTagForSort(value: string): string {
@@ -431,6 +405,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       anchorPoints: resolveComponentAnchorPoints(ds),
       ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
     }
+    const beveledFactory = diagramShapeFactories["beveled-rectangle"]
+    const trapezoidFactory = diagramShapeFactories["trapezoid"]
+    const slantedFactory = diagramShapeFactories["slanted-rectangle"]
+
     let node: DiagramNode
     if (shape === "diamond") {
       node = new DiamondNode(commonOptions)
@@ -439,17 +417,20 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     } else if (shape === "beveled-rectangle") {
       node = new CustomShapeNode({
         ...commonOptions,
-        path: (w, h) => createBeveledRectanglePath(w, h)
+        path: beveledFactory.path,
+        svgPath: beveledFactory.svgPath
       })
     } else if (shape === "trapezoid") {
       node = new CustomShapeNode({
         ...commonOptions,
-        path: (w, h) => createTrapezoidPath(w, h)
+        path: trapezoidFactory.path,
+        svgPath: trapezoidFactory.svgPath
       })
     } else if (shape === "slanted-rectangle") {
       node = new CustomShapeNode({
         ...commonOptions,
-        path: (w, h) => ShapeFactories.parallelogram(w, h)
+        path: slantedFactory.path,
+        svgPath: slantedFactory.svgPath
       })
     } else {
       node = new RectangleNode({

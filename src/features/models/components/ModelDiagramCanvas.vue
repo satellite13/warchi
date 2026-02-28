@@ -7,7 +7,6 @@ import {
   CircleNode,
   DiamondNode,
   CustomShapeNode,
-  ShapeFactories,
   Node as DiagramNode,
   Edge,
   GridOverlay,
@@ -25,6 +24,7 @@ import {
   type EdgePathType,
   type EdgeStyle,
 } from '@ngroznykh/papirus'
+import { diagramShapeFactories } from '@/utils/diagramShapes'
 import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '../../../types/api'
 import {
   parseEntityAttrs,
@@ -796,44 +796,6 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
   }
 }
 
-function createBeveledRectanglePath(width: number, height: number): Path2D {
-  const path = new Path2D()
-  const cut = Math.min(width, height) * 0.16
-  path.moveTo(cut, 0)
-  path.lineTo(width - cut, 0)
-  path.lineTo(width, cut)
-  path.lineTo(width, height - cut)
-  path.lineTo(width - cut, height)
-  path.lineTo(cut, height)
-  path.lineTo(0, height - cut)
-  path.lineTo(0, cut)
-  path.closePath()
-  return path
-}
-
-function createTrapezoidPath(width: number, height: number): Path2D {
-  const path = new Path2D()
-  const topInset = width * 0.18
-  path.moveTo(topInset, 0)
-  path.lineTo(width - topInset, 0)
-  path.lineTo(width, height)
-  path.lineTo(0, height)
-  path.closePath()
-  return path
-}
-
-function createStickyNotePath(width: number, height: number): Path2D {
-  const path = new Path2D()
-  const cut = Math.max(10, Math.min(width, height) * 0.2)
-  path.moveTo(0, 0)
-  path.lineTo(width - cut, 0)
-  path.lineTo(width, cut)
-  path.lineTo(width, height)
-  path.lineTo(0, height)
-  path.closePath()
-  return path
-}
-
 function getNodeScopedPropertyValues(modelNodeId: string): Record<string, unknown> {
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
@@ -1016,11 +978,17 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
   }
 
+  const stickyNoteFactory = diagramShapeFactories['sticky-note']
+  const beveledFactory = diagramShapeFactories['beveled-rectangle']
+  const trapezoidFactory = diagramShapeFactories['trapezoid']
+  const slantedFactory = diagramShapeFactories['slanted-rectangle']
+
   let node: DiagramNode
   if (isNoteInstance(instance) && shape === 'rectangle') {
     const noteNode = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => createStickyNotePath(w, h),
+      path: stickyNoteFactory.path,
+      svgPath: stickyNoteFactory.svgPath,
     })
     noteNode.shapeType = 'rectangle'
     ;(noteNode as unknown as { noteShape?: boolean }).noteShape = true
@@ -1032,17 +1000,20 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   } else if (shape === 'beveled-rectangle') {
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => createBeveledRectanglePath(w, h),
+      path: beveledFactory.path,
+      svgPath: beveledFactory.svgPath,
     })
   } else if (shape === 'trapezoid') {
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => createTrapezoidPath(w, h),
+      path: trapezoidFactory.path,
+      svgPath: trapezoidFactory.svgPath,
     })
   } else if (shape === 'slanted-rectangle') {
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => ShapeFactories.parallelogram(w, h),
+      path: slantedFactory.path,
+      svgPath: slantedFactory.svgPath,
     })
   } else {
     node = new RectangleNode({

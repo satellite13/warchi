@@ -20,6 +20,7 @@ const props = withDefaults(
     canShare?: boolean
     canvasMode?: boolean
     hideToolbar?: boolean
+    isAdmin?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -35,6 +36,7 @@ const props = withDefaults(
     canShare: false,
     canvasMode: false,
     hideToolbar: false,
+    isAdmin: false,
   }
 )
 
@@ -86,9 +88,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   { icon: 'separator', event: 'sep4', separator: true },
   { icon: 'download', event: 'export-notation', title: t('toolbar.exportNotation') },
   { icon: 'upload', event: 'import-notation', title: t('toolbar.importNotation') },
-  { icon: 'separator', event: 'sep5', separator: true },
-  { icon: 'data_object', event: 'show-attrs-json', title: t('toolbar.showAttrsJson') },
-  { icon: 'separator', event: 'sep6', separator: true },
+  ...(props.isAdmin
+    ? [
+        { icon: 'separator', event: 'sep5', separator: true },
+        { icon: 'data_object', event: 'show-attrs-json', title: t('toolbar.showAttrsJson') },
+        { icon: 'separator', event: 'sep6', separator: true },
+      ]
+    : []),
   {
     icon: 'save',
     event: 'save',

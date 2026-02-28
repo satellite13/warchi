@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue"
 import { useI18n } from "vue-i18n"
+import { compareVersions } from "../../../utils/version"
 import { parseTypeAttrs } from "../../notations/notationAttrs"
 import type { NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
@@ -102,8 +103,19 @@ const filteredChildNodes = (nodeId: string): EditorNode[] => {
   return childNodes(nodeId).filter((child) => nodeMatchesSearch(child, query))
 }
 
-const nodeDiagrams = (nodeId: string): EditorDiagram[] =>
-  props.diagrams.filter((diagram) => diagram.nodeId === nodeId && !diagram._isDeleted)
+/** Диаграммы узла: по одному на имя (последняя версия), без baseline-дубликатов в списке */
+const nodeDiagrams = (nodeId: string): EditorDiagram[] => {
+  const list = props.diagrams.filter((d) => d.nodeId === nodeId && !d._isDeleted)
+  const byName = new Map<string, EditorDiagram>()
+  for (const d of list) {
+    const key = d.name.trim()
+    const existing = byName.get(key)
+    if (!existing || compareVersions(d.version, existing.version) > 0) {
+      byName.set(key, d)
+    }
+  }
+  return [...byName.values()]
+}
 
 // Track which nodes are used in any diagram instance
 const usedNodeIds = computed(() => {

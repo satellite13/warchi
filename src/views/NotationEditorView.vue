@@ -50,7 +50,7 @@ const {
   loadNotation,
   saveChanges,
 } = useNotationEditor()
-const { currentUser } = useAuth()
+const { currentUser, isAdmin } = useAuth()
 const showShareModal = ref(false)
 const { canShare: canShareNotation } = useCanShare(notation, currentUser)
 
@@ -608,7 +608,7 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'show-attrs-json':
-      openAttrsJson()
+      if (isAdmin.value) openAttrsJson()
       break
     case 'export-notation':
       exportNotation()
@@ -702,6 +702,7 @@ onBeforeUnmount(() => {
         :can-undo="canUndo"
         :can-redo="canRedo"
         :can-share="canShareNotation"
+        :is-admin="isAdmin"
         @action="handleToolbarAction"
         @share="showShareModal = true"
       />
@@ -737,6 +738,7 @@ onBeforeUnmount(() => {
                 :can-undo="canUndo"
                 :can-redo="canRedo"
                 :can-share="canShareNotation"
+                :is-admin="isAdmin"
                 @action="handleToolbarAction"
                 @share="showShareModal = true"
               />

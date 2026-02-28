@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import AppLogo from '../../../components/layout/AppLogo.vue'
 import IconToolbar, { type ToolbarButton } from '../../notations/layout/IconToolbar.vue'
 
+import type { EditorDiagram } from '../types'
+
 const props = withDefaults(
   defineProps<{
     hasUnsavedChanges?: boolean
@@ -30,6 +32,12 @@ const props = withDefaults(
     notationVersion?: string
     notationOwnerInfo?: string
     canOpenNotation?: boolean
+    diagramVersions?: EditorDiagram[]
+    selectedDiagramId?: string | null
+    isDiagramReadOnly?: boolean
+    baselineCreating?: boolean
+    baselineError?: string | null
+    isAdmin?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -55,6 +63,12 @@ const props = withDefaults(
     notationVersion: '',
     notationOwnerInfo: '',
     canOpenNotation: false,
+    diagramVersions: () => [],
+    selectedDiagramId: null,
+    isDiagramReadOnly: false,
+    baselineCreating: false,
+    baselineError: null,
+    isAdmin: false,
   }
 )
 
@@ -65,6 +79,8 @@ const emit = defineEmits<{
   renameModel: [name: string]
   share: []
   openNotation: [notationId: string]
+  selectDiagramVersion: [diagramId: string]
+  createBaseline: []
 }>()
 
 const isRenamingModel = ref(false)
@@ -145,7 +161,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     icon: 'format_align_center',
     event: 'auto-layout-nodes',
     title: t('toolbar.autoLayoutNodes'),
-    disabled: !props.hasActiveDiagram,
+    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly,
   },
   {
     icon: 'restart_alt',
@@ -167,19 +183,16 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   { icon: 'separator', event: 'sep3', separator: true },
-  {
-    icon: 'close',
-    event: 'close-diagram',
-    title: t('toolbar.closeDiagram'),
-    disabled: !props.hasActiveDiagram,
-  },
-  { icon: 'separator', event: 'sep4', separator: true },
-  {
-    icon: 'data_object',
-    event: 'show-diagram-json',
-    title: t('toolbar.showDiagramJson'),
-    disabled: !props.hasActiveDiagram,
-  },
+  ...(props.isAdmin
+    ? [
+        {
+          icon: 'data_object',
+          event: 'show-diagram-json',
+          title: t('toolbar.showDiagramJson'),
+          disabled: !props.hasActiveDiagram,
+        },
+      ]
+    : []),
   {
     icon: 'article',
     event: 'open-diagram-doc',
@@ -187,6 +200,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   { icon: 'separator', event: 'sep5', separator: true },
+  {
+    icon: 'close',
+    event: 'close-diagram',
+    title: t('toolbar.closeDiagram'),
+    disabled: !props.hasActiveDiagram,
+  },
   {
     icon: 'save',
     event: 'save',
@@ -196,6 +215,14 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.canSave || !props.hasUnsavedChanges,
   },
 ])
+
+const canCreateBaseline = computed(
+  () =>
+    props.hasActiveDiagram &&
+    !props.isDiagramReadOnly &&
+    (props.diagramVersions?.length ?? 0) >= 1 &&
+    !props.baselineCreating
+)
 </script>
 
 <template>
@@ -261,8 +288,37 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     <div v-if="hideToolbar" class="model-header__info">
       <template v-if="diagramName">
         <span class="model-header__info-label">{{ t('toolbar.diagramLabel') }}:</span>
-        <span class="model-header__info-value">{{ diagramName }}</span>
-        <span v-if="diagramVersion" class="model-header__version">{{ diagramVersion }}</span>
+        <span class="model-header__info-value model-header__info-value--diagram">{{ diagramName }}</span>
+        <template v-if="diagramVersions && diagramVersions.length > 0">
+          <select
+            :value="selectedDiagramId ?? ''"
+            class="model-header__version-select"
+            :title="t('models.diagramVersion')"
+            @change="emit('selectDiagramVersion', ($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="d in diagramVersions"
+              :key="d.id"
+              :value="d.id"
+            >
+              {{ d.version }}
+            </option>
+          </select>
+          <span v-if="isDiagramReadOnly" class="model-header__readonly-badge">{{ t('models.viewOnly') }}</span>
+          <button
+            type="button"
+            class="model-header__baseline-btn"
+            :title="t('models.createBaseline')"
+            :disabled="!canCreateBaseline"
+            @click="emit('createBaseline')"
+          >
+            <span class="material-symbols-outlined">add_circle</span>
+          </button>
+          <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
+        </template>
+        <template v-else-if="diagramVersion">
+          <span class="model-header__version">{{ diagramVersion }}</span>
+        </template>
       </template>
       <template v-if="notationName">
         <span class="model-header__info-label">{{ t('toolbar.notationLabel') }}:</span>
@@ -319,6 +375,67 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   padding: 2px 3px;
   border-radius: 7px;
   background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+}
+
+/* Diagram version & baseline in main header info */
+.model-header__info-value--diagram {
+  max-width: 160px;
+}
+
+.model-header__version-select {
+  font-size: 12px;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--base-text);
+  cursor: pointer;
+  width: auto;
+  max-width: 6em;
+}
+
+.model-header__readonly-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-right: 2px;
+}
+
+.model-header__baseline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--base-text);
+  cursor: pointer;
+}
+
+.model-header__baseline-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.model-header__baseline-btn:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--primary);
+}
+
+.model-header__baseline-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.model-header__baseline-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-left: 2px;
+  cursor: help;
 }
 
 .model-header__left {

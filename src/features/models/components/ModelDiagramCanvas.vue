@@ -57,6 +57,7 @@ const props = withDefaults(
     lockAnchorsEnabled?: boolean
     attachToOutlineEnabled?: boolean
     autoLinkInGroups?: boolean
+    readOnly?: boolean
   }>(),
   {
     connectionValidator: null,
@@ -70,6 +71,7 @@ const props = withDefaults(
     attachToOutlineEnabled: true,
     relationRules: () => [],
     autoLinkInGroups: true,
+    readOnly: false,
   }
 )
 
@@ -1536,7 +1538,7 @@ function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) 
 
 // ── Persist positions from papirus back to model ──
 function persistNodePositions(papNodeIds: string[]) {
-  if (!renderer) return
+  if (props.readOnly || !renderer) return
   const next = cloneDiagramAttrs()
   let changed = false
   for (const papNodeId of papNodeIds) {
@@ -1612,22 +1614,25 @@ function initRenderer(r: DiagramRenderer) {
   })
   r.use(miniMap)
 
-  // Enable interactions
+  // Always enable interactions: when readOnly use navigationOnly (zoom/pan only, no edit)
   interactionManager = r.enableInteractions({
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
     alignToNodes: alignEnabled.value,
     attachToOutline: attachToOutlineEnabled.value,
     keymap: { deleteKeys: [] },
-  })
-  interactionManager.connection.setSnapToGrid(snapEnabled.value)
-  interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
-  // Warchi persists connections via model state/events.
-  // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
-  ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
-    edge: Edge
-  ) => {
-    r.addEdge(edge)
+    navigationOnly: props.readOnly,
+  } as Parameters<DiagramRenderer['enableInteractions']>[0])
+  if (!props.readOnly) {
+    interactionManager.connection.setSnapToGrid(snapEnabled.value)
+    interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
+    // Warchi persists connections via model state/events.
+    // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
+    ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
+      edge: Edge
+    ) => {
+      r.addEdge(edge)
+    }
   }
 
   // Permanently patch getElementAtPoint to check edges before nodes.
@@ -1664,7 +1669,8 @@ function initRenderer(r: DiagramRenderer) {
 
   emit('canvasContextChange', { renderer: r, interactionManager })
 
-  // Selection events → emit selectNodes/selectLink
+  // Selection and other interaction events (only when not read-only)
+  if (interactionManager) {
   interactionManager.selection.on('select', (elementIds: string[]) => {
     if (suppressSelectionEvent) return
     if (elementIds.length === 0) {
@@ -1716,6 +1722,7 @@ function initRenderer(r: DiagramRenderer) {
 
   // Drag end → persist position changes (include grouped nodes) + auto-link
   interactionManager.drag.on('dragend', (_nodeIds: string[]) => {
+    if (props.readOnly) return
     const allIds = endGroupDrag()
     if (allIds.length > 0) {
       persistNodePositions(allIds)
@@ -1730,6 +1737,7 @@ function initRenderer(r: DiagramRenderer) {
 
   // Resize end → persist size changes
   interactionManager.resize.on('resizeEnd', (nodeId: string) => {
+    if (props.readOnly) return
     persistNodePositions([nodeId])
   })
 
@@ -1747,6 +1755,7 @@ function initRenderer(r: DiagramRenderer) {
 
   // History → sync canUndo/canRedo + detect label changes
   interactionManager.history.on('change', () => {
+    if (props.readOnly) return
     canUndo.value = interactionManager!.history.canUndo
     canRedo.value = interactionManager!.history.canRedo
     // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
@@ -1823,7 +1832,8 @@ function initRenderer(r: DiagramRenderer) {
     })
   })
 
-  // Context menu
+  // Context menu only when editable (not read-only baseline view)
+  if (!props.readOnly) {
   r.enableContextMenu({
     menu: {
       node: (target: ContextMenuTarget) => {
@@ -1920,6 +1930,9 @@ function initRenderer(r: DiagramRenderer) {
       },
     },
   })
+  }
+
+  }
 
   syncDiagram()
 }
@@ -2145,7 +2158,7 @@ const onDragOver = (event: DragEvent) => {
 }
 
 const onDrop = (event: DragEvent) => {
-  if (!props.activeDiagram) return
+  if (props.readOnly || !props.activeDiagram) return
   if (!isAllowedDropEvent(event)) return
   event.preventDefault()
   const { x, y } = normalizeDropCoordinates(event)
@@ -2479,17 +2492,18 @@ defineExpose({
     </div>
 
     <template v-if="activeDiagram">
-      <button
-        v-if="!paletteVisible"
-        type="button"
-        class="canvas-palette-toggle"
-        :title="t('diagram.showNotationPalette')"
-        @click="setPaletteVisible(true)"
-      >
-        <span class="material-symbols-outlined">palette</span>
-      </button>
+      <template v-if="!readOnly">
+        <button
+          v-if="!paletteVisible"
+          type="button"
+          class="canvas-palette-toggle"
+          :title="t('diagram.showNotationPalette')"
+          @click="setPaletteVisible(true)"
+        >
+          <span class="material-symbols-outlined">palette</span>
+        </button>
 
-      <div v-if="paletteVisible" class="canvas-palette">
+        <div v-if="paletteVisible" class="canvas-palette">
         <div class="canvas-palette__header">
           <span class="material-symbols-outlined">palette</span>
           <span>{{ t('diagram.palette') }}</span>
@@ -2540,6 +2554,7 @@ defineExpose({
           </template>
         </div>
       </div>
+      </template>
     </template>
   </div>
 </template>

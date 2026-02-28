@@ -5,18 +5,22 @@ import type { ComponentResponse, RelationResponse } from '../../../types/api'
 import type { EditorLink, EditorNode } from '../types'
 import { parseEntityAttrs, type CustomProperty } from '../../notations/notationAttrs'
 
-const props = defineProps<{
-  activeNotationId: string | null
-  selectedNode: EditorNode | null
-  selectedLink: EditorLink | null
-  nodeBindingComponentId: string | null
-  linkBindingRelationId: string | null
-  availableComponents: ComponentResponse[]
-  availableRelations: RelationResponse[]
-  nodeScopedValues: Record<string, unknown>
-  linkScopedValues: Record<string, unknown>
-  onOpenNodeDocument?: (node: EditorNode) => void
-}>()
+const props = withDefaults(
+  defineProps<{
+    activeNotationId: string | null
+    selectedNode: EditorNode | null
+    selectedLink: EditorLink | null
+    nodeBindingComponentId: string | null
+    linkBindingRelationId: string | null
+    availableComponents: ComponentResponse[]
+    availableRelations: RelationResponse[]
+    nodeScopedValues: Record<string, unknown>
+    linkScopedValues: Record<string, unknown>
+    onOpenNodeDocument?: (node: EditorNode) => void
+    readOnly?: boolean
+  }>(),
+  { readOnly: false }
+)
 
 const emit = defineEmits<{
   bindNodeComponent: [componentId: string]
@@ -156,7 +160,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
             <span class="mp-section__title">{{ t('diagram.notationComponent') }}</span>
             <select
               class="mp-select"
-              :disabled="!activeNotationId || availableComponents.length === 0"
+              :disabled="readOnly || !activeNotationId || availableComponents.length === 0"
               :value="nodeBindingComponentId || ''"
               @change="emit('bindNodeComponent', ($event.target as HTMLSelectElement).value)"
             >
@@ -183,12 +187,14 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     :class="{ 'mp-toggle__track--on': Boolean(nodeScopedValues[property.name]) }"
                     role="switch"
                     :aria-checked="Boolean(nodeScopedValues[property.name])"
+                    :disabled="readOnly"
                     @click="
-                      emit(
-                        'setNodeScopedValue',
-                        property.name,
-                        !Boolean(nodeScopedValues[property.name])
-                      )
+                      !readOnly &&
+                        emit(
+                          'setNodeScopedValue',
+                          property.name,
+                          !Boolean(nodeScopedValues[property.name])
+                        )
                     "
                   >
                     <span class="mp-toggle__thumb"></span>
@@ -200,6 +206,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                 <select
                   v-else-if="property.type === 'enum'"
                   class="mp-select"
+                  :disabled="readOnly"
                   :value="
                     String(
                       nodeScopedValues[property.name] ??
@@ -209,11 +216,12 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     )
                   "
                   @change="
-                    emit(
-                      'setNodeScopedValue',
-                      property.name,
-                      ($event.target as HTMLSelectElement).value
-                    )
+                    !readOnly &&
+                      emit(
+                        'setNodeScopedValue',
+                        property.name,
+                        ($event.target as HTMLSelectElement).value
+                      )
                   "
                 >
                   <option value="">{{ t('diagram.selectValue') }}</option>
@@ -230,13 +238,15 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   class="mp-input"
                   :type="property.type === 'number' ? 'number' : 'text'"
                   :placeholder="property.name"
+                  :readonly="readOnly"
                   :value="String(nodeScopedValues[property.name] ?? '')"
                   @input="
-                    emit(
-                      'setNodeScopedValue',
-                      property.name,
-                      coerceValue(property, ($event.target as HTMLInputElement).value)
-                    )
+                    !readOnly &&
+                      emit(
+                        'setNodeScopedValue',
+                        property.name,
+                        coerceValue(property, ($event.target as HTMLInputElement).value)
+                      )
                   "
                 />
               </div>
@@ -254,7 +264,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
             <span class="mp-section__title">{{ t('diagram.notationRelation') }}</span>
             <select
               class="mp-select"
-              :disabled="!activeNotationId || availableRelations.length === 0"
+              :disabled="readOnly || !activeNotationId || availableRelations.length === 0"
               :value="linkBindingRelationId || ''"
               @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
             >
@@ -281,12 +291,14 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     :class="{ 'mp-toggle__track--on': Boolean(linkScopedValues[property.name]) }"
                     role="switch"
                     :aria-checked="Boolean(linkScopedValues[property.name])"
+                    :disabled="readOnly"
                     @click="
-                      emit(
-                        'setLinkScopedValue',
-                        property.name,
-                        !Boolean(linkScopedValues[property.name])
-                      )
+                      !readOnly &&
+                        emit(
+                          'setLinkScopedValue',
+                          property.name,
+                          !Boolean(linkScopedValues[property.name])
+                        )
                     "
                   >
                     <span class="mp-toggle__thumb"></span>
@@ -298,6 +310,7 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                 <select
                   v-else-if="property.type === 'enum'"
                   class="mp-select"
+                  :disabled="readOnly"
                   :value="
                     String(
                       linkScopedValues[property.name] ??
@@ -307,11 +320,12 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     )
                   "
                   @change="
-                    emit(
-                      'setLinkScopedValue',
-                      property.name,
-                      ($event.target as HTMLSelectElement).value
-                    )
+                    !readOnly &&
+                      emit(
+                        'setLinkScopedValue',
+                        property.name,
+                        ($event.target as HTMLSelectElement).value
+                      )
                   "
                 >
                   <option value="">{{ t('diagram.selectValue') }}</option>
@@ -328,13 +342,15 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                   class="mp-input"
                   :type="property.type === 'number' ? 'number' : 'text'"
                   :placeholder="property.name"
+                  :readonly="readOnly"
                   :value="String(linkScopedValues[property.name] ?? '')"
                   @input="
-                    emit(
-                      'setLinkScopedValue',
-                      property.name,
-                      coerceValue(property, ($event.target as HTMLInputElement).value)
-                    )
+                    !readOnly &&
+                      emit(
+                        'setLinkScopedValue',
+                        property.name,
+                        coerceValue(property, ($event.target as HTMLInputElement).value)
+                      )
                   "
                 />
               </div>

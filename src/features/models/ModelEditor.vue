@@ -52,8 +52,9 @@ const {
   markDiagramDirty,
   markModelDirty,
   renameModel,
+  createDiagramBaseline,
 } = useModelEditor()
-const { currentUser } = useAuth()
+const { currentUser, isAdmin } = useAuth()
 const { t } = useI18n()
 
 const selectedNodeId = ref<string | null>(null)
@@ -153,10 +154,15 @@ const noteEditorText = ref('')
 const diagramRenderer = ref<any>(null)
 const diagramInteractionManager = ref<any>(null)
 const activeRightTab = ref('properties')
-const rightPanelTabs = computed(() => [
-  { id: 'properties', label: t('models.propertiesTab'), icon: 'tune' },
-  { id: 'style', label: t('models.figureStyleTab'), icon: 'palette' },
-])
+const rightPanelTabs = computed(() => {
+  const tabs: { id: string; label: string; icon: string }[] = [
+    { id: 'properties', label: t('models.propertiesTab'), icon: 'tune' },
+  ]
+  if (!isDiagramReadOnly.value) {
+    tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
+  }
+  return tabs
+})
 const { canShare: canShareModel } = useCanShare(model, currentUser)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
@@ -328,6 +334,60 @@ const activeDiagram = computed(() =>
       ) ?? null)
     : null
 )
+
+/** Версии текущей диаграммы (тот же model + name), от новых к старым по семверу */
+const diagramVersionsForCurrentName = computed(() => {
+  const diagram = activeDiagram.value
+  if (!diagram) return []
+  const sameName = state.value.diagrams.filter(
+    d =>
+      !d._isDeleted &&
+      d.modelId === diagram.modelId &&
+      d.name.trim() === diagram.name.trim()
+  )
+  return [...sameName].sort((a, b) => compareVersions(b.version, a.version))
+})
+
+/** Последняя (редактируемая) версия диаграммы по имени */
+const latestDiagramVersion = computed(() => diagramVersionsForCurrentName.value[0] ?? null)
+
+/** Открыта старая версия — только просмотр, без редактирования */
+const isDiagramReadOnly = computed(
+  () =>
+    !!activeDiagram.value &&
+    !!latestDiagramVersion.value &&
+    activeDiagram.value.id !== latestDiagramVersion.value.id
+)
+
+const baselineCreating = ref(false)
+const baselineError = ref<string | null>(null)
+async function handleCreateBaseline() {
+  const diagram = activeDiagram.value
+  if (!diagram || isDiagramReadOnly.value) return
+  baselineError.value = null
+  baselineCreating.value = true
+  try {
+    const created = await createDiagramBaseline(diagram.id)
+    if (created) {
+      selectedDiagramId.value = created.id
+    } else {
+      baselineError.value = t('models.baselineCreateError')
+    }
+  } finally {
+    baselineCreating.value = false
+  }
+}
+
+watch(selectedDiagramId, () => {
+  baselineError.value = null
+})
+
+watch([isDiagramReadOnly, activeRightTab], () => {
+  if (isDiagramReadOnly.value && activeRightTab.value === 'style') {
+    activeRightTab.value = 'properties'
+  }
+})
+
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
 const fallbackNotationMetaLoading = ref(false)
@@ -1477,6 +1537,7 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
 }
 
 const createNodeFromPaletteComponent = (componentId: string, x: number, y: number) => {
+  if (isDiagramReadOnly.value) return
   const diagram = activeDiagram.value
   if (!diagram || !diagram.nodeId) {
     setUiError('Нельзя создать ноду без активной директории диаграммы.')
@@ -2584,7 +2645,7 @@ const handleToolbarAction = async (event: string) => {
       selectedEdgeInstanceId.value = null
       break
     case 'show-diagram-json':
-      openDiagramJson()
+      if (isAdmin.value) openDiagramJson()
       break
     case 'open-model-doc':
       handleOpenModelDoc()
@@ -2874,7 +2935,7 @@ onBeforeUnmount(() => {
       <ModelEditorHeader
         hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
-        :can-save="!isSaving"
+        :can-save="!isSaving && !isDiagramReadOnly"
         :model-name="model?.name"
         :model-version="model?.version"
         :grid-visible="gridVisible"
@@ -2894,10 +2955,18 @@ onBeforeUnmount(() => {
         :notation-version="activeDiagram ? activeDiagramNotationVersion : ''"
         :notation-owner-info="activeDiagram ? activeDiagramNotationOwnerLabel : ''"
         :can-open-notation="canOpenActiveDiagramNotation"
+        :diagram-versions="diagramVersionsForCurrentName"
+        :selected-diagram-id="selectedDiagramId"
+        :is-diagram-read-only="isDiagramReadOnly"
+        :baseline-creating="baselineCreating"
+        :baseline-error="baselineError"
+        :is-admin="isAdmin"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
         @share="showShareModal = true"
         @open-notation="handleOpenNotationEditor"
+        @select-diagram-version="selectedDiagramId = $event"
+        @create-baseline="handleCreateBaseline"
       />
     </template>
     <template #default>
@@ -2928,7 +2997,7 @@ onBeforeUnmount(() => {
         </template>
 
         <div class="model-canvas-area">
-          <template v-if="activeDiagram">
+          <template v-if="activeDiagram && !isDiagramReadOnly">
             <button
               v-if="!canvasSettingsVisible"
               type="button"
@@ -2990,7 +3059,7 @@ onBeforeUnmount(() => {
             <ModelEditorHeader
               canvas-mode
               :has-unsaved-changes="hasUnsavedChanges"
-              :can-save="!isSaving"
+              :can-save="!isSaving && !isDiagramReadOnly"
               :model-name="model?.name"
               :model-version="model?.version"
               :grid-visible="gridVisible"
@@ -3003,6 +3072,8 @@ onBeforeUnmount(() => {
               :can-undo="canUndo"
               :can-redo="canRedo"
               :can-share="canShareModel"
+              :is-diagram-read-only="isDiagramReadOnly"
+              :is-admin="isAdmin"
               :can-open-notation="canOpenActiveDiagramNotation"
               @action="handleToolbarAction"
               @rename-model="handleRenameModel"
@@ -3011,8 +3082,10 @@ onBeforeUnmount(() => {
             />
           </div>
           <ModelDiagramCanvas
+            :key="`${activeDiagram?.id ?? 'none'}-${isDiagramReadOnly}`"
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
+            :read-only="isDiagramReadOnly"
             :nodes="state.nodes"
             :links="state.links"
             :relations="state.relations"
@@ -3024,7 +3097,7 @@ onBeforeUnmount(() => {
             :snap-enabled="snapEnabled"
             :align-enabled="alignEnabled"
             :rulers-enabled="rulersEnabled"
-            :palette-visible="paletteVisible"
+            :palette-visible="!isDiagramReadOnly && paletteVisible"
             :auto-link-in-groups="autoLinkInGroups"
             :lock-anchors-enabled="lockAnchorsEnabled"
             :attach-to-outline-enabled="attachToOutlineEnabled"
@@ -3076,14 +3149,15 @@ onBeforeUnmount(() => {
               :available-relations="availableLinkRelations"
               :node-scoped-values="nodeScopedValues"
               :link-scoped-values="linkScopedValues"
-              @bind-node-component="selectedNode && bindNodeComponent(selectedNode, $event)"
-              @bind-link-relation="selectedLink && bindLinkRelation(selectedLink, $event)"
-              @set-node-scoped-value="setNodeScopedValue"
-              @set-link-scoped-value="setLinkScopedValue"
+              :read-only="isDiagramReadOnly"
+              @bind-node-component="(id) => selectedNode && !isDiagramReadOnly && bindNodeComponent(selectedNode, id)"
+              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
+              @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
+              @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               :on-open-node-document="handleOpenNodeDoc"
             />
             <NodeStylePanel
-              v-if="activeRightTab === 'style'"
+              v-if="activeRightTab === 'style' && !isDiagramReadOnly"
               :selected-element-id="selectedCanvasElementId"
               :interaction-manager="diagramInteractionManager"
               :renderer="diagramRenderer"

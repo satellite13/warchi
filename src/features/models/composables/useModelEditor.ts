@@ -51,6 +51,7 @@ type ModelEditorReturn = {
   markModelDirty: () => void
   renameModel: (nextName: string) => string | null
   handleBack: () => void
+  createDiagramBaseline: (diagramId: string) => Promise<EditorDiagram | null>
 }
 
 const toEditorNode = (row: NodeResponse): EditorNode => ({
@@ -508,6 +509,14 @@ export const useModelEditor = (): ModelEditorReturn => {
     router.push({ name: 'models' })
   }
 
+  const createDiagramBaseline = async (diagramId: string): Promise<EditorDiagram | null> => {
+    const result = await apiPost<DiagramResponse>(`/diagrams/${diagramId}/baseline`, {})
+    if (!result.success) return null
+    const editorDiagram = toEditorDiagram(result.data)
+    state.value.diagrams = [...state.value.diagrams, editorDiagram]
+    return editorDiagram
+  }
+
   return {
     model,
     state,
@@ -526,5 +535,6 @@ export const useModelEditor = (): ModelEditorReturn => {
     markModelDirty,
     renameModel,
     handleBack,
+    createDiagramBaseline,
   }
 }

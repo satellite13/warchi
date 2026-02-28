@@ -8,7 +8,7 @@
 2. **Созданные формы доступны всем**: кастомные формы — глобальный каталог (не привязаны к конкретной нотации); любой пользователь может выбрать любую форму при настройке компонента в редакторе нотации или при отрисовке диаграммы модели.
 3. **В редакторе нотации** (и в модельном редакторе) при настройке компонента форма выбирается из списка: встроенные формы + все кастомные формы из каталога.
 
-Компонент хранит только ссылку на форму по id (`customShapeId`); контур не хранится в компоненте.
+При выборе кастомной формы в компонент **копируется контур** (`customOutline` в diagramStyle); опционально сохраняется ссылка на форму в каталоге (`customShapeId`). Так уже созданные компоненты и диаграммы не зависят от удаления или изменения формы в каталоге.
 
 ## Модель данных
 
@@ -42,7 +42,7 @@ interface CustomShapeDef {
 
 ### Где хранятся формы
 
-Формы хранятся **на бэкенде** (arepos-server) как **глобальный каталог**: сущность node shape **без привязки к нотации** (нет FK на notation). У формы есть владелец (owner) — кто создал; список форм отдаётся **всем** (все созданные формы доступны для выбора любому пользователю). Редактировать и удалять может только владелец (или админ). Подробности — в разделе «Поддержка в бэкенде» ниже.
+Формы хранятся **на бэкенде** (arepos-server) как **глобальный каталог**: сущность node shape **без привязки к нотации**, с полем owner (кто создал). **Доступ по аналогии с типами (NodeTypes/LinkTypes), с отличием:** видеть могут **все** (любой авторизованный пользователь видит все формы в списке и может выбирать любую для компонента); **редактировать** (изменять контур, удалять) может только владелец или пользователь, которому выдан доступ через механизм шаринга (ResourceShares), как у типов. Подробности — в разделе «Поддержка в бэкенде» ниже.
 
 ### Копирование контура в компонент при выборе формы
 
@@ -56,7 +56,7 @@ interface CustomShapeDef {
 
 **Логика при выборе формы:** пользователь выбирает форму из каталога → в diagramStyle записываем `nodeShape = 'custom'`, **копируем** `shape.outline` в `customOutline`, при желании сохраняем `customShapeId = shape.id`.
 
-**При рендере:** если `nodeShape === 'custom'` и задан **customOutline**, контур берётся из него (path/svgPath строятся из `customOutline`). Каталог для отрисовки не нужен. Если по какой-то причине customOutline нет (старые данные, миграция), можно fallback: разрешить по customShapeId из каталога или нарисовать прямоугольник.
+**При рендере:** если `nodeShape === 'custom'` и задан **customOutline**, контур берётся из него (path/svgPath строятся из `customOutline`). Каталог для отрисовки не нужен. **Fallback:** если customOutline отсутствует или пустой (старые данные, миграция) — рисовать **прямоугольник**; каталог в рендер не подтягивать.
 
 ## Поддержка в бэкенде (arepos-server)
 
@@ -79,18 +79,19 @@ interface CustomShapeDef {
 
 ### Репозиторий и контроллер
 
-- **Repository** (например `NodeShapesRepository.kt`): `JpaRepository<NodeShapes, UUID>`, методы `findByOwner(owner, pageable)`, `findAll(pageable)` (для списка «все формы»).
+- **Repository** (например `NodeShapesRepository.kt`): `JpaRepository<NodeShapes, UUID>`, методы `findByOwner(owner, pageable)`, `findAll(pageable)`.
 - **Controller** (например `NodeShapesController.kt`), путь `/api/v1/node-shapes` (по аналогии с [NodeTypesController](arepos-server/src/main/kotlin/ru/kavader/arepos/controller/NodeTypesController.kt)):
-  - `GET /api/v1/node-shapes` — список всех форм (с пагинацией; опционально фильтр по ownerId, name). **Доступ на чтение — всем** авторизованным (чтобы любой мог выбрать форму в нотации).
-  - `GET /api/v1/node-shapes/{id}` — одна форма по id (доступ всем на чтение).
-  - `POST /api/v1/node-shapes` — создание (body: name, outline); owner = текущий пользователь. Только авторизованный пользователь.
-  - `PUT /api/v1/node-shapes/{id}` — обновление (name, outline). Только владелец формы или админ.
-  - `DELETE /api/v1/node-shapes/{id}` — удаление. Только владелец или админ.
+  - `GET /api/v1/node-shapes` — список всех форм (пагинация, опционально фильтр по ownerId, name). **Чтение — всем** авторизованным.
+  - `GET /api/v1/node-shapes/{id}` — одна форма по id. Чтение — всем. В ответе отдавать флаг **canEdit: boolean** (владелец или доступ через шаринг), чтобы фронт показывал/скрывал кнопки редактирования и удаления.
+  - `POST /api/v1/node-shapes` — создание (body: name, outline); owner = текущий пользователь. Любой авторизованный.
+  - `PUT /api/v1/node-shapes/{id}` — обновление (name, outline). **Только при праве на редактирование:** владелец или пользователь с доступом через шаринг — вызов `accessService.requireCanEditNodeShape(shape)` перед сохранением.
+  - `DELETE /api/v1/node-shapes/{id}` — удаление. Только при праве на редактирование (так же `requireCanEditNodeShape`).
+- **Права доступа (как у типов):** в [ResourceAccessService](arepos-server/src/main/kotlin/ru/kavader/arepos/security/ResourceAccessService.kt) добавить `canEditNodeShape(shape)`, `requireCanEditNodeShape(shape)`. Использовать `canEditTopLevel(ownerId, ShareResourceType.NODE_SHAPE, shapeId)`. В [ShareResourceType](arepos-server/src/main/kotlin/ru/kavader/arepos/model/ResourceShares.kt) добавить **NODE_SHAPE**. В [AccessSharesController](arepos-server/src/main/kotlin/ru/kavader/arepos/controller/AccessSharesController.kt) добавить поддержку шаринга для NODE_SHAPE (владелец может выдавать право редактирования формы).
 
 ### DTO и ответы
 
 - Request: `NodeShapeRequest(name: String, outline: String?)` (без notationId).
-- Response: `NodeShapeResponse(id, name, ownerId, outline, createdAt?, updatedAt?)` — фронт получает id, name, outline (и при необходимости ownerId для отображения «мои»).
+- Response: `NodeShapeResponse(id, name, ownerId, outline, createdAt?, updatedAt?, canEdit: Boolean)` — фронт получает id, name, outline, ownerId; **canEdit** вычисляется на бэкенде (владелец или доступ через шаринг) для отображения кнопок редактирования/удаления. Поле **canEdit** должно быть в ответе и **GET /:id**, и **GET list** (в каждом элементе списка), чтобы UI мог показывать кнопки без дополнительных запросов и с учётом шаринга.
 
 ## Архитектура по слоям (фронтенд)
 
@@ -111,8 +112,8 @@ interface CustomShapeDef {
 
 - **Маршрут и экран**: отдельный маршрут `/shapes` (аналогично `/types`), view [ShapesView.vue](warchi/src/views/ShapesView.vue) (по образцу [TypesView.vue](warchi/src/views/TypesView.vue)): шапка (AppHeader), основная часть с контентом, подвал (AppFooter). В основной части — страница редактора форм (аналог [TypeEditorPage.vue](warchi/src/features/types/TypeEditorPage.vue)): сайдбар со списком всех форм (загрузка через GET /api/v1/node-shapes), кнопка «Добавить форму», при выборе формы — форма редактирования (название + редактор контура). Сохранение и удаление через API (POST/PUT/DELETE) сразу, без привязки к сохранению нотации.
 - **Навигация**: пункт «Формы» в главном меню (рядом с «Типы», «Нотации» и т.д.), переход по клику на `/shapes`.
-- **Список форм**: сайдбар — список форм (название, опционально превью); фильтр «все» / «мои» по ownerId при желании. Кнопки: создать, редактировать выбранную, удалить выбранную (с проверкой прав на бэкенде).
-- **Редактор одной формы**: правая часть (или модал) — поле «Название», компонент **редактора контура** (CustomOutlineEditor). Кнопки «Сохранить», «Удалить». Сохранение — сразу вызов PUT или POST к API; состояние списка обновляется после успешного ответа.
+- **Список форм**: сайдбар — список форм (название, опционально превью); фильтр «все» / «мои» по ownerId при желании. Кнопки: создать (всем), **редактировать** и **удалить** — показывать только для форм, по которым у текущего пользователя есть право редактирования (по полю **canEdit** из ответа API или по ownerId + шаринг). При выборе формы без права редактирования — показывать только просмотр (превью контура без кнопок сохранения/удаления) или заглушку «Нет прав на редактирование».
+- **Редактор одной формы**: правая часть — поле «Название», компонент редактора контура. Кнопки «Сохранить», «Удалить» активны только если по форме есть canEdit; иначе форма только для просмотра.
 
 ### 4. Выбор формы в редакторе нотации (и в модельном редакторе)
 
@@ -144,13 +145,43 @@ interface CustomShapeDef {
 
 ## Порядок реализации
 
-1. **Бэкенд (arepos-server)**: сущность NodeShapes **без notation** (только owner, name, outline); миграция 015; репозиторий (findAll, findByOwner); контроллер (GET list — все, GET /:id, POST, PUT, DELETE с проверкой: запись только владелец/админ, чтение — все).
+1. **Бэкенд (arepos-server)**: сущность NodeShapes (owner, name, outline); миграция 015; репозиторий; контроллер (GET list и GET /:id — всем авторизованным, в ответе при необходимости canEdit; POST — всем, PUT/DELETE — только при праве редактирования). Добавить ShareResourceType.NODE_SHAPE, в ResourceAccessService — canEditNodeShape / requireCanEditNodeShape; поддержка шаринга форм в AccessSharesController (чтобы владелец мог выдавать доступ на редактирование).
 2. **Фронт — типы и API**: типы `OutlineSegment`, `CustomShapeDef`; в `DiagramStyle` — `customShapeId`; типы и вызовы API для node-shapes (без notationId). Composable `useNodeShapes()` (или аналог) для загрузки и кэширования списка всех форм.
 3. Модуль `customOutlinePath.ts` (Path2D + svgPath по сегментам).
 4. **Отдельный раздел «Редактор форм»**: маршрут `/shapes`, ShapesView, страница по образцу TypeEditorPage (сайдбар со списком форм из API, форма редактирования выбранной формы, CRUD сразу через API). Пункт «Формы» в главном меню.
 5. UI выбора формы в NodeStylePanel: объединённый список (встроенные + формы из useNodeShapes / каталога), запись nodeShape и customShapeId.
 6. Интеграция рендера: useNotationDiagram и ModelDiagramCanvas — ветка `nodeShape === 'custom'` + разрешение контура по customShapeId из загруженного каталога форм.
 7. Компонент CustomOutlineEditor: полигон (точки перелома), затем при необходимости Bezier.
+
+## Уточнения и варианты реализации
+
+- **Формат outline в API:** В Request/Response поле `outline` — JSON-массив сегментов (как в TypeScript: `OutlineSegment[]`). На бэкенде в БД хранится как JSONB (тот же формат). В Kotlin DTO можно принимать/отдавать список структур (line: points; bezier: points) или `JsonNode`; при сохранении в entity — сериализация в строку JSON для JSONB.
+
+- **Аудит:** В миграции 015 добавить триггер по образцу других таблиц: `CREATE TRIGGER node_shapes_audit_trigger AFTER INSERT OR UPDATE OR DELETE ON public.node_shapes FOR EACH ROW EXECUTE FUNCTION audit_trigger();`
+
+- **AccessSharesController:** Для шаринга форм в `resolveOwnerId` добавить ветку `ShareResourceType.NODE_SHAPE` → загрузка формы через `NodeShapesRepository`, возврат `shape.owner.id`; внедрить `NodeShapesRepository` в контроллер.
+
+- **ResourceAccessService:** Добавить `nodeShapeAccessPermission(shape: NodeShapes): String?` (по аналогии с `nodeTypeAccessPermission`) для UI управления доступом; плюс `canEditNodeShape(shape)`, `requireCanEditNodeShape(shape)`.
+
+- **Уникальность имени формы:** В плане указано «по желанию». Варианты: (1) без уникальности — проще; (2) уникальная пара (owner, name) — в миграции UNIQUE(owner, name), при POST/PUT при дубликате возвращать 409. Решение оставить на реализацию; при выборе (2) добавить в миграцию и обработку в контроллере.
+
+- **i18n:** Все строки раздела «Формы» (пункт меню, заголовки, кнопки «Создать», «Сохранить», «Удалить», «Нет прав на редактирование», сообщения об ошибках) вынести в `src/i18n/messages.ts` (ru/en).
+
+- **OpenAPI:** При добавлении API node-shapes обновить `openapi.yaml` в arepos-server (описание эндпоинтов и схем NodeShapeRequest/NodeShapeResponse).
+
+- **CustomOutlineEditor (фаза 1 — полигон):** На этапе реализации определить: добавление точки (двойной клик по ребру? контекстное меню?), перемещение точки (drag), удаление точки (контекстное меню или кнопка), минимальное число точек (например не меньше 3). Можно начать с простого варианта: клик по ребру добавляет точку, перетаскивание перемещает, правый клик — удалить.
+
+## Чек-лист реализации (TODO)
+
+- [ ] **Backend: права** — ShareResourceType.NODE_SHAPE в ResourceShares.kt; в ResourceAccessService — canEditNodeShape, requireCanEditNodeShape; поддержка NODE_SHAPE в AccessSharesController (шаринг форм).
+- [ ] **Backend: сущность** — NodeShapes.kt, миграция 015 (таблица node_shapes, триггер аудита node_shapes_audit_trigger), NodeShapesRepository.
+- [ ] **Backend: API** — NodeShapesController (GET list/id с canEdit, POST, PUT/DELETE с requireCanEditNodeShape), DTO NodeShapeRequest / NodeShapeResponse.
+- [ ] **Frontend: типы и API** — в notationAttrs: OutlineSegment, DiagramStyle.customOutline/customShapeId, normalizeDiagramStyle; в types/api — NodeShapeResponse, NodeShapeRequest и вызовы к node-shapes; composable useNodeShapes().
+- [ ] **Frontend: customOutlinePath** — модуль `src/utils/customOutlinePath.ts` (Path2D и svgPath по сегментам контура).
+- [ ] **Frontend: раздел «Формы»** — маршрут `/shapes`, ShapesView, страница редактора форм (список в сайдбаре + форма редактирования), пункт «Формы» в главном меню, отображение кнопок по canEdit; i18n для раздела (ru/en).
+- [ ] **Frontend: NodeStylePanel** — выбор формы (встроенные + каталог из useNodeShapes), при выборе кастомной: nodeShape = 'custom', копия outline в customOutline, customShapeId.
+- [ ] **Frontend: рендер** — в useNotationDiagram и ModelDiagramCanvas ветка nodeShape === 'custom': контур из customOutline через customOutlinePath; fallback при отсутствии customOutline.
+- [ ] **Frontend: CustomOutlineEditor** — компонент редактора контура (полигон; опционально Bezier), используется на странице редактирования формы.
 
 ## Схема потока данных
 

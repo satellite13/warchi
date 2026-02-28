@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
 type InsetSides = { top: number; right: number; bottom: number; left: number };
 type InsetSyncMode = "none" | "paired" | "all";
@@ -12,21 +13,36 @@ const props = withDefaults(
     step?: number;
     pairedLabel?: string;
     allLabel?: string;
+    topTitle?: string;
+    rightTitle?: string;
+    bottomTitle?: string;
+    leftTitle?: string;
   }>(),
   {
     min: 0,
     max: 100,
     step: 1,
-    pairedLabel: "Pair",
-    allLabel: "All",
+    pairedLabel: undefined,
+    allLabel: undefined,
+    topTitle: undefined,
+    rightTitle: undefined,
+    bottomTitle: undefined,
+    leftTitle: undefined,
   }
 );
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: InsetSides): void;
 }>();
+const { t } = useI18n();
 
 const syncMode = ref<InsetSyncMode>("none");
+const resolvedPairedLabel = computed<string>(() => props.pairedLabel ?? t("nodeStyle.syncPair"));
+const resolvedAllLabel = computed<string>(() => props.allLabel ?? t("nodeStyle.syncAll"));
+const resolvedTopTitle = computed<string>(() => props.topTitle ?? t("nodeStyle.tooltipInsetTop"));
+const resolvedRightTitle = computed<string>(() => props.rightTitle ?? t("nodeStyle.tooltipInsetRight"));
+const resolvedBottomTitle = computed<string>(() => props.bottomTitle ?? t("nodeStyle.tooltipInsetBottom"));
+const resolvedLeftTitle = computed<string>(() => props.leftTitle ?? t("nodeStyle.tooltipInsetLeft"));
 
 function toggleSyncMode(mode: Exclude<InsetSyncMode, "none">): void {
   syncMode.value = syncMode.value === mode ? "none" : mode;
@@ -62,17 +78,17 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
         class="isides__sync-btn"
         :class="{ 'isides__sync-btn--active': syncMode === 'paired' }"
         @click="toggleSyncMode('paired')"
-      >{{ pairedLabel }}</button>
+      >{{ resolvedPairedLabel }}</button>
       <button
         type="button"
         class="isides__sync-btn"
         :class="{ 'isides__sync-btn--active': syncMode === 'all' }"
         @click="toggleSyncMode('all')"
-      >{{ allLabel }}</button>
+      >{{ resolvedAllLabel }}</button>
     </div>
     <div class="isides__grid">
-      <label class="isides__field">
-        <span class="isides__label">T</span>
+      <label class="isides__field" :title="resolvedTopTitle">
+        <span class="isides__label" :title="resolvedTopTitle">T</span>
         <input
           class="isides__input"
           type="number"
@@ -80,11 +96,12 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :min="min"
           :max="max"
           :step="step"
+          :title="resolvedTopTitle"
           @input="handleSideInput('top', ($event.target as HTMLInputElement).value)"
         />
       </label>
-      <label class="isides__field">
-        <span class="isides__label">R</span>
+      <label class="isides__field" :title="resolvedRightTitle">
+        <span class="isides__label" :title="resolvedRightTitle">R</span>
         <input
           class="isides__input"
           type="number"
@@ -92,11 +109,12 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :min="min"
           :max="max"
           :step="step"
+          :title="resolvedRightTitle"
           @input="handleSideInput('right', ($event.target as HTMLInputElement).value)"
         />
       </label>
-      <label class="isides__field">
-        <span class="isides__label">B</span>
+      <label class="isides__field" :title="resolvedBottomTitle">
+        <span class="isides__label" :title="resolvedBottomTitle">B</span>
         <input
           class="isides__input"
           type="number"
@@ -104,11 +122,12 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :min="min"
           :max="max"
           :step="step"
+          :title="resolvedBottomTitle"
           @input="handleSideInput('bottom', ($event.target as HTMLInputElement).value)"
         />
       </label>
-      <label class="isides__field">
-        <span class="isides__label">L</span>
+      <label class="isides__field" :title="resolvedLeftTitle">
+        <span class="isides__label" :title="resolvedLeftTitle">L</span>
         <input
           class="isides__input"
           type="number"
@@ -116,6 +135,7 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :min="min"
           :max="max"
           :step="step"
+          :title="resolvedLeftTitle"
           @input="handleSideInput('left', ($event.target as HTMLInputElement).value)"
         />
       </label>

@@ -1133,8 +1133,7 @@ function syncDiagram() {
 
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveEdgeOptions(ds)
-    const edgeLabel =
-      getInstanceEdgeLabel(edge) ?? getBoundRelation(edge.modelLinkId)?.name ?? undefined
+    const edgeLabel = getInstanceEdgeLabel(edge)
     const edgeLabelText = buildEdgeLabel(edgeLabel)
     const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
     const edgeLabelBackground = buildEdgeLabelBackground(ds)

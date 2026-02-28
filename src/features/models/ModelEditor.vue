@@ -1984,9 +1984,6 @@ const createOrReuseLink = (linkId: string | null) => {
   if (connection.targetOutlineParam !== undefined) {
     edgeAttrs.toOutlineParam = connection.targetOutlineParam
   }
-  if (relation.name?.trim()) {
-    edgeAttrs.label = relation.name.trim()
-  }
   const newEdgeInstance = {
     id: createId(),
     modelLinkId: resolvedLinkId,

@@ -685,7 +685,7 @@ function loadEdgeProps() {
   const edge = getSelectedEdge();
   if (!edge) return;
 
-  edgeLabel.value = edge.label?.text ?? "";
+  edgeLabel.value = typeof edge.label === "string" ? edge.label : (edge.label?.text ?? "");
   const style = edge.style || {};
   edgeStrokeColor.value = style.strokeColor || "#666666";
   edgeStrokeOpacity.value = (style as any).strokeOpacity ?? 1;

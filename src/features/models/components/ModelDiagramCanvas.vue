@@ -533,7 +533,9 @@ const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined
 }
 
 const getPapEdgeLabelText = (edge: Edge): string =>
-  typeof edge.label === 'string' ? edge.label : (edge.label?.text ?? '')
+  typeof edge.label === 'string'
+    ? edge.label
+    : (edge.label?.editableText ?? edge.label?.text ?? '')
 
 type ControlPoint = { x: number; y: number }
 
@@ -1131,7 +1133,9 @@ function syncDiagram() {
 
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveEdgeOptions(ds)
-    const edgeLabel = getInstanceEdgeLabel(edge)
+    const edgeLabel =
+      getInstanceEdgeLabel(edge) ?? getBoundRelation(edge.modelLinkId)?.name ?? undefined
+    const edgeLabelText = buildEdgeLabel(edgeLabel)
     const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
     const edgeLabelBackground = buildEdgeLabelBackground(ds)
     const controlPoints = readControlPointsFromAttrs(edge.attrs)
@@ -1198,7 +1202,7 @@ function syncDiagram() {
         style: edgeOpts.style,
         startMarker: edgeOpts.startMarker,
         endMarker: edgeOpts.endMarker,
-        ...(edgeLabelConfig !== undefined ? { label: edgeLabelConfig } : {}),
+        ...(edgeLabelText !== undefined ? { label: edgeLabelText } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),
@@ -1549,6 +1553,18 @@ function persistNodePositions(papNodeIds: string[]) {
     syncEdgePortIds(next)
     emit('updateDiagram', next)
   }
+}
+
+/**
+ * Syncs all in-renderer state (positions, edge labels, ports, control points) into diagram attrs
+ * and emits updateDiagram. Call before save so that recent edits are persisted.
+ */
+function flushCanvasState() {
+  if (props.readOnly || !renderer) return
+  persistNodePositions(Array.from(nodeIdToInstance.keys()))
+  detectEdgeLabelChanges()
+  detectEdgePortChanges()
+  detectEditablePolylineControlPointChanges()
 }
 
 function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
@@ -2452,6 +2468,7 @@ defineExpose({
   redo,
   getCanUndo,
   getCanRedo,
+  flushCanvasState,
 })
 </script>
 

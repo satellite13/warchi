@@ -354,16 +354,31 @@ const endGroupDrag = (): string[] => {
 }
 
 // ── Auto-link on drop inside container ──
-const findContainerNodes = (innerPapNodeId: string): string[] => {
-  if (!renderer) return []
-  const containers: string[] = []
+const getNodeArea = (papNodeId: string): number => {
+  const bounds = getNodeBounds(papNodeId)
+  if (!bounds) return 0
+  return bounds.width * bounds.height
+}
+
+const findDirectContainer = (innerPapNodeId: string): string | null => {
+  if (!renderer) return null
+  
+  // Находим все контейнеры, внутри которых находится компонент
+  const allContainers: string[] = []
   for (const [papNodeId] of renderer.nodes) {
     if (papNodeId === innerPapNodeId) continue
     if (isNodeFullyInside(innerPapNodeId, papNodeId)) {
-      containers.push(papNodeId)
+      allContainers.push(papNodeId)
     }
   }
-  return containers
+  
+  if (allContainers.length === 0) return null
+  
+  // Выбираем самый маленький контейнер - это прямой родитель
+  // (более маленький контейнер глубже в иерархии)
+  return allContainers.reduce((smallest, current) => {
+    return getNodeArea(current) < getNodeArea(smallest) ? current : smallest
+  }, allContainers[0]!)
 }
 
 const getComponentIdByModelNodeId = (modelNodeId: string): string | undefined => {
@@ -435,61 +450,59 @@ const tryCreateAutoLink = (draggedPapNodeId: string) => {
   const entity = nodeIdToInstance.get(draggedPapNodeId)
   if (!entity) return
 
-  const containerPapNodeIds = findContainerNodes(draggedPapNodeId)
-  if (containerPapNodeIds.length === 0) return
+  // Находим только прямой контейнер (самый маленький, в который поместили компонент)
+  const directContainerPapNodeId = findDirectContainer(draggedPapNodeId)
+  if (!directContainerPapNodeId) return
 
   const targetModelNodeId = entity.modelNodeId
   const targetComponentId = getComponentIdByModelNodeId(targetModelNodeId)
   if (!targetComponentId) return
 
-  for (const containerPapNodeId of containerPapNodeIds) {
-    const containerEntity = nodeIdToInstance.get(containerPapNodeId)
-    if (!containerEntity) continue
+  const containerEntity = nodeIdToInstance.get(directContainerPapNodeId)
+  if (!containerEntity) return
 
-    const sourceModelNodeId = containerEntity.modelNodeId
-    const sourceComponentId = getComponentIdByModelNodeId(sourceModelNodeId)
-    if (!sourceComponentId) continue
+  const sourceModelNodeId = containerEntity.modelNodeId
+  const sourceComponentId = getComponentIdByModelNodeId(sourceModelNodeId)
+  if (!sourceComponentId) return
 
-    // Find all relations with group=true between these component types
-    const groupRelations = findGroupRelations(sourceComponentId, targetComponentId)
-    if (groupRelations.length === 0) continue
+  // Find all relations with group=true between these component types
+  const groupRelations = findGroupRelations(sourceComponentId, targetComponentId)
+  if (groupRelations.length === 0) return
 
-    // Find existing links for these relations
-    const existingLinks = findExistingLinksForRelations(sourceModelNodeId, targetModelNodeId, groupRelations)
+  // Find existing links for these relations
+  const existingLinks = findExistingLinksForRelations(sourceModelNodeId, targetModelNodeId, groupRelations)
 
-    // Разделяем связи: на диаграмме и не на диаграмме
-    const existingLinksOnDiagram = existingLinks.filter(link => isLinkOnDiagram(link.id))
-    const existingLinksNotOnDiagram = existingLinks.filter(link => !isLinkOnDiagram(link.id))
+  // Разделяем связи: на диаграмме и не на диаграмме
+  const existingLinksOnDiagram = existingLinks.filter(link => isLinkOnDiagram(link.id))
+  const existingLinksNotOnDiagram = existingLinks.filter(link => !isLinkOnDiagram(link.id))
 
-    // Если связь уже есть на диаграмме - ничего не делаем
-    if (existingLinksOnDiagram.length > 0) {
-      continue
-    }
+  // Если связь уже есть на диаграмме - ничего не делаем
+  if (existingLinksOnDiagram.length > 0) {
+    return
+  }
 
-    // Если связь существует но не на диаграмме - показываем диалог с использованием существующей
-    if (existingLinksNotOnDiagram.length > 0) {
-      emit('requestAutoLink', 
-        sourceModelNodeId,
-        targetModelNodeId,
-        containerEntity.instanceId,
-        entity.instanceId,
-        [], // Не нужно выбирать relation
-        existingLinksNotOnDiagram
-      )
-      break
-    }
-
-    // Связей нет - нужно создать новую
+  // Если связь существует но не на диаграмме - показываем диалог с использованием существующей
+  if (existingLinksNotOnDiagram.length > 0) {
     emit('requestAutoLink', 
       sourceModelNodeId,
       targetModelNodeId,
       containerEntity.instanceId,
       entity.instanceId,
-      groupRelations,
-      [] // Нет существующих связей
+      [], // Не нужно выбирать relation
+      existingLinksNotOnDiagram
     )
-    break // Handle only one container
+    return
   }
+
+  // Связей нет - нужно создать новую
+  emit('requestAutoLink', 
+    sourceModelNodeId,
+    targetModelNodeId,
+    containerEntity.instanceId,
+    entity.instanceId,
+    groupRelations,
+    [] // Нет существующих связей
+  )
 }
 
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {

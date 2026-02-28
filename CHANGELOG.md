@@ -14,6 +14,10 @@ All notable changes to this project are documented in this file.
 - Fixed edge label text propagation when restoring links during diagram open/sync (newly created runtime edges no longer lose label text).
 - Fixed edge style panel label input binding to correctly display label text for both string and object label forms.
 
+### Release
+- Bumped application version to `0.0.25` in package metadata.
+- Added and published release tag `v0.0.25`.
+
 ## [0.0.24] - 2026-02-28
 
 ### Added

@@ -237,6 +237,112 @@ const shouldSkipEdgeRendering = (edge: DiagramEdgeInstance): boolean => {
   return isTargetInsideSource(edge.sourceInstanceId, edge.targetInstanceId)
 }
 
+// ── Group drag state ──
+let groupDragData: {
+  leaderPapNodeId: string
+  followerIds: string[]
+  startPositions: Map<string, { x: number; y: number }>
+} | null = null
+
+const isNodeGroupingEnabled = (papNodeId: string): boolean => {
+  const entity = nodeIdToInstance.get(papNodeId)
+  if (!entity) return false
+  const notationId = activeNotationId.value
+  if (!notationId) return false
+  const node = nodeById.value.get(entity.modelNodeId)
+  if (!node) return false
+  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (!componentId) return false
+  const component = props.components.find(c => c.id === componentId)
+  if (!component) return false
+  const parsed = parseEntityAttrs(component.attrs ?? null)
+  return parsed.customProperties.some(
+    p => p.name === 'group' && p.type === 'boolean' && p.defaultValue === true
+  )
+}
+
+const getNodeBounds = (papNodeId: string): { x: number; y: number; width: number; height: number } | null => {
+  if (!renderer) return null
+  const papNode = renderer.getNode(papNodeId)
+  if (!papNode) return null
+  return {
+    x: papNode.x,
+    y: papNode.y,
+    width: papNode.width,
+    height: papNode.height
+  }
+}
+
+const isNodeFullyInside = (
+  innerPapNodeId: string,
+  outerPapNodeId: string
+): boolean => {
+  const inner = getNodeBounds(innerPapNodeId)
+  const outer = getNodeBounds(outerPapNodeId)
+  if (!inner || !outer) return false
+
+  return (
+    inner.x >= outer.x &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y >= outer.y &&
+    inner.y + inner.height <= outer.y + outer.height
+  )
+}
+
+const findContainedNodes = (containerPapNodeId: string): string[] => {
+  if (!renderer) return []
+  const contained: string[] = []
+  for (const [papNodeId] of renderer.nodes) {
+    if (papNodeId === containerPapNodeId) continue
+    if (isNodeFullyInside(papNodeId, containerPapNodeId)) {
+      contained.push(papNodeId)
+    }
+  }
+  return contained
+}
+
+const startGroupDrag = (leaderPapNodeId: string) => {
+  if (!isNodeGroupingEnabled(leaderPapNodeId)) {
+    groupDragData = null
+    return
+  }
+  const followers = findContainedNodes(leaderPapNodeId)
+  if (followers.length === 0) {
+    groupDragData = null
+    return
+  }
+  const startPositions = new Map<string, { x: number; y: number }>()
+  for (const id of [leaderPapNodeId, ...followers]) {
+    const bounds = getNodeBounds(id)
+    if (bounds) {
+      startPositions.set(id, { x: bounds.x, y: bounds.y })
+    }
+  }
+  groupDragData = {
+    leaderPapNodeId,
+    followerIds: followers,
+    startPositions
+  }
+}
+
+const applyGroupDragDelta = (deltaX: number, deltaY: number) => {
+  if (!groupDragData || !renderer) return
+  for (const followerId of groupDragData.followerIds) {
+    const papNode = renderer.getNode(followerId)
+    const startPos = groupDragData.startPositions.get(followerId)
+    if (!papNode || !startPos) continue
+    papNode.x = startPos.x + deltaX
+    papNode.y = startPos.y + deltaY
+  }
+}
+
+const endGroupDrag = (): string[] => {
+  if (!groupDragData) return []
+  const allIds = [groupDragData.leaderPapNodeId, ...groupDragData.followerIds]
+  groupDragData = null
+  return allIds
+}
+
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
   if (edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object') {
     return edgeInst.attrs.diagramStyle as DiagramStyle
@@ -1427,9 +1533,28 @@ function initRenderer(r: DiagramRenderer) {
     }
   })
 
-  // Drag end → persist position changes
-  interactionManager.drag.on('dragend', (nodeIds: string[]) => {
-    persistNodePositions(nodeIds)
+  // Drag start → initialize group drag if enabled
+  interactionManager.drag.on('dragstart', (nodeIds: string[]) => {
+    if (nodeIds.length === 1) {
+      startGroupDrag(nodeIds[0]!)
+    } else {
+      groupDragData = null
+    }
+  })
+
+  // Drag move → apply delta to grouped nodes
+  interactionManager.drag.on('drag', (_nodeIds: string[], _currentPoint: { x: number; y: number }, delta: { x: number; y: number }) => {
+    applyGroupDragDelta(delta.x, delta.y)
+  })
+
+  // Drag end → persist position changes (include grouped nodes)
+  interactionManager.drag.on('dragend', (_nodeIds: string[]) => {
+    const allIds = endGroupDrag()
+    if (allIds.length > 0) {
+      persistNodePositions(allIds)
+    } else {
+      persistNodePositions(_nodeIds)
+    }
   })
 
   // Resize end → persist size changes

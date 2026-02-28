@@ -6,6 +6,9 @@ import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
 import ColorWithAlphaField from "./ColorWithAlphaField.vue";
+import LabeledFieldRow from "./LabeledFieldRow.vue";
+import LabeledNumberInput from "./LabeledNumberInput.vue";
+import StyleSection from "./StyleSection.vue";
 import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import type { DiagramStyle } from "../notationAttrs";
@@ -868,8 +871,11 @@ function resetRelationPreset() {
   selectedRelationPreset.value = "custom";
 }
 
+type NodeSectionKey = "label" | "shape" | "fill" | "stroke" | "icon";
+type EdgeSectionKey = "label" | "line" | "markers";
+
 // Collapsible sections for node style
-const nodeSection = reactive<Record<string, boolean>>({
+const nodeSection = reactive<Record<NodeSectionKey, boolean>>({
   label: true,
   shape: true,
   fill: true,
@@ -878,13 +884,13 @@ const nodeSection = reactive<Record<string, boolean>>({
 });
 
 // Collapsible sections for edge style
-const edgeSection = reactive<Record<string, boolean>>({
+const edgeSection = reactive<Record<EdgeSectionKey, boolean>>({
   label: true,
   line: true,
   markers: true,
 });
 
-function toggleSection(sections: Record<string, boolean>, key: string) {
+function toggleSection<T extends string>(sections: Record<T, boolean>, key: T) {
   sections[key] = !sections[key];
 }
 
@@ -1659,29 +1665,25 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         <template v-if="elementType === 'edge'">
 
           <!-- Label -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'label')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.label }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.label") }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="edgeSection.label" class="sp-section__content">
+          <StyleSection
+            :title="t('nodeStyle.label')"
+            :open="edgeSection.label"
+            @toggle="toggleSection(edgeSection, 'label')"
+          >
                 <div class="sp-field">
                   <input class="sp-input sp-input--full" :value="edgeLabel" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
+                <LabeledFieldRow :label="t('nodeStyle.color')">
                   <ColorWithAlphaField
                     :model-value="edgeLabelColor"
                     :alpha-value="edgeLabelOpacity"
                     @update:model-value="handleEdgeLabelColorChange"
                     @update:alpha="(value) => handleEdgeLabelOpacityChange(String(value))"
                   />
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.size')">
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
-                </div>
+                </LabeledFieldRow>
                 <InsetSidesInput
                   :model-value="edgeLabelInset"
                   :min="0"
@@ -1689,53 +1691,48 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   :step="1"
                   @update:model-value="handleEdgeLabelInsetChange"
                 />
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.offset") }}</span>
+                <LabeledFieldRow :label="t('nodeStyle.offset')">
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.background") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.background')">
                   <ColorWithAlphaField
                     :model-value="edgeLabelBgColor"
                     :alpha-value="edgeLabelBgOpacity"
                     @update:model-value="handleEdgeLabelBgColorChange"
                     @update:alpha="(value) => handleEdgeLabelBgOpacityChange(String(value))"
                   />
-                </div>
+                </LabeledFieldRow>
                 <div class="sp-field-grid sp-field-grid--2">
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">R</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="edgeLabelBgBorderRadius" min="0" max="40" step="1" @input="handleEdgeLabelBgBorderRadiusChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <LabeledNumberInput
+                    label="R"
+                    :model-value="edgeLabelBgBorderRadius"
+                    :min="0"
+                    :max="40"
+                    :step="1"
+                    @update:model-value="handleEdgeLabelBgBorderRadiusChange"
+                  />
                 </div>
-              </div>
-            </Transition>
-          </section>
+          </StyleSection>
 
           <!-- Line -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'line')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.line }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.line") }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="edgeSection.line" class="sp-section__content">
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
+          <StyleSection
+            :title="t('nodeStyle.line')"
+            :open="edgeSection.line"
+            @toggle="toggleSection(edgeSection, 'line')"
+          >
+                <LabeledFieldRow :label="t('nodeStyle.color')">
                   <ColorWithAlphaField
                     :model-value="edgeStrokeColor"
                     :alpha-value="edgeStrokeOpacity"
                     @update:model-value="handleEdgeStrokeColorChange"
                     @update:alpha="(value) => handleEdgeStrokeOpacityChange(String(value))"
                   />
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.thickness") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.thickness')">
                   <input type="range" class="sp-range" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
                   <input type="number" class="sp-input sp-input--tiny" :value="edgeStrokeWidth" min="0" max="20" step="1" @input="handleEdgeStrokeWidthChange(($event.target as HTMLInputElement).value)">
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.style") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.style')">
                   <div class="sp-segmented">
                     <button
                       type="button"
@@ -1754,13 +1751,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <svg width="20" height="2" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/></svg>
                     </button>
                   </div>
-                </div>
-                <div v-if="edgeLineStyle === 'dashed'" class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.pattern") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow v-if="edgeLineStyle === 'dashed'" :label="t('nodeStyle.pattern')">
                   <input type="text" class="sp-input sp-input--flex" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.type") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.type')">
                   <div class="sp-segmented">
                     <button
                       v-for="edgeTypeOption in EDGE_TYPE_OPTIONS"
@@ -1774,23 +1769,18 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <span class="material-symbols-outlined">{{ edgeTypeOption.icon }}</span>
                     </button>
                   </div>
-                </div>
-              </div>
-            </Transition>
-          </section>
+                </LabeledFieldRow>
+          </StyleSection>
 
           <!-- Markers -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(edgeSection, 'markers')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !edgeSection.markers }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.markers") }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="edgeSection.markers" class="sp-section__content">
+          <StyleSection
+            :title="t('nodeStyle.markers')"
+            :open="edgeSection.markers"
+            @toggle="toggleSection(edgeSection, 'markers')"
+          >
                 <!-- Start marker -->
                 <div class="sp-marker-group">
-                  <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">{{ t("nodeStyle.start") }}</span>
+                  <LabeledFieldRow :label="t('nodeStyle.start')">
                     <select class="sp-select sp-select--flex" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
@@ -1798,27 +1788,24 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
                     </select>
-                  </div>
+                  </LabeledFieldRow>
                   <template v-if="edgeStartMarker !== 'none'">
-                    <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
+                    <LabeledFieldRow :label="t('nodeStyle.size')" indent>
                       <input type="number" class="sp-input sp-input--sm" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
+                    </LabeledFieldRow>
+                    <LabeledFieldRow :label="t('nodeStyle.fill')" indent>
                       <ColorWithAlphaField
                         :model-value="edgeStartMarkerFillColor"
                         :alpha-value="edgeStartMarkerFillOpacity"
                         @update:model-value="handleEdgeStartMarkerFillColorChange"
                         @update:alpha="(value) => handleEdgeStartMarkerFillOpacityChange(String(value))"
                       />
-                    </div>
+                    </LabeledFieldRow>
                   </template>
                 </div>
                 <!-- End marker -->
                 <div class="sp-marker-group">
-                  <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">{{ t("nodeStyle.end") }}</span>
+                  <LabeledFieldRow :label="t('nodeStyle.end')">
                     <select class="sp-select sp-select--flex" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
@@ -1826,26 +1813,22 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
                     </select>
-                  </div>
+                  </LabeledFieldRow>
                   <template v-if="edgeEndMarker !== 'none'">
-                    <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">{{ t("nodeStyle.size") }}</span>
+                    <LabeledFieldRow :label="t('nodeStyle.size')" indent>
                       <input type="number" class="sp-input sp-input--sm" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <div class="sp-field sp-field--row sp-field--indent">
-                      <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
+                    </LabeledFieldRow>
+                    <LabeledFieldRow :label="t('nodeStyle.fill')" indent>
                       <ColorWithAlphaField
                         :model-value="edgeEndMarkerFillColor"
                         :alpha-value="edgeEndMarkerFillOpacity"
                         @update:model-value="handleEdgeEndMarkerFillColorChange"
                         @update:alpha="(value) => handleEdgeEndMarkerFillOpacityChange(String(value))"
                       />
-                    </div>
+                    </LabeledFieldRow>
                   </template>
                 </div>
-              </div>
-            </Transition>
-          </section>
+          </StyleSection>
 
         </template>
 
@@ -1853,13 +1836,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         <template v-else>
 
           <!-- Label -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'label')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.label }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.label") }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="nodeSection.label" class="sp-section__content">
+          <StyleSection
+            :title="t('nodeStyle.label')"
+            :open="nodeSection.label"
+            @toggle="toggleSection(nodeSection, 'label')"
+          >
                 <div class="sp-field">
                   <input class="sp-input sp-input--full" :value="label" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
@@ -1867,20 +1848,23 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
                   <input class="sp-input sp-input--full" :value="labelTemplate" placeholder="${name} — ${status}" @input="handleLabelTemplateChange(($event.target as HTMLInputElement).value)">
                 </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.color") }}</span>
+                <LabeledFieldRow :label="t('nodeStyle.color')">
                   <ColorWithAlphaField
                     :model-value="labelColor"
                     :alpha-value="labelOpacity"
                     @update:model-value="handleLabelColorChange"
                     @update:alpha="(value) => handleLabelOpacityChange(String(value))"
                   />
-                </div>
+                </LabeledFieldRow>
                 <div class="sp-field-grid sp-field-grid--2">
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">{{ t("nodeStyle.size") }}</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="labelFontSize" min="8" max="72" step="1" @input="handleLabelFontSizeChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                  <LabeledNumberInput
+                    :label="t('nodeStyle.size')"
+                    :model-value="labelFontSize"
+                    :min="8"
+                    :max="72"
+                    :step="1"
+                    @update:model-value="handleLabelFontSizeChange"
+                  />
                 </div>
                 <InsetSidesInput
                   :model-value="labelInset"
@@ -1889,34 +1873,28 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   :step="1"
                   @update:model-value="handleLabelInsetChange"
                 />
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.align") }}</span>
+                <LabeledFieldRow :label="t('nodeStyle.align')">
                   <select class="sp-select sp-select--flex" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="center">{{ t("nodeStyle.alignCenter") }}</option>
                     <option value="left">{{ t("nodeStyle.alignLeft") }}</option>
                     <option value="right">{{ t("nodeStyle.alignRight") }}</option>
                   </select>
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.verticalAlign") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.verticalAlign')">
                   <select class="sp-select sp-select--flex" :value="labelVerticalAlign" @change="handleLabelVerticalAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="top">{{ t("nodeStyle.positionTop") }}</option>
                     <option value="middle">{{ t("nodeStyle.alignCenter") }}</option>
                     <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
                   </select>
-                </div>
-              </div>
-            </Transition>
-          </section>
+                </LabeledFieldRow>
+          </StyleSection>
 
           <!-- Shape & Dimensions -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'shape')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.shape }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.figure") }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="nodeSection.shape" class="sp-section__content">
+          <StyleSection
+            :title="t('nodeStyle.figure')"
+            :open="nodeSection.shape"
+            @toggle="toggleSection(nodeSection, 'shape')"
+          >
                 <!-- Visual shape picker -->
                 <div class="sp-shapes">
                   <button
@@ -1939,8 +1917,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </svg>
                   </button>
                 </div>
-                <div v-if="nodeShape === 'custom'" class="sp-field sp-field--row sp-field--custom-shapes">
-                  <span class="sp-field__label">{{ t("nodeStyle.customShape") }}</span>
+                <LabeledFieldRow v-if="nodeShape === 'custom'" :label="t('nodeStyle.customShape')" class="sp-field--custom-shapes">
                   <select
                     class="sp-select sp-select--flex"
                     :value="customShapeIdRef ?? ''"
@@ -1953,20 +1930,33 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       :value="opt.id"
                     >{{ opt.label }}</option>
                   </select>
-                </div>
-                <div class="sp-field-grid sp-field-grid--dims">
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">W</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="nodeWidth" min="10" max="500" step="10" @input="handleWidthChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">H</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="nodeHeight" min="10" max="300" step="10" @input="handleHeightChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div v-if="nodeShape === 'rectangle'" class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">R</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="cornerRadius" min="0" max="50" step="1" @input="handleCornerRadiusChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                </LabeledFieldRow>
+                <div class="sp-field-grid" :class="nodeShape === 'rectangle' ? 'sp-field-grid--3' : 'sp-field-grid--2'">
+                  <LabeledNumberInput
+                    label="W"
+                    :model-value="nodeWidth"
+                    :min="10"
+                    :max="500"
+                    :step="10"
+                    @update:model-value="handleWidthChange"
+                  />
+                  <LabeledNumberInput
+                    label="H"
+                    :model-value="nodeHeight"
+                    :min="10"
+                    :max="300"
+                    :step="10"
+                    @update:model-value="handleHeightChange"
+                  />
+                  <LabeledNumberInput
+                    v-if="nodeShape === 'rectangle'"
+                    label="R"
+                    :model-value="cornerRadius"
+                    :min="0"
+                    :max="50"
+                    :step="1"
+                    @update:model-value="handleCornerRadiusChange"
+                  />
                 </div>
                 <InsetSidesInput
                   :model-value="contentInset"
@@ -1975,61 +1965,69 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   :step="1"
                   @update:model-value="handleContentInsetChange"
                 />
-                <div class="sp-field-grid sp-field-grid--dims">
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">PT</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsTop" min="0" max="16" step="1" @input="handlePortsTopChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">PB</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsBottom" min="0" max="16" step="1" @input="handlePortsBottomChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">PL</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsLeft" min="0" max="16" step="1" @input="handlePortsLeftChange(($event.target as HTMLInputElement).value)">
-                  </div>
-                  <div class="sp-num-field sp-num-field--stacked">
-                    <span class="sp-num-field__label">PR</span>
-                    <input type="number" class="sp-input sp-input--sm" :value="nodePortsRight" min="0" max="16" step="1" @input="handlePortsRightChange(($event.target as HTMLInputElement).value)">
-                  </div>
+                <div class="sp-field-grid sp-field-grid--4">
+                  <LabeledNumberInput
+                    label="PT"
+                    :model-value="nodePortsTop"
+                    :min="0"
+                    :max="16"
+                    :step="1"
+                    @update:model-value="handlePortsTopChange"
+                  />
+                  <LabeledNumberInput
+                    label="PB"
+                    :model-value="nodePortsBottom"
+                    :min="0"
+                    :max="16"
+                    :step="1"
+                    @update:model-value="handlePortsBottomChange"
+                  />
+                  <LabeledNumberInput
+                    label="PL"
+                    :model-value="nodePortsLeft"
+                    :min="0"
+                    :max="16"
+                    :step="1"
+                    @update:model-value="handlePortsLeftChange"
+                  />
+                  <LabeledNumberInput
+                    label="PR"
+                    :model-value="nodePortsRight"
+                    :min="0"
+                    :max="16"
+                    :step="1"
+                    @update:model-value="handlePortsRightChange"
+                  />
                 </div>
-              </div>
-            </Transition>
-          </section>
+          </StyleSection>
 
           <!-- Fill & Stroke -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'fill')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.fill }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.fillAndStroke") }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="nodeSection.fill" class="sp-section__content">
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
+          <StyleSection
+            :title="t('nodeStyle.fillAndStroke')"
+            :open="nodeSection.fill"
+            @toggle="toggleSection(nodeSection, 'fill')"
+          >
+                <LabeledFieldRow :label="t('nodeStyle.fill')">
                   <ColorWithAlphaField
                     :model-value="fillColor"
                     :alpha-value="fillOpacity"
                     @update:model-value="handleFillChange"
                     @update:alpha="(value) => handleFillOpacityChange(String(value))"
                   />
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.stroke") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.stroke')">
                   <ColorWithAlphaField
                     :model-value="strokeColor"
                     :alpha-value="strokeOpacity"
                     @update:model-value="handleStrokeColorChange"
                     @update:alpha="(value) => handleStrokeOpacityChange(String(value))"
                   />
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.thickness") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.thickness')">
                   <input type="range" class="sp-range" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
                   <input type="number" class="sp-input sp-input--tiny" :value="strokeWidth" min="0" max="20" step="1" @input="handleStrokeWidthChange(($event.target as HTMLInputElement).value)">
-                </div>
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.style") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.style')">
                   <div class="sp-segmented">
                     <button
                       type="button"
@@ -2048,26 +2046,20 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <svg width="20" height="2" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/></svg>
                     </button>
                   </div>
-                </div>
-                <div v-if="lineStyle === 'dashed'" class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.pattern") }}</span>
+                </LabeledFieldRow>
+                <LabeledFieldRow v-if="lineStyle === 'dashed'" :label="t('nodeStyle.pattern')">
                   <input type="text" class="sp-input sp-input--flex" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
-                </div>
-              </div>
-            </Transition>
-          </section>
+                </LabeledFieldRow>
+          </StyleSection>
 
           <!-- Icon -->
-          <section class="sp-section">
-            <button type="button" class="sp-section__toggle" @click="toggleSection(nodeSection, 'icon')">
-              <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !nodeSection.icon }">chevron_right</span>
-              <span class="sp-section__name">{{ t("nodeStyle.icon") }}</span>
-              <span v-if="iconName" class="sp-section__pill">{{ iconName }}</span>
-            </button>
-            <Transition name="sp-expand">
-              <div v-if="nodeSection.icon" class="sp-section__content">
-                <div class="sp-field sp-field--row">
-                  <span class="sp-field__label">{{ t("nodeStyle.icon") }}</span>
+          <StyleSection
+            :title="t('nodeStyle.icon')"
+            :open="nodeSection.icon"
+            :pill="iconName || null"
+            @toggle="toggleSection(nodeSection, 'icon')"
+          >
+                <LabeledFieldRow :label="t('nodeStyle.icon')">
                   <div class="sp-icon-select">
                     <SearchableSelect
                       :model-value="iconName"
@@ -2088,10 +2080,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </SearchableSelect>
                     <img v-if="iconName" class="sp-icon-select__preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
                   </div>
-                </div>
+                </LabeledFieldRow>
                 <template v-if="iconName">
-                  <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">{{ t("nodeStyle.position") }}</span>
+                  <LabeledFieldRow :label="t('nodeStyle.position')">
                     <select class="sp-select sp-select--flex" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
                       <option value="top-left">{{ t("nodeStyle.positionTopLeft") }}</option>
                       <option value="top-right">{{ t("nodeStyle.positionTopRight") }}</option>
@@ -2103,41 +2094,49 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <option value="left">{{ t("nodeStyle.positionLeft") }}</option>
                       <option value="right">{{ t("nodeStyle.positionRight") }}</option>
                     </select>
-                  </div>
-                  <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">{{ t("nodeStyle.lines") }}</span>
+                  </LabeledFieldRow>
+                  <LabeledFieldRow :label="t('nodeStyle.lines')">
                     <SketchColorField
                       :model-value="iconStrokeColor"
                       :title="t('nodeStyle.lines')"
                       @update:model-value="handleIconStrokeColorChange"
                     />
-                  </div>
-                  <div class="sp-field sp-field--row">
-                    <span class="sp-field__label">{{ t("nodeStyle.fill") }}</span>
+                  </LabeledFieldRow>
+                  <LabeledFieldRow :label="t('nodeStyle.fill')">
                     <SketchColorField
                       :model-value="iconFillColor"
                       :title="t('nodeStyle.fill')"
                       @update:model-value="handleIconFillColorChange"
                     />
-                  </div>
+                  </LabeledFieldRow>
                   <div class="sp-field-grid sp-field-grid--3">
-                    <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">W</span>
-                      <input type="number" class="sp-input sp-input--sm" :value="iconWidth" min="1" max="200" step="1" @input="handleIconWidthChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">H</span>
-                      <input type="number" class="sp-input sp-input--sm" :value="iconHeight" min="1" max="200" step="1" @input="handleIconHeightChange(($event.target as HTMLInputElement).value)">
-                    </div>
-                    <div class="sp-num-field sp-num-field--stacked">
-                      <span class="sp-num-field__label">{{ t("nodeStyle.inset") }}</span>
-                      <input type="number" class="sp-input sp-input--sm" :value="iconInset" min="0" max="100" step="1" @input="handleIconInsetChange(($event.target as HTMLInputElement).value)">
-                    </div>
+                    <LabeledNumberInput
+                      label="W"
+                      :model-value="iconWidth"
+                      :min="1"
+                      :max="200"
+                      :step="1"
+                      @update:model-value="handleIconWidthChange"
+                    />
+                    <LabeledNumberInput
+                      label="H"
+                      :model-value="iconHeight"
+                      :min="1"
+                      :max="200"
+                      :step="1"
+                      @update:model-value="handleIconHeightChange"
+                    />
+                    <LabeledNumberInput
+                      :label="t('nodeStyle.inset')"
+                      :model-value="iconInset"
+                      :min="0"
+                      :max="100"
+                      :step="1"
+                      @update:model-value="handleIconInsetChange"
+                    />
                   </div>
                 </template>
-              </div>
-            </Transition>
-          </section>
+          </StyleSection>
 
         </template>
       </div>
@@ -2356,88 +2355,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   min-height: 0;
 }
 
-/* ---- Sections ---- */
-.sp-section {
-  border-bottom: 1px solid var(--border);
-}
-
-.sp-section__toggle {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  padding: 7px var(--sp-pad);
-  border: none;
-  background: none;
-  cursor: pointer;
-  user-select: none;
-  font-family: inherit;
-  transition: background 0.1s ease;
-}
-
-.sp-section__toggle:hover {
-  background: var(--surface-muted);
-}
-
-.sp-section__arrow {
-  font-size: 16px;
-  color: var(--text-subtle);
-  flex-shrink: 0;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: rotate(90deg);
-}
-
-.sp-section__arrow--closed {
-  transform: rotate(0deg);
-}
-
-.sp-section__name {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.sp-section__pill {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--primary);
-  background: var(--primary-soft);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-weight: 500;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.sp-section__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-gap);
-  padding: 0 var(--sp-pad) 10px;
-}
-
 /* ---- Fields ---- */
 .sp-field {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-}
-
-.sp-field--row {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-}
-
-.sp-field--indent {
-  padding-left: 12px;
 }
 
 .sp-field__label {
@@ -2460,6 +2383,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
 .sp-field-grid--3 {
   grid-template-columns: 1fr 1fr 1fr;
+}
+
+.sp-field-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .sp-field-grid--dims {
@@ -2539,34 +2466,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 .sp-select--flex {
   flex: 1;
   min-width: 0;
-}
-
-/* ---- Number field with label ---- */
-.sp-num-field {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.sp-num-field__label {
-  font-size: 10px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.sp-num-field--stacked {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-}
-
-.sp-num-field--stacked .sp-num-field__label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding-left: 2px;
 }
 
 /* ---- Range slider ---- */
@@ -2760,25 +2659,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 .sp-slide-leave-from {
   opacity: 1;
   max-height: 60px;
-}
-
-.sp-expand-enter-active,
-.sp-expand-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-}
-
-.sp-expand-enter-from,
-.sp-expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-bottom: 0;
-}
-
-.sp-expand-enter-to,
-.sp-expand-leave-from {
-  opacity: 1;
-  max-height: 600px;
 }
 
 /* ---- Scrollbar ---- */

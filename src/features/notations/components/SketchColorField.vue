@@ -306,4 +306,28 @@ watch(isPickerOpen, async (isOpen) => {
   z-index: 9999;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
 }
+
+.sp-input {
+  height: var(--sp-h, 28px);
+  padding: 0 7px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--sp-radius, 6px);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.sp-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.sp-input--hex {
+  flex: 1;
+  min-width: 0;
+}
 </style>

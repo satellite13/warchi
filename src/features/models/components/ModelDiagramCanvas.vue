@@ -25,6 +25,10 @@ import {
   type EdgeStyle,
 } from '@ngroznykh/papirus'
 import { diagramShapeFactories } from '@/utils/diagramShapes'
+import {
+  customOutlineToPath2D,
+  customOutlineToSvgPath,
+} from '@/utils/customOutlinePath'
 import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '../../../types/api'
 import {
   parseEntityAttrs,
@@ -722,6 +726,7 @@ type ComponentShape =
   | 'circle'
   | 'trapezoid'
   | 'slanted-rectangle'
+  | 'custom'
 
 const getInstanceArea = (instance: DiagramNodeInstance): number => {
   const { width, height } = getInstanceDimensions(instance)
@@ -790,6 +795,7 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
     case 'circle':
     case 'trapezoid':
     case 'slanted-rectangle':
+    case 'custom':
       return shape
     default:
       return 'rectangle'
@@ -1014,6 +1020,13 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
       ...commonOptions,
       path: slantedFactory.path,
       svgPath: slantedFactory.svgPath,
+    })
+  } else if (shape === 'custom' && ds?.customOutline?.length) {
+    const segments = ds.customOutline
+    node = new CustomShapeNode({
+      ...commonOptions,
+      path: (w, h) => customOutlineToPath2D(segments, w, h),
+      svgPath: (w, h) => customOutlineToSvgPath(segments, w, h),
     })
   } else {
     node = new RectangleNode({

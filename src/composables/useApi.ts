@@ -147,7 +147,7 @@ const normalizeApiErrorMessage = (
   }
 
   if (status === 403) {
-    const editorPathPrefixes = ["/models/", "/notations/", "/node-types/", "/link-types/"];
+    const editorPathPrefixes = ["/models/", "/notations/", "/node-types/", "/link-types/", "/node-shapes/"];
     const isEditorResourcePath = editorPathPrefixes.some((prefix) => path.startsWith(prefix));
     if (isEditorResourcePath) {
       return "Доступ к ресурсу отозван или отсутствует.";

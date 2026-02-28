@@ -263,6 +263,28 @@ export interface LinkTypeUpdateRequest {
   attrs?: string | null
 }
 
+// Node Shapes (custom node outline catalog)
+
+export interface NodeShapeResponse {
+  id: string
+  name: string
+  ownerId: string
+  outline: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  canEdit: boolean
+}
+
+export interface NodeShapeRequest {
+  name: string
+  outline?: string | null
+}
+
+export interface NodeShapeUpdateRequest {
+  name?: string | null
+  outline?: string | null
+}
+
 // Relation Rules
 
 export interface RelationRuleResponse {

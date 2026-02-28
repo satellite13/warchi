@@ -21,6 +21,9 @@ const { t } = useI18n();
     <RouterLink to="/types" class="app-nav__link" active-class="app-nav__link--active">
       <span class="material-symbols-outlined" :title="t('nav.types')">category</span>{{ t("nav.types") }}
     </RouterLink>
+    <RouterLink to="/shapes" class="app-nav__link" active-class="app-nav__link--active">
+      <span class="material-symbols-outlined" :title="t('nav.shapes')">hexagon</span>{{ t("nav.shapes") }}
+    </RouterLink>
     <RouterLink to="/docs" class="app-nav__link" active-class="app-nav__link--active">
       <span class="material-symbols-outlined" :title="t('nav.docs')">menu_book</span>{{ t("nav.docs") }}
     </RouterLink>

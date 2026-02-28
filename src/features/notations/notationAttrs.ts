@@ -16,6 +16,31 @@ export type CustomProperty = {
   _fromType?: boolean
 }
 
+// Custom node shape outline (normalized coordinates 0–1)
+export type OutlineSegmentLine = {
+  type: "line"
+  points: [[number, number], [number, number]]
+}
+export type OutlineSegmentBezier = {
+  type: "bezier"
+  points: [[number, number], [number, number], [number, number], [number, number]]
+}
+export type OutlineSegment = OutlineSegmentLine | OutlineSegmentBezier
+
+export const DEFAULT_RECTANGLE_OUTLINE: OutlineSegment[] = [
+  { type: "line", points: [[0, 0], [1, 0]] },
+  { type: "line", points: [[1, 0], [1, 1]] },
+  { type: "line", points: [[1, 1], [0, 1]] },
+  { type: "line", points: [[0, 1], [0, 0]] }
+]
+
+export type CustomShapeDef = {
+  id: string
+  name: string
+  outline: OutlineSegment[]
+  ownerId?: string
+}
+
 export type NodeStyle = {
   fillColor?: string
   strokeColor?: string
@@ -77,6 +102,9 @@ export type DiagramStyle = {
   portsRight?: number
   // Node base shape
   nodeShape?: string
+  // Custom shape: copy of outline stored in component (for render); catalog reference optional
+  customOutline?: OutlineSegment[]
+  customShapeId?: string
   // Label template for composite labels
   labelTemplate?: string
 }
@@ -208,8 +236,44 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.portsLeft === 'number') style.portsLeft = value.portsLeft
   if (typeof value.portsRight === 'number') style.portsRight = value.portsRight
   if (typeof value.nodeShape === 'string') style.nodeShape = value.nodeShape
+  const rawOutline = value.customOutline
+  if (Array.isArray(rawOutline) && rawOutline.length > 0) {
+    const segments = normalizeOutlineSegments(rawOutline)
+    if (segments.length > 0) style.customOutline = segments
+  }
+  if (typeof value.customShapeId === 'string') style.customShapeId = value.customShapeId
   if (typeof value.labelTemplate === 'string') style.labelTemplate = value.labelTemplate
   return Object.keys(style).length ? style : undefined
+}
+
+function normalizeOutlineSegments(arr: unknown[]): OutlineSegment[] {
+  const out: OutlineSegment[] = []
+  for (const item of arr) {
+    if (!isRecord(item) || typeof item.type !== 'string') continue
+    const points = item.points
+    if (!Array.isArray(points)) continue
+    if (item.type === 'line' && points.length >= 2) {
+      const p0 = toPoint(points[0])
+      const p1 = toPoint(points[1])
+      if (p0 != null && p1 != null) out.push({ type: 'line', points: [p0, p1] })
+    } else if (item.type === 'bezier' && points.length >= 4) {
+      const p0 = toPoint(points[0])
+      const p1 = toPoint(points[1])
+      const p2 = toPoint(points[2])
+      const p3 = toPoint(points[3])
+      if (p0 != null && p1 != null && p2 != null && p3 != null) {
+        out.push({ type: 'bezier', points: [p0, p1, p2, p3] })
+      }
+    }
+  }
+  return out
+}
+
+function toPoint(v: unknown): [number, number] | null {
+  if (!Array.isArray(v) || v.length < 2) return null
+  const x = typeof v[0] === 'number' && Number.isFinite(v[0]) ? v[0] : null
+  const y = typeof v[1] === 'number' && Number.isFinite(v[1]) ? v[1] : null
+  return x != null && y != null ? [x, y] : null
 }
 
 const normalizeStyle = (value: unknown): NodeStyle | undefined => {

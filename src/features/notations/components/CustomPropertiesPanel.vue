@@ -52,6 +52,7 @@ const tagsExpanded = ref(false)
 const paletteGroupExpanded = ref(false)
 const labelTemplateExpanded = ref(false)
 const propertiesExpanded = ref(false)
+const documentationExpanded = ref(false)
 
 watch(
   () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join('|') ?? ''],
@@ -257,8 +258,8 @@ onBeforeUnmount(() => {
       <CollapseSection
         v-if="selectedItem && !('linkTypeId' in selectedItem)"
         :label="t('diagram.documentation')"
-        :expanded="paletteGroupExpanded"
-        @toggle="paletteGroupExpanded = !paletteGroupExpanded"
+        :expanded="documentationExpanded"
+        @toggle="documentationExpanded = !documentationExpanded"
       >
       <button
         type="button"

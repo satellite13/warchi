@@ -24,6 +24,10 @@ import {
   type ArrowMarkerType
 } from "@ngroznykh/papirus"
 import { diagramShapeFactories } from "@/utils/diagramShapes"
+import {
+  customOutlineToPath2D,
+  customOutlineToSvgPath
+} from "@/utils/customOutlinePath"
 import type { DiagramStyle, NodeStyle, CustomProperty } from "../notationAttrs"
 import type {
   NotationEditorState,
@@ -109,6 +113,7 @@ type ComponentShape =
   | "circle"
   | "trapezoid"
   | "slanted-rectangle"
+  | "custom"
 
 function disableTransformerFrame(node: DiagramNode) {
   node.resizeHandlesEnabled = false
@@ -122,6 +127,7 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
     case "circle":
     case "trapezoid":
     case "slanted-rectangle":
+    case "custom":
       return shape
     default:
       return "rectangle"
@@ -431,6 +437,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         ...commonOptions,
         path: slantedFactory.path,
         svgPath: slantedFactory.svgPath
+      })
+    } else if (shape === "custom" && ds?.customOutline?.length) {
+      const segments = ds.customOutline
+      node = new CustomShapeNode({
+        ...commonOptions,
+        path: (w, h) => customOutlineToPath2D(segments, w, h),
+        svgPath: (w, h) => customOutlineToSvgPath(segments, w, h)
       })
     } else {
       node = new RectangleNode({

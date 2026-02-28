@@ -42,6 +42,11 @@ const router = createRouter({
       component: () => import("../views/TypesView.vue")
     },
     {
+      path: "/shapes",
+      name: "shapes",
+      component: () => import("../views/ShapesView.vue")
+    },
+    {
       path: "/notations/:id",
       name: "notation-editor",
       component: () => import("../views/NotationEditorView.vue")

@@ -1151,6 +1151,7 @@ function syncDiagram() {
     const edgeOpts = resolveEdgeOptions(ds)
     const edgeLabel =
       getInstanceEdgeLabel(edge) ?? getBoundRelation(edge.modelLinkId)?.name ?? undefined
+    const edgeLabelText = buildEdgeLabel(edgeLabel)
     const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
     const edgeLabelBackground = buildEdgeLabelBackground(ds)
     const controlPoints = readControlPointsFromAttrs(edge.attrs)
@@ -1217,7 +1218,7 @@ function syncDiagram() {
         style: edgeOpts.style,
         startMarker: edgeOpts.startMarker,
         endMarker: edgeOpts.endMarker,
-        ...(edgeLabelConfig !== undefined ? { label: edgeLabelConfig } : {}),
+        ...(edgeLabelText !== undefined ? { label: edgeLabelText } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),

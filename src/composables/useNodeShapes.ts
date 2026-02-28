@@ -9,11 +9,12 @@ import type {
 
 const nodeShapesPath = "/node-shapes"
 
-export function useNodeShapes() {
+export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
   const list: Ref<NodeShapeResponse[]> = ref([])
   const totalElements = ref(0)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const beforeUpdate = options?.beforeUpdate
 
   async function fetchList(params?: { ownerId?: string; page?: number; size?: number }): Promise<boolean> {
     isLoading.value = true
@@ -26,6 +27,7 @@ export function useNodeShapes() {
     const path = query ? `${nodeShapesPath}?${query}` : nodeShapesPath
     const result = await apiGet<PaginatedResponse<NodeShapeResponse>>(path)
     isLoading.value = false
+    if (beforeUpdate && !beforeUpdate()) return false
     if (!result.success) {
       error.value = result.error.message
       return false

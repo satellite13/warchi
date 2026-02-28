@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
-import {ref, reactive, computed, watch} from "vue";
+import { ref, reactive, computed, watch, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { TextLabel } from "@ngroznykh/papirus";
 import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
 import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
-import type {DiagramStyle} from "../notationAttrs";
+import type { DiagramStyle } from "../notationAttrs";
+import { useNodeShapes } from "@/composables/useNodeShapes";
 import { AVAILABLE_ICON_OPTIONS } from "@/config/availableIcons";
 import {
   getAllComponentPresets,
@@ -39,7 +40,8 @@ type NodeShape =
   | "diamond"
   | "circle"
   | "trapezoid"
-  | "slanted-rectangle";
+  | "slanted-rectangle"
+  | "custom";
 
 type IconPlacement =
   | "center"
@@ -55,6 +57,9 @@ type IconPlacement =
 function emitNodeStyle() {
   const style: DiagramStyle = {
     nodeShape: nodeShape.value,
+    ...(nodeShape.value === "custom"
+      ? { customOutline: customOutlineRef.value, customShapeId: customShapeIdRef.value ?? undefined }
+      : {}),
     fillColor: fillColor.value,
     fillOpacity: fillOpacity.value,
     strokeColor: strokeColor.value,
@@ -285,9 +290,19 @@ function applyComponentPreset(presetName: string) {
   const style = preset.style;
   
   // Update all node style refs (preserve current width/height if not in preset)
-  nodeShape.value = NODE_SHAPE_OPTIONS.some((option) => option.value === style.nodeShape)
-    ? (style.nodeShape as NodeShape)
-    : "rectangle";
+  nodeShape.value =
+    style.nodeShape === "custom"
+      ? "custom"
+      : NODE_SHAPE_OPTIONS.some((option) => option.value === style.nodeShape)
+        ? (style.nodeShape as NodeShape)
+        : "rectangle";
+  if (nodeShape.value === "custom") {
+    customOutlineRef.value = style.customOutline ?? undefined;
+    customShapeIdRef.value = style.customShapeId ?? null;
+  } else {
+    customOutlineRef.value = undefined;
+    customShapeIdRef.value = null;
+  }
   fillColor.value = style.fillColor ?? "#ffffff";
   fillOpacity.value = style.fillOpacity ?? 1;
   strokeColor.value = style.strokeColor ?? "#333333";
@@ -473,8 +488,23 @@ const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; labelKey: string }> 
   { value: "diamond", labelKey: "nodeStyle.shapeDiamond" },
   { value: "circle", labelKey: "nodeStyle.shapeCircle" },
   { value: "trapezoid", labelKey: "nodeStyle.shapeTrapezoid" },
-  { value: "slanted-rectangle", labelKey: "nodeStyle.shapeSlantedRectangle" }
+  { value: "slanted-rectangle", labelKey: "nodeStyle.shapeSlantedRectangle" },
+  { value: "custom", labelKey: "nodeStyle.customShape" }
 ];
+
+const panelMounted = ref(true);
+onBeforeUnmount(() => {
+  panelMounted.value = false;
+});
+const { list: catalogShapes, fetchList: fetchNodeShapes } = useNodeShapes({
+  beforeUpdate: () => panelMounted.value
+});
+function ensureCatalogShapesLoaded() {
+  if (catalogShapes.value.length === 0) fetchNodeShapes({ size: 200 });
+}
+const catalogShapeOptions = computed(() =>
+  catalogShapes.value.map((s) => ({ id: s.id, label: s.name }))
+);
 
 const EDGE_TYPE_OPTIONS = computed(() => ([
   { v: "straight", l: t("diagram.linkTypeStraight"), icon: "remove" },
@@ -518,6 +548,8 @@ const nodePortsTop = ref(3);
 const nodePortsBottom = ref(3);
 const nodePortsLeft = ref(1);
 const nodePortsRight = ref(1);
+const customOutlineRef = ref<DiagramStyle["customOutline"]>(undefined);
+const customShapeIdRef = ref<string | null>(null);
 
 // --- Edge style state ---
 const edgeLabel = ref("");
@@ -586,9 +618,18 @@ function loadNodeProps() {
     rawShape === "diamond" ||
     rawShape === "circle" ||
     rawShape === "trapezoid" ||
-    rawShape === "slanted-rectangle"
+    rawShape === "slanted-rectangle" ||
+    rawShape === "custom"
   ) {
     nodeShape.value = rawShape;
+    if (rawShape === "custom") {
+      customOutlineRef.value = props.currentDiagramStyle?.customOutline ?? undefined;
+      customShapeIdRef.value = props.currentDiagramStyle?.customShapeId ?? null;
+      ensureCatalogShapesLoaded();
+    } else {
+      customOutlineRef.value = undefined;
+      customShapeIdRef.value = null;
+    }
   } else {
     const typeName = (node as any).typeName as string | undefined;
     nodeShape.value =
@@ -597,6 +638,8 @@ function loadNodeProps() {
         : typeName === "circle"
           ? "circle"
           : "rectangle";
+    customOutlineRef.value = undefined;
+    customShapeIdRef.value = null;
   }
 
   label.value = node.label?.text ?? "";
@@ -690,6 +733,23 @@ watch(() => props.currentDiagramStyle?.labelTemplate, (val) => {
   labelTemplate.value = val ?? "";
 });
 
+watch(
+  () => props.currentDiagramStyle,
+  (style) => {
+    if (!style || elementType.value !== "node") return;
+    if (style.nodeShape === "custom") {
+      nodeShape.value = "custom";
+      customOutlineRef.value = style.customOutline ?? undefined;
+      customShapeIdRef.value = style.customShapeId ?? null;
+    } else if (NODE_SHAPE_OPTIONS.some((o) => o.value === style.nodeShape)) {
+      nodeShape.value = style.nodeShape as NodeShape;
+      customOutlineRef.value = undefined;
+      customShapeIdRef.value = null;
+    }
+  },
+  { deep: true }
+);
+
 function reloadSelectedProps() {
   if (elementType.value === "edge") {
     loadEdgeProps();
@@ -779,9 +839,44 @@ function handleIconChange(value: string) {
 
 function handleNodeShapeChange(value: string) {
   if (!NODE_SHAPE_OPTIONS.some((option) => option.value === value)) return;
-  nodeShape.value = value as NodeShape;
+  const next = value as NodeShape;
+  if (next !== "custom") {
+    customOutlineRef.value = undefined;
+    customShapeIdRef.value = null;
+  } else {
+    ensureCatalogShapesLoaded();
+  }
+  nodeShape.value = next;
   resetComponentPreset();
   emitNodeStyle();
+}
+
+function handleCustomShapeSelect(shape: { id: string; name: string; outline: string | null }) {
+  nodeShape.value = "custom";
+  if (shape.outline) {
+    try {
+      const parsed = JSON.parse(shape.outline) as unknown;
+      customOutlineRef.value = Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      customOutlineRef.value = undefined;
+    }
+  } else {
+    customOutlineRef.value = undefined;
+  }
+  customShapeIdRef.value = shape.id;
+  resetComponentPreset();
+  emitNodeStyle();
+}
+
+function handleCustomShapeSelectByValue(id: string) {
+  if (!id) {
+    customOutlineRef.value = undefined;
+    customShapeIdRef.value = null;
+    if (nodeShape.value === "custom") emitNodeStyle();
+    return;
+  }
+  const shape = catalogShapes.value.find((s) => s.id === id);
+  if (shape) handleCustomShapeSelect(shape);
 }
 
 function applyNodeIcon() {
@@ -1874,8 +1969,24 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <circle v-else-if="shape.value === 'circle'" cx="14" cy="10" r="8" stroke="currentColor" stroke-width="1.2" fill="none"/>
                       <polygon v-else-if="shape.value === 'trapezoid'" points="5,3 23,3 26,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
                       <polygon v-else-if="shape.value === 'slanted-rectangle'" points="6,3 26,3 22,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                      <rect v-else-if="shape.value === 'custom'" x="4" y="5" width="20" height="10" rx="1" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 2" fill="none"/>
                     </svg>
                   </button>
+                </div>
+                <div v-if="nodeShape === 'custom'" class="sp-field sp-field--row sp-field--custom-shapes">
+                  <span class="sp-field__label">{{ t("nodeStyle.customShape") }}</span>
+                  <select
+                    class="sp-select sp-select--flex"
+                    :value="customShapeIdRef ?? ''"
+                    @change="handleCustomShapeSelectByValue(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">{{ t("common.none") }}</option>
+                    <option
+                      v-for="opt in catalogShapeOptions"
+                      :key="opt.id"
+                      :value="opt.id"
+                    >{{ opt.label }}</option>
+                  </select>
                 </div>
                 <div class="sp-field-grid sp-field-grid--dims">
                   <div class="sp-num-field sp-num-field--stacked">

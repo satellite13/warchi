@@ -89,6 +89,9 @@ export const messages = {
     },
     shapes: {
       title: 'Формы узлов',
+      listTitle: 'Фигуры',
+      noShapes: 'Нет форм',
+      searchPlaceholder: 'Поиск формы...',
       selectShape: 'Выберите форму для редактирования',
       orCreateNew: 'или создайте новую',
       addShape: 'Добавить форму',
@@ -710,6 +713,9 @@ export const messages = {
     },
     shapes: {
       title: 'Node shapes',
+      listTitle: 'Shapes',
+      noShapes: 'No shapes',
+      searchPlaceholder: 'Search shape...',
       selectShape: 'Select a shape to edit',
       orCreateNew: 'or create a new one',
       addShape: 'Add shape',

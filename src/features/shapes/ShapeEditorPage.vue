@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue"
+import { ref, computed, onMounted, watch, onBeforeUnmount } from "vue"
 import { useI18n } from "vue-i18n"
 import { useNodeShapes } from "../../composables/useNodeShapes"
 import type { NodeShapeResponse } from "../../types/api"
 import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
 import type { OutlineSegment } from "../notations/notationAttrs"
 import BaseModal from "../../components/modals/BaseModal.vue"
-import CustomOutlineEditor from "./CustomOutlineEditor.vue"
+import ShapeSidebar from "./components/ShapeSidebar.vue"
+import ShapeForm from "./components/ShapeForm.vue"
 
 const { t } = useI18n()
 const {
@@ -40,6 +41,16 @@ function parseOutlineJson(json: string | null): OutlineSegment[] {
 
 const canEditSelected = computed(() => selectedDetail.value?.canEdit ?? false)
 
+/** Есть несохранённые изменения относительно данных с сервера */
+const isDirty = computed(() => {
+  const detail = selectedDetail.value
+  if (!detail) return false
+  const savedName = detail.name ?? ""
+  const savedOutline = parseOutlineJson(detail.outline)
+  if (localName.value !== savedName) return true
+  return JSON.stringify(localOutline.value) !== JSON.stringify(savedOutline)
+})
+
 onMounted(() => {
   fetchList({ size: 200 }).then((ok) => {
     if (!ok) saveError.value = t("shapes.errorLoad")
@@ -61,14 +72,13 @@ watch(selectedShapeId, async (id) => {
   }
 })
 
-async function handleSelect(id: string) {
+function handleSelect(id: string) {
   selectedShapeId.value = id
 }
 
 async function handleAdd() {
   saveError.value = null
-  const outlineJson =
-    JSON.stringify(DEFAULT_RECTANGLE_OUTLINE)
+  const outlineJson = JSON.stringify(DEFAULT_RECTANGLE_OUTLINE)
   const created = await create({
     name: t("shapes.addShape"),
     outline: outlineJson
@@ -130,48 +140,43 @@ async function confirmDelete() {
     saveError.value = t("shapes.errorDelete")
   }
 }
+
+// Toast for save/load errors (like TypeEditorPage)
+const isToastVisible = ref(false)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(saveError, (value) => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+  if (!value) {
+    isToastVisible.value = false
+    return
+  }
+  isToastVisible.value = true
+  toastTimer = setTimeout(() => {
+    isToastVisible.value = false
+  }, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+})
 </script>
 
 <template>
   <div class="shape-editor">
-    <aside class="shape-editor__sidebar">
-      <div class="shape-editor__sidebar-header">
-        <h2 class="shape-editor__title">{{ t("shapes.title") }}</h2>
-        <button
-          type="button"
-          class="btn btn--primary btn--sm"
-          @click="handleAdd"
-        >
-          {{ t("shapes.addShape") }}
-        </button>
-      </div>
-      <div v-if="isLoading" class="shape-editor__loading">
-        {{ t("common.loading") }}
-      </div>
-      <ul v-else class="shape-editor__list">
-        <li
-          v-for="shape in list"
-          :key="shape.id"
-          class="shape-editor__item"
-          :class="{ 'shape-editor__item--active': shape.id === selectedShapeId }"
-        >
-          <button
-            type="button"
-            class="shape-editor__item-btn"
-            @click="handleSelect(shape.id)"
-          >
-            <span class="shape-editor__item-name">{{ shape.name }}</span>
-            <span
-              v-if="!shape.canEdit"
-              class="shape-editor__item-readonly"
-              :title="t('shapes.noEditRights')"
-            >
-              <span class="material-symbols-outlined">lock</span>
-            </span>
-          </button>
-        </li>
-      </ul>
-    </aside>
+    <ShapeSidebar
+      :shapes="list"
+      :selected-shape-id="selectedShapeId"
+      :is-loading="isLoading"
+      @select-shape="handleSelect"
+      @add-shape="handleAdd"
+    />
 
     <main class="shape-editor__main">
       <div v-if="!selectedDetail" class="shape-editor__empty">
@@ -182,50 +187,25 @@ async function confirmDelete() {
         </div>
       </div>
 
-      <div v-else class="shape-editor__form">
-        <p v-if="!canEditSelected" class="shape-editor__no-edit">
-          {{ t("shapes.noEditRights") }}
-        </p>
-        <div class="shape-editor__field">
-          <label class="shape-editor__label">{{ t("shapes.nameLabel") }}</label>
-          <input
-            v-model="localName"
-            type="text"
-            class="shape-editor__input"
-            :disabled="!canEditSelected"
-          />
+      <template v-else>
+        <div class="shape-editor__content">
+          <div class="shape-editor__center">
+            <ShapeForm
+              :selected-shape="selectedDetail"
+              :name="localName"
+              :outline="localOutline"
+              :can-edit="canEditSelected"
+              :is-dirty="isDirty"
+              :is-saving="isSaving"
+              :is-deleting="isDeleting"
+              @save="handleSave"
+              @delete="openDeleteConfirm"
+              @update:name="localName = $event"
+              @update:outline="localOutline = $event"
+            />
+          </div>
         </div>
-        <div class="shape-editor__field">
-          <label class="shape-editor__label">{{ t("shapes.outlineLabel") }}</label>
-          <CustomOutlineEditor
-            v-if="localOutline.length > 0"
-            v-model="localOutline"
-            :disabled="!canEditSelected"
-          />
-          <p v-else class="shape-editor__outline-placeholder">
-            {{ t("shapes.outlinePlaceholder") }}
-          </p>
-        </div>
-        <div v-if="canEditSelected" class="shape-editor__actions">
-          <button
-            type="button"
-            class="btn btn--primary"
-            :disabled="isSaving"
-            @click="handleSave"
-          >
-            {{ isSaving ? t("common.saving") : t("shapes.save") }}
-          </button>
-          <button
-            type="button"
-            class="btn btn--danger"
-            :disabled="isDeleting"
-            @click="openDeleteConfirm"
-          >
-            {{ isDeleting ? t("common.deleting") : t("shapes.delete") }}
-          </button>
-        </div>
-        <p v-if="saveError" class="shape-editor__error">{{ saveError }}</p>
-      </div>
+      </template>
     </main>
 
     <BaseModal
@@ -246,190 +226,172 @@ async function confirmDelete() {
         </button>
       </template>
     </BaseModal>
+
+    <Teleport to="body">
+      <Transition name="toast">
+        <div v-if="isToastVisible && saveError" class="save-toast save-toast--error">
+          <span class="material-symbols-outlined save-toast__icon">error</span>
+          <span>{{ saveError }}</span>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .shape-editor {
   display: flex;
   height: 100%;
   min-height: 0;
-}
-
-.shape-editor__sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-muted);
-}
-
-.shape-editor__sidebar-header {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.shape-editor__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--base-text);
-}
-
-.shape-editor__loading {
-  padding: 16px;
-  color: var(--text-muted);
-}
-
-.shape-editor__list {
-  list-style: none;
-  margin: 0;
-  padding: 8px 0;
-  overflow-y: auto;
-}
-
-.shape-editor__item {
-  margin: 0;
-}
-
-.shape-editor__item-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 16px;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--base-text);
-  font-size: 14px;
-}
-
-.shape-editor__item-btn:hover {
-  background: var(--surface-strong);
-}
-
-.shape-editor__item--active .shape-editor__item-btn {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.shape-editor__item-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shape-editor__item-readonly {
-  color: var(--text-subtle);
-  flex-shrink: 0;
-}
-
-.shape-editor__item-readonly .material-symbols-outlined {
-  font-size: 18px;
+  background: var(--base-bg);
 }
 
 .shape-editor__main {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
-  padding: 24px;
+  padding: 28px 36px;
+}
+
+.shape-editor__content {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  animation: fadeIn 0.25s ease;
+}
+
+.shape-editor__center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .shape-editor__empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 240px;
+  height: 100%;
 }
 
 .empty-state {
-  text-align: center;
-  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: fadeIn 0.4s ease;
 }
 
 .empty-state__icon {
-  font-size: 48px;
-  display: block;
-  margin-bottom: 12px;
-  opacity: 0.6;
+  font-size: 56px;
+  color: var(--border-strong);
+  margin-bottom: 4px;
 }
 
 .empty-state__text {
-  margin: 0 0 4px;
-  font-size: 16px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .empty-state__hint {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-subtle);
 }
 
-.shape-editor__form {
-  max-width: 480px;
-}
-
-.shape-editor__no-edit {
-  padding: 12px;
-  background: var(--surface-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  margin-bottom: 16px;
-}
-
-.shape-editor__field {
-  margin-bottom: 16px;
-}
-
-.shape-editor__label {
-  display: block;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
   font-size: 13px;
+  font-family: inherit;
   font-weight: 500;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--secondary {
+  background: var(--surface-strong);
   color: var(--text-muted);
-  margin-bottom: 6px;
 }
 
-.shape-editor__input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+.btn--secondary:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--base-text);
 }
 
-.shape-editor__input:disabled {
-  background: var(--surface-muted);
-  color: var(--text-subtle);
-}
-
-.shape-editor__outline-placeholder {
-  padding: 12px;
-  background: var(--surface-muted);
-  border-radius: var(--radius-sm);
-  color: var(--text-subtle);
-  font-size: 13px;
-  margin: 0;
-}
-
-.shape-editor__actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.shape-editor__error {
-  margin-top: 12px;
+.btn--danger {
+  background: var(--danger-soft);
   color: var(--danger);
-  font-size: 13px;
+}
+
+.btn--danger:hover:not(:disabled) {
+  filter: brightness(0.95);
 }
 
 .shape-editor__delete-text {
   margin: 0;
+  font-size: 14px;
   color: var(--base-text);
+  line-height: 1.55;
+}
+
+.save-toast {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 2100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.save-toast--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-soft);
+}
+
+.save-toast__icon {
+  font-size: 20px;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 </style>

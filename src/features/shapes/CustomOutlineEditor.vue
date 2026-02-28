@@ -3,10 +3,6 @@ import { ref, watch, onMounted, onUnmounted } from "vue"
 import type { OutlineSegment } from "../notations/notationAttrs"
 import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
 
-/** Базовый размер фигуры в нотации (для отображения подложки) */
-const BASE_SHAPE_WIDTH = 180
-const BASE_SHAPE_HEIGHT = 80
-
 const props = withDefaults(
   defineProps<{
     modelValue: OutlineSegment[]
@@ -179,25 +175,17 @@ function draw() {
     ctx.stroke(outlinePath)
   }
 
-  // Серый прямоугольник 180×80 по центру — рисуем поверх контура, пунктирная обводка
-  const rw = Math.round(BASE_SHAPE_WIDTH * dpr)
-  const rh = Math.round(BASE_SHAPE_HEIGHT * dpr)
-  const rx = (canvas.width - rw) / 2
-  const ry = (canvas.height - rh) / 2
+  // Направляющие по центральным осям канваса (прилипание к ним в snapToOtherPoints)
+  const cx = canvas.width / 2
+  const cy = canvas.height / 2
   ctx.strokeStyle = styles.textMuted
-  ctx.lineWidth = 2
-  ctx.setLineDash([4, 4])
-  ctx.strokeRect(rx, ry, rw, rh)
-  ctx.setLineDash([])
-  // Центральные оси серого прямоугольника
-  const cx = rx + rw / 2
-  const cy = ry + rh / 2
+  ctx.lineWidth = 1
   ctx.setLineDash([3, 3])
   ctx.beginPath()
-  ctx.moveTo(cx, ry)
-  ctx.lineTo(cx, ry + rh)
-  ctx.moveTo(rx, cy)
-  ctx.lineTo(rx + rw, cy)
+  ctx.moveTo(cx, 0)
+  ctx.lineTo(cx, canvas.height)
+  ctx.moveTo(0, cy)
+  ctx.lineTo(canvas.width, cy)
   ctx.stroke()
   ctx.setLineDash([])
 

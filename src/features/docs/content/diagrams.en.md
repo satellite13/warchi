@@ -19,6 +19,39 @@ Click the desired diagram in the model tree. If there are unsaved changes, the s
 - **Don't save** — discard changes and switch
 - **Cancel** — stay on the current diagram
 
+### Creating a Baseline (new diagram version)
+
+A baseline is a new version of the current diagram created from its current state.
+
+How to create a baseline:
+
+1. Open the required diagram in the model editor
+2. Trigger the action for creating a new diagram version (baseline)
+3. Confirm creation — the system creates the next version and opens it
+
+Important details:
+
+- a baseline copies element set and layout from the source diagram at creation time;
+- you can switch to any diagram version via the version switcher;
+- only the latest version is editable, previous versions open in read-only mode.
+
+#### When to create a baseline
+
+Create a baseline before changes that may significantly alter diagram structure:
+
+- before auto-layout of many nodes;
+- before bulk edits of links or display styles;
+- before reworking subsystem grouping and composition;
+- before experimenting with an alternative architecture view.
+
+Example scenario:
+
+1. The current diagram is agreed and used as the working version.
+2. You need to try a new layout (for example, reorganize into different subsystems).
+3. Create a baseline.
+4. Apply changes in the new version.
+5. If the result is good, continue in the new version; otherwise, return to the previous version as a stable reference.
+
 ### Closing and Deleting
 
 - **Close** — button on the toolbar. The diagram remains in the model but is closed in the editor
@@ -86,6 +119,23 @@ To create a link between elements:
 | Minimap | Show/hide minimap in canvas corner |
 | Snap to grid | Enable/disable element snapping to grid when moving |
 | Lock link anchors | Fix connection points (links don't move when nodes move) |
+
+## Diagram Settings
+
+Diagram settings control editor behavior for a specific diagram.
+
+Core settings:
+
+- **Auto-links in groups** — when dropping a component into a container, the editor can suggest creating or reusing a grouping relation automatically;
+- **Snap to grid** — helps align elements cleanly while moving;
+- **Grid / minimap / rulers** — visual aids for navigation and layout;
+- **Lock link anchors** — keeps link endpoints fixed when moving nodes.
+
+Practical recommendations:
+
+- enable snap to grid for clean, consistent layouts;
+- enable auto-links in groups when modeling many container relationships;
+- use minimap and rulers on large diagrams for faster navigation.
 
 ### Export and Data
 

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Hover hints (`title`) for compact numeric fields in the style panel (`W/H/R`, `PT/PB/PL/PR`, `T/R/B/L`) so abbreviated labels are easier to understand.
+- New i18n keys under `nodeStyle` for field tooltips and inset sync modes (`pair/all`).
+
+### Changed
+- Continued `NodeStylePanel` refactoring toward reusable UI building blocks (`InsetSidesInput`, `ColorWithAlphaField`, `StyleSection`, `LabeledNumberInput`, `LabeledFieldRow`) with more consistent field styling.
+- Updated Russian locale value of `nodeStyle.inset` from `Inset` to `Отступ`.
+- Localized inset sync button captions (`Pair`/`All`).
+
 ## [0.0.25] - 2026-02-28
 
 ### Changed

@@ -67,6 +67,17 @@ When selecting an element in the tree or on the diagram, the properties panel di
 - **Style** — visual properties of the element (color, shape, size), with the ability to restore styles from the notation
 - **Custom properties** — values of properties defined in the element type
 
+#### Style panel field hints
+
+Compact fields use short labels:
+
+- `W/H/R` — width, height, radius;
+- `PT/PB/PL/PR` — number of top/bottom/left/right ports;
+- `T/R/B/L` — top/right/bottom/left insets.
+
+When hovering these fields, a tooltip shows the full parameter name.
+Inset blocks also support sync modes **Pair** (paired sides) and **All** (all sides), and button captions are localized according to the current UI language.
+
 The left and right panels can be resized and collapsed.
 
 ### Diagrams

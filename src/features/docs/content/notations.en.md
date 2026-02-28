@@ -53,6 +53,41 @@ For link types you configure:
 - Arrow style (open, closed, diamond, etc.)
 - Color and line width
 
+### Node Shapes
+
+In component style settings, you can choose a node shape:
+
+- **Rectangle**
+- **Beveled rectangle**
+- **Diamond**
+- **Circle**
+- **Trapezoid**
+- **Parallelogram** (slanted rectangle)
+- **Custom shape**
+
+Practical guidance:
+
+- rectangle is typically used for core services/modules;
+- diamond and trapezoid work well for special semantics (conditions, gateways, aggregators);
+- circle is useful for compact role/event-like nodes;
+- custom shape is useful when built-in options are not enough and a custom contour is required.
+
+Additional notes:
+
+- corner radius (`R`) applies to rectangular forms where radius is supported;
+- after changing shape, review content inset (`T/R/B/L`) and label position.
+
+#### Short field label hints
+
+For compact layout, the style panel uses abbreviated labels:
+
+- `W/H/R` — width, height, radius;
+- `PT/PB/PL/PR` — top/bottom/left/right ports;
+- `T/R/B/L` — top/right/bottom/left insets.
+
+Hovering a field shows a tooltip with the full meaning.
+Inset sync buttons **Pair**/**All** are localized automatically according to the active UI language.
+
 ### Custom Properties
 
 Node and link types can have custom properties that are available when editing the model. Properties can be of different types: text, number, enum, etc.
@@ -61,23 +96,40 @@ When creating a property, you can mark it as **system** — such properties are 
 
 ### System Property `group`
 
-A system property named `group` with type `boolean` enables component grouping mode:
+The `group` system property (`boolean`) enables **component grouping behavior** driven by relation semantics.
 
-- **Link hiding**: If the `target` component is fully inside the `source` component and there is a link with type `group=true` between them, the link is not displayed on the diagram
-- **Group drag**: When dragging a component with `group=true`, all components fully contained within it move together with it
-- **Auto-link creation**: When a component is dragged and dropped inside another component, and a `group=true` relation is possible between them:
-  - If the link already exists on the diagram, nothing is prompted
-  - If the link exists but is not on the diagram, you'll be prompted to add the existing link or create a new one
-  - If no link exists and only one relation is available, a confirmation dialog is shown
-  - If no link exists and multiple relations are available, a dialog shows to select the relation type
+#### Why it is needed
+
+`group` helps model container relationships (for example, "service belongs to subsystem") not only visually but behaviorally:
+
+- nested elements can move together with the container;
+- grouping links can be hidden to reduce diagram clutter;
+- when dropping an element inside a container, the editor helps create/reuse the correct relation.
+
+#### For components
+
+If a component type has the `group=true` system property, that component can act as a container:
+
+- dragging this component also moves components fully located inside its bounds;
+- it participates in auto-grouping flows when dropping components inside other components.
+
+#### For links
+
+If a link type has the `group=true` system property, that link is treated as a grouping relation:
+
+- when `target` is fully inside `source`, the link may be hidden on the diagram (the structural relation still exists, visual noise is reduced);
+- when dropping one component inside another, if a `group=true` relation is allowed, the editor suggests reusing an existing relation or creating a new one;
+- if multiple relation types are possible, the relation type chooser is shown.
 
 #### Configuration
 
-1. Create a property with name `group`
-2. Set type to `boolean`
-3. Set default value to `true`
-4. Enable the **Sys.** (system) checkbox
-5. Optionally mark as **Req.** (required)
+1. Create a custom property named `group`.
+2. Set its type to `boolean`.
+3. Usually set default value to `true` (if that type always participates in grouping).
+4. Enable the **Sys.** (system) checkbox.
+5. Configure this property for the required types:
+   - for **component types** — to enable container behavior;
+   - for **link types** — to mark a relation as grouping.
 
 ### Label Templates
 

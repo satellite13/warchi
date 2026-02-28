@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.23] - 2026-02-28
+
+### Added
+- Group drag in model diagram: drag a node inside a container to move both together.
+- Auto-linking in groups: when dragging a node into a container with group relation, prompts to create or reuse a link (configurable via "Auto-links in groups" toggle in diagram settings).
+- `isLinkOnDiagram()` and `tryCreateAutoLink()` logic: link on diagram → no action; link exists off diagram → reuse dialog; no link → create dialog.
+- Node usage tracking in ModelTreePalettePanel.
+- System property flag (`system`) on CustomProperty for notation-defined special behavior (e.g. `group` for grouping mode).
+
+### Changed
+- Model editor: existing link reuse and relation selection modals for auto-link flow.
+- Modal keyboard navigation and focus management improvements.
+- Updated `@ngroznykh/papirus` to 0.3.21.
+
+### Fixed
+- System properties are no longer shown in model editor properties panel (ModelPropertiesPanel).
+- System properties excluded from required validation on save (user cannot edit them).
+
 ## [0.0.22] - 2026-02-27
 
 ### Added

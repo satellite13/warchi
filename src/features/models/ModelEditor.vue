@@ -1272,6 +1272,8 @@ const saveWithValidation = async (): Promise<boolean> => {
     setUiError(validationError)
     return false
   }
+  diagramCanvasRef.value?.flushCanvasState()
+  await nextTick()
   const ok = await saveChanges()
   if (ok) {
     diagramInteractionManager.value?.history?.clear?.()
@@ -1459,9 +1461,19 @@ watch(
 )
 
 const setDiagramAttrs = (next: any) => {
-  if (!activeDiagram.value) return
-  activeDiagram.value.parsedAttrs = next
-  markDiagramDirty(activeDiagram.value.id)
+  const diagram = activeDiagram.value
+  if (!diagram) return
+  const idx = state.value.diagrams.findIndex(
+    d => d.id === diagram.id && !d._isDeleted
+  )
+  if (idx >= 0) {
+    const diagrams = [...state.value.diagrams]
+    const current = diagrams[idx]
+    if (!current) return
+    diagrams[idx] = { ...current, parsedAttrs: next }
+    state.value.diagrams = diagrams
+  }
+  markDiagramDirty(diagram.id)
 }
 
 const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
@@ -1971,6 +1983,9 @@ const createOrReuseLink = (linkId: string | null) => {
   }
   if (connection.targetOutlineParam !== undefined) {
     edgeAttrs.toOutlineParam = connection.targetOutlineParam
+  }
+  if (relation.name?.trim()) {
+    edgeAttrs.label = relation.name.trim()
   }
   const newEdgeInstance = {
     id: createId(),
@@ -2896,19 +2911,17 @@ const cancelLeave = () => {
   pendingRoute = null
 }
 
-onBeforeRouteLeave((to, _from, next) => {
+onBeforeRouteLeave((to) => {
   if (allowLeave.value) {
     allowLeave.value = false
-    next()
-    return
+    return true
   }
   if (hasUnsavedChanges.value) {
     showLeaveDialog.value = true
     pendingRoute = to
-    next(false)
-    return
+    return false
   }
-  next()
+  return true
 })
 
 const onBeforeUnload = (event: BeforeUnloadEvent) => {

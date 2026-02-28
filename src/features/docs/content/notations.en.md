@@ -57,6 +57,28 @@ For link types you configure:
 
 Node and link types can have custom properties that are available when editing the model. Properties can be of different types: text, number, enum, etc.
 
+When creating a property, you can mark it as **system** — such properties are used for special behavior in the editor.
+
+### System Property `group`
+
+A system property named `group` with type `boolean` enables component grouping mode:
+
+- **Link hiding**: If the `target` component is fully inside the `source` component and there is a link with type `group=true` between them, the link is not displayed on the diagram
+- **Group drag**: When dragging a component with `group=true`, all components fully contained within it move together with it
+- **Auto-link creation**: When a component is dragged and dropped inside another component, and a `group=true` relation is possible between them:
+  - If the link already exists on the diagram, nothing is prompted
+  - If the link exists but is not on the diagram, you'll be prompted to add the existing link or create a new one
+  - If no link exists and only one relation is available, a confirmation dialog is shown
+  - If no link exists and multiple relations are available, a dialog shows to select the relation type
+
+#### Configuration
+
+1. Create a property with name `group`
+2. Set type to `boolean`
+3. Set default value to `true`
+4. Enable the **Sys.** (system) checkbox
+5. Optionally mark as **Req.** (required)
+
 ### Label Templates
 
 For notation components you can set a composite label template that defines what text is displayed on the diagram node.

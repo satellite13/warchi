@@ -25,7 +25,7 @@ import {
   type EdgePathType,
   type EdgeStyle,
 } from '@ngroznykh/papirus'
-import type { ComponentResponse, NodeTypeResponse, RelationResponse } from '../../../types/api'
+import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '../../../types/api'
 import {
   parseEntityAttrs,
   type CustomProperty,
@@ -42,6 +42,7 @@ const props = withDefaults(
     relations: RelationResponse[]
     components: ComponentResponse[]
     nodeTypes: NodeTypeResponse[]
+    relationRules?: RelationRuleResponse[]
     selectedModelNodeIds: string[]
     selectedModelLinkId: string | null
     selectedEdgeInstanceId?: string | null
@@ -66,6 +67,7 @@ const props = withDefaults(
     paletteVisible: true,
     lockAnchorsEnabled: true,
     attachToOutlineEnabled: true,
+    relationRules: () => [],
   }
 )
 
@@ -105,6 +107,14 @@ const emit = defineEmits<{
   requestEditNote: [instanceId: string]
   requestDeleteLink: [modelLinkId: string, edgeInstanceId?: string]
   paletteVisibleChange: [visible: boolean]
+  requestAutoLink: [
+    sourceModelNodeId: string,
+    targetModelNodeId: string,
+    sourceInstanceId: string,
+    targetInstanceId: string,
+    availableRelations: RelationResponse[],
+    existingLinksNotOnDiagram: EditorLink[],
+  ]
 }>()
 const { t } = useI18n()
 
@@ -341,6 +351,145 @@ const endGroupDrag = (): string[] => {
   const allIds = [groupDragData.leaderPapNodeId, ...groupDragData.followerIds]
   groupDragData = null
   return allIds
+}
+
+// ── Auto-link on drop inside container ──
+const findContainerNodes = (innerPapNodeId: string): string[] => {
+  if (!renderer) return []
+  const containers: string[] = []
+  for (const [papNodeId] of renderer.nodes) {
+    if (papNodeId === innerPapNodeId) continue
+    if (isNodeFullyInside(innerPapNodeId, papNodeId)) {
+      containers.push(papNodeId)
+    }
+  }
+  return containers
+}
+
+const getComponentIdByModelNodeId = (modelNodeId: string): string | undefined => {
+  const notationId = activeNotationId.value
+  if (!notationId) return undefined
+  const node = nodeById.value.get(modelNodeId)
+  if (!node) return undefined
+  return node.parsedAttrs.notationComponents[notationId]?.componentId
+}
+
+const findGroupRelations = (
+  sourceComponentId: string,
+  targetComponentId: string
+): RelationResponse[] => {
+  const notationId = activeNotationId.value
+  if (!notationId) return []
+
+  // Find relation rules that allow connection between these components
+  const matchingRules = props.relationRules?.filter(rule => 
+    rule.fromComponentId === sourceComponentId && 
+    rule.toComponentId === targetComponentId
+  ) ?? []
+
+  // Get allowed relation IDs from rules
+  const allowedRelationIds = new Set(matchingRules.map(rule => rule.relationId))
+
+  // Find all relations with group=true property among allowed
+  const result: RelationResponse[] = []
+  for (const rel of props.relations) {
+    if (rel.notationId !== notationId) continue
+    if (!allowedRelationIds.has(rel.id)) continue
+    
+    const parsed = parseEntityAttrs(rel.attrs ?? null)
+    const hasGroup = parsed.customProperties.some(
+      p => p.name === 'group' && p.type === 'boolean' && p.defaultValue === true
+    )
+    if (hasGroup) result.push(rel)
+  }
+  return result
+}
+
+const findExistingLinksForRelations = (
+  sourceModelNodeId: string,
+  targetModelNodeId: string,
+  relations: RelationResponse[]
+): EditorLink[] => {
+  const notationId = activeNotationId.value
+  if (!notationId) return []
+  
+  const relationIds = new Set(relations.map(r => r.id))
+  return props.links.filter(link => {
+    if (link._isDeleted) return false
+    if (link.sourceId !== sourceModelNodeId || link.targetId !== targetModelNodeId) {
+      return false
+    }
+    const linkRelationId = link.parsedAttrs.notationRelations[notationId]?.relationId
+    return linkRelationId ? relationIds.has(linkRelationId) : false
+  })
+}
+
+const isLinkOnDiagram = (modelLinkId: string): boolean => {
+  return instanceEdges.value.some(edge => edge.modelLinkId === modelLinkId)
+}
+
+const tryCreateAutoLink = (draggedPapNodeId: string) => {
+  const notationId = activeNotationId.value
+  if (!notationId || !renderer) return
+
+  const entity = nodeIdToInstance.get(draggedPapNodeId)
+  if (!entity) return
+
+  const containerPapNodeIds = findContainerNodes(draggedPapNodeId)
+  if (containerPapNodeIds.length === 0) return
+
+  const targetModelNodeId = entity.modelNodeId
+  const targetComponentId = getComponentIdByModelNodeId(targetModelNodeId)
+  if (!targetComponentId) return
+
+  for (const containerPapNodeId of containerPapNodeIds) {
+    const containerEntity = nodeIdToInstance.get(containerPapNodeId)
+    if (!containerEntity) continue
+
+    const sourceModelNodeId = containerEntity.modelNodeId
+    const sourceComponentId = getComponentIdByModelNodeId(sourceModelNodeId)
+    if (!sourceComponentId) continue
+
+    // Find all relations with group=true between these component types
+    const groupRelations = findGroupRelations(sourceComponentId, targetComponentId)
+    if (groupRelations.length === 0) continue
+
+    // Find existing links for these relations
+    const existingLinks = findExistingLinksForRelations(sourceModelNodeId, targetModelNodeId, groupRelations)
+
+    // Разделяем связи: на диаграмме и не на диаграмме
+    const existingLinksOnDiagram = existingLinks.filter(link => isLinkOnDiagram(link.id))
+    const existingLinksNotOnDiagram = existingLinks.filter(link => !isLinkOnDiagram(link.id))
+
+    // Если связь уже есть на диаграмме - ничего не делаем
+    if (existingLinksOnDiagram.length > 0) {
+      continue
+    }
+
+    // Если связь существует но не на диаграмме - показываем диалог с использованием существующей
+    if (existingLinksNotOnDiagram.length > 0) {
+      emit('requestAutoLink', 
+        sourceModelNodeId,
+        targetModelNodeId,
+        containerEntity.instanceId,
+        entity.instanceId,
+        [], // Не нужно выбирать relation
+        existingLinksNotOnDiagram
+      )
+      break
+    }
+
+    // Связей нет - нужно создать новую
+    emit('requestAutoLink', 
+      sourceModelNodeId,
+      targetModelNodeId,
+      containerEntity.instanceId,
+      entity.instanceId,
+      groupRelations,
+      [] // Нет существующих связей
+    )
+    break // Handle only one container
+  }
 }
 
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
@@ -1547,13 +1696,17 @@ function initRenderer(r: DiagramRenderer) {
     applyGroupDragDelta(delta.x, delta.y)
   })
 
-  // Drag end → persist position changes (include grouped nodes)
+  // Drag end → persist position changes (include grouped nodes) + auto-link
   interactionManager.drag.on('dragend', (_nodeIds: string[]) => {
     const allIds = endGroupDrag()
     if (allIds.length > 0) {
       persistNodePositions(allIds)
     } else {
       persistNodePositions(_nodeIds)
+    }
+    // Try auto-create link if dragged node is inside container with group relation
+    if (_nodeIds.length === 1) {
+      tryCreateAutoLink(_nodeIds[0]!)
     }
   })
 

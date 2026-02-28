@@ -33,7 +33,7 @@ import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import TabPanel from '../../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
 import { bumpMinor, compareVersions } from '../../utils/version'
-import type { NotationMetaResponse } from '../../types/api'
+import type { NotationMetaResponse, RelationResponse } from '../../types/api'
 
 const {
   model,
@@ -1782,6 +1782,55 @@ const handleCreateNewLinkFromReuseModal = () => {
   showRelationChoiceModal.value = true
 }
 
+const handleRequestAutoLink = (
+  sourceModelNodeId: string,
+  targetModelNodeId: string,
+  sourceInstanceId: string,
+  targetInstanceId: string,
+  availableRelations: RelationResponse[],
+  existingLinksNotOnDiagram: EditorLink[]
+) => {
+  const diagram = activeDiagram.value
+  if (!diagram) return
+
+  // Store connection data
+  pendingConnection.value = {
+    sourceModelNodeId,
+    targetModelNodeId,
+    sourceInstanceId,
+    targetInstanceId,
+    sourcePortId: undefined,
+    targetPortId: undefined,
+    sourceOutlineParam: undefined,
+    targetOutlineParam: undefined,
+  }
+
+  // Если есть существующие связи не на диаграмме - показываем диалог использования
+  if (existingLinksNotOnDiagram.length > 0) {
+    reuseLinkOptions.value = existingLinksNotOnDiagram
+    showReuseLinkModal.value = true
+    return
+  }
+
+  // Prepare relation options
+  relationChoiceOptions.value = availableRelations.map(relation => ({
+    id: relation.id,
+    name: relation.name,
+    linkTypeId: relation.linkTypeId,
+  }))
+
+  // Связей нет - нужно создать новую
+  // Если только один relation - спрашиваем создать ли связь
+  if (availableRelations.length === 1) {
+    // Показываем диалог с одним вариантом (как при перетаскивании с Shift)
+    showRelationChoiceModal.value = true
+    return
+  }
+
+  // Несколько вариантов - показываем выбор
+  showRelationChoiceModal.value = true
+}
+
 const handleSelectExistingLink = (linkId: string) => {
   const notationId = activeNotationId.value
   const link = state.value.links.find(item => item.id === linkId)
@@ -2951,6 +3000,7 @@ onBeforeUnmount(() => {
             :relations="state.relations"
             :components="state.components"
             :node-types="state.nodeTypes"
+            :relation-rules="state.relationRules"
             :grid-visible="gridVisible"
             :mini-map-visible="miniMapVisible"
             :snap-enabled="snapEnabled"
@@ -2981,6 +3031,7 @@ onBeforeUnmount(() => {
             @create-note="createDiagramNote"
             @add-existing-node="addExistingNodeToDiagram"
             @connect-nodes="startConnectNodes"
+            @request-auto-link="handleRequestAutoLink"
             @reconnect-edge="handleReconnectEdge"
             @find-in-tree="handleFindInTree"
             @node-label-change="handleNodeLabelChange"

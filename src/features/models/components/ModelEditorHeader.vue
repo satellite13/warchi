@@ -206,14 +206,18 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: t('toolbar.closeDiagram'),
     disabled: !props.hasActiveDiagram,
   },
-  {
-    icon: 'save',
-    event: 'save',
-    title: saveTitle.value,
-    badge: props.hasUnsavedChanges,
-    variant: props.hasUnsavedChanges ? 'primary' : 'default',
-    disabled: !props.canSave || !props.hasUnsavedChanges,
-  },
+  ...(!props.isDiagramReadOnly
+    ? [
+        {
+          icon: 'save',
+          event: 'save',
+          title: saveTitle.value,
+          badge: props.hasUnsavedChanges,
+          variant: (props.hasUnsavedChanges ? 'primary' : 'default') as 'primary' | 'default',
+          disabled: !props.canSave || !props.hasUnsavedChanges,
+        },
+      ]
+    : []),
 ])
 
 const canCreateBaseline = computed(
@@ -228,6 +232,10 @@ const canCreateBaseline = computed(
 <template>
   <div v-if="canvasMode" class="model-header-canvas">
     <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+    <span v-if="isDiagramReadOnly" class="model-header__readonly-indicator" :title="t('models.viewOnly')">
+      <span class="material-symbols-outlined model-header__readonly-icon">visibility</span>
+      <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
+    </span>
   </div>
   <header v-else class="model-header" :class="{ 'model-header--no-toolbar': hideToolbar }">
     <div class="model-header__left">
@@ -304,7 +312,6 @@ const canCreateBaseline = computed(
               {{ d.version }}
             </option>
           </select>
-          <span v-if="isDiagramReadOnly" class="model-header__readonly-badge">{{ t('models.viewOnly') }}</span>
           <button
             type="button"
             class="model-header__baseline-btn"
@@ -342,6 +349,10 @@ const canCreateBaseline = computed(
     </div>
     <div v-if="!hideToolbar" class="model-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      <span v-if="isDiagramReadOnly" class="model-header__readonly-indicator" :title="t('models.viewOnly')">
+        <span class="material-symbols-outlined model-header__readonly-icon">visibility</span>
+        <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
+      </span>
     </div>
     <div v-if="!hideToolbar" class="model-header__right-spacer" />
   </header>
@@ -363,8 +374,8 @@ const canCreateBaseline = computed(
 .model-header-canvas {
   display: inline-flex;
   align-items: center;
-  gap: 0;
-  padding: 3px;
+  gap: 10px;
+  padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
@@ -393,13 +404,6 @@ const canCreateBaseline = computed(
   cursor: pointer;
   width: auto;
   max-width: 6em;
-}
-
-.model-header__readonly-badge {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
-  margin-right: 2px;
 }
 
 .model-header__baseline-btn {
@@ -556,8 +560,31 @@ const canCreateBaseline = computed(
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   min-width: 0;
   padding: 12px 16px;
+}
+
+.model-header__readonly-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--primary);
+  border-radius: 8px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary);
+}
+
+.model-header__readonly-icon {
+  font-size: 18px;
+}
+
+.model-header__readonly-text {
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .model-header__right-spacer {

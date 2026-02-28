@@ -56,6 +56,7 @@ const props = withDefaults(
     paletteVisible?: boolean
     lockAnchorsEnabled?: boolean
     attachToOutlineEnabled?: boolean
+    autoLinkInGroups?: boolean
   }>(),
   {
     connectionValidator: null,
@@ -68,6 +69,7 @@ const props = withDefaults(
     lockAnchorsEnabled: true,
     attachToOutlineEnabled: true,
     relationRules: () => [],
+    autoLinkInGroups: true,
   }
 )
 
@@ -444,6 +446,9 @@ const isLinkOnDiagram = (modelLinkId: string): boolean => {
 }
 
 const tryCreateAutoLink = (draggedPapNodeId: string) => {
+  // Проверяем настройку автолинков
+  if (!props.autoLinkInGroups) return
+  
   const notationId = activeNotationId.value
   if (!notationId || !renderer) return
 

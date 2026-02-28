@@ -170,6 +170,7 @@ const attachToOutlineEnabled = ref(true)
 const selectionSyncEnabled = ref(true)
 const canvasSettingsVisible = ref(true)
 const paletteVisible = ref(true)
+const autoLinkInGroups = ref(true)
 type EdgePathType = 'straight' | 'polyline' | 'editable-polyline' | 'bezier'
 const defaultEdgeType = ref<EdgePathType>('bezier')
 const NOTE_NODE_PREFIX = '__diagram-note__:'
@@ -186,6 +187,7 @@ type ToolbarState = {
   canvasSettingsVisible: boolean
   paletteVisible: boolean
   defaultEdgeType: EdgePathType
+  autoLinkInGroups: boolean
 }
 
 const TOOLBAR_STATE_STORAGE_PREFIX = 'warchi:model-editor:toolbar-state'
@@ -228,6 +230,9 @@ const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
   ) {
     defaultEdgeType.value = stateValue.defaultEdgeType as EdgePathType
   }
+  if (typeof stateValue.autoLinkInGroups === 'boolean') {
+    autoLinkInGroups.value = stateValue.autoLinkInGroups
+  }
 }
 
 const persistToolbarState = (userId: string | null) => {
@@ -243,6 +248,7 @@ const persistToolbarState = (userId: string | null) => {
     canvasSettingsVisible: canvasSettingsVisible.value,
     paletteVisible: paletteVisible.value,
     defaultEdgeType: defaultEdgeType.value,
+    autoLinkInGroups: autoLinkInGroups.value,
   }
   window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState))
 }
@@ -297,6 +303,13 @@ const canvasToggleButtons = computed<ToolbarButton[]>(() => [
     event: 'toggle-outline',
     title: t('toolbar.outline'),
     active: attachToOutlineEnabled.value,
+    disabled: !activeDiagram.value,
+  },
+  {
+    icon: 'account_tree',
+    event: 'toggle-auto-link-in-groups',
+    title: t('models.autoLinkInGroups'),
+    active: autoLinkInGroups.value,
     disabled: !activeDiagram.value,
   },
 ])
@@ -371,9 +384,10 @@ watch(
     canvasSettingsVisible,
     paletteVisible,
     defaultEdgeType,
+    autoLinkInGroups,
     () => currentUser.value?.id ?? null,
   ],
-  ([, , , , , , , , , , userId]) => {
+  ([, , , , , , , , , , , userId]) => {
     persistToolbarState(userId as string | null)
   }
 )
@@ -2541,6 +2555,10 @@ const handleToolbarAction = async (event: string) => {
       attachToOutlineEnabled.value = !attachToOutlineEnabled.value
       break
     }
+    case 'toggle-auto-link-in-groups': {
+      autoLinkInGroups.value = !autoLinkInGroups.value
+      break
+    }
     case 'toggle-lock-anchors': {
       const next = diagramCanvasRef.value?.toggleLockAnchors()
       if (typeof next === 'boolean') lockAnchorsEnabled.value = next
@@ -3007,6 +3025,7 @@ onBeforeUnmount(() => {
             :align-enabled="alignEnabled"
             :rulers-enabled="rulersEnabled"
             :palette-visible="paletteVisible"
+            :auto-link-in-groups="autoLinkInGroups"
             :lock-anchors-enabled="lockAnchorsEnabled"
             :attach-to-outline-enabled="attachToOutlineEnabled"
             :selected-model-node-ids="selectedModelNodeIds"

@@ -263,6 +263,7 @@ export const messages = {
       propertiesTab: 'Свойства',
       figureStyleTab: 'Стиль фигуры',
       defaultLinkType: 'Тип линии по умолчанию',
+      autoLinkInGroups: 'Автолинки в группах',
     },
     notations: {
       entityName: 'Нотация',
@@ -852,6 +853,7 @@ export const messages = {
       copy: 'Copy',
       propertiesTab: 'Properties',
       figureStyleTab: 'Figure Style',
+      autoLinkInGroups: 'Auto-links in groups',
     },
     notations: {
       entityName: 'Notation',

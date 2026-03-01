@@ -143,7 +143,24 @@ Practical recommendations:
 |--------|-------------|
 | Export to PNG | Save diagram as PNG raster image |
 | Export to SVG | Save diagram as SVG vector image |
+| Share as image link | Open dialog to get a public link to the diagram preview (see below) |
 | View JSON | Show JSON representation of diagram data |
+
+### Share diagram as image
+
+You can get a link to the diagram preview as SVG. Use it to share with colleagues or embed the image in Notion, Confluence, chats, or documents — anyone with the link can open it without logging in.
+
+**How to get the link:**
+
+1. Open the desired diagram in the model editor.
+2. Click **Share as image link** on the toolbar.
+3. In the dialog, choose the link type:
+   - **This diagram version** — the link will always show the current snapshot (good for a fixed view).
+   - **Always latest version by name** — the link will show the latest saved version of the diagram with this name (the image updates after you save).
+4. Click **Get link** — the current view is uploaded as preview and the link is generated.
+5. Click **Copy link** and paste it where needed.
+
+The preview is also uploaded automatically when you save the model, so an "always latest" link will show the current state after you save.
 
 ### Controls
 

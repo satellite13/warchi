@@ -235,3 +235,63 @@ export const apiPut = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
 
 export const apiDelete = <T>(path: string): Promise<ApiResult<T>> =>
   apiFetch<T>(path, { method: "DELETE" });
+
+/** Upload diagram SVG for preview (raw body, no JSON). */
+export async function uploadDiagramSvg(
+  diagramId: string,
+  svg: string
+): Promise<ApiResult<void>> {
+  const url = buildApiUrl(`/diagrams/${diagramId}/svg`);
+  const accessToken = getAccessToken();
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "image/svg+xml"
+  };
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+  try {
+    const response = await fetch(url, {
+      method: "PUT",
+      headers,
+      body: svg
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      if (response.status === 401) {
+        const refreshed = await tryRefreshAccessToken();
+        if (refreshed) {
+          return uploadDiagramSvg(diagramId, svg);
+        }
+      }
+      const rawMessage = extractErrorMessage(response.status, text);
+      return {
+        success: false,
+        error: createApiError(
+          response.status,
+          normalizeApiErrorMessage(response.status, url, rawMessage)
+        )
+      };
+    }
+    return { success: true, data: undefined as void };
+  } catch (error) {
+    return {
+      success: false,
+      error: createApiError(
+        0,
+        error instanceof Error ? error.message : "Ошибка подключения"
+      )
+    };
+  }
+}
+
+export type DiagramShareLinkPayload =
+  | { diagramId: string }
+  | { modelId: string; diagramName: string; latest: true };
+
+export type DiagramShareLinkResponse = { url: string; token: string };
+
+export const createDiagramShareLink = (
+  payload: DiagramShareLinkPayload
+): Promise<ApiResult<DiagramShareLinkResponse>> =>
+  apiPost<DiagramShareLinkResponse>("/diagrams/share-link", payload);

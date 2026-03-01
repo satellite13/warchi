@@ -182,6 +182,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: t('toolbar.exportDiagramSvg'),
     disabled: !props.hasActiveDiagram,
   },
+  {
+    icon: 'link',
+    event: 'share-diagram-image',
+    title: t('toolbar.shareDiagramImage'),
+    disabled: !props.hasActiveDiagram,
+  },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin
     ? [

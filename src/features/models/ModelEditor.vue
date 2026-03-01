@@ -3,11 +3,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { apiGet } from '../../composables/useApi'
+import { apiGet, uploadDiagramSvg } from '../../composables/useApi'
 import MainLayout from '../../layouts/MainLayout.vue'
 import AppFooter from '../../components/layout/AppFooter.vue'
 import BaseModal from '../../components/modals/BaseModal.vue'
 import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
+import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { ImageExporter, SvgExporter } from '@ngroznykh/papirus'
 import {
   createId,
@@ -33,6 +34,7 @@ import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import TabPanel from '../../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
 import { bumpMinor, compareVersions } from '../../utils/version'
+import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
 import type { NotationMetaResponse, RelationResponse } from '../../types/api'
 
 const {
@@ -59,6 +61,7 @@ const { t } = useI18n()
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
+const showDiagramImageShareModal = ref(false)
 
 // Document modal state
 const showDocModal = ref(false)
@@ -369,6 +372,25 @@ async function handleCreateBaseline() {
   try {
     const created = await createDiagramBaseline(diagram.id)
     if (created) {
+      if (diagramRenderer.value) {
+        await nextTick()
+        await new Promise<void>(r =>
+          requestAnimationFrame(() => requestAnimationFrame(() => r()))
+        )
+        const exporter = new SvgExporter(diagramRenderer.value)
+        let svg = exporter.exportSVG({
+          includeBackground: true,
+          backgroundColor: getDiagramExportBackgroundColor(),
+          padding: 24,
+        })
+        svg = appendDiagramCaption(svg, {
+          diagramName: created.name,
+          diagramVersion: created.version,
+          notationName: activeDiagramNotationName.value,
+          notationVersion: activeDiagramNotationVersion.value,
+        })
+        void uploadDiagramSvg(created.id, svg)
+      }
       selectedDiagramId.value = created.id
     } else {
       baselineError.value = t('models.baselineCreateError')
@@ -1277,6 +1299,9 @@ const saveWithValidation = async (): Promise<boolean> => {
   const ok = await saveChanges()
   if (ok) {
     diagramInteractionManager.value?.history?.clear?.()
+    if (activeDiagram.value?.id && diagramRenderer.value) {
+      void uploadDiagramPreview()
+    }
   }
   return ok
 }
@@ -2533,11 +2558,47 @@ const exportActiveDiagramAsSvg = () => {
   }
 
   const exporter = new SvgExporter(diagramRenderer.value)
-  exporter.download(`${getDiagramExportBaseName()}.svg`, {
+  let svg = exporter.exportSVG({
     includeBackground: true,
     backgroundColor: getDiagramExportBackgroundColor(),
     padding: 24,
   })
+  svg = appendDiagramCaption(svg, {
+    diagramName: activeDiagram.value.name,
+    diagramVersion: activeDiagram.value.version,
+    notationName: activeDiagramNotationName.value,
+    notationVersion: activeDiagramNotationVersion.value,
+  })
+  const blob = new Blob([svg], { type: 'image/svg+xml' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${getDiagramExportBaseName()}.svg`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+const uploadDiagramPreview = async (): Promise<boolean> => {
+  if (!activeDiagram.value?.id || !diagramRenderer.value) {
+    setUiError('Откройте диаграмму перед обновлением превью.')
+    return false
+  }
+  const exporter = new SvgExporter(diagramRenderer.value)
+  let svg = exporter.exportSVG({
+    includeBackground: true,
+    backgroundColor: getDiagramExportBackgroundColor(),
+    padding: 24,
+  })
+  svg = appendDiagramCaption(svg, {
+    diagramName: activeDiagram.value.name,
+    diagramVersion: activeDiagram.value.version,
+    notationName: activeDiagramNotationName.value,
+    notationVersion: activeDiagramNotationVersion.value,
+  })
+  const result = await uploadDiagramSvg(activeDiagram.value.id, svg)
+  if (result.success) return true
+  setUiError(result.error.message)
+  return false
 }
 
 const handleToolbarAction = async (event: string) => {
@@ -2647,6 +2708,9 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'export-diagram-svg':
       exportActiveDiagramAsSvg()
+      break
+    case 'share-diagram-image':
+      showDiagramImageShareModal.value = true
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -3602,6 +3666,16 @@ onBeforeUnmount(() => {
     resource-type="MODEL"
     :resource-id="model.id"
     @close="showShareModal = false"
+  />
+
+  <DiagramImageShareModal
+    v-if="showDiagramImageShareModal"
+    :visible="true"
+    :diagram-id="activeDiagram?.id ?? null"
+    :diagram-name="activeDiagram?.name ?? ''"
+    :model-id="model?.id ?? null"
+    :on-before-get-link="uploadDiagramPreview"
+    @close="showDiagramImageShareModal = false"
   />
 
   <DocumentEditorModal

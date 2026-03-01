@@ -68,7 +68,7 @@ const handleInteractiveKindChange = (value: string) => {
     if (kind === 'url' || kind === 'diagram' || kind === 'document') {
       p.type = 'string'
       if (kind === 'url') {
-        p.regex = p.regex ?? DEFAULT_URL_REGEX
+        if (!(p.regex ?? '').trim()) p.regex = DEFAULT_URL_REGEX
       }
     }
   })

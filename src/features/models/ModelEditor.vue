@@ -3,7 +3,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { apiGet, uploadDiagramSvg } from '../../composables/useApi'
+import { apiGet, apiPost, uploadDiagramSvg } from '../../composables/useApi'
 import MainLayout from '../../layouts/MainLayout.vue'
 import AppFooter from '../../components/layout/AppFooter.vue'
 import BaseModal from '../../components/modals/BaseModal.vue'
@@ -138,10 +138,27 @@ function handleCreateDocumentForProperty(propertyName: string) {
   showDocModal.value = true
 }
 
-function handleDocSaved(fileId: string) {
+async function handleDocSaved(fileId: string) {
   const ctx = docModalContext.value
   if (ctx?.kind === 'property') {
     setNodeScopedValue(ctx.propertyKey, fileId)
+    const modelId = state.value.modelId
+    const nodeId = selectedNode.value?.id ?? null
+    const notationId = activeNotationId.value
+    const componentId = nodeBindingComponentId.value
+    if (modelId && (nodeId ?? notationId ?? componentId)) {
+      const res = await apiPost<{ fileId: string; label: string }>('/documents', {
+        fileId,
+        modelId: modelId ?? undefined,
+        nodeId: nodeId ?? undefined,
+        notationId: notationId ?? undefined,
+        componentId: componentId ?? undefined
+      })
+      if (res.success) {
+        const existing = documentsFromApi.value.find((d) => d.fileId === res.data.fileId)
+        if (!existing) documentsFromApi.value = [...documentsFromApi.value, res.data]
+      }
+    }
     docModalContext.value = null
     showDocModal.value = false
     return
@@ -585,7 +602,34 @@ const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
     .map((d) => ({ id: d.id, label: `${d.name} ${d.version}` }))
 )
 
-const modelDocuments = computed<{ fileId: string; label: string }[]>(() => {
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isUuid(s: unknown): s is string {
+  return typeof s === 'string' && UUID_REGEX.test(s)
+}
+
+const documentsFromApi = ref<{ fileId: string; label: string }[]>([])
+async function fetchDocumentsFromApi() {
+  const modelId = state.value.modelId
+  if (!modelId) return
+  const params = new URLSearchParams()
+  params.set('modelId', modelId)
+  const notationId = activeNotationId.value
+  if (notationId) params.set('notationId', notationId)
+  const componentId = nodeBindingComponentId.value
+  if (componentId) params.set('componentId', componentId)
+  const nodeId = selectedNode.value?.id ?? null
+  if (nodeId) params.set('nodeId', nodeId)
+  const res = await apiGet<{ fileId: string; label: string }[]>(`/documents?${params.toString()}`)
+  if (res.success) documentsFromApi.value = res.data
+  else documentsFromApi.value = []
+}
+watch(
+  () => [state.value.modelId, activeNotationId.value, nodeBindingComponentId.value, selectedNode.value?.id],
+  () => { fetchDocumentsFromApi() },
+  { immediate: true }
+)
+
+function modelDocumentsInState(): { fileId: string; label: string }[] {
   const seen = new Set<string>()
   const list: { fileId: string; label: string }[] = []
   for (const node of state.value.nodes) {
@@ -594,6 +638,19 @@ const modelDocuments = computed<{ fileId: string; label: string }[]>(() => {
       seen.add(fileId)
       list.push({ fileId, label: `${node.name} (${t('diagram.nodeLabel')})` })
     }
+    const compProps = node.parsedAttrs.componentProperties
+    if (compProps && typeof compProps === 'object') {
+      for (const comp of Object.values(compProps) as Record<string, unknown>[]) {
+        if (comp && typeof comp === 'object') {
+          for (const val of Object.values(comp)) {
+            if (isUuid(val) && !seen.has(val)) {
+              seen.add(val)
+              list.push({ fileId: val, label: t('diagram.documentLabel') })
+            }
+          }
+        }
+      }
+    }
   }
   for (const diagram of state.value.diagrams) {
     if (diagram._isDeleted) continue
@@ -601,6 +658,23 @@ const modelDocuments = computed<{ fileId: string; label: string }[]>(() => {
     if (typeof fileId === 'string' && fileId && !seen.has(fileId)) {
       seen.add(fileId)
       list.push({ fileId, label: `${diagram.name} (${t('diagram.diagramLabel')})` })
+    }
+  }
+  return list
+}
+
+const modelDocuments = computed<{ fileId: string; label: string }[]>(() => {
+  const fromState = modelDocumentsInState()
+  const seen = new Set<string>()
+  const list: { fileId: string; label: string }[] = []
+  for (const item of fromState) {
+    seen.add(item.fileId)
+    list.push(item)
+  }
+  for (const item of documentsFromApi.value) {
+    if (!seen.has(item.fileId)) {
+      seen.add(item.fileId)
+      list.push(item)
     }
   }
   return list

@@ -75,6 +75,18 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
   }
   return raw
 }
+
+/** Returns null if no regex or invalid regex, true if value matches, false if not. */
+function regexTest(property: CustomProperty, value: string): boolean | null {
+  if (property.type !== 'string' || !property.regex?.trim()) return null
+  const val = (value ?? '').trim()
+  if (val === '') return null
+  try {
+    return new RegExp(property.regex).test(val)
+  } catch {
+    return null
+  }
+}
 </script>
 
 <template>
@@ -302,22 +314,30 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     {{ enumValue }}
                   </option>
                 </select>
-                <input
-                  v-else
-                  class="mp-input"
-                  :type="property.type === 'number' ? 'number' : 'text'"
-                  :placeholder="property.name"
-                  :readonly="readOnly"
-                  :value="String(nodeScopedValues[property.name] ?? '')"
-                  @input="
-                    !readOnly &&
-                      emit(
-                        'setNodeScopedValue',
-                        property.name,
-                        coerceValue(property, ($event.target as HTMLInputElement).value)
-                      )
-                  "
-                />
+                <div v-else class="mp-field__input-wrap">
+                  <input
+                    class="mp-input"
+                    :class="{ 'mp-input--error': property.type === 'string' && regexTest(property, String(nodeScopedValues[property.name] ?? '')) === false }"
+                    :type="property.type === 'number' ? 'number' : 'text'"
+                    :placeholder="property.name"
+                    :readonly="readOnly"
+                    :value="String(nodeScopedValues[property.name] ?? '')"
+                    @input="
+                      !readOnly &&
+                        emit(
+                          'setNodeScopedValue',
+                          property.name,
+                          coerceValue(property, ($event.target as HTMLInputElement).value)
+                        )
+                    "
+                  />
+                  <span
+                    v-if="property.type === 'string' && regexTest(property, String(nodeScopedValues[property.name] ?? '')) === false"
+                    class="mp-field__error"
+                  >
+                    {{ t('types.regexNoMatch') }}
+                  </span>
+                </div>
               </div>
             </div>
           </section>
@@ -406,22 +426,30 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
                     {{ enumValue }}
                   </option>
                 </select>
-                <input
-                  v-else
-                  class="mp-input"
-                  :type="property.type === 'number' ? 'number' : 'text'"
-                  :placeholder="property.name"
-                  :readonly="readOnly"
-                  :value="String(linkScopedValues[property.name] ?? '')"
-                  @input="
-                    !readOnly &&
-                      emit(
-                        'setLinkScopedValue',
-                        property.name,
-                        coerceValue(property, ($event.target as HTMLInputElement).value)
-                      )
-                  "
-                />
+                <div v-else class="mp-field__input-wrap">
+                  <input
+                    class="mp-input"
+                    :class="{ 'mp-input--error': property.type === 'string' && regexTest(property, String(linkScopedValues[property.name] ?? '')) === false }"
+                    :type="property.type === 'number' ? 'number' : 'text'"
+                    :placeholder="property.name"
+                    :readonly="readOnly"
+                    :value="String(linkScopedValues[property.name] ?? '')"
+                    @input="
+                      !readOnly &&
+                        emit(
+                          'setLinkScopedValue',
+                          property.name,
+                          coerceValue(property, ($event.target as HTMLInputElement).value)
+                        )
+                    "
+                  />
+                  <span
+                    v-if="property.type === 'string' && regexTest(property, String(linkScopedValues[property.name] ?? '')) === false"
+                    class="mp-field__error"
+                  >
+                    {{ t('types.regexNoMatch') }}
+                  </span>
+                </div>
               </div>
             </div>
           </section>
@@ -600,6 +628,21 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
 .mp-field__label {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.mp-field__input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mp-input--error {
+  border-color: var(--danger);
+}
+
+.mp-field__error {
+  font-size: 11px;
+  color: var(--danger);
 }
 
 .mp-doc-pick {

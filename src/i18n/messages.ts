@@ -111,7 +111,9 @@ export const messages = {
       zoomReset: 'Масштаб 1:1',
       errorSave: 'Ошибка сохранения',
       errorDelete: 'Ошибка удаления',
-      outlineHint: 'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек).',
+      outlineHint: 'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
+      convertToBezier: 'В кривую Безье',
+      convertToLine: 'В линию',
     },
     auth: {
       cardSubtitle: 'Архитектурный репозиторий',
@@ -751,7 +753,9 @@ export const messages = {
       zoomReset: 'Reset zoom 1:1',
       errorSave: 'Save failed',
       errorDelete: 'Delete failed',
-      outlineHint: 'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points).',
+      outlineHint: 'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
+      convertToBezier: 'Convert to Bezier',
+      convertToLine: 'Convert to line',
     },
     auth: {
       cardSubtitle: 'Architecture repository',

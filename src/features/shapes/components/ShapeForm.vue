@@ -4,7 +4,7 @@ import type { NodeShapeResponse } from "../../../types/api"
 import type { OutlineSegment } from "../../notations/notationAttrs"
 import CustomOutlineEditor from "../CustomOutlineEditor.vue"
 
-const props = defineProps<{
+defineProps<{
   selectedShape: NodeShapeResponse | null
   name: string
   outline: OutlineSegment[]

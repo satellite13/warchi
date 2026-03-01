@@ -8,6 +8,7 @@ import RelationRulesSection from './RelationRulesSection.vue'
 import type { CustomProperty, CustomPropertyType } from '../notationAttrs'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 import { useCustomProperties } from '../composables/useCustomProperties'
+import { INTERACTIVE_BADGE_ICONS } from '@/config/interactiveBadgeIcons'
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null
@@ -29,6 +30,9 @@ const props = defineProps<{
 }>()
 
 const selectedItemComputed = computed(() => props.selectedItem)
+const isComponent = computed(
+  () => props.selectedItem != null && 'nodeTypeId' in props.selectedItem
+)
 const { t } = useI18n()
 
 const { addCustomProperty, addCustomPropertyFromType, removeCustomProperty, propertyErrors } =
@@ -422,6 +426,8 @@ onBeforeUnmount(() => {
             :errors="propertyErrors(property)"
             :from-type="property._fromType"
             :is-equivalent-to-type="isEquivalentToTypeProperty(property)"
+            :show-interactive-options="isComponent"
+            :interactive-icon-options="INTERACTIVE_BADGE_ICONS"
             @toggle="toggleCollapse(property.id)"
             @remove="removeCustomProperty(property.id)"
           />

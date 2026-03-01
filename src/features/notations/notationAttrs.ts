@@ -1,5 +1,7 @@
 export type CustomPropertyType = 'string' | 'number' | 'boolean' | 'enum'
 
+export type InteractiveKind = 'url' | 'diagram' | 'document'
+
 export type CustomProperty = {
   id: string
   name: string
@@ -14,6 +16,12 @@ export type CustomProperty = {
   defaultValue?: string | number | boolean
   enumDefault?: string
   _fromType?: boolean
+  /** Show as clickable badge on diagram when value is set */
+  interactive?: boolean
+  /** Action when badge is clicked */
+  interactiveKind?: InteractiveKind
+  /** Material symbol name for badge icon */
+  interactiveIcon?: string
 }
 
 // Custom node shape outline (normalized coordinates 0–1)
@@ -168,6 +176,17 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
       defaultValue = enumDefaultRaw
     }
 
+    const interactiveKindRaw = record.interactiveKind
+    const interactiveKind: InteractiveKind | undefined =
+      interactiveKindRaw === 'url' || interactiveKindRaw === 'diagram' || interactiveKindRaw === 'document'
+        ? interactiveKindRaw
+        : undefined
+    const interactiveIconRaw = record.interactiveIcon
+    const interactiveIcon =
+      typeof interactiveIconRaw === 'string' && interactiveIconRaw.trim().length > 0
+        ? interactiveIconRaw.trim()
+        : undefined
+
     return {
       id: typeof record.id === 'string' ? record.id : createId(),
       name: typeof record.name === 'string' ? record.name : '',
@@ -184,6 +203,9 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
       defaultValue,
       enumDefault:
         type === 'enum' && typeof defaultValue === 'string' ? defaultValue : enumDefaultRaw,
+      interactive: Boolean(record.interactive),
+      interactiveKind,
+      interactiveIcon,
     }
   })
 }

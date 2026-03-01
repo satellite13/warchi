@@ -10,7 +10,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext .vue,.ts,.tsx --cache",
-    "lint:fix": "eslint src --ext .vue,.ts,.tsx --fix"
+    "lint:fix": "eslint src --ext .vue,.ts,.tsx --fix",
+    "generate:badge-icon-names": "node scripts/generate-material-icon-names.mjs",
+    "copy:badge-icons": "node scripts/copy-material-badge-icons.mjs",
+    "prepare:badge-icons": "npm run generate:badge-icon-names && npm run copy:badge-icons"
   },
   "dependencies": {
     "@ckpack/vue-color": "^1.6.0",
@@ -24,6 +27,7 @@
     "vue-router": "^5.0.3"
   },
   "devDependencies": {
+    "@material-design-icons/svg": "^0.14.15",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.3.1",
     "@vitejs/plugin-vue": "^6.0.4",

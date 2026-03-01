@@ -33,7 +33,12 @@ import {
   parseEntityAttrs,
   type CustomProperty,
   type DiagramStyle,
+  type InteractiveKind,
 } from '../../notations/notationAttrs'
+import {
+  DEFAULT_INTERACTIVE_BADGE_ICON,
+  getInteractiveBadgeIconIds,
+} from '@/config/interactiveBadgeIcons'
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 
@@ -75,6 +80,8 @@ const props = withDefaults(
     relationRules: () => [],
     autoLinkInGroups: true,
     readOnly: false,
+    selectedEdgeInstanceId: null,
+    selectedInstanceIds: () => [],
   }
 )
 
@@ -110,6 +117,8 @@ const emit = defineEmits<{
   ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
+  openDiagram: [diagramId: string]
+  openDocument: [fileId: string]
   requestDeleteNodeFromDiagram: [instanceId: string]
   requestEditNote: [instanceId: string]
   requestDeleteLink: [modelLinkId: string, edgeInstanceId?: string]
@@ -822,6 +831,43 @@ function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[]
   return parseEntityAttrs(component.attrs ?? null).customProperties
 }
 
+function buildInteractiveBadgeIconUrl(materialIconName: string): string {
+  const allowed = getInteractiveBadgeIconIds()
+  const name = allowed.includes(materialIconName) ? materialIconName : DEFAULT_INTERACTIVE_BADGE_ICON
+  return `/icons/${name}.svg`
+}
+
+function isInteractivePropertyValueFilled(prop: CustomProperty, value: unknown): boolean {
+  if (value === undefined || value === null) return false
+  if (prop.type === 'string') return typeof value === 'string' && value.trim().length > 0
+  if (prop.type === 'number') return typeof value === 'number' && Number.isFinite(value)
+  if (prop.type === 'boolean') return typeof value === 'boolean'
+  if (prop.type === 'enum') return typeof value === 'string' && value.length > 0
+  return false
+}
+
+function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{ id: string; iconUrl: string }> {
+  const node = nodeById.value.get(instance.modelNodeId)
+  const notationId = activeNotationId.value
+  if (!node || !notationId) return []
+  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (!componentId) return []
+  const component = props.components.find(c => c.id === componentId)
+  if (!component) return []
+  const customProperties = parseEntityAttrs(component.attrs ?? null).customProperties
+  const scopedValues = getNodeScopedPropertyValues(instance.modelNodeId)
+  const result: Array<{ id: string; iconUrl: string }> = []
+  for (const prop of customProperties) {
+    if (!prop.interactive) continue
+    if (!isInteractivePropertyValueFilled(prop, scopedValues[prop.id] ?? scopedValues[prop.name])) continue
+    result.push({
+      id: prop.id,
+      iconUrl: buildInteractiveBadgeIconUrl(prop.interactiveIcon ?? DEFAULT_INTERACTIVE_BADGE_ICON),
+    })
+  }
+  return result
+}
+
 function resolveLabelTemplate(
   template: string,
   name: string,
@@ -986,6 +1032,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     anchorPoints: resolveAnchorPoints(ds),
     contentInset: (ds?.contentInset ?? 0) as unknown as number,
     ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
+    badges: getInteractiveBadgesForInstance(instance),
   }
 
   const stickyNoteFactory = diagramShapeFactories['sticky-note']
@@ -1106,6 +1153,8 @@ function syncDiagram() {
         existing.cornerRadius = visual.cornerRadius
       }
       existing.icon = buildNodeIcon(ds)
+      ;(existing as DiagramNode & { badges: Array<{ id: string; iconUrl: string }> }).badges =
+        getInteractiveBadgesForInstance(instance)
       existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
       if (ds?.labelPlacement) {
         ;(existing as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
@@ -1668,6 +1717,35 @@ function initRenderer(r: DiagramRenderer) {
   }
 
   emit('canvasContextChange', { renderer: r, interactionManager })
+
+  ;(r as { on(event: 'nodeBadgeClick', cb: (nodeId: string, badgeId: string) => void): void }).on(
+    'nodeBadgeClick',
+    (papNodeId: string, badgeId: string) => {
+    const entity = nodeIdToInstance.get(papNodeId)
+    if (!entity) return
+    const node = nodeById.value.get(entity.modelNodeId)
+    const notationId = activeNotationId.value
+    if (!node || !notationId) return
+    const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+    if (!componentId) return
+    const component = props.components.find(c => c.id === componentId)
+    if (!component) return
+    const customProperties = parseEntityAttrs(component.attrs ?? null).customProperties
+    const prop = customProperties.find(p => p.id === badgeId)
+    if (!prop || !prop.interactive) return
+    const scopedValues = getNodeScopedPropertyValues(entity.modelNodeId)
+    const value = scopedValues[prop.id] ?? scopedValues[prop.name]
+    if (value === undefined || value === null) return
+    const kind: InteractiveKind = prop.interactiveKind ?? 'url'
+    if (kind === 'url') {
+      window.open(String(value), '_blank')
+    } else if (kind === 'diagram') {
+      emit('openDiagram', String(value))
+    } else if (kind === 'document') {
+      emit('openDocument', String(value))
+    }
+  }
+  )
 
   // Selection and other interaction events (only when not read-only)
   if (interactionManager) {

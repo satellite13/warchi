@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue"
+import { computed, reactive, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { parseNumberInput } from "@/utils/number"
-import type { CustomProperty, CustomPropertyType } from "../../notations/notationAttrs"
+import type { CustomProperty, CustomPropertyType, InteractiveKind } from "../../notations/notationAttrs"
 
 const props = withDefaults(defineProps<{
   property: CustomProperty
@@ -12,10 +12,14 @@ const props = withDefaults(defineProps<{
   errors?: string[]
   fromType?: boolean
   isEquivalentToType?: boolean
+  showInteractiveOptions?: boolean
+  interactiveIconOptions?: { id: string; label: string }[]
 }>(), {
   onMutateProperty: undefined,
   errors: () => [] as string[],
-  size: "default"
+  size: "default",
+  showInteractiveOptions: false,
+  interactiveIconOptions: () => [],
 })
 
 const emit = defineEmits<{
@@ -31,14 +35,42 @@ const typeOptions: { value: CustomPropertyType; label: string }[] = [
   { value: "enum", label: t("types.propertyTypeEnum") }
 ]
 
+const interactiveKindOptions: { value: InteractiveKind; label: string }[] = [
+  { value: "url", label: t("types.actionTypeUrl") },
+  { value: "diagram", label: t("types.actionTypeDiagram") },
+  { value: "document", label: t("types.actionTypeDocument") },
+]
+
 const typeLabel = (type: CustomPropertyType) =>
   typeOptions.find((o) => o.value === type)?.label ?? type
 
+/** Default regex for URL validation when interactive kind is "url". */
+const DEFAULT_URL_REGEX = '^https?:\\/\\/\\S+$'
+
 const handleTypeChange = (value: string) => {
   props.onMutateProperty?.((p) => {
-    p.type = value as CustomPropertyType
+    const nextType = value as CustomPropertyType
+    p.type = nextType
     p.defaultValue = undefined
     p.enumDefault = undefined
+    if (nextType !== 'string' && p.interactive) {
+      p.interactive = false
+      p.interactiveKind = undefined
+      p.interactiveIcon = undefined
+    }
+  })
+}
+
+const handleInteractiveKindChange = (value: string) => {
+  const kind = (value || undefined) as InteractiveKind | undefined
+  props.onMutateProperty?.((p) => {
+    p.interactiveKind = kind
+    if (kind === 'url' || kind === 'diagram' || kind === 'document') {
+      p.type = 'string'
+      if (kind === 'url') {
+        p.regex = p.regex ?? DEFAULT_URL_REGEX
+      }
+    }
   })
 }
 
@@ -103,6 +135,47 @@ const inputClass = computed(() => isSm.value ? "form-input form-input--sm" : "fo
 const inputNumClass = computed(() => isSm.value ? "form-input form-input--sm form-input--num" : "form-input form-input--num")
 const selectClass = computed(() => isSm.value ? "form-select form-select--sm" : "form-select")
 const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToType)
+
+// Icon combobox: search when there are many options
+const iconSearchQuery = ref('')
+const iconDropdownOpen = ref(false)
+const ICON_DROPDOWN_MAX = 150
+
+const filteredIconOptions = computed(() => {
+  const opts = props.interactiveIconOptions ?? []
+  const q = iconSearchQuery.value.trim().toLowerCase()
+  if (!q) return opts.slice(0, ICON_DROPDOWN_MAX)
+  return opts.filter(
+    (o) => o.id.toLowerCase().includes(q) || o.label.toLowerCase().includes(q)
+  ).slice(0, ICON_DROPDOWN_MAX)
+})
+
+const selectedIconLabel = computed(() => {
+  const id = props.property.interactiveIcon
+  if (!id) return ''
+  return props.interactiveIconOptions?.find((o) => o.id === id)?.label ?? id
+})
+
+const showIconCombobox = computed(() => (props.interactiveIconOptions?.length ?? 0) > 50)
+
+function openIconDropdown() {
+  iconDropdownOpen.value = true
+  iconSearchQuery.value = ''
+}
+
+function selectIcon(id: string) {
+  props.onMutateProperty?.((p) => { p.interactiveIcon = id || undefined })
+  iconDropdownOpen.value = false
+  iconSearchQuery.value = ''
+}
+
+function closeIconDropdown() {
+  iconDropdownOpen.value = false
+}
+
+function handleIconBlur() {
+  setTimeout(closeIconDropdown, 150)
+}
 </script>
 
 <template>
@@ -279,6 +352,77 @@ const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToT
             <option v-for="val in property.enumValues" :key="val" :value="val">{{ val }}</option>
           </select>
         </div>
+        <div v-if="showInteractiveOptions" class="property-row__extra property-row__interactive">
+          <label class="property-checkbox">
+            <input
+              type="checkbox"
+              :checked="property.interactive"
+              @change="onMutateProperty?.((p) => { p.interactive = ($event.target as HTMLInputElement).checked })"
+            >
+            <span class="property-checkbox__label">{{ t("types.interactiveOnDiagram") }}</span>
+          </label>
+          <template v-if="property.interactive">
+            <span class="property-row__label">{{ t("types.actionType") }}</span>
+            <select
+              :class="selectClass"
+              :value="property.interactiveKind ?? ''"
+              @change="handleInteractiveKindChange(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">{{ t("common.none") }}</option>
+              <option v-for="opt in interactiveKindOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <span class="property-row__label">{{ t("types.icon") }}</span>
+            <div v-if="showIconCombobox" class="property-row__icon-combobox">
+              <input
+                :class="inputClass"
+                type="text"
+                :placeholder="t('types.iconSearchPlaceholder')"
+                :value="iconDropdownOpen ? iconSearchQuery : selectedIconLabel"
+                autocomplete="off"
+                @focus="openIconDropdown"
+                @input="iconSearchQuery = ($event.target as HTMLInputElement).value"
+                @blur="handleIconBlur"
+              >
+              <div
+                v-show="iconDropdownOpen"
+                class="property-row__icon-dropdown"
+                @mousedown.prevent
+              >
+                <button
+                  type="button"
+                  class="property-row__icon-option property-row__icon-option--none"
+                  @mousedown="selectIcon('')"
+                >
+                  {{ t("common.none") }}
+                </button>
+                <button
+                  v-for="opt in filteredIconOptions"
+                  :key="opt.id"
+                  type="button"
+                  class="property-row__icon-option"
+                  @mousedown="selectIcon(opt.id)"
+                >
+                  <span class="material-symbols-outlined property-row__icon-option-icon">{{ opt.id }}</span>
+                  {{ opt.label }}
+                </button>
+              </div>
+            </div>
+            <select
+              v-else
+              :class="selectClass"
+              :value="property.interactiveIcon ?? ''"
+              @change="onMutateProperty?.((p) => { p.interactiveIcon = (($event.target as HTMLSelectElement).value || undefined) })"
+            >
+              <option value="">{{ t("common.none") }}</option>
+              <option v-for="opt in interactiveIconOptions" :key="opt.id" :value="opt.id">
+                {{ opt.label }}
+              </option>
+            </select>
+            <span v-if="property.interactiveIcon" class="property-row__icon-preview">
+              <span class="material-symbols-outlined">{{ property.interactiveIcon }}</span>
+            </span>
+          </template>
+        </div>
         <div v-if="errors === undefined && isRequiredDefaultMissing()" class="property-row__warning">
           {{ t("types.requiredNeedsDefault") }}
         </div>
@@ -416,6 +560,68 @@ const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToT
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.property-row__interactive {
+  flex-wrap: wrap;
+}
+
+.property-row__icon-combobox {
+  position: relative;
+  min-width: 140px;
+}
+
+.property-row__icon-combobox input {
+  width: 100%;
+}
+
+.property-row__icon-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+}
+
+.property-row__icon-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--base-text);
+}
+
+.property-row__icon-option:hover {
+  background: var(--surface-muted);
+}
+
+.property-row__icon-option--none {
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.property-row__icon-option-icon {
+  font-size: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.property-row__icon-preview .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--text-muted);
 }
 
 .property-row__label {

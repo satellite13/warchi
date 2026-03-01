@@ -36,7 +36,7 @@ flowchart LR
 ```
 
 1. **Схема (нотация)**: расширить `CustomProperty` полями «интерактивное», тип действия, иконка.
-2. **UI редактора компонентов**: в [CustomPropertiesPanel.vue](src/features/notations/components/CustomPropertiesPanel.vue) для каждого свойства — чекбокс «Показывать на диаграмме как кнопку», выбор типа действия (URL, диаграмма, документ и т.д.), выбор иконки (список/селект из Material или `/icons/`).
+2. **UI редактора компонентов**: в [CustomPropertiesPanel.vue](src/features/notations/components/CustomPropertiesPanel.vue) для каждого свойства — чекбокс «Показывать на диаграмме как кнопку», выбор типа действия (URL, диаграмма, документ и т.д.), выбор иконки — Material Symbols (см. п. 6).
 3. **Papirus**: в базовый `Node` добавить опциональные `badges: Array<{ id: string; iconUrl: string }>`, отрисовка в левом верхнем углу (несколько иконок в ряд), метод `getBadgeAtPoint(point): { id: string; index: number } | null`, в `hitTest` не учитывать бейджи (клик по бейджу обрабатывается отдельно). В `SelectionManager.handleClick`: если под точкой узел и `node.getBadgeAtPoint(point)` не null — вызвать `renderer.emit('nodeBadgeClick', node.id, badge.id)` и выйти без смены выделения. Добавить событие `nodeBadgeClick` в `DiagramEvents`.
 4. **warchi**: в `createInstanceNode` для каждого интерактивного свойства компонента, у которого у данного узла заполнено значение, добавить в `badges` элемент с `id: property.id`, `iconUrl` из свойства или дефолт; при синхронизации узла обновлять `node.badges`. Подписаться на `renderer.on('nodeBadgeClick', (nodeId, badgeId) => ...)`: по `nodeId` взять instanceId/modelNodeId, по badgeId — property id, взять значение из `componentProperties`, выполнить действие в зависимости от `interactiveKind` (открыть URL в новой вкладке, переход на диаграмму по id, открыть документ и т.д.).
 
@@ -49,8 +49,9 @@ flowchart LR
 - В тип `CustomProperty` добавить опциональные поля:
   - `interactive?: boolean`
   - `interactiveKind?: 'url' | 'diagram' | 'document'` (или строковый union для расширяемости)
-  - `interactiveIcon?: string` (имя иконки из `/icons/`, например `link`, `open_in_new`, `description`)
-- В `normalizeCustomProperties` и в `serializeEntityAttrs` (через `stripInternalFlags` не трогать эти поля) читать/писать эти поля.
+  - `interactiveIcon?: string` (имя символа Material Symbols Outlined, например `link`, `open_in_new`, `description` — см. п. 6)
+- В **normalizeCustomProperties**: в объект, возвращаемый для каждого свойства, явно добавить чтение из `record` полей `interactive`, `interactiveKind`, `interactiveIcon` (с приведением типов и дефолтами), иначе при загрузке старых/внешних данных эти поля не появятся после парсинга attrs.
+- В `serializeEntityAttrs` через `stripInternalFlags` эти поля не трогать (убирается только `_fromType`).
 
 ### 2. UI в редакторе компонентов (warchi)
 
@@ -58,7 +59,7 @@ flowchart LR
 
 - В строке свойства (или в раскрывающихся опциях свойства) добавить:
   - Чекбокс «Интерактивное на диаграмме» → `interactive: true/false`.
-  - При `interactive === true`: выбор типа действия (select: url / diagram / document) → `interactiveKind`, выбор иконки (select по списку имён из `/public/icons/` или фиксированный набор) → `interactiveIcon`.
+  - При `interactive === true`: выбор типа действия (select: url / diagram / document) → `interactiveKind`, выбор иконки (select по списку имён Material Symbols, см. п. 6) → `interactiveIcon`.
 - i18n: ключи для «Интерактивное», «Тип действия», «Иконка», варианты URL / Диаграмма / Документ.
 
 ### 3. Papirus: бейджи на узле
@@ -84,24 +85,34 @@ flowchart LR
   - взять modelNodeId, component по привязке нотации;
   - из `parseEntityAttrs(component.attrs)` взять `customProperties`;
   - из `getNodeScopedPropertyValues(modelNodeId)` взять значения;
-  - для каждого свойства, у которого `interactive === true` и значение не пустое (строка/число — в зависимости от типа), добавить в массив `{ id: property.id, iconUrl: buildIconUrl(property.interactiveIcon ?? 'link') }`.
-- В `createInstanceNode(instance)` в `commonOptions` (или в опции, которые Papirus уже поддерживает для узла) передавать `badges: getInteractiveBadgesForInstance(instance)`.
-- В `syncDiagram` при обновлении существующего узла (in-place) выставлять `existing.badges = getInteractiveBadgesForInstance(instance)` (если в Papirus у Node есть setter `badges`).
+  - для каждого свойства, у которого `interactive === true` и значение не пустое (строка/число — в зависимости от типа), добавить в массив `{ id: property.id, iconUrl: buildInteractiveBadgeIconUrl(property.interactiveIcon ?? 'link') }` (см. п. 6).
+- В `createInstanceNode(instance)` в `commonOptions` передавать `badges: getInteractiveBadgesForInstance(instance)`.
+- В **syncDiagram** в блоке обновления существующего узла in-place (рядом с `existing.icon = buildNodeIcon(ds)`) добавить: `existing.badges = getInteractiveBadgesForInstance(instance)` (при условии, что в Papirus у Node реализован setter `badges`).
+- Ввести два новых эмита ModelDiagramCanvas: `openDiagram: [diagramId: string]` и `openDocument: [fileId: string]`.
 - При инициализации рендерера подписаться на `renderer.on('nodeBadgeClick', (nodeId, badgeId) => { ... })`:
   - по `nodeId` из `nodeIdToInstance` получить `modelNodeId` и `instanceId`;
   - по компоненту узла и `badgeId` найти свойство в `customProperties`, получить `interactiveKind` и значение из `componentProperties`;
   - выполнить действие:
     - `url`: `window.open(value, '_blank')` (значение — строка URL);
-    - `diagram`: переход на диаграмму (например, эмит в родителя или `router.push` с id диаграммы/модели — уточнить формат хранения id диаграммы в значении);
-    - `document`: открыть документ (аналогично существующей логике `documentFileId` / DocumentEditorModal).
+    - `diagram`: `emit('openDiagram', value)` — значение есть id диаграммы (UUID) в рамках текущей модели;
+    - `document`: `emit('openDocument', value)` — значение есть UUID файла документа.
+- В **ModelEditor**: подписаться на `@open-diagram` и вызывать `selectDiagram(diagramId)` (переключение на эту диаграмму в текущей модели); подписаться на `@open-document` и открывать DocumentEditorModal с переданным `fileId` (при открытии по бейджу `docModalTarget` не устанавливать — только просмотр/редактирование файла по ID без привязки к узлу).
 
 ### 5. Действия по типам (уточнение)
 
-- **url**: значение свойства — строка URL; открыть в новой вкладке.
-- **diagram**: значение — id диаграммы (или модели + id диаграммы). В приложении переход к редактированию этой диаграммы (текущий контекст — модель; нужен роут/эмит для перехода на диаграмму по id).
-- **document**: значение — UUID файла документа; открыть модальное окно документа (как для узла/диаграммы с `documentFileId`).
+- **url**: значение свойства — строка URL; открыть в новой вкладке (`window.open(value, '_blank')`).
+- **diagram**: значение — id диаграммы (UUID) в рамках текущей модели. ModelDiagramCanvas эмитит `openDiagram(diagramId)`; ModelEditor обрабатывает и вызывает `selectDiagram(diagramId)` (диаграмма выбирается в дереве, при необходимости переключить вкладку на канвас).
+- **document**: значение — UUID файла документа. ModelDiagramCanvas эмитит `openDocument(fileId)`; ModelEditor открывает DocumentEditorModal с этим `fileId`. При открытии по бейджу привязку к узлу не сохраняем (`docModalTarget = null`) — только просмотр/редактирование файла по ID.
 
-Иконки: использовать существующие в `/public/icons/` (например `link`, `open_in_new`) или Material Symbols; в плане — единый механизм `buildIconUrl(iconName)` как для палитры.
+### 6. Иконки для интерактивных свойств — Material Symbols
+
+Иконки берём из **Material Symbols Outlined** (как в остальном UI приложения: `material-symbols-outlined`, см. CustomPropertiesPanel, ModelEditor и др.).
+
+- **Хранение**: в `interactiveIcon` хранится имя символа (например `link`, `open_in_new`, `description`, `article`).
+- **UI в CustomPropertiesPanel**: селект с фиксированным списком имён Material Symbols (конфиг по аналогии с [material-palette-icon-plan.md](material-palette-icon-plan.md) — массив имён для выбора). Превью в селекте: `<span class="material-symbols-outlined">{{ iconName }}</span>`.
+- **Отрисовка бейджей на канвасе (Papirus)**: у Node бейдж принимает `iconUrl: string`. В warchi нужна функция `buildInteractiveBadgeIconUrl(materialIconName: string): string`, возвращающая URL картинки для отрисовки. Варианты реализации: (a) подмножество Material-символов экспортировать в SVG и положить в `/public/icons/` (например `link.svg`, `open_in_new.svg`, `description.svg`) — тогда URL = `/icons/${materialIconName}.svg`; (b) в warchi по имени символа формировать data URL (рендер символа шрифтом Material в offscreen canvas, затем toDataURL). Рекомендация для первой итерации: вариант (a) — добавить в `/public/icons/` SVG для выбранного набора символов (совпадающие по начертанию с Material или экспорт из Material Icons).
+
+- **Скрипт подстановки официальных Material SVG**: чтобы иконки в настройках (Material Symbols) и на диаграмме (SVG из `public/icons/`) совпадали, в проекте есть скрипт, копирующий официальные SVG из пакета `@material-design-icons/svg` (стиль outlined) в `public/icons/`. Список имён совпадает с [INTERACTIVE_BADGE_ICONS](src/config/interactiveBadgeIcons.ts). Запуск: `npm run copy:badge-icons` (перед этим нужна установка: `npm install` с devDependency `@material-design-icons/svg`). Файл скрипта: [scripts/copy-material-badge-icons.mjs](scripts/copy-material-badge-icons.mjs). При добавлении новой иконки в конфиг нужно добавить её id в массив `BADGE_ICON_IDS` в этом скрипте и перезапустить `copy:badge-icons`.
 
 ## Порядок работ
 
@@ -114,4 +125,4 @@ flowchart LR
 ## Риски и упрощения
 
 - **Papirus**: если не хочется трогать ядро, альтернатива — рисовать «бейджи» в warchi поверх канваса (HTML-слой с позиционированием по worldToScreen и обновлением при pan/zoom). Это усложнит синхронизацию и скролл. Рекомендация: реализовать бейджи в Node в Papirus для единообразия и корректного hit-test.
-- Переход на диаграмму: если в модели нет явного «id диаграммы» в одном поле, можно договориться, что значение интерактивного свойства типа diagram хранит id диаграммы (UUID или составной ключ); в первом варианте достаточно перейти на маршрут редактора модели с открытой этой диаграммой.
+- Переход на диаграмму: id диаграммы в модели есть (UUID). Значение интерактивного свойства типа `diagram` хранит этот id; по клику вызывается `selectDiagram(diagramId)` — переключение на нужную диаграмму в текущей модели.

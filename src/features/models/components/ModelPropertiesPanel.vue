@@ -16,10 +16,19 @@ const props = withDefaults(
     availableRelations: RelationResponse[]
     nodeScopedValues: Record<string, unknown>
     linkScopedValues: Record<string, unknown>
+    /** Diagrams for interactive property "diagram" (id + label with name and version) */
+    diagrams?: { id: string; label: string }[]
+    /** Documents already used in model for interactive property "document" */
+    modelDocuments?: { fileId: string; label: string }[]
     onOpenNodeDocument?: (node: EditorNode) => void
     readOnly?: boolean
   }>(),
-  { readOnly: false }
+  {
+    readOnly: false,
+    onOpenNodeDocument: undefined,
+    diagrams: () => [],
+    modelDocuments: () => [],
+  }
 )
 
 const emit = defineEmits<{
@@ -27,6 +36,7 @@ const emit = defineEmits<{
   bindLinkRelation: [relationId: string]
   setNodeScopedValue: [key: string, value: unknown]
   setLinkScopedValue: [key: string, value: unknown]
+  createDocumentForProperty: [propertyName: string]
 }>()
 const { t } = useI18n()
 
@@ -180,7 +190,66 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
             <div class="mp-fields">
               <div v-for="property in nodeProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
-                <div v-if="property.type === 'boolean'" class="mp-toggle">
+                <select
+                  v-if="
+                    property.interactive &&
+                    property.interactiveKind === 'diagram' &&
+                    property.type === 'string' &&
+                    diagrams.length > 0
+                  "
+                  class="mp-select"
+                  :disabled="readOnly"
+                  :value="String(nodeScopedValues[property.name] ?? '')"
+                  @change="
+                    !readOnly &&
+                      emit('setNodeScopedValue', property.name, ($event.target as HTMLSelectElement).value)
+                  "
+                >
+                  <option value="">{{ t('diagram.selectDiagram') }}</option>
+                  <option
+                    v-for="d in diagrams"
+                    :key="d.id"
+                    :value="d.id"
+                  >
+                    {{ d.label }}
+                  </option>
+                </select>
+                <div
+                  v-else-if="
+                    property.interactive &&
+                    property.interactiveKind === 'document' &&
+                    property.type === 'string'
+                  "
+                  class="mp-doc-pick"
+                >
+                  <select
+                    class="mp-select mp-doc-pick__select"
+                    :disabled="readOnly"
+                    :value="String(nodeScopedValues[property.name] ?? '')"
+                    @change="
+                      !readOnly &&
+                        emit('setNodeScopedValue', property.name, ($event.target as HTMLSelectElement).value)
+                    "
+                  >
+                    <option value="">{{ t('diagram.selectDocument') }}</option>
+                    <option
+                      v-for="doc in modelDocuments"
+                      :key="doc.fileId"
+                      :value="doc.fileId"
+                    >
+                      {{ doc.label }}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    class="mp-btn mp-btn--small mp-doc-pick__btn"
+                    :disabled="readOnly"
+                    @click="emit('createDocumentForProperty', property.name)"
+                  >
+                    {{ t('diagram.newDocument') }}
+                  </button>
+                </div>
+                <div v-else-if="property.type === 'boolean'" class="mp-toggle">
                   <button
                     type="button"
                     class="mp-toggle__track"
@@ -531,6 +600,49 @@ const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): 
 .mp-field__label {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.mp-doc-pick {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mp-doc-pick__select {
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-doc-pick__btn {
+  flex-shrink: 0;
+}
+
+.mp-btn {
+  height: var(--mp-h);
+  padding: 0 10px;
+  border-radius: var(--mp-radius);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mp-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mp-btn--small {
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 /* ---- Toggle switch (replaces checkbox) ---- */

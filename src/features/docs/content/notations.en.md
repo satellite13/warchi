@@ -131,6 +131,37 @@ If a link type has the `group=true` system property, that link is treated as a g
    - for **component types** — to enable container behavior;
    - for **link types** — to mark a relation as grouping.
 
+### Interactive Properties on the Diagram
+
+For **component** properties you can enable **“Interactive on diagram”**. Then, for nodes that have a value for this property, a small icon button appears in the top-left corner of the node on the diagram; clicking it performs an action depending on the chosen type. For any interactive property (URL, Diagram, Document) the property type must be **"string"**; when you choose an action type, the type is set automatically if needed.
+
+#### Action Types and What to Enter
+
+| Action type | What to enter as the property value | Example | What happens on click |
+|-------------|-------------------------------------|---------|------------------------|
+| **URL** | Web page address | `https://wiki.example.com/ServiceA` | Opens in a new browser tab |
+| **Diagram** | Diagram ID (UUID) within the current model | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` | Editor switches to that diagram (selection in the tree on the left) |
+| **Document** | Document file ID (UUID) | `f0e1d2c3-b4a5-9876-5432-10fedcba0987` | Opens the document viewer/editor for that file |
+
+#### Filling Values in the Model Editor
+
+In the model editor, for **Diagram** and **Document** types a dropdown is available instead of typing a UUID: you select a diagram by name and version, or a document from those already attached in the model (to nodes or diagrams). For **Document** there is a **"New document"** button: an empty document is created in storage and its ID is set as the property value. For **URL** you enter the address in a text field; in the notation editor you can set the property's "Regex" field to validate the URL format (a default pattern is suggested when you choose the URL action type).
+
+#### How to Get the IDs (if needed manually)
+
+- **Diagram**: Each diagram in the model tree has a unique UUID. You can copy it when dragging a diagram (the clipboard gets text like `diagram:<uuid>` — use the part after `diagram:`), or from model export/API.
+- **Document**: When you attach a document to a node or diagram, the system stores the file ID. Use that same ID in an interactive property of type “Document” if you want the badge to open that file. The file ID is returned when saving a document or when selecting an existing file in the model editor.
+
+#### Setup in the Notation Editor
+
+1. Open the notation component and the desired custom property.
+2. Enable **“Interactive on diagram”**.
+3. Choose the **action type**: URL, Diagram, or Document.
+4. Choose the **icon** for the diagram button (link, open_in_new, description, article, etc.).
+5. Save the notation.
+
+In the model editor, when this property is filled for a node, the corresponding icon appears on the diagram; clicking it performs the chosen action.
+
 ### Label Templates
 
 For notation components you can set a composite label template that defines what text is displayed on the diagram node.

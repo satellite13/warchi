@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SketchColorField from "./SketchColorField.vue";
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     modelValue: string;
     alphaValue: number;

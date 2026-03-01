@@ -68,6 +68,8 @@ const showDocModal = ref(false)
 const docModalTitle = ref('')
 const docModalFileId = ref<string | null>(null)
 const docModalTarget = ref<{ kind: 'model' | 'node' | 'diagram'; id: string } | null>(null)
+/** When opening doc modal for "new document for interactive property", set this; handleDocSaved will set the property value. */
+const docModalContext = ref<{ kind: 'property'; propertyKey: string } | null>(null)
 
 function getModelDocFileId(): string | null {
   const raw = model.value?.attrs
@@ -120,7 +122,30 @@ function handleOpenDiagramDoc() {
   showDocModal.value = true
 }
 
+function handleOpenDocumentFromBadge(fileId: string) {
+  docModalTarget.value = null
+  docModalContext.value = null
+  docModalTitle.value = ''
+  docModalFileId.value = fileId
+  showDocModal.value = true
+}
+
+function handleCreateDocumentForProperty(propertyName: string) {
+  docModalTarget.value = null
+  docModalContext.value = { kind: 'property', propertyKey: propertyName }
+  docModalTitle.value = ''
+  docModalFileId.value = null
+  showDocModal.value = true
+}
+
 function handleDocSaved(fileId: string) {
+  const ctx = docModalContext.value
+  if (ctx?.kind === 'property') {
+    setNodeScopedValue(ctx.propertyKey, fileId)
+    docModalContext.value = null
+    showDocModal.value = false
+    return
+  }
   const target = docModalTarget.value
   if (!target) return
 
@@ -144,6 +169,7 @@ function handleDocSaved(fileId: string) {
 function handleDocModalClose() {
   showDocModal.value = false
   docModalTarget.value = null
+  docModalContext.value = null
 }
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
@@ -551,6 +577,33 @@ const nodeScopedValues = computed<Record<string, unknown>>(() => {
   const node = selectedNode.value
   if (!notationId || !componentId || !node) return {}
   return node.parsedAttrs.componentProperties[notationId]?.[componentId] ?? {}
+})
+
+const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
+  state.value.diagrams
+    .filter((d) => !d._isDeleted)
+    .map((d) => ({ id: d.id, label: `${d.name} ${d.version}` }))
+)
+
+const modelDocuments = computed<{ fileId: string; label: string }[]>(() => {
+  const seen = new Set<string>()
+  const list: { fileId: string; label: string }[] = []
+  for (const node of state.value.nodes) {
+    const fileId = node.parsedAttrs.documentFileId
+    if (typeof fileId === 'string' && fileId && !seen.has(fileId)) {
+      seen.add(fileId)
+      list.push({ fileId, label: `${node.name} (${t('diagram.nodeLabel')})` })
+    }
+  }
+  for (const diagram of state.value.diagrams) {
+    if (diagram._isDeleted) continue
+    const fileId = diagram.parsedAttrs.documentFileId
+    if (typeof fileId === 'string' && fileId && !seen.has(fileId)) {
+      seen.add(fileId)
+      list.push({ fileId, label: `${diagram.name} (${t('diagram.diagramLabel')})` })
+    }
+  }
+  return list
 })
 
 const availableLinkRelations = computed(() => {
@@ -3212,6 +3265,8 @@ onBeforeUnmount(() => {
             @select-canvas-element-id="selectedCanvasElementId = $event"
             @canvas-context-change="handleCanvasContextChange"
             @palette-visible-change="paletteVisible = $event"
+            @open-diagram="selectDiagram"
+            @open-document="handleOpenDocumentFromBadge"
           />
         </div>
 
@@ -3228,11 +3283,14 @@ onBeforeUnmount(() => {
               :available-relations="availableLinkRelations"
               :node-scoped-values="nodeScopedValues"
               :link-scoped-values="linkScopedValues"
+              :diagrams="diagramsForProps"
+              :model-documents="modelDocuments"
               :read-only="isDiagramReadOnly"
               @bind-node-component="(id) => selectedNode && !isDiagramReadOnly && bindNodeComponent(selectedNode, id)"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
+              @create-document-for-property="(name) => !isDiagramReadOnly && handleCreateDocumentForProperty(name)"
               :on-open-node-document="handleOpenNodeDoc"
             />
             <NodeStylePanel

@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import SearchableSelect from './SearchableSelect.vue'
 import { AVAILABLE_ICON_OPTIONS } from '@/config/availableIcons'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     modelValue: string
     placeholder?: string

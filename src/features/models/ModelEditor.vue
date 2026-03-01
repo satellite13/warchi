@@ -1430,6 +1430,7 @@ const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
 const onDeleteKeydown = (event: KeyboardEvent) => {
   if (event.key !== 'Delete' && event.key !== 'Backspace') return
   if (!activeDiagram.value) return
+  if (isDiagramReadOnly.value) return
   if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event))
     return
 
@@ -1463,6 +1464,7 @@ watch(
 const setDiagramAttrs = (next: any) => {
   const diagram = activeDiagram.value
   if (!diagram) return
+  if (isDiagramReadOnly.value) return
   const idx = state.value.diagrams.findIndex(
     d => d.id === diagram.id && !d._isDeleted
   )
@@ -2411,6 +2413,7 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
 }
 
 const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {
+  if (isDiagramReadOnly.value) return
   selectedModelLinkId.value = null
   selectedEdgeInstanceId.value = null
   openNodeDeleteDialog([], 'canvas', [instanceId])
@@ -2428,6 +2431,7 @@ const openNoteEditor = (instanceId: string) => {
 }
 
 const saveNoteEditor = () => {
+  if (isDiagramReadOnly.value) return
   const diagram = activeDiagram.value
   const instanceId = editingNoteInstanceId.value
   if (!diagram || !instanceId) return
@@ -2448,6 +2452,7 @@ const cancelNoteEditor = () => {
 }
 
 const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
+  if (isDiagramReadOnly.value) return
   selectedModelNodeIds.value = []
   selectedInstanceIds.value = []
   selectedModelLinkId.value = linkId

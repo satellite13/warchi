@@ -602,6 +602,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         } as PapirusEdgeStyle
         existingEdge.labelBackground = buildEdgeLabelBackground(ds)
         existingEdge.labelOffset = ds?.edgeLabelOffset ?? 18
+        existingEdge.labelLineGap = ds?.edgeLabelLineGap ?? false
         if (ds?.edgeType) {
           existingEdge.type = ds.edgeType as "straight" | "polyline" | "editable-polyline" | "bezier"
         }
@@ -729,6 +730,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           arrowType: "none",
           label: buildEdgeLabel(relationName, ds),
           labelOffset: ds?.edgeLabelOffset ?? 18,
+          labelLineGap: ds?.edgeLabelLineGap ?? false,
           labelBackground: buildEdgeLabelBackground(ds),
           style: {
             strokeColor: edgeStyle.strokeColor,
@@ -878,6 +880,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       snapToGrid: true,
       gridSize: GRID_SIZE,
       alignToNodes: true,
+      alignmentScreenTolerance: 80,
       keymap: { deleteKeys: [] }
     })
     // Notation editor does not support interactive port-to-port connections.

@@ -11,6 +11,7 @@ import LabeledNumberInput from "./LabeledNumberInput.vue";
 import StyleSection from "./StyleSection.vue";
 import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
+import ToggleSwitch from "@/components/forms/ToggleSwitch.vue";
 import type { DiagramStyle } from "../notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { COMBINED_ICON_OPTIONS } from "@/config/iconOptions";
@@ -186,6 +187,7 @@ function emitEdgeStyle() {
     labelFontSize: edgeLabelFontSize.value,
     labelInset: insetToPlain(edgeLabelInset.value),
     edgeLabelOffset: edgeLabelOffset.value,
+    edgeLabelLineGap: edgeLabelLineGap.value,
     labelBgColor: edgeLabelBgColor.value,
     labelBgOpacity: edgeLabelBgOpacity.value,
     labelBgBorderRadius: edgeLabelBgBorderRadius.value,
@@ -267,6 +269,7 @@ function confirmSavePreset() {
       labelFontSize: edgeLabelFontSize.value,
       labelInset: insetToPlain(edgeLabelInset.value),
       edgeLabelOffset: edgeLabelOffset.value,
+      edgeLabelLineGap: edgeLabelLineGap.value,
       labelBgColor: edgeLabelBgColor.value,
       labelBgOpacity: edgeLabelBgOpacity.value,
       labelBgBorderRadius: edgeLabelBgBorderRadius.value,
@@ -487,6 +490,7 @@ function applyEdgePreset(presetName: string) {
   edgeLabelFontSize.value = style.labelFontSize ?? 14;
   edgeLabelInset.value = toInsetSides(style.labelInset, 8);
   edgeLabelOffset.value = style.edgeLabelOffset ?? edgeLabelOffset.value;
+  edgeLabelLineGap.value = style.edgeLabelLineGap ?? false;
   edgeLabelBgColor.value = style.labelBgColor ?? "#ffffff";
   edgeLabelBgOpacity.value = style.labelBgOpacity ?? 1;
   edgeLabelBgBorderRadius.value = style.labelBgBorderRadius ?? 2;
@@ -531,6 +535,7 @@ function applyEdgePreset(presetName: string) {
       setLabelSpacing(edge.label, { inset: insetToPlain(edgeLabelInset.value) });
     }
     edge.labelOffset = edgeLabelOffset.value;
+    edge.labelLineGap = edgeLabelLineGap.value;
     (edge as any).labelBackground = { 
       color: edgeLabelBgColor.value,
       opacity: edgeLabelBgOpacity.value,
@@ -624,6 +629,7 @@ const edgeLabelOpacity = ref(1);
 const edgeLabelFontSize = ref(14);
 const edgeLabelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 });
 const edgeLabelOffset = ref(0);
+const edgeLabelLineGap = ref(false);
 const edgeLabelBgColor = ref("#ffffff");
 const edgeLabelBgOpacity = ref(1);
 const edgeLabelBgBorderRadius = ref(2);
@@ -767,6 +773,7 @@ function loadEdgeProps() {
   const edgeLabelSpacing = getLabelSpacing(edge.label);
   edgeLabelInset.value = toInsetSides(edgeLabelSpacing.inset, 8);
   edgeLabelOffset.value = edge.labelOffset ?? 0;
+  edgeLabelLineGap.value = edge.labelLineGap ?? false;
   edgeLabelBgColor.value = (edge as any).labelBackground?.color || "#ffffff";
   edgeLabelBgOpacity.value = ((edge as any).labelBackground as any)?.opacity ?? 1;
   edgeLabelBgBorderRadius.value = ((edge as any).labelBackground as any)?.borderRadius ?? 2;
@@ -1483,6 +1490,16 @@ function handleEdgeLabelBgBorderRadiusChange(value: string) {
   emitEdgeStyle();
 }
 
+function handleEdgeLabelLineGapChange(checked: boolean) {
+  edgeLabelLineGap.value = checked;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    edge.labelLineGap = checked;
+  });
+  emitEdgeStyle();
+}
+
 function buildMarkerConfig(
   type: "none" | "arrow" | "open" | "diamond" | "circle",
   size: number,
@@ -1712,6 +1729,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     @update:model-value="handleEdgeLabelBgBorderRadiusChange"
                   />
                 </div>
+                <LabeledFieldRow :label="t('nodeStyle.labelLineGap')">
+                  <ToggleSwitch
+                    :model-value="edgeLabelLineGap"
+                    @update:model-value="handleEdgeLabelLineGapChange"
+                  />
+                </LabeledFieldRow>
           </StyleSection>
 
           <!-- Line -->

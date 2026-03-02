@@ -90,6 +90,8 @@ export type DiagramStyle = {
   labelBgPadding?: number
   labelBgBorderRadius?: number
   edgeLabelOffset?: number
+  /** When true, the edge line is not drawn under the label (gap at label). */
+  edgeLabelLineGap?: boolean
   // Marker details
   startMarkerSize?: number
   startMarkerFillColor?: string
@@ -246,6 +248,7 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.labelBgBorderRadius === 'number')
     style.labelBgBorderRadius = value.labelBgBorderRadius
   if (typeof value.edgeLabelOffset === 'number') style.edgeLabelOffset = value.edgeLabelOffset
+  if (typeof value.edgeLabelLineGap === 'boolean') style.edgeLabelLineGap = value.edgeLabelLineGap
   if (typeof value.startMarkerSize === 'number') style.startMarkerSize = value.startMarkerSize
   if (typeof value.startMarkerFillColor === 'string')
     style.startMarkerFillColor = value.startMarkerFillColor

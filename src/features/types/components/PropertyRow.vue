@@ -3,6 +3,7 @@ import { computed, reactive } from "vue"
 import { useI18n } from "vue-i18n"
 import { parseNumberInput } from "@/utils/number"
 import IconPicker from "@/components/forms/IconPicker.vue"
+import ToggleSwitch from "@/components/forms/ToggleSwitch.vue"
 import type { IconOption } from "@/config/iconOptions"
 import type { CustomProperty, CustomPropertyType, InteractiveKind } from "../../notations/notationAttrs"
 
@@ -199,22 +200,18 @@ function handleInteractiveIconChange(value: string) {
               {{ opt.label }}
             </option>
           </select>
-          <label class="property-checkbox">
-            <input
-              type="checkbox"
-              :checked="property.required"
-              @change="onMutateProperty?.((p) => { p.required = ($event.target as HTMLInputElement).checked })"
-            >
-            <span class="property-checkbox__label">{{ t("types.requiredShort") }}</span>
-          </label>
-          <label class="property-checkbox">
-            <input
-              type="checkbox"
-              :checked="property.system"
-              @change="onMutateProperty?.((p) => { p.system = ($event.target as HTMLInputElement).checked })"
-            >
-            <span class="property-checkbox__label">{{ t("types.systemShort") }}</span>
-          </label>
+          <ToggleSwitch
+            :model-value="property.required"
+            @update:model-value="(v) => onMutateProperty?.((p) => { p.required = v })"
+          >
+            {{ t("types.requiredShort") }}
+          </ToggleSwitch>
+          <ToggleSwitch
+            :model-value="property.system ?? false"
+            @update:model-value="(v) => onMutateProperty?.((p) => { p.system = v })"
+          >
+            {{ t("types.systemShort") }}
+          </ToggleSwitch>
         </div>
 
         <div v-if="property.type === 'string'" class="property-row__extra">
@@ -319,14 +316,12 @@ function handleInteractiveIconChange(value: string) {
           </select>
         </div>
         <div v-if="showInteractiveOptions" class="property-row__extra property-row__interactive">
-          <label class="property-checkbox">
-            <input
-              type="checkbox"
-              :checked="property.interactive"
-              @change="onMutateProperty?.((p) => { p.interactive = ($event.target as HTMLInputElement).checked })"
-            >
-            <span class="property-checkbox__label">{{ t("types.interactiveOnDiagram") }}</span>
-          </label>
+          <ToggleSwitch
+            :model-value="property.interactive ?? false"
+            @update:model-value="(v) => onMutateProperty?.((p) => { p.interactive = v })"
+          >
+            {{ t("types.interactiveOnDiagram") }}
+          </ToggleSwitch>
           <template v-if="property.interactive">
             <span class="property-row__label">{{ t("types.actionType") }}</span>
             <select
@@ -552,24 +547,6 @@ function handleInteractiveIconChange(value: string) {
 .property-remove-btn:hover {
   background: var(--danger-soft);
   color: var(--danger);
-}
-
-.property-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.property-checkbox input {
-  accent-color: var(--primary);
-}
-
-.property-checkbox__label {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .property-row__from-type-badge {

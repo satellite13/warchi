@@ -634,6 +634,7 @@ const resolveEdgeOptions = (
   startMarker: ArrowMarkerConfig
   endMarker: ArrowMarkerConfig
   labelOffset: number
+  labelLineGap: boolean
 }> => {
   if (!ds) return {}
   const opts: Partial<{
@@ -642,6 +643,7 @@ const resolveEdgeOptions = (
     startMarker: ArrowMarkerConfig
     endMarker: ArrowMarkerConfig
     labelOffset: number
+    labelLineGap: boolean
   }> = {}
   const style: EdgeStyle = {}
   if (ds.strokeColor) style.strokeColor = ds.strokeColor
@@ -668,6 +670,7 @@ const resolveEdgeOptions = (
     }
   }
   if (ds.edgeLabelOffset != null) opts.labelOffset = ds.edgeLabelOffset
+  if (ds.edgeLabelLineGap != null) opts.labelLineGap = ds.edgeLabelLineGap
   return opts
 }
 
@@ -1219,6 +1222,7 @@ function syncDiagram() {
         ;(existing as unknown as { controlPoints?: ControlPoint[] }).controlPoints = controlPoints
       }
       existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
+      if (edgeOpts.labelLineGap !== undefined) existing.labelLineGap = edgeOpts.labelLineGap
       existing.label = edgeLabelConfig
       if (existing.label) {
         existing.label.style = {
@@ -1255,6 +1259,7 @@ function syncDiagram() {
         endMarker: edgeOpts.endMarker,
         ...(edgeLabelText !== undefined ? { label: edgeLabelText } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
+        ...(edgeOpts.labelLineGap !== undefined ? { labelLineGap: edgeOpts.labelLineGap } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),
         lockAnchors: lockAnchorsEnabled.value,
@@ -1671,6 +1676,7 @@ function initRenderer(r: DiagramRenderer) {
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
     alignToNodes: alignEnabled.value,
+    alignmentScreenTolerance: 80,
     attachToOutline: attachToOutlineEnabled.value,
     keymap: { deleteKeys: [] },
     navigationOnly: navOnly,
@@ -2443,6 +2449,7 @@ watch(
       snapToGrid: snapEnabled.value,
       gridSize: GRID_SIZE,
       alignToNodes: alignEnabled.value,
+      alignmentScreenTolerance: 80,
       attachToOutline: attachToOutlineEnabled.value,
       keymap: { deleteKeys: [] },
       navigationOnly: navOnly,
@@ -2453,7 +2460,7 @@ watch(
       ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
         edge: Edge
       ) => {
-        renderer.addEdge(edge)
+        if (renderer) renderer.addEdge(edge)
       }
     }
     emit('canvasContextChange', { renderer, interactionManager })

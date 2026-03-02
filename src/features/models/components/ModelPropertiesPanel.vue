@@ -6,6 +6,7 @@ import type { EditorLink, EditorNode } from '../types'
 import { parseEntityAttrs, type CustomProperty } from '../../notations/notationAttrs'
 import type { DocumentWikiItem } from '../../../composables/useWikiDocuments'
 import SearchableSelect from '../../../components/forms/SearchableSelect.vue'
+import ToggleSwitch from '../../../components/forms/ToggleSwitch.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -280,29 +281,14 @@ const documentSelectOptions = computed(() => {
                     {{ t('diagram.newDocument') }}
                   </button>
                 </div>
-                <div v-else-if="property.type === 'boolean'" class="mp-toggle">
-                  <button
-                    type="button"
-                    class="mp-toggle__track"
-                    :class="{ 'mp-toggle__track--on': Boolean(nodeScopedValues[property.name]) }"
-                    role="switch"
-                    :aria-checked="Boolean(nodeScopedValues[property.name])"
-                    :disabled="readOnly"
-                    @click="
-                      !readOnly &&
-                        emit(
-                          'setNodeScopedValue',
-                          property.name,
-                          !Boolean(nodeScopedValues[property.name])
-                        )
-                    "
-                  >
-                    <span class="mp-toggle__thumb"></span>
-                  </button>
-                  <span class="mp-toggle__label">{{
-                    Boolean(nodeScopedValues[property.name]) ? t('common.yes') : t('common.no')
-                  }}</span>
-                </div>
+                <ToggleSwitch
+                  v-else-if="property.type === 'boolean'"
+                  :model-value="Boolean(nodeScopedValues[property.name])"
+                  :disabled="readOnly"
+                  @update:model-value="emit('setNodeScopedValue', property.name, $event)"
+                >
+                  {{ Boolean(nodeScopedValues[property.name]) ? t('common.yes') : t('common.no') }}
+                </ToggleSwitch>
                 <select
                   v-else-if="property.type === 'enum'"
                   class="mp-select"
@@ -392,29 +378,14 @@ const documentSelectOptions = computed(() => {
             <div class="mp-fields">
               <div v-for="property in linkProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
-                <div v-if="property.type === 'boolean'" class="mp-toggle">
-                  <button
-                    type="button"
-                    class="mp-toggle__track"
-                    :class="{ 'mp-toggle__track--on': Boolean(linkScopedValues[property.name]) }"
-                    role="switch"
-                    :aria-checked="Boolean(linkScopedValues[property.name])"
-                    :disabled="readOnly"
-                    @click="
-                      !readOnly &&
-                        emit(
-                          'setLinkScopedValue',
-                          property.name,
-                          !Boolean(linkScopedValues[property.name])
-                        )
-                    "
-                  >
-                    <span class="mp-toggle__thumb"></span>
-                  </button>
-                  <span class="mp-toggle__label">{{
-                    Boolean(linkScopedValues[property.name]) ? t('common.yes') : t('common.no')
-                  }}</span>
-                </div>
+                <ToggleSwitch
+                  v-if="property.type === 'boolean'"
+                  :model-value="Boolean(linkScopedValues[property.name])"
+                  :disabled="readOnly"
+                  @update:model-value="emit('setLinkScopedValue', property.name, $event)"
+                >
+                  {{ Boolean(linkScopedValues[property.name]) ? t('common.yes') : t('common.no') }}
+                </ToggleSwitch>
                 <select
                   v-else-if="property.type === 'enum'"
                   class="mp-select"
@@ -705,52 +676,6 @@ const documentSelectOptions = computed(() => {
 .mp-btn--small {
   padding: 0 8px;
   font-size: 11px;
-}
-
-/* ---- Toggle switch (replaces checkbox) ---- */
-.mp-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mp-toggle__track {
-  position: relative;
-  width: 34px;
-  height: 18px;
-  border-radius: 9px;
-  border: none;
-  background: var(--border-strong);
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-  transition: background 0.2s ease;
-}
-
-.mp-toggle__track--on {
-  background: var(--primary);
-}
-
-.mp-toggle__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.mp-toggle__track--on .mp-toggle__thumb {
-  transform: translateX(16px);
-}
-
-.mp-toggle__label {
-  font-size: 11px;
-  color: var(--text-muted);
-  user-select: none;
 }
 
 /* ---- Hint ---- */

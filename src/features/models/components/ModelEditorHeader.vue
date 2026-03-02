@@ -36,6 +36,7 @@ const props = withDefaults(
     diagramVersions?: EditorDiagram[]
     selectedDiagramId?: string | null
     isDiagramReadOnly?: boolean
+    navigationOnlyMode?: boolean
     baselineCreating?: boolean
     baselineError?: string | null
     isAdmin?: boolean
@@ -67,6 +68,7 @@ const props = withDefaults(
     diagramVersions: () => [],
     selectedDiagramId: null,
     isDiagramReadOnly: false,
+    navigationOnlyMode: false,
     baselineCreating: false,
     baselineError: null,
     isAdmin: false,
@@ -121,6 +123,14 @@ const saveTitle = computed(() =>
 )
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
+  {
+    icon: 'open_with',
+    event: 'toggle-navigation-mode',
+    title: t('toolbar.navigationMode'),
+    active: props.navigationOnlyMode,
+    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly,
+  },
+  { icon: 'separator', event: 'sep-nav', separator: true },
   {
     icon: 'undo',
     event: 'undo',

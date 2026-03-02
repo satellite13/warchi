@@ -66,6 +66,7 @@ const props = withDefaults(
     attachToOutlineEnabled?: boolean
     autoLinkInGroups?: boolean
     readOnly?: boolean
+    navigationOnlyMode?: boolean
   }>(),
   {
     connectionValidator: null,
@@ -80,6 +81,7 @@ const props = withDefaults(
     relationRules: () => [],
     autoLinkInGroups: true,
     readOnly: false,
+    navigationOnlyMode: false,
     selectedEdgeInstanceId: null,
     selectedInstanceIds: () => [],
   }
@@ -1663,16 +1665,17 @@ function initRenderer(r: DiagramRenderer) {
   })
   r.use(miniMap)
 
-  // Always enable interactions: when readOnly use navigationOnly (zoom/pan only, no edit)
+  // Always enable interactions: when readOnly or navigationOnlyMode use navigationOnly (zoom/pan only, no edit)
+  const navOnly = props.readOnly || props.navigationOnlyMode
   interactionManager = r.enableInteractions({
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
     alignToNodes: alignEnabled.value,
     attachToOutline: attachToOutlineEnabled.value,
     keymap: { deleteKeys: [] },
-    navigationOnly: props.readOnly,
+    navigationOnly: navOnly,
   } as Parameters<DiagramRenderer['enableInteractions']>[0])
-  if (!props.readOnly) {
+  if (!navOnly) {
     interactionManager.connection.setSnapToGrid(snapEnabled.value)
     interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
     // Warchi persists connections via model state/events.
@@ -2426,6 +2429,34 @@ watch(
   () => props.activeDiagram?.id ?? null,
   (nextId, prevId) => {
     if (nextId !== prevId) resetHistory()
+  }
+)
+
+// Re-apply interactions when navigation-only mode or readOnly changes (Papirus does not support changing navigationOnly at runtime)
+watch(
+  () => [props.readOnly, props.navigationOnlyMode],
+  () => {
+    if (!renderer) return
+    const navOnly = props.readOnly || props.navigationOnlyMode
+    renderer.disableInteractions()
+    interactionManager = renderer.enableInteractions({
+      snapToGrid: snapEnabled.value,
+      gridSize: GRID_SIZE,
+      alignToNodes: alignEnabled.value,
+      attachToOutline: attachToOutlineEnabled.value,
+      keymap: { deleteKeys: [] },
+      navigationOnly: navOnly,
+    } as Parameters<DiagramRenderer['enableInteractions']>[0])
+    if (!navOnly) {
+      interactionManager.connection.setSnapToGrid(snapEnabled.value)
+      interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
+      ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
+        edge: Edge
+      ) => {
+        renderer.addEdge(edge)
+      }
+    }
+    emit('canvasContextChange', { renderer, interactionManager })
   }
 )
 

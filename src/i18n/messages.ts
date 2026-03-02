@@ -40,6 +40,7 @@ export const messages = {
       newVersionAvailable: 'Новая версия v{version} доступна. Обновление...',
     },
     toolbar: {
+      navigationMode: 'Режим навигации (только перемещение и зум)',
       undo: 'Отменить',
       redo: 'Повторить',
       zoomIn: 'Приблизить',
@@ -258,6 +259,7 @@ export const messages = {
       addChildFolder: 'Добавить дочернюю папку',
       addChildNode: 'Добавить дочернюю ноду',
       renameFolder: 'Переименовать папку',
+      renameDiagram: 'Переименовать диаграмму',
       openDiagramDoubleClick: 'Открыть диаграмму (двойной клик)',
       diagramOpened: 'Открыта',
       resizeLeftPanelWidth: 'Потяните, чтобы изменить ширину левой панели',
@@ -737,6 +739,7 @@ export const messages = {
       newVersionAvailable: 'New version v{version} available. Updating...',
     },
     toolbar: {
+      navigationMode: 'Navigation mode (pan and zoom only)',
       undo: 'Undo',
       redo: 'Redo',
       zoomIn: 'Zoom in',
@@ -955,6 +958,7 @@ export const messages = {
       addChildFolder: 'Add child folder',
       addChildNode: 'Add child node',
       renameFolder: 'Rename folder',
+      renameDiagram: 'Rename diagram',
       openDiagramDoubleClick: 'Open diagram (double click)',
       diagramOpened: 'Opened',
       resizeLeftPanelWidth: 'Drag to resize left panel width',

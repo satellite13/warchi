@@ -29,6 +29,7 @@ const emit = defineEmits<{
   moveDiagram: [diagramId: string, newNodeId: string]
   moveNode: [nodeId: string, targetNodeId: string | null, position: "above" | "below" | "inside"]
   renameNode: [nodeId: string, name: string]
+  renameDiagram: [diagramId: string, name: string]
   toggleSyncSelection: []
 }>()
 const { t } = useI18n()
@@ -177,6 +178,8 @@ const onDragDiagramStart = (event: DragEvent, diagramId: string) => {
 const dropTarget = ref<{ nodeId: string | null; position: "above" | "below" | "inside" } | null>(null)
 const renamingNodeId = ref<string | null>(null)
 const renamingNodeName = ref("")
+const renamingDiagramId = ref<string | null>(null)
+const renamingDiagramName = ref("")
 
 const isDescendant = (nodeId: string, potentialParentId: string): boolean => {
   const children = childNodes(potentialParentId)
@@ -282,6 +285,28 @@ const commitRenameNode = (node: EditorNode) => {
     emit("renameNode", node.id, nextName)
   }
   cancelRenameNode()
+}
+
+const startRenameDiagram = (diagram: EditorDiagram) => {
+  renamingDiagramId.value = diagram.id
+  renamingDiagramName.value = diagram.name
+}
+
+const cancelRenameDiagram = () => {
+  renamingDiagramId.value = null
+  renamingDiagramName.value = ""
+}
+
+const commitRenameDiagram = (diagram: EditorDiagram) => {
+  const nextName = renamingDiagramName.value.trim()
+  if (!nextName) {
+    cancelRenameDiagram()
+    return
+  }
+  if (nextName !== diagram.name) {
+    emit("renameDiagram", diagram.id, nextName)
+  }
+  cancelRenameDiagram()
 }
 
 const expandToNode = (nodeId: string) => {
@@ -468,6 +493,7 @@ defineExpose({ expandToNode, focusNode })
               @dragstart="onDragDiagramStart($event, diagram.id)"
             >
               <button
+                v-if="renamingDiagramId !== diagram.id"
                 type="button"
                 class="diagram-row__select"
                 :title="t('models.openDiagramDoubleClick')"
@@ -476,6 +502,30 @@ defineExpose({ expandToNode, focusNode })
                 <UiIcon name="table_chart" />
                 <span>{{ diagram.name }}</span>
                 <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
+              </button>
+              <div
+                v-else
+                class="diagram-row__select diagram-row__rename-wrap"
+              >
+                <UiIcon name="table_chart" />
+                <input
+                  v-model="renamingDiagramName"
+                  class="diagram-row__rename-input"
+                  type="text"
+                  @click.stop
+                  @keydown.enter.prevent="commitRenameDiagram(diagram)"
+                  @keydown.esc.prevent="cancelRenameDiagram"
+                  @blur="commitRenameDiagram(diagram)"
+                >
+              </div>
+              <button
+                v-if="renamingDiagramId !== diagram.id"
+                type="button"
+                class="mini-btn diagram-row__edit-btn"
+                :title="t('models.renameDiagram')"
+                @click.stop="startRenameDiagram(diagram)"
+              >
+                <UiIcon name="edit" />
               </button>
               <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
                 <UiIcon name="delete" />
@@ -588,6 +638,7 @@ defineExpose({ expandToNode, focusNode })
                   @dragstart="onDragDiagramStart($event, diagram.id)"
                 >
                   <button
+                    v-if="renamingDiagramId !== diagram.id"
                     type="button"
                     class="diagram-row__select"
                     :title="t('models.openDiagramDoubleClick')"
@@ -596,6 +647,30 @@ defineExpose({ expandToNode, focusNode })
                     <UiIcon name="table_chart" />
                     <span>{{ diagram.name }}</span>
                     <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
+                  </button>
+                  <div
+                    v-else
+                    class="diagram-row__select diagram-row__rename-wrap"
+                  >
+                    <UiIcon name="table_chart" />
+                    <input
+                      v-model="renamingDiagramName"
+                      class="diagram-row__rename-input"
+                      type="text"
+                      @click.stop
+                      @keydown.enter.prevent="commitRenameDiagram(diagram)"
+                      @keydown.esc.prevent="cancelRenameDiagram"
+                      @blur="commitRenameDiagram(diagram)"
+                    >
+                  </div>
+                  <button
+                    v-if="renamingDiagramId !== diagram.id"
+                    type="button"
+                    class="mini-btn diagram-row__edit-btn"
+                    :title="t('models.renameDiagram')"
+                    @click.stop="startRenameDiagram(diagram)"
+                  >
+                    <UiIcon name="edit" />
                   </button>
                   <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
                     <UiIcon name="delete" />
@@ -1109,12 +1184,14 @@ defineExpose({ expandToNode, focusNode })
   border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
-.diagram-row .mini-btn--danger {
+.diagram-row .mini-btn--danger,
+.diagram-row .diagram-row__edit-btn {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.diagram-row:hover .mini-btn--danger {
+.diagram-row:hover .mini-btn--danger,
+.diagram-row:hover .diagram-row__edit-btn {
   opacity: 1;
 }
 
@@ -1156,6 +1233,32 @@ defineExpose({ expandToNode, focusNode })
   margin-left: 8px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.diagram-row__rename-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.diagram-row__rename-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--surface);
+  color: var(--base-text);
+}
+
+.diagram-row__rename-input:focus {
+  outline: none;
+  border-color: var(--primary);
 }
 
 </style>

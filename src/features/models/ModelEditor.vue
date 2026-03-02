@@ -36,6 +36,7 @@ import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue
 import { bumpMinor, compareVersions } from '../../utils/version'
 import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
 import type { NotationMetaResponse, RelationResponse } from '../../types/api'
+import { useWikiDocuments } from '../../composables/useWikiDocuments'
 
 const {
   model,
@@ -58,6 +59,7 @@ const {
 } = useModelEditor()
 const { currentUser, isAdmin } = useAuth()
 const { t } = useI18n()
+const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
@@ -242,6 +244,8 @@ const selectionSyncEnabled = ref(true)
 const canvasSettingsVisible = ref(true)
 const paletteVisible = ref(true)
 const autoLinkInGroups = ref(true)
+/** Режим «только навигация»: панорама и зум без редактирования элементов. */
+const diagramNavigationOnlyMode = ref(false)
 type EdgePathType = 'straight' | 'polyline' | 'editable-polyline' | 'bezier'
 const defaultEdgeType = ref<EdgePathType>('bezier')
 const NOTE_NODE_PREFIX = '__diagram-note__:'
@@ -2451,6 +2455,13 @@ const handleRenameNode = (nodeId: string, newName: string) => {
   markNodeDirty(node.id)
 }
 
+const handleRenameDiagram = (diagramId: string, newName: string) => {
+  const diagram = state.value.diagrams.find(item => item.id === diagramId)
+  if (!diagram || diagram.name === newName) return
+  diagram.name = newName
+  markDiagramDirty(diagram.id)
+}
+
 const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
   const diagram = activeDiagram.value
   if (!diagram || instanceIds.length === 0) return
@@ -2849,6 +2860,9 @@ const handleToolbarAction = async (event: string) => {
       if (typeof next === 'boolean') lockAnchorsEnabled.value = next
       break
     }
+    case 'toggle-navigation-mode':
+      diagramNavigationOnlyMode.value = !diagramNavigationOnlyMode.value
+      break
     case 'export-diagram-png':
       await exportActiveDiagramAsPng()
       break
@@ -3145,6 +3159,7 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(async () => {
   await loadModel()
   syncDefaultsOnLoad()
+  void fetchWikiDocuments()
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('keydown', onDeleteKeydown)
 })
@@ -3218,6 +3233,7 @@ onBeforeUnmount(() => {
             @move-diagram="handleMoveDiagram"
             @move-node="handleMoveNode"
             @rename-node="handleRenameNode"
+            @rename-diagram="handleRenameDiagram"
           />
         </template>
 
@@ -3297,6 +3313,7 @@ onBeforeUnmount(() => {
               :can-undo="canUndo"
               :can-redo="canRedo"
               :can-share="canShareModel"
+              :navigation-only-mode="diagramNavigationOnlyMode"
               :is-diagram-read-only="isDiagramReadOnly"
               :is-admin="isAdmin"
               :can-open-notation="canOpenActiveDiagramNotation"
@@ -3311,6 +3328,7 @@ onBeforeUnmount(() => {
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
             :read-only="isDiagramReadOnly"
+            :navigation-only-mode="diagramNavigationOnlyMode"
             :nodes="state.nodes"
             :links="state.links"
             :relations="state.relations"
@@ -3378,6 +3396,7 @@ onBeforeUnmount(() => {
               :link-scoped-values="linkScopedValues"
               :diagrams="diagramsForProps"
               :model-documents="modelDocuments"
+              :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
               @bind-node-component="(id) => selectedNode && !isDiagramReadOnly && bindNodeComponent(selectedNode, id)"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"

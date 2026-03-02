@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import type { ComponentResponse, RelationResponse } from '../../../types/api'
 import type { EditorLink, EditorNode } from '../types'
 import { parseEntityAttrs, type CustomProperty } from '../../notations/notationAttrs'
+import type { DocumentWikiItem } from '../../../composables/useWikiDocuments'
+import SearchableSelect from '../../../components/forms/SearchableSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +22,8 @@ const props = withDefaults(
     diagrams?: { id: string; label: string }[]
     /** Documents already used in model for interactive property "document" */
     modelDocuments?: { fileId: string; label: string }[]
+    /** Full wiki document list for document property dropdown (with search) */
+    wikiDocuments?: DocumentWikiItem[]
     onOpenNodeDocument?: (node: EditorNode) => void
     readOnly?: boolean
   }>(),
@@ -28,6 +32,7 @@ const props = withDefaults(
     onOpenNodeDocument: undefined,
     diagrams: () => [],
     modelDocuments: () => [],
+    wikiDocuments: () => [],
   }
 )
 
@@ -87,6 +92,24 @@ function regexTest(property: CustomProperty, value: string): boolean | null {
     return null
   }
 }
+
+function documentDisplayLabel(item: DocumentWikiItem): string {
+  const name =
+    item.entityName ?? (item.entityType ? t('wiki.documentation') : item.label)
+  if (item.parentName) return `${item.parentName} — ${name}`
+  return name
+}
+
+const documentSelectOptions = computed(() => {
+  const byId = new Map<string, string>()
+  for (const d of props.wikiDocuments ?? []) {
+    byId.set(d.fileId, documentDisplayLabel(d))
+  }
+  for (const d of props.modelDocuments ?? []) {
+    if (!byId.has(d.fileId)) byId.set(d.fileId, d.label)
+  }
+  return Array.from(byId.entries(), ([id, label]) => ({ id, label }))
+})
 </script>
 
 <template>
@@ -234,24 +257,20 @@ function regexTest(property: CustomProperty, value: string): boolean | null {
                   "
                   class="mp-doc-pick"
                 >
-                  <select
-                    class="mp-select mp-doc-pick__select"
+                  <SearchableSelect
+                    :model-value="String(nodeScopedValues[property.name] ?? '')"
+                    :options="documentSelectOptions"
+                    :placeholder="t('diagram.selectDocument')"
+                    :search-placeholder="t('common.search')"
+                    :empty-text="t('wiki.empty')"
                     :disabled="readOnly"
-                    :value="String(nodeScopedValues[property.name] ?? '')"
-                    @change="
-                      !readOnly &&
-                        emit('setNodeScopedValue', property.name, ($event.target as HTMLSelectElement).value)
+                    allow-empty
+                    :empty-label="t('diagram.selectDocument')"
+                    class="mp-doc-pick__select"
+                    @update:model-value="
+                      !readOnly && emit('setNodeScopedValue', property.name, $event)
                     "
-                  >
-                    <option value="">{{ t('diagram.selectDocument') }}</option>
-                    <option
-                      v-for="doc in modelDocuments"
-                      :key="doc.fileId"
-                      :value="doc.fileId"
-                    >
-                      {{ doc.label }}
-                    </option>
-                  </select>
+                  />
                   <button
                     type="button"
                     class="mp-btn mp-btn--small mp-doc-pick__btn"

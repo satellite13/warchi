@@ -36,22 +36,7 @@ const {
   isDirty,
 } = useTypeEditor()
 
-const {
-  documentContent,
-  documentFileId,
-  isDocLoading,
-  isDocSaving,
-  docError,
-  docVersions,
-  isLoadingVersions,
-  isDocDirty,
-  setDocumentContent,
-  loadDocument,
-  saveDocument,
-  loadVersions,
-  loadVersion,
-  resetDocument,
-} = useTypeDocument()
+const { documentFileId, loadDocument, resetDocument } = useTypeDocument()
 
 const { t } = useI18n()
 

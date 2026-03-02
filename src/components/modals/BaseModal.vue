@@ -69,13 +69,6 @@ const handleKeydown = (event: KeyboardEvent) => {
     }
 
     case 'Escape': {
-      // For text inputs with content, require Shift+Escape to close
-      if (isTextInput) {
-        const input = activeElement as HTMLInputElement | HTMLTextAreaElement
-        if (input.value.length > 0 && !event.shiftKey) {
-          return
-        }
-      }
       event.preventDefault()
       emit('close')
       break

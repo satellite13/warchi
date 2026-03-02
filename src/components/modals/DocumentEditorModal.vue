@@ -109,15 +109,9 @@ function handleClose() {
   emit('close')
 }
 
-// Keyboard handling for modal
+// Keyboard handling for modal: Escape always closes
 const handleKeydown = (event: KeyboardEvent) => {
-  // Only handle Escape when not editing in the markdown editor
   if (event.key === 'Escape') {
-    // Check if focus is inside the markdown editor
-    const activeElement = document.activeElement
-    const isInEditor = activeElement?.closest('.md-editor') !== null
-    if (isInEditor) return
-
     event.preventDefault()
     handleClose()
   }

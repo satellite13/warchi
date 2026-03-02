@@ -45,7 +45,15 @@ type ListItem = {
   name: string;
   typeLabel: string;
   tags: string[];
+  /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
+  paletteIcon: string;
 };
+
+function getPaletteIcon(parsedAttrs: { diagramStyle?: { iconName?: string }; paletteMaterialIcon?: string }): string {
+  const fromStyle = parsedAttrs.diagramStyle?.iconName?.trim();
+  const fromPalette = parsedAttrs.paletteMaterialIcon?.trim();
+  return fromStyle ?? fromPalette ?? "widgets";
+}
 
 const allTags = computed<string[]>(() => {
   const tagSet = new Set<string>();
@@ -83,7 +91,8 @@ const items = computed<ListItem[]>(() => {
       kind: "component" as const,
       name: c.name,
       typeLabel: props.state.nodeTypes.find(t => t.id === c.nodeTypeId)?.name || "",
-      tags: c.parsedAttrs.tags
+      tags: c.parsedAttrs.tags,
+      paletteIcon: getPaletteIcon(c.parsedAttrs)
     }));
 
   const relations: ListItem[] = props.state.relations
@@ -93,7 +102,8 @@ const items = computed<ListItem[]>(() => {
       kind: "relation" as const,
       name: r.name,
       typeLabel: props.state.linkTypes.find(t => t.id === r.linkTypeId)?.name || "",
-      tags: r.parsedAttrs.tags
+      tags: r.parsedAttrs.tags,
+      paletteIcon: getPaletteIcon(r.parsedAttrs)
     }));
 
   let all = [...components, ...relations];
@@ -237,7 +247,11 @@ watch(tagsExpanded, (value) => {
         @keydown.enter.prevent="emit('select', item.kind, item.id)"
         @keydown.space.prevent="emit('select', item.kind, item.id)"
       >
-        <UiIcon :name="item.kind === 'component' ? DEFAULT_ENTITY_ICONS.component : DEFAULT_ENTITY_ICONS.link" class="component-item__icon" />
+        <img
+          :src="`/icons/${item.paletteIcon}.svg`"
+          :alt="item.name"
+          class="component-item__icon-img"
+        >
         <div class="component-item__info">
           <span class="component-item__name">{{ item.name }}</span>
           <span v-if="item.typeLabel" class="component-item__type">{{ item.typeLabel }}</span>
@@ -580,11 +594,19 @@ watch(tagsExpanded, (value) => {
   border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
-.component-item__icon {
+.component-item__icon,
+.component-item__icon-img {
   width: 20px;
   height: 20px;
-  color: var(--text-subtle);
   flex-shrink: 0;
+}
+
+.component-item__icon {
+  color: var(--text-subtle);
+}
+
+.component-item__icon-img {
+  object-fit: contain;
 }
 
 .component-item--active .component-item__icon {

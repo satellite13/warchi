@@ -44,16 +44,18 @@ const formattedUpdatedAt = computed(() => {
 <template>
   <div class="model-card" @click="emit('click')">
     <div class="model-card__gradient" :style="{ background: cardColor }">
-      <div class="model-card__icon">
-        <template v-if="icon">
-          <img
-            v-if="icon"
-            class="model-card__icon-img"
-            :src="`/icons/${icon}.svg`"
-            :alt="name"
-          >
-        </template>
-        <slot v-else name="icon" />
+      <div class="model-card__icon-wrap">
+        <div class="model-card__icon">
+          <template v-if="icon">
+            <img
+              v-if="icon"
+              class="model-card__icon-img"
+              :src="`/icons/${icon}.svg`"
+              :alt="name"
+            >
+          </template>
+          <slot v-else name="icon" />
+        </div>
         <button
           v-if="canChangeIcon"
           type="button"
@@ -148,10 +150,15 @@ const formattedUpdatedAt = computed(() => {
   background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.15) 100%);
 }
 
+.model-card__icon-wrap {
+  margin-left: 24px;
+  position: relative;
+  z-index: 1;
+}
+
 .model-card__icon {
   width: 48px;
   height: 48px;
-  margin-left: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,8 +166,6 @@ const formattedUpdatedAt = computed(() => {
   border-radius: 12px;
   color: rgba(255, 255, 255, 0.95);
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-  position: relative;
-  z-index: 1;
 }
 
 .model-card__icon :deep(.ui-icon),
@@ -176,30 +181,37 @@ const formattedUpdatedAt = computed(() => {
 
 .model-card__icon-edit {
   position: absolute;
-  inset: 0;
+  right: -4px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.35);
-  color: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
 
 .model-card__icon-edit .ui-icon {
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
 }
 
-.model-card__icon:hover .model-card__icon-edit {
+.model-card__icon-wrap:hover .model-card__icon-edit {
   opacity: 1;
 }
 
 .model-card__icon-edit:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 
 .model-card__body {

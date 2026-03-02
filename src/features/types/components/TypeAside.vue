@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref } from "vue"
 import { useI18n } from "vue-i18n"
-import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import BaseModal from "../../../components/modals/BaseModal.vue"
 
 defineProps<{
   attrsJson: string
-  typeUsages: { notationId: string; notationName: string; elements: { id: string; name: string; version: string }[] }[]
+  typeUsages: {
+    notationId: string
+    notationName: string
+    notationIcon?: string
+    elements: { id: string; name: string; version: string; icon: string }[]
+  }[]
   isLoadingUsages: boolean
   isNewType: boolean
   typeKind: "node" | "link"
@@ -82,13 +86,23 @@ const { t } = useI18n()
         <div v-else class="usages-groups">
           <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
             <div class="usage-group__header">
-              <UiIcon name="account_tree" class="usage-group__icon" />
+              <img
+                v-if="group.notationIcon"
+                :src="`/icons/${group.notationIcon}.svg`"
+                :alt="group.notationName"
+                class="usage-group__icon-img"
+              >
+              <UiIcon v-else name="account_tree" class="usage-group__icon" />
               <span class="usage-group__name">{{ group.notationName }}</span>
               <span class="usage-group__count">{{ group.elements.length }}</span>
             </div>
             <ul class="usage-group__list">
               <li v-for="el in group.elements" :key="el.id" class="usage-item">
-                <UiIcon :name="typeKind === 'node' ? DEFAULT_ENTITY_ICONS.nodeType : DEFAULT_ENTITY_ICONS.link" class="usage-item__icon" />
+                <img
+                  :src="`/icons/${el.icon}.svg`"
+                  :alt="el.name"
+                  class="usage-item__icon-img"
+                >
                 <span class="usage-item__name">{{ el.name }}</span>
                 <span class="usage-item__version">{{ el.version }}</span>
               </li>
@@ -288,11 +302,19 @@ const { t } = useI18n()
   margin-bottom: 6px;
 }
 
-.usage-group__icon {
+.usage-group__icon,
+.usage-group__icon-img {
   width: 20px;
   height: 20px;
-  color: var(--primary);
   flex-shrink: 0;
+}
+
+.usage-group__icon {
+  color: var(--primary);
+}
+
+.usage-group__icon-img {
+  object-fit: contain;
 }
 
 .usage-group__name {
@@ -340,11 +362,19 @@ const { t } = useI18n()
   background: var(--surface-strong);
 }
 
-.usage-item__icon {
+.usage-item__icon,
+.usage-item__icon-img {
   width: 20px;
   height: 20px;
-  color: var(--text-subtle);
   flex-shrink: 0;
+}
+
+.usage-item__icon {
+  color: var(--text-subtle);
+}
+
+.usage-item__icon-img {
+  object-fit: contain;
 }
 
 .usage-item__name {

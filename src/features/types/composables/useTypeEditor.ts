@@ -322,15 +322,51 @@ export function useTypeEditor() {
 
   // --- Type usages ---
 
+  function parseIconFromAttrs(attrs: string | null | undefined): string | undefined {
+    if (attrs == null) return undefined
+    try {
+      const parsed = JSON.parse(attrs) as { icon?: string }
+      const v = parsed?.icon
+      return typeof v === "string" && v.trim() ? v.trim() : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
+  function parsePaletteIconFromAttrs(attrs: string | null | undefined): string {
+    if (attrs == null) return "widgets"
+    try {
+      const parsed = JSON.parse(attrs) as {
+        diagramStyle?: { iconName?: string }
+        paletteMaterialIcon?: string
+      }
+      const fromStyle =
+        typeof parsed?.diagramStyle?.iconName === "string" && parsed.diagramStyle.iconName.trim()
+          ? parsed.diagramStyle.iconName.trim()
+          : undefined
+      const fromPalette =
+        typeof parsed?.paletteMaterialIcon === "string" && parsed.paletteMaterialIcon.trim()
+          ? parsed.paletteMaterialIcon.trim()
+          : undefined
+      return fromStyle ?? fromPalette ?? "widgets"
+    } catch {
+      return "widgets"
+    }
+  }
+
   interface UsageElement {
     id: string
     name: string
     version: string
+    /** Иконка для палитры (diagramStyle.iconName ?? paletteMaterialIcon ?? widgets) */
+    icon: string
   }
 
   interface UsageGroup {
     notationId: string
     notationName: string
+    notationIcon?: string
     elements: UsageElement[]
   }
 
@@ -354,10 +390,13 @@ export function useTypeEditor() {
           : apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
       ])
 
-      const notationsMap = new Map<string, string>()
+      const notationsMap = new Map<string, { name: string; icon?: string }>()
       if (notationsResult.success) {
         for (const n of notationsResult.data.content ?? []) {
-          notationsMap.set(n.id, `${n.name} (${n.version})`)
+          notationsMap.set(n.id, {
+            name: `${n.name} (${n.version})`,
+            icon: parseIconFromAttrs(n.attrs)
+          })
         }
       }
 
@@ -383,15 +422,20 @@ export function useTypeEditor() {
         grouped.get(notId)!.push({
           id: el.id,
           name: el.name,
-          version: el.version
+          version: el.version,
+          icon: parsePaletteIconFromAttrs(el.attrs)
         })
       }
 
-      typeUsages.value = Array.from(grouped.entries()).map(([notationId, elements]) => ({
-        notationId,
-        notationName: notationsMap.get(notationId) ?? notationId,
-        elements
-      }))
+      typeUsages.value = Array.from(grouped.entries()).map(([notationId, elements]) => {
+        const notation = notationsMap.get(notationId)
+        return {
+          notationId,
+          notationName: notation?.name ?? notationId,
+          notationIcon: notation?.icon,
+          elements
+        }
+      })
     } finally {
       isLoadingUsages.value = false
     }

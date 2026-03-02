@@ -1,14 +1,23 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SearchableSelect from './SearchableSelect.vue'
-import { AVAILABLE_ICON_OPTIONS } from '@/config/availableIcons'
+import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
+import type { IconOption } from '@/config/iconOptions'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     modelValue: string
+    /** Options (id = filename in public/icons/ without .svg). Default: COMBINED_ICON_OPTIONS */
+    options?: IconOption[]
     placeholder?: string
+    emptyLabel?: string
   }>(),
-  { placeholder: '' }
+  {
+    options: () => COMBINED_ICON_OPTIONS,
+    placeholder: '',
+    emptyLabel: undefined,
+  }
 )
 
 const emit = defineEmits<{
@@ -16,16 +25,18 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const effectiveEmptyLabel = computed(() => props.emptyLabel ?? t('types.iconClear'))
 </script>
 
 <template>
   <div class="icon-picker">
     <SearchableSelect
       :model-value="modelValue"
-      :options="AVAILABLE_ICON_OPTIONS"
+      :options="options"
       allow-empty
-      :empty-label="t('types.iconClear')"
-      :placeholder="t('types.iconClear')"
+      :empty-label="effectiveEmptyLabel"
+      :placeholder="placeholder || effectiveEmptyLabel"
       :search-placeholder="t('common.search')"
       :empty-text="t('common.nothingFound')"
       @update:model-value="emit('update:modelValue', $event)"
@@ -34,7 +45,7 @@ const { t } = useI18n()
         <span class="icon-picker__option">
           <img
             v-if="option.id"
-            class="icon-picker__option-preview"
+            class="icon-picker__preview"
             :src="`/icons/${option.id}.svg`"
             :alt="option.label"
           >
@@ -44,7 +55,8 @@ const { t } = useI18n()
       <template #selected="{ option }">
         <span v-if="option" class="icon-picker__selected">
           <img
-            class="icon-picker__selected-preview"
+            v-if="option.id"
+            class="icon-picker__preview"
             :src="`/icons/${option.id}.svg`"
             :alt="option.label"
           >
@@ -60,26 +72,14 @@ const { t } = useI18n()
   min-width: 140px;
 }
 
-.icon-picker__option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.icon-picker__option-preview {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  object-fit: contain;
-}
-
+.icon-picker__option,
 .icon-picker__selected {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.icon-picker__selected-preview {
+.icon-picker__preview {
   width: 20px;
   height: 20px;
   flex-shrink: 0;

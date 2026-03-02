@@ -1968,7 +1968,7 @@ function initRenderer(r: DiagramRenderer) {
         items.push(
           {
             label: t('diagram.linkType'),
-            icon: 'conversion_path',
+            icon: 'cable',
             items: [
               {
                 label: t('diagram.linkTypeStraight'),
@@ -2285,9 +2285,13 @@ const paletteItems = computed(() => {
         typeof parsedAttrs.paletteGroup === 'number' && parsedAttrs.paletteGroup >= 0
           ? parsedAttrs.paletteGroup
           : 0
+      const hasSvgIcon = iconName && iconName.length > 0
+      const paletteIconId = hasSvgIcon
+        ? undefined
+        : (parsedAttrs.paletteMaterialIcon?.trim() || undefined)
       return {
         ...component,
-        paletteIconName: iconName && iconName.length > 0 ? iconName : 'component',
+        paletteIconName: hasSvgIcon ? iconName : paletteIconId ?? 'component',
         paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : 'var(--accent)',
         paletteGroup,
       }
@@ -2565,7 +2569,7 @@ defineExpose({
     />
 
     <div v-if="!activeDiagram" class="diagram-canvas__placeholder">
-      <span class="material-symbols-outlined diagram-canvas__placeholder-icon">draw</span>
+      <UiIcon name="draw" class="diagram-canvas__placeholder-icon" />
       <span class="diagram-canvas__placeholder-text">{{ t('diagram.openOrCreateDiagram') }}</span>
       <span class="diagram-canvas__placeholder-hint">{{ t('diagram.selectDiagramInTree') }}</span>
     </div>
@@ -2579,12 +2583,12 @@ defineExpose({
           :title="t('diagram.showNotationPalette')"
           @click="setPaletteVisible(true)"
         >
-          <span class="material-symbols-outlined">palette</span>
+          <UiIcon name="palette" />
         </button>
 
         <div v-if="paletteVisible" class="canvas-palette">
         <div class="canvas-palette__header">
-          <span class="material-symbols-outlined">palette</span>
+          <UiIcon name="palette" />
           <span>{{ t('diagram.palette') }}</span>
           <button
             type="button"
@@ -2592,7 +2596,7 @@ defineExpose({
             :title="t('diagram.hidePalette')"
             @click="setPaletteVisible(false)"
           >
-            <span class="material-symbols-outlined">chevron_right</span>
+            <UiIcon name="chevron_right" />
           </button>
         </div>
         <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
@@ -2606,7 +2610,7 @@ defineExpose({
             draggable="true"
             @dragstart="onDragNoteStart"
           >
-            <span class="material-symbols-outlined canvas-palette__note-icon">note</span>
+            <UiIcon name="note" class="canvas-palette__note-icon" />
           </button>
           <template
             v-for="(entry, index) in paletteEntries"
@@ -2674,7 +2678,8 @@ defineExpose({
 }
 
 .diagram-canvas__placeholder-icon {
-  font-size: 48px;
+  width: 48px;
+  height: 48px;
   color: var(--border-strong);
   margin-bottom: 4px;
 }
@@ -2750,7 +2755,7 @@ defineExpose({
   text-transform: uppercase;
 }
 
-.canvas-palette__header .material-symbols-outlined {
+.canvas-palette__header .ui-icon {
   font-size: 14px;
 }
 
@@ -2771,7 +2776,7 @@ defineExpose({
   justify-content: center;
 }
 
-.canvas-palette__hide .material-symbols-outlined {
+.canvas-palette__hide .ui-icon {
   font-size: 16px;
 }
 
@@ -2817,7 +2822,8 @@ defineExpose({
 }
 
 .canvas-palette__note-icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: #7a5a00;
 }
 

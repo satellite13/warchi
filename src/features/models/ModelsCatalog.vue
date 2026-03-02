@@ -3,6 +3,7 @@ import { useI18n } from "vue-i18n";
 import type { ModelData } from "../../types/entities";
 import type { EntityListConfig } from "../../composables/useEntityList";
 import EntityCatalog from "../../components/catalog/EntityCatalog.vue";
+import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
 
 const { t } = useI18n();
 
@@ -20,6 +21,12 @@ const config: EntityListConfig<ModelData> = {
     version: item.version,
     ownerId: item.ownerId,
     attrs: item.attrs ?? null
+  }),
+  buildUpdateAttrsRequest: (item, nextAttrs) => ({
+    name: item.name,
+    version: item.version,
+    ownerId: item.ownerId,
+    attrs: nextAttrs
   })
 };
 </script>
@@ -29,7 +36,7 @@ const config: EntityListConfig<ModelData> = {
     :entity-list-config="config"
     editor-route-name="model-editor"
     i18n-prefix="models"
-    icon="schema"
+    :icon="DEFAULT_ENTITY_ICONS.model"
     resource-type="MODEL"
   />
 </template>

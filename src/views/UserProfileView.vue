@@ -136,7 +136,7 @@ onMounted(() => {
           <div v-if="successMessage" class="msg msg--success">{{ successMessage }}</div>
 
           <button type="submit" class="btn btn--primary profile-form__save" :disabled="isSaving || isLoading || !isDirty">
-            <span class="material-symbols-outlined">save</span>
+            <UiIcon name="save" />
             {{ isSaving ? t("common.saving") : t("common.save") }}
           </button>
         </form>

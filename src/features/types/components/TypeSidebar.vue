@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import { useI18n } from "vue-i18n"
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import type { TypeItem } from "../composables/useTypeEditor"
 import { toAccessLabel } from "../../../utils/accessPermission"
 
@@ -44,177 +45,274 @@ const filteredLinkTypes = computed(() => {
     : props.linkTypes.filter((t) => t.name.toLowerCase().includes(query))
   return sortTypes(filtered)
 })
+
+const totalCount = computed(() => props.nodeTypes.length + props.linkTypes.length)
+
+const nodeTypesExpanded = ref(true)
+const linkTypesExpanded = ref(true)
 </script>
 
 <template>
-  <aside class="sidebar">
-    <div class="sidebar__header">
-      <span class="material-symbols-outlined sidebar__header-icon">category</span>
-      <span class="sidebar__header-text">{{ t("types.title") }}</span>
-    </div>
-    <div class="sidebar__search">
-      <span class="material-symbols-outlined sidebar__search-icon">search</span>
-      <input
-        v-model="typeSearchQuery"
-        class="sidebar__search-input"
-        type="text"
-        :placeholder="t('types.searchTypePlaceholder')"
-      >
-      <button
-        v-if="typeSearchQuery"
-        type="button"
-        class="sidebar__clear-btn"
-        :title="t('common.clearSearch')"
-        @click="typeSearchQuery = ''"
-      >
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-
-    <div class="type-section">
-      <div class="type-section__header">
-        <h3 class="type-section__title">{{ t("types.nodeTypes") }}</h3>
+  <aside class="type-sidebar">
+    <div class="type-sidebar__header">
+      <div class="type-sidebar__title-row">
+        <h3 class="type-sidebar__title">{{ t("types.title") }}</h3>
+        <span v-if="totalCount > 0" class="type-sidebar__count">{{ totalCount }}</span>
+      </div>
+      <div class="type-sidebar__actions">
         <button
           type="button"
-          class="type-section__add-btn"
+          class="add-btn"
           :title="t('types.addNodeType')"
           @click="emit('addType', 'node')"
         >
-          <span class="material-symbols-outlined">add</span>
+          <UiIcon :name="DEFAULT_ENTITY_ICONS.nodeType" />
         </button>
-      </div>
-      <div v-if="isLoading" class="type-section__loading">
-        <span class="loading-pulse"></span>
-        {{ t("common.loading") }}
-      </div>
-      <template v-else>
-        <div v-if="nodeTypes.length === 0" class="type-section__empty">{{ t("types.noTypes") }}</div>
-        <div v-else-if="filteredNodeTypes.length === 0" class="type-section__empty">{{ t("common.nothingFound") }}</div>
-        <ul v-else class="type-list">
-          <li
-            v-for="(typeItem, idx) in filteredNodeTypes"
-            :key="typeItem.id"
-            class="type-list__item"
-            :class="{ 'type-list__item--selected': selectedTypeId === typeItem.id }"
-            :style="{ animationDelay: `${idx * 30}ms` }"
-            @click="emit('selectType', typeItem.id)"
-          >
-            <span class="material-symbols-outlined type-list__icon">category</span>
-            <span class="type-list__name">{{ typeItem.name || $t("common.unnamed") }}</span>
-            <span v-if="!typeItem._isNew && toAccessLabel(typeItem.accessPermission, locale)" class="type-list__access-badge">
-              {{ toAccessLabel(typeItem.accessPermission, locale) }}
-            </span>
-            <span v-if="typeItem._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
-          </li>
-        </ul>
-      </template>
-    </div>
-
-    <div class="type-section">
-      <div class="type-section__header">
-        <h3 class="type-section__title">{{ t("types.linkTypes") }}</h3>
         <button
           type="button"
-          class="type-section__add-btn"
+          class="add-btn"
           :title="t('types.addLinkType')"
           @click="emit('addType', 'link')"
         >
-          <span class="material-symbols-outlined">add</span>
+          <UiIcon :name="DEFAULT_ENTITY_ICONS.link" />
         </button>
       </div>
-      <div v-if="isLoading" class="type-section__loading">
-        <span class="loading-pulse"></span>
+    </div>
+
+    <div class="type-sidebar__search">
+      <div class="type-sidebar__search-wrap">
+        <UiIcon name="search" class="type-sidebar__search-icon" />
+        <input
+          v-model="typeSearchQuery"
+          class="type-sidebar__search-input"
+          type="text"
+          :placeholder="t('types.searchTypePlaceholder')"
+        >
+        <button
+          v-if="typeSearchQuery"
+          type="button"
+          class="type-sidebar__clear-btn"
+          :title="t('common.clearSearch')"
+          @click="typeSearchQuery = ''"
+        >
+          <UiIcon name="close" />
+        </button>
+      </div>
+    </div>
+
+    <div class="type-sidebar__list">
+      <div v-if="isLoading" class="type-sidebar__loading">
+        <span class="type-sidebar__loading-dot" />
         {{ t("common.loading") }}
       </div>
       <template v-else>
-        <div v-if="linkTypes.length === 0" class="type-section__empty">{{ t("types.noTypes") }}</div>
-        <div v-else-if="filteredLinkTypes.length === 0" class="type-section__empty">{{ t("common.nothingFound") }}</div>
-        <ul v-else class="type-list">
-          <li
-            v-for="(typeItem, idx) in filteredLinkTypes"
-            :key="typeItem.id"
-            class="type-list__item"
-            :class="{ 'type-list__item--selected': selectedTypeId === typeItem.id }"
-            :style="{ animationDelay: `${idx * 30}ms` }"
-            @click="emit('selectType', typeItem.id)"
-          >
-            <span class="material-symbols-outlined type-list__icon">link</span>
-            <span class="type-list__name">{{ typeItem.name || $t("common.unnamed") }}</span>
-            <span v-if="!typeItem._isNew && toAccessLabel(typeItem.accessPermission, locale)" class="type-list__access-badge">
-              {{ toAccessLabel(typeItem.accessPermission, locale) }}
-            </span>
-            <span v-if="typeItem._isNew" class="type-list__badge">{{ $t("common.new") }}</span>
-          </li>
-        </ul>
+      <div class="type-sidebar__section">
+        <button
+          type="button"
+          class="type-sidebar__section-header"
+          :aria-expanded="nodeTypesExpanded"
+          @click="nodeTypesExpanded = !nodeTypesExpanded"
+        >
+          <UiIcon
+            name="expand_more"
+            class="type-sidebar__section-chevron"
+            :class="{ 'type-sidebar__section-chevron--collapsed': !nodeTypesExpanded }"
+          />
+          <span class="type-sidebar__section-label">{{ t("types.nodeTypes") }}</span>
+          <span v-if="nodeTypes.length > 0" class="type-sidebar__section-count">{{ nodeTypes.length }}</span>
+        </button>
+        <div v-show="nodeTypesExpanded" class="type-sidebar__section-content">
+        <div v-if="nodeTypes.length === 0" class="type-sidebar__empty">{{ t("types.noTypes") }}</div>
+        <div v-else-if="filteredNodeTypes.length === 0" class="type-sidebar__empty">{{ t("common.nothingFound") }}</div>
+        <ul v-else class="type-sidebar__items">
+            <li
+              v-for="(typeItem, idx) in filteredNodeTypes"
+              :key="typeItem.id"
+              class="type-sidebar__item"
+              :class="{ 'type-sidebar__item--active': selectedTypeId === typeItem.id }"
+              :style="{ animationDelay: `${idx * 30}ms` }"
+              role="button"
+              tabindex="0"
+              @click="emit('selectType', typeItem.id)"
+              @keydown.enter.prevent="emit('selectType', typeItem.id)"
+              @keydown.space.prevent="emit('selectType', typeItem.id)"
+            >
+              <img
+                v-if="typeItem.parsedAttrs?.icon"
+                class="type-sidebar__item-icon type-sidebar__item-icon--svg"
+                :src="`/icons/${typeItem.parsedAttrs.icon}.svg`"
+                :alt="typeItem.name ?? ''"
+              >
+              <UiIcon v-else :name="DEFAULT_ENTITY_ICONS.nodeType" class="type-sidebar__item-icon" />
+              <div class="type-sidebar__item-info">
+                <span class="type-sidebar__item-name">{{ typeItem.name || t("common.unnamed") }}</span>
+                <span v-if="!typeItem._isNew && toAccessLabel(typeItem.accessPermission, locale)" class="type-sidebar__item-badge">
+                  {{ toAccessLabel(typeItem.accessPermission, locale) }}
+                </span>
+              </div>
+              <span v-if="typeItem._isNew" class="type-sidebar__item-new">{{ t("common.new") }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="type-sidebar__section">
+        <button
+          type="button"
+          class="type-sidebar__section-header"
+          :aria-expanded="linkTypesExpanded"
+          @click="linkTypesExpanded = !linkTypesExpanded"
+        >
+          <UiIcon
+            name="expand_more"
+            class="type-sidebar__section-chevron"
+            :class="{ 'type-sidebar__section-chevron--collapsed': !linkTypesExpanded }"
+          />
+          <span class="type-sidebar__section-label">{{ t("types.linkTypes") }}</span>
+          <span v-if="linkTypes.length > 0" class="type-sidebar__section-count">{{ linkTypes.length }}</span>
+        </button>
+        <div v-show="linkTypesExpanded" class="type-sidebar__section-content">
+        <div v-if="linkTypes.length === 0" class="type-sidebar__empty">{{ t("types.noTypes") }}</div>
+        <div v-else-if="filteredLinkTypes.length === 0" class="type-sidebar__empty">{{ t("common.nothingFound") }}</div>
+        <ul v-else class="type-sidebar__items">
+            <li
+              v-for="(typeItem, idx) in filteredLinkTypes"
+              :key="typeItem.id"
+              class="type-sidebar__item type-sidebar__item--link"
+              :class="{ 'type-sidebar__item--active': selectedTypeId === typeItem.id }"
+              :style="{ animationDelay: `${idx * 30}ms` }"
+              role="button"
+              tabindex="0"
+              @click="emit('selectType', typeItem.id)"
+              @keydown.enter.prevent="emit('selectType', typeItem.id)"
+              @keydown.space.prevent="emit('selectType', typeItem.id)"
+            >
+              <img
+                v-if="typeItem.parsedAttrs?.icon"
+                class="type-sidebar__item-icon type-sidebar__item-icon--svg"
+                :src="`/icons/${typeItem.parsedAttrs.icon}.svg`"
+                :alt="typeItem.name ?? ''"
+              >
+              <UiIcon v-else :name="DEFAULT_ENTITY_ICONS.link" class="type-sidebar__item-icon" />
+              <div class="type-sidebar__item-info">
+                <span class="type-sidebar__item-name">{{ typeItem.name || t("common.unnamed") }}</span>
+                <span v-if="!typeItem._isNew && toAccessLabel(typeItem.accessPermission, locale)" class="type-sidebar__item-badge">
+                  {{ toAccessLabel(typeItem.accessPermission, locale) }}
+                </span>
+              </div>
+              <span v-if="typeItem._isNew" class="type-sidebar__item-new">{{ t("common.new") }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
       </template>
     </div>
   </aside>
 </template>
 
 <style scoped>
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes pulseGlow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.sidebar {
+.type-sidebar {
   width: 272px;
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  min-width: 0;
 }
 
-.sidebar__header {
+.type-sidebar__header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 18px 12px;
+  justify-content: space-between;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.sidebar__header-icon {
-  font-size: 20px;
-  color: var(--primary);
+.type-sidebar__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.sidebar__header-text {
-  font-size: 14px;
+.type-sidebar__title {
+  margin: 0;
+  font-size: var(--heading-font-size, 14px);
   font-weight: 600;
   color: var(--base-text);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--heading-letter-spacing, -0.01em);
 }
 
-.sidebar__search {
-  position: relative;
+.type-sidebar__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.type-sidebar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.add-btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.add-btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.type-sidebar__search {
+  display: flex;
+  align-items: center;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.sidebar__search-icon {
+.type-sidebar__search-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.type-sidebar__search-icon {
   position: absolute;
-  left: 20px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   pointer-events: none;
 }
 
-.sidebar__search-input {
+.type-sidebar__search-input {
   width: 100%;
   padding: 7px 10px 7px 34px;
   font-size: 13px;
@@ -228,18 +326,18 @@ const filteredLinkTypes = computed(() => {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.sidebar__search-input:focus {
+.type-sidebar__search-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
 }
 
-.sidebar__search-input::placeholder {
+.type-sidebar__search-input::placeholder {
   color: var(--text-subtle);
 }
 
-.sidebar__clear-btn {
+.type-sidebar__clear-btn {
   position: absolute;
-  right: 18px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -256,69 +354,94 @@ const filteredLinkTypes = computed(() => {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.sidebar__clear-btn .material-symbols-outlined {
-  font-size: 14px;
+.type-sidebar__clear-btn .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
-.sidebar__clear-btn:hover {
+.type-sidebar__clear-btn:hover {
   background: var(--border-strong);
   color: var(--base-text);
 }
 
-/* Sections */
-.type-section {
-  padding: 14px 0 8px;
+.type-sidebar__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px;
 }
 
-.type-section + .type-section {
+.type-sidebar__section {
+  padding-top: 10px;
+}
+
+.type-sidebar__section + .type-sidebar__section {
+  margin-top: 4px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
-.type-section__header {
+.type-sidebar__section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px 8px;
+  gap: 6px;
+  width: 100%;
+  padding: 0 4px 6px;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s ease;
 }
 
-.type-section__title {
-  margin: 0;
+.type-sidebar__section-header:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.type-sidebar__section-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.type-sidebar__section-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.type-sidebar__section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  flex: 1;
+  min-width: 0;
+}
+
+.type-sidebar__section-count {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-subtle);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.type-section__add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
   background: var(--surface-strong);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
-.type-section__add-btn .material-symbols-outlined {
-  font-size: 16px;
+.type-sidebar__section-content {
+  padding-top: 2px;
 }
 
-.type-section__add-btn:hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: scale(1.08);
-}
-
-.type-section__loading,
-.type-section__empty {
-  padding: 12px 18px;
+.type-sidebar__loading,
+.type-sidebar__empty {
+  padding: 12px 10px;
   font-size: 13px;
   color: var(--text-subtle);
   display: flex;
@@ -326,90 +449,143 @@ const filteredLinkTypes = computed(() => {
   gap: 8px;
 }
 
-.loading-pulse {
+.type-sidebar__loading-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--primary);
-  animation: pulseGlow 1s ease-in-out infinite;
+  animation: typeSidebarPulse 1s ease-in-out infinite;
   flex-shrink: 0;
 }
 
-/* List */
-.type-list {
+@keyframes typeSidebarPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.type-sidebar__items {
   list-style: none;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
-.type-list__item {
+.type-sidebar__item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: none;
   border-radius: 8px;
+  background: transparent;
   cursor: pointer;
-  font-size: 13px;
-  color: var(--base-text);
-  transition: all 0.15s ease;
-  animation: fadeSlideIn 0.3s ease both;
-  position: relative;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
+  border-left: 3px solid transparent;
+  box-sizing: border-box;
+  animation: typeSidebarFadeIn 0.25s ease both;
 }
 
-.type-list__item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%) scaleY(0);
-  width: 3px;
-  height: 60%;
-  border-radius: 0 2px 2px 0;
-  background: var(--primary);
-  transition: transform 0.2s ease;
-}
-
-.type-list__item:hover {
+.type-sidebar__item:hover {
   background: var(--surface-strong);
 }
 
-.type-list__item--selected {
+.type-sidebar__item:not(.type-sidebar__item--active):hover {
+  border-left-color: rgba(124, 92, 252, 0.3);
+}
+
+.type-sidebar__item--active {
   background: var(--primary-soft);
-  color: var(--primary);
-  font-weight: 500;
+  border-left-color: var(--primary);
 }
 
-.type-list__item--selected::before {
-  transform: translateY(-50%) scaleY(1);
-}
-
-.type-list__item--selected:hover {
+.type-sidebar__item--active:hover {
   background: var(--primary-soft);
 }
 
-.type-list__icon {
-  font-size: 18px;
+.type-sidebar__item--link.type-sidebar__item--active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-left-color: var(--accent);
+}
+
+.type-sidebar__item--link.type-sidebar__item--active:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.type-sidebar__item--link:not(.type-sidebar__item--active):hover {
+  border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+.type-sidebar__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+@keyframes typeSidebarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.type-sidebar__item-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--text-subtle);
   flex-shrink: 0;
-  opacity: 0.7;
 }
 
-.type-list__item--selected .type-list__icon {
-  opacity: 1;
+.type-sidebar__item-icon--svg {
+  object-fit: contain;
 }
 
-.type-list__name {
-  flex: 1;
+.type-sidebar__item--active .type-sidebar__item-icon {
+  color: var(--primary);
+}
+
+.type-sidebar__item--link .type-sidebar__item-icon {
+  color: var(--accent);
+}
+
+.type-sidebar__item--link.type-sidebar__item--active .type-sidebar__item-icon {
+  color: var(--accent);
+}
+
+.type-sidebar__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
+  flex: 1;
+}
+
+.type-sidebar__item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--base-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.type-list__badge {
+.type-sidebar__item-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-sidebar__item-new {
   font-size: 10px;
   font-weight: 600;
   color: var(--accent);
@@ -419,16 +595,5 @@ const filteredLinkTypes = computed(() => {
   text-transform: uppercase;
   flex-shrink: 0;
   letter-spacing: 0.02em;
-}
-
-.type-list__access-badge {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--primary);
-  background: var(--primary-soft);
-  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
-  padding: 2px 7px;
-  border-radius: 4px;
-  flex-shrink: 0;
 }
 </style>

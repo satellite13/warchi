@@ -120,9 +120,7 @@ onBeforeUnmount(() => {
         </slot>
         <template v-else>{{ displayLabel }}</template>
       </span>
-      <span class="material-symbols-outlined searchable-select__arrow">
-        {{ isOpen ? 'expand_less' : 'expand_more' }}
-      </span>
+      <UiIcon :name="isOpen ? 'expand_less' : 'expand_more'" class="searchable-select__arrow" />
     </div>
     <Teleport to="body">
       <div
@@ -214,7 +212,8 @@ onBeforeUnmount(() => {
 }
 
 .searchable-select__arrow {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   flex-shrink: 0;
 }

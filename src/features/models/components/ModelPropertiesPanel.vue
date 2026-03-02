@@ -167,10 +167,10 @@ function regexTest(property: CustomProperty, value: string): boolean | null {
         class="mp-doc-btn"
         @click="onOpenNodeDocument?.(selectedNode)"
       >
-        <span class="material-symbols-outlined">description</span>
+        <UiIcon name="description" />
         {{ t('models.documentation') }}
         <span v-if="selectedNode.parsedAttrs.documentFileId" class="mp-doc-btn__badge">
-          <span class="material-symbols-outlined">check_circle</span>
+          <UiIcon name="check_circle" />
         </span>
       </button>
 
@@ -764,7 +764,7 @@ function regexTest(property: CustomProperty, value: string): boolean | null {
   border-color: var(--primary);
   color: var(--primary);
 }
-.mp-doc-btn .material-symbols-outlined {
+.mp-doc-btn .ui-icon {
   font-size: 16px;
 }
 .mp-doc-btn__badge {
@@ -773,7 +773,7 @@ function regexTest(property: CustomProperty, value: string): boolean | null {
   align-items: center;
   color: var(--success, #22c55e);
 }
-.mp-doc-btn__badge .material-symbols-outlined {
+.mp-doc-btn__badge .ui-icon {
   font-size: 14px;
 }
 </style>

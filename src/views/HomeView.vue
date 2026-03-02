@@ -10,6 +10,7 @@ import { useDashboard } from "../composables/useDashboard"
 import { getUserDisplayName } from "../utils/userDisplay"
 import { getGradient } from "../utils/gradientColors"
 import { formatDate } from "../utils/formatDate"
+import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
 
@@ -36,7 +37,7 @@ const userDisplayName = computed(() => {
 const statCards = computed(() => [
   {
     key: "models",
-    icon: "schema",
+    icon: DEFAULT_ENTITY_ICONS.model,
     label: t("home.models"),
     value: stats.value.models,
     sub: t("home.versions", { count: totalVersions.value.models }),
@@ -45,7 +46,7 @@ const statCards = computed(() => [
   },
   {
     key: "notations",
-    icon: "graph_3",
+    icon: DEFAULT_ENTITY_ICONS.notation,
     label: t("home.notations"),
     value: stats.value.notations,
     sub: t("home.versions", { count: totalVersions.value.notations }),
@@ -54,7 +55,7 @@ const statCards = computed(() => [
   },
   {
     key: "nodeTypes",
-    icon: "category",
+    icon: DEFAULT_ENTITY_ICONS.nodeType,
     label: t("home.nodeTypes"),
     value: stats.value.nodeTypes,
     sub: t("home.definitions"),
@@ -63,7 +64,7 @@ const statCards = computed(() => [
   },
   {
     key: "linkTypes",
-    icon: "link",
+    icon: DEFAULT_ENTITY_ICONS.link,
     label: t("home.linkTypes"),
     value: stats.value.linkTypes,
     sub: t("home.definitions"),
@@ -187,7 +188,7 @@ const releaseNotes = computed(() => {
             @click="goTo(card.route)"
           >
             <div class="stat-card__icon-wrap">
-              <span class="material-symbols-outlined stat-card__icon">{{ card.icon }}</span>
+              <UiIcon :name="card.icon" class="stat-card__icon" />
             </div>
             <div class="stat-card__data">
               <span class="stat-card__value" :class="{ 'stat-card__value--loading': isLoading }">
@@ -206,18 +207,18 @@ const releaseNotes = computed(() => {
             <!-- Recent Models -->
             <section class="section">
               <div class="section__header">
-                <span class="material-symbols-outlined section__icon">schema</span>
+                <UiIcon name="schema" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
                 <button type="button" class="section__link" @click="goTo('models')">
                   {{ t("home.sectionAllModels") }}
-                  <span class="material-symbols-outlined">arrow_forward</span>
+                  <UiIcon name="arrow_forward" />
                 </button>
               </div>
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 3" :key="i" class="skeleton-item" />
               </div>
               <div v-else-if="recentModels.length === 0" class="section__empty">
-                <span class="material-symbols-outlined">folder_off</span>
+                <UiIcon name="folder_off" />
                 <span>{{ t("home.sectionNoModels") }}</span>
               </div>
               <div v-else class="entity-list">
@@ -241,18 +242,18 @@ const releaseNotes = computed(() => {
             <!-- Recent Notations -->
             <section class="section">
               <div class="section__header">
-                <span class="material-symbols-outlined section__icon">graph_3</span>
+                <UiIcon name="account_tree" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
                 <button type="button" class="section__link" @click="goTo('notations')">
                   {{ t("home.sectionAllNotations") }}
-                  <span class="material-symbols-outlined">arrow_forward</span>
+                  <UiIcon name="arrow_forward" />
                 </button>
               </div>
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 3" :key="i" class="skeleton-item" />
               </div>
               <div v-else-if="recentNotations.length === 0" class="section__empty">
-                <span class="material-symbols-outlined">folder_off</span>
+                <UiIcon name="folder_off" />
                 <span>{{ t("home.sectionNoNotations") }}</span>
               </div>
               <div v-else class="entity-list">
@@ -275,7 +276,7 @@ const releaseNotes = computed(() => {
 
             <section class="section release-notes">
               <div class="section__header">
-                <span class="material-symbols-outlined section__icon">new_releases</span>
+                <UiIcon name="new_releases" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionReleaseNotes", { version: appVersion }) }}</h2>
               </div>
               <ul v-if="releaseNotes.length > 0" class="release-notes__list">
@@ -284,7 +285,7 @@ const releaseNotes = computed(() => {
                 </li>
               </ul>
               <div v-else class="section__empty section__empty--compact">
-                <span class="material-symbols-outlined">description</span>
+                <UiIcon name="description" />
                 <span>{{ t("home.sectionReleaseNotesEmpty") }}</span>
               </div>
             </section>
@@ -295,7 +296,7 @@ const releaseNotes = computed(() => {
             <!-- Quick Actions -->
             <section class="section section--compact">
               <div class="section__header">
-                <span class="material-symbols-outlined section__icon">bolt</span>
+                <UiIcon name="bolt" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
               </div>
               <div class="actions-grid">
@@ -307,7 +308,7 @@ const releaseNotes = computed(() => {
                   :style="{ '--action-color': action.color }"
                   @click="goTo(action.route)"
                 >
-                  <span class="material-symbols-outlined action-btn__icon">{{ action.icon }}</span>
+                  <UiIcon :name="action.icon" class="action-btn__icon" />
                   <span class="action-btn__label">{{ action.label }}</span>
                 </button>
               </div>
@@ -316,14 +317,14 @@ const releaseNotes = computed(() => {
             <!-- Activity Feed -->
             <section class="section section--grow">
               <div class="section__header">
-                <span class="material-symbols-outlined section__icon">history</span>
+                <UiIcon name="history" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionRecentActivity") }}</h2>
               </div>
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 5" :key="i" class="skeleton-item skeleton-item--sm" />
               </div>
               <div v-else-if="recentActivity.length === 0" class="section__empty">
-                <span class="material-symbols-outlined">hourglass_empty</span>
+                <UiIcon name="hourglass_empty" />
                 <span>{{ t("home.sectionNoActivity") }}</span>
               </div>
               <div v-else class="activity-feed">
@@ -333,7 +334,7 @@ const releaseNotes = computed(() => {
                   class="activity-item"
                 >
                   <div class="activity-item__icon" :style="{ color: operationColor(log.operation) }">
-                    <span class="material-symbols-outlined">{{ operationIcon(log.operation) }}</span>
+                    <UiIcon :name="operationIcon(log.operation)" />
                   </div>
                   <div class="activity-item__body">
                     <span class="activity-item__op">{{ operationLabel(log.operation) }}</span>
@@ -503,7 +504,8 @@ const releaseNotes = computed(() => {
 }
 
 .stat-card__icon {
-  font-size: 22px;
+  width: 22px;
+  height: 22px;
   color: var(--stat-color);
 }
 
@@ -591,7 +593,8 @@ const releaseNotes = computed(() => {
 }
 
 .section__icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
 }
 
@@ -623,8 +626,9 @@ const releaseNotes = computed(() => {
   background: var(--primary-soft);
 }
 
-.section__link .material-symbols-outlined {
-  font-size: 14px;
+.section__link .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .section__empty {
@@ -642,8 +646,9 @@ const releaseNotes = computed(() => {
   padding: 8px 0 2px;
 }
 
-.section__empty .material-symbols-outlined {
-  font-size: 32px;
+.section__empty .ui-icon {
+  width: 32px;
+  height: 32px;
   opacity: 0.5;
 }
 
@@ -763,7 +768,8 @@ const releaseNotes = computed(() => {
 }
 
 .action-btn__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
   color: var(--action-color);
 }
 
@@ -807,8 +813,9 @@ const releaseNotes = computed(() => {
   background: var(--surface-strong);
 }
 
-.activity-item__icon .material-symbols-outlined {
-  font-size: 15px;
+.activity-item__icon .ui-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .activity-item__body {

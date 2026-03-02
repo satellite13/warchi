@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import {RouterLink} from "vue-router";
+import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
+import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
 
 const { isAdmin } = useAuth();
 const { t } = useI18n();
@@ -10,28 +11,28 @@ const { t } = useI18n();
 <template>
   <nav class="app-nav">
     <RouterLink to="/" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.home')">home</span>{{ t("nav.home") }}
+      <UiIcon name="home" :alt="t('nav.home')" />{{ t("nav.home") }}
     </RouterLink>
     <RouterLink to="/models" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.models')">schema</span>{{ t("nav.models") }}
+      <UiIcon :name="DEFAULT_ENTITY_ICONS.model" :alt="t('nav.models')" />{{ t("nav.models") }}
     </RouterLink>
     <RouterLink to="/notations" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.notations')">graph_3</span>{{ t("nav.notations") }}
+      <UiIcon :name="DEFAULT_ENTITY_ICONS.notation" :alt="t('nav.notations')" />{{ t("nav.notations") }}
     </RouterLink>
     <RouterLink to="/types" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.types')">category</span>{{ t("nav.types") }}
+      <UiIcon :name="DEFAULT_ENTITY_ICONS.nodeType" :alt="t('nav.types')" />{{ t("nav.types") }}
     </RouterLink>
     <RouterLink to="/shapes" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.shapes')">hexagon</span>{{ t("nav.shapes") }}
+      <UiIcon name="hexagon" :alt="t('nav.shapes')" />{{ t("nav.shapes") }}
     </RouterLink>
     <RouterLink to="/docs" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.docs')">menu_book</span>{{ t("nav.docs") }}
+      <UiIcon name="menu_book" :alt="t('nav.docs')" />{{ t("nav.docs") }}
     </RouterLink>
     <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.profile')">account_circle</span>{{ t("nav.profile") }}
+      <UiIcon name="account_circle" :alt="t('nav.profile')" />{{ t("nav.profile") }}
     </RouterLink>
     <RouterLink v-if="isAdmin" to="/admin/users" class="app-nav__link" active-class="app-nav__link--active">
-      <span class="material-symbols-outlined" :title="t('nav.admin')">admin_panel_settings</span>{{ t("nav.admin") }}
+      <UiIcon name="admin_panel_settings" :alt="t('nav.admin')" />{{ t("nav.admin") }}
     </RouterLink>
   </nav>
 </template>
@@ -55,7 +56,7 @@ const { t } = useI18n();
   gap: 6px;
 }
 
-.app-nav__link .material-symbols-outlined {
+.app-nav__link .ui-icon {
   font-size: 20px;
 }
 

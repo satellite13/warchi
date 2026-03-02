@@ -153,7 +153,7 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
       :title="leftCollapsed ? t('models.showLeftPanel') : t('models.hideLeftPanel')"
       @click="leftCollapsed = !leftCollapsed"
     >
-      <span class="material-symbols-outlined">{{ leftCollapsed ? "chevron_right" : "chevron_left" }}</span>
+      <UiIcon :name="leftCollapsed ? 'chevron_right' : 'chevron_left'" />
     </button>
     <button
       type="button"
@@ -161,7 +161,7 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
       :title="rightCollapsed ? t('models.showRightPanel') : t('models.hideRightPanel')"
       @click="rightCollapsed = !rightCollapsed"
     >
-      <span class="material-symbols-outlined">{{ rightCollapsed ? "chevron_left" : "chevron_right" }}</span>
+      <UiIcon :name="rightCollapsed ? 'chevron_left' : 'chevron_right'" />
     </button>
   </div>
 </template>
@@ -278,8 +278,9 @@ watch([leftCollapsed, rightCollapsed, leftWidth, rightWidth], () => {
   z-index: 10;
 }
 
-.model-panel__collapse-btn .material-symbols-outlined {
-  font-size: 16px;
+.model-panel__collapse-btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .model-panel__collapse-btn:hover {

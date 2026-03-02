@@ -35,7 +35,7 @@ const emit = defineEmits<{
         :disabled="btn.disabled"
         @click="emit('action', btn.event)"
       >
-        <span class="material-symbols-outlined">{{ btn.icon }}</span>
+        <UiIcon :name="btn.icon" />
         <span v-if="btn.badge" class="icon-toolbar__badge" />
       </button>
     </template>
@@ -48,7 +48,7 @@ const emit = defineEmits<{
   align-items: center;
   gap: 2px;
   padding: 5px 6px;
-  background: var(--surface-strong);
+  background: transparent;
   border-radius: var(--radius-sm);
 }
 
@@ -79,8 +79,9 @@ const emit = defineEmits<{
   pointer-events: none;
 }
 
-.icon-toolbar__btn .material-symbols-outlined {
-  font-size: 20px;
+.icon-toolbar__btn .ui-icon {
+  width: 20px;
+  height: 20px;
   line-height: 1;
 }
 

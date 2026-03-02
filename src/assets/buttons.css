@@ -18,8 +18,9 @@
   cursor: not-allowed;
 }
 
-.btn .material-symbols-outlined {
-  font-size: 18px;
+.btn .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .btn--primary {

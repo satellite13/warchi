@@ -22,7 +22,7 @@ const emit = defineEmits<{
         :class="{ 'tab-panel__tab--active': modelValue === tab.id }"
         @click="emit('update:modelValue', tab.id)"
       >
-        <span v-if="tab.icon" class="material-symbols-outlined tab-panel__tab-icon">{{ tab.icon }}</span>
+        <UiIcon v-if="tab.icon" :name="tab.icon" class="tab-panel__tab-icon" />
         <span class="tab-panel__tab-label">{{ tab.label }}</span>
       </button>
     </div>
@@ -86,7 +86,8 @@ const emit = defineEmits<{
 }
 
 .tab-panel__tab-icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .tab-panel__tab-label {

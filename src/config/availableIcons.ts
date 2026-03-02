@@ -1,7 +1,7 @@
 /**
- * SVG icons from public/icons/ - same set as in notation editor NodeStylePanel
+ * Archimate-style SVG icons from public/icons/ (node icon on diagram, NodeStylePanel).
  */
-export const AVAILABLE_ICONS = [
+export const ARCHIMATE_ICONS = [
   'actor',
   'artifact',
   'assessment',
@@ -57,6 +57,11 @@ export const AVAILABLE_ICONS = [
   'work_package',
 ] as const
 
-export type AvailableIcon = (typeof AVAILABLE_ICONS)[number]
+export type ArchimateIcon = (typeof ARCHIMATE_ICONS)[number]
 
-export const AVAILABLE_ICON_OPTIONS = AVAILABLE_ICONS.map((name) => ({ id: name, label: name }))
+export type IconOption = { id: string; label: string }
+
+export const ARCHIMATE_ICON_OPTIONS: IconOption[] = ARCHIMATE_ICONS.map((name) => ({
+  id: name,
+  label: name,
+}))

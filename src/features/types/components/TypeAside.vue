@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue"
 import { useI18n } from "vue-i18n"
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import BaseModal from "../../../components/modals/BaseModal.vue"
 
 defineProps<{
@@ -28,11 +29,12 @@ const { t } = useI18n()
         @click="showAttrs = !showAttrs"
         @keydown.enter="showAttrs = !showAttrs"
       >
-        <span
-          class="material-symbols-outlined aside-panel__chevron"
+        <UiIcon
+          name="expand_more"
+          class="aside-panel__chevron"
           :class="{ 'aside-panel__chevron--collapsed': !showAttrs }"
-        >expand_more</span>
-        <span class="material-symbols-outlined aside-panel__icon">data_object</span>
+        />
+        <UiIcon name="data_object" class="aside-panel__icon" />
         attrs
         <button
           type="button"
@@ -40,7 +42,7 @@ const { t } = useI18n()
           :title="t('types.openFullscreen')"
           @click.stop="showAttrsModal = true"
         >
-          <span class="material-symbols-outlined">open_in_full</span>
+          <UiIcon name="open_in_full" />
         </button>
       </div>
       <pre v-if="showAttrs" class="json-preview">{{ attrsJson }}</pre>
@@ -55,10 +57,11 @@ const { t } = useI18n()
         @click="showUsages = !showUsages"
         @keydown.enter="showUsages = !showUsages"
       >
-        <span
-          class="material-symbols-outlined aside-panel__chevron"
+        <UiIcon
+          name="expand_more"
+          class="aside-panel__chevron"
           :class="{ 'aside-panel__chevron--collapsed': !showUsages }"
-        >expand_more</span>
+        />
         {{ t("types.usage") }}
         <span v-if="typeUsages.length > 0" class="aside-panel__count">
           {{ typeUsages.reduce((sum, g) => sum + g.elements.length, 0) }}
@@ -79,15 +82,13 @@ const { t } = useI18n()
         <div v-else class="usages-groups">
           <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
             <div class="usage-group__header">
-              <span class="material-symbols-outlined usage-group__icon">graph_3</span>
+              <UiIcon name="account_tree" class="usage-group__icon" />
               <span class="usage-group__name">{{ group.notationName }}</span>
               <span class="usage-group__count">{{ group.elements.length }}</span>
             </div>
             <ul class="usage-group__list">
               <li v-for="el in group.elements" :key="el.id" class="usage-item">
-                <span class="material-symbols-outlined usage-item__icon">
-                  {{ typeKind === 'node' ? 'widgets' : 'conversion_path' }}
-                </span>
+                <UiIcon :name="typeKind === 'node' ? DEFAULT_ENTITY_ICONS.nodeType : DEFAULT_ENTITY_ICONS.link" class="usage-item__icon" />
                 <span class="usage-item__name">{{ el.name }}</span>
                 <span class="usage-item__version">{{ el.version }}</span>
               </li>
@@ -218,7 +219,7 @@ const { t } = useI18n()
   transition: all 0.15s ease;
 }
 
-.aside-panel__expand-btn .material-symbols-outlined {
+.aside-panel__expand-btn .ui-icon {
   font-size: 15px;
 }
 
@@ -288,8 +289,10 @@ const { t } = useI18n()
 }
 
 .usage-group__icon {
-  font-size: 16px;
+  width: 20px;
+  height: 20px;
   color: var(--primary);
+  flex-shrink: 0;
 }
 
 .usage-group__name {
@@ -338,7 +341,8 @@ const { t } = useI18n()
 }
 
 .usage-item__icon {
-  font-size: 14px;
+  width: 20px;
+  height: 20px;
   color: var(--text-subtle);
   flex-shrink: 0;
 }

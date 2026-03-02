@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import type { CustomProperty } from "../../notations/notationAttrs"
 import IconPicker from "@/components/forms/IconPicker.vue"
+import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import PropertyRow from "./PropertyRow.vue"
 
 const props = defineProps<{
@@ -49,17 +51,12 @@ const filteredCustomProperties = computed(() => {
     <div class="type-form__header">
       <div class="type-form__title-row">
         <div class="type-form__kind-icon">
-          <span class="material-symbols-outlined">
-            {{ selectedType.kind === 'node' ? 'category' : 'link' }}
-          </span>
+          <UiIcon :name="selectedType.kind === 'node' ? DEFAULT_ENTITY_ICONS.nodeType : DEFAULT_ENTITY_ICONS.link" />
         </div>
         <h2 class="type-form__title">
           {{ selectedType.kind === 'node' ? t('types.nodeType') : t('types.linkType') }}
         </h2>
-        <span v-if="isDirty" class="dirty-badge" :title="t('types.unsavedChangesHint')">
-          <span class="dirty-dot"></span>
-          {{ t("types.notSaved") }}
-        </span>
+        <UnsavedBadge v-if="isDirty" tooltip-key="types.unsavedChangesHint" />
       </div>
       <div class="type-form__actions">
         <button
@@ -69,7 +66,7 @@ const filteredCustomProperties = computed(() => {
           :disabled="isSaving"
           @click="emit('share')"
         >
-          <span class="material-symbols-outlined">share</span>
+          <UiIcon name="share" />
           {{ t("common.share") }}
         </button>
         <button
@@ -79,7 +76,7 @@ const filteredCustomProperties = computed(() => {
           :disabled="isSaving"
           @click="emit('delete')"
         >
-          <span class="material-symbols-outlined">delete</span>
+          <UiIcon name="delete" />
           {{ t("common.delete") }}
         </button>
         <button
@@ -88,7 +85,7 @@ const filteredCustomProperties = computed(() => {
           :disabled="isSaving || !selectedType.name.trim() || !isDirty"
           @click="emit('save')"
         >
-          <span class="material-symbols-outlined">save</span>
+          <UiIcon name="save" />
           {{ isSaving ? t("common.saving") : t("common.save") }}
         </button>
       </div>
@@ -139,12 +136,12 @@ const filteredCustomProperties = computed(() => {
             :title="t('types.addProperty')"
             @click="emit('addProperty')"
           >
-            <span class="material-symbols-outlined">add</span>
+            <UiIcon name="add" />
           </button>
         </div>
 
         <div v-if="selectedType.parsedAttrs.customProperties?.length" class="properties-search">
-          <span class="material-symbols-outlined properties-search__icon">search</span>
+          <UiIcon name="search" class="properties-search__icon" />
           <input
             v-model="propertySearchQuery"
             class="properties-search__input"
@@ -158,7 +155,7 @@ const filteredCustomProperties = computed(() => {
             :title="t('types.clearFilter')"
             @click="propertySearchQuery = ''"
           >
-            <span class="material-symbols-outlined">close</span>
+            <UiIcon name="close" />
           </button>
         </div>
 
@@ -173,7 +170,7 @@ const filteredCustomProperties = computed(() => {
             :title="t('types.addProperty')"
             @click="emit('addProperty')"
           >
-            <span class="material-symbols-outlined">add</span>
+            <UiIcon name="add" />
           </button>
         </div>
 
@@ -210,16 +207,6 @@ const filteredCustomProperties = computed(() => {
   }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes pulseGlow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
 .type-form {
   flex: 1;
   min-width: 0;
@@ -252,7 +239,7 @@ const filteredCustomProperties = computed(() => {
   flex-shrink: 0;
 }
 
-.type-form__kind-icon .material-symbols-outlined {
+.type-form__kind-icon .ui-icon {
   font-size: 20px;
 }
 
@@ -275,31 +262,6 @@ const filteredCustomProperties = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-/* Dirty indicator */
-.dirty-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--warning);
-  background: var(--warning-soft);
-  padding: 4px 12px;
-  border-radius: 20px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  animation: fadeIn 0.2s ease;
-}
-
-.dirty-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warning);
-  flex-shrink: 0;
-  animation: pulseGlow 1.5s ease-in-out infinite;
 }
 
 /* Form sections */
@@ -361,7 +323,7 @@ const filteredCustomProperties = computed(() => {
   transition: all 0.2s ease;
 }
 
-.add-btn .material-symbols-outlined {
+.add-btn .ui-icon {
   font-size: 16px;
 }
 
@@ -387,7 +349,7 @@ const filteredCustomProperties = computed(() => {
   transition: all 0.15s ease;
 }
 
-.link-btn--icon .material-symbols-outlined {
+.link-btn--icon .ui-icon {
   font-size: 16px;
 }
 
@@ -454,7 +416,7 @@ const filteredCustomProperties = computed(() => {
   color: var(--base-text);
 }
 
-.properties-search__clear .material-symbols-outlined {
+.properties-search__clear .ui-icon {
   font-size: 16px;
 }
 </style>

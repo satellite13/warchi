@@ -62,7 +62,7 @@ const html = computed(() => {
 <template>
   <div class="docs-content">
     <div v-if="isLoading" class="docs-content__loading">
-      <span class="material-symbols-outlined docs-content__spinner">progress_activity</span>
+      <UiIcon name="progress_activity" class="docs-content__spinner" />
       {{ t("common.loading") }}
     </div>
     <!-- eslint-disable-next-line vue/no-v-html -->
@@ -89,7 +89,8 @@ const html = computed(() => {
 }
 
 .docs-content__spinner {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
   animation: spin 1s linear infinite;
 }
 

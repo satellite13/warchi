@@ -24,6 +24,8 @@ export interface EntityListConfig<T extends VersionedEntity = VersionedEntity> {
   renameFailedMessage?: string;
   /** Построить тело PUT-запроса для переименования */
   buildRenameRequest?: (item: T, newName: string) => unknown;
+  /** Построить тело PUT-запроса для обновления attrs (например, иконка карточки) */
+  buildUpdateAttrsRequest?: (item: T, nextAttrs: string | null) => unknown;
 }
 
 export interface SourceVersion {
@@ -73,6 +75,15 @@ export interface EntityListReturn<T extends VersionedEntity> {
   getSelectedItem: (group: EntityGroup<T>) => T | null;
   handleVersionChange: (groupName: string, version: string) => void;
   validateCreate: () => string | null;
+
+  showIconModal: Ref<boolean>;
+  itemToUpdateIcon: Ref<T | null>;
+  iconPickerValue: Ref<string>;
+  isUpdatingIcon: Ref<boolean>;
+  iconUpdateError: Ref<string | null>;
+  openIconModal: (item: T) => void;
+  closeIconModal: () => void;
+  submitIconChange: () => Promise<void>;
 }
 
 export function useEntityList<T extends VersionedEntity>(
@@ -104,6 +115,12 @@ export function useEntityList<T extends VersionedEntity>(
   const renameName = ref("");
   const renameError = ref<string | null>(null);
   const isRenaming = ref(false);
+
+  const showIconModal = ref(false);
+  const itemToUpdateIcon = ref<T | null>(null) as Ref<T | null>;
+  const iconPickerValue = ref("");
+  const isUpdatingIcon = ref(false);
+  const iconUpdateError = ref<string | null>(null);
 
   const groupedItems = computed(() => {
     const groups = new Map<string, T[]>();
@@ -471,6 +488,59 @@ export function useEntityList<T extends VersionedEntity>(
     };
   };
 
+  const openIconModal = (item: T) => {
+    const withAttrs = item as T & { attrs?: string | null };
+    let currentIcon = "";
+    try {
+      const parsed = withAttrs.attrs ? JSON.parse(withAttrs.attrs) : {};
+      if (typeof parsed?.icon === "string") currentIcon = parsed.icon;
+    } catch {
+      // ignore
+    }
+    itemToUpdateIcon.value = item;
+    iconPickerValue.value = currentIcon;
+    iconUpdateError.value = null;
+    showIconModal.value = true;
+  };
+
+  const closeIconModal = () => {
+    showIconModal.value = false;
+    itemToUpdateIcon.value = null;
+    iconPickerValue.value = "";
+    iconUpdateError.value = null;
+    isUpdatingIcon.value = false;
+  };
+
+  const submitIconChange = async () => {
+    const item = itemToUpdateIcon.value;
+    if (!item || !config.buildUpdateAttrsRequest) return;
+    const withAttrs = item as T & { attrs?: string | null };
+    let nextAttrsObj: Record<string, unknown> = {};
+    try {
+      if (withAttrs.attrs) nextAttrsObj = JSON.parse(withAttrs.attrs) as Record<string, unknown>;
+    } catch {
+      // ignore
+    }
+    nextAttrsObj.icon = iconPickerValue.value || undefined;
+    if (nextAttrsObj.icon === undefined) delete nextAttrsObj.icon;
+    const nextAttrsStr = Object.keys(nextAttrsObj).length > 0 ? JSON.stringify(nextAttrsObj) : null;
+
+    isUpdatingIcon.value = true;
+    iconUpdateError.value = null;
+    try {
+      const body = config.buildUpdateAttrsRequest(item, nextAttrsStr);
+      const result = await apiPut<T>(`/${config.endpoint}/${item.id}`, body);
+      if (!result.success) throw new Error(result.error.message);
+      items.value = items.value.map((i) => (i.id === item.id ? result.data : i));
+      closeIconModal();
+    } catch (error) {
+      iconUpdateError.value =
+        error instanceof Error ? error.message : t("common.errorSave");
+    } finally {
+      isUpdatingIcon.value = false;
+    }
+  };
+
   onMounted(() => {
     loadItems();
   });
@@ -516,6 +586,15 @@ export function useEntityList<T extends VersionedEntity>(
     renameItem,
     getSelectedItem,
     handleVersionChange,
-    validateCreate
+    validateCreate,
+
+    showIconModal,
+    itemToUpdateIcon,
+    iconPickerValue,
+    isUpdatingIcon,
+    iconUpdateError,
+    openIconModal,
+    closeIconModal,
+    submitIconChange
   };
 }

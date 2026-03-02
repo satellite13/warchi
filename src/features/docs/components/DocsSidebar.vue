@@ -20,7 +20,7 @@ const sectionTitle = (id: string): string => t(`docs.sections.${id}`)
         class="docs-sidebar__link"
         :class="{ 'docs-sidebar__link--active': currentSection === section.id }"
       >
-        <span class="material-symbols-outlined docs-sidebar__icon">{{ section.icon }}</span>
+        <UiIcon :name="section.icon" class="docs-sidebar__icon" />
         {{ sectionTitle(section.id) }}
       </RouterLink>
     </nav>
@@ -82,6 +82,7 @@ const sectionTitle = (id: string): string => t(`docs.sections.${id}`)
 }
 
 .docs-sidebar__icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 </style>

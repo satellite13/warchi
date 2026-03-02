@@ -29,7 +29,7 @@ const { t } = useI18n()
     <div class="shape-form__header">
       <div class="shape-form__title-row">
         <div class="shape-form__icon">
-          <span class="material-symbols-outlined">hexagon</span>
+          <UiIcon name="hexagon" />
         </div>
         <h2 class="shape-form__title">
           {{ name || t("shapes.title") }}
@@ -42,7 +42,7 @@ const { t } = useI18n()
           :disabled="isSaving || isDeleting"
           @click="emit('delete')"
         >
-          <span class="material-symbols-outlined">delete</span>
+          <UiIcon name="delete" />
           {{ t("common.delete") }}
         </button>
         <button
@@ -51,7 +51,7 @@ const { t } = useI18n()
           :disabled="isSaving || !name.trim() || !isDirty"
           @click="emit('save')"
         >
-          <span class="material-symbols-outlined">save</span>
+          <UiIcon name="save" />
           {{ isSaving ? t("common.saving") : t("common.save") }}
         </button>
       </div>
@@ -133,7 +133,7 @@ const { t } = useI18n()
   flex-shrink: 0;
 }
 
-.shape-form__icon .material-symbols-outlined {
+.shape-form__icon .ui-icon {
   font-size: 20px;
 }
 
@@ -273,7 +273,7 @@ const { t } = useI18n()
   filter: brightness(0.95);
 }
 
-.btn .material-symbols-outlined {
+.btn .ui-icon {
   font-size: 18px;
 }
 </style>

@@ -2,8 +2,9 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import AppLogo from '../../../components/layout/AppLogo.vue'
-import IconToolbar, { type ToolbarButton } from '../../notations/layout/IconToolbar.vue'
+import AppLogo from "@/components/layout/AppLogo.vue"
+import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
 
 import type { EditorDiagram } from '../types'
 
@@ -239,7 +240,7 @@ const canCreateBaseline = computed(
   <div v-if="canvasMode" class="model-header-canvas">
     <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
     <span v-if="isDiagramReadOnly" class="model-header__readonly-indicator" :title="t('models.viewOnly')">
-      <span class="material-symbols-outlined model-header__readonly-icon">visibility</span>
+      <UiIcon name="visibility" class="model-header__readonly-icon" />
       <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
     </span>
   </div>
@@ -251,7 +252,7 @@ const canCreateBaseline = computed(
         :title="t('toolbar.backToModels')"
         @click="router.push({ name: 'models' })"
       >
-        <span class="material-symbols-outlined">arrow_back</span>
+        <UiIcon name="arrow_back" />
       </button>
       <AppLogo size="sm" />
       <span class="model-header__divider">/</span>
@@ -273,14 +274,11 @@ const canCreateBaseline = computed(
           @click="startModelRename"
         >
           <span class="model-header__title">{{ modelName || t('toolbar.modelEditor') }}</span>
-          <span class="material-symbols-outlined model-header__title-edit-icon">edit</span>
+          <UiIcon name="edit" class="model-header__title-edit-icon" />
         </button>
       </div>
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
-      <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
-        <span class="dirty-dot"></span>
-        {{ t('types.notSaved') }}
-      </span>
+      <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button
         v-if="canShare"
         type="button"
@@ -288,7 +286,7 @@ const canCreateBaseline = computed(
         :title="t('toolbar.shareAccess')"
         @click="emit('share')"
       >
-        <span class="material-symbols-outlined">share</span>
+        <UiIcon name="share" />
       </button>
       <button
         type="button"
@@ -296,7 +294,7 @@ const canCreateBaseline = computed(
         :title="t('models.documentation')"
         @click="emit('action', 'open-model-doc')"
       >
-        <span class="material-symbols-outlined">article</span>
+        <UiIcon name="article" />
       </button>
     </div>
     <div v-if="hideToolbar" class="model-header__info">
@@ -325,7 +323,7 @@ const canCreateBaseline = computed(
             :disabled="!canCreateBaseline"
             @click="emit('createBaseline')"
           >
-            <span class="material-symbols-outlined">add_circle</span>
+            <UiIcon name="add_box" />
           </button>
           <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
         </template>
@@ -356,7 +354,7 @@ const canCreateBaseline = computed(
     <div v-if="!hideToolbar" class="model-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
       <span v-if="isDiagramReadOnly" class="model-header__readonly-indicator" :title="t('models.viewOnly')">
-        <span class="material-symbols-outlined model-header__readonly-icon">visibility</span>
+        <UiIcon name="visibility" class="model-header__readonly-icon" />
         <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
       </span>
     </div>
@@ -391,7 +389,6 @@ const canCreateBaseline = computed(
 .model-header-canvas :deep(.icon-toolbar) {
   padding: 2px 3px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
 }
 
 /* Diagram version & baseline in main header info */
@@ -420,19 +417,21 @@ const canCreateBaseline = computed(
   height: 24px;
   padding: 0;
   margin: 0 2px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 4px;
-  background: var(--surface);
+  background: transparent;
   color: var(--base-text);
   cursor: pointer;
 }
 
-.model-header__baseline-btn .material-symbols-outlined {
-  font-size: 16px;
+.model-header__baseline-btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .model-header__baseline-btn:hover:not(:disabled) {
-  background: var(--surface-muted);
+  background: var(--primary-soft);
+  border-color: var(--primary);
   color: var(--primary);
 }
 
@@ -631,47 +630,6 @@ const canCreateBaseline = computed(
   border-radius: 6px;
 }
 
-.dirty-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--warning);
-  background: var(--warning-soft);
-  padding: 4px 12px;
-  border-radius: 20px;
-  white-space: nowrap;
-  animation: fadeIn 0.2s ease;
-}
-
-.dirty-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warning);
-  animation: pulseGlow 1.5s ease-in-out infinite;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes pulseGlow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-
 .share-btn {
   display: flex;
   align-items: center;
@@ -681,14 +639,15 @@ const canCreateBaseline = computed(
   padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface-strong);
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.share-btn .material-symbols-outlined {
-  font-size: 16px;
+.share-btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .share-btn:hover {

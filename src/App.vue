@@ -43,7 +43,7 @@ onUnmounted(() => {
         v-if="showNewVersionToast"
         class="version-toast"
       >
-        <span class="material-symbols-outlined version-toast__icon">sync</span>
+        <UiIcon name="sync" class="version-toast__icon" />
         <span>{{ t("common.newVersionAvailable", { version: newVersion }) }}</span>
       </div>
     </Transition>
@@ -72,7 +72,8 @@ onUnmounted(() => {
 }
 
 .version-toast__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
   animation: spin 1s linear infinite;
 }
 

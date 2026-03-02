@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue"
 import { useI18n } from "vue-i18n"
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "../../../utils/version"
 import { parseTypeAttrs } from "../../notations/notationAttrs"
 import type { NodeTypeResponse } from "../../../types/api"
@@ -78,6 +79,10 @@ const rootNodes = computed(() => {
     )
   )
 })
+
+const totalNodesCount = computed(() =>
+  props.nodes.filter((n) => !n._isDeleted && n.id !== props.treeRootNodeId).length
+)
 
 const childNodes = (nodeId: string): EditorNode[] =>
   sortNodesByTreeOrder(
@@ -306,8 +311,8 @@ defineExpose({ expandToNode, focusNode })
   <div class="panel">
     <div class="panel__header">
       <div class="panel__title-row">
-        <span class="material-symbols-outlined">schema</span>
-        <span class="panel__title">{{ modelName || t("models.entityName") }}</span>
+        <h3 class="panel__title">{{ modelName || t("models.entityName") }}</h3>
+        <span v-if="totalNodesCount > 0" class="panel__count">{{ totalNodesCount }}</span>
       </div>
       <div class="panel__header-actions">
         <button
@@ -317,33 +322,36 @@ defineExpose({ expandToNode, focusNode })
           :title="syncSelectionEnabled ? t('models.disableSelectionSync') : t('models.enableSelectionSync')"
           @click="emit('toggleSyncSelection')"
         >
-          <span class="material-symbols-outlined">{{ syncSelectionEnabled ? "link" : "link_off" }}</span>
+          <UiIcon name="swap_horiz" />
         </button>
         <button type="button" class="mini-btn" :title="t('models.addRootFolder')" @click="emit('createFolder', null)">
-          <span class="material-symbols-outlined">create_new_folder</span>
+          <UiIcon name="create_new_folder" />
         </button>
         <button type="button" class="mini-btn" :title="t('models.addRootNode')" @click="emit('createNode', null)">
-          <span class="material-symbols-outlined">add_box</span>
+          <UiIcon name="add_box" />
         </button>
       </div>
     </div>
 
-    <div class="tree-search">
-      <span class="material-symbols-outlined tree-search__icon">search</span>
-      <input
-        v-model="treeSearchQuery"
-        type="text"
-        class="tree-search__input"
-        :placeholder="t('common.search')"
-      >
-      <button
-        v-if="treeSearchQuery"
-        type="button"
-        class="tree-search__clear"
-        @click="treeSearchQuery = ''"
-      >
-        <span class="material-symbols-outlined">close</span>
-      </button>
+    <div class="panel__search">
+      <div class="panel__search-wrap">
+        <UiIcon name="search" class="panel__search-icon" />
+        <input
+          v-model="treeSearchQuery"
+          type="text"
+          class="panel__search-input"
+          :placeholder="t('common.search')"
+        >
+        <button
+          v-if="treeSearchQuery"
+          type="button"
+          class="panel__search-clear"
+          :title="t('common.clearSearch')"
+          @click="treeSearchQuery = ''"
+        >
+          <UiIcon name="close" />
+        </button>
+      </div>
     </div>
 
     <div
@@ -352,7 +360,7 @@ defineExpose({ expandToNode, focusNode })
       @drop.self.prevent="onTreeDrop($event, null)"
     >
       <div v-if="filteredRootNodes.length === 0" class="tree__empty">
-        <span class="material-symbols-outlined tree__empty-icon">account_tree</span>
+        <UiIcon name="account_tree" class="tree__empty-icon" />
         <span class="tree__empty-text">{{ t("models.noNodes") }}</span>
         <span class="tree__empty-hint">{{ t("models.createFolderOrNodeHint") }}</span>
       </div>
@@ -374,9 +382,7 @@ defineExpose({ expandToNode, focusNode })
               class="tree-node__toggle"
               @click="toggleNode(node.id)"
             >
-              <span class="material-symbols-outlined">
-                {{ expandedNodes.has(node.id) ? "expand_more" : "chevron_right" }}
-              </span>
+              <UiIcon :name="expandedNodes.has(node.id) ? 'expand_more' : 'chevron_right'" />
             </button>
             <button
               type="button"
@@ -387,11 +393,15 @@ defineExpose({ expandToNode, focusNode })
             >
               <img
                 v-if="nodeTypeIconById.get(node.nodeTypeId)"
-                class="tree-node__icon-img"
+                class="tree-node__icon-svg"
                 :src="`/icons/${nodeTypeIconById.get(node.nodeTypeId)}.svg`"
-                :alt="nodeTypeNameById.get(node.nodeTypeId) ?? ''"
+                :alt="node.name"
               >
-              <span v-else class="material-symbols-outlined">{{ isDirectory(node) ? 'folder' : 'category' }}</span>
+              <UiIcon
+                v-else
+                :name="isDirectory(node) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
+                class="tree-node__icon-symbol"
+              />
               <input
                 v-if="renamingNodeId === node.id"
                 v-model="renamingNodeName"
@@ -413,7 +423,7 @@ defineExpose({ expandToNode, focusNode })
                 :title="t('models.addChildFolder')"
                 @click.stop="emit('createFolder', node.id)"
               >
-                <span class="material-symbols-outlined">create_new_folder</span>
+                <UiIcon name="create_new_folder" />
               </button>
               <button
                 v-if="isDirectory(node)"
@@ -422,7 +432,7 @@ defineExpose({ expandToNode, focusNode })
                 :title="t('models.addChildNode')"
                 @click.stop="emit('createNode', node.id)"
               >
-                <span class="material-symbols-outlined">add_box</span>
+                <UiIcon name="add_box" />
               </button>
               <button
                 v-if="isDirectory(node)"
@@ -431,7 +441,7 @@ defineExpose({ expandToNode, focusNode })
                 :title="t('models.createDiagramTitle')"
                 @click.stop="emit('createDiagram', node.id)"
               >
-                <span class="material-symbols-outlined">add_chart</span>
+                <UiIcon name="add_chart" />
               </button>
               <button
                 v-if="isDirectory(node)"
@@ -440,10 +450,10 @@ defineExpose({ expandToNode, focusNode })
                 :title="t('models.renameFolder')"
                 @click.stop="startRenameNode(node)"
               >
-                <span class="material-symbols-outlined">edit</span>
+                <UiIcon name="edit" />
               </button>
               <button type="button" class="mini-btn mini-btn--danger" :title="t('common.delete')" @click.stop="emit('deleteNode', node.id)">
-                <span class="material-symbols-outlined">delete</span>
+                <UiIcon name="delete" />
               </button>
             </div>
           </div>
@@ -463,12 +473,12 @@ defineExpose({ expandToNode, focusNode })
                 :title="t('models.openDiagramDoubleClick')"
                 @dblclick="emit('openDiagram', diagram.id)"
               >
-                <span class="material-symbols-outlined">table_chart</span>
+                <UiIcon name="table_chart" />
                 <span>{{ diagram.name }}</span>
                 <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
               </button>
               <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
-                <span class="material-symbols-outlined">delete</span>
+                <UiIcon name="delete" />
               </button>
             </div>
 
@@ -493,9 +503,7 @@ defineExpose({ expandToNode, focusNode })
                   class="tree-node__toggle"
                   @click="toggleNode(child.id)"
                 >
-                  <span class="material-symbols-outlined">
-                    {{ expandedNodes.has(child.id) ? "expand_more" : "chevron_right" }}
-                  </span>
+                  <UiIcon :name="expandedNodes.has(child.id) ? 'expand_more' : 'chevron_right'" />
                 </button>
                 <button
                   type="button"
@@ -506,11 +514,15 @@ defineExpose({ expandToNode, focusNode })
                 >
                   <img
                     v-if="nodeTypeIconById.get(child.nodeTypeId)"
-                    class="tree-node__icon-img"
+                    class="tree-node__icon-svg"
                     :src="`/icons/${nodeTypeIconById.get(child.nodeTypeId)}.svg`"
-                    :alt="nodeTypeNameById.get(child.nodeTypeId) ?? ''"
+                    :alt="child.name"
                   >
-                  <span v-else class="material-symbols-outlined">{{ isDirectory(child) ? 'folder' : 'category' }}</span>
+                  <UiIcon
+                    v-else
+                    :name="isDirectory(child) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
+                    class="tree-node__icon-symbol"
+                  />
                   <input
                     v-if="renamingNodeId === child.id"
                     v-model="renamingNodeName"
@@ -532,7 +544,7 @@ defineExpose({ expandToNode, focusNode })
                     :title="t('models.addChildFolder')"
                     @click.stop="emit('createFolder', child.id)"
                   >
-                    <span class="material-symbols-outlined">create_new_folder</span>
+                    <UiIcon name="create_new_folder" />
                   </button>
                   <button
                     v-if="isDirectory(child)"
@@ -541,7 +553,7 @@ defineExpose({ expandToNode, focusNode })
                     :title="t('models.addChildNode')"
                     @click.stop="emit('createNode', child.id)"
                   >
-                    <span class="material-symbols-outlined">add_box</span>
+                    <UiIcon name="add_box" />
                   </button>
                   <button
                     v-if="isDirectory(child)"
@@ -550,7 +562,7 @@ defineExpose({ expandToNode, focusNode })
                     :title="t('models.renameFolder')"
                     @click.stop="startRenameNode(child)"
                   >
-                    <span class="material-symbols-outlined">edit</span>
+                    <UiIcon name="edit" />
                   </button>
                   <button
                     v-if="isDirectory(child)"
@@ -558,10 +570,10 @@ defineExpose({ expandToNode, focusNode })
                     class="mini-btn"
                     @click.stop="emit('createDiagram', child.id)"
                   >
-                    <span class="material-symbols-outlined">add_chart</span>
+                    <UiIcon name="add_chart" />
                   </button>
                   <button type="button" class="mini-btn mini-btn--danger" @click.stop="emit('deleteNode', child.id)">
-                    <span class="material-symbols-outlined">delete</span>
+                    <UiIcon name="delete" />
                   </button>
                 </div>
               </div>
@@ -581,12 +593,12 @@ defineExpose({ expandToNode, focusNode })
                     :title="t('models.openDiagramDoubleClick')"
                     @dblclick="emit('openDiagram', diagram.id)"
                   >
-                    <span class="material-symbols-outlined">table_chart</span>
+                    <UiIcon name="table_chart" />
                     <span>{{ diagram.name }}</span>
                     <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
                   </button>
                   <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
-                    <span class="material-symbols-outlined">delete</span>
+                    <UiIcon name="delete" />
                   </button>
                 </div>
 
@@ -611,9 +623,7 @@ defineExpose({ expandToNode, focusNode })
                       class="tree-node__toggle"
                       @click="toggleNode(grandchild.id)"
                     >
-                      <span class="material-symbols-outlined">
-                        {{ expandedNodes.has(grandchild.id) ? "expand_more" : "chevron_right" }}
-                      </span>
+                      <UiIcon :name="expandedNodes.has(grandchild.id) ? 'expand_more' : 'chevron_right'" />
                     </button>
                     <button
                       type="button"
@@ -624,11 +634,15 @@ defineExpose({ expandToNode, focusNode })
                     >
                       <img
                         v-if="nodeTypeIconById.get(grandchild.nodeTypeId)"
-                        class="tree-node__icon-img"
+                        class="tree-node__icon-svg"
                         :src="`/icons/${nodeTypeIconById.get(grandchild.nodeTypeId)}.svg`"
-                        :alt="nodeTypeNameById.get(grandchild.nodeTypeId) ?? ''"
+                        :alt="grandchild.name"
                       >
-                      <span v-else class="material-symbols-outlined">{{ isDirectory(grandchild) ? 'folder' : 'category' }}</span>
+                      <UiIcon
+                        v-else
+                        :name="isDirectory(grandchild) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
+                        class="tree-node__icon-symbol"
+                      />
                       <input
                         v-if="renamingNodeId === grandchild.id"
                         v-model="renamingNodeName"
@@ -650,7 +664,7 @@ defineExpose({ expandToNode, focusNode })
                         :title="t('models.addChildFolder')"
                         @click.stop="emit('createFolder', grandchild.id)"
                       >
-                        <span class="material-symbols-outlined">create_new_folder</span>
+                        <UiIcon name="create_new_folder" />
                       </button>
                       <button
                         v-if="isDirectory(grandchild)"
@@ -659,7 +673,7 @@ defineExpose({ expandToNode, focusNode })
                         :title="t('models.addChildNode')"
                         @click.stop="emit('createNode', grandchild.id)"
                       >
-                        <span class="material-symbols-outlined">add_box</span>
+                        <UiIcon name="add_box" />
                       </button>
                       <button
                         v-if="isDirectory(grandchild)"
@@ -668,7 +682,7 @@ defineExpose({ expandToNode, focusNode })
                         :title="t('models.renameFolder')"
                         @click.stop="startRenameNode(grandchild)"
                       >
-                        <span class="material-symbols-outlined">edit</span>
+                        <UiIcon name="edit" />
                       </button>
                       <button
                         v-if="isDirectory(grandchild)"
@@ -676,10 +690,10 @@ defineExpose({ expandToNode, focusNode })
                         class="mini-btn"
                         @click.stop="emit('createDiagram', grandchild.id)"
                       >
-                        <span class="material-symbols-outlined">add_chart</span>
+                        <UiIcon name="add_chart" />
                       </button>
                       <button type="button" class="mini-btn mini-btn--danger" @click.stop="emit('deleteNode', grandchild.id)">
-                        <span class="material-symbols-outlined">delete</span>
+                        <UiIcon name="delete" />
                       </button>
                     </div>
                   </div>
@@ -715,6 +729,8 @@ defineExpose({ expandToNode, focusNode })
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .panel__header {
@@ -722,48 +738,60 @@ defineExpose({ expandToNode, focusNode })
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: 14px 16px;
+  flex-shrink: 0;
 }
 
 .panel__title-row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .panel__title {
-  font-size: 14px;
+  margin: 0;
+  font-size: var(--heading-font-size, 14px);
   font-weight: 600;
+  color: var(--base-text);
+  letter-spacing: var(--heading-letter-spacing, -0.01em);
+}
+
+.panel__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .panel__header-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .icon-btn,
 .mini-btn {
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.mini-btn {
   width: 22px;
   height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.icon-btn .material-symbols-outlined,
-.mini-btn .material-symbols-outlined {
-  font-size: 16px;
+.icon-btn .ui-icon,
+.mini-btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .icon-btn:hover,
@@ -785,24 +813,32 @@ defineExpose({ expandToNode, focusNode })
   background: var(--primary-soft);
 }
 
-.tree-search {
-  position: relative;
-  padding: 8px 12px;
+.panel__search {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.tree-search__icon {
+.panel__search-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.panel__search-icon {
   position: absolute;
-  left: 20px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   pointer-events: none;
 }
 
-.tree-search__input {
+.panel__search-input {
   width: 100%;
   padding: 7px 10px 7px 34px;
   font-size: 13px;
@@ -816,18 +852,18 @@ defineExpose({ expandToNode, focusNode })
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.tree-search__input:focus {
+.panel__search-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
 }
 
-.tree-search__input::placeholder {
+.panel__search-input::placeholder {
   color: var(--text-subtle);
 }
 
-.tree-search__clear {
+.panel__search-clear {
   position: absolute;
-  right: 18px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -837,18 +873,19 @@ defineExpose({ expandToNode, focusNode })
   height: 20px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 8px;
   background: var(--surface-strong);
   color: var(--text-subtle);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.tree-search__clear .material-symbols-outlined {
-  font-size: 14px;
+.panel__search-clear .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
-.tree-search__clear:hover {
+.panel__search-clear:hover {
   background: var(--border-strong);
   color: var(--base-text);
 }
@@ -857,7 +894,7 @@ defineExpose({ expandToNode, focusNode })
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 8px;
+  padding: 6px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -866,26 +903,29 @@ defineExpose({ expandToNode, focusNode })
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 8px;
   padding: 32px 16px;
+  text-align: center;
   animation: fadeIn 0.4s ease;
 }
 
 .tree__empty-icon {
-  font-size: 36px;
+  width: 28px;
+  height: 28px;
   color: var(--border-strong);
-  margin-bottom: 4px;
 }
 
 .tree__empty-text {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-muted);
+  margin: 0;
 }
 
 .tree__empty-hint {
   font-size: 12px;
   color: var(--text-subtle);
+  margin: 0;
 }
 
 .tree-node {
@@ -902,18 +942,26 @@ defineExpose({ expandToNode, focusNode })
 .tree-node__row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
   border-radius: 8px;
-  padding: 2px;
-  transition: background 0.15s ease;
+  border-left: 3px solid transparent;
+  box-sizing: border-box;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
 }
 
 .tree-node__row:hover {
   background: var(--surface-strong);
 }
 
+.tree-node__row:not(.tree-node__row--active):hover {
+  border-left-color: rgba(124, 92, 252, 0.3);
+}
+
 .tree-node__row--active {
   background: var(--primary-soft);
+  border-left-color: var(--primary);
 }
 
 .tree-node__row--active:hover {
@@ -938,13 +986,19 @@ defineExpose({ expandToNode, focusNode })
   border: none;
   background: transparent;
   color: var(--text-subtle);
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.tree-node__toggle .material-symbols-outlined {
-  font-size: 18px;
+.tree-node__toggle .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .tree-node__select {
@@ -955,9 +1009,10 @@ defineExpose({ expandToNode, focusNode })
   text-align: left;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   color: var(--base-text);
   cursor: pointer;
+  font-family: inherit;
 }
 
 .tree-node__select--unused .tree-node__name {
@@ -970,6 +1025,8 @@ defineExpose({ expandToNode, focusNode })
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+  font-weight: 500;
+  color: var(--base-text);
 }
 
 .tree-node__rename-input {
@@ -985,16 +1042,28 @@ defineExpose({ expandToNode, focusNode })
   outline: none;
 }
 
-.tree-node__icon-img {
-  width: 18px;
-  height: 18px;
+.tree-node__icon-symbol,
+.tree-node__icon-svg {
   flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--text-subtle);
+}
+
+.tree-node__icon-svg {
   object-fit: contain;
 }
 
+.tree-node__row--active .tree-node__icon-symbol,
+.tree-node__row--active .tree-node__icon-svg {
+  color: var(--primary);
+}
+
 .tree-node__type {
-  font-size: 10px;
-  color: var(--text-subtle);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1022,10 +1091,22 @@ defineExpose({ expandToNode, focusNode })
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 2px 4px;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
   margin-left: 14px;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  box-sizing: border-box;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
+}
+
+.diagram-row:hover {
+  background: var(--surface-strong);
+}
+
+.diagram-row:not(.diagram-row--active):hover {
+  border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .diagram-row .mini-btn--danger {
@@ -1038,8 +1119,12 @@ defineExpose({ expandToNode, focusNode })
 }
 
 .diagram-row--active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-left-color: var(--accent);
+}
+
+.diagram-row--active:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
 }
 
 .diagram-row__select {
@@ -1047,15 +1132,18 @@ defineExpose({ expandToNode, focusNode })
   background: transparent;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--base-text);
   cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
 }
 
 .diagram-row--active .diagram-row__select {
   color: var(--accent);
-  font-weight: 600;
 }
 
 .diagram-row__badge {
@@ -1067,6 +1155,7 @@ defineExpose({ expandToNode, focusNode })
   padding: 1px 6px;
   margin-left: 8px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 </style>

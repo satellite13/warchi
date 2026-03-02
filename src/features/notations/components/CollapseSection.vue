@@ -19,10 +19,7 @@ const emit = defineEmits<{
       @keydown.enter.prevent="emit('toggle')"
       @keydown.space.prevent="emit('toggle')"
     >
-      <span
-        class="material-symbols-outlined collapse-section__chevron"
-        :class="{ 'collapse-section__chevron--collapsed': !expanded }"
-      >expand_more</span>
+      <UiIcon name="expand_more" class="collapse-section__chevron" :class="{ 'collapse-section__chevron--collapsed': !expanded }" />
       <span class="collapse-section__label">{{ label }}</span>
       <slot name="header-extra" />
     </div>
@@ -50,7 +47,8 @@ const emit = defineEmits<{
 }
 
 .collapse-section__chevron {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   flex-shrink: 0;
   transition: transform 0.2s ease;

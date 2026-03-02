@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
       :title="leftCollapsed ? t('notations.showElementsPanel') : t('notations.hideElementsPanel')"
       @click="toggleLeft"
     >
-      <span class="material-symbols-outlined">{{ leftCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
+      <UiIcon :name="leftCollapsed ? 'chevron_right' : 'chevron_left'" />
     </button>
     <button
       type="button"
@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
       :title="rightCollapsed ? t('notations.showStylesPanel') : t('notations.hideStylesPanel')"
       @click="toggleRight"
     >
-      <span class="material-symbols-outlined">{{ rightCollapsed ? 'chevron_left' : 'chevron_right' }}</span>
+      <UiIcon :name="rightCollapsed ? 'chevron_left' : 'chevron_right'" />
     </button>
   </div>
 </template>
@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.notation-panel__collapse-btn .material-symbols-outlined {
+.notation-panel__collapse-btn .ui-icon {
   font-size: 16px;
 }
 

@@ -4,8 +4,9 @@ import { useI18n } from 'vue-i18n'
 import '@/config/mdEditor'
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
-import { useLocale } from '../../composables/useLocale'
-import { useTypeDocument } from '../../features/types/composables/useTypeDocument'
+import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import { useLocale } from "../../composables/useLocale"
+import { useTypeDocument } from "../../features/types/composables/useTypeDocument"
 
 const props = defineProps<{
   /** Display title (entity name) */
@@ -152,11 +153,12 @@ function formatSize(bytes: number): string {
         <!-- Header -->
         <div class="doc-modal__header">
           <div class="doc-modal__header-left">
-            <span class="material-symbols-outlined doc-modal__icon">description</span>
+            <UiIcon name="description" class="doc-modal__icon" />
             <h2>{{ title }}</h2>
-            <span v-if="isDocDirty && !viewingOldVersion" class="doc-modal__dirty-badge">{{
-              t('types.docNotSaved')
-            }}</span>
+            <UnsavedBadge
+              v-if="isDocDirty && !viewingOldVersion"
+              tooltip-key="types.docNotSaved"
+            />
             <span v-if="viewingOldVersion" class="doc-modal__version-badge">
               v{{ viewingVersionNumber }}
             </span>
@@ -168,7 +170,7 @@ function formatSize(bytes: number): string {
                 class="doc-modal-btn doc-modal-btn--primary"
                 @click="handleBackToCurrent"
               >
-                <span class="material-symbols-outlined">undo</span>
+                <UiIcon name="undo" />
                 {{ t('types.docBackToCurrent') }}
               </button>
             </template>
@@ -178,9 +180,7 @@ function formatSize(bytes: number): string {
                 class="doc-modal-btn doc-modal-btn--ghost"
                 @click="togglePreview"
               >
-                <span class="material-symbols-outlined">
-                  {{ isEditing ? 'visibility' : 'edit' }}
-                </span>
+                <UiIcon :name="isEditing ? 'visibility' : 'edit'" />
                 {{ isEditing ? t('types.docPreview') : t('common.edit') }}
               </button>
 
@@ -191,7 +191,7 @@ function formatSize(bytes: number): string {
                 :disabled="!canSave"
                 @click="handleSave"
               >
-                <span class="material-symbols-outlined">save</span>
+                <UiIcon name="save" />
                 {{ isDocSaving ? t('common.saving') : t('common.save') }}
               </button>
             </template>
@@ -203,12 +203,12 @@ function formatSize(bytes: number): string {
               :class="{ 'doc-modal-btn--active': showVersions }"
               @click="handleShowVersions"
             >
-              <span class="material-symbols-outlined">history</span>
+              <UiIcon name="history" />
               {{ t('types.docVersions') }}
             </button>
 
             <button type="button" class="doc-modal__close" @click="handleClose">
-              <span class="material-symbols-outlined">cancel</span>
+              <UiIcon name="cancel" />
             </button>
           </div>
         </div>
@@ -247,7 +247,7 @@ function formatSize(bytes: number): string {
 
           <!-- Error -->
           <div v-else-if="docError" class="doc-modal__error">
-            <span class="material-symbols-outlined">error</span>
+            <UiIcon name="error" />
             {{ docError }}
           </div>
 
@@ -374,7 +374,8 @@ function formatSize(bytes: number): string {
 }
 
 .doc-modal__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
   color: var(--primary);
   flex-shrink: 0;
 }
@@ -387,17 +388,6 @@ function formatSize(bytes: number): string {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.doc-modal__dirty-badge {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 12%, transparent);
-  padding: 2px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .doc-modal__version-badge {
@@ -459,7 +449,7 @@ function formatSize(bytes: number): string {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.doc-modal-btn .material-symbols-outlined {
+.doc-modal-btn .ui-icon {
   font-size: 15px;
 }
 
@@ -561,8 +551,9 @@ function formatSize(bytes: number): string {
   align-items: center;
   gap: 8px;
 }
-.doc-modal__error .material-symbols-outlined {
-  font-size: 18px;
+.doc-modal__error .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .doc-modal__editor {

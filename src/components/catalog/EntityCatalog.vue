@@ -17,6 +17,8 @@ import EntityCreateModal from "../modals/EntityCreateModal.vue";
 import EntityDeleteModal from "../modals/EntityDeleteModal.vue";
 import EntityRenameModal from "../modals/EntityRenameModal.vue";
 import ShareAccessModal from "../modals/ShareAccessModal.vue";
+import BaseModal from "../modals/BaseModal.vue";
+import IconPicker from "../forms/IconPicker.vue";
 
 const props = defineProps<{
   entityListConfig: EntityListConfig<VersionedEntity & { attrs?: string | null }>
@@ -62,8 +64,29 @@ const {
   getSelectedItem,
   handleVersionChange,
   createItem,
-  deleteItem
+  deleteItem,
+  showIconModal,
+  itemToUpdateIcon,
+  iconPickerValue,
+  isUpdatingIcon,
+  iconUpdateError,
+  openIconModal,
+  closeIconModal,
+  submitIconChange
 } = useEntityList(props.entityListConfig);
+
+function parseIconFromAttrs(attrs: string | null | undefined): string | undefined {
+  if (attrs == null) return undefined;
+  try {
+    const parsed = JSON.parse(attrs) as { icon?: string };
+    const v = parsed?.icon;
+    return typeof v === "string" && v.trim() ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const canChangeIcon = !!props.entityListConfig.buildUpdateAttrsRequest;
 
 const openEntity = (id: string) => {
   router.push({ name: props.editorRouteName, params: { id } });
@@ -125,14 +148,17 @@ const openShareModal = (item: VersionedEntity) => {
           getSelectedItem(group)?.ownerId === currentUser.id
         "
         :updated-at="getSelectedItem(group)?.updatedAt"
+        :icon="canChangeIcon ? (parseIconFromAttrs(getSelectedItem(group)?.attrs) ?? icon) : undefined"
+        :can-change-icon="canChangeIcon"
         @click="getSelectedItem(group) && openEntity(getSelectedItem(group)!.id)"
         @delete="getSelectedItem(group) && openDeleteModal(getSelectedItem(group)!)"
         @rename="getSelectedItem(group) && openRenameModal(getSelectedItem(group)!)"
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @version-change="handleVersionChange(group.name, $event)"
+        @change-icon="getSelectedItem(group) && openIconModal(getSelectedItem(group)!)"
       >
-        <template #icon>
-          <span class="material-symbols-outlined" :title="t(`${i18nPrefix}.entityName`)">{{ icon }}</span>
+        <template v-if="!canChangeIcon" #icon>
+          <UiIcon :name="icon" :alt="t(`${i18nPrefix}.entityName`)" />
         </template>
       </EntityCard>
     </section>
@@ -186,6 +212,32 @@ const openShareModal = (item: VersionedEntity) => {
       :resource-id="shareTargetId"
       @close="showShareModal = false; shareTargetId = null"
     />
+
+    <BaseModal
+      v-if="showIconModal"
+      :title="t('common.changeIcon')"
+      max-width="420px"
+      @close="closeIconModal"
+    >
+      <div class="icon-modal__body">
+        <label class="icon-modal__label">{{ t("types.icon") }}</label>
+        <IconPicker v-model="iconPickerValue" />
+        <p v-if="iconUpdateError" class="icon-modal__error">{{ iconUpdateError }}</p>
+      </div>
+      <template #footer>
+        <button type="button" class="btn btn--secondary" @click="closeIconModal">
+          {{ t("common.cancel") }}
+        </button>
+        <button
+          type="button"
+          class="btn btn--primary"
+          :disabled="isUpdatingIcon"
+          @click="submitIconChange"
+        >
+          {{ isUpdatingIcon ? t("common.saving") : t("common.save") }}
+        </button>
+      </template>
+    </BaseModal>
   </main>
 </template>
 
@@ -225,5 +277,23 @@ const openShareModal = (item: VersionedEntity) => {
   color: var(--danger);
   font-size: 14px;
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.icon-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.icon-modal__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.icon-modal__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
 }
 </style>

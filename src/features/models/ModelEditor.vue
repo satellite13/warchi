@@ -3211,11 +3211,11 @@ onBeforeUnmount(() => {
               :title="t('models.showDiagramSettings')"
               @click="canvasSettingsVisible = true"
             >
-              <span class="material-symbols-outlined">settings</span>
+              <UiIcon name="settings" />
             </button>
             <div v-else class="canvas-settings">
               <div class="canvas-settings__header">
-                <span class="material-symbols-outlined">tune</span>
+                <UiIcon name="tune" />
                 <span>{{ t('common.settings') }}</span>
                 <button
                   type="button"
@@ -3223,7 +3223,7 @@ onBeforeUnmount(() => {
                   :title="t('models.hideDiagramSettings')"
                   @click="canvasSettingsVisible = false"
                 >
-                  <span class="material-symbols-outlined">chevron_left</span>
+                  <UiIcon name="chevron_left" />
                 </button>
               </div>
               <div class="canvas-settings__list">
@@ -3237,7 +3237,7 @@ onBeforeUnmount(() => {
                   :disabled="button.disabled"
                   @click="handleToolbarAction(button.event)"
                 >
-                  <span class="material-symbols-outlined">{{ button.icon }}</span>
+                  <UiIcon :name="button.icon" />
                   <span>{{ button.title }}</span>
                 </button>
                 <div class="canvas-settings__row">
@@ -3253,7 +3253,7 @@ onBeforeUnmount(() => {
                       :disabled="!activeDiagram"
                       @click="defaultEdgeType = opt.value"
                     >
-                      <span class="material-symbols-outlined">{{ opt.icon }}</span>
+                      <UiIcon :name="opt.icon" />
                       <span>{{ opt.label }}</span>
                     </button>
                   </div>
@@ -3389,15 +3389,15 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="toast">
       <div v-if="isSaving" class="save-toast save-toast--progress">
-        <span class="material-symbols-outlined save-toast__icon spin">sync</span>
+        <UiIcon name="sync" class="save-toast__icon spin" />
         <span>{{ saveProgress || t('common.saving') }}</span>
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
-        <span class="material-symbols-outlined save-toast__icon">check_circle</span>
+        <UiIcon name="check_circle" class="save-toast__icon" />
         <span>{{ t('common.saved') }}</span>
       </div>
       <div v-else-if="saveError || uiError" class="save-toast save-toast--error">
-        <span class="material-symbols-outlined save-toast__icon">error</span>
+        <UiIcon name="error" class="save-toast__icon" />
         <span>{{ saveError || uiError }}</span>
       </div>
     </Transition>
@@ -3432,9 +3432,7 @@ onBeforeUnmount(() => {
           <span class="node-type-dropdown__value">{{
             selectedNodeTypeName || t('models.selectType')
           }}</span>
-          <span class="material-symbols-outlined node-type-dropdown__arrow">
-            {{ nodeTypeDropdownOpen ? 'expand_less' : 'expand_more' }}
-          </span>
+          <UiIcon :name="nodeTypeDropdownOpen ? 'expand_less' : 'expand_more'" class="node-type-dropdown__arrow" />
         </div>
         <div v-if="nodeTypeDropdownOpen" class="node-type-dropdown__panel">
           <input
@@ -3999,8 +3997,9 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
-.canvas-settings__header .material-symbols-outlined {
-  font-size: 14px;
+.canvas-settings__header .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .canvas-settings__hide {
@@ -4020,8 +4019,9 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-.canvas-settings__hide .material-symbols-outlined {
-  font-size: 16px;
+.canvas-settings__hide .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .canvas-settings__list {
@@ -4062,8 +4062,9 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.canvas-settings__item .material-symbols-outlined {
-  font-size: 16px;
+.canvas-settings__item .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .canvas-settings__row {
@@ -4135,7 +4136,8 @@ onBeforeUnmount(() => {
 }
 
 .save-toast__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .spin {
@@ -4200,7 +4202,8 @@ onBeforeUnmount(() => {
 }
 
 .node-type-dropdown__arrow {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
 }
 

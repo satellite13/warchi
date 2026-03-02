@@ -794,15 +794,15 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="toast">
       <div v-if="isSaving" class="save-toast save-toast--progress">
-        <span class="material-symbols-outlined save-toast__icon spin">sync</span>
+        <UiIcon name="sync" class="save-toast__icon spin" />
         <span>{{ saveProgress || t('common.saving') }}</span>
       </div>
       <div v-else-if="saveSuccess" class="save-toast save-toast--success">
-        <span class="material-symbols-outlined save-toast__icon">check_circle</span>
+        <UiIcon name="check_circle" class="save-toast__icon" />
         <span>{{ t('common.saved') }}</span>
       </div>
       <div v-else-if="saveError" class="save-toast save-toast--error">
-        <span class="material-symbols-outlined save-toast__icon">error</span>
+        <UiIcon name="error" class="save-toast__icon" />
         <span>{{ saveError }}</span>
       </div>
     </Transition>
@@ -1007,7 +1007,8 @@ onBeforeUnmount(() => {
 }
 
 .save-toast__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .spin {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import '@/config/mdEditor'
+import { ref, computed } from "vue"
+import { useI18n } from "vue-i18n"
+import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import "@/config/mdEditor"
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { useLocale } from '../../../composables/useLocale'
@@ -111,14 +112,10 @@ function formatSize(bytes: number): string {
       @click="showPanel = !showPanel"
       @keydown.enter="showPanel = !showPanel"
     >
-      <span
-        class="material-symbols-outlined doc-panel__chevron"
-        :class="{ 'doc-panel__chevron--collapsed': !showPanel }"
-        >expand_more</span
-      >
-      <span class="material-symbols-outlined doc-panel__icon">description</span>
+      <UiIcon name="expand_more" class="doc-panel__chevron" :class="{ 'doc-panel__chevron--collapsed': !showPanel }" />
+      <UiIcon name="description" class="doc-panel__icon" />
       {{ t('types.documentation') }}
-      <span v-if="isDirty" class="doc-panel__dirty-dot" :title="t('types.docNotSaved')"></span>
+      <UnsavedBadge v-if="isDirty" tooltip-key="types.docNotSaved" />
     </div>
 
     <template v-if="showPanel">
@@ -135,7 +132,7 @@ function formatSize(bytes: number): string {
 
       <!-- Error -->
       <div v-else-if="error" class="doc-panel__error">
-        <span class="material-symbols-outlined">error</span>
+        <UiIcon name="error" />
         {{ error }}
       </div>
 
@@ -145,19 +142,19 @@ function formatSize(bytes: number): string {
           <template v-if="viewingOldVersion">
             <span class="doc-panel__version-label">v{{ viewingVersionNumber }}</span>
             <button type="button" class="doc-btn doc-btn--primary" @click="handleBackToCurrent">
-              <span class="material-symbols-outlined">undo</span>
+              <UiIcon name="undo" />
               {{ t('types.docBackToCurrent') }}
             </button>
           </template>
           <template v-else-if="isEditing">
             <button type="button" class="doc-btn doc-btn--secondary" @click="stopEditing">
-              <span class="material-symbols-outlined">visibility</span>
+              <UiIcon name="visibility" />
               {{ t('types.docPreview') }}
             </button>
           </template>
           <template v-else>
             <button type="button" class="doc-btn doc-btn--secondary" @click="startEditing">
-              <span class="material-symbols-outlined">edit</span>
+              <UiIcon name="edit" />
               {{ hasDocument ? t('common.edit') : t('types.docCreate') }}
             </button>
           </template>
@@ -169,7 +166,7 @@ function formatSize(bytes: number): string {
             :class="{ 'doc-btn--active': showVersions }"
             @click="handleShowVersions"
           >
-            <span class="material-symbols-outlined">history</span>
+            <UiIcon name="history" />
             {{ t('types.docVersions') }}
           </button>
 
@@ -180,7 +177,7 @@ function formatSize(bytes: number): string {
             :disabled="!canSave"
             @click="handleSave"
           >
-            <span class="material-symbols-outlined">save</span>
+            <UiIcon name="save" />
             {{ isSaving ? t('common.saving') : t('types.docSave') }}
           </button>
         </div>
@@ -317,7 +314,8 @@ function formatSize(bytes: number): string {
 }
 
 .doc-panel__icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .doc-panel__version-label {
@@ -331,22 +329,13 @@ function formatSize(bytes: number): string {
 }
 
 .doc-panel__chevron {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   transition: transform 0.2s ease;
 }
 
 .doc-panel__chevron--collapsed {
   transform: rotate(-90deg);
-}
-
-.doc-panel__dirty-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warning);
-  flex-shrink: 0;
-  animation: pulseGlow 1.5s ease-in-out infinite;
-  margin-left: 4px;
 }
 
 .doc-panel__empty {
@@ -366,8 +355,9 @@ function formatSize(bytes: number): string {
   gap: 6px;
 }
 
-.doc-panel__error .material-symbols-outlined {
-  font-size: 16px;
+.doc-panel__error .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .loading-pulse {
@@ -406,7 +396,7 @@ function formatSize(bytes: number): string {
   cursor: not-allowed;
 }
 
-.doc-btn .material-symbols-outlined {
+.doc-btn .ui-icon {
   font-size: 15px;
 }
 

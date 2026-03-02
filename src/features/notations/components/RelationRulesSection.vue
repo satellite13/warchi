@@ -130,7 +130,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
         :aria-label="t('diagram.addLinkRule')"
         @click.stop="addRelationRule"
       >
-        <span class="material-symbols-outlined">add</span>
+        <UiIcon name="add" />
       </button>
     </template>
 
@@ -186,7 +186,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
           :title="t('common.delete')"
           @click="removeRelationRule(rule)"
         >
-          <span class="material-symbols-outlined">close</span>
+          <UiIcon name="close" />
         </button>
       </div>
     </div>
@@ -240,7 +240,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
     color 0.15s ease;
 }
 
-.rules-section__remove-btn .material-symbols-outlined {
+.rules-section__remove-btn .ui-icon {
   font-size: 14px;
 }
 
@@ -279,7 +279,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
   transition: all 0.15s ease;
 }
 
-.link-btn--icon .material-symbols-outlined {
+.link-btn--icon .ui-icon {
   font-size: 16px;
 }
 

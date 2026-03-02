@@ -13,7 +13,7 @@ const emit = defineEmits<{
 <template>
   <section class="sp-section">
     <button type="button" class="sp-section__toggle" @click="emit('toggle')">
-      <span class="material-symbols-outlined sp-section__arrow" :class="{ 'sp-section__arrow--closed': !open }">chevron_right</span>
+      <UiIcon name="chevron_right" class="sp-section__arrow" :class="{ 'sp-section__arrow--closed': !open }" />
       <span class="sp-section__name">{{ title }}</span>
       <span v-if="pill" class="sp-section__pill">{{ pill }}</span>
     </button>
@@ -48,7 +48,8 @@ const emit = defineEmits<{
 }
 
 .sp-section__arrow {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
   color: var(--text-subtle);
   transform: rotate(90deg);
   transition: transform 0.15s ease;

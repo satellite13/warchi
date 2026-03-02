@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue"
+import { computed, reactive } from "vue"
 import { useI18n } from "vue-i18n"
 import { parseNumberInput } from "@/utils/number"
+import IconPicker from "@/components/forms/IconPicker.vue"
+import type { IconOption } from "@/config/iconOptions"
 import type { CustomProperty, CustomPropertyType, InteractiveKind } from "../../notations/notationAttrs"
 
 const props = withDefaults(defineProps<{
@@ -13,7 +15,7 @@ const props = withDefaults(defineProps<{
   fromType?: boolean
   isEquivalentToType?: boolean
   showInteractiveOptions?: boolean
-  interactiveIconOptions?: { id: string; label: string }[]
+  interactiveIconOptions?: IconOption[]
 }>(), {
   onMutateProperty: undefined,
   errors: () => [] as string[],
@@ -136,45 +138,10 @@ const inputNumClass = computed(() => isSm.value ? "form-input form-input--sm for
 const selectClass = computed(() => isSm.value ? "form-select form-select--sm" : "form-select")
 const showFromTypeBadge = computed(() => props.fromType || props.isEquivalentToType)
 
-// Icon combobox: search when there are many options
-const iconSearchQuery = ref('')
-const iconDropdownOpen = ref(false)
-const ICON_DROPDOWN_MAX = 150
-
-const filteredIconOptions = computed(() => {
-  const opts = props.interactiveIconOptions ?? []
-  const q = iconSearchQuery.value.trim().toLowerCase()
-  if (!q) return opts.slice(0, ICON_DROPDOWN_MAX)
-  return opts.filter(
-    (o) => o.id.toLowerCase().includes(q) || o.label.toLowerCase().includes(q)
-  ).slice(0, ICON_DROPDOWN_MAX)
-})
-
-const selectedIconLabel = computed(() => {
-  const id = props.property.interactiveIcon
-  if (!id) return ''
-  return props.interactiveIconOptions?.find((o) => o.id === id)?.label ?? id
-})
-
-const showIconCombobox = computed(() => (props.interactiveIconOptions?.length ?? 0) > 50)
-
-function openIconDropdown() {
-  iconDropdownOpen.value = true
-  iconSearchQuery.value = ''
-}
-
-function selectIcon(id: string) {
-  props.onMutateProperty?.((p) => { p.interactiveIcon = id || undefined })
-  iconDropdownOpen.value = false
-  iconSearchQuery.value = ''
-}
-
-function closeIconDropdown() {
-  iconDropdownOpen.value = false
-}
-
-function handleIconBlur() {
-  setTimeout(closeIconDropdown, 150)
+function handleInteractiveIconChange(value: string) {
+  props.onMutateProperty?.((p) => {
+    p.interactiveIcon = value?.trim() || undefined
+  })
 }
 </script>
 
@@ -187,10 +154,11 @@ function handleIconBlur() {
       @click="emit('toggle')"
       @keydown.enter="emit('toggle')"
     >
-      <span
-        class="material-symbols-outlined property-row__chevron"
+      <UiIcon
+        name="expand_more"
+        class="property-row__chevron"
         :class="{ 'property-row__chevron--collapsed': !expanded }"
-      >expand_more</span>
+      />
       <span class="property-row__name">{{ property.name || t("common.unnamed") }}</span>
       <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
       <span
@@ -198,7 +166,7 @@ function handleIconBlur() {
         class="property-row__from-type-badge"
         :title="t('types.inheritedFromType')"
       >
-        <span class="material-symbols-outlined property-row__from-type-icon">linked_services</span>
+        <UiIcon name="linked_services" class="property-row__from-type-icon" />
         {{ t("types.typeShort") }}
       </span>
       <span v-if="property.system" class="property-row__system-badge">{{ t("types.systemShort") }}</span>
@@ -209,7 +177,7 @@ function handleIconBlur() {
         :title="t('types.removeProperty')"
         @click.stop="emit('remove')"
       >
-        <span class="material-symbols-outlined">close</span>
+        <UiIcon name="close" />
       </button>
     </div>
 
@@ -277,9 +245,7 @@ function handleIconBlur() {
             class="regex-result"
             :class="regexTestResult() ? 'regex-result--pass' : 'regex-result--fail'"
           >
-            <span class="material-symbols-outlined">
-              {{ regexTestResult() ? 'check_circle' : 'cancel' }}
-            </span>
+            <UiIcon :name="regexTestResult() ? 'check_circle' : 'cancel'" />
             {{ regexTestResult() ? t("types.regexMatch") : t("types.regexNoMatch") }}
           </span>
         </div>
@@ -372,55 +338,12 @@ function handleIconBlur() {
               <option v-for="opt in interactiveKindOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
             <span class="property-row__label">{{ t("types.icon") }}</span>
-            <div v-if="showIconCombobox" class="property-row__icon-combobox">
-              <input
-                :class="inputClass"
-                type="text"
-                :placeholder="t('types.iconSearchPlaceholder')"
-                :value="iconDropdownOpen ? iconSearchQuery : selectedIconLabel"
-                autocomplete="off"
-                @focus="openIconDropdown"
-                @input="iconSearchQuery = ($event.target as HTMLInputElement).value"
-                @blur="handleIconBlur"
-              >
-              <div
-                v-show="iconDropdownOpen"
-                class="property-row__icon-dropdown"
-                @mousedown.prevent
-              >
-                <button
-                  type="button"
-                  class="property-row__icon-option property-row__icon-option--none"
-                  @mousedown="selectIcon('')"
-                >
-                  {{ t("common.none") }}
-                </button>
-                <button
-                  v-for="opt in filteredIconOptions"
-                  :key="opt.id"
-                  type="button"
-                  class="property-row__icon-option"
-                  @mousedown="selectIcon(opt.id)"
-                >
-                  <span class="material-symbols-outlined property-row__icon-option-icon">{{ opt.id }}</span>
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-            <select
-              v-else
-              :class="selectClass"
-              :value="property.interactiveIcon ?? ''"
-              @change="onMutateProperty?.((p) => { p.interactiveIcon = (($event.target as HTMLSelectElement).value || undefined) })"
-            >
-              <option value="">{{ t("common.none") }}</option>
-              <option v-for="opt in interactiveIconOptions" :key="opt.id" :value="opt.id">
-                {{ opt.label }}
-              </option>
-            </select>
-            <span v-if="property.interactiveIcon" class="property-row__icon-preview">
-              <span class="material-symbols-outlined">{{ property.interactiveIcon }}</span>
-            </span>
+            <IconPicker
+              :model-value="property.interactiveIcon ?? ''"
+              :options="interactiveIconOptions ?? []"
+              :empty-label="t('common.none')"
+              @update:model-value="handleInteractiveIconChange"
+            />
           </template>
         </div>
         <div v-if="errors === undefined && isRequiredDefaultMissing()" class="property-row__warning">
@@ -486,7 +409,8 @@ function handleIconBlur() {
 }
 
 .property-row__chevron {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   flex-shrink: 0;
   transition: transform 0.2s ease;
@@ -566,64 +490,6 @@ function handleIconBlur() {
   flex-wrap: wrap;
 }
 
-.property-row__icon-combobox {
-  position: relative;
-  min-width: 140px;
-}
-
-.property-row__icon-combobox input {
-  width: 100%;
-}
-
-.property-row__icon-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 2px;
-  max-height: 220px;
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  z-index: 10;
-}
-
-.property-row__icon-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 10px;
-  font-size: 13px;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--base-text);
-}
-
-.property-row__icon-option:hover {
-  background: var(--surface-muted);
-}
-
-.property-row__icon-option--none {
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
-}
-
-.property-row__icon-option-icon {
-  font-size: 18px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.property-row__icon-preview .material-symbols-outlined {
-  font-size: 20px;
-  color: var(--text-muted);
-}
-
 .property-row__label {
   font-size: 12px;
   color: var(--text-muted);
@@ -645,7 +511,7 @@ function handleIconBlur() {
   flex-shrink: 0;
 }
 
-.regex-result .material-symbols-outlined {
+.regex-result .ui-icon {
   font-size: 16px;
 }
 
@@ -679,7 +545,7 @@ function handleIconBlur() {
   opacity: 1;
 }
 
-.property-remove-btn .material-symbols-outlined {
+.property-remove-btn .ui-icon {
   font-size: 16px;
 }
 

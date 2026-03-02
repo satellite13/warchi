@@ -116,7 +116,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <h2>{{ title }}</h2>
           <button class="modal-close" type="button" @click="emit('close')">
-            <span class="material-symbols-outlined">cancel</span>
+            <UiIcon name="cancel" />
           </button>
         </div>
         <div class="modal-body">

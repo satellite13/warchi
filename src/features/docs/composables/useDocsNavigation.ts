@@ -35,7 +35,7 @@ const contentModules: Record<
 export const sections: DocSection[] = [
   { id: "overview", title: "Обзор системы", icon: "info" },
   { id: "models", title: "Модели", icon: "schema" },
-  { id: "notations", title: "Нотации", icon: "graph_3" },
+  { id: "notations", title: "Нотации", icon: "account_tree" },
   { id: "diagrams", title: "Диаграммы", icon: "dashboard" },
   { id: "types", title: "Типы", icon: "category" },
   { id: "shapes", title: "Формы", icon: "hexagon" },

@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import {ref, computed, watch, nextTick} from "vue";
-import type {NotationEditorState} from "../types";
+import { ref, computed, watch, nextTick } from "vue";
+import { useI18n } from "vue-i18n";
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
+import type { NotationEditorState } from "../types";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   state: NotationEditorState;
@@ -156,20 +160,20 @@ watch(tagsExpanded, (value) => {
           :title="syncSelectionEnabled ? 'Отключить синхронизацию выбора' : 'Включить синхронизацию выбора'"
           @click="emit('toggle-sync-selection')"
         >
-          <span class="material-symbols-outlined">{{ syncSelectionEnabled ? "link" : "link_off" }}</span>
+          <UiIcon name="swap_horiz" />
         </button>
         <button type="button" class="add-btn" title="Добавить компонент" @click="emit('create-component')">
-          <span class="material-symbols-outlined">category</span>
+          <UiIcon :name="DEFAULT_ENTITY_ICONS.component" />
         </button>
         <button type="button" class="add-btn" title="Добавить отношение" @click="emit('create-relation')">
-          <span class="material-symbols-outlined">conversion_path</span>
+          <UiIcon :name="DEFAULT_ENTITY_ICONS.link" />
         </button>
       </div>
     </div>
 
     <div class="component-list__search">
       <div class="component-list__search-input-wrap">
-        <span class="material-symbols-outlined search-icon">search</span>
+        <UiIcon name="search" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
@@ -182,7 +186,7 @@ watch(tagsExpanded, (value) => {
           class="clear-btn"
           @click="searchQuery = ''"
         >
-          <span class="material-symbols-outlined">close</span>
+          <UiIcon name="close" />
         </button>
       </div>
       <select
@@ -201,9 +205,7 @@ watch(tagsExpanded, (value) => {
       <button type="button" class="tags-toggle" @click="tagsExpanded = !tagsExpanded">
         <span class="tags-toggle__label">Теги</span>
         <span v-if="selectedTags.size > 0" class="tags-toggle__count">{{ selectedTags.size }}</span>
-        <span class="material-symbols-outlined tags-toggle__icon" :class="{ 'tags-toggle__icon--collapsed': !tagsExpanded }">
-          expand_more
-        </span>
+        <UiIcon name="expand_more" class="tags-toggle__icon" :class="{ 'tags-toggle__icon--collapsed': !tagsExpanded }" />
       </button>
       <div v-if="tagsExpanded" class="component-list__tags">
         <button
@@ -235,9 +237,7 @@ watch(tagsExpanded, (value) => {
         @keydown.enter.prevent="emit('select', item.kind, item.id)"
         @keydown.space.prevent="emit('select', item.kind, item.id)"
       >
-        <span class="material-symbols-outlined component-item__icon">
-          {{ item.kind === 'component' ? 'category' : 'conversion_path' }}
-        </span>
+        <UiIcon :name="item.kind === 'component' ? DEFAULT_ENTITY_ICONS.component : DEFAULT_ENTITY_ICONS.link" class="component-item__icon" />
         <div class="component-item__info">
           <span class="component-item__name">{{ item.name }}</span>
           <span v-if="item.typeLabel" class="component-item__type">{{ item.typeLabel }}</span>
@@ -245,17 +245,15 @@ watch(tagsExpanded, (value) => {
         <button
           type="button"
           class="component-item__remove"
-          title="Удалить"
+          :title="t('common.delete')"
           @click.stop="emit('remove-item', item.kind, item.id)"
         >
-          <span class="material-symbols-outlined">delete</span>
+          <UiIcon name="delete" />
         </button>
       </div>
 
       <div v-if="items.length === 0" class="component-list__empty">
-        <span class="material-symbols-outlined component-list__empty-icon">
-          {{ searchQuery ? 'search_off' : 'inventory_2' }}
-        </span>
+        <UiIcon :name="searchQuery ? 'search_off' : 'inventory_2'" class="component-list__empty-icon" />
         <span>{{ searchQuery ? 'Ничего не найдено' : 'Нет элементов' }}</span>
       </div>
     </div>
@@ -347,8 +345,9 @@ watch(tagsExpanded, (value) => {
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.add-btn .material-symbols-outlined {
-  font-size: 16px;
+.add-btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .add-btn:hover {
@@ -383,7 +382,8 @@ watch(tagsExpanded, (value) => {
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   pointer-events: none;
 }
@@ -430,8 +430,9 @@ watch(tagsExpanded, (value) => {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.clear-btn .material-symbols-outlined {
-  font-size: 14px;
+.clear-btn .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .clear-btn:hover {
@@ -476,7 +477,8 @@ watch(tagsExpanded, (value) => {
 }
 
 .tags-toggle__icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   margin-left: auto;
   transition: transform 0.2s ease;
@@ -579,7 +581,8 @@ watch(tagsExpanded, (value) => {
 }
 
 .component-item__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
   color: var(--text-subtle);
   flex-shrink: 0;
 }
@@ -620,26 +623,28 @@ watch(tagsExpanded, (value) => {
   white-space: nowrap;
 }
 
+/* Кнопка удаления в стиле редактора модели (mini-btn mini-btn--danger) */
 .component-item__remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: transparent;
-  color: var(--text-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
   margin-left: auto;
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.component-item__remove .material-symbols-outlined {
-  font-size: 16px;
+.component-item__remove .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .component-item:hover .component-item__remove {
@@ -647,8 +652,9 @@ watch(tagsExpanded, (value) => {
 }
 
 .component-item__remove:hover {
-  background: var(--danger-soft);
   color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .component-list__empty {
@@ -664,7 +670,8 @@ watch(tagsExpanded, (value) => {
 }
 
 .component-list__empty-icon {
-  font-size: 28px;
+  width: 28px;
+  height: 28px;
   color: var(--border-strong);
 }
 </style>

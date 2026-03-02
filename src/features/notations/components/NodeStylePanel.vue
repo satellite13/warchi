@@ -13,7 +13,7 @@ import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import type { DiagramStyle } from "../notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
-import { AVAILABLE_ICON_OPTIONS } from "@/config/availableIcons";
+import { COMBINED_ICON_OPTIONS } from "@/config/iconOptions";
 import {
   getAllComponentPresets,
   getAllRelationPresets,
@@ -1592,7 +1592,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             :disabled="!selectedElementId || !canRestoreStyle"
             @click="emit('restore-style')"
           >
-            <span class="material-symbols-outlined">restart_alt</span>
+            <UiIcon name="restart_alt" />
           </button>
         </div>
       </div>
@@ -1626,7 +1626,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           </optgroup>
         </select>
         <button type="button" class="sp-preset__btn" :title="t('nodeStyle.saveAsPreset')" @click="openSavePresetForm">
-          <span class="material-symbols-outlined">bookmark_add</span>
+          <UiIcon name="bookmark_add" />
         </button>
         <button
           v-if="(elementType === 'edge' ? userRelationPresets : userComponentPresets).some(p => p.name === (elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset))"
@@ -1635,7 +1635,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           :title="t('nodeStyle.deletePreset')"
           @click="handleDeleteUserPreset(elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset, elementType === 'edge' ? 'relation' : 'component')"
         >
-          <span class="material-symbols-outlined">delete_outline</span>
+          <UiIcon name="delete_outline" />
         </button>
       </div>
 
@@ -1650,10 +1650,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             @keyup.escape="cancelSavePreset"
           >
           <button type="button" class="sp-save-form__btn sp-save-form__btn--ok" @click="confirmSavePreset">
-            <span class="material-symbols-outlined">check</span>
+            <UiIcon name="check" />
           </button>
           <button type="button" class="sp-save-form__btn" @click="cancelSavePreset">
-            <span class="material-symbols-outlined">close</span>
+            <UiIcon name="close" />
           </button>
         </div>
       </Transition>
@@ -1766,7 +1766,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       :title="edgeTypeOption.l"
                       @click="handleEdgeTypeChange(edgeTypeOption.v)"
                     >
-                      <span class="material-symbols-outlined">{{ edgeTypeOption.icon }}</span>
+                      <UiIcon :name="edgeTypeOption.icon" />
                     </button>
                   </div>
                 </LabeledFieldRow>
@@ -2063,7 +2063,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <div class="sp-icon-select">
                     <SearchableSelect
                       :model-value="iconName"
-                      :options="AVAILABLE_ICON_OPTIONS"
+                      :options="COMBINED_ICON_OPTIONS"
                       allow-empty
                       :empty-label="t('nodeStyle.none')"
                       :placeholder="t('nodeStyle.none')"
@@ -2249,8 +2249,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   background: var(--primary-soft);
 }
 
-.sp-header__btn .material-symbols-outlined {
-  font-size: 16px;
+.sp-header__btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .sp-header__btn:disabled {
@@ -2288,8 +2289,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   transition: all 0.15s ease;
 }
 
-.sp-preset__btn .material-symbols-outlined {
-  font-size: 16px;
+.sp-preset__btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .sp-preset__btn:hover {
@@ -2333,8 +2335,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   transition: all 0.15s ease;
 }
 
-.sp-save-form__btn .material-symbols-outlined {
-  font-size: 16px;
+.sp-save-form__btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .sp-save-form__btn:hover {
@@ -2531,8 +2534,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   font-family: inherit;
 }
 
-.sp-segmented__btn .material-symbols-outlined {
-  font-size: 16px;
+.sp-segmented__btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .sp-segmented__btn + .sp-segmented__btn {

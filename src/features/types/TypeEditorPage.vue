@@ -242,7 +242,7 @@ const attrsJson = computed(() => {
     <main class="type-editor__main">
       <div v-if="!selectedType" class="type-editor__empty">
         <div class="empty-state">
-          <span class="material-symbols-outlined empty-state__icon">edit_note</span>
+          <UiIcon name="edit_note" class="empty-state__icon" />
           <p class="empty-state__text">{{ t('types.selectTypeToEdit') }}</p>
           <p class="empty-state__hint">{{ t('types.orCreateNew') }}</p>
         </div>
@@ -319,7 +319,7 @@ const attrsJson = computed(() => {
     <Teleport to="body">
       <Transition name="toast">
         <div v-if="isToastVisible && toastError" class="save-toast save-toast--error">
-          <span class="material-symbols-outlined save-toast__icon">error</span>
+          <UiIcon name="error" class="save-toast__icon" />
           <span>{{ toastError }}</span>
         </div>
       </Transition>
@@ -393,7 +393,8 @@ const attrsJson = computed(() => {
 }
 
 .empty-state__icon {
-  font-size: 56px;
+  width: 56px;
+  height: 56px;
   color: var(--border-strong);
   margin-bottom: 4px;
 }
@@ -481,7 +482,8 @@ const attrsJson = computed(() => {
 }
 
 .save-toast__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .toast-enter-active,

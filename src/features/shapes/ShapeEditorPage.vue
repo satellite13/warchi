@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
     <main class="shape-editor__main">
       <div v-if="!selectedDetail" class="shape-editor__empty">
         <div class="empty-state">
-          <span class="material-symbols-outlined empty-state__icon">hexagon</span>
+          <UiIcon name="hexagon" class="empty-state__icon" />
           <p class="empty-state__text">{{ t("shapes.selectShape") }}</p>
           <p class="empty-state__hint">{{ t("shapes.orCreateNew") }}</p>
         </div>
@@ -230,7 +230,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <Transition name="toast">
         <div v-if="isToastVisible && saveError" class="save-toast save-toast--error">
-          <span class="material-symbols-outlined save-toast__icon">error</span>
+          <UiIcon name="error" class="save-toast__icon" />
           <span>{{ saveError }}</span>
         </div>
       </Transition>
@@ -293,7 +293,8 @@ onBeforeUnmount(() => {
 }
 
 .empty-state__icon {
-  font-size: 56px;
+  width: 56px;
+  height: 56px;
   color: var(--border-strong);
   margin-bottom: 4px;
 }
@@ -379,7 +380,8 @@ onBeforeUnmount(() => {
 }
 
 .save-toast__icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .toast-enter-active,

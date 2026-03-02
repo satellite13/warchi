@@ -95,9 +95,7 @@ onBeforeUnmount(() => {
       >
         {{ displayLabel }}
       </span>
-      <span class="material-symbols-outlined multi-select__arrow">
-        {{ isOpen ? 'expand_less' : 'expand_more' }}
-      </span>
+      <UiIcon :name="isOpen ? 'expand_less' : 'expand_more'" class="multi-select__arrow" />
     </div>
     <div v-if="isOpen" class="multi-select__panel">
       <input
@@ -119,7 +117,7 @@ onBeforeUnmount(() => {
           @click.stop="toggleOption(option.id)"
         >
           <span class="multi-select__check">
-            <span v-if="selectedSet.has(option.id)" class="material-symbols-outlined">check</span>
+            <UiIcon v-if="selectedSet.has(option.id)" name="check" />
           </span>
           <span class="multi-select__item-label">{{ option.label }}</span>
         </button>
@@ -267,7 +265,7 @@ onBeforeUnmount(() => {
   color: white;
 }
 
-.multi-select__check .material-symbols-outlined {
+.multi-select__check .ui-icon {
   font-size: 12px;
   font-weight: 600;
 }

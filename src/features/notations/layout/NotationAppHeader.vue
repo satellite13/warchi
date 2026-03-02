@@ -2,8 +2,9 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import AppLogo from '../../../components/layout/AppLogo.vue'
-import IconToolbar, { type ToolbarButton } from './IconToolbar.vue'
+import AppLogo from "@/components/layout/AppLogo.vue"
+import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import IconToolbar, { type ToolbarButton } from "./IconToolbar.vue"
 
 const props = withDefaults(
   defineProps<{
@@ -123,16 +124,13 @@ const emit = defineEmits<{
         :title="t('toolbar.backToNotations')"
         @click="router.push({ name: 'notations' })"
       >
-        <span class="material-symbols-outlined">arrow_back</span>
+        <UiIcon name="arrow_back" />
       </button>
       <AppLogo size="sm" />
       <span class="notation-header__divider">/</span>
       <span class="notation-header__title">{{ notationName || t('toolbar.notationEditor') }}</span>
       <span v-if="notationVersion" class="notation-header__version">{{ notationVersion }}</span>
-      <span v-if="hasUnsavedChanges" class="dirty-badge" :title="t('toolbar.unsavedChangesHint')">
-        <span class="dirty-dot"></span>
-        {{ t('types.notSaved') }}
-      </span>
+      <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button
         v-if="canShare"
         type="button"
@@ -140,7 +138,7 @@ const emit = defineEmits<{
         :title="t('toolbar.shareAccess')"
         @click="emit('share')"
       >
-        <span class="material-symbols-outlined">share</span>
+        <UiIcon name="share" />
       </button>
       <button
         type="button"
@@ -148,7 +146,7 @@ const emit = defineEmits<{
         :title="t('notations.documentation')"
         @click="emit('action', 'open-notation-doc')"
       >
-        <span class="material-symbols-outlined">article</span>
+        <UiIcon name="article" />
       </button>
     </div>
     <div v-if="!hideToolbar" class="notation-header__center">
@@ -185,7 +183,6 @@ const emit = defineEmits<{
 .notation-header-canvas :deep(.icon-toolbar) {
   padding: 2px 3px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
 }
 
 .notation-header__left {
@@ -202,14 +199,14 @@ const emit = defineEmits<{
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--surface);
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
 }
 
-.back-btn .material-symbols-outlined {
+.back-btn .ui-icon {
   font-size: 16px;
 }
 
@@ -252,26 +249,6 @@ const emit = defineEmits<{
   min-width: 0;
 }
 
-.dirty-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--warning);
-  background: var(--warning-soft);
-  padding: 4px 12px;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-
-.dirty-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warning);
-}
-
 .share-btn {
   display: flex;
   align-items: center;
@@ -281,14 +258,15 @@ const emit = defineEmits<{
   padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface-strong);
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.share-btn .material-symbols-outlined {
-  font-size: 16px;
+.share-btn .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .share-btn:hover {

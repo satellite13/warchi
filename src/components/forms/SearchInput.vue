@@ -15,10 +15,10 @@ const clear = () => {
 
 <template>
   <div class="search-box">
-    <span class="material-symbols-outlined search-icon">search</span>
+    <UiIcon name="search" class="search-icon" />
     <input v-model="model" type="text" class="search-input" :placeholder="placeholder || t('common.search')">
     <button v-if="model" type="button" class="clear-button" @click="clear">
-      <span class="material-symbols-outlined">cancel</span>
+      <UiIcon name="cancel" />
     </button>
   </div>
 </template>
@@ -37,7 +37,8 @@ const clear = () => {
   color: var(--text-subtle);
   pointer-events: none;
   transition: color 0.2s ease;
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .search-input {

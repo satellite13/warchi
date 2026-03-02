@@ -4,12 +4,14 @@ import '@fontsource/outfit/400.css'
 import '@fontsource/outfit/500.css'
 import '@fontsource/outfit/600.css'
 import '@fontsource/outfit/700.css'
-import '@fontsource/material-symbols-outlined/400.css'
 import './style.css'
 import './assets/buttons.css'
 import './assets/forms.css'
 import App from './App.vue'
+import UiIcon from './components/ui/UiIcon.vue'
 import router from './router'
 import i18n from './i18n'
 
-createApp(App).use(router).use(i18n).mount('#app')
+const app = createApp(App)
+app.component('UiIcon', UiIcon)
+app.use(router).use(i18n).mount('#app')

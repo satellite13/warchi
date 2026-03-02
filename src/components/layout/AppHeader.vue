@@ -32,7 +32,7 @@ const handleLogout = () => {
       <span class="user-email">{{ userDisplayName }}</span>
       <span v-if="currentUser?.role" class="user-role">{{ currentUser.role }}</span>
       <button class="logout-button" type="button" @click="handleLogout">
-        <span class="material-symbols-outlined">exit_to_app</span>
+        <UiIcon name="exit_to_app" />
       </button>
     </div>
   </header>
@@ -53,7 +53,7 @@ const handleLogout = () => {
   z-index: 10;
 }
 
-.material-symbols-outlined {
+.ui-icon {
   line-height: unset;
 }
 

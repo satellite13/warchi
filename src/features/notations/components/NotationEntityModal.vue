@@ -1,41 +1,56 @@
 <script setup lang="ts">
-import BaseModal from "../../../components/modals/BaseModal.vue";
-import TagSuggestions from "./TagSuggestions.vue";
-import type { EditorNodeType, EditorLinkType } from "../types";
-import type { ComponentStylePreset, RelationStylePreset } from "../styles/stylePresets";
+import { computed } from "vue"
+import { useI18n } from "vue-i18n"
+import BaseModal from "@/components/modals/BaseModal.vue"
+import SearchableSelect from "@/components/forms/SearchableSelect.vue"
+import TagSuggestions from "./TagSuggestions.vue"
+import type { EditorNodeType, EditorLinkType } from "../types"
+import type { ComponentStylePreset, RelationStylePreset } from "../styles/stylePresets"
 
-const nameModel = defineModel<string>("name", { default: "" });
-const tagsModel = defineModel<string>("tags", { default: "" });
-const versionModel = defineModel<string>("version", { default: "1.0.0" });
-const typeSelectionModel = defineModel<string>("typeSelection", { default: "" });
-const newTypeNameModel = defineModel<string>("newTypeName", { default: "" });
-const stylePresetModel = defineModel<string>("stylePreset", { default: "default" });
+const nameModel = defineModel<string>("name", { default: "" })
+const tagsModel = defineModel<string>("tags", { default: "" })
+const versionModel = defineModel<string>("version", { default: "1.0.0" })
+const typeSelectionModel = defineModel<string>("typeSelection", { default: "" })
+const newTypeNameModel = defineModel<string>("newTypeName", { default: "" })
+const stylePresetModel = defineModel<string>("stylePreset", { default: "default" })
 
-defineProps<{
-  title: string;
-  formId: string;
-  nameLabel: string;
-  namePlaceholder?: string;
-  versionLabel?: string;
-  versionPlaceholder?: string;
-  tagsLabel: string;
-  tagsPlaceholder?: string;
-  typeLabel: string;
-  typeOptions: (EditorNodeType | EditorLinkType)[];
-  newTypeValue: string;
-  newTypeLabel: string;
-  newTypePlaceholder?: string;
-  styleLabel?: string;
-  stylePresets: (ComponentStylePreset | RelationStylePreset)[];
-  suggestions: string[];
-  error?: string | null;
-}>();
+const props = defineProps<{
+  title: string
+  formId: string
+  nameLabel: string
+  namePlaceholder?: string
+  versionLabel?: string
+  versionPlaceholder?: string
+  tagsLabel: string
+  tagsPlaceholder?: string
+  typeLabel: string
+  typeOptions: (EditorNodeType | EditorLinkType)[]
+  newTypeValue: string
+  newTypeLabel: string
+  newTypePlaceholder?: string
+  styleLabel?: string
+  stylePresets: (ComponentStylePreset | RelationStylePreset)[]
+  suggestions: string[]
+  error?: string | null
+}>()
 
 const emit = defineEmits<{
-  close: [];
-  submit: [];
-  selectTag: [string];
-}>();
+  close: []
+  submit: []
+  selectTag: [string]
+}>()
+
+const { t } = useI18n()
+
+const typeSelectOptions = computed(() => [
+  { id: props.newTypeValue, label: `+ ${props.newTypeLabel}` },
+  ...props.typeOptions.map((type) => ({ id: type.id, label: type.name }))
+])
+
+const stylePresetSelectOptions = computed(() => [
+  ...props.stylePresets.filter((p) => !p._isUser),
+  ...props.stylePresets.filter((p) => p._isUser)
+].map((p) => ({ id: p.name, label: p.label })))
 </script>
 
 <template>
@@ -79,16 +94,13 @@ const emit = defineEmits<{
       />
       <label class="modal-label">
         {{ typeLabel }}
-        <select v-model="typeSelectionModel">
-          <option :value="newTypeValue">+ {{ newTypeLabel }}</option>
-          <option
-            v-for="type in typeOptions"
-            :key="type.id"
-            :value="type.id"
-          >
-            {{ type.name }}
-          </option>
-        </select>
+        <SearchableSelect
+          v-model="typeSelectionModel"
+          :options="typeSelectOptions"
+          :placeholder="t('types.selectType')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </label>
       <label
         v-if="typeSelectionModel === newTypeValue"
@@ -102,27 +114,14 @@ const emit = defineEmits<{
         >
       </label>
       <label class="modal-label">
-        {{ styleLabel || 'Стиль' }}
-        <select v-model="stylePresetModel">
-          <optgroup label="Встроенные">
-            <option
-              v-for="preset in stylePresets.filter(p => !p._isUser)"
-              :key="preset.name"
-              :value="preset.name"
-            >
-              {{ preset.label }}
-            </option>
-          </optgroup>
-          <optgroup v-if="stylePresets.some(p => p._isUser)" label="Мои пресеты">
-            <option
-              v-for="preset in stylePresets.filter(p => p._isUser)"
-              :key="preset.name"
-              :value="preset.name"
-            >
-              {{ preset.label }}
-            </option>
-          </optgroup>
-        </select>
+        {{ styleLabel || t('nodeStyle.figureStyleLabel') }}
+        <SearchableSelect
+          v-model="stylePresetModel"
+          :options="stylePresetSelectOptions"
+          :placeholder="t('common.selectValue')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </label>
       <p
         v-if="error"
@@ -182,6 +181,30 @@ const emit = defineEmits<{
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   text-transform: none;
+}
+
+.modal-label :deep(.searchable-select__control) {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.modal-label :deep(.searchable-select__control:hover) {
+  border-color: var(--border-strong);
+}
+
+.modal-label :deep(.searchable-select__value) {
+  font-size: 13px;
+}
+
+.modal-label :deep(.searchable-select__arrow) {
+  width: 16px;
+  height: 16px;
 }
 
 .modal-label input:focus,

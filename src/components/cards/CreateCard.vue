@@ -12,7 +12,7 @@ const emit = defineEmits<{
 <template>
   <button class="create-card" type="button" @click="emit('click')">
     <div class="create-card__icon">
-      <span class="material-symbols-outlined">add_2</span>
+      <UiIcon name="add" />
     </div>
     <span class="create-card__title">{{ title }}</span>
     <span v-if="description" class="create-card__description">{{ description }}</span>
@@ -49,9 +49,14 @@ const emit = defineEmits<{
   justify-content: center;
   margin-bottom: 12px;
   background: var(--surface-strong);
-  border-radius: 50%;
+  border-radius: 12px;
   transition: background 0.25s ease, transform 0.25s ease;
   color: var(--primary);
+}
+
+.create-card__icon .ui-icon {
+  width: 28px;
+  height: 28px;
 }
 
 .create-card:hover .create-card__icon {

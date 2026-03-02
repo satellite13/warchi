@@ -31,71 +31,81 @@ const sortedShapes = computed(() =>
     })
   )
 )
+
+const totalCount = computed(() => props.shapes.length)
 </script>
 
 <template>
-  <aside class="sidebar">
-    <div class="sidebar__header">
-      <span class="material-symbols-outlined sidebar__header-icon">hexagon</span>
-      <span class="sidebar__header-text">{{ t("shapes.title") }}</span>
-    </div>
-    <div class="sidebar__search">
-      <span class="material-symbols-outlined sidebar__search-icon">search</span>
-      <input
-        v-model="shapeSearchQuery"
-        class="sidebar__search-input"
-        type="text"
-        :placeholder="t('shapes.searchPlaceholder')"
-      />
-      <button
-        v-if="shapeSearchQuery"
-        type="button"
-        class="sidebar__clear-btn"
-        :title="t('common.clearSearch')"
-        @click="shapeSearchQuery = ''"
-      >
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-
-    <div class="type-section">
-      <div class="type-section__header">
-        <h3 class="type-section__title">{{ t("shapes.listTitle") }}</h3>
+  <aside class="shape-sidebar">
+    <div class="shape-sidebar__header">
+      <div class="shape-sidebar__title-row">
+        <h3 class="shape-sidebar__title">{{ t("shapes.title") }}</h3>
+        <span v-if="totalCount > 0" class="shape-sidebar__count">{{ totalCount }}</span>
+      </div>
+      <div class="shape-sidebar__actions">
         <button
           type="button"
-          class="type-section__add-btn"
+          class="shape-sidebar__add-btn"
           :title="t('shapes.addShape')"
           @click="emit('addShape')"
         >
-          <span class="material-symbols-outlined">add</span>
+          <UiIcon name="add" />
         </button>
       </div>
-      <div v-if="isLoading" class="type-section__loading">
-        <span class="loading-pulse"></span>
+    </div>
+
+    <div class="shape-sidebar__search">
+      <div class="shape-sidebar__search-wrap">
+        <UiIcon name="search" class="shape-sidebar__search-icon" />
+        <input
+          v-model="shapeSearchQuery"
+          class="shape-sidebar__search-input"
+          type="text"
+          :placeholder="t('shapes.searchPlaceholder')"
+        >
+        <button
+          v-if="shapeSearchQuery"
+          type="button"
+          class="shape-sidebar__clear-btn"
+          :title="t('common.clearSearch')"
+          @click="shapeSearchQuery = ''"
+        >
+          <UiIcon name="close" />
+        </button>
+      </div>
+    </div>
+
+    <div class="shape-sidebar__list">
+      <div v-if="isLoading" class="shape-sidebar__loading">
+        <span class="shape-sidebar__loading-dot" />
         {{ t("common.loading") }}
       </div>
       <template v-else>
-        <div v-if="shapes.length === 0" class="type-section__empty">{{ t("shapes.noShapes") }}</div>
-        <div v-else-if="sortedShapes.length === 0" class="type-section__empty">
-          {{ t("common.nothingFound") }}
-        </div>
-        <ul v-else class="type-list">
+        <div v-if="props.shapes.length === 0" class="shape-sidebar__empty">{{ t("shapes.noShapes") }}</div>
+        <div v-else-if="sortedShapes.length === 0" class="shape-sidebar__empty">{{ t("common.nothingFound") }}</div>
+        <ul v-else class="shape-sidebar__items">
           <li
             v-for="(shape, idx) in sortedShapes"
             :key="shape.id"
-            class="type-list__item"
-            :class="{ 'type-list__item--selected': selectedShapeId === shape.id }"
+            class="shape-sidebar__item"
+            :class="{ 'shape-sidebar__item--active': selectedShapeId === shape.id }"
             :style="{ animationDelay: `${idx * 30}ms` }"
+            role="button"
+            tabindex="0"
             @click="emit('selectShape', shape.id)"
+            @keydown.enter.prevent="emit('selectShape', shape.id)"
+            @keydown.space.prevent="emit('selectShape', shape.id)"
           >
-            <span class="material-symbols-outlined type-list__icon">hexagon</span>
-            <span class="type-list__name">{{ shape.name || t("common.unnamed") }}</span>
+            <UiIcon name="hexagon" class="shape-sidebar__item-icon" />
+            <div class="shape-sidebar__item-info">
+              <span class="shape-sidebar__item-name">{{ shape.name || t("common.unnamed") }}</span>
+            </div>
             <span
               v-if="!shape.canEdit"
-              class="type-list__lock"
+              class="shape-sidebar__item-lock"
               :title="t('shapes.noEditRights')"
             >
-              <span class="material-symbols-outlined">lock</span>
+              <UiIcon name="lock" />
             </span>
           </li>
         </ul>
@@ -105,74 +115,108 @@ const sortedShapes = computed(() =>
 </template>
 
 <style scoped>
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes pulseGlow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-
-.sidebar {
+.shape-sidebar {
   width: 272px;
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  min-width: 0;
 }
 
-.sidebar__header {
+.shape-sidebar__header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 18px 12px;
+  justify-content: space-between;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.sidebar__header-icon {
-  font-size: 20px;
-  color: var(--primary);
+.shape-sidebar__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.sidebar__header-text {
-  font-size: 14px;
+.shape-sidebar__title {
+  margin: 0;
+  font-size: var(--heading-font-size, 14px);
   font-weight: 600;
   color: var(--base-text);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--heading-letter-spacing, -0.01em);
 }
 
-.sidebar__search {
-  position: relative;
+.shape-sidebar__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shape-sidebar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shape-sidebar__add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.shape-sidebar__add-btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.shape-sidebar__add-btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.shape-sidebar__search {
+  display: flex;
+  align-items: center;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.sidebar__search-icon {
+.shape-sidebar__search-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.shape-sidebar__search-icon {
   position: absolute;
-  left: 20px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
   color: var(--text-subtle);
   pointer-events: none;
 }
 
-.sidebar__search-input {
+.shape-sidebar__search-input {
   width: 100%;
   padding: 7px 10px 7px 34px;
   font-size: 13px;
@@ -186,18 +230,18 @@ const sortedShapes = computed(() =>
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.sidebar__search-input:focus {
+.shape-sidebar__search-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
 }
 
-.sidebar__search-input::placeholder {
+.shape-sidebar__search-input::placeholder {
   color: var(--text-subtle);
 }
 
-.sidebar__clear-btn {
+.shape-sidebar__clear-btn {
   position: absolute;
-  right: 18px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -207,71 +251,34 @@ const sortedShapes = computed(() =>
   height: 20px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 8px;
   background: var(--surface-strong);
   color: var(--text-subtle);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.sidebar__clear-btn .material-symbols-outlined {
-  font-size: 14px;
+.shape-sidebar__clear-btn .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
-.sidebar__clear-btn:hover {
+.shape-sidebar__clear-btn:hover {
   background: var(--border-strong);
   color: var(--base-text);
 }
 
-.type-section {
-  padding: 14px 0 8px;
+.shape-sidebar__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px;
 }
 
-.type-section__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px 8px;
-}
-
-.type-section__title {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-subtle);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.type-section__add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.type-section__add-btn .material-symbols-outlined {
-  font-size: 16px;
-}
-
-.type-section__add-btn:hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: scale(1.08);
-}
-
-.type-section__loading,
-.type-section__empty {
-  padding: 12px 18px;
+.shape-sidebar__loading,
+.shape-sidebar__empty {
+  padding: 12px 10px;
   font-size: 13px;
   color: var(--text-subtle);
   display: flex;
@@ -279,96 +286,118 @@ const sortedShapes = computed(() =>
   gap: 8px;
 }
 
-.loading-pulse {
+.shape-sidebar__loading-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--primary);
-  animation: pulseGlow 1s ease-in-out infinite;
+  animation: shapeSidebarPulse 1s ease-in-out infinite;
   flex-shrink: 0;
 }
 
-.type-list {
+@keyframes shapeSidebarPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.shape-sidebar__items {
   list-style: none;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
-.type-list__item {
+.shape-sidebar__item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: none;
   border-radius: 8px;
+  background: transparent;
   cursor: pointer;
-  font-size: 13px;
-  color: var(--base-text);
-  transition: all 0.15s ease;
-  animation: fadeSlideIn 0.3s ease both;
-  position: relative;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
+  border-left: 3px solid transparent;
+  box-sizing: border-box;
+  animation: shapeSidebarFadeIn 0.25s ease both;
 }
 
-.type-list__item::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%) scaleY(0);
-  width: 3px;
-  height: 60%;
-  border-radius: 0 2px 2px 0;
-  background: var(--primary);
-  transition: transform 0.2s ease;
-}
-
-.type-list__item:hover {
+.shape-sidebar__item:hover {
   background: var(--surface-strong);
 }
 
-.type-list__item--selected {
+.shape-sidebar__item:not(.shape-sidebar__item--active):hover {
+  border-left-color: rgba(124, 92, 252, 0.3);
+}
+
+.shape-sidebar__item--active {
   background: var(--primary-soft);
-  color: var(--primary);
-  font-weight: 500;
+  border-left-color: var(--primary);
 }
 
-.type-list__item--selected::before {
-  transform: translateY(-50%) scaleY(1);
-}
-
-.type-list__item--selected:hover {
+.shape-sidebar__item--active:hover {
   background: var(--primary-soft);
 }
 
-.type-list__icon {
-  font-size: 18px;
+.shape-sidebar__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+@keyframes shapeSidebarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.shape-sidebar__item-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--text-subtle);
   flex-shrink: 0;
-  opacity: 0.7;
 }
 
-.type-list__item--selected .type-list__icon {
-  opacity: 1;
+.shape-sidebar__item--active .shape-sidebar__item-icon {
+  color: var(--primary);
 }
 
-.type-list__name {
-  flex: 1;
+.shape-sidebar__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
+  flex: 1;
+}
+
+.shape-sidebar__item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--base-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.type-list__lock {
+.shape-sidebar__item-lock {
   color: var(--text-subtle);
   flex-shrink: 0;
   display: flex;
   align-items: center;
 }
 
-.type-list__lock .material-symbols-outlined {
-  font-size: 16px;
+.shape-sidebar__item-lock .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 </style>

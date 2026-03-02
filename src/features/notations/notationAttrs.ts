@@ -359,6 +359,8 @@ export type EntityAttrs = {
   diagramStyle?: DiagramStyle
   /** Группа в палитре (0 = note). По умолчанию 0. */
   paletteGroup?: number
+  /** Имя символа Material Symbols для палитры (только при отсутствии diagramStyle.iconName) */
+  paletteMaterialIcon?: string
   /** UUID файла markdown-документации */
   documentFileId?: string
 }
@@ -400,6 +402,10 @@ export const parseEntityAttrs = (attrs: string | null): EntityAttrs => {
     ) {
       result.paletteGroup = record.paletteGroup
     }
+    if (typeof record.paletteMaterialIcon === 'string') {
+      const trimmed = record.paletteMaterialIcon.trim()
+      if (trimmed.length > 0) result.paletteMaterialIcon = trimmed
+    }
     if (typeof record.documentFileId === 'string' && record.documentFileId.trim().length > 0) {
       result.documentFileId = record.documentFileId.trim()
     }
@@ -427,6 +433,9 @@ export const serializeEntityAttrs = (attrs: EntityAttrs): string => {
     attrs.paletteGroup >= 0
   ) {
     result.paletteGroup = attrs.paletteGroup
+  }
+  if (typeof attrs.paletteMaterialIcon === 'string' && attrs.paletteMaterialIcon.trim().length > 0) {
+    result.paletteMaterialIcon = attrs.paletteMaterialIcon.trim()
   }
   if (typeof attrs.documentFileId === 'string' && attrs.documentFileId.trim().length > 0) {
     result.documentFileId = attrs.documentFileId.trim()

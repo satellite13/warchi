@@ -3,6 +3,7 @@ import { useI18n } from "vue-i18n";
 import type { NotationData } from "../../types/entities";
 import type { EntityListConfig } from "../../composables/useEntityList";
 import EntityCatalog from "../../components/catalog/EntityCatalog.vue";
+import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
 
 const { t } = useI18n();
 
@@ -20,6 +21,12 @@ const config: EntityListConfig<NotationData> = {
     version: item.version,
     ownerId: item.ownerId,
     attrs: item.attrs ?? null
+  }),
+  buildUpdateAttrsRequest: (item, nextAttrs) => ({
+    name: item.name,
+    version: item.version,
+    ownerId: item.ownerId,
+    attrs: nextAttrs
   })
 };
 </script>
@@ -29,7 +36,7 @@ const config: EntityListConfig<NotationData> = {
     :entity-list-config="config"
     editor-route-name="notation-editor"
     i18n-prefix="notations"
-    icon="graph_3"
+    :icon="DEFAULT_ENTITY_ICONS.notation"
     resource-type="NOTATION"
   />
 </template>

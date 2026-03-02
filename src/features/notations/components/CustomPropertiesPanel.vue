@@ -8,7 +8,8 @@ import RelationRulesSection from './RelationRulesSection.vue'
 import type { CustomProperty, CustomPropertyType } from '../notationAttrs'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 import { useCustomProperties } from '../composables/useCustomProperties'
-import { INTERACTIVE_BADGE_ICONS } from '@/config/interactiveBadgeIcons'
+import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
+import IconPicker from '@/components/forms/IconPicker.vue'
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null
@@ -54,6 +55,7 @@ const sameTags = (a: string[], b: string[]) =>
 const tagsDraft = ref('')
 const tagsExpanded = ref(false)
 const paletteGroupExpanded = ref(false)
+const paletteIconExpanded = ref(false)
 const labelTemplateExpanded = ref(false)
 const propertiesExpanded = ref(false)
 const documentationExpanded = ref(false)
@@ -138,6 +140,25 @@ const handlePaletteGroupChange = (value: string) => {
       item.parsedAttrs.paletteGroup = num
     } else if (value === '' || value === '-') {
       delete item.parsedAttrs.paletteGroup
+    }
+  })
+}
+
+const showPaletteIconSection = computed(
+  () =>
+    props.selectedItem &&
+    !('linkTypeId' in props.selectedItem) &&
+    !(props.selectedItem.parsedAttrs.diagramStyle?.iconName?.trim())
+)
+
+const handlePaletteMaterialIconChange = (value: string) => {
+  if (!props.selectedItem || 'linkTypeId' in props.selectedItem) return
+  props.onMutateItem?.(props.selectedItem.id, item => {
+    const trimmed = value?.trim()
+    if (trimmed) {
+      item.parsedAttrs.paletteMaterialIcon = trimmed
+    } else {
+      delete item.parsedAttrs.paletteMaterialIcon
     }
   })
 }
@@ -254,7 +275,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="!selectedItem" class="properties-panel__empty properties-panel__empty--centered">
-      <span class="material-symbols-outlined properties-panel__empty-icon">edit_note</span>
+      <UiIcon name="edit_note" class="properties-panel__empty-icon" />
       <span>{{ t('diagram.selectElementToEditProperties') }}</span>
     </div>
 
@@ -270,10 +291,10 @@ onBeforeUnmount(() => {
         class="properties-panel__doc-btn"
         @click="onOpenDocument?.(selectedItem)"
       >
-        <span class="material-symbols-outlined">description</span>
+        <UiIcon name="description" />
         {{ t('notations.documentation') }}
         <span v-if="selectedItem.parsedAttrs.documentFileId" class="properties-panel__doc-badge">
-          <span class="material-symbols-outlined">check_circle</span>
+          <UiIcon name="check_circle" />
         </span>
       </button>
       </CollapseSection>
@@ -309,6 +330,22 @@ onBeforeUnmount(() => {
       </CollapseSection>
 
       <CollapseSection
+        v-if="showPaletteIconSection"
+        :label="t('diagram.paletteIcon')"
+        :expanded="paletteIconExpanded"
+        @toggle="paletteIconExpanded = !paletteIconExpanded"
+      >
+        <div class="properties-panel__palette-icon-select">
+          <IconPicker
+            :model-value="selectedItem?.parsedAttrs.paletteMaterialIcon ?? ''"
+            :empty-label="t('nodeStyle.none')"
+            @update:model-value="handlePaletteMaterialIconChange"
+          />
+        </div>
+        <span class="properties-panel__palette-group-hint">{{ t('diagram.paletteIconHint') }}</span>
+      </CollapseSection>
+
+      <CollapseSection
         :label="t('diagram.tags')"
         :expanded="tagsExpanded"
         @toggle="tagsExpanded = !tagsExpanded"
@@ -331,7 +368,7 @@ onBeforeUnmount(() => {
             @click="removeTag(tag)"
           >
             {{ tag }}
-            <span class="material-symbols-outlined">close</span>
+            <UiIcon name="close" />
           </button>
         </div>
       </CollapseSection>
@@ -382,11 +419,11 @@ onBeforeUnmount(() => {
               :aria-label="t('types.addProperty')"
               @click="toggleAddMenu"
             >
-              <span class="material-symbols-outlined">add</span>
+              <UiIcon name="add" />
             </button>
             <div v-if="showAddMenu" class="add-menu">
               <button type="button" class="add-menu__item" @click="addNewProperty">
-                <span class="material-symbols-outlined">note_add</span>
+                <UiIcon name="note_add" />
                 {{ t('types.newProperty') }}
               </button>
               <div class="add-menu__divider"></div>
@@ -398,7 +435,7 @@ onBeforeUnmount(() => {
                 class="add-menu__item"
                 @click="addMissingTypeProperty(prop)"
               >
-                <span class="material-symbols-outlined">linked_services</span>
+                <UiIcon name="linked_services" />
                 {{ prop.name }} ({{ typeLabel(prop.type) }})
               </button>
               <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">
@@ -427,7 +464,7 @@ onBeforeUnmount(() => {
             :from-type="property._fromType"
             :is-equivalent-to-type="isEquivalentToTypeProperty(property)"
             :show-interactive-options="isComponent"
-            :interactive-icon-options="INTERACTIVE_BADGE_ICONS"
+            :interactive-icon-options="COMBINED_ICON_OPTIONS"
             @toggle="toggleCollapse(property.id)"
             @remove="removeCustomProperty(property.id)"
           />
@@ -527,7 +564,7 @@ onBeforeUnmount(() => {
   background: var(--surface-strong);
 }
 
-.add-menu__item .material-symbols-outlined {
+.add-menu__item .ui-icon {
   font-size: 16px;
   color: var(--text-subtle);
   flex-shrink: 0;
@@ -582,6 +619,26 @@ onBeforeUnmount(() => {
   color: var(--text-subtle);
 }
 
+.properties-panel__palette-icon-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.properties-panel__palette-icon-option,
+.properties-panel__palette-icon-selected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.properties-panel__palette-icon-preview {
+  font-size: 20px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
 .properties-panel__tags-input {
   width: 100%;
   box-sizing: border-box;
@@ -627,7 +684,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.properties-panel__tag-chip .material-symbols-outlined {
+.properties-panel__tag-chip .ui-icon {
   font-size: 14px;
 }
 
@@ -709,7 +766,7 @@ onBeforeUnmount(() => {
   transition: all 0.15s ease;
 }
 
-.link-btn--icon .material-symbols-outlined {
+.link-btn--icon .ui-icon {
   font-size: 16px;
 }
 
@@ -749,7 +806,7 @@ onBeforeUnmount(() => {
   border-color: var(--primary);
   color: var(--primary);
 }
-.properties-panel__doc-btn .material-symbols-outlined {
+.properties-panel__doc-btn .ui-icon {
   font-size: 16px;
 }
 .properties-panel__doc-badge {
@@ -758,7 +815,7 @@ onBeforeUnmount(() => {
   align-items: center;
   color: var(--success, #22c55e);
 }
-.properties-panel__doc-badge .material-symbols-outlined {
+.properties-panel__doc-badge .ui-icon {
   font-size: 14px;
 }
 </style>

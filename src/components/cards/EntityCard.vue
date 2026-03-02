@@ -14,6 +14,10 @@ const props = defineProps<{
   accessLabel?: string;
   canShare?: boolean;
   updatedAt?: string | null;
+  /** Иконка в шапке плашки (id из public/icons). Если задана, слот #icon не используется. */
+  icon?: string;
+  /** Показывать кнопку смены иконки в шапке. */
+  canChangeIcon?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +26,7 @@ const emit = defineEmits<{
   rename: [];
   share: [];
   "version-change": [string];
+  "change-icon": [];
 }>();
 const { t, locale } = useI18n();
 
@@ -40,17 +45,35 @@ const formattedUpdatedAt = computed(() => {
   <div class="model-card" @click="emit('click')">
     <div class="model-card__gradient" :style="{ background: cardColor }">
       <div class="model-card__icon">
-        <slot name="icon"></slot>
+        <template v-if="icon">
+          <img
+            v-if="icon"
+            class="model-card__icon-img"
+            :src="`/icons/${icon}.svg`"
+            :alt="name"
+          >
+        </template>
+        <slot v-else name="icon" />
+        <button
+          v-if="canChangeIcon"
+          type="button"
+          class="model-card__icon-edit"
+          :aria-label="t('common.changeIcon')"
+          :title="t('common.changeIcon')"
+          @click.stop="emit('change-icon')"
+        >
+          <UiIcon name="edit" />
+        </button>
       </div>
     </div>
     <div class="model-card__body">
       <button class="model-card__delete" type="button" :aria-label="t('common.delete')" :title="t('common.delete')"
               @click.stop="emit('delete')">
-        <span class="material-symbols-outlined" :title="t('common.delete')">delete</span>
+        <UiIcon name="delete" :alt="t('common.delete')" />
       </button>
       <button class="model-card__rename" type="button" :aria-label="t('common.rename')" :title="t('common.rename')"
               @click.stop="emit('rename')">
-        <span class="material-symbols-outlined" :title="t('common.rename')">edit</span>
+        <UiIcon name="edit" :alt="t('common.rename')" />
       </button>
       <button
         v-if="canShare"
@@ -60,7 +83,7 @@ const formattedUpdatedAt = computed(() => {
         :title="t('common.share')"
         @click.stop="emit('share')"
       >
-        <span class="material-symbols-outlined" :title="t('common.share')">share</span>
+        <UiIcon name="share" :alt="t('common.share')" />
       </button>
       <span class="model-card__title">{{ name }}</span>
       <div class="model-card__version">
@@ -126,12 +149,57 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card__icon {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 36px;
+  width: 48px;
+  height: 48px;
+  margin-left: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.95);
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-  margin-left: 30px;
   position: relative;
   z-index: 1;
+}
+
+.model-card__icon :deep(.ui-icon),
+.model-card__icon .model-card__icon-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.model-card__icon-img {
+  flex-shrink: 0;
+}
+
+.model-card__icon-edit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.model-card__icon-edit .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.model-card__icon:hover .model-card__icon-edit {
+  opacity: 1;
+}
+
+.model-card__icon-edit:hover {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .model-card__body {
@@ -142,75 +210,62 @@ const formattedUpdatedAt = computed(() => {
   position: relative;
 }
 
-.model-card__delete {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-.model-card__rename {
-  position: absolute;
-  top: 12px;
-  right: 48px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
+.model-card__delete,
+.model-card__rename,
 .model-card__share {
   position: absolute;
   top: 12px;
-  right: 84px;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: var(--surface-strong);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.model-card__delete {
+  right: 12px;
+}
+
+.model-card__rename {
+  right: 48px;
+}
+
+.model-card__share {
+  right: 84px;
 }
 
 .model-card__delete:hover {
-  background: var(--danger-soft);
+  background: var(--surface-strong);
+  border-color: var(--danger);
   color: var(--danger);
 }
 
 .model-card__rename:hover {
-  background: var(--primary-soft);
+  background: var(--surface-strong);
+  border-color: var(--primary);
   color: var(--primary);
 }
 
 .model-card__share:hover {
-  background: var(--accent-soft);
+  background: var(--surface-strong);
+  border-color: var(--accent);
   color: var(--accent);
 }
 
-.model-card__delete svg {
-  width: 16px;
-  height: 16px;
+.model-card__delete :deep(.ui-icon),
+.model-card__rename :deep(.ui-icon),
+.model-card__share :deep(.ui-icon),
+.model-card__delete :deep(svg),
+.model-card__rename :deep(svg),
+.model-card__share :deep(svg) {
+  width: 18px;
+  height: 18px;
 }
 
 .model-card__title {

@@ -9,7 +9,7 @@ import MainLayout from '../layouts/MainLayout.vue'
 import AppFooter from '../components/layout/AppFooter.vue'
 import BaseModal from '../components/modals/BaseModal.vue'
 import ShareAccessModal from '../components/modals/ShareAccessModal.vue'
-import { apiGet } from '../composables/useApi'
+import { apiGet, apiPost } from '../composables/useApi'
 import { useAuth } from '../composables/useAuth'
 import { useCanShare } from '../composables/useCanShare'
 import NotationMainPanelLayout from '../features/notations/layout/NotationMainPanelLayout.vue'
@@ -112,23 +112,42 @@ function handleOpenNotationDoc() {
   )
 }
 
-function handleDocSaved(fileId: string) {
+async function handleDocSaved(fileId: string) {
   const target = docModalTarget.value
   if (!target) return
 
+  const notationId = state.value.notationId ?? undefined
+
   if (target.kind === 'notation') {
     setNotationDocFileId(fileId)
+    if (notationId) {
+      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, notationId })
+    }
   } else if (target.kind === 'component') {
     const component = state.value.components.find(c => c.id === target.id)
     if (component && !component.parsedAttrs.documentFileId) {
       component.parsedAttrs.documentFileId = fileId
       markComponentDirty(target.id)
     }
+    if (notationId) {
+      await apiPost<{ fileId: string; label: string }>('/documents', {
+        fileId,
+        notationId,
+        componentId: target.id
+      })
+    }
   } else if (target.kind === 'relation') {
     const relation = state.value.relations.find(r => r.id === target.id)
     if (relation && !relation.parsedAttrs.documentFileId) {
       relation.parsedAttrs.documentFileId = fileId
       markRelationDirty(target.id)
+    }
+    if (notationId) {
+      await apiPost<{ fileId: string; label: string }>('/documents', {
+        fileId,
+        notationId,
+        relationId: target.id
+      })
     }
   }
 }

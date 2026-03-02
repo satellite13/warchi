@@ -270,6 +270,8 @@ export interface NodeShapeResponse {
   name: string
   ownerId: string
   outline: string | null
+  contentArea?: string | null
+  attrs?: string | null
   createdAt?: string | null
   updatedAt?: string | null
   canEdit: boolean
@@ -278,11 +280,15 @@ export interface NodeShapeResponse {
 export interface NodeShapeRequest {
   name: string
   outline?: string | null
+  contentArea?: string | null
+  attrs?: string | null
 }
 
 export interface NodeShapeUpdateRequest {
   name?: string | null
   outline?: string | null
+  contentArea?: string | null
+  attrs?: string | null
 }
 
 // Relation Rules

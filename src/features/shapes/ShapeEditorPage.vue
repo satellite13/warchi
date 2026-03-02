@@ -6,8 +6,10 @@ import type { NodeShapeResponse } from "../../types/api"
 import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
 import type { OutlineSegment } from "../notations/notationAttrs"
 import BaseModal from "../../components/modals/BaseModal.vue"
+import DocumentEditorModal from "../../components/modals/DocumentEditorModal.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
+import { apiPost } from "../../composables/useApi"
 
 const { t } = useI18n()
 const {
@@ -103,7 +105,8 @@ async function handleSave() {
   isSaving.value = true
   const updated = await update(selectedDetail.value.id, {
     name: localName.value.trim() || selectedDetail.value.name,
-    outline: JSON.stringify(localOutline.value)
+    outline: JSON.stringify(localOutline.value),
+    attrs: selectedDetail.value.attrs ?? undefined
   })
   isSaving.value = false
   if (updated) {
@@ -119,6 +122,58 @@ async function handleSave() {
   } else {
     saveError.value = t("shapes.errorSave")
   }
+}
+
+function getShapeDocFileId(): string | null {
+  const raw = selectedDetail.value?.attrs
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return typeof parsed.documentFileId === 'string' ? parsed.documentFileId : null
+  } catch {
+    return null
+  }
+}
+
+function setShapeDocFileId(fileId: string) {
+  if (!selectedDetail.value) return
+  const raw = selectedDetail.value.attrs
+  let parsed: Record<string, unknown> = {}
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      parsed = {}
+    }
+  }
+  parsed.documentFileId = fileId
+  selectedDetail.value = { ...selectedDetail.value, attrs: JSON.stringify(parsed) }
+}
+
+const showDocModal = ref(false)
+const docModalFileId = ref<string | null>(null)
+
+function openDocModal() {
+  docModalFileId.value = getShapeDocFileId()
+  showDocModal.value = true
+}
+
+async function handleDocSaved(fileId: string) {
+  if (!selectedDetail.value || !canEditSelected.value) return
+  setShapeDocFileId(fileId)
+  const updated = await update(selectedDetail.value.id, {
+    attrs: selectedDetail.value.attrs ?? undefined
+  })
+  if (updated) selectedDetail.value = updated
+  await apiPost<{ fileId: string; label: string }>('/documents', {
+    fileId,
+    nodeShapeId: selectedDetail.value.id
+  })
+}
+
+function handleDocModalClose() {
+  showDocModal.value = false
+  docModalFileId.value = null
 }
 
 function openDeleteConfirm() {
@@ -203,10 +258,27 @@ onBeforeUnmount(() => {
               @update:name="localName = $event"
               @update:outline="localOutline = $event"
             />
+            <div v-if="selectedDetail && canEditSelected" class="shape-editor__doc-row">
+              <button type="button" class="btn btn--secondary" @click="openDocModal">
+                <UiIcon name="menu_book" />
+                {{ t("notations.documentation") }}
+                <span v-if="getShapeDocFileId()" class="shape-editor__doc-badge">
+                  <UiIcon name="check" />
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </template>
     </main>
+
+    <DocumentEditorModal
+      v-if="showDocModal && selectedDetail"
+      :title="selectedDetail.name"
+      :file-id="docModalFileId"
+      @close="handleDocModalClose"
+      @saved="handleDocSaved"
+    />
 
     <BaseModal
       v-if="showDeleteConfirm"
@@ -275,6 +347,37 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.shape-editor__doc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shape-editor__doc-row .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--base-text);
+  cursor: pointer;
+}
+
+.shape-editor__doc-row .btn:hover {
+  background: var(--surface-strong);
+}
+
+.shape-editor__doc-badge {
+  display: inline-flex;
+  color: var(--success);
+  font-size: 14px;
 }
 
 .shape-editor__empty {

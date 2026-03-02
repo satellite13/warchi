@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useTypeEditor } from './composables/useTypeEditor'
 import { useTypeDocument } from './composables/useTypeDocument'
+import { apiPost } from '../../composables/useApi'
 import { serializeTypeAttrs, type CustomProperty } from '../notations/notationAttrs'
 import { useCanShare } from '../../composables/useCanShare'
 import BaseModal from '../../components/modals/BaseModal.vue'
@@ -58,10 +59,22 @@ onMounted(() => {
   loadAll()
 })
 
-// Load document when selected type changes
-watch(selectedType, item => {
+// Load document when selected type changes; register ref so type docs appear in wiki
+watch(selectedType, async (item) => {
   if (item && !item._isNew) {
-    loadDocument(item.parsedAttrs.documentFileId)
+    await loadDocument(item.parsedAttrs.documentFileId)
+    const fileId = item.parsedAttrs.documentFileId
+    if (fileId && item.id) {
+      try {
+        if (item.kind === 'node') {
+          await apiPost<{ fileId: string; label: string }>('/documents', { fileId, nodeTypeId: item.id })
+        } else {
+          await apiPost<{ fileId: string; label: string }>('/documents', { fileId, linkTypeId: item.id })
+        }
+      } catch {
+        // ref may already exist or permission issue; ignore
+      }
+    }
   } else {
     resetDocument()
   }
@@ -71,10 +84,18 @@ async function handleDocumentSave() {
   if (!selectedType.value) return
 
   const fileId = await saveDocument()
-  if (fileId && !selectedType.value.parsedAttrs.documentFileId) {
-    // First save: persist fileId into type attrs
-    selectedType.value.parsedAttrs.documentFileId = fileId
-    await saveType(selectedType.value)
+  if (fileId) {
+    if (!selectedType.value.parsedAttrs.documentFileId) {
+      // First save: persist fileId into type attrs
+      selectedType.value.parsedAttrs.documentFileId = fileId
+      await saveType(selectedType.value)
+    }
+    const item = selectedType.value
+    if (item.kind === 'node') {
+      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, nodeTypeId: item.id })
+    } else {
+      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, linkTypeId: item.id })
+    }
   }
 }
 

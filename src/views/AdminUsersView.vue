@@ -512,12 +512,12 @@ onMounted(() => {
 .page__body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
   padding: 28px 32px;
   background: var(--base-bg);
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow: hidden;
 }
 
 /* ─── Title bar ───────────────────────────────── */
@@ -686,10 +686,14 @@ onMounted(() => {
 
 /* ─── Table card ──────────────────────────────── */
 .table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* ─── Table ───────────────────────────────────── */
@@ -699,6 +703,9 @@ onMounted(() => {
 }
 
 .table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 14px 20px;
   text-align: left;
   font-size: 11px;
@@ -708,6 +715,7 @@ onMounted(() => {
   letter-spacing: 0.06em;
   background: var(--surface-muted);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .table tbody td {
@@ -1036,7 +1044,7 @@ onMounted(() => {
   }
 
   .table-card {
-    overflow-x: auto;
+    overflow: auto;
   }
 
   .table {

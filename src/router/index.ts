@@ -61,6 +61,11 @@ const router = createRouter({
       component: () => import("../views/DocsView.vue")
     },
     {
+      path: "/wiki",
+      name: "wiki",
+      component: () => import("../views/WikiView.vue")
+    },
+    {
       path: "/",
       name: "home",
       component: () => import("../views/HomeView.vue"),

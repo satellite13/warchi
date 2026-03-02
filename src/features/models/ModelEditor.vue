@@ -166,19 +166,38 @@ async function handleDocSaved(fileId: string) {
   const target = docModalTarget.value
   if (!target) return
 
+  const modelId = state.value.modelId ?? undefined
+
   if (target.kind === 'model') {
     setModelDocFileId(fileId)
+    if (modelId) {
+      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, modelId })
+    }
   } else if (target.kind === 'node') {
     const node = state.value.nodes.find(n => n.id === target.id)
     if (node && !node.parsedAttrs.documentFileId) {
       node.parsedAttrs.documentFileId = fileId
       markNodeDirty(target.id)
     }
+    if (modelId) {
+      await apiPost<{ fileId: string; label: string }>('/documents', {
+        fileId,
+        modelId,
+        nodeId: target.id
+      })
+    }
   } else if (target.kind === 'diagram') {
     const diagram = state.value.diagrams.find(d => d.id === target.id)
     if (diagram && !diagram.parsedAttrs.documentFileId) {
       diagram.parsedAttrs.documentFileId = fileId
       markDiagramDirty(target.id)
+    }
+    if (modelId) {
+      await apiPost<{ fileId: string; label: string }>('/documents', {
+        fileId,
+        modelId,
+        diagramId: target.id
+      })
     }
   }
 }

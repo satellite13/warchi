@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue"
+import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import type { CustomProperty } from "../../notations/notationAttrs"
@@ -15,12 +16,14 @@ const props = defineProps<{
   isSaving: boolean
   isTypeInUse: boolean
   canShare: boolean
+  hasDoc?: boolean
   onMutateProperty?: (propertyId: string, apply: (p: CustomProperty) => void) => void
 }>()
 
 const emit = defineEmits<{
   save: []
   delete: []
+  openDoc: []
   addProperty: []
   removeProperty: [propertyId: string]
   updateName: [value: string]
@@ -56,9 +59,27 @@ const filteredCustomProperties = computed(() => {
         <h2 class="type-form__title">
           {{ selectedType.kind === 'node' ? t('types.nodeType') : t('types.linkType') }}
         </h2>
+        <button
+          type="button"
+          class="type-form__doc-btn"
+          :title="t('types.documentation')"
+          @click="emit('openDoc')"
+        >
+          <UiIcon name="description" class="type-form__doc-btn-icon" />
+          <span v-if="hasDoc" class="type-form__doc-badge">
+            <UiIcon name="check" />
+          </span>
+        </button>
         <UnsavedBadge v-if="isDirty" tooltip-key="types.unsavedChangesHint" />
       </div>
       <div class="type-form__actions">
+        <RouterLink
+          :to="{ name: 'docs-section', params: { section: 'types' } }"
+          class="type-form__help-link"
+          :title="t('types.helpTitle')"
+        >
+          <UiIcon name="help" />
+        </RouterLink>
         <button
           v-if="canShare"
           type="button"
@@ -250,6 +271,80 @@ const filteredCustomProperties = computed(() => {
   color: var(--base-text);
   white-space: nowrap;
   letter-spacing: -0.01em;
+}
+
+.type-form__help-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-height);
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.type-form__help-link:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.type-form__help-link .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.type-form__doc-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.type-form__doc-btn:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.type-form__doc-btn-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.type-form__doc-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  font-size: 10px;
+}
+
+.type-form__doc-badge .ui-icon {
+  width: 10px;
+  height: 10px;
 }
 
 .type-form__actions {

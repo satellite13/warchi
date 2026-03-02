@@ -67,6 +67,9 @@ body {
     --radius: 14px;
     --radius-sm: 10px;
 
+    /* Buttons: единая высота для .btn и кнопкоподобных ссылок (Помощь и т.д.) */
+    --btn-height: 38px;
+
     /* Typography */
     --base-font: "Outfit", system-ui, -apple-system, sans-serif;
     --base-font-weight: 400;

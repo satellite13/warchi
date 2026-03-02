@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { NodeShapeResponse } from "../../../types/api"
 import type { OutlineSegment } from "../../notations/notationAttrs"
@@ -12,11 +13,13 @@ defineProps<{
   isDirty: boolean
   isSaving: boolean
   isDeleting: boolean
+  hasDoc?: boolean
 }>()
 
 const emit = defineEmits<{
   save: []
   delete: []
+  openDoc: []
   "update:name": [value: string]
   "update:outline": [value: OutlineSegment[]]
 }>()
@@ -34,26 +37,47 @@ const { t } = useI18n()
         <h2 class="shape-form__title">
           {{ name || t("shapes.title") }}
         </h2>
+        <button
+          v-if="canEdit"
+          type="button"
+          class="shape-form__doc-btn"
+          :title="t('notations.documentation')"
+          @click="emit('openDoc')"
+        >
+          <UiIcon name="description" class="shape-form__doc-btn-icon" />
+          <span v-if="hasDoc" class="shape-form__doc-badge">
+            <UiIcon name="check" />
+          </span>
+        </button>
       </div>
-      <div v-if="canEdit" class="shape-form__actions">
-        <button
-          type="button"
-          class="btn btn--soft-danger"
-          :disabled="isSaving || isDeleting"
-          @click="emit('delete')"
+      <div class="shape-form__actions">
+        <RouterLink
+          :to="{ name: 'docs-section', params: { section: 'shapes' } }"
+          class="shape-form__help-link"
+          :title="t('shapes.editorDescriptionLink')"
         >
-          <UiIcon name="delete" />
-          {{ t("common.delete") }}
-        </button>
-        <button
-          type="button"
-          class="btn btn--primary"
-          :disabled="isSaving || !name.trim() || !isDirty"
-          @click="emit('save')"
-        >
-          <UiIcon name="save" />
-          {{ isSaving ? t("common.saving") : t("common.save") }}
-        </button>
+          <UiIcon name="help" />
+        </RouterLink>
+        <template v-if="canEdit">
+          <button
+            type="button"
+            class="btn btn--soft-danger"
+            :disabled="isSaving || isDeleting"
+            @click="emit('delete')"
+          >
+            <UiIcon name="delete" />
+            {{ t("common.delete") }}
+          </button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="isSaving || !name.trim() || !isDirty"
+            @click="emit('save')"
+          >
+            <UiIcon name="save" />
+            {{ isSaving ? t("common.saving") : t("common.save") }}
+          </button>
+        </template>
       </div>
     </div>
 
@@ -148,10 +172,85 @@ const { t } = useI18n()
   letter-spacing: -0.01em;
 }
 
+.shape-form__doc-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.shape-form__doc-btn:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.shape-form__doc-btn-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.shape-form__doc-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  font-size: 10px;
+}
+
+.shape-form__doc-badge .ui-icon {
+  width: 10px;
+  height: 10px;
+}
+
 .shape-form__actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.shape-form__help-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-height);
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.shape-form__help-link:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.shape-form__help-link .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .shape-form__body {
@@ -236,44 +335,4 @@ const { t } = useI18n()
   cursor: not-allowed;
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn--primary {
-  background: var(--primary);
-  color: #fff;
-}
-
-.btn--primary:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-.btn--soft-danger {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.btn--soft-danger:hover:not(:disabled) {
-  filter: brightness(0.95);
-}
-
-.btn .ui-icon {
-  font-size: 18px;
-}
 </style>

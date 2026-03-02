@@ -253,20 +253,13 @@ onBeforeUnmount(() => {
               :is-dirty="isDirty"
               :is-saving="isSaving"
               :is-deleting="isDeleting"
+              :has-doc="!!getShapeDocFileId()"
               @save="handleSave"
               @delete="openDeleteConfirm"
+              @open-doc="openDocModal"
               @update:name="localName = $event"
               @update:outline="localOutline = $event"
             />
-            <div v-if="selectedDetail && canEditSelected" class="shape-editor__doc-row">
-              <button type="button" class="btn btn--secondary" @click="openDocModal">
-                <UiIcon name="menu_book" />
-                {{ t("notations.documentation") }}
-                <span v-if="getShapeDocFileId()" class="shape-editor__doc-badge">
-                  <UiIcon name="check" />
-                </span>
-              </button>
-            </div>
           </div>
         </div>
       </template>
@@ -347,37 +340,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-.shape-editor__doc-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.shape-editor__doc-row .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--base-text);
-  cursor: pointer;
-}
-
-.shape-editor__doc-row .btn:hover {
-  background: var(--surface-strong);
-}
-
-.shape-editor__doc-badge {
-  display: inline-flex;
-  color: var(--success);
-  font-size: 14px;
 }
 
 .shape-editor__empty {

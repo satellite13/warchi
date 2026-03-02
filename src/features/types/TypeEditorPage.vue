@@ -12,7 +12,7 @@ import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
 import TypeSidebar from './components/TypeSidebar.vue'
 import TypeForm from './components/TypeForm.vue'
 import TypeAside from './components/TypeAside.vue'
-import TypeDocumentPanel from './components/TypeDocumentPanel.vue'
+import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
 import type { ShareResourceType } from '../../types/api'
 
 const {
@@ -80,35 +80,25 @@ watch(selectedType, async (item) => {
   }
 })
 
-async function handleDocumentSave() {
+const showDocModal = ref(false)
+
+function openDocModal() {
+  showDocModal.value = true
+}
+
+async function handleDocumentSavedFromModal(fileId: string) {
   if (!selectedType.value) return
-
-  const fileId = await saveDocument()
-  if (fileId) {
-    if (!selectedType.value.parsedAttrs.documentFileId) {
-      // First save: persist fileId into type attrs
-      selectedType.value.parsedAttrs.documentFileId = fileId
-      await saveType(selectedType.value)
-    }
-    const item = selectedType.value
-    if (item.kind === 'node') {
-      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, nodeTypeId: item.id })
-    } else {
-      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, linkTypeId: item.id })
-    }
+  if (!selectedType.value.parsedAttrs.documentFileId) {
+    selectedType.value.parsedAttrs.documentFileId = fileId
+    await saveType(selectedType.value)
   }
-}
-
-function handleDocumentLoadVersions() {
-  if (documentFileId.value) {
-    loadVersions(documentFileId.value)
+  const item = selectedType.value
+  if (item.kind === 'node') {
+    await apiPost<{ fileId: string; label: string }>('/documents', { fileId, nodeTypeId: item.id })
+  } else {
+    await apiPost<{ fileId: string; label: string }>('/documents', { fileId, linkTypeId: item.id })
   }
-}
-
-function handleDocumentLoadVersion(versionNumber: number) {
-  if (documentFileId.value) {
-    loadVersion(documentFileId.value, versionNumber)
-  }
+  showDocModal.value = false
 }
 
 async function handleSave() {
@@ -279,8 +269,10 @@ const attrsJson = computed(() => {
               :is-saving="isSaving"
               :is-type-in-use="isTypeInUse"
               :can-share="canShareSelectedType"
+              :has-doc="!!documentFileId"
               @save="handleSave"
               @delete="handleDelete"
+              @open-doc="openDocModal"
               @update-name="handleTypeNameUpdate"
               @update-default-directory-path="handleDefaultDirectoryPathUpdate"
               @update-icon="handleIconUpdate"
@@ -288,23 +280,6 @@ const attrsJson = computed(() => {
               @add-property="addCustomProperty(selectedType)"
               @remove-property="removeCustomProperty(selectedType, $event)"
               @share="showShareModal = true"
-            />
-
-            <TypeDocumentPanel
-              :content="documentContent"
-              :file-id="documentFileId"
-              :is-loading="isDocLoading"
-              :is-saving="isDocSaving"
-              :is-dirty="isDocDirty"
-              :is-new-type="!!selectedType._isNew"
-              :versions="docVersions"
-              :is-loading-versions="isLoadingVersions"
-              :error="docError"
-              @update:content="setDocumentContent"
-              @save="handleDocumentSave"
-              @load-versions="handleDocumentLoadVersions"
-              @load-version="handleDocumentLoadVersion"
-              @back-to-current="loadDocument(selectedType?.parsedAttrs.documentFileId)"
             />
           </div>
 
@@ -352,6 +327,14 @@ const attrsJson = computed(() => {
       :resource-type="shareResourceType"
       :resource-id="selectedType.id"
       @close="showShareModal = false"
+    />
+
+    <DocumentEditorModal
+      v-if="showDocModal && selectedType"
+      :title="selectedType.name"
+      :file-id="documentFileId ?? selectedType.parsedAttrs.documentFileId ?? null"
+      @close="showDocModal = false"
+      @saved="handleDocumentSavedFromModal"
     />
   </div>
 </template>
@@ -431,45 +414,6 @@ const attrsJson = computed(() => {
   margin: 0;
   font-size: 13px;
   color: var(--text-subtle);
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn--secondary {
-  background: var(--surface-strong);
-  color: var(--text-muted);
-}
-
-.btn--secondary:hover:not(:disabled) {
-  background: var(--border);
-  color: var(--base-text);
-}
-
-.btn--danger {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.btn--danger:hover:not(:disabled) {
-  filter: brightness(0.95);
 }
 
 /* Unsaved dialog */

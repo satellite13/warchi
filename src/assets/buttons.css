@@ -3,7 +3,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 20px;
+  height: var(--btn-height);
+  padding: 0 20px;
   font-size: 14px;
   font-weight: 500;
   border-radius: var(--radius-sm);
@@ -11,6 +12,7 @@
   transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   font-family: inherit;
   letter-spacing: 0.01em;
+  box-sizing: border-box;
 }
 
 .btn:disabled {
@@ -90,7 +92,8 @@
 }
 
 .btn--soft-danger:hover:not(:disabled) {
-  filter: brightness(0.95);
+  filter: brightness(0.92);
+  background: rgba(220, 53, 69, 0.15);
 }
 
 /* ─── Keyboard focus styles ──────────────────── */

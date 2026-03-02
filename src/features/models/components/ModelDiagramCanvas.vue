@@ -1913,6 +1913,7 @@ function initRenderer(r: DiagramRenderer) {
   // Context menu only when editable (not read-only baseline view)
   if (!props.readOnly) {
   r.enableContextMenu({
+    iconToUrl: (name: string) => `/icons/${name}.svg`,
     menu: {
       node: (target: ContextMenuTarget) => {
         if (target.type !== 'node') return []

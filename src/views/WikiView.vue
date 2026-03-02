@@ -18,6 +18,20 @@ const selectedFileId = ref<string | null>(null)
 const content = ref("")
 const contentLoading = ref(false)
 
+/** Свернутые группы (entityType). Пустой Set — все развёрнуты. */
+const collapsedGroups = ref(new Set<string>())
+
+function toggleGroup(entityType: string) {
+  const next = new Set(collapsedGroups.value)
+  if (next.has(entityType)) next.delete(entityType)
+  else next.add(entityType)
+  collapsedGroups.value = next
+}
+
+function isGroupCollapsed(entityType: string): boolean {
+  return collapsedGroups.value.has(entityType)
+}
+
 const editorLanguage = computed(() => {
   const map: Record<string, string> = { ru: "ru-RU", en: "en-US" }
   return map[currentLocale.value] ?? "en-US"
@@ -105,8 +119,24 @@ onMounted(() => {
             :key="group.entityType"
             class="wiki-view__group"
           >
-            <h3 class="wiki-view__group-title">{{ group.typeLabel }}</h3>
-            <ul class="wiki-view__list">
+            <button
+              type="button"
+              class="wiki-view__group-title-btn"
+              :aria-expanded="!isGroupCollapsed(group.entityType)"
+              @click="toggleGroup(group.entityType)"
+            >
+              <UiIcon
+                name="expand_more"
+                class="wiki-view__group-chevron"
+                :class="{ 'wiki-view__group-chevron--collapsed': isGroupCollapsed(group.entityType) }"
+              />
+              <span class="wiki-view__group-title-text">{{ group.typeLabel }}</span>
+              <span class="wiki-view__group-count">{{ group.items.length }}</span>
+            </button>
+            <ul
+              v-show="!isGroupCollapsed(group.entityType)"
+              class="wiki-view__list"
+            >
               <li
                 v-for="item in group.items"
                 :key="item.fileId"
@@ -202,14 +232,51 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.wiki-view__group-title {
+.wiki-view__group-title-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
   margin: 0 8px 8px;
-  padding: 0;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.wiki-view__group-title-btn:hover {
+  background: var(--surface-strong);
+  color: var(--base-text);
+}
+
+.wiki-view__group-chevron {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.wiki-view__group-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.wiki-view__group-title-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.wiki-view__group-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+  font-weight: 600;
 }
 
 .wiki-view__list {

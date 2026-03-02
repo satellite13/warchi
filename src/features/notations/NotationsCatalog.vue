@@ -38,5 +38,6 @@ const config: EntityListConfig<NotationData> = {
     i18n-prefix="notations"
     :icon="DEFAULT_ENTITY_ICONS.notation"
     resource-type="NOTATION"
+    :show-version-tree="true"
   />
 </template>

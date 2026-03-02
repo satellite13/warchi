@@ -79,12 +79,12 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
         :version-id="versionId"
         :disabled="isSubmitting"
       />
-      <div v-if="sourceVersions.length > 0" class="form-field">
-        <label class="form-label" for="source-version">{{ t("common.baseVersion") }}</label>
+      <div v-if="sourceVersions.length > 0" class="source-version-field">
+        <label class="source-version-field__label" for="source-version">{{ t("common.baseVersion") }}</label>
         <select
           id="source-version"
           v-model="sourceVersionModel"
-          class="form-select"
+          class="source-version-field__select"
           :disabled="isSubmitting"
         >
           <option value="">{{ t("common.emptyNotation") }}</option>
@@ -128,41 +128,49 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
   gap: 20px;
 }
 
-.form-field {
+.source-version-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.form-label {
-  font-size: 14px;
+.source-version-field__label {
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-.form-select {
-  padding: 10px 12px;
-  font-size: 14px;
+.source-version-field__select {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.2;
   font-family: inherit;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--surface-muted);
   color: var(--base-text);
   cursor: pointer;
-  transition: border-color 0.2s ease;
-}
-
-.form-select:hover:not(:disabled) {
-  border-color: var(--primary);
-}
-
-.form-select:focus {
   outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.source-version-field__select:hover:not(:disabled) {
   border-color: var(--primary);
 }
 
-.form-select:disabled {
-  opacity: 0.5;
+.source-version-field__select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
+  background: var(--surface);
+}
+
+.source-version-field__select:disabled {
+  background: var(--surface-strong);
+  color: var(--text-subtle);
   cursor: not-allowed;
 }
 

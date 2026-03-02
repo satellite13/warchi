@@ -18,6 +18,10 @@ const props = defineProps<{
   icon?: string;
   /** Показывать кнопку смены иконки в шапке. */
   canChangeIcon?: boolean;
+  /** Показывать кнопку «Дерево версий». */
+  showVersionTreeButton?: boolean;
+  /** Префикс i18n для подписи кнопки дерева версий (например 'models' или 'notations'). */
+  versionTreeI18nPrefix?: string;
 }>();
 
 const emit = defineEmits<{
@@ -27,10 +31,13 @@ const emit = defineEmits<{
   share: [];
   "version-change": [string];
   "change-icon": [];
+  "show-version-tree": [];
 }>();
 const { t, locale } = useI18n();
 
 const cardColor = computed(() => getGradient(props.id));
+
+const isStacked = computed(() => (props.versions?.length ?? 0) > 1);
 
 const formattedUpdatedAt = computed(() => {
   if (!props.updatedAt) {
@@ -42,8 +49,9 @@ const formattedUpdatedAt = computed(() => {
 </script>
 
 <template>
-  <div class="model-card" @click="emit('click')">
-    <div class="model-card__gradient" :style="{ background: cardColor }">
+  <div class="model-card-wrap" :class="{ 'model-card-wrap--stacked': isStacked }">
+    <div class="model-card" @click="emit('click')">
+      <div class="model-card__gradient" :style="{ background: cardColor }">
       <div class="model-card__icon-wrap">
         <div class="model-card__icon">
           <template v-if="icon">
@@ -87,6 +95,16 @@ const formattedUpdatedAt = computed(() => {
       >
         <UiIcon name="share" :alt="t('common.share')" />
       </button>
+      <button
+        v-if="showVersionTreeButton && versionTreeI18nPrefix"
+        class="model-card__version-tree"
+        type="button"
+        :aria-label="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+        :title="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+        @click.stop="emit('show-version-tree')"
+      >
+        <UiIcon :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })" name="account_tree" />
+      </button>
       <span class="model-card__title">{{ name }}</span>
       <div class="model-card__version">
         <span v-if="!versions || versions.length <= 1" class="model-card__badge">v{{ version }}</span>
@@ -109,10 +127,50 @@ const formattedUpdatedAt = computed(() => {
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.model-card-wrap {
+  position: relative;
+  display: block;
+}
+
+.model-card-wrap--stacked {
+  padding: 0 6px 6px 0;
+}
+
+.model-card-wrap--stacked::before,
+.model-card-wrap--stacked::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.model-card-wrap--stacked::before {
+  transform: translate(4px, 4px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.model-card-wrap--stacked::after {
+  transform: translate(8px, 8px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.model-card-wrap--stacked .model-card {
+  position: relative;
+  z-index: 1;
+}
+
 .model-card {
   display: flex;
   flex-direction: column;
@@ -157,21 +215,21 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card__icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+  border-radius: 10px;
   color: rgba(255, 255, 255, 0.95);
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .model-card__icon :deep(.ui-icon),
 .model-card__icon .model-card__icon-img {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
 }
 
@@ -181,15 +239,15 @@ const formattedUpdatedAt = computed(() => {
 
 .model-card__icon-edit {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 22px;
-  height: 22px;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
@@ -200,8 +258,8 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card__icon-edit .ui-icon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 .model-card__icon-wrap:hover .model-card__icon-edit {
@@ -224,12 +282,13 @@ const formattedUpdatedAt = computed(() => {
 
 .model-card__delete,
 .model-card__rename,
-.model-card__share {
+.model-card__share,
+.model-card__version-tree {
   position: absolute;
   top: 12px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-muted);
@@ -245,11 +304,15 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card__rename {
-  right: 48px;
+  right: 44px;
 }
 
 .model-card__share {
-  right: 84px;
+  right: 76px;
+}
+
+.model-card__version-tree {
+  right: 108px;
 }
 
 .model-card__delete:hover {
@@ -264,7 +327,8 @@ const formattedUpdatedAt = computed(() => {
   color: var(--primary);
 }
 
-.model-card__share:hover {
+.model-card__share:hover,
+.model-card__version-tree:hover {
   background: var(--surface-strong);
   border-color: var(--accent);
   color: var(--accent);
@@ -273,11 +337,13 @@ const formattedUpdatedAt = computed(() => {
 .model-card__delete :deep(.ui-icon),
 .model-card__rename :deep(.ui-icon),
 .model-card__share :deep(.ui-icon),
+.model-card__version-tree :deep(.ui-icon),
 .model-card__delete :deep(svg),
 .model-card__rename :deep(svg),
-.model-card__share :deep(svg) {
-  width: 18px;
-  height: 18px;
+.model-card__share :deep(svg),
+.model-card__version-tree :deep(svg) {
+  width: 16px;
+  height: 16px;
 }
 
 .model-card__title {

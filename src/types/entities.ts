@@ -10,10 +10,14 @@ export interface VersionedEntity {
 
 export interface ModelData extends VersionedEntity {
   attrs?: string | null;
+  /** Id модели-источника, из которой создана эта версия (дерево версий). */
+  sourceId?: string | null;
 }
 
 export interface NotationData extends VersionedEntity {
   attrs?: string | null;
+  /** Id нотации-источника, из которой создана эта версия (дерево версий). */
+  sourceId?: string | null;
 }
 
 export interface EntityGroup<T extends VersionedEntity> {

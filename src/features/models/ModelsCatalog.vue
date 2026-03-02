@@ -38,5 +38,6 @@ const config: EntityListConfig<ModelData> = {
     i18n-prefix="models"
     :icon="DEFAULT_ENTITY_ICONS.model"
     resource-type="MODEL"
+    :show-version-tree="true"
   />
 </template>

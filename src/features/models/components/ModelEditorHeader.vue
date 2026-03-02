@@ -530,9 +530,10 @@ const canCreateBaseline = computed(
   text-overflow: ellipsis;
 }
 
-.model-header__title-edit-icon {
-  font-size: 14px;
-  color: var(--text-subtle);
+.model-header__title-btn .model-header__title-edit-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
 }
 
 .model-header__title-btn:hover .model-header__title {

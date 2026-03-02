@@ -19,6 +19,7 @@ import EntityRenameModal from "../modals/EntityRenameModal.vue";
 import ShareAccessModal from "../modals/ShareAccessModal.vue";
 import BaseModal from "../modals/BaseModal.vue";
 import IconPicker from "../forms/IconPicker.vue";
+import VersionTreeModal from "../modals/VersionTreeModal.vue";
 
 const props = defineProps<{
   entityListConfig: EntityListConfig<VersionedEntity & { attrs?: string | null }>
@@ -26,6 +27,8 @@ const props = defineProps<{
   i18nPrefix: string
   icon: string
   resourceType: ShareResourceType
+  /** Показывать кнопку «Дерево версий» на карточках (для моделей). */
+  showVersionTree?: boolean
 }>();
 
 const router = useRouter();
@@ -104,6 +107,29 @@ const openShareModal = (item: VersionedEntity) => {
   shareTargetId.value = item.id;
   showShareModal.value = true;
 };
+
+const showVersionTreeModal = ref(false);
+const versionTreeGroup = ref<{
+  name: string
+  versions: (VersionedEntity & { sourceId?: string | null })[]
+} | null>(null);
+
+function openVersionTreeModal(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}) {
+  versionTreeGroup.value = { name: group.name, versions: group.versions };
+  showVersionTreeModal.value = true;
+}
+
+function closeVersionTreeModal() {
+  showVersionTreeModal.value = false;
+  versionTreeGroup.value = null;
+}
+
+function openEntityFromVersionTree(id: string) {
+  openEntity(id);
+}
 </script>
 
 <template>
@@ -149,10 +175,13 @@ const openShareModal = (item: VersionedEntity) => {
         :updated-at="getSelectedItem(group)?.updatedAt"
         :icon="canChangeIcon ? (parseIconFromAttrs(getSelectedItem(group)?.attrs) ?? icon) : undefined"
         :can-change-icon="canChangeIcon"
+        :show-version-tree-button="showVersionTree"
+        :version-tree-i18n-prefix="showVersionTree ? i18nPrefix : undefined"
         @click="getSelectedItem(group) && openEntity(getSelectedItem(group)!.id)"
         @delete="getSelectedItem(group) && openDeleteModal(getSelectedItem(group)!)"
         @rename="getSelectedItem(group) && openRenameModal(getSelectedItem(group)!)"
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
+        @show-version-tree="openVersionTreeModal(group)"
         @version-change="handleVersionChange(group.name, $event)"
         @change-icon="getSelectedItem(group) && openIconModal(getSelectedItem(group)!)"
       >
@@ -210,6 +239,15 @@ const openShareModal = (item: VersionedEntity) => {
       :resource-type="resourceType"
       :resource-id="shareTargetId"
       @close="showShareModal = false; shareTargetId = null"
+    />
+
+    <VersionTreeModal
+      v-if="showVersionTreeModal && versionTreeGroup"
+      :group-name="versionTreeGroup.name"
+      :items="versionTreeGroup.versions"
+      :i18n-prefix="i18nPrefix"
+      @close="closeVersionTreeModal"
+      @open="openEntityFromVersionTree"
     />
 
     <BaseModal

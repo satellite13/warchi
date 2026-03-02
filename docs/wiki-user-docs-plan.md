@@ -1,5 +1,9 @@
 # Вики из пользовательской документации
 
+**Ветка:** `wiki-user-docs` (warchi). Бэкенд: репозиторий arepos-server.
+
+---
+
 ## Замысел: document_refs как единое место для всех документов
 
 Таблица **document_refs** (arepos-server: `src/main/resources/db/changelog/018-add-document-refs.sql`) создана именно для того, чтобы в неё попадали **все** привязки документов к контексту. Таким образом, вики строится поверх этой таблицы — один источник правды.
@@ -36,7 +40,7 @@ flowchart LR
     AllDocs[Все документы в document_refs]
   end
   subgraph current [Сейчас]
-    ModelEditor[ModelEditor] -->|POST /documents| Refs[document_refs]
+    ModelEditor[ModelEditor] -->|"только property"| Refs[document_refs]
     TypeEditor[TypeEditor] -.->|нет вызова| Refs
     NotationEditor[NotationEditor] -.->|нет вызова| Refs
   end
@@ -47,13 +51,17 @@ flowchart LR
 
 ## План реализации
 
-### 0. Бэкенд: схема под полный список сущностей
+Порядок выполнения: **0** (схема и API на бэкенде) → **1** (регистрация ref во всех редакторах) → **2** (расширенный ответ для вики) → **3** (страница Вики на фронте). Шаги 1 и 2 можно частично совмещать после появления новых полей в API.
+
+### 0. Бэкенд (arepos-server): схема под полный список сущностей
 
 - **document_refs**: добавить колонки `diagram_id` (FK → diagrams), `relation_id` (FK → relations), `node_shape_id` (FK → node_shapes). Обновить constraint: хотя бы одно из полей контекста должно быть задано (включая новые).
 - **node_shapes**: добавить колонку `attrs` (jsonb), чтобы хранить `documentFileId` (и при необходимости другое). Либо отдельная колонка `document_file_id` (uuid, FK → files).
 - **DocumentRefs** (entity), **RegisterDocumentRefRequest**, **DocumentRefsService**, **DocumentRefsRepository** (findByFilters): поддержать параметры `diagramId`, `relationId`, `nodeShapeId`.
 
-### 1. Довести регистрацию ref до всех мест, где сохраняется документ
+Файлы: миграция в `src/main/resources/db/changelog/`, сущность `model/DocumentRefs.kt`, `service/DocumentRefsService.kt`, `controller/DocumentsController.kt`, `repository/DocumentRefsRepository.kt`.
+
+### 1. Фронт (warchi): довести регистрацию ref до всех мест, где сохраняется документ
 
 - **Редактор модели** (`src/features/models/ModelEditor.vue`): в `handleDocSaved` после установки fileId в state вызывать `POST /documents`:
   - для `target.kind === 'model'`: `{ fileId, modelId }`;
@@ -64,20 +72,20 @@ flowchart LR
   - нотация: `{ fileId, notationId }`;
   - компонент: `{ fileId, notationId, componentId }`;
   - отношение: `{ fileId, notationId, relationId }` (после появления relation_id в API).
-- **Редактор форм** (`src/features/shapes/ShapeEditorPage.vue`): после появления attrs/documentFileId у формы — кнопка «Документация», модалка DocumentEditorModal, при сохранении вызов `POST /documents` с `{ fileId, nodeShapeId }`.
+- **Редактор форм** (`src/features/shapes/ShapeEditorPage.vue`): после появления attrs/documentFileId у формы (шаг 0) — кнопка «Документация», модалка DocumentEditorModal, при сохранении вызов `POST /documents` с `{ fileId, nodeShapeId }`.
 
-### 2. Бэкенд: расширить ответ GET /documents для вики
+### 2. Бэкенд (arepos-server): расширить ответ GET /documents для вики
 
 - При вызове `GET /documents` без параметров (или с параметром `wiki=true`) возвращать для каждой записи контекст, чтобы в вики показывать «Тип X», «Нотация Y / Компонент Z», «Модель M / Узел N» и т.д.
 - Расширить DTO (например, `DocumentItem` или новый `DocumentWikiItem`): добавить поля `entityType`, `entityId`, `entityName`, при необходимости `parentName`. Реализация: при формировании списка подгружать связанные сущности (model, node, diagram, notation, component, relation, nodeType, linkType, nodeShape) и заполнять человекочитаемые названия для вики.
 
-### 3. Фронт: страница «Вики»
+### 3. Фронт (warchi): страница «Вики»
 
 - Новый маршрут (например, `/wiki`) и страница со списком документов: запрос `GET /documents` без параметров, отображение списка с контекстом (entityName, тип сущности).
 - Клик по строке: загрузка контента `GET /files/{id}` и отображение markdown (переиспользовать рендер из `src/features/docs/components/DocsContent.vue` или превью из DocumentEditorModal).
 - По желанию: поиск/фильтр по названию, группировка по типу контекста (модели, нотации, типы).
 
-После этого вики будет полностью опираться на таблицу **document_refs**, в которую по замыслу попадают все документы — как только регистрация ref будет добавлена в редакторах типов и нотаций.
+После этого вики будет полностью опираться на таблицу **document_refs**, в которую по замыслу попадают все документы.
 
 ---
 

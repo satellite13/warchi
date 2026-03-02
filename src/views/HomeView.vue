@@ -76,7 +76,7 @@ const statCards = computed(() => [
 const quickActions = computed(() => [
   { icon: "add_circle", label: t("home.quickCreateModel"), route: "models", color: "#7c5cfc" },
   { icon: "add_circle", label: t("home.quickCreateNotation"), route: "notations", color: "#2bb896" },
-  { icon: "tune", label: t("home.quickTypeEditor"), route: "types", color: "#f59e42" }
+  { icon: DEFAULT_ENTITY_ICONS.nodeType, label: t("home.quickTypeEditor"), route: "types", color: "#f59e42" }
 ])
 
 

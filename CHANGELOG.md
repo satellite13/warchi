@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.27] - 2026-03-03
+
+### Added
+- ToggleSwitch component (slider-style boolean control); replaced checkboxes in NodeStylePanel (label line gap), PropertyRow (required/system/interactive), ModelPropertiesPanel (node/link boolean properties).
+- Edge style option "Разрыв под меткой" (labelLineGap) in notation and model diagram; alignment tolerance configurable from warchi (alignmentScreenTolerance: 80) via enableInteractions options.
+
+### Changed
+- Updated `@ngroznykh/papirus` to `0.5.3` (labelLineGap, alignmentScreenTolerance option).
+- DiagramStyle: added edgeLabelLineGap; applied in useNotationDiagram and ModelDiagramCanvas.
+
+### Fixed
+- PropertyRow: pass `property.system ?? false` and `property.interactive ?? false` to ToggleSwitch to fix TS2322 (boolean | undefined).
+
 ## [0.0.26] - 2026-03-02
 
 ### Added

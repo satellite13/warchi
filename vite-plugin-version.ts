@@ -19,9 +19,12 @@ export default function versionPlugin(): Plugin {
   const pkg = JSON.parse(
     readFileSync(resolve(process.cwd(), "package.json"), "utf-8")
   ) as { version: string };
+  // Prefer VITE_APP_VERSION from env (Docker build-arg) so deployed version is correct
+  const version =
+    (process.env.VITE_APP_VERSION as string | undefined) || pkg.version;
   const buildTime = new Date().toISOString();
   const versionDetails: VersionDetails = {
-    version: pkg.version,
+    version,
     buildTime
   };
 
@@ -30,7 +33,7 @@ export default function versionPlugin(): Plugin {
     config() {
       return {
         define: {
-          "import.meta.env.APP_VERSION": JSON.stringify(pkg.version),
+          "import.meta.env.APP_VERSION": JSON.stringify(version),
           "import.meta.env.APP_BUILD_TIME": JSON.stringify(buildTime)
         }
       };

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
+
+const { t } = useI18n()
 const appVersion = import.meta.env.APP_VERSION ?? "dev"
 </script>
 
@@ -10,7 +13,7 @@ const appVersion = import.meta.env.APP_VERSION ?? "dev"
     <div class="app-footer__center">
     </div>
     <div class="app-footer__right">
-      Version: {{ appVersion }}
+      {{ t("common.version") }}: {{ appVersion }}
     </div>
   </footer>
 

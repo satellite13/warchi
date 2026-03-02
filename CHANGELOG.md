@@ -4,14 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.26] - 2026-03-02
+
 ### Added
 - Hover hints (`title`) for compact numeric fields in the style panel (`W/H/R`, `PT/PB/PL/PR`, `T/R/B/L`) so abbreviated labels are easier to understand.
 - New i18n keys under `nodeStyle` for field tooltips and inset sync modes (`pair/all`).
 
 ### Changed
+- Updated `@ngroznykh/papirus` to `0.5.0`.
 - Continued `NodeStylePanel` refactoring toward reusable UI building blocks (`InsetSidesInput`, `ColorWithAlphaField`, `StyleSection`, `LabeledNumberInput`, `LabeledFieldRow`) with more consistent field styling.
 - Updated Russian locale value of `nodeStyle.inset` from `Inset` to `Отступ`.
 - Localized inset sync button captions (`Pair`/`All`).
+
+### Release
+- Bumped application version to `0.0.26` in package metadata.
+- Release tag `v0.0.26`.
 
 ## [0.0.25] - 2026-02-28
 

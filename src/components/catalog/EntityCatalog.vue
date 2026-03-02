@@ -66,7 +66,6 @@ const {
   createItem,
   deleteItem,
   showIconModal,
-  itemToUpdateIcon,
   iconPickerValue,
   isUpdatingIcon,
   iconUpdateError,

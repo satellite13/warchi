@@ -2,7 +2,7 @@
 import type { VersionTreeNode as VersionTreeNodeType, VersionTreeItem } from "@/utils/versionTree"
 import VersionTreeNode from "./VersionTreeNode.vue"
 
-const props = defineProps<{
+defineProps<{
   node: VersionTreeNodeType<VersionTreeItem>
   /** Корневой узел — без вертикальной линии слева. */
   isRoot?: boolean

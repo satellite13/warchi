@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.0.28] - 2026-03-04
+
+### Added
+- Navigation-only mode in ModelEditor: diagram and palette respect the mode and disable drag-and-drop when enabled.
+
+### Changed
+- Updated `@ngroznykh/papirus` to `0.5.4` (npm dependency).
+- ModelDiagramCanvas and ModelTreePalettePanel: draggable properties conditionally disabled based on navigation-only mode.
+
+### Fixed
+- VersionTreeNode: removed unused `props` variable (ESLint no-unused-vars).
+
 ## [0.0.27] - 2026-03-03
 
 ### Added

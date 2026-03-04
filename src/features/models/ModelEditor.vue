@@ -3222,6 +3222,7 @@ onBeforeUnmount(() => {
             :selected-diagram-id="selectedDiagramId"
             :model-name="model?.name"
             :sync-selection-enabled="selectionSyncEnabled"
+            :navigation-only-mode="diagramNavigationOnlyMode"
             @select-node="handleTreeSelectNode"
             @toggle-sync-selection="toggleSelectionSync"
             @open-diagram="selectDiagram"

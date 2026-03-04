@@ -2222,6 +2222,10 @@ const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } =>
 
 const onDragOver = (event: DragEvent) => {
   if (!props.activeDiagram) return
+  if (props.readOnly || props.navigationOnlyMode) {
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none'
+    return
+  }
 
   const hasComponentPayload = hasDragType(event, 'application/x-notation-component-id')
   const hasModelNodePayload = hasDragType(event, 'application/x-model-node-id')
@@ -2246,7 +2250,7 @@ const onDragOver = (event: DragEvent) => {
 }
 
 const onDrop = (event: DragEvent) => {
-  if (props.readOnly || !props.activeDiagram) return
+  if (props.readOnly || props.navigationOnlyMode || !props.activeDiagram) return
   if (!isAllowedDropEvent(event)) return
   event.preventDefault()
   const { x, y } = normalizeDropCoordinates(event)
@@ -2646,7 +2650,7 @@ defineExpose({
             type="button"
             class="canvas-palette__item canvas-palette__item--note"
             :title="t('diagram.note')"
-            draggable="true"
+            :draggable="!props.readOnly && !props.navigationOnlyMode"
             @dragstart="onDragNoteStart"
           >
             <UiIcon name="note" class="canvas-palette__note-icon" />
@@ -2662,7 +2666,7 @@ defineExpose({
               class="canvas-palette__item"
               :title="entry.component.name"
               :style="{ '--palette-item-fill': entry.component.paletteFillColor }"
-              draggable="true"
+              :draggable="!props.readOnly && !props.navigationOnlyMode"
               @dragstart="onDragComponentStart($event, entry.component.id)"
             >
               <img

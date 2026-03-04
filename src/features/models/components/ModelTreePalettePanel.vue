@@ -16,6 +16,7 @@ const props = defineProps<{
   selectedDiagramId: string | null
   modelName?: string
   syncSelectionEnabled?: boolean
+  navigationOnlyMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -395,7 +396,7 @@ defineExpose({ expandToNode, focusNode })
             class="tree-node__row"
             :class="{ 'tree-node__row--active': selectedNodeId === node.id, ...getDropClass(node.id) }"
             :data-tree-node-id="node.id"
-            draggable="true"
+            :draggable="!props.navigationOnlyMode"
             @dragstart="onDragNodeStart($event, node.id)"
             @dragover.prevent="onTreeDragOver($event, node.id)"
             @dragleave="onTreeDragLeave"
@@ -489,7 +490,7 @@ defineExpose({ expandToNode, focusNode })
               :key="diagram.id"
               class="diagram-row"
               :class="{ 'diagram-row--active': selectedDiagramId === diagram.id }"
-              draggable="true"
+              :draggable="!props.navigationOnlyMode"
               @dragstart="onDragDiagramStart($event, diagram.id)"
             >
               <button
@@ -541,7 +542,7 @@ defineExpose({ expandToNode, focusNode })
                 class="tree-node__row"
                 :class="{ 'tree-node__row--active': selectedNodeId === child.id, ...getDropClass(child.id) }"
                 :data-tree-node-id="child.id"
-                draggable="true"
+                :draggable="!props.navigationOnlyMode"
                 @dragstart="onDragNodeStart($event, child.id)"
                 @dragover.prevent="onTreeDragOver($event, child.id)"
                 @dragleave="onTreeDragLeave"
@@ -634,7 +635,7 @@ defineExpose({ expandToNode, focusNode })
                   :key="diagram.id"
                   class="diagram-row"
                   :class="{ 'diagram-row--active': selectedDiagramId === diagram.id }"
-                  draggable="true"
+                  :draggable="!props.navigationOnlyMode"
                   @dragstart="onDragDiagramStart($event, diagram.id)"
                 >
                   <button
@@ -686,7 +687,7 @@ defineExpose({ expandToNode, focusNode })
                     class="tree-node__row"
                     :class="{ 'tree-node__row--active': selectedNodeId === grandchild.id, ...getDropClass(grandchild.id) }"
                     :data-tree-node-id="grandchild.id"
-                    draggable="true"
+                    :draggable="!props.navigationOnlyMode"
                     @dragstart="onDragNodeStart($event, grandchild.id)"
                     @dragover.prevent="onTreeDragOver($event, grandchild.id)"
                     @dragleave="onTreeDragLeave"

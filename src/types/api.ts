@@ -207,6 +207,16 @@ export interface NotationUpdateRequest {
   attrs?: string | null
 }
 
+export interface NotationResponse {
+  id: string
+  name: string
+  version: string
+  ownerId: string
+  attrs?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
 export interface NotationMetaResponse {
   id: string
   name: string

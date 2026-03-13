@@ -35,7 +35,7 @@ import TabPanel from '../../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
 import { bumpMinor, compareVersions } from '../../utils/version'
 import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
-import type { NotationMetaResponse, RelationResponse } from '../../types/api'
+import type { NotationMetaResponse, NotationResponse, RelationResponse } from '../../types/api'
 import { useWikiDocuments } from '../../composables/useWikiDocuments'
 
 const {
@@ -477,6 +477,7 @@ watch([isDiagramReadOnly, activeRightTab], () => {
 })
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
+const newerNotationVersions = ref<NotationResponse[]>([])
 const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
 const fallbackNotationMetaLoading = ref(false)
 const fallbackNotationMetaError = ref<string | null>(null)
@@ -511,6 +512,23 @@ const canOpenActiveDiagramNotation = computed(() => {
   if (state.value.notations.some(item => item.id === notationId)) return true
   return fallbackNotationMeta.value?.id === notationId
 })
+
+watch(
+  activeNotationId,
+  async (notationId) => {
+    if (!notationId) {
+      newerNotationVersions.value = []
+      return
+    }
+    const result = await apiGet<NotationResponse[]>(`/notations/${notationId}/newer-versions`)
+    if (result.success) {
+      newerNotationVersions.value = result.data
+    } else {
+      newerNotationVersions.value = []
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   () => currentUser.value?.id ?? null,
@@ -3238,7 +3256,10 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <div class="model-canvas-area">
+        <div
+          class="model-canvas-area"
+          :class="{ 'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram }"
+        >
           <template v-if="activeDiagram && !isDiagramReadOnly">
             <button
               v-if="!canvasSettingsVisible"
@@ -3297,6 +3318,18 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </template>
+          <div
+            v-if="newerNotationVersions.length > 0 && activeDiagram"
+            class="model-canvas-area__newer-notation-banner"
+          >
+            <span class="material-symbols-outlined model-canvas-area__newer-notation-icon">info</span>
+            {{
+              t('diagram.newerNotationVersionsBanner', {
+                name: newerNotationVersions[0]?.name ?? '',
+                version: newerNotationVersions[0]?.version ?? '',
+              })
+            }}
+          </div>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
               canvas-mode
@@ -4125,6 +4158,31 @@ onBeforeUnmount(() => {
 
 .canvas-settings__item--link-type {
   width: 100%;
+}
+
+.model-canvas-area__newer-notation-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--primary);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+
+.model-canvas-area__newer-notation-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
+  top: 42px;
 }
 
 .model-canvas-area__toolbar {

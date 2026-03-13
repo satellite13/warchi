@@ -1,0 +1,16 @@
+---
+description: Workflow при реализации фич по документам из docs/
+alwaysApply: true
+---
+
+# Workflow реализации фич по docs/
+
+При реализации фичи по документу из `docs/` (например, `notation-versioning-components-relations.md`, `diagram-notation-migration.md`):
+
+1. **Создать одну и ту же feature-ветку** во всех затронутых проектах (warchi, papirus, arepos-server). Имя ветки — осмысленное, связанное с документом (например `feat/notation-copy-versions`, `feat/diagram-notation-migration`).
+
+2. **Переключиться на эту ветку** в каждом проекте (`git checkout -b feat/...` или `git checkout feat/...`).
+
+3. **В warchi переключить papirus на прямую зависимость** — в `package.json` заменить `"@ngroznykh/papirus": "^0.x.x"` на `"@ngroznykh/papirus": "file:../papirus"`, затем выполнить `npm install`. Это даёт возможность менять papirus и сразу проверять в warchi без публикации.
+
+Перед релизом warchi — перевести обратно на npm-версию papirus и выполнить `rm -rf node_modules package-lock.json && npm install` (см. release-warchi skill).

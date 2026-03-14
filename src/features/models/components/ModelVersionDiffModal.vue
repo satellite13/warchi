@@ -31,6 +31,11 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const activeTab = ref<"nodes" | "links" | "diagrams">("nodes")
 
+/** Убирает скрытый корень "Root/" из пути для отображения. */
+function pathForDisplay(path: string): string {
+  return path.startsWith("Root/") ? path.slice(5) : path
+}
+
 const otherVersions = () =>
   props.relatedVersions.filter((m) => m.id !== props.modelId)
 
@@ -126,7 +131,7 @@ watch(
               :class="`model-diff-modal__row--${item.kind}`"
             >
               <span class="model-diff-modal__badge">{{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}</span>
-              <span class="model-diff-modal__path">{{ item.path }}</span>
+              <span class="model-diff-modal__path">{{ pathForDisplay(item.path) }}</span>
             </div>
             <p v-if="diff.nodes.length === 0" class="model-diff-modal__empty">
               {{ t('models.compareNoChanges') }}
@@ -140,7 +145,7 @@ watch(
               :class="`model-diff-modal__row--${item.kind}`"
             >
               <span class="model-diff-modal__badge">{{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}</span>
-              <span class="model-diff-modal__path">{{ item.sourcePath }} → {{ item.targetPath }}</span>
+              <span class="model-diff-modal__path">{{ pathForDisplay(item.sourcePath) }} → {{ pathForDisplay(item.targetPath) }}</span>
             </div>
             <p v-if="diff.links.length === 0" class="model-diff-modal__empty">
               {{ t('models.compareNoChanges') }}

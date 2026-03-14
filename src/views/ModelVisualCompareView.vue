@@ -23,8 +23,6 @@ import {
   buildDiagramDiffStateMaps,
   buildNodePathMap,
   computeModelDiff,
-  edgePlacementKey,
-  nodePlacementKey,
 } from "@/utils/modelDiff"
 import { compareVersions } from "@/utils/version"
 import {
@@ -321,94 +319,68 @@ const rightPathMap = computed(() =>
   rightData.value ? buildNodePathMap(rightData.value.nodes) : new Map<string, string>()
 )
 
-/** Размещения на левой диаграмме: (компонент+узел), (отношение+связь). Нотация — левая диаграмма. */
-const leftDiagramPlacements = computed(() => {
-  const diagram = leftDiagram.value
-  const instances = diagram?.parsedAttrs?.instances
+/** stableId узлов и связей на левой диаграмме (для сравнения «есть слева, нет справа» по stableId). */
+const leftDiagramStableIds = computed(() => {
+  const instances = leftDiagram.value?.parsedAttrs?.instances
   const editorNodes = leftEditorNodes.value
   const editorLinks = leftEditorLinks.value
-  if (!instances || !editorNodes.length) return { nodePlacements: new Set<string>(), edgePlacements: new Set<string>() }
-  const notationId = diagram.notationId ?? ""
-  const nodePlacements = new Set<string>()
+  if (!instances) return { nodeStableIds: new Set<string>(), linkStableIds: new Set<string>() }
   const nodeById = new Map(editorNodes.map((n) => [n.id, n]))
+  const nodeStableIds = new Set<string>()
   for (const inst of instances.nodes) {
     const node = nodeById.get(inst.modelNodeId)
-    const componentId = node?.parsedAttrs?.notationComponents?.[notationId]?.componentId ?? ""
-    nodePlacements.add(nodePlacementKey(componentId, inst.modelNodeId))
+    nodeStableIds.add(node?.stableId ?? inst.modelNodeId)
   }
   const linkById = new Map(editorLinks.map((l) => [l.id, l]))
-  const edgePlacements = new Set<string>()
+  const linkStableIds = new Set<string>()
   for (const e of instances.edges) {
     const link = linkById.get(e.modelLinkId)
-    const relationId = link?.parsedAttrs?.notationRelations?.[notationId]?.relationId ?? ""
-    edgePlacements.add(edgePlacementKey(relationId, e.modelLinkId))
+    linkStableIds.add(link?.stableId ?? e.modelLinkId)
   }
-  return { nodePlacements, edgePlacements }
+  return { nodeStableIds, linkStableIds }
 })
 
-/** Текущие привязки левой диаграммы: узел→компонент, связь→отношение (для нотации левой диаграммы). */
-const leftCurrentPlacements = computed(() => {
-  const diagram = leftDiagram.value
+/** Текущая левая диаграмма: modelNodeId/modelLinkId → stableId (или id). */
+const leftCurrentStableIds = computed(() => {
   const editorNodes = leftEditorNodes.value
   const editorLinks = leftEditorLinks.value
-  if (!diagram) return { nodeToComponent: new Map<string, string>(), linkToRelation: new Map<string, string>() }
-  const notationId = diagram.notationId ?? ""
-  const nodeToComponent = new Map<string, string>()
-  for (const n of editorNodes) {
-    const c = n.parsedAttrs?.notationComponents?.[notationId]?.componentId
-    if (c) nodeToComponent.set(n.id, c)
-  }
-  const linkToRelation = new Map<string, string>()
-  for (const l of editorLinks) {
-    const r = l.parsedAttrs?.notationRelations?.[notationId]?.relationId
-    if (r) linkToRelation.set(l.id, r)
-  }
-  return { nodeToComponent, linkToRelation }
+  const nodeIdToStableId = new Map<string, string>()
+  for (const n of editorNodes) nodeIdToStableId.set(n.id, n.stableId ?? n.id)
+  const linkIdToStableId = new Map<string, string>()
+  for (const l of editorLinks) linkIdToStableId.set(l.id, l.stableId ?? l.id)
+  return { nodeIdToStableId, linkIdToStableId }
 })
 
-/** Размещения на правой диаграмме. */
-const rightDiagramPlacements = computed(() => {
-  const diagram = rightDiagram.value
-  const instances = diagram?.parsedAttrs?.instances
+/** stableId узлов и связей на правой диаграмме. */
+const rightDiagramStableIds = computed(() => {
+  const instances = rightDiagram.value?.parsedAttrs?.instances
   const editorNodes = rightEditorNodes.value
   const editorLinks = rightEditorLinks.value
-  if (!instances || !editorNodes.length) return { nodePlacements: new Set<string>(), edgePlacements: new Set<string>() }
-  const notationId = diagram.notationId ?? ""
-  const nodePlacements = new Set<string>()
+  if (!instances) return { nodeStableIds: new Set<string>(), linkStableIds: new Set<string>() }
   const nodeById = new Map(editorNodes.map((n) => [n.id, n]))
+  const nodeStableIds = new Set<string>()
   for (const inst of instances.nodes) {
     const node = nodeById.get(inst.modelNodeId)
-    const componentId = node?.parsedAttrs?.notationComponents?.[notationId]?.componentId ?? ""
-    nodePlacements.add(nodePlacementKey(componentId, inst.modelNodeId))
+    nodeStableIds.add(node?.stableId ?? inst.modelNodeId)
   }
   const linkById = new Map(editorLinks.map((l) => [l.id, l]))
-  const edgePlacements = new Set<string>()
+  const linkStableIds = new Set<string>()
   for (const e of instances.edges) {
     const link = linkById.get(e.modelLinkId)
-    const relationId = link?.parsedAttrs?.notationRelations?.[notationId]?.relationId ?? ""
-    edgePlacements.add(edgePlacementKey(relationId, e.modelLinkId))
+    linkStableIds.add(link?.stableId ?? e.modelLinkId)
   }
-  return { nodePlacements, edgePlacements }
+  return { nodeStableIds, linkStableIds }
 })
 
-/** Текущие привязки правой диаграммы. */
-const rightCurrentPlacements = computed(() => {
-  const diagram = rightDiagram.value
+/** Текущая правая диаграмма: modelNodeId/modelLinkId → stableId (или id). */
+const rightCurrentStableIds = computed(() => {
   const editorNodes = rightEditorNodes.value
   const editorLinks = rightEditorLinks.value
-  if (!diagram) return { nodeToComponent: new Map<string, string>(), linkToRelation: new Map<string, string>() }
-  const notationId = diagram.notationId ?? ""
-  const nodeToComponent = new Map<string, string>()
-  for (const n of editorNodes) {
-    const c = n.parsedAttrs?.notationComponents?.[notationId]?.componentId
-    if (c) nodeToComponent.set(n.id, c)
-  }
-  const linkToRelation = new Map<string, string>()
-  for (const l of editorLinks) {
-    const r = l.parsedAttrs?.notationRelations?.[notationId]?.relationId
-    if (r) linkToRelation.set(l.id, r)
-  }
-  return { nodeToComponent, linkToRelation }
+  const nodeIdToStableId = new Map<string, string>()
+  for (const n of editorNodes) nodeIdToStableId.set(n.id, n.stableId ?? n.id)
+  const linkIdToStableId = new Map<string, string>()
+  for (const l of editorLinks) linkIdToStableId.set(l.id, l.stableId ?? l.id)
+  return { nodeIdToStableId, linkIdToStableId }
 })
 
 /** Подсветка на левом канвасе, когда база слева: красный — удалено (в т.ч. есть на базе, нет на диаграмме изменений), оранжевый — изменено. */
@@ -449,8 +421,8 @@ const leftDiffState = computed(() => {
     edges,
     "base",
     {
-      otherSidePlacements: rightDiagramPlacements.value,
-      currentPlacements: leftCurrentPlacements.value,
+      otherSideStableIds: rightDiagramStableIds.value,
+      currentStableIds: leftCurrentStableIds.value,
     }
   )
 })
@@ -492,8 +464,8 @@ const rightDiffState = computed(() => {
     edges,
     "target",
     {
-      otherSidePlacements: leftDiagramPlacements.value,
-      currentPlacements: rightCurrentPlacements.value,
+      otherSideStableIds: leftDiagramStableIds.value,
+      currentStableIds: rightCurrentStableIds.value,
     }
   )
 })
@@ -548,8 +520,8 @@ const leftDiffStateWhenRightIsBase = computed(() => {
     edges,
     "target",
     {
-      otherSidePlacements: rightDiagramPlacements.value,
-      currentPlacements: leftCurrentPlacements.value,
+      otherSideStableIds: rightDiagramStableIds.value,
+      currentStableIds: leftCurrentStableIds.value,
     }
   )
 })
@@ -593,8 +565,8 @@ const rightDiffStateWhenRightIsBase = computed(() => {
     edges,
     "base",
     {
-      otherSidePlacements: leftDiagramPlacements.value,
-      currentPlacements: rightCurrentPlacements.value,
+      otherSideStableIds: leftDiagramStableIds.value,
+      currentStableIds: rightCurrentStableIds.value,
     }
   )
 })
@@ -744,67 +716,90 @@ function flattenRelationProperties(
 }
 
 type PropertyRow = { key: string; base: string; target: string; changed: boolean }
+/** Таблица свойств: первая колонка — левая версия, вторая — правая. Если элемент только на одной диаграмме (красный/зелёный), в колонке другой стороны показываем "—". */
 const selectedPropertyRows = computed<PropertyRow[]>(() => {
   const sel = selectedElement.value
   if (!sel) return []
-  const baseIsLeft = baseSide.value === "left"
-  const basePathMap = baseIsLeft ? leftByPath : rightByPath
-  const targetPathMap = baseIsLeft ? rightByPath : leftByPath
-  const baseLinkMap = baseIsLeft ? leftByLinkKey : rightByLinkKey
-  const targetLinkMap = baseIsLeft ? rightByLinkKey : leftByLinkKey
+  const leftPathMap = leftByPath.value
+  const rightPathMap = rightByPath.value
+  const leftLinkMap = leftByLinkKey.value
+  const rightLinkMap = rightByLinkKey.value
+  const leftDiff = leftCanvasDiffState.value.diffStateByModelNodeId
+  const rightDiff = rightCanvasDiffState.value.diffStateByModelNodeId
+  const leftLinkDiff = leftCanvasDiffState.value.diffStateByModelLinkId
+  const rightLinkDiff = rightCanvasDiffState.value.diffStateByModelLinkId
+
+  const hideRight = (modelNodeId: string): boolean =>
+    leftDiff[modelNodeId] === "removed" || leftDiff[modelNodeId] === "added"
+  const hideLeft = (modelNodeId: string): boolean =>
+    rightDiff[modelNodeId] === "removed" || rightDiff[modelNodeId] === "added"
+  const hideRightLink = (modelLinkId: string): boolean =>
+    leftLinkDiff[modelLinkId] === "removed" || leftLinkDiff[modelLinkId] === "added"
+  const hideLeftLink = (modelLinkId: string): boolean =>
+    rightLinkDiff[modelLinkId] === "removed" || rightLinkDiff[modelLinkId] === "added"
+
   if (sel.kind === "node") {
-    const baseNode = basePathMap.value.get(sel.path)
-    const targetNode = targetPathMap.value.get(sel.path)
-    const baseAttrs = baseNode ? parseNodeAttrs(baseNode.attrs) : null
-    const targetAttrs = targetNode ? parseNodeAttrs(targetNode.attrs) : null
+    const leftNode = leftPathMap.get(sel.path)
+    const rightNode = rightPathMap.get(sel.path)
+    const rightAbsent = leftNode && sel.side === "left" && hideRight(leftNode.id)
+    const leftAbsent = rightNode && sel.side === "right" && hideLeft(rightNode.id)
+    const leftAttrs = leftNode ? parseNodeAttrs(leftNode.attrs) : null
+    const rightAttrs = rightNode ? parseNodeAttrs(rightNode.attrs) : null
     const rows: PropertyRow[] = []
     rows.push({
       key: "name",
-      base: baseNode ? baseNode.name : "—",
-      target: targetNode ? targetNode.name : "—",
-      changed: (baseNode?.name ?? "") !== (targetNode?.name ?? ""),
+      base: leftAbsent ? "—" : leftNode ? leftNode.name : "—",
+      target: rightAbsent ? "—" : rightNode ? rightNode.name : "—",
+      changed: leftAbsent || rightAbsent || (leftNode?.name ?? "") !== (rightNode?.name ?? ""),
     })
-    const baseFlat = baseAttrs ? flattenComponentProperties(baseAttrs.componentProperties) : []
-    const targetFlat = targetAttrs ? flattenComponentProperties(targetAttrs.componentProperties) : []
-    const allKeys = new Set([...baseFlat.map((x) => x.key), ...targetFlat.map((x) => x.key)])
-    const baseByKey = new Map(baseFlat.map((x) => [x.key, x.value]))
-    const targetByKey = new Map(targetFlat.map((x) => [x.key, x.value]))
+    const leftFlat = leftAttrs ? flattenComponentProperties(leftAttrs.componentProperties) : []
+    const rightFlat = rightAttrs ? flattenComponentProperties(rightAttrs.componentProperties) : []
+    const allKeys = new Set([...leftFlat.map((x) => x.key), ...rightFlat.map((x) => x.key)])
+    const leftByKey = new Map(leftFlat.map((x) => [x.key, x.value]))
+    const rightByKey = new Map(rightFlat.map((x) => [x.key, x.value]))
     for (const key of Array.from(allKeys).sort()) {
-      const b = baseByKey.get(key)
-      const t = targetByKey.get(key)
-      const baseStr = formatPropValue(b)
-      const targetStr = formatPropValue(t)
-      rows.push({ key, base: baseStr, target: targetStr, changed: baseStr !== targetStr })
+      const leftVal = leftAbsent ? undefined : leftByKey.get(key)
+      const rightVal = rightAbsent ? undefined : rightByKey.get(key)
+      const leftStr = formatPropValue(leftVal)
+      const rightStr = formatPropValue(rightVal)
+      rows.push({ key, base: leftStr, target: rightStr, changed: leftStr !== rightStr })
     }
     return rows
   } else {
     const lk = linkKey(sel.sourcePath, sel.targetPath, sel.linkTypeId)
-    const baseLink = baseLinkMap.value.get(lk)
-    const targetLink = targetLinkMap.value.get(lk)
-    const baseAttrs = baseLink ? parseLinkAttrs(baseLink.attrs) : null
-    const targetAttrs = targetLink ? parseLinkAttrs(targetLink.attrs) : null
-    const baseFlat = baseAttrs ? flattenRelationProperties(baseAttrs.relationProperties) : []
-    const targetFlat = targetAttrs ? flattenRelationProperties(targetAttrs.relationProperties) : []
-    const allKeys = new Set([...baseFlat.map((x) => x.key), ...targetFlat.map((x) => x.key)])
-    const baseByKey = new Map(baseFlat.map((x) => [x.key, x.value]))
-    const targetByKey = new Map(targetFlat.map((x) => [x.key, x.value]))
+    const leftLink = leftLinkMap.get(lk)
+    const rightLink = rightLinkMap.get(lk)
+    const rightAbsent = leftLink && sel.side === "left" && hideRightLink(leftLink.id)
+    const leftAbsent = rightLink && sel.side === "right" && hideLeftLink(rightLink.id)
+    const leftAttrs = leftLink ? parseLinkAttrs(leftLink.attrs) : null
+    const rightAttrs = rightLink ? parseLinkAttrs(rightLink.attrs) : null
+    const leftFlat = leftAttrs ? flattenRelationProperties(leftAttrs.relationProperties) : []
+    const rightFlat = rightAttrs ? flattenRelationProperties(rightAttrs.relationProperties) : []
+    const allKeys = new Set([...leftFlat.map((x) => x.key), ...rightFlat.map((x) => x.key)])
+    const leftByKey = new Map(leftFlat.map((x) => [x.key, x.value]))
+    const rightByKey = new Map(rightFlat.map((x) => [x.key, x.value]))
     const rows: PropertyRow[] = []
     for (const key of Array.from(allKeys).sort()) {
-      const b = baseByKey.get(key)
-      const t = targetByKey.get(key)
-      const baseStr = formatPropValue(b)
-      const targetStr = formatPropValue(t)
-      rows.push({ key, base: baseStr, target: targetStr, changed: baseStr !== targetStr })
+      const leftVal = leftAbsent ? undefined : leftByKey.get(key)
+      const rightVal = rightAbsent ? undefined : rightByKey.get(key)
+      const leftStr = formatPropValue(leftVal)
+      const rightStr = formatPropValue(rightVal)
+      rows.push({ key, base: leftStr, target: rightStr, changed: leftStr !== rightStr })
     }
     return rows
   }
 })
 
+/** Убирает скрытый корень "Root/" из пути для отображения. */
+function pathForDisplay(path: string): string {
+  return path.startsWith("Root/") ? path.slice(5) : path
+}
+
 const selectedElementLabel = computed(() => {
   const sel = selectedElement.value
   if (!sel) return null
-  if (sel.kind === "node") return sel.path
-  return `${sel.sourcePath} → ${sel.targetPath}`
+  if (sel.kind === "node") return pathForDisplay(sel.path)
+  return `${pathForDisplay(sel.sourcePath)} → ${pathForDisplay(sel.targetPath)}`
 })
 
 watch(

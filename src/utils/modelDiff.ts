@@ -274,21 +274,11 @@ export type DiagramDiffStateMaps = {
   diffStateByModelLinkId: Record<string, "added" | "removed" | "modified">
 }
 
-/** Ключ размещения узла на диаграмме: компонент нотации + узел модели. */
-export function nodePlacementKey(componentId: string, modelNodeId: string): string {
-  return `${componentId}\t${modelNodeId}`
-}
-
-/** Ключ размещения связи на диаграмме: отношение нотации + связь модели. */
-export function edgePlacementKey(relationId: string, modelLinkId: string): string {
-  return `${relationId}\t${modelLinkId}`
-}
-
 /**
  * Строит карты подсветки для экземпляров диаграммы (узлы и рёбра на канвасе).
  * base = левый канвас (removed/modified), target = правый (added/modified).
- * Сравнение по размещениям: (компонент + узел) и (отношение + связь). Размещение есть на базе,
- * но нет на диаграмме изменений → красный на базе; есть на изменениях, нет на базе → зелёный на изменениях.
+ * Сравнение «есть на этой диаграмме, нет на той» — по stableId узла/связи. Один и тот же stableId
+ * на базе и отсутствующий на диаграмме изменений → красный на базе; на изменениях и отсутствующий на базе → зелёный.
  */
 export function buildDiagramDiffStateMaps(
   diff: ModelVersionDiff,
@@ -305,15 +295,15 @@ export function buildDiagramDiffStateMaps(
   }>,
   side: "base" | "target",
   options?: {
-    /** Размещения (компонент+узел, отношение+связь) на противоположной диаграмме. */
-    otherSidePlacements?: {
-      nodePlacements: Set<string>
-      edgePlacements: Set<string>
+    /** stableId узлов/связей на противоположной диаграмме (stableId или id при отсутствии stableId). */
+    otherSideStableIds?: {
+      nodeStableIds: Set<string>
+      linkStableIds: Set<string>
     }
-    /** Текущая диаграмма: узел→компонент, связь→отношение (для ключа размещения). */
-    currentPlacements?: {
-      nodeToComponent: Map<string, string>
-      linkToRelation: Map<string, string>
+    /** Текущая диаграмма: modelNodeId → stableId (или id), modelLinkId → stableId (или id). */
+    currentStableIds?: {
+      nodeIdToStableId: Map<string, string>
+      linkIdToStableId: Map<string, string>
     }
   }
 ): DiagramDiffStateMaps {
@@ -342,39 +332,33 @@ export function buildDiagramDiffStateMaps(
     diff.links.filter((l) => l.kind === "modified").map((l) => l.target.id)
   )
 
-  const otherPlacements = options?.otherSidePlacements
-  const currentPlacements = options?.currentPlacements
+  const otherStableIds = options?.otherSideStableIds
+  const currentStableIds = options?.currentStableIds
 
   const diffStateByModelNodeId: Record<string, "added" | "removed" | "modified"> = {}
   for (const nodeId of instanceNodeIds) {
-    const placementAbsentOnOther =
-      otherPlacements?.nodePlacements && currentPlacements?.nodeToComponent
-        ? !otherPlacements.nodePlacements.has(
-            nodePlacementKey(currentPlacements.nodeToComponent.get(nodeId) ?? "", nodeId)
-          )
-        : false
+    const stableId = currentStableIds?.nodeIdToStableId.get(nodeId) ?? nodeId
+    const absentOnOtherByStableId =
+      otherStableIds?.nodeStableIds ? !otherStableIds.nodeStableIds.has(stableId) : false
     if (side === "base") {
-      if (removedNodeIds.has(nodeId) || placementAbsentOnOther) diffStateByModelNodeId[nodeId] = "removed"
+      if (removedNodeIds.has(nodeId) || absentOnOtherByStableId) diffStateByModelNodeId[nodeId] = "removed"
       else if (modifiedBaseNodeIds.has(nodeId)) diffStateByModelNodeId[nodeId] = "modified"
     } else {
-      if (addedNodeIds.has(nodeId) || placementAbsentOnOther) diffStateByModelNodeId[nodeId] = "added"
+      if (addedNodeIds.has(nodeId) || absentOnOtherByStableId) diffStateByModelNodeId[nodeId] = "added"
       else if (modifiedTargetNodeIds.has(nodeId)) diffStateByModelNodeId[nodeId] = "modified"
     }
   }
 
   const diffStateByModelLinkId: Record<string, "added" | "removed" | "modified"> = {}
   for (const edge of instanceEdges) {
-    const placementAbsentOnOther =
-      otherPlacements?.edgePlacements && currentPlacements?.linkToRelation
-        ? !otherPlacements.edgePlacements.has(
-            edgePlacementKey(currentPlacements.linkToRelation.get(edge.modelLinkId) ?? "", edge.modelLinkId)
-          )
-        : false
+    const stableId = currentStableIds?.linkIdToStableId.get(edge.modelLinkId) ?? edge.modelLinkId
+    const absentOnOtherByStableId =
+      otherStableIds?.linkStableIds ? !otherStableIds.linkStableIds.has(stableId) : false
     if (side === "base") {
-      if (removedLinkIds.has(edge.modelLinkId) || placementAbsentOnOther) diffStateByModelLinkId[edge.modelLinkId] = "removed"
+      if (removedLinkIds.has(edge.modelLinkId) || absentOnOtherByStableId) diffStateByModelLinkId[edge.modelLinkId] = "removed"
       else if (modifiedBaseLinkIds.has(edge.modelLinkId)) diffStateByModelLinkId[edge.modelLinkId] = "modified"
     } else {
-      if (addedLinkIds.has(edge.modelLinkId) || placementAbsentOnOther) diffStateByModelLinkId[edge.modelLinkId] = "added"
+      if (addedLinkIds.has(edge.modelLinkId) || absentOnOtherByStableId) diffStateByModelLinkId[edge.modelLinkId] = "added"
       else if (modifiedTargetLinkIds.has(edge.modelLinkId)) diffStateByModelLinkId[edge.modelLinkId] = "modified"
     }
   }

@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
   cancelLabel?: string;
   sourceVersions?: SourceVersion[];
   sourceVersionId?: string | null;
+  sourceEmptyLabel?: string;
 }>(), {
   namePlaceholder: undefined,
   versionPlaceholder: undefined,
@@ -32,7 +33,8 @@ const props = withDefaults(defineProps<{
   submittingLabel: undefined,
   cancelLabel: undefined,
   sourceVersions: () => [],
-  sourceVersionId: null
+  sourceVersionId: null,
+  sourceEmptyLabel: undefined
 });
 
 const { t } = useI18n();
@@ -87,7 +89,7 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
           class="source-version-field__select"
           :disabled="isSubmitting"
         >
-          <option value="">{{ t("common.emptyNotation") }}</option>
+          <option value="">{{ props.sourceEmptyLabel ?? t("common.emptyNotation") }}</option>
           <option
             v-for="sv in sourceVersions"
             :key="sv.id"

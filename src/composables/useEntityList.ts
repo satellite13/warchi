@@ -66,6 +66,7 @@ export interface EntityListReturn<T extends VersionedEntity> {
   createItem: (ownerId: string, ownerDisplayName?: string) => Promise<T | null>;
   deleteItem: () => Promise<boolean>;
   openCreateModal: () => void;
+  openCreateModalFromVersion: (item: T) => void;
   closeCreateModal: () => void;
   openDeleteModal: (item: T) => void;
   closeDeleteModal: () => void;
@@ -122,20 +123,38 @@ export function useEntityList<T extends VersionedEntity>(
   const isUpdatingIcon = ref(false);
   const iconUpdateError = ref<string | null>(null);
 
+  const normalizeEntityName = (name: string): string =>
+    name.trim().toLowerCase();
+
+  /** Удалённые сущности не участвуют в группировке и проверке версий — предложенная версия может совпадать с версией удалённой. */
+  const activeItems = computed(() =>
+    items.value.filter(
+      (item) => !(item && "deleted" in item && (item as VersionedEntity & { deleted?: boolean }).deleted)
+    )
+  );
+
   const groupedItems = computed(() => {
-    const groups = new Map<string, T[]>();
-    items.value.forEach((item) => {
-      if (!groups.has(item.name)) {
-        groups.set(item.name, []);
+    const groups = new Map<string, { displayName: string; versions: T[] }>();
+    activeItems.value.forEach((item) => {
+      const normalizedName = normalizeEntityName(item.name);
+      const trimmedName = item.name.trim();
+      if (!groups.has(normalizedName)) {
+        groups.set(normalizedName, {
+          displayName: trimmedName || item.name,
+          versions: []
+        });
       }
-      groups.get(item.name)?.push(item);
+      groups.get(normalizedName)?.versions.push(item);
     });
 
-    return Array.from(groups.entries()).map(([name, versions]) => {
-      const sorted = [...versions].sort((a, b) =>
+    return Array.from(groups.values()).map((group) => {
+      const sorted = [...group.versions].sort((a, b) =>
         compareVersions(b.version, a.version)
       );
-      return { name, versions: sorted } satisfies EntityGroup<T>;
+      return {
+        name: sorted[0]?.name?.trim() || group.displayName,
+        versions: sorted
+      } satisfies EntityGroup<T>;
     });
   });
 
@@ -171,11 +190,31 @@ export function useEntityList<T extends VersionedEntity>(
 
   const itemCount = computed(() => filteredItems.value.length);
 
+  const suggestNextVersion = (name: string, preferredSourceId: string | null): string | null => {
+    const normalizedName = normalizeEntityName(name);
+    if (!normalizedName) return null;
+
+    const sameNameGroup = groupedItems.value.find(
+      (g) => normalizeEntityName(g.name) === normalizedName
+    );
+    if (!sameNameGroup) return null;
+
+    if (preferredSourceId) {
+      const source = sameNameGroup.versions.find((item) => item.id === preferredSourceId);
+      if (source?.version) {
+        return bumpMinor(source.version);
+      }
+    }
+
+    const maxVersion = sameNameGroup.versions[0]?.version;
+    return maxVersion ? bumpMinor(maxVersion) : null;
+  };
+
   const sourceVersions = computed<SourceVersion[]>(() => {
     const name = newItemName.value.trim();
     if (!name) return [];
     const group = groupedItems.value.find(
-      (g) => g.name.toLowerCase() === name.toLowerCase()
+      (g) => normalizeEntityName(g.name) === normalizeEntityName(name)
     );
     if (!group) return [];
     return group.versions.map((item) => ({ id: item.id, version: item.version }));
@@ -234,7 +273,7 @@ export function useEntityList<T extends VersionedEntity>(
     const name = newItemName.value.trim();
     const version = newItemVersion.value.trim();
     const sameNameGroup = groupedItems.value.find(
-      (g) => g.name.toLowerCase() === name.toLowerCase()
+      (g) => normalizeEntityName(g.name) === normalizeEntityName(name)
     );
     const hasExactVersionConflict = sameNameGroup?.versions.some(
       (item) => item.version.trim() === version
@@ -363,15 +402,19 @@ export function useEntityList<T extends VersionedEntity>(
     showCreateModal.value = true;
   };
 
+  const openCreateModalFromVersion = (item: T) => {
+    newItemName.value = item.name.trim();
+    sourceVersionId.value = item.id;
+    newItemVersion.value = bumpMinor(item.version) ?? item.version;
+    createError.value = null;
+    showCreateModal.value = true;
+  };
+
   watch(
-    () => [newItemName.value.trim(), groupedItems.value, showCreateModal.value] as const,
-    ([name, groups]) => {
+    () => [newItemName.value.trim(), sourceVersionId.value, groupedItems.value, showCreateModal.value] as const,
+    ([name, preferredSourceId, _groups]) => {
       if (!showCreateModal.value || !name) return;
-      const sameNameGroup = groups.find(
-        (g) => g.name.toLowerCase() === name.toLowerCase()
-      );
-      const maxVersion = sameNameGroup?.versions[0]?.version;
-      const suggested = maxVersion ? bumpMinor(maxVersion) : null;
+      const suggested = suggestNextVersion(name, preferredSourceId);
       if (suggested) {
         newItemVersion.value = suggested;
       }
@@ -578,6 +621,7 @@ export function useEntityList<T extends VersionedEntity>(
     createItem,
     deleteItem,
     openCreateModal,
+    openCreateModalFromVersion,
     closeCreateModal,
     openDeleteModal,
     closeDeleteModal,

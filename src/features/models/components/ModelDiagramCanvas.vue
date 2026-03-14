@@ -67,6 +67,9 @@ const props = withDefaults(
     autoLinkInGroups?: boolean
     readOnly?: boolean
     navigationOnlyMode?: boolean
+    /** Подсветка diff: красный — удалён, зелёный — добавлен, жёлтый — изменён */
+    diffStateByModelNodeId?: Record<string, 'added' | 'removed' | 'modified'>
+    diffStateByModelLinkId?: Record<string, 'added' | 'removed' | 'modified'>
   }>(),
   {
     connectionValidator: null,
@@ -84,8 +87,38 @@ const props = withDefaults(
     navigationOnlyMode: false,
     selectedEdgeInstanceId: null,
     selectedInstanceIds: () => [],
+    diffStateByModelNodeId: undefined,
+    diffStateByModelLinkId: undefined,
   }
 )
+
+const DIFF_COLORS = {
+  added: { strokeColor: '#1ea355', fillColor: 'rgba(30, 163, 85, 0.15)' },
+  removed: { strokeColor: '#dc3545', fillColor: 'rgba(220, 53, 69, 0.15)' },
+  modified: { strokeColor: '#e67e22', fillColor: 'rgba(230, 126, 34, 0.12)' },
+} as const
+
+function applyDiffOverlayToNodeStyle(
+  style: Record<string, unknown>,
+  state: 'added' | 'removed' | 'modified'
+): void {
+  const c = DIFF_COLORS[state]
+  style.strokeColor = c.strokeColor
+  style.strokeWidth = 2
+  style.fillColor = c.fillColor
+}
+
+function applyDiffOverlayToEdgeStyle(
+  style: Record<string, unknown> & { strokeColor?: string; strokeWidth?: number },
+  state: 'added' | 'removed' | 'modified'
+): void {
+  const c = DIFF_COLORS[state]
+  ;(style as Record<string, unknown>).strokeColor = c.strokeColor
+  ;(style as Record<string, unknown>).strokeWidth = Math.max(
+    Number(style.strokeWidth) || 2,
+    2
+  )
+}
 
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs]
@@ -1021,6 +1054,8 @@ function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
 function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const ds = getEffectiveStyle(instance)
   const visual = resolveInstanceStyle(instance, ds)
+  const diffState = props.diffStateByModelNodeId?.[instance.modelNodeId]
+  if (diffState) applyDiffOverlayToNodeStyle(visual.style, diffState)
   const shape = getComponentShape(ds)
   const nodeName = isNoteInstance(instance)
     ? getNoteText(instance)
@@ -1138,6 +1173,8 @@ function syncDiagram() {
 
       // Update in-place
       const visual = resolveInstanceStyle(instance, ds)
+      const diffState = props.diffStateByModelNodeId?.[instance.modelNodeId]
+      if (diffState) applyDiffOverlayToNodeStyle(visual.style, diffState)
       const nodeName = isNoteInstance(instance)
         ? getNoteText(instance)
         : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
@@ -1190,6 +1227,12 @@ function syncDiagram() {
 
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveEdgeOptions(ds)
+    const linkDiffState = props.diffStateByModelLinkId?.[edge.modelLinkId]
+    if (linkDiffState) {
+      const styleObj = (edgeOpts.style ?? {}) as Record<string, unknown>
+      applyDiffOverlayToEdgeStyle(styleObj, linkDiffState)
+      edgeOpts.style = styleObj as EdgeStyle
+    }
     const edgeLabel = getInstanceEdgeLabel(edge)
     const edgeLabelText = buildEdgeLabel(edgeLabel)
     const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
@@ -1481,14 +1524,31 @@ function detectEdgePortChanges() {
     const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
 
+    const nextFromInstanceId = papEdge.from.nodeId.startsWith('instance-')
+      ? papEdge.from.nodeId.slice('instance-'.length)
+      : edgeInst.sourceInstanceId
+    const nextToInstanceId = papEdge.to.nodeId.startsWith('instance-')
+      ? papEdge.to.nodeId.slice('instance-'.length)
+      : edgeInst.targetInstanceId
     const nextFromPortId = papEdge.from.portId ?? undefined
     const nextToPortId = papEdge.to.portId ?? undefined
     const nextFromOutline = papEdge.from.outlineParam
     const nextToOutline = papEdge.to.outlineParam
+    const currentFromInstanceId = edgeInst.sourceInstanceId
+    const currentToInstanceId = edgeInst.targetInstanceId
     const currentFromPortId = edgeInst.attrs?.fromPortId as string | undefined
     const currentToPortId = edgeInst.attrs?.toPortId as string | undefined
     const currentFromOutline = edgeInst.attrs?.fromOutlineParam as number | undefined
     const currentToOutline = edgeInst.attrs?.toOutlineParam as number | undefined
+
+    if (nextFromInstanceId !== currentFromInstanceId) {
+      edgeInst.sourceInstanceId = nextFromInstanceId
+      changed = true
+    }
+    if (nextToInstanceId !== currentToInstanceId) {
+      edgeInst.targetInstanceId = nextToInstanceId
+      changed = true
+    }
 
     const portMatch = nextFromPortId === currentFromPortId && nextToPortId === currentToPortId
     const outlineMatch =
@@ -1642,6 +1702,172 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
   }
 }
 
+function setupInteractionManager(
+  manager: InteractionManager,
+  currentRenderer: DiagramRenderer,
+  navOnly: boolean
+) {
+  if (!navOnly) {
+    manager.connection.setSnapToGrid(snapEnabled.value)
+    manager.connection.setAttachToOutline(attachToOutlineEnabled.value)
+    // Warchi persists connections via model state/events.
+    // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
+    ;(manager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
+      edge: Edge
+    ) => {
+      currentRenderer.addEdge(edge)
+    }
+  }
+}
+
+function bindInteractionEvents(manager: InteractionManager, currentRenderer: DiagramRenderer) {
+  // Selection and other interaction events (only when not read-only)
+  manager.selection.on('select', (elementIds: string[]) => {
+    if (suppressSelectionEvent) return
+    if (elementIds.length === 0) {
+      emit('selectInstanceIds', [])
+      emit('selectEdgeInstanceId', null)
+      emit('selectCanvasElementId', null)
+      return
+    }
+    emit('selectCanvasElementId', elementIds[0] ?? null)
+
+    const modelNodeIds: string[] = []
+    const instanceIds: string[] = []
+    for (const elementId of elementIds) {
+      const nodeEntity = nodeIdToInstance.get(elementId)
+      if (nodeEntity) {
+        modelNodeIds.push(nodeEntity.modelNodeId)
+        instanceIds.push(nodeEntity.instanceId)
+      }
+    }
+    if (modelNodeIds.length > 0) {
+      emit('selectNodes', modelNodeIds)
+      emit('selectInstanceIds', instanceIds)
+      return
+    }
+
+    if (elementIds.length === 1) {
+      const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
+      if (edgeEntity) {
+        emit('selectInstanceIds', [])
+        emit('selectLink', edgeEntity.modelLinkId)
+        emit('selectEdgeInstanceId', edgeEntity.edgeId)
+      }
+    }
+  })
+
+  // Drag start → initialize group drag if enabled
+  manager.drag.on('dragstart', (nodeIds: string[]) => {
+    if (nodeIds.length === 1) {
+      startGroupDrag(nodeIds[0]!)
+    } else {
+      groupDragData = null
+    }
+  })
+
+  // Drag move → apply delta to grouped nodes
+  manager.drag.on(
+    'drag',
+    (_nodeIds: string[], _currentPoint: { x: number; y: number }, delta: { x: number; y: number }) => {
+      applyGroupDragDelta(delta.x, delta.y)
+    }
+  )
+
+  // Drag end → persist position changes (include grouped nodes) + auto-link
+  manager.drag.on('dragend', (_nodeIds: string[]) => {
+    if (props.readOnly) return
+    const allIds = endGroupDrag()
+    if (allIds.length > 0) {
+      persistNodePositions(allIds)
+    } else {
+      persistNodePositions(_nodeIds)
+    }
+    // Try auto-create link if dragged node is inside container with group relation
+    if (_nodeIds.length === 1) {
+      tryCreateAutoLink(_nodeIds[0]!)
+    }
+  })
+
+  // Resize end → persist size changes
+  manager.resize.on('resizeEnd', (nodeId: string) => {
+    if (props.readOnly) return
+    persistNodePositions([nodeId])
+  })
+
+  // Connection validator: translate papirus node IDs to model node IDs and delegate
+  manager.connection.connectionValidator = (
+    sourcePapId: string,
+    targetPapId: string
+  ) => {
+    if (!props.connectionValidator) return true
+    const sourceEntity = nodeIdToInstance.get(sourcePapId)
+    const targetEntity = nodeIdToInstance.get(targetPapId)
+    if (!sourceEntity || !targetEntity) return false
+    return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
+  }
+
+  // History → sync canUndo/canRedo + detect label changes
+  manager.history.on('change', () => {
+    if (props.readOnly) return
+    canUndo.value = manager.history.canUndo
+    canRedo.value = manager.history.canRedo
+    // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
+    persistNodePositions(Array.from(nodeIdToInstance.keys()))
+    detectEdgePortChanges()
+    detectEditablePolylineControlPointChanges()
+    detectLabelChanges()
+    detectEdgeLabelChanges()
+  })
+
+  // Connection → emit connectNodes
+  manager.connection.on('connect', (edge: Edge) => {
+    const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
+    const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
+    if (sourceEntity && targetEntity) {
+      emit(
+        'connectNodes',
+        sourceEntity.modelNodeId,
+        targetEntity.modelNodeId,
+        sourceEntity.instanceId,
+        targetEntity.instanceId,
+        edge.from.portId ?? undefined,
+        edge.to.portId ?? undefined,
+        edge.from.outlineParam,
+        edge.to.outlineParam
+      )
+    }
+    // Remove the edge papirus created — parent will add it through state
+    currentRenderer.removeEdge(edge.id)
+  })
+
+  manager.connection.on('edgeReconnect', (edge: Edge, endpoint: 'start' | 'end') => {
+    const entity = edgeIdToInstance.get(edge.id)
+    if (!entity) return
+
+    const newPapNodeId = endpoint === 'start' ? edge.from.nodeId : edge.to.nodeId
+    const newInstanceId = newPapNodeId.startsWith('instance-')
+      ? newPapNodeId.slice('instance-'.length)
+      : null
+    if (!newInstanceId) return
+
+    const portId =
+      endpoint === 'start'
+        ? (edge.from.portId ?? undefined)
+        : (edge.to.portId ?? undefined)
+    const outlineParam =
+      endpoint === 'start'
+        ? (edge.from.outlineParam ?? undefined)
+        : (edge.to.outlineParam ?? undefined)
+
+    emit('reconnectEdge', entity.edgeId, endpoint, newInstanceId, portId, outlineParam)
+    nextTick(() => {
+      detectEdgePortChanges()
+      detectEditablePolylineControlPointChanges()
+    })
+  })
+}
+
 // ── Renderer init ──
 function initRenderer(r: DiagramRenderer) {
   renderer = r
@@ -1681,17 +1907,8 @@ function initRenderer(r: DiagramRenderer) {
     keymap: { deleteKeys: [] },
     navigationOnly: navOnly,
   } as Parameters<DiagramRenderer['enableInteractions']>[0])
-  if (!navOnly) {
-    interactionManager.connection.setSnapToGrid(snapEnabled.value)
-    interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
-    // Warchi persists connections via model state/events.
-    // Disable papirus temporary connect history entries to avoid redo ghost edge replay.
-    ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
-      edge: Edge
-    ) => {
-      r.addEdge(edge)
-    }
-  }
+  setupInteractionManager(interactionManager, r, navOnly)
+  bindInteractionEvents(interactionManager, r)
 
   // Permanently patch getElementAtPoint to check edges before nodes.
   // This fixes the issue where double-clicking on an edge that passes over a node
@@ -1756,169 +1973,7 @@ function initRenderer(r: DiagramRenderer) {
   }
   )
 
-  // Selection and other interaction events (only when not read-only)
   if (interactionManager) {
-  interactionManager.selection.on('select', (elementIds: string[]) => {
-    if (suppressSelectionEvent) return
-    if (elementIds.length === 0) {
-      emit('selectInstanceIds', [])
-      emit('selectEdgeInstanceId', null)
-      emit('selectCanvasElementId', null)
-      return
-    }
-    emit('selectCanvasElementId', elementIds[0] ?? null)
-
-    const modelNodeIds: string[] = []
-    const instanceIds: string[] = []
-    for (const elementId of elementIds) {
-      const nodeEntity = nodeIdToInstance.get(elementId)
-      if (nodeEntity) {
-        modelNodeIds.push(nodeEntity.modelNodeId)
-        instanceIds.push(nodeEntity.instanceId)
-      }
-    }
-    if (modelNodeIds.length > 0) {
-      emit('selectNodes', modelNodeIds)
-      emit('selectInstanceIds', instanceIds)
-      return
-    }
-
-    if (elementIds.length === 1) {
-      const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
-      if (edgeEntity) {
-        emit('selectInstanceIds', [])
-        emit('selectLink', edgeEntity.modelLinkId)
-        emit('selectEdgeInstanceId', edgeEntity.edgeId)
-      }
-    }
-  })
-
-  // Drag start → initialize group drag if enabled
-  interactionManager.drag.on('dragstart', (nodeIds: string[]) => {
-    if (nodeIds.length === 1) {
-      startGroupDrag(nodeIds[0]!)
-    } else {
-      groupDragData = null
-    }
-  })
-
-  // Drag move → apply delta to grouped nodes
-  interactionManager.drag.on('drag', (_nodeIds: string[], _currentPoint: { x: number; y: number }, delta: { x: number; y: number }) => {
-    applyGroupDragDelta(delta.x, delta.y)
-  })
-
-  // Drag end → persist position changes (include grouped nodes) + auto-link
-  interactionManager.drag.on('dragend', (_nodeIds: string[]) => {
-    if (props.readOnly) return
-    const allIds = endGroupDrag()
-    if (allIds.length > 0) {
-      persistNodePositions(allIds)
-    } else {
-      persistNodePositions(_nodeIds)
-    }
-    // Try auto-create link if dragged node is inside container with group relation
-    if (_nodeIds.length === 1) {
-      tryCreateAutoLink(_nodeIds[0]!)
-    }
-  })
-
-  // Resize end → persist size changes
-  interactionManager.resize.on('resizeEnd', (nodeId: string) => {
-    if (props.readOnly) return
-    persistNodePositions([nodeId])
-  })
-
-  // Connection validator: translate papirus node IDs to model node IDs and delegate
-  interactionManager.connection.connectionValidator = (
-    sourcePapId: string,
-    targetPapId: string
-  ) => {
-    if (!props.connectionValidator) return true
-    const sourceEntity = nodeIdToInstance.get(sourcePapId)
-    const targetEntity = nodeIdToInstance.get(targetPapId)
-    if (!sourceEntity || !targetEntity) return false
-    return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
-  }
-
-  // History → sync canUndo/canRedo + detect label changes
-  interactionManager.history.on('change', () => {
-    if (props.readOnly) return
-    canUndo.value = interactionManager!.history.canUndo
-    canRedo.value = interactionManager!.history.canRedo
-    // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
-    persistNodePositions(Array.from(nodeIdToInstance.keys()))
-    detectEdgePortChanges()
-    detectEditablePolylineControlPointChanges()
-    detectLabelChanges()
-    detectEdgeLabelChanges()
-  })
-
-  // Connection → emit connectNodes
-  interactionManager.connection.on('connect', (edge: Edge) => {
-    const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
-    const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
-    if (sourceEntity && targetEntity) {
-      emit(
-        'connectNodes',
-        sourceEntity.modelNodeId,
-        targetEntity.modelNodeId,
-        sourceEntity.instanceId,
-        targetEntity.instanceId,
-        edge.from.portId ?? undefined,
-        edge.to.portId ?? undefined,
-        edge.from.outlineParam,
-        edge.to.outlineParam
-      )
-    }
-    // Remove the edge papirus created — parent will add it through state
-    renderer?.removeEdge(edge.id)
-  })
-
-  interactionManager.connection.on('edgeReconnect', (edge: Edge, endpoint: 'start' | 'end') => {
-    const entity = edgeIdToInstance.get(edge.id)
-    if (!entity) return
-
-    const newPapNodeId = endpoint === 'start' ? edge.from.nodeId : edge.to.nodeId
-    const newInstanceId = newPapNodeId.startsWith('instance-')
-      ? newPapNodeId.slice('instance-'.length)
-      : null
-    if (!newInstanceId) return
-
-    const otherPapNodeId = endpoint === 'start' ? edge.to.nodeId : edge.from.nodeId
-    const sourceEntity =
-      endpoint === 'start'
-        ? nodeIdToInstance.get(newPapNodeId)
-        : nodeIdToInstance.get(otherPapNodeId)
-    const targetEntity =
-      endpoint === 'start'
-        ? nodeIdToInstance.get(otherPapNodeId)
-        : nodeIdToInstance.get(newPapNodeId)
-    if (!sourceEntity || !targetEntity) return
-
-    if (props.connectionValidator) {
-      const allowed = props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
-      if (!allowed) {
-        syncDiagram()
-        return
-      }
-    }
-
-    const portId =
-      endpoint === 'start'
-        ? (edge.from.portId ?? undefined)
-        : (edge.to.portId ?? undefined)
-    const outlineParam =
-      endpoint === 'start'
-        ? (edge.from.outlineParam ?? undefined)
-        : (edge.to.outlineParam ?? undefined)
-
-    emit('reconnectEdge', entity.edgeId, endpoint, newInstanceId, portId, outlineParam)
-    nextTick(() => {
-      detectEdgePortChanges()
-      detectEditablePolylineControlPointChanges()
-    })
-  })
-
   // Context menu only when editable (not read-only baseline view)
   if (!props.readOnly) {
   r.enableContextMenu({
@@ -2425,6 +2480,11 @@ onBeforeUnmount(() => {
 // Watch for data changes
 watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
 watch(
+  () => [props.diffStateByModelNodeId, props.diffStateByModelLinkId],
+  () => syncDiagram(),
+  { deep: true }
+)
+watch(
   () => props.nodes,
   () => syncDiagram(),
   { deep: true }
@@ -2458,15 +2518,8 @@ watch(
       keymap: { deleteKeys: [] },
       navigationOnly: navOnly,
     } as Parameters<DiagramRenderer['enableInteractions']>[0])
-    if (!navOnly) {
-      interactionManager.connection.setSnapToGrid(snapEnabled.value)
-      interactionManager.connection.setAttachToOutline(attachToOutlineEnabled.value)
-      ;(interactionManager.connection as unknown as { addEdge?: (edge: Edge) => void }).addEdge = (
-        edge: Edge
-      ) => {
-        if (renderer) renderer.addEdge(edge)
-      }
-    }
+    setupInteractionManager(interactionManager, renderer, navOnly)
+    bindInteractionEvents(interactionManager, renderer)
     emit('canvasContextChange', { renderer, interactionManager })
   }
 )

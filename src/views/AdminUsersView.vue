@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import AppFooter from "../components/layout/AppFooter.vue";
-import AppHeader from "../components/layout/AppHeader.vue";
 import { apiGet, apiPut } from "../composables/useApi";
 import type { PaginatedResponse, User, UserRole } from "../types/entities";
 import { formatDate } from "../utils/formatDate";
@@ -224,13 +222,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page__header">
-      <AppHeader />
-    </header>
-
-    <main class="page__body">
-      <!-- Title bar -->
+  <div class="admin-users-content">
+    <!-- Title bar -->
       <div class="title-bar">
         <div>
           <h1 class="title-bar__heading">{{ t("adminUsers.title") }}</h1>
@@ -493,31 +486,16 @@ onMounted(() => {
           </TransitionGroup>
         </table>
       </div>
-    </main>
-
-    <footer class="page__footer">
-      <AppFooter />
-    </footer>
   </div>
 </template>
 
 <style scoped>
-/* ─── Page layout ─────────────────────────────── */
-.page {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.page__body {
-  flex: 1;
-  min-height: 0;
-  padding: 28px 32px;
-  background: var(--base-bg);
+/* ─── Content (used inside AdminLayout) ────────── */
+.admin-users-content {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow: hidden;
+  min-height: 0;
 }
 
 /* ─── Title bar ───────────────────────────────── */
@@ -1022,8 +1000,8 @@ onMounted(() => {
 
 /* ─── Responsive ──────────────────────────────── */
 @media (max-width: 768px) {
-  .page__body {
-    padding: 20px 16px;
+  .admin-users-content {
+    padding: 0;
   }
 
   .title-bar {

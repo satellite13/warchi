@@ -29,6 +29,8 @@ const props = defineProps<{
   resourceType: ShareResourceType
   /** Показывать кнопку «Дерево версий» на карточках (для моделей). */
   showVersionTree?: boolean
+  /** Показывать кнопку создания версии на базе выбранной (для моделей). */
+  showCreateFromVersionButton?: boolean
 }>();
 
 const router = useRouter();
@@ -58,6 +60,7 @@ const {
   renameError,
   isRenaming,
   openCreateModal,
+  openCreateModalFromVersion,
   closeCreateModal,
   openDeleteModal,
   closeDeleteModal,
@@ -130,6 +133,15 @@ function closeVersionTreeModal() {
 function openEntityFromVersionTree(id: string) {
   openEntity(id);
 }
+
+function handleCreateFromSelectedVersion(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}) {
+  const selected = getSelectedItem(group);
+  if (!selected) return;
+  openCreateModalFromVersion(selected);
+}
 </script>
 
 <template>
@@ -176,12 +188,14 @@ function openEntityFromVersionTree(id: string) {
         :icon="canChangeIcon ? (parseIconFromAttrs(getSelectedItem(group)?.attrs) ?? icon) : undefined"
         :can-change-icon="canChangeIcon"
         :show-version-tree-button="showVersionTree"
+        :show-create-from-version-button="showCreateFromVersionButton"
         :version-tree-i18n-prefix="showVersionTree ? i18nPrefix : undefined"
         @click="getSelectedItem(group) && openEntity(getSelectedItem(group)!.id)"
         @delete="getSelectedItem(group) && openDeleteModal(getSelectedItem(group)!)"
         @rename="getSelectedItem(group) && openRenameModal(getSelectedItem(group)!)"
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @show-version-tree="openVersionTreeModal(group)"
+        @create-from-version="handleCreateFromSelectedVersion(group)"
         @version-change="handleVersionChange(group.name, $event)"
         @change-icon="getSelectedItem(group) && openIconModal(getSelectedItem(group)!)"
       >
@@ -204,6 +218,7 @@ function openEntityFromVersionTree(id: string) {
       :name-id="`${i18nPrefix}-name`"
       :version-id="`${i18nPrefix}-version`"
       :source-versions="sourceVersions"
+      :source-empty-label="t(`${i18nPrefix}.emptySourceVersion`)"
       :is-submitting="isCreating"
       :error="createError"
       @close="closeCreateModal"

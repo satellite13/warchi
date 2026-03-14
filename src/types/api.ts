@@ -67,6 +67,8 @@ export interface DiagramUpdateRequest {
 
 export interface NodeResponse {
   id: string
+  /** Сквозной id: не меняется при копировании модели, для сопоставления узлов между версиями */
+  stableId?: string
   name: string
   modelId: string
   ownerId: string
@@ -163,6 +165,8 @@ export interface ComponentUpdateRequest {
 
 export interface LinkResponse {
   id: string
+  /** Сквозной id: не меняется при копировании модели */
+  stableId?: string
   sourceId: string
   targetId: string
   modelId: string

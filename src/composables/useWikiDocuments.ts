@@ -1,7 +1,6 @@
 import { ref, type Ref } from "vue"
 import { apiGet } from "./useApi"
-import { buildApiUrl } from "../api/config"
-import { getAccessToken } from "./authStorage"
+import { fetchFileContent } from "../api/fileApi"
 
 export interface DocumentWikiItem {
   fileId: string
@@ -28,22 +27,6 @@ export function useWikiDocuments() {
     }
     list.value = result.data ?? []
     return true
-  }
-
-  async function fetchFileContent(fileId: string): Promise<string | null> {
-    const url = buildApiUrl(`/files/${fileId}`)
-    const headers: Record<string, string> = {
-      Accept: "text/markdown, text/plain, */*"
-    }
-    const token = getAccessToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-    try {
-      const response = await fetch(url, { method: "GET", headers, cache: "no-store" })
-      if (!response.ok) return null
-      return await response.text()
-    } catch {
-      return null
-    }
   }
 
   return { list, isLoading, error, fetchList, fetchFileContent }

@@ -40,6 +40,7 @@ const props = withDefaults(
     baselineCreating?: boolean
     baselineError?: string | null
     isAdmin?: boolean
+    showCompareButton?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -72,6 +73,7 @@ const props = withDefaults(
     baselineCreating: false,
     baselineError: null,
     isAdmin: false,
+    showCompareButton: false,
   }
 )
 
@@ -84,6 +86,7 @@ const emit = defineEmits<{
   openNotation: [notationId: string]
   selectDiagramVersion: [diagramId: string]
   createBaseline: []
+  compare: []
 }>()
 
 const isRenamingModel = ref(false)
@@ -288,6 +291,15 @@ const canCreateBaseline = computed(
         </button>
       </div>
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
+      <button
+        v-if="showCompareButton"
+        type="button"
+        class="share-btn"
+        :title="t('models.compareWithVersion')"
+        @click="emit('compare')"
+      >
+        <UiIcon name="compare_arrows" />
+      </button>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button
         v-if="canShare"

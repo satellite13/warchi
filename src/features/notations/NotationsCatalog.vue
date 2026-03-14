@@ -39,5 +39,6 @@ const config: EntityListConfig<NotationData> = {
     :icon="DEFAULT_ENTITY_ICONS.notation"
     resource-type="NOTATION"
     :show-version-tree="true"
+    :show-create-from-version-button="true"
   />
 </template>

@@ -39,5 +39,6 @@ const config: EntityListConfig<ModelData> = {
     :icon="DEFAULT_ENTITY_ICONS.model"
     resource-type="MODEL"
     :show-version-tree="true"
+    :show-create-from-version-button="true"
   />
 </template>

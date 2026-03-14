@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { apiPost, apiPut, apiFetch } from '../../../composables/useApi'
 import { buildApiUrl } from '../../../api/config'
 import { getAccessToken } from '../../../composables/authStorage'
+import { fetchFileContent } from '../../../api/fileApi'
 import type { FileUploadResponse, FileVersionResponse } from '../../../types/api'
 
 export interface DocumentState {
@@ -36,28 +37,6 @@ export function useTypeDocument() {
   function setDocumentContent(value: string) {
     documentContent.value = value
     updateDocDirty()
-  }
-
-  /** Fetches raw markdown content from /files/{id} */
-  async function fetchFileContent(fileId: string): Promise<string | null> {
-    const url = buildApiUrl(`/files/${fileId}`)
-    const headers: Record<string, string> = {
-      Accept: 'text/markdown, text/plain, */*',
-    }
-    const accessToken = getAccessToken()
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`
-    }
-
-    try {
-      const response = await fetch(url, { method: 'GET', headers, cache: 'no-store' })
-      if (!response.ok) {
-        return null
-      }
-      return await response.text()
-    } catch {
-      return null
-    }
   }
 
   /** Loads document content for a given fileId */

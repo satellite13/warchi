@@ -20,6 +20,8 @@ const props = defineProps<{
   canChangeIcon?: boolean;
   /** Показывать кнопку «Дерево версий». */
   showVersionTreeButton?: boolean;
+  /** Показывать кнопку создания новой версии на базе выбранной. */
+  showCreateFromVersionButton?: boolean;
   /** Префикс i18n для подписи кнопки дерева версий (например 'models' или 'notations'). */
   versionTreeI18nPrefix?: string;
 }>();
@@ -32,6 +34,7 @@ const emit = defineEmits<{
   "version-change": [string];
   "change-icon": [];
   "show-version-tree": [];
+  "create-from-version": [];
 }>();
 const { t, locale } = useI18n();
 
@@ -115,6 +118,16 @@ const formattedUpdatedAt = computed(() => {
             <option v-for="ver in versions" :key="ver" :value="ver">v{{ ver }}</option>
           </select>
         </label>
+        <button
+          v-if="showCreateFromVersionButton"
+          type="button"
+          class="model-card__copy-version"
+          :aria-label="t('common.createFromVersion')"
+          :title="t('common.createFromVersion')"
+          @click.stop="emit('create-from-version')"
+        >
+          <UiIcon name="library_add" :alt="t('common.createFromVersion')" />
+        </button>
         <span class="model-card__updated">{{ t("common.updatedAt") }}: {{ formattedUpdatedAt }}</span>
       </div>
       <div v-if="accessLabel" class="model-card__access-badge">
@@ -393,6 +406,32 @@ const formattedUpdatedAt = computed(() => {
   color: var(--base-text);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
+}
+
+.model-card__copy-version {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.model-card__copy-version:hover {
+  background: var(--surface-strong);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.model-card__copy-version :deep(.ui-icon),
+.model-card__copy-version :deep(svg) {
+  width: 16px;
+  height: 16px;
 }
 
 .model-card__owner {

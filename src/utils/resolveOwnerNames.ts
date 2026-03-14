@@ -1,4 +1,4 @@
-import { apiGet } from "../composables/useApi";
+import { apiGet } from "../api/apiClient";
 import { getUserDisplayName } from "./userDisplay";
 import type { UserInfo } from "../types/entities";
 

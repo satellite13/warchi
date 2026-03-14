@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuth } from "../composables/useAuth";
+import "./types";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -11,10 +12,25 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
-      path: "/admin/users",
-      name: "admin-users",
-      component: () => import("../views/AdminUsersView.vue"),
-      meta: { requiresRole: "ADMIN" }
+      path: "/admin",
+      component: () => import("../layouts/AdminLayout.vue"),
+      meta: { requiresRole: "ADMIN" },
+      children: [
+        {
+          path: "",
+          redirect: { name: "admin-users" }
+        },
+        {
+          path: "users",
+          name: "admin-users",
+          component: () => import("../views/AdminUsersView.vue")
+        },
+        {
+          path: "deleted",
+          name: "admin-deleted",
+          component: () => import("../views/AdminDeletedView.vue")
+        }
+      ]
     },
     {
       path: "/profile",
@@ -30,6 +46,11 @@ const router = createRouter({
       path: "/models/:id",
       name: "model-editor",
       component: () => import("../features/models/ModelEditor.vue")
+    },
+    {
+      path: "/models/:id/compare",
+      name: "model-visual-compare",
+      component: () => import("../views/ModelVisualCompareView.vue")
     },
     {
       path: "/notations",
@@ -87,9 +108,7 @@ router.beforeEach((to) => {
     return { name: "login" };
   }
 
-  const requiredRole =
-    typeof to.meta.requiresRole === "string" ? to.meta.requiresRole : undefined;
-  if (requiredRole && currentUser.value?.role !== requiredRole) {
+  if (to.meta.requiresRole && currentUser.value?.role !== to.meta.requiresRole) {
     return { name: "home" };
   }
 

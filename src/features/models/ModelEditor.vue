@@ -19,6 +19,8 @@ import {
 } from './modelAttrs'
 import type { EditorLink, EditorNode } from './types'
 import { useModelEditor } from './composables/useModelEditor'
+import { useModelVersionDiff } from './composables/useModelVersionDiff'
+import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { useAuth } from '../../composables/useAuth'
 import { getUserDisplayName } from '../../utils/userDisplay'
 import type { UserInfo } from '../../types/entities'
@@ -33,6 +35,7 @@ import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from '../notation
 import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import TabPanel from '../../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
+import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import { bumpMinor, compareVersions } from '../../utils/version'
 import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
 import type { NotationMetaResponse, NotationResponse, RelationResponse } from '../../types/api'
@@ -64,6 +67,13 @@ const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocume
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
 const showDiagramImageShareModal = ref(false)
+const showCompareModal = ref(false)
+
+const versionDiff = useModelVersionDiff(() => ({
+  nodes: state.value.nodes.filter((n) => !n._isDeleted),
+  links: state.value.links.filter((l) => !l._isDeleted),
+  diagrams: state.value.diagrams.filter((d) => !d._isDeleted),
+}))
 
 // Document modal state
 const showDocModal = ref(false)
@@ -209,6 +219,31 @@ function handleDocModalClose() {
   docModalTarget.value = null
   docModalContext.value = null
 }
+
+async function handleOpenCompareModal() {
+  const modelId = state.value.modelId
+  if (!modelId) return
+  showCompareModal.value = true
+  versionDiff.clearCompare()
+  await Promise.all([
+    versionDiff.fetchRelatedVersions(modelId),
+    versionDiff.loadBaseFromApi(modelId),
+  ])
+}
+
+function handleCompareModalClose() {
+  showCompareModal.value = false
+  versionDiff.clearCompare()
+}
+
+const compareModalState = computed(() => ({
+  relatedVersions: versionDiff.relatedVersions.value,
+  relatedVersionsLoading: versionDiff.relatedVersionsLoading.value,
+  compareTargetId: versionDiff.compareTargetId.value,
+  compareTargetLoading: versionDiff.compareTargetLoading.value,
+  compareTargetError: versionDiff.compareTargetError.value,
+  diff: versionDiff.diff.value,
+}))
 const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedInstanceIds = ref<string[]>([])
@@ -1658,6 +1693,14 @@ const setDiagramAttrs = (next: any) => {
   const diagram = activeDiagram.value
   if (!diagram) return
   if (isDiagramReadOnly.value) return
+  syncLinkEndpointsFromDiagram({
+    prevDiagramAttrs: diagram.parsedAttrs,
+    nextDiagramAttrs: next,
+    links: state.value.links,
+    markLinkDirty,
+    isDiagramOnlyEdgeModelLinkId,
+  })
+
   const idx = state.value.diagrams.findIndex(
     d => d.id === diagram.id && !d._isDeleted
   )
@@ -3219,9 +3262,11 @@ onBeforeUnmount(() => {
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="isAdmin"
+        :show-compare-button="!!model?.id"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
         @share="showShareModal = true"
+        @compare="handleOpenCompareModal"
         @open-notation="handleOpenNotationEditor"
         @select-diagram-version="selectedDiagramId = $event"
         @create-baseline="handleCreateBaseline"
@@ -3886,6 +3931,20 @@ onBeforeUnmount(() => {
     :file-id="docModalFileId"
     @saved="handleDocSaved"
     @close="handleDocModalClose"
+  />
+
+  <ModelVersionDiffModal
+    v-if="showCompareModal && model"
+    :model-id="model.id"
+    :model-version="model.version"
+    :related-versions="compareModalState.relatedVersions"
+    :related-versions-loading="compareModalState.relatedVersionsLoading"
+    :compare-target-id="compareModalState.compareTargetId"
+    :compare-target-loading="compareModalState.compareTargetLoading"
+    :compare-target-error="compareModalState.compareTargetError"
+    :diff="compareModalState.diff"
+    @close="handleCompareModalClose"
+    @select-version="versionDiff.loadCompareTarget"
   />
 
   <div v-if="isLoading" class="overlay-loading">{{ t('common.loading') }}</div>

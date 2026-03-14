@@ -34,7 +34,7 @@ const { t } = useI18n();
     <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="account_circle" :alt="t('nav.profile')" />{{ t("nav.profile") }}
     </RouterLink>
-    <RouterLink v-if="isAdmin" to="/admin/users" class="app-nav__link" active-class="app-nav__link--active">
+    <RouterLink v-if="isAdmin" to="/admin" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="admin_panel_settings" :alt="t('nav.admin')" />{{ t("nav.admin") }}
     </RouterLink>
   </nav>

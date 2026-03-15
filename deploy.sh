@@ -67,6 +67,18 @@ if ! kubectl cluster-info >/dev/null 2>&1; then
     exit 1
 fi
 
+# Подтверждение kubectl context
+CURRENT_CONTEXT=$(kubectl config current-context)
+CLUSTER_NAME=$(kubectl config view -o jsonpath="{.contexts[?(@.name=='$CURRENT_CONTEXT')].context.cluster}")
+log_warn "Текущий kubectl context: $CURRENT_CONTEXT (кластер: $CLUSTER_NAME)"
+if [ "${SKIP_CONFIRM:-false}" != "true" ]; then
+    read -p "Деплоить в этот кластер? (y/N) " CONFIRM
+    if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
+        log_info "Деплой отменён"
+        exit 0
+    fi
+fi
+
 # Проверка/создание namespace
 log_info "Проверка namespace '$NAMESPACE'..."
 if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then

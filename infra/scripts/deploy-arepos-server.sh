@@ -77,7 +77,8 @@ sed "s/<REGISTRY_ID>/${REGISTRY_ID}/g" "$VALUES_FILE" > "$TEMP_VALUES"
 helm upgrade --install arepos-server "$AREPOS_DIR/charts/arepos-server" \
   -n "$NAMESPACE" \
   -f "$TEMP_VALUES" \
-  --set image.tag="$VERSION"
+  --set image.tag="$VERSION" \
+  --set-string podAnnotations.deployedAt="$(date +%s)"
 
 rm -f "$TEMP_VALUES"
 

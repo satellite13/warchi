@@ -10,7 +10,7 @@ const { t } = useI18n();
 
 <template>
   <nav class="app-nav">
-    <RouterLink to="/" class="app-nav__link" active-class="app-nav__link--active">
+    <RouterLink :to="{ name: 'home' }" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="home" :alt="t('nav.home')" />{{ t("nav.home") }}
     </RouterLink>
     <RouterLink to="/models" class="app-nav__link" active-class="app-nav__link--active">

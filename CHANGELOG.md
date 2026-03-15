@@ -7,57 +7,33 @@ All notable changes to this project are documented in this file.
 ## [0.0.28] - 2026-03-04
 
 ### Added
-- Navigation-only mode in ModelEditor: diagram and palette respect the mode and disable drag-and-drop when enabled.
-
-### Changed
-- Updated `@ngroznykh/papirus` to `0.5.4` (npm dependency).
-- ModelDiagramCanvas and ModelTreePalettePanel: draggable properties conditionally disabled based on navigation-only mode.
-
-### Fixed
-- VersionTreeNode: removed unused `props` variable (ESLint no-unused-vars).
+- Navigation-only mode in Model Editor: diagram and palette can be explored without accidental drag-and-drop edits.
 
 ## [0.0.27] - 2026-03-03
 
 ### Added
-- ToggleSwitch component (slider-style boolean control); replaced checkboxes in NodeStylePanel (label line gap), PropertyRow (required/system/interactive), ModelPropertiesPanel (node/link boolean properties).
-- Edge style option "Разрыв под меткой" (labelLineGap) in notation and model diagram; alignment tolerance configurable from warchi (alignmentScreenTolerance: 80) via enableInteractions options.
+- New switch-style toggles for boolean settings in style and properties panels.
+- New edge style option to create a gap under edge labels for better readability on dense diagrams.
 
 ### Changed
-- Updated `@ngroznykh/papirus` to `0.5.3` (labelLineGap, alignmentScreenTolerance option).
-- DiagramStyle: added edgeLabelLineGap; applied in useNotationDiagram and ModelDiagramCanvas.
-
-### Fixed
-- PropertyRow: pass `property.system ?? false` and `property.interactive ?? false` to ToggleSwitch to fix TS2322 (boolean | undefined).
+- Improved consistency of boolean controls across model and notation editors.
 
 ## [0.0.26] - 2026-03-02
 
 ### Added
 - Hover hints (`title`) for compact numeric fields in the style panel (`W/H/R`, `PT/PB/PL/PR`, `T/R/B/L`) so abbreviated labels are easier to understand.
-- New i18n keys under `nodeStyle` for field tooltips and inset sync modes (`pair/all`).
 
 ### Changed
-- Updated `@ngroznykh/papirus` to `0.5.0`.
-- Continued `NodeStylePanel` refactoring toward reusable UI building blocks (`InsetSidesInput`, `ColorWithAlphaField`, `StyleSection`, `LabeledNumberInput`, `LabeledFieldRow`) with more consistent field styling.
-- Updated Russian locale value of `nodeStyle.inset` from `Inset` to `Отступ`.
 - Localized inset sync button captions (`Pair`/`All`).
-
-### Release
-- Bumped application version to `0.0.26` in package metadata.
-- Release tag `v0.0.26`.
 
 ## [0.0.25] - 2026-02-28
 
 ### Changed
-- Updated `@ngroznykh/papirus` to `0.3.22`.
-- Refined model editor/canvas synchronization and validation behavior for links and diagram interactions.
+- Improved model editor stability for link synchronization and validation.
 
 ### Fixed
 - Fixed edge label text propagation when restoring links during diagram open/sync (newly created runtime edges no longer lose label text).
 - Fixed edge style panel label input binding to correctly display label text for both string and object label forms.
-
-### Release
-- Bumped application version to `0.0.25` in package metadata.
-- Added and published release tag `v0.0.25`.
 
 ## [0.0.24] - 2026-02-28
 
@@ -73,14 +49,11 @@ All notable changes to this project are documented in this file.
 ### Added
 - Group drag in model diagram: drag a node inside a container to move both together.
 - Auto-linking in groups: when dragging a node into a container with group relation, prompts to create or reuse a link (configurable via "Auto-links in groups" toggle in diagram settings).
-- `isLinkOnDiagram()` and `tryCreateAutoLink()` logic: link on diagram → no action; link exists off diagram → reuse dialog; no link → create dialog.
-- Node usage tracking in ModelTreePalettePanel.
 - System property flag (`system`) on CustomProperty for notation-defined special behavior (e.g. `group` for grouping mode).
 
 ### Changed
 - Model editor: existing link reuse and relation selection modals for auto-link flow.
 - Modal keyboard navigation and focus management improvements.
-- Updated `@ngroznykh/papirus` to 0.3.21.
 
 ### Fixed
 - System properties are no longer shown in model editor properties panel (ModelPropertiesPanel).
@@ -89,7 +62,7 @@ All notable changes to this project are documented in this file.
 ## [0.0.22] - 2026-02-27
 
 ### Added
-- IconPicker component for selecting SVG icons in type editor (NodeStylePanel, TypeForm).
+- SVG icon selection for node types in the types editor.
 - Icon field for node types (notationAttrs): tree display in model palette with custom icons from public/icons.
 - availableIcons config with pre-defined icon options.
 
@@ -113,18 +86,15 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 - DocumentEditorModal: improved version handling and editing state management.
-- Model editor: refactored document-related flows and UI for better maintainability.
-- CustomPropertiesPanel, useNotationEditor, useModelEditor, useTypeDocument updates.
+- Improved document workflows in Model Editor.
 
 ## [0.0.19] - 2026-02-26
 
 ### Added
 - DocumentEditorModal for editing markdown documents with version history.
-- mdEditor config (mdEditor.ts) for shared editor configuration.
 - TypeDocumentPanel version history support.
 
 ### Changed
-- CustomPropertiesPanel, NotationAppHeader, notationAttrs, types.
 - i18n messages for document/version UI.
 
 ## [0.0.18] - 2026-02-26
@@ -134,48 +104,25 @@ All notable changes to this project are documented in this file.
 - TabPanel component with icon tabs and active tab underline.
 - Tabbed right panel in notation editor (Properties + Figure Style tabs), replacing the bottom resizable properties panel.
 - Tabbed right panel in model editor, replacing the collapsible stack layout.
-- CollapseSection, EntityCatalog shared components.
-- `useNotationExport`, `useNotationToolbarState` composables.
-- Utility modules: `number.ts`, `resolveOwnerNames.ts`, `forms.css`.
+- More consistent selection and tabbed editing experience across editors.
 
 ### Changed
-- TypeSelectSection: replaced native `<select>` with SearchableSelect (with "Create new type" option).
-- NodeStylePanel: replaced icon `<select>` with SearchableSelect featuring SVG icon previews; removed collapse logic.
-- RelationRulesSection: replaced inline dropdown with SearchableSelect, removed ~115 lines of CSS.
-- NotationMainPanelLayout: removed bottom slot, resizer, and properties height logic.
-- Refactored ModelsCatalog and NotationsCatalog to use shared EntityCatalog.
-- Refactored PropertyRow, TypeForm, useTypeEditor, useCustomProperties.
-- Simplified AdminUsersView, EntityRenameModal, useAccessShares.
-- Updated `@ngroznykh/papirus` to `0.3.16`, `vue` to `3.5.29`, and dev dependencies.
+- Unified editor UI behavior and visual consistency.
 
 ## [0.0.17] - 2026-02-25
 
 ### Added
 - Outline ON setting in model editor toolbar: attach edges to shape contour instead of ports (enabled by default).
-- Updated `@ngroznykh/papirus` dependency to `0.3.14`.
-
-### Release
-- Bumped application version to `0.0.17` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.17`.
 
 ## [0.0.16] - 2026-02-25
 
 ### Fixed
 - When switching edge type from polyline or editable-polyline to bezier or straight, control points are now removed to prevent distorted arrow rendering.
 
-### Release
-- Bumped application version to `0.0.16` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.16`.
-
 ## [0.0.15] - 2026-02-25
 
 ### Added
 - Auto-reload on blue-green deployment: app periodically checks `version.json` and on new version shows a toast, then reloads the page.
-- Vite plugin `vite-plugin-version` to generate `version.json` at build time.
-
-### Release
-- Bumped application version to `0.0.15` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.15`.
 
 ## [0.0.14] - 2026-02-25
 
@@ -185,10 +132,6 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 - Documentation content loads based on current locale; switching language updates docs content.
-
-### Release
-- Bumped application version to `0.0.14` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.14`.
 
 ## [0.0.13] - 2026-02-24
 
@@ -204,25 +147,16 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Fixed palette grouping visual separation when the first component group is greater than `0` (components no longer appear in the same visual group as note).
 
-### Release
-- Bumped application version to `0.0.13` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.13`.
-
 ## [0.0.12] - 2026-02-24
 
 ### Changed
-- Updated `@ngroznykh/papirus` dependency from `0.3.9` to `0.3.11`.
 - Notation diagram nodes now derive anchor/port counts from component style settings (`portsTop/Right/Bottom/Left`) with sane defaults.
 - Disabled interactive connection/reconnection start in notation editor canvas runtime to keep notation editing flow component-focused.
-
-### Release
-- Bumped application version to `0.0.12` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.12`.
 
 ## [0.0.11] - 2026-02-23
 
 ### Added
-- Added explicit release playbook memory for `warchi` (`MEMORY.md`) so the "release" command always means commit + version bump + changelog + tag + push.
+- Improved repeatability of the release process.
 
 ### Changed
 - Unified model/notation editor toolbar visuals: compact share icon button, matching floating-canvas toolbar style, and hidden duplicate top toolbar in notation editor.
@@ -233,19 +167,11 @@ All notable changes to this project are documented in this file.
 - Fixed model editor undo/redo drift by routing add/connect/delete flows through consistent history/state synchronization.
 - Fixed redo artifacts where connection markers/styles could reappear in multiple phases after reconnecting edges.
 
-### Release
-- Bumped application version to `0.0.11` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.11`.
-
 ## [0.0.10] - 2026-02-23
 
 ### Fixed
 - Notation export now includes only active notation entities and only node/link types that are actually used by exported components and relations.
 - Restored notation rename flow in catalog cards with modal UI, duplicate validation, and backend update via `PUT /notations/{id}`.
-
-### Release
-- Bumped application version to `0.0.10` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.10`.
 
 ## [0.0.9] - 2026-02-22
 
@@ -266,10 +192,6 @@ All notable changes to this project are documented in this file.
 - Sharing UX issues in user search and share assignment defaults.
 - Home dashboard hero text clipping and panel sizing issues.
 
-### Release
-- Bumped application version to `0.0.9` in package metadata, home release widget, footer, Docker/Helm scripts, and chart values.
-- Added and documented release tag `v0.0.9`.
-
 ## [0.0.8] - 2026-02-21
 
 ### Added
@@ -281,7 +203,6 @@ All notable changes to this project are documented in this file.
 - Auto-sync of default custom property values on model load for new required properties.
 
 ### Changed
-- Updated Papirus to 0.3.6 with text align support and basic example enhancements.
 - Inline label editing (double-click) now shows only the component name, not the resolved template.
 
 ### Fixed
@@ -289,9 +210,6 @@ All notable changes to this project are documented in this file.
 - Diagram labels not updating in real-time when custom property values change.
 - Validation errors when notation gains new required properties after model nodes already exist.
 
-### Release
-- Bumped application version to `0.0.8`.
-- Tagged and pushed release tags `v0.0.6`, `v0.0.7`, `v0.0.8`.
 
 ## [0.0.5] - 2026-02-20
 
@@ -307,9 +225,6 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Fixed model diagram build/lint issues in z-order helper logic.
 
-### Release
-- Bumped application version to `0.0.5` in package metadata, footer, Docker/Helm scripts, and chart values.
-- Tagged and pushed release tag `v0.0.5`.
 
 ## [0.0.4] - 2026-02-19
 
@@ -326,8 +241,6 @@ All notable changes to this project are documented in this file.
 - Fixed notation component list control row height so sorting select no longer stretches neighboring icon buttons.
 - Fixed missing persistence of tags section collapse/expand state between sessions.
 
-### Release
-- Bumped application version to `0.0.4` in package metadata, footer, Docker/Helm scripts, and chart values.
 
 ## [0.0.3] - 2026-02-19
 
@@ -346,8 +259,6 @@ All notable changes to this project are documented in this file.
 - Fixed edge deletion from current diagram to participate in undo/redo history.
 - Fixed applying custom port counts and anchor points after diagram reopen.
 
-### Release
-- Bumped application version to `0.0.3` in package metadata, footer, Docker/Helm scripts, and chart values.
 
 ## [0.0.2] - 2026-02-19
 
@@ -367,6 +278,3 @@ All notable changes to this project are documented in this file.
 - Fixed default custom-property values initialization when adding nodes from palette and when binding components/relations.
 - Fixed diagram switch flow with unsaved changes by allowing save/discard decision and proper state reload on discard.
 
-### Release
-- Bumped application version to `0.0.2` in package metadata, footer, Docker/Helm scripts, and chart values.
-- Tagged and pushed release tag `v0.0.2`.

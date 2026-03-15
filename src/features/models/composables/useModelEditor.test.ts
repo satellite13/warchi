@@ -1,6 +1,6 @@
 import { effectScope } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { parseNodeAttrs } from "../modelAttrs"
+import { parseDiagramAttrs, parseNodeAttrs } from "../modelAttrs"
 import type { ModelData } from "../../../types/entities"
 import { useModelEditor } from "./useModelEditor"
 
@@ -120,5 +120,75 @@ describe("useModelEditor save order", () => {
     const putOrder = apiPutMock.mock.invocationCallOrder[0] ?? 0
     const deleteOrder = apiDeleteMock.mock.invocationCallOrder[0] ?? 0
     expect(putOrder).toBeLessThan(deleteOrder)
+  })
+
+  it("updates diagram versions from latest to oldest", async () => {
+    let saveChanges: (() => Promise<boolean>) | null = null
+    let stopScope: (() => void) | null = null
+
+    const scope = effectScope()
+    scope.run(() => {
+      const editor = useModelEditor()
+      const model: ModelData = {
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null
+      }
+      editor.model.value = model
+      editor.state.value = {
+        modelId: "model-1",
+        ownerId: "owner-1",
+        nodes: [],
+        links: [],
+        diagrams: [
+          {
+            id: "diagram-v1",
+            name: "Architecture",
+            version: "1.0.0",
+            ownerId: "owner-1",
+            modelId: "model-1",
+            nodeId: "node-1",
+            notationId: "notation-1",
+            createdAt: null,
+            updatedAt: null,
+            parsedAttrs: parseDiagramAttrs(null),
+            _isDirty: true
+          },
+          {
+            id: "diagram-v2",
+            name: "Architecture",
+            version: "1.1.0",
+            ownerId: "owner-1",
+            modelId: "model-1",
+            nodeId: "node-1",
+            notationId: "notation-1",
+            createdAt: null,
+            updatedAt: null,
+            parsedAttrs: parseDiagramAttrs(null),
+            _isDirty: true
+          }
+        ],
+        notations: [],
+        nodeTypes: [],
+        linkTypes: [],
+        components: [],
+        relations: [],
+        relationRules: []
+      }
+
+      saveChanges = editor.saveChanges
+      stopScope = () => scope.stop()
+    })
+
+    const result = await saveChanges!()
+    stopScope!()
+
+    expect(result).toBe(true)
+    const firstPath = apiPutMock.mock.calls[0]?.[0]
+    const secondPath = apiPutMock.mock.calls[1]?.[0]
+    expect(firstPath).toBe("/diagrams/diagram-v2")
+    expect(secondPath).toBe("/diagrams/diagram-v1")
   })
 })

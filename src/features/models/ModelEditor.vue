@@ -2518,9 +2518,19 @@ const handleRenameNode = (nodeId: string, newName: string) => {
 
 const handleRenameDiagram = (diagramId: string, newName: string) => {
   const diagram = state.value.diagrams.find(item => item.id === diagramId)
-  if (!diagram || diagram.name === newName) return
-  diagram.name = newName
-  markDiagramDirty(diagram.id)
+  const trimmedName = newName.trim()
+  if (!diagram || !trimmedName) return
+  if (diagram.name === trimmedName) return
+
+  const oldNameNormalized = diagram.name.trim().toLowerCase()
+  for (const row of state.value.diagrams) {
+    if (row._isDeleted) continue
+    if (row.modelId !== diagram.modelId) continue
+    if (row.name.trim().toLowerCase() !== oldNameNormalized) continue
+    if (row.name === trimmedName) continue
+    row.name = trimmedName
+    markDiagramDirty(row.id)
+  }
 }
 
 const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {

@@ -17,6 +17,7 @@ import type {
   RelationResponse,
   RelationRuleResponse,
 } from '../../../types/api'
+import { compareVersions } from '../../../utils/version'
 import {
   parseDiagramAttrs,
   parseLinkAttrs,
@@ -462,9 +463,10 @@ export const useModelEditor = (): ModelEditorReturn => {
         diagram._isNew = false
       }
 
-      for (const diagram of diagrams.filter(
-        row => row._isDirty && !row._isDeleted && !row._isNew
-      )) {
+      const dirtyDiagrams = diagrams
+        .filter(row => row._isDirty && !row._isDeleted && !row._isNew)
+        .sort((a, b) => compareVersions(b.version, a.version))
+      for (const diagram of dirtyDiagrams) {
         saveProgress.value = `Обновление диаграммы: ${diagram.name}`
         const request: DiagramUpdateRequest = {
           name: diagram.name,

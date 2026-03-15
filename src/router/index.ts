@@ -87,14 +87,24 @@ const router = createRouter({
       component: () => import("../views/DocsView.vue")
     },
     {
+      path: "/",
+      name: "landing",
+      component: () => import("../views/LandingView.vue"),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: "/landing",
+      redirect: "/"
+    },
+    {
       path: "/wiki",
       name: "wiki",
       component: () => import("../views/WikiView.vue")
     },
     {
-      path: "/",
+      path: "/home",
       name: "home",
-      component: () => import("../views/HomeView.vue"),
+      component: () => import("../views/HomeView.vue")
     }
   ]
 });

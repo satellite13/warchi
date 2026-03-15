@@ -5,6 +5,7 @@ import type { ComponentResponse, RelationResponse } from '../../../types/api'
 import type { EditorLink, EditorNode } from '../types'
 import { parseEntityAttrs, type CustomProperty } from '../../notations/notationAttrs'
 import type { DocumentWikiItem } from '../../../composables/useWikiDocuments'
+import { coercePropertyValue, regexTestProperty } from '@/utils/propertyUtils'
 import SearchableSelect from '../../../components/forms/SearchableSelect.vue'
 import ToggleSwitch from '../../../components/forms/ToggleSwitch.vue'
 
@@ -73,26 +74,8 @@ const currentMode = computed<'node' | 'link' | 'empty'>(() => {
   return 'empty'
 })
 
-const coerceValue = (property: CustomProperty, raw: string, checked?: boolean): unknown => {
-  if (property.type === 'boolean') return Boolean(checked)
-  if (property.type === 'number') {
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return raw
-}
-
-/** Returns null if no regex or invalid regex, true if value matches, false if not. */
-function regexTest(property: CustomProperty, value: string): boolean | null {
-  if (property.type !== 'string' || !property.regex?.trim()) return null
-  const val = (value ?? '').trim()
-  if (val === '') return null
-  try {
-    return new RegExp(property.regex).test(val)
-  } catch {
-    return null
-  }
-}
+const coerceValue = coercePropertyValue
+const regexTest = regexTestProperty
 
 function documentDisplayLabel(item: DocumentWikiItem): string {
   const name =

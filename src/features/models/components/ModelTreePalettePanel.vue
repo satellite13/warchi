@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue"
+import { computed, nextTick, ref, toRef } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "../../../utils/version"
 import { parseTypeAttrs } from "../../notations/notationAttrs"
 import type { NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
+import { useTreeSearch } from "../composables/useTreeSearch"
 
 const props = defineProps<{
   nodes: EditorNode[]
@@ -35,9 +36,6 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-const expandedNodes = ref<Set<string>>(new Set())
-const treeSearchQuery = ref("")
-
 const nodeTypeNameById = computed(() => {
   const map = new Map<string, string>()
   for (const type of props.nodeTypes) map.set(type.id, type.name)
@@ -63,52 +61,20 @@ const nodeIndexById = computed(() => {
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
 
-const sortNodesByTreeOrder = (nodes: EditorNode[]): EditorNode[] =>
-  [...nodes].sort((a, b) => {
-    const orderDiff = (a.parsedAttrs.treeOrder ?? 0) - (b.parsedAttrs.treeOrder ?? 0)
-    if (orderDiff !== 0) return orderDiff
-    return (nodeIndexById.value.get(a.id) ?? 0) - (nodeIndexById.value.get(b.id) ?? 0)
-  })
-
-const rootNodes = computed(() => {
-  const topParentId = props.treeRootNodeId ?? null
-  return sortNodesByTreeOrder(
-    props.nodes.filter(
-      (node) =>
-        !node._isDeleted &&
-        node.id !== props.treeRootNodeId &&
-        (node.parentNodeId ?? null) === topParentId
-    )
-  )
+const {
+  expandedNodes,
+  treeSearchQuery,
+  totalNodesCount,
+  filteredRootNodes,
+  filteredChildNodes,
+  childNodes,
+  toggleNode,
+} = useTreeSearch({
+  nodes: toRef(props, 'nodes'),
+  treeRootNodeId: toRef(props, 'treeRootNodeId'),
+  isDirectory,
+  nodeIndexById,
 })
-
-const totalNodesCount = computed(() =>
-  props.nodes.filter((n) => !n._isDeleted && n.id !== props.treeRootNodeId).length
-)
-
-const childNodes = (nodeId: string): EditorNode[] =>
-  sortNodesByTreeOrder(
-    props.nodes.filter(
-      (node) => node.parentNodeId === nodeId && !node._isDeleted && node.id !== props.treeRootNodeId
-    )
-  )
-
-const nodeMatchesSearch = (node: EditorNode, query: string): boolean => {
-  if (node.name.toLowerCase().includes(query)) return true
-  return childNodes(node.id).some((child) => nodeMatchesSearch(child, query))
-}
-
-const filteredRootNodes = computed(() => {
-  const query = treeSearchQuery.value.trim().toLowerCase()
-  if (!query) return rootNodes.value
-  return rootNodes.value.filter((node) => nodeMatchesSearch(node, query))
-})
-
-const filteredChildNodes = (nodeId: string): EditorNode[] => {
-  const query = treeSearchQuery.value.trim().toLowerCase()
-  if (!query) return childNodes(nodeId)
-  return childNodes(nodeId).filter((child) => nodeMatchesSearch(child, query))
-}
 
 /** Диаграммы узла: по одному на имя (последняя версия), без baseline-дубликатов в списке */
 const nodeDiagrams = (nodeId: string): EditorDiagram[] => {
@@ -137,13 +103,6 @@ const usedNodeIds = computed(() => {
 })
 
 const isNodeUsed = (nodeId: string): boolean => usedNodeIds.value.has(nodeId)
-
-const toggleNode = (nodeId: string) => {
-  const next = new Set(expandedNodes.value)
-  if (next.has(nodeId)) next.delete(nodeId)
-  else next.add(nodeId)
-  expandedNodes.value = next
-}
 
 const onDragNodeStart = (event: DragEvent, nodeId: string) => {
   event.dataTransfer?.setData("application/x-model-node-id", nodeId)

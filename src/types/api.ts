@@ -355,7 +355,7 @@ export type SharePermission = 'VIEW' | 'EDIT'
 export interface AccessShareRequest {
   resourceType: ShareResourceType
   resourceId: string
-  granteeUserId: string
+  granteeUserId?: string | null
   permission: SharePermission
 }
 
@@ -363,7 +363,7 @@ export interface AccessShareResponse {
   id: string
   resourceType: ShareResourceType
   resourceId: string
-  granteeUserId: string
+  granteeUserId?: string | null
   grantedByUserId: string
   permission: SharePermission
   createdAt?: string | null

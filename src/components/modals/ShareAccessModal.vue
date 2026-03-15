@@ -34,9 +34,10 @@ const selectedUser = ref<UserInfo | null>(null);
 const searchResults = ref<UserInfo[]>([]);
 const searchPerformed = ref(false);
 const selectedPermission = ref<SharePermission>("VIEW");
+const shareWithAllUsers = ref(false);
 
 const canSubmit = computed(
-  () => selectedUser.value !== null && !isSubmitting.value
+  () => (shareWithAllUsers.value || selectedUser.value !== null) && !isSubmitting.value
 );
 
 const load = async () => {
@@ -44,6 +45,9 @@ const load = async () => {
 };
 
 const searchUsers = async (): Promise<void> => {
+  if (shareWithAllUsers.value) {
+    return;
+  }
   const email = userSearchEmail.value.trim();
   searchError.value = null;
   searchPerformed.value = true;
@@ -74,12 +78,12 @@ const searchUsers = async (): Promise<void> => {
 const submitShare = async () => {
   if (!canSubmit.value) return;
   const user = selectedUser.value;
-  if (!user) return;
+  if (!shareWithAllUsers.value && !user) return;
 
   const ok = await grantShare({
     resourceType: props.resourceType,
     resourceId: props.resourceId,
-    granteeUserId: user.id,
+    granteeUserId: shareWithAllUsers.value ? null : user?.id,
     permission: selectedPermission.value
   });
   if (ok) {
@@ -88,6 +92,7 @@ const submitShare = async () => {
     searchResults.value = [];
     searchPerformed.value = false;
     selectedPermission.value = "VIEW";
+    shareWithAllUsers.value = false;
   }
 };
 
@@ -100,6 +105,15 @@ const selectUser = (user: UserInfo) => {
 };
 
 watch(userSearchEmail, () => {
+  selectedUser.value = null;
+  searchError.value = null;
+  searchResults.value = [];
+  searchPerformed.value = false;
+});
+
+watch(shareWithAllUsers, (enabled) => {
+  if (!enabled) return;
+  userSearchEmail.value = "";
   selectedUser.value = null;
   searchError.value = null;
   searchResults.value = [];
@@ -123,6 +137,17 @@ onMounted(load);
         <h4 class="share-modal__subtitle">{{ t("share.grantAccess") }}</h4>
         <div class="share-modal__grid">
           <label class="share-modal__field">
+            <span>{{ t("share.scope") }}</span>
+            <label class="share-modal__permission-option">
+              <input
+                v-model="shareWithAllUsers"
+                type="checkbox"
+                :disabled="isSubmitting"
+              >
+              <span>{{ t("share.allUsers") }}</span>
+            </label>
+          </label>
+          <label class="share-modal__field">
             <span>{{ t("share.userEmail") }}</span>
             <div class="share-modal__inline">
               <input
@@ -130,12 +155,12 @@ onMounted(load);
                 class="share-modal__input"
                 type="text"
                 placeholder="user@example.com"
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || shareWithAllUsers"
               >
               <button
                 type="button"
                 class="btn btn--secondary"
-                :disabled="isSubmitting || userSearchEmail.trim().length === 0"
+                :disabled="isSubmitting || shareWithAllUsers || userSearchEmail.trim().length === 0"
                 @click="searchUsers"
               >
                 {{ t("common.find") }}
@@ -167,7 +192,10 @@ onMounted(load);
           </label>
         </div>
 
-        <div v-if="selectedUser" class="share-modal__found">
+        <div v-if="shareWithAllUsers" class="share-modal__found">
+          {{ t("share.shareWithAllHint") }}
+        </div>
+        <div v-else-if="selectedUser" class="share-modal__found">
           {{ t("share.userFound") }}: <strong>{{ selectedUser.email }}</strong>
         </div>
         <div v-if="searchError" class="share-modal__error">{{ searchError }}</div>

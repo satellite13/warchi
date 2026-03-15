@@ -24,9 +24,9 @@ export function useAccessShares() {
 
   const userNameCache = new Map<string, string>();
 
-  const resolveUserName = async (userId: string): Promise<string> => {
+  const resolveUserName = async (userId?: string | null): Promise<string> => {
     const fallback = t("common.unknownUser");
-    if (!userId) return fallback;
+    if (!userId) return t("share.allUsers");
     const cached = userNameCache.get(userId);
     if (cached) return cached;
 

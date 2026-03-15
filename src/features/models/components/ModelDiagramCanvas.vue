@@ -45,6 +45,14 @@ import {
   persistDiagramViewport,
   restoreDiagramViewport,
 } from '../utils/diagramViewportPersistence'
+import {
+  applyEditablePolylineControlPointChangesToDiagram as applyEditablePolylineControlPointChangesToDiagramAttrs,
+  applyNodeAndEditablePolylineChangesToDiagram as applyNodeAndEditablePolylineChangesToDiagramAttrs,
+  applyNodePositionsToDiagram as applyNodePositionsToDiagramAttrs,
+  areControlPointsEqual,
+  readControlPointsFromAttrs,
+  readControlPointsFromEdge,
+} from '../utils/diagramCanvasSync'
 
 const props = withDefaults(
   defineProps<{
@@ -598,40 +606,6 @@ const getPapEdgeLabelText = (edge: Edge): string =>
   typeof edge.label === 'string'
     ? edge.label
     : (edge.label?.editableText ?? edge.label?.text ?? '')
-
-type ControlPoint = { x: number; y: number }
-
-const readControlPointsFromAttrs = (attrs: Record<string, unknown> | undefined): ControlPoint[] => {
-  const raw = attrs?.controlPoints
-  if (!Array.isArray(raw)) return []
-  return raw
-    .filter(
-      (point): point is { x: number; y: number } =>
-        Boolean(point) &&
-        typeof point === 'object' &&
-        typeof (point as { x?: unknown }).x === 'number' &&
-        typeof (point as { y?: unknown }).y === 'number'
-    )
-    .map(point => ({ x: point.x, y: point.y }))
-}
-
-const readControlPointsFromEdge = (edge: Edge): ControlPoint[] => {
-  const raw = (edge as unknown as { controlPoints?: unknown }).controlPoints
-  if (!Array.isArray(raw)) return []
-  return raw
-    .filter(
-      (point): point is { x: number; y: number } =>
-        Boolean(point) &&
-        typeof point === 'object' &&
-        typeof (point as { x?: unknown }).x === 'number' &&
-        typeof (point as { y?: unknown }).y === 'number'
-    )
-    .map(point => ({ x: point.x, y: point.y }))
-}
-
-const areControlPointsEqual = (a: ControlPoint[], b: ControlPoint[]): boolean =>
-  a.length === b.length &&
-  a.every((point, index) => point.x === b[index]?.x && point.y === b[index]?.y)
 
 const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
   const text = labelText?.trim()
@@ -1281,7 +1255,8 @@ function syncDiagram() {
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
       if (edgeOpts.endMarker !== undefined) existing.endMarker = edgeOpts.endMarker
       if (!areControlPointsEqual(readControlPointsFromEdge(existing), controlPoints)) {
-        ;(existing as unknown as { controlPoints?: ControlPoint[] }).controlPoints = controlPoints
+        ;(existing as unknown as { controlPoints?: Array<{ x: number; y: number }> }).controlPoints =
+          controlPoints
       }
       existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
       if (edgeOpts.labelLineGap !== undefined) existing.labelLineGap = edgeOpts.labelLineGap
@@ -1603,28 +1578,11 @@ function detectEditablePolylineControlPointChanges() {
   if (!renderer) return
 
   const next = cloneDiagramAttrs()
-  let changed = false
-
-  for (const [papEdgeId, entity] of edgeIdToInstance) {
-    const papEdge = renderer.getEdge(papEdgeId)
-    if (!papEdge || papEdge.type !== 'editable-polyline') continue
-
-    const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
-    if (!edgeInst) continue
-
-    const nextControlPoints = readControlPointsFromEdge(papEdge)
-    const currentControlPoints = readControlPointsFromAttrs(edgeInst.attrs)
-    if (areControlPointsEqual(nextControlPoints, currentControlPoints)) continue
-
-    if (!edgeInst.attrs) edgeInst.attrs = {}
-    if (nextControlPoints.length > 0) edgeInst.attrs.controlPoints = nextControlPoints
-    else delete edgeInst.attrs.controlPoints
-
-    if (Object.keys(edgeInst.attrs).length === 0) {
-      delete edgeInst.attrs
-    }
-    changed = true
-  }
+  const changed = applyEditablePolylineControlPointChangesToDiagramAttrs(
+    next,
+    edgeIdToInstance,
+    papEdgeId => renderer?.getEdge(papEdgeId)
+  )
 
   if (changed) {
     emit('updateDiagram', next)
@@ -1663,31 +1621,37 @@ function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) 
 function persistNodePositions(papNodeIds: string[]) {
   if (props.readOnly || !renderer) return
   const next = cloneDiagramAttrs()
-  let changed = false
-  for (const papNodeId of papNodeIds) {
-    const entity = nodeIdToInstance.get(papNodeId)
-    if (!entity) continue
-    const papNode = renderer.getNode(papNodeId)
-    if (!papNode) continue
-    const instance = next.instances.nodes.find(n => n.id === entity.instanceId)
-    if (!instance) continue
-    if (
-      instance.x !== papNode.x ||
-      instance.y !== papNode.y ||
-      instance.width !== papNode.width ||
-      instance.height !== papNode.height
-    ) {
-      instance.x = papNode.x
-      instance.y = papNode.y
-      instance.width = papNode.width
-      instance.height = papNode.height
-      changed = true
-    }
-  }
+  const changed = applyNodePositionsToDiagram(next, papNodeIds)
   if (changed) {
     syncEdgePortIds(next)
     emit('updateDiagram', next)
   }
+}
+
+function persistNodePositionsWithEditablePolylineControlPoints(papNodeIds: string[]) {
+  if (props.readOnly || !renderer) return
+  const next = cloneDiagramAttrs()
+  const { nodeChanged, controlPointsChanged } = applyNodeAndEditablePolylineChangesToDiagramAttrs(
+    next,
+    papNodeIds,
+    nodeIdToInstance,
+    edgeIdToInstance,
+    papNodeId => renderer?.getNode(papNodeId),
+    papEdgeId => renderer?.getEdge(papEdgeId)
+  )
+  if (nodeChanged || controlPointsChanged) {
+    syncEdgePortIds(next)
+    emit('updateDiagram', next)
+  }
+}
+
+function applyNodePositionsToDiagram(diagramAttrs: DiagramAttrs, papNodeIds: string[]): boolean {
+  return applyNodePositionsToDiagramAttrs(
+    diagramAttrs,
+    papNodeIds,
+    nodeIdToInstance,
+    papNodeId => renderer?.getNode(papNodeId)
+  )
 }
 
 /**
@@ -1798,9 +1762,9 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     if (props.readOnly) return
     const allIds = endGroupDrag()
     if (allIds.length > 0) {
-      persistNodePositions(allIds)
+      persistNodePositionsWithEditablePolylineControlPoints(allIds)
     } else {
-      persistNodePositions(_nodeIds)
+      persistNodePositionsWithEditablePolylineControlPoints(_nodeIds)
     }
     // Try auto-create link if dragged node is inside container with group relation
     if (_nodeIds.length === 1) {

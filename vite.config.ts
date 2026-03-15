@@ -19,12 +19,23 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            "vue-vendor": ["vue", "vue-router", "vue-i18n"],
-            papirus: ["@ngroznykh/papirus"],
-            "md-editor": ["md-editor-v3"],
-            "color-picker": ["@ckpack/vue-color"],
-            marked: ["marked"]
+          manualChunks(id) {
+            if (id.includes("node_modules/vue") || id.includes("node_modules/@vue")) {
+              return "vue-vendor";
+            }
+            if (id.includes("@ngroznykh/papirus")) {
+              return "papirus";
+            }
+            if (id.includes("md-editor-v3")) {
+              return "md-editor";
+            }
+            if (id.includes("@ckpack/vue-color")) {
+              return "color-picker";
+            }
+            if (id.includes("node_modules/marked")) {
+              return "marked";
+            }
+            return undefined;
           }
         }
       },
@@ -32,6 +43,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "happy-dom",
+      setupFiles: ["./src/test/setup.ts"],
     },
     server: {
       proxy: {

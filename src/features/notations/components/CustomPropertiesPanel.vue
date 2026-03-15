@@ -435,7 +435,7 @@ onBeforeUnmount(() => {
                 class="add-menu__item"
                 @click="addMissingTypeProperty(prop)"
               >
-                <UiIcon name="linked_services" />
+                <UiIcon name="link" />
                 {{ prop.name }} ({{ typeLabel(prop.type) }})
               </button>
               <div v-if="missingTypeProperties.length === 0" class="add-menu__empty">

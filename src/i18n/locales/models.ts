@@ -122,8 +122,11 @@ export const modelsMessages = {
       compareToggleBase: 'Переключить базу',
       compareSelectedElement: 'Выбранный элемент',
       comparePropName: 'Свойство',
+      compareLinkRoute: 'Маршрут связи',
       comparePropWas: 'Было (слева)',
+      comparePropWasRight: 'Было (справа)',
       comparePropBecame: 'Стало (справа)',
+      comparePropBecameLeft: 'Стало (слева)',
     },
   },
   en: {
@@ -248,8 +251,11 @@ export const modelsMessages = {
       compareToggleBase: 'Switch base',
       compareSelectedElement: 'Selected element',
       comparePropName: 'Property',
+      compareLinkRoute: 'Link route',
       comparePropWas: 'Was (left)',
+      comparePropWasRight: 'Was (right)',
       comparePropBecame: 'Became (right)',
+      comparePropBecameLeft: 'Became (left)',
     },
   },
 }

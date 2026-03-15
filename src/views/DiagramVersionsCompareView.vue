@@ -29,6 +29,10 @@ import {
   parseNodeAttrs,
 } from "@/features/models/modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "@/features/models/types"
+import {
+  getDiagramScopedLinkMap,
+  getDiagramScopedNodeMap,
+} from "@/features/models/utils/diagramScopedProperties"
 
 const route = useRoute()
 const router = useRouter()
@@ -65,7 +69,14 @@ const { propsPanelHeight, startPropsPanelResize } = useResizablePropsPanel(
 
 type SelectedElement =
   | { kind: "node"; path: string; side: "left" | "right" }
-  | { kind: "link"; sourcePath: string; targetPath: string; linkTypeId: string; side: "left" | "right" }
+  | {
+      kind: "link"
+      sourcePath: string
+      targetPath: string
+      linkTypeId: string
+      side: "left" | "right"
+      edgeInstanceId?: string
+    }
 const selectedElement = ref<SelectedElement | null>(null)
 
 async function loadVersionData(): Promise<void> {
@@ -269,12 +280,13 @@ const diff = computed(() => {
 
 function buildEdges(links: LinkResponse[]) {
   const linkById = new Map(links.map((l) => [l.id, l]))
-  return (edgeRefs: Array<{ modelLinkId: string }>) =>
+  return (edgeRefs: Array<{ id: string; modelLinkId: string }>) =>
     edgeRefs
       .map((e) => {
         const link = linkById.get(e.modelLinkId)
         return link
           ? {
+              edgeInstanceId: e.id,
               modelLinkId: e.modelLinkId,
               sourceId: link.sourceId,
               targetId: link.targetId,
@@ -283,6 +295,7 @@ function buildEdges(links: LinkResponse[]) {
         : null
       })
       .filter(Boolean) as Array<{
+        edgeInstanceId: string
         modelLinkId: string
         sourceId: string
         targetId: string
@@ -290,14 +303,67 @@ function buildEdges(links: LinkResponse[]) {
       }>
 }
 
+const leftDiagramEdgeInstanceIds = computed(() => {
+  const instances = leftDiagram.value?.parsedAttrs?.instances
+  return new Set((instances?.edges ?? []).map((e) => e.id))
+})
+
+const rightDiagramEdgeInstanceIds = computed(() => {
+  const instances = rightDiagram.value?.parsedAttrs?.instances
+  return new Set((instances?.edges ?? []).map((e) => e.id))
+})
+
+const leftEdgeInstanceSignatures = computed(() => {
+  const instances = leftDiagram.value?.parsedAttrs?.instances
+  const byId = new Map<string, string>()
+  for (const e of instances?.edges ?? []) {
+    const attrs = (e.attrs ?? {}) as Record<string, unknown>
+    const fromPort = typeof attrs.fromPortId === 'string' ? attrs.fromPortId : ''
+    const toPort = typeof attrs.toPortId === 'string' ? attrs.toPortId : ''
+    const fromOutline = typeof attrs.fromOutlineParam === 'number' ? attrs.fromOutlineParam : ''
+    const toOutline = typeof attrs.toOutlineParam === 'number' ? attrs.toOutlineParam : ''
+    byId.set(
+      e.id,
+      `${e.modelLinkId}|${e.sourceInstanceId}|${e.targetInstanceId}|${fromPort}|${toPort}|${fromOutline}|${toOutline}`
+    )
+  }
+  return byId
+})
+
+const rightEdgeInstanceSignatures = computed(() => {
+  const instances = rightDiagram.value?.parsedAttrs?.instances
+  const byId = new Map<string, string>()
+  for (const e of instances?.edges ?? []) {
+    const attrs = (e.attrs ?? {}) as Record<string, unknown>
+    const fromPort = typeof attrs.fromPortId === 'string' ? attrs.fromPortId : ''
+    const toPort = typeof attrs.toPortId === 'string' ? attrs.toPortId : ''
+    const fromOutline = typeof attrs.fromOutlineParam === 'number' ? attrs.fromOutlineParam : ''
+    const toOutline = typeof attrs.toOutlineParam === 'number' ? attrs.toOutlineParam : ''
+    byId.set(
+      e.id,
+      `${e.modelLinkId}|${e.sourceInstanceId}|${e.targetInstanceId}|${fromPort}|${toPort}|${fromOutline}|${toOutline}`
+    )
+  }
+  return byId
+})
+
+const useEdgeInstanceIdMatching = computed(() => {
+  const leftIds = leftDiagramEdgeInstanceIds.value
+  const rightIds = rightDiagramEdgeInstanceIds.value
+  for (const id of leftIds) {
+    if (rightIds.has(id)) return true
+  }
+  return false
+})
+
 const leftDiffState = computed(() => {
   const d = diff.value
   const diagram = leftDiagram.value
   const left = leftData.value
   const right = rightData.value
-  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const instances = diagram.parsedAttrs?.instances
-  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
   const edges = buildEdges(left.links)(instances.edges)
   return buildDiagramDiffStateMaps(
@@ -312,6 +378,10 @@ const leftDiffState = computed(() => {
     {
       otherSideStableIds: rightDiagramStableIds.value,
       currentStableIds: leftCurrentStableIds.value,
+      otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
+      otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+      currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     }
   )
 })
@@ -321,9 +391,9 @@ const rightDiffState = computed(() => {
   const diagram = rightDiagram.value
   const left = leftData.value
   const right = rightData.value
-  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const instances = diagram.parsedAttrs?.instances
-  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
   const edges = buildEdges(right.links)(instances.edges)
   return buildDiagramDiffStateMaps(
@@ -338,6 +408,10 @@ const rightDiffState = computed(() => {
     {
       otherSideStableIds: leftDiagramStableIds.value,
       currentStableIds: rightCurrentStableIds.value,
+      otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
+      otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+      currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     }
   )
 })
@@ -357,9 +431,9 @@ const leftDiffStateWhenRightIsBase = computed(() => {
   const diagram = leftDiagram.value
   const left = leftData.value
   const right = rightData.value
-  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const instances = diagram.parsedAttrs?.instances
-  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
   const edges = buildEdges(left.links)(instances.edges)
   return buildDiagramDiffStateMaps(
@@ -374,6 +448,10 @@ const leftDiffStateWhenRightIsBase = computed(() => {
     {
       otherSideStableIds: rightDiagramStableIds.value,
       currentStableIds: leftCurrentStableIds.value,
+      otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
+      otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+      currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     }
   )
 })
@@ -383,9 +461,9 @@ const rightDiffStateWhenRightIsBase = computed(() => {
   const diagram = rightDiagram.value
   const left = leftData.value
   const right = rightData.value
-  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const instances = diagram.parsedAttrs?.instances
-  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {}, diffStateByEdgeInstanceId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
   const edges = buildEdges(right.links)(instances.edges)
   return buildDiagramDiffStateMaps(
@@ -400,6 +478,10 @@ const rightDiffStateWhenRightIsBase = computed(() => {
     {
       otherSideStableIds: leftDiagramStableIds.value,
       currentStableIds: rightCurrentStableIds.value,
+      otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
+      otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+      currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     }
   )
 })
@@ -440,6 +522,34 @@ function handleLeftSelectLink(linkId: string): void {
     }
 }
 
+function handleLeftSelectEdgeInstanceId(edgeInstanceId: string | null): void {
+  if (!edgeInstanceId) return
+  const diagram = leftDiagram.value
+  const data = versionData.value
+  if (!diagram || !data) return
+  const instances = diagram.parsedAttrs?.instances
+  if (!instances) return
+  const edgeInst = instances.edges.find((e) => e.id === edgeInstanceId)
+  if (!edgeInst) return
+  const link = data.links.find((l) => l.id === edgeInst.modelLinkId)
+  if (!link || !leftPathMap.value) return
+  const nodeInstanceToModelNodeId = new Map(instances.nodes.map((n) => [n.id, n.modelNodeId]))
+  const sourceModelNodeId = nodeInstanceToModelNodeId.get(edgeInst.sourceInstanceId) ?? link.sourceId
+  const targetModelNodeId = nodeInstanceToModelNodeId.get(edgeInst.targetInstanceId) ?? link.targetId
+  const sp = leftPathMap.value.get(sourceModelNodeId)
+  const tp = leftPathMap.value.get(targetModelNodeId)
+  if (sp !== undefined && tp !== undefined) {
+    selectedElement.value = {
+      kind: "link",
+      sourcePath: sp,
+      targetPath: tp,
+      linkTypeId: link.linkTypeId,
+      side: "left",
+      edgeInstanceId,
+    }
+  }
+}
+
 function handleRightSelectNodes(ids: string[]): void {
   if (ids.length !== 1 || !rightPathMap.value) return
   const path = rightPathMap.value.get(ids[0]!)
@@ -459,6 +569,34 @@ function handleRightSelectLink(linkId: string): void {
       linkTypeId: link.linkTypeId,
       side: "right",
     }
+}
+
+function handleRightSelectEdgeInstanceId(edgeInstanceId: string | null): void {
+  if (!edgeInstanceId) return
+  const diagram = rightDiagram.value
+  const data = versionData.value
+  if (!diagram || !data) return
+  const instances = diagram.parsedAttrs?.instances
+  if (!instances) return
+  const edgeInst = instances.edges.find((e) => e.id === edgeInstanceId)
+  if (!edgeInst) return
+  const link = data.links.find((l) => l.id === edgeInst.modelLinkId)
+  if (!link || !rightPathMap.value) return
+  const nodeInstanceToModelNodeId = new Map(instances.nodes.map((n) => [n.id, n.modelNodeId]))
+  const sourceModelNodeId = nodeInstanceToModelNodeId.get(edgeInst.sourceInstanceId) ?? link.sourceId
+  const targetModelNodeId = nodeInstanceToModelNodeId.get(edgeInst.targetInstanceId) ?? link.targetId
+  const sp = rightPathMap.value.get(sourceModelNodeId)
+  const tp = rightPathMap.value.get(targetModelNodeId)
+  if (sp !== undefined && tp !== undefined) {
+    selectedElement.value = {
+      kind: "link",
+      sourcePath: sp,
+      targetPath: tp,
+      linkTypeId: link.linkTypeId,
+      side: "right",
+      edgeInstanceId,
+    }
+  }
 }
 
 function linkKey(sp: string, tp: string, lt: string): string {
@@ -509,6 +647,43 @@ const rightByLinkKey = computed(() => {
   return map
 })
 
+function resolveLinkSideSnapshot(
+  side: "left" | "right",
+  edgeInstanceId: string | undefined
+): { link: LinkResponse | null; sourcePath: string | null; targetPath: string | null } {
+  const diagram = side === "left" ? leftDiagram.value : rightDiagram.value
+  const data = versionData.value
+  const pathMap = side === "left" ? leftPathMap.value : rightPathMap.value
+  if (!diagram || !data || !edgeInstanceId) {
+    return { link: null, sourcePath: null, targetPath: null }
+  }
+
+  const instances = diagram.parsedAttrs?.instances
+  if (!instances) {
+    return { link: null, sourcePath: null, targetPath: null }
+  }
+
+  const edgeInst = instances.edges.find((e) => e.id === edgeInstanceId)
+  if (!edgeInst) {
+    return { link: null, sourcePath: null, targetPath: null }
+  }
+
+  const link = data.links.find((l) => l.id === edgeInst.modelLinkId) ?? null
+  if (!link) {
+    return { link: null, sourcePath: null, targetPath: null }
+  }
+
+  const nodeInstanceToModelNodeId = new Map(instances.nodes.map((n) => [n.id, n.modelNodeId]))
+  const sourceModelNodeId = nodeInstanceToModelNodeId.get(edgeInst.sourceInstanceId) ?? link.sourceId
+  const targetModelNodeId = nodeInstanceToModelNodeId.get(edgeInst.targetInstanceId) ?? link.targetId
+
+  return {
+    link,
+    sourcePath: pathMap.get(sourceModelNodeId) ?? null,
+    targetPath: pathMap.get(targetModelNodeId) ?? null,
+  }
+}
+
 function formatPropValue(v: unknown): string {
   if (v === undefined || v === null) return "—"
   if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v)
@@ -544,12 +719,43 @@ function flattenRelationProperties(
   return out
 }
 
+function getNodePropertiesForSide(
+  side: "left" | "right",
+  modelNodeId: string
+): Record<string, Record<string, Record<string, unknown>>> {
+  const diagram = side === "left" ? leftDiagram.value : rightDiagram.value
+  const node = versionData.value?.nodes.find(item => item.id === modelNodeId)
+  return getDiagramScopedNodeMap({
+    diagram: diagram?.parsedAttrs,
+    modelNodeId,
+    nodeAttrsFallback: node ? parseNodeAttrs(node.attrs) : null,
+  })
+}
+
+function getLinkPropertiesForSide(
+  side: "left" | "right",
+  modelLinkId: string,
+  edgeInstanceId?: string
+): Record<string, Record<string, Record<string, unknown>>> {
+  const diagram = side === "left" ? leftDiagram.value : rightDiagram.value
+  const link = versionData.value?.links.find(item => item.id === modelLinkId)
+  return getDiagramScopedLinkMap({
+    diagram: diagram?.parsedAttrs,
+    modelLinkId,
+    linkAttrsFallback: link ? parseLinkAttrs(link.attrs) : null,
+    edgeInstanceId,
+  })
+}
+
 type PropertyRow = { key: string; base: string; target: string; changed: boolean }
 const selectedPropertyRows = computed<PropertyRow[]>(() => {
   const sel = selectedElement.value
   if (!sel) return []
-  const leftPathMap = leftByPath.value
-  const rightPathMap = rightByPath.value
+  const isLeftBase = baseSide.value === "left"
+  const leftNodeByPath = leftByPath.value
+  const rightNodeByPath = rightByPath.value
+  const leftNodePathMap = leftPathMap.value
+  const rightNodePathMap = rightPathMap.value
   const leftLinkMap = leftByLinkKey.value
   const rightLinkMap = rightByLinkKey.value
   const leftDiff = leftCanvasDiffState.value.diffStateByModelNodeId
@@ -567,21 +773,25 @@ const selectedPropertyRows = computed<PropertyRow[]>(() => {
     rightLinkDiff[modelLinkId] === "removed" || rightLinkDiff[modelLinkId] === "added"
 
   if (sel.kind === "node") {
-    const leftNode = leftPathMap.get(sel.path)
-    const rightNode = rightPathMap.get(sel.path)
+    const leftNode = leftNodeByPath.get(sel.path)
+    const rightNode = rightNodeByPath.get(sel.path)
     const rightAbsent = leftNode && sel.side === "left" && hideRight(leftNode.id)
     const leftAbsent = rightNode && sel.side === "right" && hideLeft(rightNode.id)
-    const leftAttrs = leftNode ? parseNodeAttrs(leftNode.attrs) : null
-    const rightAttrs = rightNode ? parseNodeAttrs(rightNode.attrs) : null
+    const leftScopedMap = leftNode ? getNodePropertiesForSide("left", leftNode.id) : {}
+    const rightScopedMap = rightNode ? getNodePropertiesForSide("right", rightNode.id) : {}
     const rows: PropertyRow[] = []
     rows.push({
       key: "name",
-      base: leftAbsent ? "—" : leftNode ? leftNode.name : "—",
-      target: rightAbsent ? "—" : rightNode ? rightNode.name : "—",
+      base: isLeftBase
+        ? leftAbsent ? "—" : leftNode ? leftNode.name : "—"
+        : rightAbsent ? "—" : rightNode ? rightNode.name : "—",
+      target: isLeftBase
+        ? rightAbsent ? "—" : rightNode ? rightNode.name : "—"
+        : leftAbsent ? "—" : leftNode ? leftNode.name : "—",
       changed: leftAbsent || rightAbsent || (leftNode?.name ?? "") !== (rightNode?.name ?? ""),
     })
-    const leftFlat = leftAttrs ? flattenComponentProperties(leftAttrs.componentProperties) : []
-    const rightFlat = rightAttrs ? flattenComponentProperties(rightAttrs.componentProperties) : []
+    const leftFlat = flattenComponentProperties(leftScopedMap)
+    const rightFlat = flattenComponentProperties(rightScopedMap)
     const allKeys = new Set([...leftFlat.map((x) => x.key), ...rightFlat.map((x) => x.key)])
     const leftByKey = new Map(leftFlat.map((x) => [x.key, x.value]))
     const rightByKey = new Map(rightFlat.map((x) => [x.key, x.value]))
@@ -590,33 +800,112 @@ const selectedPropertyRows = computed<PropertyRow[]>(() => {
       const rightVal = rightAbsent ? undefined : rightByKey.get(key)
       const leftStr = formatPropValue(leftVal)
       const rightStr = formatPropValue(rightVal)
-      rows.push({ key, base: leftStr, target: rightStr, changed: leftStr !== rightStr })
+      rows.push({
+        key,
+        base: isLeftBase ? leftStr : rightStr,
+        target: isLeftBase ? rightStr : leftStr,
+        changed: leftStr !== rightStr,
+      })
     }
     return rows
   } else {
+    const leftSnapshot = resolveLinkSideSnapshot("left", sel.edgeInstanceId)
+    const rightSnapshot = resolveLinkSideSnapshot("right", sel.edgeInstanceId)
     const lk = linkKey(sel.sourcePath, sel.targetPath, sel.linkTypeId)
-    const leftLink = leftLinkMap.get(lk)
-    const rightLink = rightLinkMap.get(lk)
+    const leftLink = leftSnapshot.link ?? leftLinkMap.get(lk)
+    const rightLink = rightSnapshot.link ?? rightLinkMap.get(lk)
     const rightAbsent = leftLink && sel.side === "left" && hideRightLink(leftLink.id)
     const leftAbsent = rightLink && sel.side === "right" && hideLeftLink(rightLink.id)
-    const leftAttrs = leftLink ? parseLinkAttrs(leftLink.attrs) : null
-    const rightAttrs = rightLink ? parseLinkAttrs(rightLink.attrs) : null
-    const leftFlat = leftAttrs ? flattenRelationProperties(leftAttrs.relationProperties) : []
-    const rightFlat = rightAttrs ? flattenRelationProperties(rightAttrs.relationProperties) : []
+    const leftRouteSource =
+      leftSnapshot.sourcePath ?? (leftLink ? (leftNodePathMap.get(leftLink.sourceId) ?? null) : null)
+    const leftRouteTarget =
+      leftSnapshot.targetPath ?? (leftLink ? (leftNodePathMap.get(leftLink.targetId) ?? null) : null)
+    const rightRouteSource =
+      rightSnapshot.sourcePath ?? (rightLink ? (rightNodePathMap.get(rightLink.sourceId) ?? null) : null)
+    const rightRouteTarget =
+      rightSnapshot.targetPath ?? (rightLink ? (rightNodePathMap.get(rightLink.targetId) ?? null) : null)
+
+    const leftRoute =
+      leftRouteSource && leftRouteTarget
+        ? `${pathForDisplay(leftRouteSource)} -> ${pathForDisplay(leftRouteTarget)}`
+        : "—"
+    const rightRoute =
+      rightRouteSource && rightRouteTarget
+        ? `${pathForDisplay(rightRouteSource)} -> ${pathForDisplay(rightRouteTarget)}`
+        : "—"
+    const leftScopedMap = leftLink
+      ? getLinkPropertiesForSide("left", leftLink.id, sel.edgeInstanceId)
+      : {}
+    const rightScopedMap = rightLink
+      ? getLinkPropertiesForSide("right", rightLink.id, sel.edgeInstanceId)
+      : {}
+    const leftFlat = flattenRelationProperties(leftScopedMap)
+    const rightFlat = flattenRelationProperties(rightScopedMap)
     const allKeys = new Set([...leftFlat.map((x) => x.key), ...rightFlat.map((x) => x.key)])
     const leftByKey = new Map(leftFlat.map((x) => [x.key, x.value]))
     const rightByKey = new Map(rightFlat.map((x) => [x.key, x.value]))
-    const rows: PropertyRow[] = []
+    const rows: PropertyRow[] = [
+      {
+        key: t('models.compareLinkRoute'),
+        base: isLeftBase ? leftRoute : rightRoute,
+        target: isLeftBase ? rightRoute : leftRoute,
+        changed: leftRoute !== rightRoute,
+      },
+    ]
     for (const key of Array.from(allKeys).sort()) {
       const leftVal = leftAbsent ? undefined : leftByKey.get(key)
       const rightVal = rightAbsent ? undefined : rightByKey.get(key)
       const leftStr = formatPropValue(leftVal)
       const rightStr = formatPropValue(rightVal)
-      rows.push({ key, base: leftStr, target: rightStr, changed: leftStr !== rightStr })
+      rows.push({
+        key,
+        base: isLeftBase ? leftStr : rightStr,
+        target: isLeftBase ? rightStr : leftStr,
+        changed: leftStr !== rightStr,
+      })
     }
     return rows
   }
 })
+
+const selectedElementDiffKind = computed<'added' | 'removed' | 'modified' | null>(() => {
+  const sel = selectedElement.value
+  if (!sel) return null
+
+  if (sel.kind === "node") {
+    const node = (sel.side === "left" ? leftByPath.value : rightByPath.value).get(sel.path)
+    if (!node) return null
+    const diffMap =
+      sel.side === "left"
+        ? leftCanvasDiffState.value.diffStateByModelNodeId
+        : rightCanvasDiffState.value.diffStateByModelNodeId
+    return diffMap[node.id] ?? null
+  }
+
+  const sideDiffState = sel.side === "left" ? leftCanvasDiffState.value : rightCanvasDiffState.value
+  if (sel.edgeInstanceId) {
+    const byEdge = sideDiffState.diffStateByEdgeInstanceId[sel.edgeInstanceId]
+    if (byEdge) return byEdge
+  }
+
+  const lk = linkKey(sel.sourcePath, sel.targetPath, sel.linkTypeId)
+  const sideSnapshot = resolveLinkSideSnapshot(sel.side, sel.edgeInstanceId)
+  const sideLink =
+    sideSnapshot.link ??
+    (sel.side === "left" ? leftByLinkKey.value : rightByLinkKey.value).get(lk)
+  if (!sideLink) return null
+  return sideDiffState.diffStateByModelLinkId[sideLink.id] ?? null
+})
+
+const comparePropWasLabel = computed(() =>
+  baseSide.value === "left" ? t('models.comparePropWas') : t('models.comparePropWasRight')
+)
+
+const comparePropBecameLabel = computed(() =>
+  baseSide.value === "left" ? t('models.comparePropBecame') : t('models.comparePropBecameLeft')
+)
+
+const isLeftBaseForProps = computed(() => baseSide.value === "left")
 
 function pathForDisplay(path: string): string {
   return path.startsWith("Root/") ? path.slice(5) : path
@@ -793,8 +1082,10 @@ watch(
                   :read-only="true"
                   :diff-state-by-model-node-id="leftCanvasDiffState.diffStateByModelNodeId"
                   :diff-state-by-model-link-id="leftCanvasDiffState.diffStateByModelLinkId"
+                  :diff-state-by-edge-instance-id="leftCanvasDiffState.diffStateByEdgeInstanceId"
                   @select-nodes="handleLeftSelectNodes"
                   @select-link="handleLeftSelectLink"
+                  @select-edge-instance-id="handleLeftSelectEdgeInstanceId"
                 />
                 <div v-else class="dc__placeholder">
                   {{ leftDiagram ? t('common.loading') : t('models.compareNoDiagram') }}
@@ -838,8 +1129,10 @@ watch(
                   :read-only="true"
                   :diff-state-by-model-node-id="rightCanvasDiffState.diffStateByModelNodeId"
                   :diff-state-by-model-link-id="rightCanvasDiffState.diffStateByModelLinkId"
+                  :diff-state-by-edge-instance-id="rightCanvasDiffState.diffStateByEdgeInstanceId"
                   @select-nodes="handleRightSelectNodes"
                   @select-link="handleRightSelectLink"
+                  @select-edge-instance-id="handleRightSelectEdgeInstanceId"
                 />
                 <div v-else class="dc__placeholder">
                   {{ rightDiagram ? t('common.loading') : t('models.compareNoDiagram') }}
@@ -874,8 +1167,8 @@ watch(
               <thead>
                 <tr>
                   <th>{{ t('models.comparePropName') }}</th>
-                  <th>{{ t('models.comparePropWas') }}</th>
-                  <th>{{ t('models.comparePropBecame') }}</th>
+                  <th>{{ isLeftBaseForProps ? comparePropWasLabel : comparePropBecameLabel }}</th>
+                  <th>{{ isLeftBaseForProps ? comparePropBecameLabel : comparePropWasLabel }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -885,8 +1178,28 @@ watch(
                   :class="{ 'dc__row--diff': row.changed }"
                 >
                   <td class="dc__cell-key">{{ row.key }}</td>
-                  <td :class="row.changed ? 'dc__cell--old' : ''">{{ row.base }}</td>
-                  <td :class="row.changed ? 'dc__cell--new' : ''">{{ row.target }}</td>
+                  <td
+                    :class="
+                      row.changed
+                        ? selectedElementDiffKind === 'modified'
+                          ? 'dc__cell--modified'
+                          : (isLeftBaseForProps ? 'dc__cell--old' : 'dc__cell--new')
+                        : ''
+                    "
+                  >
+                    {{ isLeftBaseForProps ? row.base : row.target }}
+                  </td>
+                  <td
+                    :class="
+                      row.changed
+                        ? selectedElementDiffKind === 'modified'
+                          ? 'dc__cell--modified'
+                          : (isLeftBaseForProps ? 'dc__cell--new' : 'dc__cell--old')
+                        : ''
+                    "
+                  >
+                    {{ isLeftBaseForProps ? row.target : row.base }}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -1261,6 +1574,12 @@ watch(
 .dc__cell--new {
   color: var(--success);
   background: var(--success-soft);
+  font-weight: 500;
+}
+
+.dc__cell--modified {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
   font-weight: 500;
 }
 </style>

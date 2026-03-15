@@ -47,6 +47,21 @@ const interactiveKindOptions: { value: InteractiveKind; label: string }[] = [
 const typeLabel = (type: CustomPropertyType) =>
   typeOptions.find((o) => o.value === type)?.label ?? type
 
+const typeIconName = (type: CustomPropertyType): string => {
+  switch (type) {
+    case 'string':
+      return 'text_fields'
+    case 'number':
+      return 'numbers'
+    case 'boolean':
+      return 'toggle_on'
+    case 'enum':
+      return 'list_alt'
+    default:
+      return 'category'
+  }
+}
+
 /** Default regex for URL validation when interactive kind is "url". */
 const DEFAULT_URL_REGEX = '^https?:\\/\\/\\S+$'
 
@@ -161,13 +176,16 @@ function handleInteractiveIconChange(value: string) {
         :class="{ 'property-row__chevron--collapsed': !expanded }"
       />
       <span class="property-row__name">{{ property.name || t("common.unnamed") }}</span>
-      <span class="property-row__type-badge">{{ typeLabel(property.type) }}</span>
+      <span class="property-row__type-badge">
+        <UiIcon :name="typeIconName(property.type)" class="property-row__type-icon" />
+        {{ typeLabel(property.type) }}
+      </span>
       <span
         v-if="showFromTypeBadge"
         class="property-row__from-type-badge"
         :title="t('types.inheritedFromType')"
       >
-        <UiIcon name="linked_services" class="property-row__from-type-icon" />
+        <UiIcon name="link" class="property-row__from-type-icon" />
         {{ t("types.typeShort") }}
       </span>
       <span v-if="property.system" class="property-row__system-badge">{{ t("types.systemShort") }}</span>
@@ -427,6 +445,9 @@ function handleInteractiveIconChange(value: string) {
 }
 
 .property-row__type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-weight: 500;
   color: var(--primary);
@@ -435,6 +456,10 @@ function handleInteractiveIconChange(value: string) {
   border-radius: 6px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.property-row__type-icon {
+  font-size: 13px;
 }
 
 .property-row__required-badge {

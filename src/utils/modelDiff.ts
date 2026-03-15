@@ -272,6 +272,7 @@ export function computeModelDiff(
 export type DiagramDiffStateMaps = {
   diffStateByModelNodeId: Record<string, "added" | "removed" | "modified">
   diffStateByModelLinkId: Record<string, "added" | "removed" | "modified">
+  diffStateByEdgeInstanceId: Record<string, "added" | "removed" | "modified">
 }
 
 /**
@@ -288,6 +289,7 @@ export function buildDiagramDiffStateMaps(
   _targetLinks: LinkResponse[],
   instanceNodeIds: string[],
   instanceEdges: Array<{
+    edgeInstanceId: string
     modelLinkId: string
     sourceId: string
     targetId: string
@@ -305,6 +307,18 @@ export function buildDiagramDiffStateMaps(
       nodeIdToStableId: Map<string, string>
       linkIdToStableId: Map<string, string>
     }
+    /**
+     * ids экземпляров рёбер на противоположной диаграмме (для точного сравнения "есть здесь, нет там")
+     */
+    otherSideEdgeInstanceIds?: Set<string>
+    /** Сигнатуры экземпляров рёбер на противоположной диаграмме (edgeInstanceId -> signature). */
+    otherSideEdgeInstanceSignatures?: Map<string, string>
+    /** Сигнатуры экземпляров рёбер на текущей диаграмме (edgeInstanceId -> signature). */
+    currentEdgeInstanceSignatures?: Map<string, string>
+    /**
+     * Включать сравнение по id экземпляра ребра только если id между сторонами реально коррелируют.
+     */
+    useEdgeInstanceIdMatching?: boolean
   }
 ): DiagramDiffStateMaps {
   const removedNodeIds = new Set(
@@ -334,6 +348,10 @@ export function buildDiagramDiffStateMaps(
 
   const otherStableIds = options?.otherSideStableIds
   const currentStableIds = options?.currentStableIds
+  const otherSideEdgeInstanceIds = options?.otherSideEdgeInstanceIds
+  const otherSideEdgeInstanceSignatures = options?.otherSideEdgeInstanceSignatures
+  const currentEdgeInstanceSignatures = options?.currentEdgeInstanceSignatures
+  const useEdgeInstanceIdMatching = options?.useEdgeInstanceIdMatching ?? false
 
   const diffStateByModelNodeId: Record<string, "added" | "removed" | "modified"> = {}
   for (const nodeId of instanceNodeIds) {
@@ -350,18 +368,41 @@ export function buildDiagramDiffStateMaps(
   }
 
   const diffStateByModelLinkId: Record<string, "added" | "removed" | "modified"> = {}
+  const diffStateByEdgeInstanceId: Record<string, "added" | "removed" | "modified"> = {}
   for (const edge of instanceEdges) {
     const stableId = currentStableIds?.linkIdToStableId.get(edge.modelLinkId) ?? edge.modelLinkId
     const absentOnOtherByStableId =
       otherStableIds?.linkStableIds ? !otherStableIds.linkStableIds.has(stableId) : false
+    const absentOnOtherByEdgeInstanceId =
+      useEdgeInstanceIdMatching && otherSideEdgeInstanceIds
+        ? !otherSideEdgeInstanceIds.has(edge.edgeInstanceId)
+        : false
+    const modifiedByEdgeInstanceSignature =
+      useEdgeInstanceIdMatching &&
+      !!otherSideEdgeInstanceIds?.has(edge.edgeInstanceId) &&
+      !!currentEdgeInstanceSignatures &&
+      !!otherSideEdgeInstanceSignatures &&
+      currentEdgeInstanceSignatures.get(edge.edgeInstanceId) !==
+        otherSideEdgeInstanceSignatures.get(edge.edgeInstanceId)
+    const isAbsentOnOther = absentOnOtherByStableId || absentOnOtherByEdgeInstanceId
     if (side === "base") {
-      if (removedLinkIds.has(edge.modelLinkId) || absentOnOtherByStableId) diffStateByModelLinkId[edge.modelLinkId] = "removed"
-      else if (modifiedBaseLinkIds.has(edge.modelLinkId)) diffStateByModelLinkId[edge.modelLinkId] = "modified"
+      if (removedLinkIds.has(edge.modelLinkId) || isAbsentOnOther) {
+        diffStateByModelLinkId[edge.modelLinkId] = "removed"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "removed"
+      } else if (modifiedBaseLinkIds.has(edge.modelLinkId) || modifiedByEdgeInstanceSignature) {
+        diffStateByModelLinkId[edge.modelLinkId] = "modified"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "modified"
+      }
     } else {
-      if (addedLinkIds.has(edge.modelLinkId) || absentOnOtherByStableId) diffStateByModelLinkId[edge.modelLinkId] = "added"
-      else if (modifiedTargetLinkIds.has(edge.modelLinkId)) diffStateByModelLinkId[edge.modelLinkId] = "modified"
+      if (addedLinkIds.has(edge.modelLinkId) || isAbsentOnOther) {
+        diffStateByModelLinkId[edge.modelLinkId] = "added"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "added"
+      } else if (modifiedTargetLinkIds.has(edge.modelLinkId) || modifiedByEdgeInstanceSignature) {
+        diffStateByModelLinkId[edge.modelLinkId] = "modified"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "modified"
+      }
     }
   }
 
-  return { diffStateByModelNodeId, diffStateByModelLinkId }
+  return { diffStateByModelNodeId, diffStateByModelLinkId, diffStateByEdgeInstanceId }
 }

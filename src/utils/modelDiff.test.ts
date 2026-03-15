@@ -7,6 +7,7 @@ import {
   compareLinks,
   compareDiagrams,
   computeModelDiff,
+  buildDiagramDiffStateMaps,
 } from '@/utils/modelDiff'
 
 // ---------------------------------------------------------------------------
@@ -378,5 +379,117 @@ describe('computeModelDiff', () => {
     const diff = computeModelDiff(base, target)
     // latest base is d1New which equals target → no diff
     expect(diff.diagrams).toEqual([])
+  })
+})
+
+describe('buildDiagramDiffStateMaps edge instance matching', () => {
+  it('marks base edge as removed when instance id is absent on other side', () => {
+    const state = buildDiagramDiffStateMaps(
+      { nodes: [], links: [], diagrams: [] },
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [
+        {
+          edgeInstanceId: 'edge-inst-1',
+          modelLinkId: 'link-1',
+          sourceId: 'node-1',
+          targetId: 'node-2',
+          linkTypeId: 'lt1',
+        },
+      ],
+      'base',
+      {
+        otherSideStableIds: {
+          nodeStableIds: new Set(),
+          linkStableIds: new Set(['link-1']),
+        },
+        currentStableIds: {
+          nodeIdToStableId: new Map(),
+          linkIdToStableId: new Map([['link-1', 'link-1']]),
+        },
+        otherSideEdgeInstanceIds: new Set<string>(),
+        useEdgeInstanceIdMatching: true,
+      }
+    )
+
+    expect(state.diffStateByModelLinkId['link-1']).toBe('removed')
+    expect(state.diffStateByEdgeInstanceId['edge-inst-1']).toBe('removed')
+  })
+
+  it('does not mark by edge instance id when matching is disabled', () => {
+    const state = buildDiagramDiffStateMaps(
+      { nodes: [], links: [], diagrams: [] },
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [
+        {
+          edgeInstanceId: 'edge-inst-1',
+          modelLinkId: 'link-1',
+          sourceId: 'node-1',
+          targetId: 'node-2',
+          linkTypeId: 'lt1',
+        },
+      ],
+      'base',
+      {
+        otherSideStableIds: {
+          nodeStableIds: new Set(),
+          linkStableIds: new Set(['link-1']),
+        },
+        currentStableIds: {
+          nodeIdToStableId: new Map(),
+          linkIdToStableId: new Map([['link-1', 'link-1']]),
+        },
+        otherSideEdgeInstanceIds: new Set<string>(),
+        useEdgeInstanceIdMatching: false,
+      }
+    )
+
+    expect(state.diffStateByModelLinkId['link-1']).toBeUndefined()
+    expect(state.diffStateByEdgeInstanceId['edge-inst-1']).toBeUndefined()
+  })
+
+  it('marks edge as modified when same instance id has different attachment signature', () => {
+    const state = buildDiagramDiffStateMaps(
+      { nodes: [], links: [], diagrams: [] },
+      new Map(),
+      new Map(),
+      [],
+      [],
+      [],
+      [
+        {
+          edgeInstanceId: 'edge-inst-1',
+          modelLinkId: 'link-1',
+          sourceId: 'node-1',
+          targetId: 'node-2',
+          linkTypeId: 'lt1',
+        },
+      ],
+      'base',
+      {
+        otherSideStableIds: {
+          nodeStableIds: new Set(),
+          linkStableIds: new Set(['link-1']),
+        },
+        currentStableIds: {
+          nodeIdToStableId: new Map(),
+          linkIdToStableId: new Map([['link-1', 'link-1']]),
+        },
+        otherSideEdgeInstanceIds: new Set(['edge-inst-1']),
+        currentEdgeInstanceSignatures: new Map([['edge-inst-1', 'link-1|src-a|dst-a|left|right||']]),
+        otherSideEdgeInstanceSignatures: new Map([['edge-inst-1', 'link-1|src-b|dst-b|left|right||']]),
+        useEdgeInstanceIdMatching: true,
+      }
+    )
+
+    expect(state.diffStateByModelLinkId['link-1']).toBe('modified')
+    expect(state.diffStateByEdgeInstanceId['edge-inst-1']).toBe('modified')
   })
 })

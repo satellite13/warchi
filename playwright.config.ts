@@ -24,6 +24,16 @@ export default defineConfig({
       },
       dependencies: ['setup'],
     },
+    {
+      name: 'slow',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'tests/.auth/user.json',
+        launchOptions: { slowMo: 800 },
+        video: 'on',
+      },
+      dependencies: ['setup'],
+    },
   ],
 
   webServer: {

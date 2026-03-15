@@ -24,6 +24,12 @@ import { useModelToolbarState } from './composables/useModelToolbarState'
 import { useNoteEditor } from './composables/useNoteEditor'
 import { useModelDiagramExport } from './composables/useModelDiagramExport'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
+import {
+  getDiagramScopedLinkValues,
+  getDiagramScopedNodeValues,
+  setDiagramScopedLinkValue,
+  setDiagramScopedNodeValue,
+} from './utils/diagramScopedProperties'
 import { useAuth } from '../../composables/useAuth'
 import { getUserDisplayName } from '../../utils/userDisplay'
 import type { UserInfo } from '../../types/entities'
@@ -342,6 +348,29 @@ const selectedLink = computed(() =>
     : null
 )
 
+const selectedNodeInstanceId = computed<string | null>(() => {
+  const selectedElementId = selectedCanvasElementId.value
+  if (selectedElementId?.startsWith('instance-')) {
+    return selectedElementId.slice('instance-'.length)
+  }
+  if (selectedInstanceIds.value.length === 1) {
+    return selectedInstanceIds.value[0] ?? null
+  }
+  const diagram = activeDiagram.value
+  const modelNodeId = selectedNode.value?.id
+  if (!diagram || !modelNodeId) return null
+  return diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
+})
+
+const selectedLinkEdgeInstanceId = computed<string | null>(() => {
+  if (selectedEdgeInstanceId.value) return selectedEdgeInstanceId.value
+  const selectedElementId = selectedCanvasElementId.value
+  if (selectedElementId?.startsWith('edge-')) {
+    return selectedElementId.slice('edge-'.length)
+  }
+  return null
+})
+
 const availableNodeComponents = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
@@ -361,7 +390,14 @@ const nodeScopedValues = computed<Record<string, unknown>>(() => {
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
   if (!notationId || !componentId || !node) return {}
-  return node.parsedAttrs.componentProperties[notationId]?.[componentId] ?? {}
+  return getDiagramScopedNodeValues({
+    diagram: activeDiagram.value?.parsedAttrs,
+    modelNodeId: node.id,
+    notationId,
+    componentId,
+    nodeAttrsFallback: node.parsedAttrs,
+    instanceId: selectedNodeInstanceId.value,
+  })
 })
 
 const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
@@ -467,7 +503,14 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
   const relationId = linkBindingRelationId.value
   const link = selectedLink.value
   if (!notationId || !relationId || !link) return {}
-  return link.parsedAttrs.relationProperties[notationId]?.[relationId] ?? {}
+  return getDiagramScopedLinkValues({
+    diagram: activeDiagram.value?.parsedAttrs,
+    modelLinkId: link.id,
+    notationId,
+    relationId,
+    linkAttrsFallback: link.parsedAttrs,
+    edgeInstanceId: selectedLinkEdgeInstanceId.value,
+  })
 })
 
 const uiError = ref<string | null>(null)
@@ -627,7 +670,14 @@ const extractLinkLabelValue = (link: EditorLink): string => {
     link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
   if (!relationId) return 'без метки'
 
-  const scopedValues = link.parsedAttrs.relationProperties[notationId]?.[relationId]
+  const scopedValues = getDiagramScopedLinkValues({
+    diagram: activeDiagram.value?.parsedAttrs,
+    modelLinkId: link.id,
+    notationId,
+    relationId,
+    linkAttrsFallback: link.parsedAttrs,
+    edgeInstanceId: selectedLinkEdgeInstanceId.value,
+  })
   if (!scopedValues) return 'без метки'
 
   for (const key of ['label', 'name', 'title', 'метка']) {
@@ -1167,8 +1217,13 @@ const validateRequiredCustomProperties = (): string | null => {
       )
       if (requiredProperties.length === 0) continue
 
-      const scopedValues =
-        node.parsedAttrs.componentProperties[notationId]?.[binding.componentId] ?? {}
+      const scopedValues = getDiagramScopedNodeValues({
+        diagram: activeDiagram.value?.parsedAttrs,
+        modelNodeId: node.id,
+        notationId,
+        componentId: binding.componentId,
+        nodeAttrsFallback: node.parsedAttrs,
+      })
       for (const property of requiredProperties) {
         const value = scopedValues[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
@@ -1190,8 +1245,13 @@ const validateRequiredCustomProperties = (): string | null => {
       )
       if (requiredProperties.length === 0) continue
 
-      const scopedValues =
-        link.parsedAttrs.relationProperties[notationId]?.[binding.relationId] ?? {}
+      const scopedValues = getDiagramScopedLinkValues({
+        diagram: activeDiagram.value?.parsedAttrs,
+        modelLinkId: link.id,
+        notationId,
+        relationId: binding.relationId,
+        linkAttrsFallback: link.parsedAttrs,
+      })
       for (const property of requiredProperties) {
         const value = scopedValues[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
@@ -2572,28 +2632,42 @@ const setNodeScopedValue = (key: string, value: unknown) => {
   const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
-  if (!notationId || !componentId || !node) return
-  if (!node.parsedAttrs.componentProperties[notationId])
-    node.parsedAttrs.componentProperties[notationId] = {}
-  if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
-    node.parsedAttrs.componentProperties[notationId][componentId] = {}
+  const diagram = activeDiagram.value
+  if (!notationId || !componentId || !node || !diagram) return
+  const changed = setDiagramScopedNodeValue({
+    diagram: diagram.parsedAttrs,
+    modelNodeId: node.id,
+    notationId,
+    componentId,
+    key,
+    value,
+    nodeAttrsFallback: node.parsedAttrs,
+    instanceId: selectedNodeInstanceId.value,
+  })
+  if (changed) {
+    markDiagramDirty(diagram.id)
   }
-  node.parsedAttrs.componentProperties[notationId][componentId][key] = value
-  markNodeDirty(node.id)
 }
 
 const setLinkScopedValue = (key: string, value: unknown) => {
   const notationId = activeNotationId.value
   const relationId = linkBindingRelationId.value
   const link = selectedLink.value
-  if (!notationId || !relationId || !link) return
-  if (!link.parsedAttrs.relationProperties[notationId])
-    link.parsedAttrs.relationProperties[notationId] = {}
-  if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
-    link.parsedAttrs.relationProperties[notationId][relationId] = {}
+  const diagram = activeDiagram.value
+  if (!notationId || !relationId || !link || !diagram) return
+  const changed = setDiagramScopedLinkValue({
+    diagram: diagram.parsedAttrs,
+    modelLinkId: link.id,
+    notationId,
+    relationId,
+    key,
+    value,
+    linkAttrsFallback: link.parsedAttrs,
+    edgeInstanceId: selectedLinkEdgeInstanceId.value,
+  })
+  if (changed) {
+    markDiagramDirty(diagram.id)
   }
-  link.parsedAttrs.relationProperties[notationId][relationId][key] = value
-  markLinkDirty(link.id)
 }
 
 // Document modal composable — initialized after all dependencies

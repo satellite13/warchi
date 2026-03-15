@@ -638,7 +638,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       snapToGrid: true,
       gridSize: GRID_SIZE,
       alignToNodes: true,
-      alignmentScreenTolerance: 80,
+      alignmentScreenTolerance: 40,
       keymap: { deleteKeys: [] }
     })
     // Notation editor does not support interactive port-to-port connections.

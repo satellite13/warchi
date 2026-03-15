@@ -23,6 +23,16 @@ export type ModelLinkAttrs = {
   relationProperties: Record<string, Record<string, Record<string, unknown>>>
 }
 
+export type ScopedCustomValues = Record<string, Record<string, Record<string, unknown>>>
+
+export type DiagramNodeInstanceAttrs = JsonObject & {
+  componentProperties?: ScopedCustomValues
+}
+
+export type DiagramEdgeInstanceAttrs = JsonObject & {
+  relationProperties?: ScopedCustomValues
+}
+
 export type DiagramNodeInstance = {
   id: string
   modelNodeId: string
@@ -30,7 +40,7 @@ export type DiagramNodeInstance = {
   y: number
   width?: number
   height?: number
-  attrs?: JsonObject
+  attrs?: DiagramNodeInstanceAttrs
 }
 
 export type DiagramEdgeInstance = {
@@ -38,7 +48,7 @@ export type DiagramEdgeInstance = {
   modelLinkId: string
   sourceInstanceId: string
   targetInstanceId: string
-  attrs?: JsonObject
+  attrs?: DiagramEdgeInstanceAttrs
 }
 
 export type DiagramAttrs = {
@@ -68,10 +78,17 @@ const parseJson = (raw: string | null | undefined): JsonObject => {
   return {}
 }
 
+const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
 const toRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {}
+
+const toClonedRecord = (value: unknown): Record<string, unknown> => {
+  const record = toRecord(value)
+  return Object.keys(record).length > 0 ? cloneJson(record) : {}
+}
 
 const toNodeBindings = (value: unknown): Record<string, NodeComponentBinding> => {
   const source = toRecord(value)
@@ -97,18 +114,34 @@ const toLinkBindings = (value: unknown): Record<string, LinkRelationBinding> => 
   return out
 }
 
-const toScopedMap = (value: unknown): Record<string, Record<string, Record<string, unknown>>> => {
+const toScopedMap = (value: unknown): ScopedCustomValues => {
   const source = toRecord(value)
-  const result: Record<string, Record<string, Record<string, unknown>>> = {}
+  const result: ScopedCustomValues = {}
   for (const [notationId, byEntity] of Object.entries(source)) {
     const entityMap = toRecord(byEntity)
     const normalizedEntityMap: Record<string, Record<string, unknown>> = {}
     for (const [entityId, props] of Object.entries(entityMap)) {
-      normalizedEntityMap[entityId] = toRecord(props)
+      normalizedEntityMap[entityId] = toClonedRecord(props)
     }
     result[notationId] = normalizedEntityMap
   }
   return result
+}
+
+const toDiagramNodeAttrs = (value: unknown): DiagramNodeInstanceAttrs => {
+  const attrs = toClonedRecord(value) as DiagramNodeInstanceAttrs
+  if ('componentProperties' in attrs) {
+    attrs.componentProperties = toScopedMap(attrs.componentProperties)
+  }
+  return attrs
+}
+
+const toDiagramEdgeAttrs = (value: unknown): DiagramEdgeInstanceAttrs => {
+  const attrs = toClonedRecord(value) as DiagramEdgeInstanceAttrs
+  if ('relationProperties' in attrs) {
+    attrs.relationProperties = toScopedMap(attrs.relationProperties)
+  }
+  return attrs
 }
 
 const toDiagramNodes = (value: unknown): DiagramNodeInstance[] => {
@@ -123,7 +156,7 @@ const toDiagramNodes = (value: unknown): DiagramNodeInstance[] => {
       y: typeof item.y === 'number' ? item.y : 80,
       width: typeof item.width === 'number' ? item.width : undefined,
       height: typeof item.height === 'number' ? item.height : undefined,
-      attrs: toRecord(item.attrs),
+      attrs: toDiagramNodeAttrs(item.attrs),
     }))
 }
 
@@ -143,7 +176,7 @@ const toDiagramEdges = (value: unknown): DiagramEdgeInstance[] => {
       modelLinkId: item.modelLinkId as string,
       sourceInstanceId: item.sourceInstanceId as string,
       targetInstanceId: item.targetInstanceId as string,
-      attrs: toRecord(item.attrs),
+      attrs: toDiagramEdgeAttrs(item.attrs),
     }))
 }
 

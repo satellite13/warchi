@@ -53,6 +53,7 @@ import {
   readControlPointsFromAttrs,
   readControlPointsFromEdge,
 } from '../utils/diagramCanvasSync'
+import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 
 const props = withDefaults(
   defineProps<{
@@ -82,6 +83,7 @@ const props = withDefaults(
     /** Подсветка diff: красный — удалён, зелёный — добавлен, жёлтый — изменён */
     diffStateByModelNodeId?: Record<string, 'added' | 'removed' | 'modified'>
     diffStateByModelLinkId?: Record<string, 'added' | 'removed' | 'modified'>
+    diffStateByEdgeInstanceId?: Record<string, 'added' | 'removed' | 'modified'>
   }>(),
   {
     connectionValidator: null,
@@ -101,6 +103,7 @@ const props = withDefaults(
     selectedInstanceIds: () => [],
     diffStateByModelNodeId: undefined,
     diffStateByModelLinkId: undefined,
+    diffStateByEdgeInstanceId: undefined,
   }
 )
 
@@ -842,13 +845,23 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
   }
 }
 
-function getNodeScopedPropertyValues(modelNodeId: string): Record<string, unknown> {
+function getNodeScopedPropertyValues(
+  modelNodeId: string,
+  nodeInstanceId?: string
+): Record<string, unknown> {
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return {}
   const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
   if (!componentId) return {}
-  return node.parsedAttrs.componentProperties[notationId]?.[componentId] ?? {}
+  return getDiagramScopedNodeValues({
+    diagram: props.activeDiagram?.parsedAttrs,
+    modelNodeId,
+    notationId,
+    componentId,
+    nodeAttrsFallback: node.parsedAttrs,
+    instanceId: nodeInstanceId,
+  })
 }
 
 function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[] {
@@ -886,7 +899,7 @@ function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{
   const component = props.components.find(c => c.id === componentId)
   if (!component) return []
   const customProperties = parseEntityAttrs(component.attrs ?? null).customProperties
-  const scopedValues = getNodeScopedPropertyValues(instance.modelNodeId)
+  const scopedValues = getNodeScopedPropertyValues(instance.modelNodeId, instance.id)
   const result: Array<{ id: string; iconUrl: string }> = []
   for (const prop of customProperties) {
     if (!prop.interactive) continue
@@ -921,13 +934,14 @@ function resolveLabelTemplate(
 function buildNodeLabel(
   name: string,
   ds?: DiagramStyle,
-  modelNodeId?: string
+  modelNodeId?: string,
+  nodeInstanceId?: string
 ): string | TextLabelOptions {
   const hasTemplate = !!ds?.labelTemplate
   let displayText = name
   if (hasTemplate && modelNodeId) {
     const customProps = getNodeComponentCustomProperties(modelNodeId)
-    const scopedValues = getNodeScopedPropertyValues(modelNodeId)
+    const scopedValues = getNodeScopedPropertyValues(modelNodeId, nodeInstanceId)
     displayText = resolveLabelTemplate(ds!.labelTemplate!, name, customProps, scopedValues)
   }
 
@@ -1060,7 +1074,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     y: instance.y,
     width: visual.width,
     height: visual.height,
-    label: buildNodeLabel(nodeName, ds, instance.modelNodeId),
+    label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
     style: visual.style,
     anchorPoints: resolveAnchorPoints(ds),
     contentInset: (ds?.contentInset ?? 0) as unknown as number,
@@ -1178,7 +1192,7 @@ function syncDiagram() {
       existing.height = visual.height
       existing.style = visual.style
       existing.anchorPoints = resolveAnchorPoints(ds)
-      const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId)
+      const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id)
       if (typeof newLabel === 'string') {
         existing.label = newLabel
       } else {
@@ -1220,7 +1234,8 @@ function syncDiagram() {
 
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveEdgeOptions(ds)
-    const linkDiffState = props.diffStateByModelLinkId?.[edge.modelLinkId]
+    const linkDiffState =
+      props.diffStateByEdgeInstanceId?.[edge.id] ?? props.diffStateByModelLinkId?.[edge.modelLinkId]
     if (linkDiffState) {
       const styleObj = (edgeOpts.style ?? {}) as Record<string, unknown>
       applyDiffOverlayToEdgeStyle(styleObj, linkDiffState)
@@ -1886,7 +1901,7 @@ function initRenderer(r: DiagramRenderer) {
     snapToGrid: snapEnabled.value,
     gridSize: GRID_SIZE,
     alignToNodes: alignEnabled.value,
-    alignmentScreenTolerance: 80,
+    alignmentScreenTolerance: 40,
     attachToOutline: attachToOutlineEnabled.value,
     keymap: { deleteKeys: [] },
     navigationOnly: navOnly,
@@ -1953,7 +1968,7 @@ function initRenderer(r: DiagramRenderer) {
     const customProperties = parseEntityAttrs(component.attrs ?? null).customProperties
     const prop = customProperties.find(p => p.id === badgeId)
     if (!prop || !prop.interactive) return
-    const scopedValues = getNodeScopedPropertyValues(entity.modelNodeId)
+    const scopedValues = getNodeScopedPropertyValues(entity.modelNodeId, entity.instanceId)
     const value = scopedValues[prop.id] ?? scopedValues[prop.name]
     if (value === undefined || value === null) return
     const kind: InteractiveKind = prop.interactiveKind ?? 'url'
@@ -2480,7 +2495,7 @@ onBeforeUnmount(() => {
 // Watch for data changes
 watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
 watch(
-  () => [props.diffStateByModelNodeId, props.diffStateByModelLinkId],
+  () => [props.diffStateByModelNodeId, props.diffStateByModelLinkId, props.diffStateByEdgeInstanceId],
   () => syncDiagram(),
   { deep: true }
 )
@@ -2520,7 +2535,7 @@ watch(
       snapToGrid: snapEnabled.value,
       gridSize: GRID_SIZE,
       alignToNodes: alignEnabled.value,
-      alignmentScreenTolerance: 80,
+      alignmentScreenTolerance: 40,
       attachToOutline: attachToOutlineEnabled.value,
       keymap: { deleteKeys: [] },
       navigationOnly: navOnly,

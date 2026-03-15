@@ -15,6 +15,7 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:slow": "npx playwright test --project=slow --headed --workers=1",
     "generate:badge-icon-names": "node scripts/generate-material-icon-names.mjs",
     "copy:badge-icons": "node scripts/copy-material-badge-icons.mjs",
     "prepare:badge-icons": "npm run generate:badge-icon-names && npm run copy:badge-icons"

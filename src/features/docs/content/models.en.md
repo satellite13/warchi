@@ -38,6 +38,33 @@ Models support semantic versioning (SemVer):
 
 You can create a new model version based on an existing one.
 
+### Model Version Comparison
+
+Models provide a dedicated **visual version comparison** screen.
+
+How to open it:
+
+1. Open the target model in the editor.
+2. Click **Compare with version** (the `compare_arrows` icon) in the header.
+3. Select left and right versions.
+4. If needed, choose the diagram name to match between versions.
+
+How to read the result:
+
+- the screen renders two diagrams side by side in read-only mode;
+- one side is treated as **base**, the other as **changes**;
+- use **Switch base** to invert change interpretation;
+- when you click a node or link, the bottom table shows **was/became** properties;
+- for elements missing on one side, the table shows `—`.
+
+Difference highlighting:
+
+- **added**;
+- **removed**;
+- **modified**.
+
+Comparison covers both node/link presence and properties, including diagram-scoped notation-specific values.
+
 ## Model Editor
 
 The model editor includes several areas:

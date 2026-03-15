@@ -52,6 +52,30 @@ Example scenario:
 4. Apply changes in the new version.
 5. If the result is good, continue in the new version; otherwise, return to the previous version as a stable reference.
 
+### Diagram Version Comparison
+
+For the active diagram, you can open a dedicated version comparison screen.
+
+How to open it:
+
+1. Open the diagram in the model editor.
+2. In the diagram version block, click **Compare diagram versions** (the `compare` icon).
+3. In the comparison screen, choose left and right versions.
+
+Comparison behavior:
+
+- comparison is scoped to one diagram name (for example, `Context` versions `1.0.0` and `1.1.0`);
+- both sides are rendered in read-only mode;
+- you can switch the base side via **Switch base**;
+- clicking an element opens a **was/became** property table at the bottom;
+- link route and link properties are also compared.
+
+When this is useful:
+
+- right after creating a baseline, to quickly inspect what actually changed;
+- before team review/approval of a new diagram version;
+- before sharing a public image link for the latest visual state.
+
 ### Closing and Deleting
 
 - **Close** — button on the toolbar. The diagram remains in the model but is closed in the editor

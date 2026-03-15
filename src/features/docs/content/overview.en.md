@@ -8,6 +8,7 @@
 - **Notations** — visual configuration of components and relations (shapes, styles, behavior)
 - **Diagrams** — graphical editor with navigation tools, auto-layout, PNG/SVG export, and JSON view
 - **Diagram baselines** — create a new diagram version from current state and switch between versions
+- **Version comparison** — visual comparison for model versions and diagram versions with highlights and property table
 - **Types** — manage node/link types including custom and system properties
 - **Custom properties** — `string`, `number`, `boolean`, `enum` with defaults and validation
 - **Sharing** — ACL sharing for models, notations, and types with `VIEW`/`EDIT` access levels
@@ -22,7 +23,33 @@ The application consists of several main sections available through the navigati
 | Models | Model list, model editor, diagrams, and baseline version flow |
 | Notations | Notation list, visual editor for components/relations, and relation rules |
 | Types | Node/link type editor with fields (`icon`, `defaultDirectoryPath`, custom properties) |
-| Documentation | This help section |
+| Shapes | Custom node shape catalog with visual outline editor |
+| Documentation | Product help section |
+| Wiki | Entity-linked pages for model, notation, type, and shape documentation |
+
+## Documentation Section
+
+This section includes focused pages:
+
+- **System overview** — high-level map of product capabilities and workflows;
+- **Models** — model structure, versioning, and typical operations;
+- **Notations** — components, relations, styles, and relation rules;
+- **Diagrams** — editing flow, navigation, export, and baselines;
+- **Version comparison** — workflows for model and diagram version comparison;
+- **Types** — system/custom fields and attribute management;
+- **Shapes** — creation and reuse of custom node outlines;
+- **Hotkeys** — keyboard shortcuts for faster daily work;
+- **FAQ** — answers to frequently asked questions;
+- **Changelog** — recent product updates.
+
+## Wiki Section
+
+`Wiki` complements the static help pages with entity-linked documentation. Use it for domain conventions, team instructions, and contextual notes attached to specific models, notations, types, or shapes.
+
+See comparison details in:
+
+- model comparison — [Models](/docs/models);
+- diagram comparison — [Diagrams](/docs/diagrams).
 
 ## Permissions and Sharing
 

@@ -9,8 +9,11 @@ Frontend SPA for architectural modeling workflows: managing models, notations, v
 - Notation editor on top of Papirus canvas (selection, transforms, auto-layout)
 - JSON import/export for notation data
 - Component and relation style customization
+- Custom node shapes with dedicated outline editor
 - Tags, custom attributes, and relation rules editor
 - Versioned models and notations
+- Built-in documentation section (`/docs`) with guides, hotkeys, FAQ, and changelog
+- Wiki section (`/wiki`) for entity-linked documentation pages
 - Blue/green deployment support via Helm and `deploy.sh`
 
 ## Tech Stack
@@ -98,6 +101,13 @@ Configured via `.env.local`:
 - API layer is based on typed `ApiResult<T>` wrappers
 - Entities are versioned and grouped by name
 - Notation editor uses Papirus rendering engine
+
+## Documentation
+
+- In-app documentation section: `/docs` (overview, models, notations, diagrams, types, shapes, hotkeys, FAQ, changelog)
+- Entity wiki section: `/wiki` (model, notation, type, and shape linked pages)
+- Documentation content source: `src/features/docs/content/*.md`
+- Technical plans and implementation notes: `docs/*.md`
 
 ## Open Source Readiness
 

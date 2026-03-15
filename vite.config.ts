@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => {
       },
       chunkSizeWarningLimit: 900
     },
+    test: {
+      environment: "happy-dom",
+    },
     server: {
       proxy: {
         "/api": {

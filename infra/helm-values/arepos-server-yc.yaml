@@ -1,0 +1,47 @@
+# Helm values override для arepos-server в Yandex Cloud
+# Замените <REGISTRY_ID> на реальный ID из terraform output registry_id
+
+image:
+  repository: cr.yandex/<REGISTRY_ID>/arepos-server
+  pullPolicy: Always
+
+# Отключаем in-cluster PostgreSQL — используем Yandex Managed PostgreSQL
+postgresql:
+  enabled: false
+
+# Отключаем in-cluster MinIO — используем Yandex Object Storage
+minio:
+  enabled: false
+
+# DB credentials из K8s secret (создаётся скриптом create-secrets.sh)
+database:
+  existingSecret: "arepos-db-secret"
+
+# S3 и auth env vars — передаём напрямую, т.к. minio.enabled=false
+env:
+  - name: FILE_STORAGE
+    value: "minio"
+  - name: MINIO_ENDPOINT
+    value: "https://storage.yandexcloud.net"
+  - name: MINIO_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: arepos-s3-secret
+        key: access-key
+  - name: MINIO_SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: arepos-s3-secret
+        key: secret-key
+  - name: MINIO_BUCKET
+    value: "arepos-files"
+  - name: JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: arepos-server-auth-secret
+        key: jwt-secret
+  - name: ADMIN_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: arepos-server-auth-secret
+        key: admin-secret

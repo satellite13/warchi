@@ -37,3 +37,6 @@ test-results/
 /playwright/.auth/
 /tests/.auth/
 coverage/
+
+# Infrastructure state (contains cloud resource IDs)
+infra/state.env

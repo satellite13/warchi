@@ -1,0 +1,22 @@
+# Helm values override для warchi в Yandex Cloud
+# Замените <REGISTRY_ID> на реальный ID из terraform output registry_id
+
+image:
+  repository: cr.yandex/<REGISTRY_ID>/warchi
+  pullPolicy: Always
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: warchi.ru
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: warchi-tls
+      hosts:
+        - warchi.ru

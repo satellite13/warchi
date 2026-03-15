@@ -62,7 +62,10 @@ describe('resolveOwnerDisplayNames', () => {
   })
 
   it('uses fallback on API failure', async () => {
-    mockedApiGet.mockResolvedValueOnce({ success: false, error: 'Not found' })
+    mockedApiGet.mockResolvedValueOnce({
+      success: false,
+      error: { status: 404, message: 'Not found' },
+    })
     const result = await resolveOwnerDisplayNames(['u3'], new Map(), null, 'Unknown')
     expect(result.get('u3')).toBe('Unknown')
   })

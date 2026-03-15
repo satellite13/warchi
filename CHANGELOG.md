@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-03-15
+
+### Added
+- Newer notation version notification in Model Editor when a diagram uses an outdated notation.
+- Extended model version comparison workflow with clearer difference presentation.
+
+### Changed
+- Improved diagram version management and rename flows in Model Editor.
+- Refined documentation/navigation experience and scoped property formatting in editor panels.
+
 ## [0.0.28] - 2026-03-04
 
 ### Added

@@ -3,7 +3,7 @@
  * Coordinates may be normalized 0–1 or in design space (e.g. 0–180, 0–80).
  * Контур растягивается по своему bounding box на полный размер узла (width × height).
  */
-import type { OutlineSegment } from "../features/notations/notationAttrs"
+import type { OutlineSegment } from '@/types/shapes'
 
 const DESIGN_WIDTH = 180
 const DESIGN_HEIGHT = 80

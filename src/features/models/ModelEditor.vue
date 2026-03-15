@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { apiGet, apiPost, uploadDiagramSvg } from '../../composables/useApi'
+import { apiGet, uploadDiagramSvg } from '../../composables/useApi'
 import MainLayout from '../../layouts/MainLayout.vue'
 import AppFooter from '../../components/layout/AppFooter.vue'
 import BaseModal from '../../components/modals/BaseModal.vue'
@@ -42,6 +42,7 @@ import { bumpMinor, compareVersions } from '../../utils/version'
 import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
 import type { NotationMetaResponse, NotationResponse, RelationResponse } from '../../types/api'
 import { useWikiDocuments } from '../../composables/useWikiDocuments'
+import { useDocumentModal } from './composables/useDocumentModal'
 
 const {
   model,
@@ -76,150 +77,7 @@ const versionDiff = useModelVersionDiff(() => ({
   diagrams: state.value.diagrams.filter((d) => !d._isDeleted),
 }))
 
-// Document modal state
-const showDocModal = ref(false)
-const docModalTitle = ref('')
-const docModalFileId = ref<string | null>(null)
-const docModalTarget = ref<{ kind: 'model' | 'node' | 'diagram'; id: string } | null>(null)
-/** When opening doc modal for "new document for interactive property", set this; handleDocSaved will set the property value. */
-const docModalContext = ref<{ kind: 'property'; propertyKey: string } | null>(null)
-
-function getModelDocFileId(): string | null {
-  const raw = model.value?.attrs
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    return typeof parsed.documentFileId === 'string' ? parsed.documentFileId : null
-  } catch {
-    return null
-  }
-}
-
-function setModelDocFileId(fileId: string) {
-  const raw = model.value?.attrs
-  let parsed: Record<string, unknown> = {}
-  if (raw) {
-    try {
-      parsed = JSON.parse(raw) as Record<string, unknown>
-    } catch {
-      parsed = {}
-    }
-  }
-  parsed.documentFileId = fileId
-  if (model.value) {
-    model.value.attrs = JSON.stringify(parsed)
-    markModelDirty()
-  }
-}
-
-function handleOpenModelDoc() {
-  docModalTarget.value = { kind: 'model', id: state.value.modelId }
-  docModalTitle.value = model.value?.name ?? t('models.entityName')
-  docModalFileId.value = getModelDocFileId()
-  showDocModal.value = true
-}
-
-function handleOpenNodeDoc(node: EditorNode) {
-  docModalTarget.value = { kind: 'node', id: node.id }
-  docModalTitle.value = node.name
-  docModalFileId.value = node.parsedAttrs.documentFileId ?? null
-  showDocModal.value = true
-}
-
-function handleOpenDiagramDoc() {
-  const diagram = state.value.diagrams.find(d => d.id === selectedDiagramId.value)
-  if (!diagram) return
-  docModalTarget.value = { kind: 'diagram', id: diagram.id }
-  docModalTitle.value = diagram.name
-  docModalFileId.value = diagram.parsedAttrs.documentFileId ?? null
-  showDocModal.value = true
-}
-
-function handleOpenDocumentFromBadge(fileId: string) {
-  docModalTarget.value = null
-  docModalContext.value = null
-  docModalTitle.value = ''
-  docModalFileId.value = fileId
-  showDocModal.value = true
-}
-
-function handleCreateDocumentForProperty(propertyName: string) {
-  docModalTarget.value = null
-  docModalContext.value = { kind: 'property', propertyKey: propertyName }
-  docModalTitle.value = ''
-  docModalFileId.value = null
-  showDocModal.value = true
-}
-
-async function handleDocSaved(fileId: string) {
-  const ctx = docModalContext.value
-  if (ctx?.kind === 'property') {
-    setNodeScopedValue(ctx.propertyKey, fileId)
-    const modelId = state.value.modelId
-    const nodeId = selectedNode.value?.id ?? null
-    const notationId = activeNotationId.value
-    const componentId = nodeBindingComponentId.value
-    if (modelId && (nodeId ?? notationId ?? componentId)) {
-      const res = await apiPost<{ fileId: string; label: string }>('/documents', {
-        fileId,
-        modelId: modelId ?? undefined,
-        nodeId: nodeId ?? undefined,
-        notationId: notationId ?? undefined,
-        componentId: componentId ?? undefined
-      })
-      if (res.success) {
-        const existing = documentsFromApi.value.find((d) => d.fileId === res.data.fileId)
-        if (!existing) documentsFromApi.value = [...documentsFromApi.value, res.data]
-      }
-    }
-    docModalContext.value = null
-    showDocModal.value = false
-    return
-  }
-  const target = docModalTarget.value
-  if (!target) return
-
-  const modelId = state.value.modelId ?? undefined
-
-  if (target.kind === 'model') {
-    setModelDocFileId(fileId)
-    if (modelId) {
-      await apiPost<{ fileId: string; label: string }>('/documents', { fileId, modelId })
-    }
-  } else if (target.kind === 'node') {
-    const node = state.value.nodes.find(n => n.id === target.id)
-    if (node && !node.parsedAttrs.documentFileId) {
-      node.parsedAttrs.documentFileId = fileId
-      markNodeDirty(target.id)
-    }
-    if (modelId) {
-      await apiPost<{ fileId: string; label: string }>('/documents', {
-        fileId,
-        modelId,
-        nodeId: target.id
-      })
-    }
-  } else if (target.kind === 'diagram') {
-    const diagram = state.value.diagrams.find(d => d.id === target.id)
-    if (diagram && !diagram.parsedAttrs.documentFileId) {
-      diagram.parsedAttrs.documentFileId = fileId
-      markDiagramDirty(target.id)
-    }
-    if (modelId) {
-      await apiPost<{ fileId: string; label: string }>('/documents', {
-        fileId,
-        modelId,
-        diagramId: target.id
-      })
-    }
-  }
-}
-
-function handleDocModalClose() {
-  showDocModal.value = false
-  docModalTarget.value = null
-  docModalContext.value = null
-}
+// Document modal — initialized later after all dependencies are defined (see useDocumentModal call below)
 
 async function handleOpenCompareModal() {
   const modelId = state.value.modelId
@@ -2737,6 +2595,33 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   link.parsedAttrs.relationProperties[notationId][relationId][key] = value
   markLinkDirty(link.id)
 }
+
+// Document modal composable — initialized after all dependencies
+const {
+  showDocModal,
+  docModalTitle,
+  docModalFileId,
+  handleOpenModelDoc,
+  handleOpenNodeDoc,
+  handleOpenDiagramDoc,
+  handleOpenDocumentFromBadge,
+  handleCreateDocumentForProperty,
+  handleDocSaved,
+  handleDocModalClose,
+} = useDocumentModal({
+  model,
+  state,
+  selectedDiagramId,
+  selectedNode,
+  activeNotationId,
+  nodeBindingComponentId,
+  documentsFromApi,
+  markModelDirty,
+  markNodeDirty,
+  markDiagramDirty,
+  setNodeScopedValue,
+  t,
+})
 
 const handleCanvasContextChange = (ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }) => {
   diagramRenderer.value = ctx.renderer

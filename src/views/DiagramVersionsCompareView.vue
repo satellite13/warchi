@@ -1,20 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
+import { computed, nextTick, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import { apiGet } from "@/composables/useApi"
 import type { PaginatedResponse } from "@/types/entities"
 import type {
-  ComponentResponse,
   DiagramResponse,
   LinkResponse,
   LinkTypeResponse,
   NodeResponse,
   NodeTypeResponse,
-  RelationResponse,
-  RelationRuleResponse,
 } from "@/types/api"
-import type { NotationData } from "@/types/entities"
+import { type CompareSharedData, loadCompareSharedData } from "@/api/loadCompareSharedData"
+import { useResizablePropsPanel } from "@/composables/useResizablePropsPanel"
 import MainLayout from "@/layouts/MainLayout.vue"
 import AppHeader from "@/components/layout/AppHeader.vue"
 import AppFooter from "@/components/layout/AppFooter.vue"
@@ -51,12 +49,7 @@ const diagramName = ref<string>("")
 const leftDiagramId = ref<string>("")
 const rightDiagramId = ref<string>("")
 
-const sharedData = ref<{
-  notations: NotationData[]
-  components: ComponentResponse[]
-  relations: RelationResponse[]
-  relationRules: RelationRuleResponse[]
-} | null>(null)
+const sharedData = ref<CompareSharedData | null>(null)
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -66,65 +59,9 @@ const baseSide = ref<"left" | "right">("left")
 const leftCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const rightCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 
-const PROPS_PANEL_STORAGE_KEY = "warchi:diagram-versions-compare:props-panel-height"
-const PROPS_PANEL_MIN_HEIGHT = 120
-const PROPS_PANEL_MAX_HEIGHT = 600
-const PROPS_PANEL_DEFAULT_HEIGHT = 220
-
-function loadPropsPanelHeight(): number {
-  if (typeof window === "undefined") return PROPS_PANEL_DEFAULT_HEIGHT
-  try {
-    const raw = window.localStorage.getItem(PROPS_PANEL_STORAGE_KEY)
-    if (raw == null) return PROPS_PANEL_DEFAULT_HEIGHT
-    const n = Number(raw)
-    return Number.isFinite(n) ? Math.max(PROPS_PANEL_MIN_HEIGHT, Math.min(PROPS_PANEL_MAX_HEIGHT, n)) : PROPS_PANEL_DEFAULT_HEIGHT
-  } catch {
-    return PROPS_PANEL_DEFAULT_HEIGHT
-  }
-}
-
-const propsPanelHeight = ref(loadPropsPanelHeight())
-let propsPanelResizing = false
-let propsPanelStartY = 0
-let propsPanelStartHeight = 0
-
-function onPropsPanelResizeMove(e: MouseEvent): void {
-  if (!propsPanelResizing) return
-  const deltaY = propsPanelStartY - e.clientY
-  propsPanelHeight.value = Math.max(
-    PROPS_PANEL_MIN_HEIGHT,
-    Math.min(PROPS_PANEL_MAX_HEIGHT, propsPanelStartHeight + deltaY)
-  )
-}
-
-function stopPropsPanelResize(): void {
-  if (!propsPanelResizing) return
-  propsPanelResizing = false
-  document.body.style.cursor = ""
-  document.body.style.userSelect = ""
-  window.removeEventListener("mousemove", onPropsPanelResizeMove)
-  window.removeEventListener("mouseup", stopPropsPanelResize)
-  try {
-    window.localStorage.setItem(PROPS_PANEL_STORAGE_KEY, String(propsPanelHeight.value))
-  } catch {
-    /* ignore */
-  }
-}
-
-function startPropsPanelResize(e: MouseEvent): void {
-  e.preventDefault()
-  propsPanelResizing = true
-  propsPanelStartY = e.clientY
-  propsPanelStartHeight = propsPanelHeight.value
-  document.body.style.cursor = "row-resize"
-  document.body.style.userSelect = "none"
-  window.addEventListener("mousemove", onPropsPanelResizeMove)
-  window.addEventListener("mouseup", stopPropsPanelResize)
-}
-
-onBeforeUnmount(() => {
-  stopPropsPanelResize()
-})
+const { propsPanelHeight, startPropsPanelResize } = useResizablePropsPanel(
+  "warchi:diagram-versions-compare:props-panel-height",
+)
 
 type SelectedElement =
   | { kind: "node"; path: string; side: "left" | "right" }
@@ -167,19 +104,7 @@ async function loadVersionData(): Promise<void> {
 }
 
 async function loadSharedData(): Promise<void> {
-  const listQuery = new URLSearchParams({ size: "1000" })
-  const [notationsRes, componentsRes, relationsRes, relationRulesRes] = await Promise.all([
-    apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-    apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
-    apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
-    apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`),
-  ])
-  sharedData.value = {
-    notations: notationsRes.success ? notationsRes.data.content ?? [] : [],
-    components: componentsRes.success ? componentsRes.data.content ?? [] : [],
-    relations: relationsRes.success ? relationsRes.data.content ?? [] : [],
-    relationRules: relationRulesRes.success ? relationRulesRes.data.content ?? [] : [],
-  }
+  sharedData.value = await loadCompareSharedData()
 }
 
 /** Версии диаграммы с выбранным именем, по убыванию версии. */

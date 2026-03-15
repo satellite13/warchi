@@ -16,25 +16,31 @@ import {
   InteractionManager,
   TextLabel,
   type ElementState,
-  type TextLabelOptions,
-  type TextStyle,
-  type NodeImageOptions,
   type EdgeStyle as PapirusEdgeStyle,
-  type ArrowMarkerType
 } from "@ngroznykh/papirus"
 import { diagramShapeFactories } from "@/utils/diagramShapes"
 import {
   customOutlineToPath2D,
   customOutlineToSvgPath
 } from "@/utils/customOutlinePath"
-import type { DiagramStyle, NodeStyle, CustomProperty } from "../notationAttrs"
+import type { DiagramStyle } from "../notationAttrs"
 import type {
   NotationEditorState,
-  EditorNodeType,
-  EditorLinkType,
   EditorComponent,
-  EditorRelation
 } from "../types"
+import {
+  useNotationStyles,
+  COMPONENT_STYLE,
+  type RelationEdgeStyle,
+} from "./useNotationStyles"
+import {
+  resolveComponentAnchorPoints,
+  buildNodeLabel,
+  buildEdgeLabel,
+  buildEdgeLabelBackground,
+  buildNodeIcon,
+  buildMarker,
+} from "../utils/notationElementBuilders"
 
 export type EntityKind = "component" | "relation"
 
@@ -44,19 +50,6 @@ export interface NotationDiagramOptions {
   onSelect: (id: string, kind: EntityKind) => void
 }
 
-const COMPONENT_STYLE = {
-  fillColor: "#e0f2fe",
-  fillOpacity: 1,
-  strokeColor: "#0284c7",
-  strokeOpacity: 1,
-  strokeWidth: 2
-}
-
-const RELATION_EDGE_STYLE = {
-  strokeColor: "#7c3aed",
-  strokeOpacity: 1,
-  strokeWidth: 2
-}
 
 const ANCHOR_STYLE = {
   fillColor: "transparent",
@@ -66,35 +59,12 @@ const ANCHOR_STYLE = {
 const SOFT_SELECTION_COLOR = "#6366f1"
 const SOFT_SELECTION_OFFSET_PX = 3
 
-type ResolvedStyle = {
-  fillColor: string
-  fillOpacity: number
-  strokeColor: string
-  strokeOpacity: number
-  strokeWidth: number
-}
-
-const NODE_WIDTH = 140
-const NODE_HEIGHT = 50
-const COMPONENT_RADIUS = 8
 const ANCHOR_SIZE = 10
 const ANCHOR_GAP = 120
 const COLUMN_GAP = 60
 const ROW_GAP = 30
 const GRID_SIZE = 20
 const NO_ANCHORS = { top: 0, right: 0, bottom: 0, left: 0 }
-const DEFAULT_COMPONENT_ANCHORS = { top: 3, right: 1, bottom: 3, left: 1 }
-
-type ExtendedNotationNodeStyle = NodeStyle & {
-  fillOpacity?: number
-  strokeOpacity?: number
-}
-
-type RelationEdgeStyle = {
-  strokeColor: string
-  strokeOpacity?: number
-  strokeWidth: number
-}
 
 type AnchorRelationMeta = {
   pairedTarget: CircleNode
@@ -208,222 +178,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   let syncingRelationSelection = false
   let syncingSelectionFromState = false
 
-  function mergeStyle(base: ResolvedStyle, override?: ExtendedNotationNodeStyle): ResolvedStyle {
-    return {
-      fillColor: override?.fillColor ?? base.fillColor,
-      fillOpacity: override?.fillOpacity ?? base.fillOpacity,
-      strokeColor: override?.strokeColor ?? base.strokeColor,
-      strokeOpacity: override?.strokeOpacity ?? base.strokeOpacity,
-      strokeWidth: override?.strokeWidth ?? base.strokeWidth
-    }
-  }
-
-  function resolveComponentTypeStyle(typeItem: EditorNodeType | undefined) {
-    const baseStyle = COMPONENT_STYLE
-    const width =
-      typeof typeItem?.parsedAttrs.width === "number"
-        ? typeItem.parsedAttrs.width
-        : NODE_WIDTH
-    const height =
-      typeof typeItem?.parsedAttrs.height === "number"
-        ? typeItem.parsedAttrs.height
-        : NODE_HEIGHT
-    const style: ResolvedStyle = mergeStyle(baseStyle, typeItem?.parsedAttrs.style)
-    const cornerRadius =
-      typeof typeItem?.parsedAttrs.cornerRadius === "number"
-        ? typeItem.parsedAttrs.cornerRadius
-        : typeof typeItem?.parsedAttrs.style?.cornerRadius === "number"
-          ? typeItem.parsedAttrs.style.cornerRadius
-          : COMPONENT_RADIUS
-    return { style, width, height, cornerRadius }
-  }
-
-  function resolveRelationEdgeStyle(typeItem: EditorLinkType | undefined) {
-    const base = RELATION_EDGE_STYLE
-    const rawStyle = typeItem?.parsedAttrs.style as ExtendedNotationNodeStyle | undefined
-    const strokeColor = rawStyle?.strokeColor ?? base.strokeColor
-    const strokeOpacity = rawStyle?.strokeOpacity ?? base.strokeOpacity
-    const strokeWidth = rawStyle?.strokeWidth ?? base.strokeWidth
-    return { strokeColor, strokeOpacity, strokeWidth }
-  }
-
-  function resolveComponentStyle(item: EditorComponent) {
-    const typeItem = state.value.nodeTypes.find(
-      (type) => type.id === item.nodeTypeId
-    )
-    const base = resolveComponentTypeStyle(typeItem)
-    const ds = item.parsedAttrs.diagramStyle
-    if (!ds) return base
-    return {
-      style: {
-        fillColor: ds.fillColor ?? base.style.fillColor,
-        fillOpacity: ds.fillOpacity ?? base.style.fillOpacity ?? 1,
-        strokeColor: ds.strokeColor ?? base.style.strokeColor,
-        strokeOpacity: ds.strokeOpacity ?? base.style.strokeOpacity ?? 1,
-        strokeWidth: ds.strokeWidth ?? base.style.strokeWidth,
-        ...(ds.opacity != null ? { opacity: ds.opacity } : {}),
-        ...(ds.lineDash ? { lineDash: ds.lineDash } : {})
-      } as ResolvedStyle,
-      width: ds.width ?? base.width,
-      height: ds.height ?? base.height,
-      cornerRadius: ds.cornerRadius ?? base.cornerRadius
-    }
-  }
-
-  function resolveRelationStyle(item: EditorRelation) {
-    const typeItem = state.value.linkTypes.find(
-      (type) => type.id === item.linkTypeId
-    )
-    const base = resolveRelationEdgeStyle(typeItem)
-    const ds = item.parsedAttrs.diagramStyle
-    if (!ds) return base
-    return {
-      strokeColor: ds.strokeColor ?? base.strokeColor,
-      strokeOpacity: ds.strokeOpacity ?? base.strokeOpacity ?? 1,
-      strokeWidth: ds.strokeWidth ?? base.strokeWidth
-    }
-  }
-
-  function resolveComponentAnchorPoints(ds?: DiagramStyle): { top: number; right: number; bottom: number; left: number } {
-    const normalize = (value: unknown, fallback: number): number => {
-      const parsed = Math.round(Number(value))
-      if (!Number.isFinite(parsed) || parsed < 0) return fallback
-      return parsed
-    }
-
-    return {
-      top: normalize(ds?.portsTop, DEFAULT_COMPONENT_ANCHORS.top),
-      right: normalize(ds?.portsRight, DEFAULT_COMPONENT_ANCHORS.right),
-      bottom: normalize(ds?.portsBottom, DEFAULT_COMPONENT_ANCHORS.bottom),
-      left: normalize(ds?.portsLeft, DEFAULT_COMPONENT_ANCHORS.left)
-    }
-  }
-
-  function resolveLabelTemplate(
-    template: string,
-    name: string,
-    customProperties: CustomProperty[]
-  ): string {
-    return template.replace(/\$\{(\w+)\}/g, (_match, key: string) => {
-      if (key === "name") return name
-      const prop = customProperties.find((p) => p.name === key)
-      if (prop) {
-        const val = prop.defaultValue
-        return val != null ? String(val) : ""
-      }
-      return ""
-    }).replace(/\\n/g, "\n")
-  }
-
-  function buildNodeLabel(
-    name: string,
-    ds?: DiagramStyle,
-    customProperties?: CustomProperty[]
-  ): string | TextLabelOptions {
-    const hasTemplate = !!ds?.labelTemplate
-    const displayText = hasTemplate
-      ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [])
-      : name
-
-    const labelInset = ds?.labelInset
-    const hasStyle = !!(
-      ds?.labelColor ||
-      ds?.labelOpacity != null ||
-      ds?.labelFontSize ||
-      labelInset != null ||
-      ds?.labelAlign ||
-      ds?.labelVerticalAlign
-    )
-
-    if (!hasStyle && !hasTemplate) {
-      return displayText
-    }
-    const opts: TextLabelOptions = { text: displayText }
-    if (hasTemplate) {
-      opts.editableText = name
-    }
-    const style: TextStyle = {}
-    if (ds?.labelColor) style.color = ds.labelColor
-    if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
-    if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
-    if (ds?.labelAlign) style.align = ds.labelAlign as TextStyle["align"]
-    if (ds?.labelVerticalAlign)
-      style.verticalAlign = ds.labelVerticalAlign as TextStyle["verticalAlign"]
-    if (Object.keys(style).length) opts.style = style
-    if (labelInset != null) opts.inset = labelInset
-    return opts
-  }
-
-  function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-    const labelInset = ds?.labelInset
-    if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && labelInset == null) {
-      return name
-    }
-    const opts: TextLabelOptions = { text: name }
-    const style: TextStyle = {}
-    if (ds?.labelColor) style.color = ds.labelColor
-    if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
-    if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
-    if (Object.keys(style).length) opts.style = style
-    if (labelInset != null) opts.inset = labelInset
-    return opts
-  }
-
-  function buildEdgeLabelBackground(ds?: DiagramStyle) {
-    return {
-      color: ds?.labelBgColor || "transparent",
-      ...(ds?.labelBgOpacity != null ? { opacity: ds.labelBgOpacity } : {}),
-      ...(ds?.labelBgPadding != null ? { padding: ds.labelBgPadding } : {}),
-      ...(ds?.labelBgBorderRadius != null ? { borderRadius: ds.labelBgBorderRadius } : {})
-    }
-  }
-
-  function buildNodeIcon(ds?: DiagramStyle) {
-    if (!ds?.iconName) return undefined
-    const placement = ds.iconPlacement
-    const resolvedPlacement: NodeImageOptions["placement"] =
-      placement === "center" ||
-      placement === "top" ||
-      placement === "bottom" ||
-      placement === "left" ||
-      placement === "right" ||
-      placement === "top-left" ||
-      placement === "top-right" ||
-      placement === "bottom-left" ||
-      placement === "bottom-right"
-        ? placement
-        : "top-left"
-    const iconInset = ds.iconInset ?? ds.iconPadding ?? ds.iconMargin ?? ds.iconGap
-    return {
-      source: `/icons/${ds.iconName}.svg`,
-      placement: resolvedPlacement,
-      width: ds.iconWidth ?? 20,
-      height: ds.iconHeight ?? 20,
-      fit: "contain" as const,
-      ...(iconInset != null ? { inset: iconInset as unknown as number } : {}),
-      ...(ds.iconOffsetX != null ? { offsetX: ds.iconOffsetX } : {}),
-      ...(ds.iconOffsetY != null ? { offsetY: ds.iconOffsetY } : {}),
-      ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
-      ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {})
-    }
-  }
-
-  function buildMarker(typeStr: string | undefined, ds: DiagramStyle | undefined, prefix: "start" | "end") {
-    const markerType =
-      typeStr === "arrow" || typeStr === "open" || typeStr === "diamond" || typeStr === "circle"
-        ? (typeStr as ArrowMarkerType)
-        : undefined
-    if (!markerType) return undefined
-    const sizeKey = prefix === "start" ? "startMarkerSize" : "endMarkerSize"
-    const fillKey = prefix === "start" ? "startMarkerFillColor" : "endMarkerFillColor"
-    const opacityKey = prefix === "start" ? "startMarkerFillOpacity" : "endMarkerFillOpacity"
-    return {
-      type: markerType,
-      size: ds?.[sizeKey] ?? 12,
-      ...(ds?.[fillKey] ? { fillColor: ds[fillKey] } : {}),
-      ...(ds?.[opacityKey] != null ? { fillOpacity: ds[opacityKey] } : {})
-    }
-  }
+  const {
+    resolveComponentStyle,
+    resolveRelationStyle,
+  } = useNotationStyles(state)
 
   function createComponentNode(
     item: EditorComponent,

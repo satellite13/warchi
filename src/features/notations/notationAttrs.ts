@@ -24,16 +24,9 @@ export type CustomProperty = {
   interactiveIcon?: string
 }
 
-// Custom node shape outline (normalized coordinates 0–1)
-export type OutlineSegmentLine = {
-  type: "line"
-  points: [[number, number], [number, number]]
-}
-export type OutlineSegmentBezier = {
-  type: "bezier"
-  points: [[number, number], [number, number], [number, number], [number, number]]
-}
-export type OutlineSegment = OutlineSegmentLine | OutlineSegmentBezier
+// Custom node shape outline — types live in src/types/shapes.ts to avoid layer violation (utils → features)
+export type { OutlineSegmentLine, OutlineSegmentBezier, OutlineSegment } from '@/types/shapes'
+import type { OutlineSegment } from '@/types/shapes'
 
 export const DEFAULT_RECTANGLE_OUTLINE: OutlineSegment[] = [
   { type: "line", points: [[0, 0], [1, 0]] },

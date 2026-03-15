@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
+import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
 
 const { t } = useI18n();
@@ -27,17 +28,7 @@ type SortMode = "alpha-asc" | "alpha-desc" | "type";
 const sortMode = ref<SortMode>("alpha-asc");
 const TAGS_EXPANDED_STORAGE_KEY = "warchi:notation-editor:component-list:tags-expanded";
 
-const readTagsExpanded = (): boolean => {
-  try {
-    const raw = window.localStorage.getItem(TAGS_EXPANDED_STORAGE_KEY);
-    if (raw === null) return true;
-    return raw === "1";
-  } catch {
-    return true;
-  }
-};
-
-const tagsExpanded = ref(readTagsExpanded());
+const tagsExpanded = ref(loadString(TAGS_EXPANDED_STORAGE_KEY, "1") !== "0");
 
 type ListItem = {
   id: string;
@@ -147,11 +138,7 @@ watch(() => props.selectedId, (id) => {
 });
 
 watch(tagsExpanded, (value) => {
-  try {
-    window.localStorage.setItem(TAGS_EXPANDED_STORAGE_KEY, value ? "1" : "0");
-  } catch {
-    // Ignore storage errors (private mode/quota/etc.)
-  }
+  saveString(TAGS_EXPANDED_STORAGE_KEY, value ? "1" : "0");
 });
 </script>
 

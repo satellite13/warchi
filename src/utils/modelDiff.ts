@@ -282,10 +282,10 @@ export type DiagramDiffStateMaps = {
  */
 export function buildDiagramDiffStateMaps(
   diff: ModelVersionDiff,
-  basePathMap: Map<string, string>,
-  targetPathMap: Map<string, string>,
-  baseLinks: LinkResponse[],
-  targetLinks: LinkResponse[],
+  _basePathMap: Map<string, string>,
+  _targetPathMap: Map<string, string>,
+  _baseLinks: LinkResponse[],
+  _targetLinks: LinkResponse[],
   instanceNodeIds: string[],
   instanceEdges: Array<{
     modelLinkId: string

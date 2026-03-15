@@ -571,8 +571,6 @@ const rightDiffStateWhenRightIsBase = computed(() => {
   )
 })
 
-const emptyDiffState = { diffStateByModelNodeId: {} as Record<string, "added" | "removed" | "modified">, diffStateByModelLinkId: {} as Record<string, "added" | "removed" | "modified"> }
-
 const leftCanvasDiffState = computed(() =>
   baseSide.value === "left" ? leftDiffState.value : leftDiffStateWhenRightIsBase.value
 )

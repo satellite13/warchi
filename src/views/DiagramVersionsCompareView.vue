@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import { apiGet } from "@/composables/useApi"
-import type { ModelData, PaginatedResponse } from "@/types/entities"
+import type { PaginatedResponse } from "@/types/entities"
 import type {
   ComponentResponse,
   DiagramResponse,
@@ -36,27 +36,21 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
-const modelId = computed(() => route.params.id as string)
+/** id версии модели (как в редакторе). */
+const versionId = computed(() => route.params.id as string)
+const diagramNameFromQuery = computed(() => (route.query.diagram as string) ?? "")
 
-const relatedVersions = ref<ModelData[]>([])
-const leftVersionId = ref<string>("")
-const rightVersionId = ref<string>("")
+const versionData = ref<{
+  nodes: NodeResponse[]
+  links: LinkResponse[]
+  diagrams: DiagramResponse[]
+  nodeTypes: NodeTypeResponse[]
+  linkTypes: LinkTypeResponse[]
+} | null>(null)
 const diagramName = ref<string>("")
+const leftDiagramId = ref<string>("")
+const rightDiagramId = ref<string>("")
 
-const leftData = ref<{
-  nodes: NodeResponse[]
-  links: LinkResponse[]
-  diagrams: DiagramResponse[]
-  nodeTypes: NodeTypeResponse[]
-  linkTypes: LinkTypeResponse[]
-} | null>(null)
-const rightData = ref<{
-  nodes: NodeResponse[]
-  links: LinkResponse[]
-  diagrams: DiagramResponse[]
-  nodeTypes: NodeTypeResponse[]
-  linkTypes: LinkTypeResponse[]
-} | null>(null)
 const sharedData = ref<{
   notations: NotationData[]
   components: ComponentResponse[]
@@ -67,13 +61,12 @@ const sharedData = ref<{
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-/** Какая сторона считается базой (без подсветки); вторая сторона показывает изменения. */
 const baseSide = ref<"left" | "right">("left")
 
 const leftCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const rightCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 
-const PROPS_PANEL_STORAGE_KEY = "warchi:model-visual-compare:props-panel-height"
+const PROPS_PANEL_STORAGE_KEY = "warchi:diagram-versions-compare:props-panel-height"
 const PROPS_PANEL_MIN_HEIGHT = 120
 const PROPS_PANEL_MAX_HEIGHT = 600
 const PROPS_PANEL_DEFAULT_HEIGHT = 220
@@ -138,76 +131,49 @@ type SelectedElement =
   | { kind: "link"; sourcePath: string; targetPath: string; linkTypeId: string; side: "left" | "right" }
 const selectedElement = ref<SelectedElement | null>(null)
 
-async function loadRelatedVersions(): Promise<void> {
-  const id = modelId.value
+async function loadVersionData(): Promise<void> {
+  const id = versionId.value
   if (!id) return
   loading.value = true
   error.value = null
   try {
-    const res = await apiGet<ModelData[]>(`/models/${id}/related-versions`)
-    if (res.success) {
-      relatedVersions.value = res.data
-      if (res.data.length >= 2 && !leftVersionId.value && !rightVersionId.value) {
-        leftVersionId.value = res.data[res.data.length - 1]!.id
-        rightVersionId.value = res.data[0]!.id
-      }
-    } else {
-      relatedVersions.value = []
-      error.value = res.error.message
+    const listQuery = new URLSearchParams({ size: "1000" })
+    const [nodesRes, linksRes, diagramsRes, nodeTypesRes, linkTypesRes] = await Promise.all([
+      apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),
+      apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),
+      apiGet<PaginatedResponse<DiagramResponse>>(`/diagrams?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),
+      apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),
+      apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),
+    ])
+    if (!nodesRes.success || !linksRes.success || !diagramsRes.success) {
+      versionData.value = null
+      return
+    }
+    versionData.value = {
+      nodes: nodesRes.data.content ?? [],
+      links: linksRes.data.content ?? [],
+      diagrams: diagramsRes.data.content ?? [],
+      nodeTypes: nodeTypesRes.success ? nodeTypesRes.data.content ?? [] : [],
+      linkTypes: linkTypesRes.success ? linkTypesRes.data.content ?? [] : [],
+    }
+    if (versionData.value.diagrams.length > 0 && !diagramName.value) {
+      diagramName.value = diagramNameFromQuery.value.trim() || versionData.value.diagrams[0]!.name
     }
   } catch (e) {
-    relatedVersions.value = []
     error.value = e instanceof Error ? e.message : "Ошибка загрузки"
   } finally {
     loading.value = false
   }
 }
 
-async function loadVersionData(versionId: string): Promise<{
-  nodes: NodeResponse[]
-  links: LinkResponse[]
-  diagrams: DiagramResponse[]
-  nodeTypes: NodeTypeResponse[]
-  linkTypes: LinkTypeResponse[]
-} | null> {
-  const listQuery = new URLSearchParams({ size: "1000" })
-  const [nodesRes, linksRes, diagramsRes, nodeTypesRes, linkTypesRes] =
-    await Promise.all([
-      apiGet<PaginatedResponse<NodeResponse>>(
-        `/nodes?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`
-      ),
-      apiGet<PaginatedResponse<LinkResponse>>(
-        `/links?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`
-      ),
-      apiGet<PaginatedResponse<DiagramResponse>>(
-        `/diagrams?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`
-      ),
-      apiGet<PaginatedResponse<NodeTypeResponse>>(
-        `/node-types?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`
-      ),
-      apiGet<PaginatedResponse<LinkTypeResponse>>(
-        `/link-types?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`
-      ),
-    ])
-  if (!nodesRes.success || !linksRes.success || !diagramsRes.success) return null
-  return {
-    nodes: nodesRes.data.content ?? [],
-    links: linksRes.data.content ?? [],
-    diagrams: diagramsRes.data.content ?? [],
-    nodeTypes: nodeTypesRes.success ? nodeTypesRes.data.content ?? [] : [],
-    linkTypes: linkTypesRes.success ? linkTypesRes.data.content ?? [] : [],
-  }
-}
-
 async function loadSharedData(): Promise<void> {
   const listQuery = new URLSearchParams({ size: "1000" })
-  const [notationsRes, componentsRes, relationsRes, relationRulesRes] =
-    await Promise.all([
-      apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-      apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
-      apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
-      apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`),
-    ])
+  const [notationsRes, componentsRes, relationsRes, relationRulesRes] = await Promise.all([
+    apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
+    apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
+    apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
+    apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`),
+  ])
   sharedData.value = {
     notations: notationsRes.success ? notationsRes.data.content ?? [] : [],
     components: componentsRes.success ? componentsRes.data.content ?? [] : [],
@@ -216,32 +182,21 @@ async function loadSharedData(): Promise<void> {
   }
 }
 
-async function loadBothVersions(): Promise<void> {
-  const leftId = leftVersionId.value
-  const rightId = rightVersionId.value
-  if (!leftId || !rightId || leftId === rightId) {
-    leftData.value = null
-    rightData.value = null
-    return
-  }
-  loading.value = true
-  error.value = null
-  try {
-    const [left, right] = await Promise.all([
-      loadVersionData(leftId),
-      loadVersionData(rightId),
-    ])
-    leftData.value = left
-    rightData.value = right
-    if (left?.diagrams.length && !diagramName.value) {
-      diagramName.value = left.diagrams[0]!.name
-    }
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "Ошибка загрузки"
-  } finally {
-    loading.value = false
-  }
-}
+/** Версии диаграммы с выбранным именем, по убыванию версии. */
+const diagramsWithName = computed((): DiagramResponse[] => {
+  const list = versionData.value?.diagrams ?? []
+  const name = diagramName.value.trim()
+  if (!name) return []
+  return list
+    .filter((d) => d.name.trim() === name)
+    .sort((a, b) => compareVersions(b.version, a.version))
+})
+
+const diagramNames = computed(() => {
+  const names = new Set<string>()
+  versionData.value?.diagrams.forEach((d) => names.add(d.name))
+  return Array.from(names).sort()
+})
 
 function toEditorNode(r: NodeResponse): EditorNode {
   return { ...r, parsedAttrs: parseNodeAttrs(r.attrs ?? null) }
@@ -253,73 +208,70 @@ function toEditorDiagram(r: DiagramResponse): EditorDiagram {
   return { ...r, parsedAttrs: parseDiagramAttrs(r.attrs ?? null) }
 }
 
-/** Выбирает диаграмму с именем name с максимальной версией (как в редакторе модели). */
-function getLatestDiagramByName(
-  diagrams: DiagramResponse[],
-  name: string
-): DiagramResponse | undefined {
-  const sameName = diagrams.filter((d) => d.name.trim() === name.trim())
-  if (sameName.length === 0) return undefined
-  return [...sameName].sort((a, b) => compareVersions(b.version, a.version))[0]
-}
-
-const diagramNames = computed(() => {
-  const names = new Set<string>()
-  leftData.value?.diagrams.forEach((d) => names.add(d.name))
-  rightData.value?.diagrams.forEach((d) => names.add(d.name))
-  return Array.from(names).sort()
+/** Синтетические данные для diff: слева — только левая диаграмма, справа — только правая. */
+const leftData = computed(() => {
+  const v = versionData.value
+  const left = leftDiagramRaw.value
+  if (!v || !left) return null
+  return { ...v, diagrams: [left] }
 })
 
-const diff = computed(() => {
-  const left = leftData.value
-  const right = rightData.value
-  if (!left || !right) return null
-  return computeModelDiff(
-    { nodes: left.nodes, links: left.links, diagrams: left.diagrams },
-    { nodes: right.nodes, links: right.links, diagrams: right.diagrams }
-  )
+const rightData = computed(() => {
+  const v = versionData.value
+  const right = rightDiagramRaw.value
+  if (!v || !right) return null
+  return { ...v, diagrams: [right] }
+})
+
+const leftDiagramRaw = computed((): DiagramResponse | null => {
+  const list = versionData.value?.diagrams ?? []
+  if (!leftDiagramId.value) return null
+  return list.find((d) => d.id === leftDiagramId.value) ?? null
+})
+
+const rightDiagramRaw = computed((): DiagramResponse | null => {
+  const list = versionData.value?.diagrams ?? []
+  if (!rightDiagramId.value) return null
+  return list.find((d) => d.id === rightDiagramId.value) ?? null
 })
 
 const leftDiagram = computed((): EditorDiagram | null => {
-  const list = leftData.value?.diagrams ?? []
-  const d = getLatestDiagramByName(list, diagramName.value)
+  const d = leftDiagramRaw.value
   return d ? toEditorDiagram(d) : null
 })
 
 const rightDiagram = computed((): EditorDiagram | null => {
-  const list = rightData.value?.diagrams ?? []
-  const d = getLatestDiagramByName(list, diagramName.value)
+  const d = rightDiagramRaw.value
   return d ? toEditorDiagram(d) : null
 })
 
 const leftEditorNodes = computed((): EditorNode[] => {
-  const nodes = leftData.value?.nodes ?? []
+  const nodes = versionData.value?.nodes ?? []
+  return nodes.map(toEditorNode)
+})
+
+const rightEditorNodes = computed((): EditorNode[] => {
+  const nodes = versionData.value?.nodes ?? []
   return nodes.map(toEditorNode)
 })
 
 const leftEditorLinks = computed((): EditorLink[] => {
-  const links = leftData.value?.links ?? []
+  const links = versionData.value?.links ?? []
   return links.map(toEditorLink)
 })
 
-const rightEditorNodes = computed((): EditorNode[] => {
-  const nodes = rightData.value?.nodes ?? []
-  return nodes.map(toEditorNode)
-})
-
 const rightEditorLinks = computed((): EditorLink[] => {
-  const links = rightData.value?.links ?? []
+  const links = versionData.value?.links ?? []
   return links.map(toEditorLink)
 })
 
 const leftPathMap = computed(() =>
-  leftData.value ? buildNodePathMap(leftData.value.nodes) : new Map<string, string>()
+  versionData.value ? buildNodePathMap(versionData.value.nodes) : new Map<string, string>()
 )
 const rightPathMap = computed(() =>
-  rightData.value ? buildNodePathMap(rightData.value.nodes) : new Map<string, string>()
+  versionData.value ? buildNodePathMap(versionData.value.nodes) : new Map<string, string>()
 )
 
-/** stableId узлов и связей на левой диаграмме (для сравнения «есть слева, нет справа» по stableId). */
 const leftDiagramStableIds = computed(() => {
   const instances = leftDiagram.value?.parsedAttrs?.instances
   const editorNodes = leftEditorNodes.value
@@ -340,18 +292,6 @@ const leftDiagramStableIds = computed(() => {
   return { nodeStableIds, linkStableIds }
 })
 
-/** Текущая левая диаграмма: modelNodeId/modelLinkId → stableId (или id). */
-const leftCurrentStableIds = computed(() => {
-  const editorNodes = leftEditorNodes.value
-  const editorLinks = leftEditorLinks.value
-  const nodeIdToStableId = new Map<string, string>()
-  for (const n of editorNodes) nodeIdToStableId.set(n.id, n.stableId ?? n.id)
-  const linkIdToStableId = new Map<string, string>()
-  for (const l of editorLinks) linkIdToStableId.set(l.id, l.stableId ?? l.id)
-  return { nodeIdToStableId, linkIdToStableId }
-})
-
-/** stableId узлов и связей на правой диаграмме. */
 const rightDiagramStableIds = computed(() => {
   const instances = rightDiagram.value?.parsedAttrs?.instances
   const editorNodes = rightEditorNodes.value
@@ -372,7 +312,16 @@ const rightDiagramStableIds = computed(() => {
   return { nodeStableIds, linkStableIds }
 })
 
-/** Текущая правая диаграмма: modelNodeId/modelLinkId → stableId (или id). */
+const leftCurrentStableIds = computed(() => {
+  const editorNodes = leftEditorNodes.value
+  const editorLinks = leftEditorLinks.value
+  const nodeIdToStableId = new Map<string, string>()
+  for (const n of editorNodes) nodeIdToStableId.set(n.id, n.stableId ?? n.id)
+  const linkIdToStableId = new Map<string, string>()
+  for (const l of editorLinks) linkIdToStableId.set(l.id, l.stableId ?? l.id)
+  return { nodeIdToStableId, linkIdToStableId }
+})
+
 const rightCurrentStableIds = computed(() => {
   const editorNodes = rightEditorNodes.value
   const editorLinks = rightEditorLinks.value
@@ -383,40 +332,55 @@ const rightCurrentStableIds = computed(() => {
   return { nodeIdToStableId, linkIdToStableId }
 })
 
-/** Подсветка на левом канвасе, когда база слева: красный — удалено (в т.ч. есть на базе, нет на диаграмме изменений), оранжевый — изменено. */
+const diff = computed(() => {
+  const left = leftData.value
+  const right = rightData.value
+  if (!left || !right) return null
+  return computeModelDiff(
+    { nodes: left.nodes, links: left.links, diagrams: left.diagrams },
+    { nodes: right.nodes, links: right.links, diagrams: right.diagrams }
+  )
+})
+
+function buildEdges(links: LinkResponse[]) {
+  const linkById = new Map(links.map((l) => [l.id, l]))
+  return (edgeRefs: Array<{ modelLinkId: string }>) =>
+    edgeRefs
+      .map((e) => {
+        const link = linkById.get(e.modelLinkId)
+        return link
+          ? {
+              modelLinkId: e.modelLinkId,
+              sourceId: link.sourceId,
+              targetId: link.targetId,
+              linkTypeId: link.linkTypeId,
+            }
+        : null
+      })
+      .filter(Boolean) as Array<{
+        modelLinkId: string
+        sourceId: string
+        targetId: string
+        linkTypeId: string
+      }>
+}
+
 const leftDiffState = computed(() => {
   const d = diff.value
   const diagram = leftDiagram.value
   const left = leftData.value
-  if (!d || !diagram || !left) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  const right = rightData.value
+  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
   const instances = diagram.parsedAttrs?.instances
   if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-  const linkById = new Map(left.links.map((l) => [l.id, l]))
-  const edges = instances.edges
-    .map((e) => {
-      const link = linkById.get(e.modelLinkId)
-      return link
-        ? {
-            modelLinkId: e.modelLinkId,
-            sourceId: link.sourceId,
-            targetId: link.targetId,
-            linkTypeId: link.linkTypeId,
-          }
-        : null
-    })
-    .filter(Boolean) as Array<{
-    modelLinkId: string
-    sourceId: string
-    targetId: string
-    linkTypeId: string
-  }>
+  const edges = buildEdges(left.links)(instances.edges)
   return buildDiagramDiffStateMaps(
     d,
     leftPathMap.value,
     rightPathMap.value,
     left.links,
-    rightData.value!.links,
+    right.links,
     nodeIds,
     edges,
     "base",
@@ -430,35 +394,18 @@ const leftDiffState = computed(() => {
 const rightDiffState = computed(() => {
   const d = diff.value
   const diagram = rightDiagram.value
+  const left = leftData.value
   const right = rightData.value
-  if (!d || !diagram || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
+  if (!d || !diagram || !left || !right) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
   const instances = diagram.parsedAttrs?.instances
   if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-  const linkById = new Map(right.links.map((l) => [l.id, l]))
-  const edges = instances.edges
-    .map((e) => {
-      const link = linkById.get(e.modelLinkId)
-      return link
-        ? {
-            modelLinkId: e.modelLinkId,
-            sourceId: link.sourceId,
-            targetId: link.targetId,
-            linkTypeId: link.linkTypeId,
-          }
-        : null
-    })
-    .filter(Boolean) as Array<{
-    modelLinkId: string
-    sourceId: string
-    targetId: string
-    linkTypeId: string
-  }>
+  const edges = buildEdges(right.links)(instances.edges)
   return buildDiagramDiffStateMaps(
     d,
     leftPathMap.value,
     rightPathMap.value,
-    leftData.value!.links,
+    left.links,
     right.links,
     nodeIds,
     edges,
@@ -470,7 +417,6 @@ const rightDiffState = computed(() => {
   )
 })
 
-/** Diff когда база — правая версия (right=base, left=target). */
 const diffWhenRightIsBase = computed(() => {
   const left = leftData.value
   const right = rightData.value
@@ -481,7 +427,6 @@ const diffWhenRightIsBase = computed(() => {
   )
 })
 
-/** Подсветка изменений на левом канвасе, когда база — справа. */
 const leftDiffStateWhenRightIsBase = computed(() => {
   const d = diffWhenRightIsBase.value
   const diagram = leftDiagram.value
@@ -491,25 +436,7 @@ const leftDiffStateWhenRightIsBase = computed(() => {
   const instances = diagram.parsedAttrs?.instances
   if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-  const linkById = new Map(left.links.map((l) => [l.id, l]))
-  const edges = instances.edges
-    .map((e) => {
-      const link = linkById.get(e.modelLinkId)
-      return link
-        ? {
-            modelLinkId: e.modelLinkId,
-            sourceId: link.sourceId,
-            targetId: link.targetId,
-            linkTypeId: link.linkTypeId,
-          }
-        : null
-    })
-    .filter(Boolean) as Array<{
-    modelLinkId: string
-    sourceId: string
-    targetId: string
-    linkTypeId: string
-  }>
+  const edges = buildEdges(left.links)(instances.edges)
   return buildDiagramDiffStateMaps(
     d,
     rightPathMap.value,
@@ -526,7 +453,6 @@ const leftDiffStateWhenRightIsBase = computed(() => {
   )
 })
 
-/** Подсветка на правом канвасе, когда база справа: красный — удалено (в т.ч. есть на базе, нет на диаграмме изменений), оранжевый — изменено. */
 const rightDiffStateWhenRightIsBase = computed(() => {
   const d = diffWhenRightIsBase.value
   const diagram = rightDiagram.value
@@ -536,25 +462,7 @@ const rightDiffStateWhenRightIsBase = computed(() => {
   const instances = diagram.parsedAttrs?.instances
   if (!instances) return { diffStateByModelNodeId: {}, diffStateByModelLinkId: {} }
   const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-  const linkById = new Map(right.links.map((l) => [l.id, l]))
-  const edges = instances.edges
-    .map((e) => {
-      const link = linkById.get(e.modelLinkId)
-      return link
-        ? {
-            modelLinkId: e.modelLinkId,
-            sourceId: link.sourceId,
-            targetId: link.targetId,
-            linkTypeId: link.linkTypeId,
-          }
-        : null
-    })
-    .filter(Boolean) as Array<{
-    modelLinkId: string
-    sourceId: string
-    targetId: string
-    linkTypeId: string
-  }>
+  const edges = buildEdges(right.links)(instances.edges)
   return buildDiagramDiffStateMaps(
     d,
     rightPathMap.value,
@@ -571,8 +479,6 @@ const rightDiffStateWhenRightIsBase = computed(() => {
   )
 })
 
-const emptyDiffState = { diffStateByModelNodeId: {} as Record<string, "added" | "removed" | "modified">, diffStateByModelLinkId: {} as Record<string, "added" | "removed" | "modified"> }
-
 const leftCanvasDiffState = computed(() =>
   baseSide.value === "left" ? leftDiffState.value : leftDiffStateWhenRightIsBase.value
 )
@@ -581,7 +487,7 @@ const rightCanvasDiffState = computed(() =>
 )
 
 function handleBack(): void {
-  router.push({ name: "model-editor", params: { id: modelId.value } })
+  router.push({ name: "model-editor", params: { id: versionId.value } })
 }
 
 function handleToggleBaseSide(): void {
@@ -595,7 +501,7 @@ function handleLeftSelectNodes(ids: string[]): void {
 }
 
 function handleLeftSelectLink(linkId: string): void {
-  const link = leftData.value?.links.find((l) => l.id === linkId)
+  const link = versionData.value?.links.find((l) => l.id === linkId)
   if (!link || !leftPathMap.value) return
   const sp = leftPathMap.value.get(link.sourceId)
   const tp = leftPathMap.value.get(link.targetId)
@@ -616,7 +522,7 @@ function handleRightSelectNodes(ids: string[]): void {
 }
 
 function handleRightSelectLink(linkId: string): void {
-  const link = rightData.value?.links.find((l) => l.id === linkId)
+  const link = versionData.value?.links.find((l) => l.id === linkId)
   if (!link || !rightPathMap.value) return
   const sp = rightPathMap.value.get(link.sourceId)
   const tp = rightPathMap.value.get(link.targetId)
@@ -630,11 +536,15 @@ function handleRightSelectLink(linkId: string): void {
     }
 }
 
+function linkKey(sp: string, tp: string, lt: string): string {
+  return `${sp}\t${tp}\t${lt}`
+}
+
 const leftByPath = computed(() => {
   const map = new Map<string, NodeResponse>()
-  if (!leftData.value) return map
-  const pathMap = buildNodePathMap(leftData.value.nodes)
-  for (const n of leftData.value.nodes) {
+  if (!versionData.value) return map
+  const pathMap = buildNodePathMap(versionData.value.nodes)
+  for (const n of versionData.value.nodes) {
     const p = pathMap.get(n.id)
     if (p !== undefined) map.set(p, n)
   }
@@ -643,39 +553,33 @@ const leftByPath = computed(() => {
 
 const rightByPath = computed(() => {
   const map = new Map<string, NodeResponse>()
-  if (!rightData.value) return map
-  const pathMap = buildNodePathMap(rightData.value.nodes)
-  for (const n of rightData.value.nodes) {
+  if (!versionData.value) return map
+  const pathMap = buildNodePathMap(versionData.value.nodes)
+  for (const n of versionData.value.nodes) {
     const p = pathMap.get(n.id)
     if (p !== undefined) map.set(p, n)
   }
   return map
 })
 
-function linkKey(sp: string, tp: string, lt: string): string {
-  return `${sp}\t${tp}\t${lt}`
-}
-
 const leftByLinkKey = computed(() => {
   const map = new Map<string, LinkResponse>()
-  if (!leftData.value || !leftPathMap.value) return map
-  for (const l of leftData.value.links) {
+  if (!versionData.value || !leftPathMap.value) return map
+  for (const l of versionData.value.links) {
     const sp = leftPathMap.value.get(l.sourceId)
     const tp = leftPathMap.value.get(l.targetId)
-    if (sp !== undefined && tp !== undefined)
-      map.set(linkKey(sp, tp, l.linkTypeId), l)
+    if (sp !== undefined && tp !== undefined) map.set(linkKey(sp, tp, l.linkTypeId), l)
   }
   return map
 })
 
 const rightByLinkKey = computed(() => {
   const map = new Map<string, LinkResponse>()
-  if (!rightData.value || !rightPathMap.value) return map
-  for (const l of rightData.value.links) {
+  if (!versionData.value || !rightPathMap.value) return map
+  for (const l of versionData.value.links) {
     const sp = rightPathMap.value.get(l.sourceId)
     const tp = rightPathMap.value.get(l.targetId)
-    if (sp !== undefined && tp !== undefined)
-      map.set(linkKey(sp, tp, l.linkTypeId), l)
+    if (sp !== undefined && tp !== undefined) map.set(linkKey(sp, tp, l.linkTypeId), l)
   }
   return map
 })
@@ -716,7 +620,6 @@ function flattenRelationProperties(
 }
 
 type PropertyRow = { key: string; base: string; target: string; changed: boolean }
-/** Таблица свойств: первая колонка — левая версия, вторая — правая. Если элемент только на одной диаграмме (красный/зелёный), в колонке другой стороны показываем "—". */
 const selectedPropertyRows = computed<PropertyRow[]>(() => {
   const sel = selectedElement.value
   if (!sel) return []
@@ -790,7 +693,6 @@ const selectedPropertyRows = computed<PropertyRow[]>(() => {
   }
 })
 
-/** Убирает скрытый корень "Root/" из пути для отображения. */
 function pathForDisplay(path: string): string {
   return path.startsWith("Root/") ? path.slice(5) : path
 }
@@ -803,17 +705,45 @@ const selectedElementLabel = computed(() => {
 })
 
 watch(
-  [modelId, leftVersionId, rightVersionId],
+  [versionId, diagramName],
   () => {
-    if (modelId.value) void loadRelatedVersions()
-    if (leftVersionId.value && rightVersionId.value) void loadBothVersions()
+    if (versionId.value) void loadVersionData()
   },
   { immediate: true }
 )
 
 watch(
-  () => modelId.value,
+  () => versionId.value,
   () => void loadSharedData(),
+  { immediate: true }
+)
+
+watch(
+  [diagramsWithName, diagramName],
+  () => {
+    const list = diagramsWithName.value
+    if (list.length === 0) {
+      leftDiagramId.value = ""
+      rightDiagramId.value = ""
+      return
+    }
+    const firstId = list[0]!.id
+    const secondId = list[1]?.id ?? firstId
+    if (!leftDiagramId.value || !list.some((d) => d.id === leftDiagramId.value)) {
+      leftDiagramId.value = firstId
+    }
+    if (!rightDiagramId.value || !list.some((d) => d.id === rightDiagramId.value)) {
+      rightDiagramId.value = secondId
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => diagramNameFromQuery.value,
+  (q) => {
+    if (q && diagramNames.value.includes(q)) diagramName.value = q
+  },
   { immediate: true }
 )
 
@@ -841,38 +771,41 @@ watch(
       <AppHeader />
     </template>
     <template #default>
-      <div class="vc">
+      <div class="dc">
         <!-- Top bar -->
-        <div class="vc__topbar">
+        <div class="dc__topbar">
           <button
             type="button"
-            class="vc__back"
+            class="dc__back"
             :title="t('toolbar.backToModels')"
             @click="handleBack"
           >
             <UiIcon name="arrow_back" />
           </button>
 
-          <div class="vc__selectors">
-            <div class="vc__version-pick">
-              <span class="vc__pick-label">{{ t('models.compareVersionLeft') }}</span>
-              <select v-model="leftVersionId" class="vc__pick-select" :disabled="loading">
-                <option value="">{{ t('models.compareSelectVersion') }}</option>
-                <option
-                  v-for="v in relatedVersions"
-                  :key="v.id"
-                  :value="v.id"
-                  :disabled="v.id === rightVersionId"
-                >
-                  {{ v.name }} {{ v.version }}
-                </option>
+          <div class="dc__selectors">
+            <div class="dc__pick-group">
+              <span class="dc__pick-label">{{ t('models.compareDiagramName') }}</span>
+              <select v-model="diagramName" class="dc__pick-select">
+                <option v-for="name in diagramNames" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </div>
+
+            <div class="dc__pick-group">
+              <span class="dc__pick-label">{{ t('models.compareVersionLeft') }}</span>
+              <select
+                v-model="leftDiagramId"
+                class="dc__pick-select"
+                :disabled="loading || !diagramsWithName.length"
+              >
+                <option v-for="d in diagramsWithName" :key="d.id" :value="d.id">{{ d.version }}</option>
               </select>
             </div>
 
             <button
               type="button"
-              class="vc__swap"
-              :disabled="!leftVersionId || !rightVersionId || loading"
+              class="dc__swap"
+              :disabled="!leftDiagramId || !rightDiagramId || loading"
               :title="t('models.compareToggleBase')"
               @click="handleToggleBaseSide"
             >
@@ -884,50 +817,39 @@ watch(
               </svg>
             </button>
 
-            <div class="vc__version-pick">
-              <span class="vc__pick-label">{{ t('models.compareVersionRight') }}</span>
-              <select v-model="rightVersionId" class="vc__pick-select" :disabled="loading">
-                <option value="">{{ t('models.compareSelectVersion') }}</option>
-                <option
-                  v-for="v in relatedVersions"
-                  :key="v.id"
-                  :value="v.id"
-                  :disabled="v.id === leftVersionId"
-                >
-                  {{ v.name }} {{ v.version }}
-                </option>
+            <div class="dc__pick-group">
+              <span class="dc__pick-label">{{ t('models.compareVersionRight') }}</span>
+              <select
+                v-model="rightDiagramId"
+                class="dc__pick-select"
+                :disabled="loading || !diagramsWithName.length"
+              >
+                <option v-for="d in diagramsWithName" :key="d.id" :value="d.id">{{ d.version }}</option>
               </select>
             </div>
           </div>
-
-          <div class="vc__diagram-pick">
-            <span class="vc__pick-label">{{ t('models.compareDiagramName') }}</span>
-            <select v-model="diagramName" class="vc__pick-select">
-              <option v-for="name in diagramNames" :key="name" :value="name">{{ name }}</option>
-            </select>
-          </div>
         </div>
 
-        <p v-if="error" class="vc__error">{{ error }}</p>
+        <p v-if="error" class="dc__error">{{ error }}</p>
 
         <!-- Canvas area -->
-        <div v-else class="vc__body">
-          <div class="vc__panels">
+        <div v-else class="dc__body">
+          <div class="dc__panels">
             <!-- Left panel -->
             <div
-              class="vc__panel"
-              :class="baseSide === 'left' ? 'vc__panel--base' : 'vc__panel--changes'"
+              class="dc__panel"
+              :class="baseSide === 'left' ? 'dc__panel--base' : 'dc__panel--changes'"
             >
-              <div class="vc__panel-header">
-                <span class="vc__panel-side">{{ t('models.compareVersionLeft') }}</span>
+              <div class="dc__panel-header">
+                <span class="dc__panel-side">{{ t('models.compareVersionLeft') }}</span>
                 <span
-                  class="vc__role-badge"
-                  :class="baseSide === 'left' ? 'vc__role-badge--base' : 'vc__role-badge--changes'"
+                  class="dc__role-badge"
+                  :class="baseSide === 'left' ? 'dc__role-badge--base' : 'dc__role-badge--changes'"
                 >
                   {{ baseSide === 'left' ? t('models.compareBaseLabel') : t('models.compareChangesLabel') }}
                 </span>
               </div>
-              <div class="vc__canvas-area">
+              <div class="dc__canvas-area">
                 <ModelDiagramCanvas
                   ref="leftCanvasRef"
                   v-if="leftDiagram && sharedData"
@@ -936,7 +858,7 @@ watch(
                   :links="leftEditorLinks"
                   :relations="sharedData.relations"
                   :components="sharedData.components"
-                  :node-types="leftData?.nodeTypes ?? []"
+                  :node-types="versionData?.nodeTypes ?? []"
                   :relation-rules="sharedData.relationRules"
                   :selected-model-node-ids="[]"
                   :selected-model-link-id="null"
@@ -949,30 +871,30 @@ watch(
                   @select-nodes="handleLeftSelectNodes"
                   @select-link="handleLeftSelectLink"
                 />
-                <div v-else class="vc__placeholder">
+                <div v-else class="dc__placeholder">
                   {{ leftDiagram ? t('common.loading') : t('models.compareNoDiagram') }}
                 </div>
               </div>
             </div>
 
             <!-- Divider -->
-            <div class="vc__divider" />
+            <div class="dc__divider" />
 
             <!-- Right panel -->
             <div
-              class="vc__panel"
-              :class="baseSide === 'right' ? 'vc__panel--base' : 'vc__panel--changes'"
+              class="dc__panel"
+              :class="baseSide === 'right' ? 'dc__panel--base' : 'dc__panel--changes'"
             >
-              <div class="vc__panel-header">
-                <span class="vc__panel-side">{{ t('models.compareVersionRight') }}</span>
+              <div class="dc__panel-header">
+                <span class="dc__panel-side">{{ t('models.compareVersionRight') }}</span>
                 <span
-                  class="vc__role-badge"
-                  :class="baseSide === 'right' ? 'vc__role-badge--base' : 'vc__role-badge--changes'"
+                  class="dc__role-badge"
+                  :class="baseSide === 'right' ? 'dc__role-badge--base' : 'dc__role-badge--changes'"
                 >
                   {{ baseSide === 'right' ? t('models.compareBaseLabel') : t('models.compareChangesLabel') }}
                 </span>
               </div>
-              <div class="vc__canvas-area">
+              <div class="dc__canvas-area">
                 <ModelDiagramCanvas
                   ref="rightCanvasRef"
                   v-if="rightDiagram && sharedData"
@@ -981,7 +903,7 @@ watch(
                   :links="rightEditorLinks"
                   :relations="sharedData.relations"
                   :components="sharedData.components"
-                  :node-types="rightData?.nodeTypes ?? []"
+                  :node-types="versionData?.nodeTypes ?? []"
                   :relation-rules="sharedData.relationRules"
                   :selected-model-node-ids="[]"
                   :selected-model-link-id="null"
@@ -994,7 +916,7 @@ watch(
                   @select-nodes="handleRightSelectNodes"
                   @select-link="handleRightSelectLink"
                 />
-                <div v-else class="vc__placeholder">
+                <div v-else class="dc__placeholder">
                   {{ rightDiagram ? t('common.loading') : t('models.compareNoDiagram') }}
                 </div>
               </div>
@@ -1005,25 +927,25 @@ watch(
         <!-- Properties panel -->
         <div
           v-if="selectedElementLabel"
-          class="vc__resizer"
+          class="dc__resizer"
           role="separator"
           aria-orientation="horizontal"
           :title="t('models.resizePropertiesPanelHeight')"
           @mousedown.prevent="startPropsPanelResize"
         >
-          <span class="vc__resizer-grip" />
+          <span class="dc__resizer-grip" />
         </div>
         <div
           v-if="selectedElementLabel"
-          class="vc__props"
+          class="dc__props"
           :style="{ height: propsPanelHeight + 'px' }"
         >
-          <div class="vc__props-header">
-            <span class="vc__props-label">{{ t('models.compareSelectedElement') }}</span>
-            <span class="vc__props-element">{{ selectedElementLabel }}</span>
+          <div class="dc__props-header">
+            <span class="dc__props-label">{{ t('models.compareSelectedElement') }}</span>
+            <span class="dc__props-element">{{ selectedElementLabel }}</span>
           </div>
-          <div class="vc__props-scroll">
-            <table class="vc__table">
+          <div class="dc__props-scroll">
+            <table class="dc__table">
               <thead>
                 <tr>
                   <th>{{ t('models.comparePropName') }}</th>
@@ -1035,11 +957,11 @@ watch(
                 <tr
                   v-for="row in selectedPropertyRows"
                   :key="row.key"
-                  :class="{ 'vc__row--diff': row.changed }"
+                  :class="{ 'dc__row--diff': row.changed }"
                 >
-                  <td class="vc__cell-key">{{ row.key }}</td>
-                  <td :class="row.changed ? 'vc__cell--old' : ''">{{ row.base }}</td>
-                  <td :class="row.changed ? 'vc__cell--new' : ''">{{ row.target }}</td>
+                  <td class="dc__cell-key">{{ row.key }}</td>
+                  <td :class="row.changed ? 'dc__cell--old' : ''">{{ row.base }}</td>
+                  <td :class="row.changed ? 'dc__cell--new' : ''">{{ row.target }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1055,7 +977,7 @@ watch(
 
 <style scoped>
 /* ── Layout ── */
-.vc {
+.dc {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1064,7 +986,7 @@ watch(
 }
 
 /* ── Top bar ── */
-.vc__topbar {
+.dc__topbar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1073,7 +995,7 @@ watch(
   border-bottom: 1px solid var(--border);
 }
 
-.vc__back {
+.dc__back {
   display: grid;
   place-items: center;
   width: 34px;
@@ -1086,14 +1008,14 @@ watch(
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
-.vc__back:hover {
+.dc__back:hover {
   color: var(--primary);
   border-color: var(--primary);
   background: var(--primary-soft);
   box-shadow: var(--shadow-glow);
 }
 
-.vc__selectors {
+.dc__selectors {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1101,14 +1023,13 @@ watch(
   min-width: 0;
 }
 
-.vc__version-pick,
-.vc__diagram-pick {
+.dc__pick-group {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.vc__pick-label {
+.dc__pick-label {
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -1117,7 +1038,7 @@ watch(
   white-space: nowrap;
 }
 
-.vc__pick-select {
+.dc__pick-select {
   height: 32px;
   padding: 0 28px 0 10px;
   border: 1px solid var(--border);
@@ -1134,16 +1055,16 @@ watch(
   background-repeat: no-repeat;
   background-position: right 10px center;
 }
-.vc__pick-select:hover {
+.dc__pick-select:hover {
   border-color: var(--border-strong);
 }
-.vc__pick-select:focus {
+.dc__pick-select:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
-.vc__swap {
+.dc__swap {
   display: grid;
   place-items: center;
   width: 34px;
@@ -1156,18 +1077,18 @@ watch(
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
-.vc__swap:hover:not(:disabled) {
+.dc__swap:hover:not(:disabled) {
   color: var(--primary);
   border-color: var(--primary);
   background: var(--primary-soft);
   transform: rotate(180deg);
 }
-.vc__swap:disabled {
+.dc__swap:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.vc__error {
+.dc__error {
   padding: 16px;
   color: var(--danger);
   margin: 0;
@@ -1175,20 +1096,20 @@ watch(
 }
 
 /* ── Canvas area ── */
-.vc__body {
+.dc__body {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.vc__panels {
+.dc__panels {
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
-.vc__panel {
+.dc__panel {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1197,20 +1118,20 @@ watch(
   transition: border-color 0.25s ease;
 }
 
-.vc__panel--base {
+.dc__panel--base {
   border-top: 2px solid var(--border);
 }
-.vc__panel--changes {
+.dc__panel--changes {
   border-top: 2px solid var(--primary);
 }
 
-.vc__divider {
+.dc__divider {
   width: 1px;
   background: var(--border);
   flex-shrink: 0;
   position: relative;
 }
-.vc__divider::before {
+.dc__divider::before {
   content: '';
   position: absolute;
   top: 50%;
@@ -1223,11 +1144,11 @@ watch(
   opacity: 0;
   transition: opacity 0.2s ease;
 }
-.vc__panels:hover .vc__divider::before {
+.dc__panels:hover .dc__divider::before {
   opacity: 1;
 }
 
-.vc__panel-header {
+.dc__panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1236,7 +1157,7 @@ watch(
   border-bottom: 1px solid var(--border);
 }
 
-.vc__panel-side {
+.dc__panel-side {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1244,7 +1165,7 @@ watch(
   color: var(--text-subtle);
 }
 
-.vc__role-badge {
+.dc__role-badge {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1253,24 +1174,24 @@ watch(
   border-radius: 6px;
   transition: all 0.25s ease;
 }
-.vc__role-badge--base {
+.dc__role-badge--base {
   background: var(--surface-strong);
   color: var(--text-muted);
 }
-.vc__role-badge--changes {
+.dc__role-badge--changes {
   background: var(--primary);
   color: #fff;
   box-shadow: 0 1px 4px rgba(124, 92, 252, 0.25);
 }
 
-.vc__canvas-area {
+.dc__canvas-area {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.vc__placeholder {
+.dc__placeholder {
   flex: 1;
   display: grid;
   place-items: center;
@@ -1297,7 +1218,7 @@ watch(
 }
 
 /* ── Resizer ── */
-.vc__resizer {
+.dc__resizer {
   flex-shrink: 0;
   height: 8px;
   display: flex;
@@ -1308,24 +1229,24 @@ watch(
   border-top: 1px solid var(--border);
   transition: background 0.15s ease;
 }
-.vc__resizer:hover {
+.dc__resizer:hover {
   background: var(--primary-soft);
 }
 
-.vc__resizer-grip {
+.dc__resizer-grip {
   width: 36px;
   height: 3px;
   border-radius: 2px;
   background: var(--border-strong);
   transition: all 0.15s ease;
 }
-.vc__resizer:hover .vc__resizer-grip {
+.dc__resizer:hover .dc__resizer-grip {
   background: var(--primary);
   width: 48px;
 }
 
 /* ── Properties panel ── */
-.vc__props {
+.dc__props {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1334,7 +1255,7 @@ watch(
   overflow: hidden;
 }
 
-.vc__props-header {
+.dc__props-header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1343,7 +1264,7 @@ watch(
   flex-shrink: 0;
 }
 
-.vc__props-label {
+.dc__props-label {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1351,25 +1272,25 @@ watch(
   color: var(--text-subtle);
 }
 
-.vc__props-element {
+.dc__props-element {
   font-size: 13px;
   font-weight: 500;
   color: var(--base-text);
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 }
 
-.vc__props-scroll {
+.dc__props-scroll {
   flex: 1;
   overflow: auto;
 }
 
-.vc__table {
+.dc__table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-.vc__table th {
+.dc__table th {
   padding: 6px 12px;
   text-align: left;
   font-size: 10px;
@@ -1384,35 +1305,35 @@ watch(
   z-index: 1;
 }
 
-.vc__table td {
+.dc__table td {
   padding: 5px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
 
-.vc__table tbody tr:hover {
+.dc__table tbody tr:hover {
   background: var(--surface-muted);
 }
 
-.vc__cell-key {
+.dc__cell-key {
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.vc__row--diff {
+.dc__row--diff {
   background: color-mix(in srgb, var(--warning) 4%, transparent);
 }
-.vc__row--diff:hover {
+.dc__row--diff:hover {
   background: color-mix(in srgb, var(--warning) 8%, transparent) !important;
 }
 
-.vc__cell--old {
+.dc__cell--old {
   color: var(--danger);
   background: var(--danger-soft);
   font-weight: 500;
 }
 
-.vc__cell--new {
+.dc__cell--new {
   color: var(--success);
   background: var(--success-soft);
   font-weight: 500;

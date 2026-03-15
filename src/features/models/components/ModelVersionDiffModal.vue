@@ -60,14 +60,13 @@ watch(
     max-width="720px"
     @close="emit('close')"
   >
-    <div class="model-diff-modal">
-      <div class="model-diff-modal__versions">
-        <label class="model-diff-modal__label">
-          {{ t('models.compareSelectVersion') }}
-        </label>
+    <div class="mdm">
+      <!-- Version selector -->
+      <div class="mdm__selector">
+        <span class="mdm__selector-label">{{ t('models.compareSelectVersion') }}</span>
         <select
           ref="versionSelectEl"
-          class="model-diff-modal__select"
+          class="mdm__select"
           :value="compareTargetId ?? ''"
           :disabled="relatedVersionsLoading || compareTargetLoading"
           @change="onSelectVersion"
@@ -83,87 +82,103 @@ watch(
             {{ v.name }} {{ v.version }}
           </option>
         </select>
-        <p v-if="!relatedVersionsLoading && otherVersions().length === 0" class="model-diff-modal__hint">
+        <p v-if="!relatedVersionsLoading && otherVersions().length === 0" class="mdm__msg mdm__msg--muted">
           {{ t('models.compareNoVersions') }}
         </p>
-        <p v-if="compareTargetError" class="model-diff-modal__error">
+        <p v-if="compareTargetError" class="mdm__msg mdm__msg--error">
           {{ compareTargetError }}
         </p>
-        <p v-if="compareTargetLoading" class="model-diff-modal__hint">
+        <p v-if="compareTargetLoading" class="mdm__msg mdm__msg--muted">
           {{ t('models.compareLoadingTarget') }}
         </p>
       </div>
 
+      <!-- Diff content -->
       <template v-if="diff">
-        <div class="model-diff-modal__tabs">
+        <div class="mdm__tabs">
           <button
             type="button"
-            class="model-diff-modal__tab"
-            :class="{ 'model-diff-modal__tab--active': activeTab === 'nodes' }"
+            class="mdm__tab"
+            :class="{ 'mdm__tab--active': activeTab === 'nodes' }"
             @click="activeTab = 'nodes'"
           >
-            {{ t('models.compareDiffNodes') }} ({{ diff.nodes.length }})
+            <span class="mdm__tab-text">{{ t('models.compareDiffNodes') }}</span>
+            <span class="mdm__tab-count" :class="{ 'mdm__tab-count--zero': diff.nodes.length === 0 }">
+              {{ diff.nodes.length }}
+            </span>
           </button>
           <button
             type="button"
-            class="model-diff-modal__tab"
-            :class="{ 'model-diff-modal__tab--active': activeTab === 'links' }"
+            class="mdm__tab"
+            :class="{ 'mdm__tab--active': activeTab === 'links' }"
             @click="activeTab = 'links'"
           >
-            {{ t('models.compareDiffLinks') }} ({{ diff.links.length }})
+            <span class="mdm__tab-text">{{ t('models.compareDiffLinks') }}</span>
+            <span class="mdm__tab-count" :class="{ 'mdm__tab-count--zero': diff.links.length === 0 }">
+              {{ diff.links.length }}
+            </span>
           </button>
           <button
             type="button"
-            class="model-diff-modal__tab"
-            :class="{ 'model-diff-modal__tab--active': activeTab === 'diagrams' }"
+            class="mdm__tab"
+            :class="{ 'mdm__tab--active': activeTab === 'diagrams' }"
             @click="activeTab = 'diagrams'"
           >
-            {{ t('models.compareDiffDiagrams') }} ({{ diff.diagrams.length }})
+            <span class="mdm__tab-text">{{ t('models.compareDiffDiagrams') }}</span>
+            <span class="mdm__tab-count" :class="{ 'mdm__tab-count--zero': diff.diagrams.length === 0 }">
+              {{ diff.diagrams.length }}
+            </span>
           </button>
         </div>
 
-        <div class="model-diff-modal__list">
+        <div class="mdm__list">
           <template v-if="activeTab === 'nodes'">
             <div
               v-for="(item, i) in diff.nodes as NodeDiffItem[]"
               :key="`n-${i}`"
-              class="model-diff-modal__row"
-              :class="`model-diff-modal__row--${item.kind}`"
+              class="mdm__row"
+              :class="`mdm__row--${item.kind}`"
             >
-              <span class="model-diff-modal__badge">{{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}</span>
-              <span class="model-diff-modal__path">{{ pathForDisplay(item.path) }}</span>
+              <span class="mdm__badge" :class="`mdm__badge--${item.kind}`">
+                {{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}
+              </span>
+              <span class="mdm__path">{{ pathForDisplay(item.path) }}</span>
             </div>
-            <p v-if="diff.nodes.length === 0" class="model-diff-modal__empty">
+            <div v-if="diff.nodes.length === 0" class="mdm__empty">
               {{ t('models.compareNoChanges') }}
-            </p>
+            </div>
           </template>
           <template v-else-if="activeTab === 'links'">
             <div
               v-for="(item, i) in diff.links as LinkDiffItem[]"
               :key="`l-${i}`"
-              class="model-diff-modal__row"
-              :class="`model-diff-modal__row--${item.kind}`"
+              class="mdm__row"
+              :class="`mdm__row--${item.kind}`"
             >
-              <span class="model-diff-modal__badge">{{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}</span>
-              <span class="model-diff-modal__path">{{ pathForDisplay(item.sourcePath) }} → {{ pathForDisplay(item.targetPath) }}</span>
+              <span class="mdm__badge" :class="`mdm__badge--${item.kind}`">
+                {{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}
+              </span>
+              <span class="mdm__path">{{ pathForDisplay(item.sourcePath) }} → {{ pathForDisplay(item.targetPath) }}</span>
             </div>
-            <p v-if="diff.links.length === 0" class="model-diff-modal__empty">
+            <div v-if="diff.links.length === 0" class="mdm__empty">
               {{ t('models.compareNoChanges') }}
-            </p>
+            </div>
           </template>
           <template v-else>
             <div
               v-for="(item, i) in diff.diagrams as DiagramDiffItem[]"
               :key="`d-${i}`"
-              class="model-diff-modal__row"
-              :class="`model-diff-modal__row--${item.kind}`"
+              class="mdm__row"
+              :class="`mdm__row--${item.kind}`"
             >
-              <span class="model-diff-modal__badge">{{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}</span>
-              <span class="model-diff-modal__path">{{ item.name }}</span>
+              <span class="mdm__badge" :class="`mdm__badge--${item.kind}`">
+                {{ item.kind === 'added' ? t('models.compareDiffAdded') : item.kind === 'removed' ? t('models.compareDiffRemoved') : t('models.compareDiffModified') }}
+              </span>
+              <span class="mdm__path">{{ item.name }}</span>
             </div>
-            <p v-if="diff.diagrams.length === 0" class="model-diff-modal__empty">
+            <div v-if="diff.diagrams.length === 0" class="mdm__empty">
               {{ t('models.compareNoChanges') }}
-            </p>
+            </div>
           </template>
         </div>
       </template>
@@ -188,104 +203,192 @@ watch(
 </template>
 
 <style scoped>
-.model-diff-modal {
+.mdm {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 16px;
   min-height: 200px;
 }
-.model-diff-modal__versions {
+
+/* ── Version selector ── */
+.mdm__selector {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
 }
-.model-diff-modal__label {
-  font-weight: 500;
-  color: var(--base-text);
+
+.mdm__selector-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
 }
-.model-diff-modal__select {
-  max-width: 320px;
-  padding: 0.5rem 0.75rem;
+
+.mdm__select {
+  max-width: 360px;
+  height: 36px;
+  padding: 0 32px 0 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  border-radius: 8px;
+  background: var(--surface-muted);
   color: var(--base-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%239a9a9a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
 }
-.model-diff-modal__hint,
-.model-diff-modal__error {
+.mdm__select:hover {
+  border-color: var(--border-strong);
+}
+.mdm__select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.mdm__msg {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 12px;
 }
-.model-diff-modal__error {
+.mdm__msg--muted {
+  color: var(--text-muted);
+}
+.mdm__msg--error {
   color: var(--danger);
 }
-.model-diff-modal__hint {
-  color: var(--text-muted);
-}
-.model-diff-modal__tabs {
+
+/* ── Tabs ── */
+.mdm__tabs {
   display: flex;
-  gap: 0.25rem;
-}
-.model-diff-modal__tab {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  gap: 4px;
   background: var(--surface-muted);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.mdm__tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
 }
-.model-diff-modal__tab--active {
+.mdm__tab:hover:not(.mdm__tab--active) {
   background: var(--surface);
-  color: var(--primary);
-  border-color: var(--primary);
+  color: var(--base-text);
 }
-.model-diff-modal__list {
+.mdm__tab--active {
+  background: var(--surface);
+  color: var(--base-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.mdm__tab-text {
+  white-space: nowrap;
+}
+
+.mdm__tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.mdm__tab-count--zero {
+  background: var(--surface-strong);
+  color: var(--text-subtle);
+}
+
+/* ── Diff list ── */
+.mdm__list {
   max-height: 360px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.5rem;
+  border-radius: 10px;
 }
-.model-diff-modal__row {
+
+.mdm__row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  transition: background 0.1s ease;
 }
-.model-diff-modal__row--added {
-  background: rgba(30, 163, 85, 0.1);
+.mdm__row:last-child {
+  border-bottom: none;
 }
-.model-diff-modal__row--removed {
-  background: rgba(220, 53, 69, 0.1);
+.mdm__row:hover {
+  background: var(--surface-muted);
 }
-.model-diff-modal__row--modified {
-  background: rgba(230, 126, 34, 0.1);
+
+.mdm__row--added {
+  border-left: 3px solid var(--success);
 }
-.model-diff-modal__badge {
+.mdm__row--removed {
+  border-left: 3px solid var(--danger);
+}
+.mdm__row--modified {
+  border-left: 3px solid var(--warning);
+}
+
+.mdm__badge {
   flex-shrink: 0;
-  font-weight: 500;
-  min-width: 5rem;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 72px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  text-align: center;
 }
-.model-diff-modal__row--added .model-diff-modal__badge {
+.mdm__badge--added {
   color: var(--success);
+  background: var(--success-soft);
 }
-.model-diff-modal__row--removed .model-diff-modal__badge {
+.mdm__badge--removed {
   color: var(--danger);
+  background: var(--danger-soft);
 }
-.model-diff-modal__row--modified .model-diff-modal__badge {
+.mdm__badge--modified {
   color: var(--warning);
+  background: var(--warning-soft);
 }
-.model-diff-modal__path {
+
+.mdm__path {
+  font-size: 13px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   word-break: break-all;
   color: var(--base-text);
 }
-.model-diff-modal__empty {
-  margin: 0;
-  padding: 0.5rem;
-  color: var(--text-muted);
-  font-size: 0.875rem;
+
+.mdm__empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: 13px;
 }
 </style>

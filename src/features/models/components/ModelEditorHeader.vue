@@ -41,6 +41,8 @@ const props = withDefaults(
     baselineError?: string | null
     isAdmin?: boolean
     showCompareButton?: boolean
+    /** id текущей версии модели (для перехода к сравнению версий диаграммы). */
+    modelId?: string | null
   }>(),
   {
     hasUnsavedChanges: false,
@@ -74,6 +76,7 @@ const props = withDefaults(
     baselineError: null,
     isAdmin: false,
     showCompareButton: false,
+    modelId: null,
   }
 )
 
@@ -112,6 +115,16 @@ const startModelRename = async () => {
 const cancelModelRename = () => {
   isRenamingModel.value = false
   editableModelName.value = props.modelName || ''
+}
+
+const goToDiagramCompare = () => {
+  const id = props.modelId
+  if (!id) return
+  router.push({
+    name: 'diagram-versions-compare',
+    params: { id },
+    query: props.diagramName ? { diagram: props.diagramName } : {},
+  })
 }
 
 const commitModelRename = () => {
@@ -346,6 +359,15 @@ const canCreateBaseline = computed(
             @click="emit('createBaseline')"
           >
             <UiIcon name="add_box" />
+          </button>
+          <button
+            v-if="modelId"
+            type="button"
+            class="model-header__baseline-btn"
+            :title="t('models.compareDiagramVersions')"
+            @click="goToDiagramCompare"
+          >
+            <UiIcon name="compare" />
           </button>
           <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
         </template>

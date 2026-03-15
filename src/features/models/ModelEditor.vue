@@ -3263,6 +3263,7 @@ onBeforeUnmount(() => {
         :baseline-error="baselineError"
         :is-admin="isAdmin"
         :show-compare-button="!!model?.id"
+        :model-id="model?.id ?? null"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
         @share="showShareModal = true"

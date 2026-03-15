@@ -186,6 +186,8 @@ const canRedo = ref(false)
 const GRID_SIZE = 20
 const MIN_ZOOM = 0.3
 const MAX_ZOOM = 2.5
+const DIAGRAM_VIEWPORT_STORAGE_KEY = 'warchi:model-diagram-viewport:v1'
+const MAX_STORED_DIAGRAM_VIEWPORTS = 200
 const DEFAULT_NODE_WIDTH = 160
 const DEFAULT_NODE_HEIGHT = 56
 const COMPONENT_RADIUS = 8
@@ -198,6 +200,90 @@ let miniMap: MiniMap | null = null
 let rulersOverlay: RulersOverlay | null = null
 let resizeObserver: ResizeObserver | null = null
 let suppressSelectionEvent = false
+let suppressViewportPersistence = false
+let lastActiveDiagramId: string | null = null
+
+type DiagramViewportState = {
+  zoom: number
+  offsetX: number
+  offsetY: number
+  updatedAt: number
+}
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
+function readStoredDiagramViewports(): Record<string, DiagramViewportState> {
+  try {
+    const raw = window.localStorage.getItem(DIAGRAM_VIEWPORT_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return {}
+    const result: Record<string, DiagramViewportState> = {}
+    for (const [diagramId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') continue
+      const candidate = value as Partial<DiagramViewportState>
+      if (
+        !isFiniteNumber(candidate.zoom) ||
+        !isFiniteNumber(candidate.offsetX) ||
+        !isFiniteNumber(candidate.offsetY)
+      ) {
+        continue
+      }
+      result[diagramId] = {
+        zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, candidate.zoom)),
+        offsetX: candidate.offsetX,
+        offsetY: candidate.offsetY,
+        updatedAt: isFiniteNumber(candidate.updatedAt) ? candidate.updatedAt : 0,
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+function writeStoredDiagramViewports(viewports: Record<string, DiagramViewportState>) {
+  try {
+    const entries = Object.entries(viewports)
+      .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+      .slice(0, MAX_STORED_DIAGRAM_VIEWPORTS)
+    window.localStorage.setItem(DIAGRAM_VIEWPORT_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch {
+    // localStorage may be unavailable (private mode/storage limits), ignore silently
+  }
+}
+
+function persistDiagramViewport(diagramId: string, currentRenderer: DiagramRenderer) {
+  if (suppressViewportPersistence) return
+  const viewports = readStoredDiagramViewports()
+  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentRenderer.zoom))
+  viewports[diagramId] = {
+    zoom,
+    offsetX: currentRenderer.offsetX,
+    offsetY: currentRenderer.offsetY,
+    updatedAt: Date.now(),
+  }
+  writeStoredDiagramViewports(viewports)
+}
+
+function restoreDiagramViewport(diagramId: string, currentRenderer: DiagramRenderer): boolean {
+  const viewports = readStoredDiagramViewports()
+  const saved = viewports[diagramId]
+  if (!saved) return false
+  suppressViewportPersistence = true
+  try {
+    currentRenderer.viewport = {
+      zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, saved.zoom)),
+      offsetX: saved.offsetX,
+      offsetY: saved.offsetY,
+    }
+  } finally {
+    suppressViewportPersistence = false
+  }
+  currentRenderer.markDirty()
+  return true
+}
 
 // Maps: papirus element ID → model entity
 const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: string }>()
@@ -1871,6 +1957,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
 // ── Renderer init ──
 function initRenderer(r: DiagramRenderer) {
   renderer = r
+  lastActiveDiagramId = props.activeDiagram?.id ?? null
   r.getCanvas().addEventListener('click', handleCanvasClickPrioritizeEdge)
   window.addEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
 
@@ -1909,6 +1996,16 @@ function initRenderer(r: DiagramRenderer) {
   } as Parameters<DiagramRenderer['enableInteractions']>[0])
   setupInteractionManager(interactionManager, r, navOnly)
   bindInteractionEvents(interactionManager, r)
+  r.on('zoom', () => {
+    const diagramId = props.activeDiagram?.id
+    if (!diagramId) return
+    persistDiagramViewport(diagramId, r)
+  })
+  r.on('pan', () => {
+    const diagramId = props.activeDiagram?.id
+    if (!diagramId) return
+    persistDiagramViewport(diagramId, r)
+  })
 
   // Permanently patch getElementAtPoint to check edges before nodes.
   // This fixes the issue where double-clicking on an edge that passes over a node
@@ -2078,6 +2175,9 @@ function initRenderer(r: DiagramRenderer) {
   }
 
   syncDiagram()
+  if (lastActiveDiagramId) {
+    restoreDiagramViewport(lastActiveDiagramId, r)
+  }
 }
 
 // ── Helpers ──
@@ -2462,6 +2562,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (renderer && lastActiveDiagramId) {
+    persistDiagramViewport(lastActiveDiagramId, renderer)
+  }
   resizeObserver?.disconnect()
   resizeObserver = null
   renderer?.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
@@ -2498,6 +2601,13 @@ watch(
 watch(
   () => props.activeDiagram?.id ?? null,
   (nextId, prevId) => {
+    if (renderer && prevId) {
+      persistDiagramViewport(prevId, renderer)
+    }
+    if (renderer && nextId) {
+      restoreDiagramViewport(nextId, renderer)
+    }
+    lastActiveDiagramId = nextId
     if (nextId !== prevId) resetHistory()
   }
 )

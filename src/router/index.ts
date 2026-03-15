@@ -53,6 +53,11 @@ const router = createRouter({
       component: () => import("../views/ModelVisualCompareView.vue")
     },
     {
+      path: "/models/:id/diagram-compare",
+      name: "diagram-versions-compare",
+      component: () => import("../views/DiagramVersionsCompareView.vue")
+    },
+    {
       path: "/notations",
       name: "notations",
       component: () => import("../views/NotationsView.vue")

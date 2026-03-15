@@ -73,6 +73,254 @@ const toEditorDiagram = (row: DiagramResponse): EditorDiagram => ({
 const withoutDeleted = <T extends { _isDeleted?: boolean }>(rows: T[]): T[] =>
   rows.filter(row => !row._isDeleted)
 
+function formatSaveEntityError(
+  action: 'создания' | 'обновления' | 'удаления',
+  entity: string,
+  status: number,
+  message: string
+): string {
+  if (status === 401 || status === 403) {
+    return 'Недостаточно прав для редактирования модели. Войдите заново или обратитесь к администратору.'
+  }
+  return `Ошибка ${action} ${entity}: ${message}`
+}
+
+async function saveModelMetadata(
+  model: ModelData,
+  modelCatalog: ModelData[]
+): Promise<{ data: ModelData }> {
+  const request: ModelUpdateRequest = {
+    name: model.name,
+    version: model.version,
+    ownerId: model.ownerId,
+    attrs: model.attrs ?? null,
+  }
+  const result = await apiPut<ModelData>(`/models/${model.id}`, request)
+  if (!result.success) {
+    if (result.error.status === 409) {
+      throw new Error('Модель с таким именем и версией уже существует.')
+    }
+    throw new Error(`Ошибка обновления модели: ${result.error.message}`)
+  }
+  const idx = modelCatalog.findIndex(item => item.id === result.data.id)
+  if (idx >= 0) modelCatalog[idx] = result.data
+  return { data: result.data }
+}
+
+async function saveNodes(
+  nodes: EditorNode[],
+  modelId: string,
+  ownerId: string,
+  onProgress: (msg: string) => void
+): Promise<Map<string, string>> {
+  const newNodeIdMap = new Map<string, string>()
+
+  const pendingNewNodes = nodes.filter(row => row._isNew && !row._isDeleted)
+  const pendingNewNodeIds = new Set(pendingNewNodes.map(node => node.id))
+
+  while (pendingNewNodes.length > 0) {
+    let progress = false
+
+    for (let i = 0; i < pendingNewNodes.length; i += 1) {
+      const node = pendingNewNodes[i]!
+      const rawParentId = node.parentNodeId ?? null
+      const parentIsPending = rawParentId ? pendingNewNodeIds.has(rawParentId) : false
+      if (parentIsPending && !newNodeIdMap.has(rawParentId!)) {
+        continue
+      }
+
+      const resolvedParentId = rawParentId
+        ? (newNodeIdMap.get(rawParentId) ?? rawParentId)
+        : null
+      onProgress(`Создание узла: ${node.name}`)
+      const request: NodeRequest = {
+        name: node.name,
+        modelId,
+        ownerId,
+        nodeTypeId: node.nodeTypeId,
+        parentNodeId: resolvedParentId,
+        attrs: serializeNodeAttrs(node.parsedAttrs),
+      }
+      const result = await apiPost<NodeResponse>('/nodes', request)
+      if (!result.success) {
+        throw new Error(
+          formatSaveEntityError('создания', 'узла', result.error.status, result.error.message)
+        )
+      }
+      const oldId = node.id
+      newNodeIdMap.set(oldId, result.data.id)
+      node.id = result.data.id
+      node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
+      node._isNew = false
+      pendingNewNodes.splice(i, 1)
+      pendingNewNodeIds.delete(oldId)
+      i -= 1
+      progress = true
+    }
+
+    if (!progress) {
+      throw new Error('Не удалось сохранить новые узлы: проверьте иерархию дерева.')
+    }
+  }
+
+  for (const node of nodes.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
+    onProgress(`Обновление узла: ${node.name}`)
+    const resolvedParentId = node.parentNodeId
+      ? (newNodeIdMap.get(node.parentNodeId) ?? node.parentNodeId)
+      : null
+    const request: NodeRequest = {
+      name: node.name,
+      modelId,
+      ownerId,
+      nodeTypeId: node.nodeTypeId,
+      parentNodeId: resolvedParentId,
+      attrs: serializeNodeAttrs(node.parsedAttrs),
+    }
+    const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
+    if (!result.success) {
+      throw new Error(
+        formatSaveEntityError('обновления', 'узла', result.error.status, result.error.message)
+      )
+    }
+    node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
+    node._isDirty = false
+  }
+
+  for (const node of nodes.filter(row => row._isDeleted && !row._isNew)) {
+    onProgress(`Удаление узла: ${node.name}`)
+    const result = await apiDelete<void>(`/nodes/${node.id}`)
+    if (!result.success) {
+      throw new Error(
+        formatSaveEntityError('удаления', 'узла', result.error.status, result.error.message)
+      )
+    }
+  }
+
+  return newNodeIdMap
+}
+
+function remapNodeIds(
+  newNodeIdMap: Map<string, string>,
+  links: EditorLink[],
+  diagrams: EditorDiagram[]
+): void {
+  if (newNodeIdMap.size === 0) return
+  for (const link of links) {
+    if (newNodeIdMap.has(link.sourceId)) link.sourceId = newNodeIdMap.get(link.sourceId)!
+    if (newNodeIdMap.has(link.targetId)) link.targetId = newNodeIdMap.get(link.targetId)!
+  }
+  for (const diagram of diagrams) {
+    if (diagram.nodeId && newNodeIdMap.has(diagram.nodeId)) {
+      diagram.nodeId = newNodeIdMap.get(diagram.nodeId) ?? diagram.nodeId
+    }
+    for (const nodeInstance of diagram.parsedAttrs.instances.nodes) {
+      if (newNodeIdMap.has(nodeInstance.modelNodeId)) {
+        nodeInstance.modelNodeId = newNodeIdMap.get(nodeInstance.modelNodeId)!
+      }
+    }
+  }
+}
+
+async function saveLinks(
+  links: EditorLink[],
+  diagrams: EditorDiagram[],
+  modelId: string,
+  ownerId: string,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  for (const link of links.filter(row => row._isDeleted && !row._isNew)) {
+    onProgress('Удаление связи')
+    const result = await apiDelete<void>(`/links/${link.id}`)
+    if (!result.success) throw new Error(`Ошибка удаления связи: ${result.error.message}`)
+  }
+
+  for (const link of links.filter(row => row._isNew && !row._isDeleted)) {
+    onProgress('Создание связи')
+    const request: LinkRequest = {
+      sourceId: link.sourceId,
+      targetId: link.targetId,
+      modelId,
+      ownerId,
+      linkTypeId: link.linkTypeId,
+      attrs: serializeLinkAttrs(link.parsedAttrs),
+    }
+    const result = await apiPost<LinkResponse>('/links', request)
+    if (!result.success) throw new Error(`Ошибка создания связи: ${result.error.message}`)
+    const oldId = link.id
+    link.id = result.data.id
+    link._isNew = false
+    for (const diagram of diagrams) {
+      for (const edge of diagram.parsedAttrs.instances.edges) {
+        if (edge.modelLinkId === oldId) edge.modelLinkId = result.data.id
+      }
+    }
+  }
+
+  for (const link of links.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
+    onProgress('Обновление связи')
+    const request: LinkRequest = {
+      sourceId: link.sourceId,
+      targetId: link.targetId,
+      modelId,
+      ownerId,
+      linkTypeId: link.linkTypeId,
+      attrs: serializeLinkAttrs(link.parsedAttrs),
+    }
+    const result = await apiPut<LinkResponse>(`/links/${link.id}`, request)
+    if (!result.success) throw new Error(`Ошибка обновления связи: ${result.error.message}`)
+    link._isDirty = false
+  }
+}
+
+async function saveDiagrams(
+  diagrams: EditorDiagram[],
+  ownerId: string,
+  modelId: string,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  for (const diagram of diagrams.filter(row => row._isDeleted && !row._isNew)) {
+    onProgress(`Удаление диаграммы: ${diagram.name}`)
+    const result = await apiDelete<void>(`/diagrams/${diagram.id}`)
+    if (!result.success) throw new Error(`Ошибка удаления диаграммы: ${result.error.message}`)
+  }
+
+  for (const diagram of diagrams.filter(row => row._isNew && !row._isDeleted)) {
+    onProgress(`Создание диаграммы: ${diagram.name}`)
+    const request: DiagramRequest = {
+      name: diagram.name,
+      version: diagram.version,
+      ownerId,
+      modelId,
+      nodeId: diagram.nodeId ?? null,
+      notationId: diagram.notationId,
+      attrs: serializeDiagramAttrs(diagram.parsedAttrs),
+    }
+    const result = await apiPost<DiagramResponse>('/diagrams', request)
+    if (!result.success) throw new Error(`Ошибка создания диаграммы: ${result.error.message}`)
+    diagram.id = result.data.id
+    diagram._isNew = false
+  }
+
+  const dirtyDiagrams = diagrams
+    .filter(row => row._isDirty && !row._isDeleted && !row._isNew)
+    .sort((a, b) => compareVersions(b.version, a.version))
+  for (const diagram of dirtyDiagrams) {
+    onProgress(`Обновление диаграммы: ${diagram.name}`)
+    const request: DiagramUpdateRequest = {
+      name: diagram.name,
+      version: diagram.version,
+      ownerId,
+      modelId,
+      nodeId: diagram.nodeId ?? null,
+      notationId: diagram.notationId,
+      attrs: serializeDiagramAttrs(diagram.parsedAttrs),
+    }
+    const result = await apiPut<DiagramResponse>(`/diagrams/${diagram.id}`, request)
+    if (!result.success) throw new Error(`Ошибка обновления диаграммы: ${result.error.message}`)
+    diagram._isDirty = false
+  }
+}
+
 export const useModelEditor = (): ModelEditorReturn => {
   const route = useRoute()
   const router = useRouter()
@@ -252,235 +500,21 @@ export const useModelEditor = (): ModelEditorReturn => {
     saveProgress.value = ''
 
     try {
-      const formatSaveEntityError = (
-        action: 'создания' | 'обновления' | 'удаления',
-        entity: string,
-        status: number,
-        message: string
-      ): string => {
-        if (status === 401 || status === 403) {
-          return 'Недостаточно прав для редактирования модели. Войдите заново или обратитесь к администратору.'
-        }
-        return `Ошибка ${action} ${entity}: ${message}`
-      }
-
-      const ownerId = state.value.ownerId
-      const modelId = state.value.modelId
-
-      const nodes = state.value.nodes
-      const links = state.value.links
-      const diagrams = state.value.diagrams
+      const { ownerId, modelId, nodes, links, diagrams } = state.value
+      const onProgress = (msg: string) => { saveProgress.value = msg }
 
       if (model.value && modelDirty.value) {
-        saveProgress.value = `Обновление модели: ${model.value.name}`
-        const request: ModelUpdateRequest = {
-          name: model.value.name,
-          version: model.value.version,
-          ownerId: model.value.ownerId,
-          attrs: model.value.attrs ?? null,
-        }
-        const result = await apiPut<ModelData>(`/models/${model.value.id}`, request)
-        if (!result.success) {
-          if (result.error.status === 409) {
-            throw new Error('Модель с таким именем и версией уже существует.')
-          }
-          throw new Error(`Ошибка обновления модели: ${result.error.message}`)
-        }
-        model.value = result.data
-        modelInitialName.value = result.data.name
+        onProgress(`Обновление модели: ${model.value.name}`)
+        const { data } = await saveModelMetadata(model.value, modelCatalog.value)
+        model.value = data
+        modelInitialName.value = data.name
         modelDirty.value = false
-        const idx = modelCatalog.value.findIndex(item => item.id === result.data.id)
-        if (idx >= 0) modelCatalog.value[idx] = result.data
       }
 
-      const newNodeIdMap = new Map<string, string>()
-
-      const pendingNewNodes = nodes.filter(row => row._isNew && !row._isDeleted)
-      const pendingNewNodeIds = new Set(pendingNewNodes.map(node => node.id))
-
-      while (pendingNewNodes.length > 0) {
-        let progress = false
-
-        for (let i = 0; i < pendingNewNodes.length; i += 1) {
-          const node = pendingNewNodes[i]!
-          const rawParentId = node.parentNodeId ?? null
-          const parentIsPending = rawParentId ? pendingNewNodeIds.has(rawParentId) : false
-          if (parentIsPending && !newNodeIdMap.has(rawParentId!)) {
-            continue
-          }
-
-          const resolvedParentId = rawParentId
-            ? (newNodeIdMap.get(rawParentId) ?? rawParentId)
-            : null
-          saveProgress.value = `Создание узла: ${node.name}`
-          const request: NodeRequest = {
-            name: node.name,
-            modelId,
-            ownerId,
-            nodeTypeId: node.nodeTypeId,
-            parentNodeId: resolvedParentId,
-            attrs: serializeNodeAttrs(node.parsedAttrs),
-          }
-          const result = await apiPost<NodeResponse>('/nodes', request)
-          if (!result.success) {
-            throw new Error(
-              formatSaveEntityError('создания', 'узла', result.error.status, result.error.message)
-            )
-          }
-          const oldId = node.id
-          newNodeIdMap.set(oldId, result.data.id)
-          node.id = result.data.id
-          node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
-          node._isNew = false
-          pendingNewNodes.splice(i, 1)
-          pendingNewNodeIds.delete(oldId)
-          i -= 1
-          progress = true
-        }
-
-        if (!progress) {
-          throw new Error('Не удалось сохранить новые узлы: проверьте иерархию дерева.')
-        }
-      }
-
-      for (const node of nodes.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
-        saveProgress.value = `Обновление узла: ${node.name}`
-        const resolvedParentId = node.parentNodeId
-          ? (newNodeIdMap.get(node.parentNodeId) ?? node.parentNodeId)
-          : null
-        const request: NodeRequest = {
-          name: node.name,
-          modelId,
-          ownerId,
-          nodeTypeId: node.nodeTypeId,
-          parentNodeId: resolvedParentId,
-          attrs: serializeNodeAttrs(node.parsedAttrs),
-        }
-        const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
-        if (!result.success) {
-          throw new Error(
-            formatSaveEntityError('обновления', 'узла', result.error.status, result.error.message)
-          )
-        }
-        node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
-        node._isDirty = false
-      }
-
-      // Delete nodes after all node updates.
-      // This prevents backend cascades from removing nodes that were moved out
-      // of a folder in the same save transaction.
-      for (const node of nodes.filter(row => row._isDeleted && !row._isNew)) {
-        saveProgress.value = `Удаление узла: ${node.name}`
-        const result = await apiDelete<void>(`/nodes/${node.id}`)
-        if (!result.success) {
-          throw new Error(
-            formatSaveEntityError('удаления', 'узла', result.error.status, result.error.message)
-          )
-        }
-      }
-
-      // Update links/diagrams references if nodes were recreated.
-      if (newNodeIdMap.size > 0) {
-        for (const link of links) {
-          if (newNodeIdMap.has(link.sourceId)) link.sourceId = newNodeIdMap.get(link.sourceId)!
-          if (newNodeIdMap.has(link.targetId)) link.targetId = newNodeIdMap.get(link.targetId)!
-        }
-        for (const diagram of diagrams) {
-          if (diagram.nodeId && newNodeIdMap.has(diagram.nodeId)) {
-            diagram.nodeId = newNodeIdMap.get(diagram.nodeId) ?? diagram.nodeId
-          }
-          for (const nodeInstance of diagram.parsedAttrs.instances.nodes) {
-            if (newNodeIdMap.has(nodeInstance.modelNodeId)) {
-              nodeInstance.modelNodeId = newNodeIdMap.get(nodeInstance.modelNodeId)!
-            }
-          }
-        }
-      }
-
-      for (const link of links.filter(row => row._isDeleted && !row._isNew)) {
-        saveProgress.value = `Удаление связи`
-        const result = await apiDelete<void>(`/links/${link.id}`)
-        if (!result.success) throw new Error(`Ошибка удаления связи: ${result.error.message}`)
-      }
-
-      for (const link of links.filter(row => row._isNew && !row._isDeleted)) {
-        saveProgress.value = `Создание связи`
-        const request: LinkRequest = {
-          sourceId: link.sourceId,
-          targetId: link.targetId,
-          modelId,
-          ownerId,
-          linkTypeId: link.linkTypeId,
-          attrs: serializeLinkAttrs(link.parsedAttrs),
-        }
-        const result = await apiPost<LinkResponse>('/links', request)
-        if (!result.success) throw new Error(`Ошибка создания связи: ${result.error.message}`)
-        const oldId = link.id
-        link.id = result.data.id
-        link._isNew = false
-        for (const diagram of diagrams) {
-          for (const edge of diagram.parsedAttrs.instances.edges) {
-            if (edge.modelLinkId === oldId) edge.modelLinkId = result.data.id
-          }
-        }
-      }
-
-      for (const link of links.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
-        saveProgress.value = `Обновление связи`
-        const request: LinkRequest = {
-          sourceId: link.sourceId,
-          targetId: link.targetId,
-          modelId,
-          ownerId,
-          linkTypeId: link.linkTypeId,
-          attrs: serializeLinkAttrs(link.parsedAttrs),
-        }
-        const result = await apiPut<LinkResponse>(`/links/${link.id}`, request)
-        if (!result.success) throw new Error(`Ошибка обновления связи: ${result.error.message}`)
-        link._isDirty = false
-      }
-
-      for (const diagram of diagrams.filter(row => row._isDeleted && !row._isNew)) {
-        saveProgress.value = `Удаление диаграммы: ${diagram.name}`
-        const result = await apiDelete<void>(`/diagrams/${diagram.id}`)
-        if (!result.success) throw new Error(`Ошибка удаления диаграммы: ${result.error.message}`)
-      }
-
-      for (const diagram of diagrams.filter(row => row._isNew && !row._isDeleted)) {
-        saveProgress.value = `Создание диаграммы: ${diagram.name}`
-        const request: DiagramRequest = {
-          name: diagram.name,
-          version: diagram.version,
-          ownerId,
-          modelId,
-          nodeId: diagram.nodeId ?? null,
-          notationId: diagram.notationId,
-          attrs: serializeDiagramAttrs(diagram.parsedAttrs),
-        }
-        const result = await apiPost<DiagramResponse>('/diagrams', request)
-        if (!result.success) throw new Error(`Ошибка создания диаграммы: ${result.error.message}`)
-        diagram.id = result.data.id
-        diagram._isNew = false
-      }
-
-      const dirtyDiagrams = diagrams
-        .filter(row => row._isDirty && !row._isDeleted && !row._isNew)
-        .sort((a, b) => compareVersions(b.version, a.version))
-      for (const diagram of dirtyDiagrams) {
-        saveProgress.value = `Обновление диаграммы: ${diagram.name}`
-        const request: DiagramUpdateRequest = {
-          name: diagram.name,
-          version: diagram.version,
-          ownerId,
-          modelId,
-          nodeId: diagram.nodeId ?? null,
-          notationId: diagram.notationId,
-          attrs: serializeDiagramAttrs(diagram.parsedAttrs),
-        }
-        const result = await apiPut<DiagramResponse>(`/diagrams/${diagram.id}`, request)
-        if (!result.success) throw new Error(`Ошибка обновления диаграммы: ${result.error.message}`)
-        diagram._isDirty = false
-      }
+      const newNodeIdMap = await saveNodes(nodes, modelId, ownerId, onProgress)
+      remapNodeIds(newNodeIdMap, links, diagrams)
+      await saveLinks(links, diagrams, modelId, ownerId, onProgress)
+      await saveDiagrams(diagrams, ownerId, modelId, onProgress)
 
       state.value.nodes = withoutDeleted(state.value.nodes)
       state.value.links = withoutDeleted(state.value.links)

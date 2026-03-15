@@ -163,6 +163,359 @@ const fetchAllRelationRulesByNotation = async (
   return collected
 }
 
+function formatNotationEntityError(
+  action: 'создания' | 'обновления' | 'удаления',
+  entity: string,
+  status: number,
+  message: string
+): string {
+  if (status === 401 || status === 403) {
+    return 'Недостаточно прав для редактирования нотации. Войдите заново или обратитесь к администратору.'
+  }
+  return `Ошибка ${action} ${entity}: ${message}`
+}
+
+async function resolveNodeTypes(
+  nodeTypes: EditorNodeType[],
+  components: EditorComponent[],
+  typeOwnerId: string,
+  role: string | undefined,
+  userId: string | undefined,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  const existingNodeTypeQuery = new URLSearchParams({ size: '1000' })
+  if (role !== 'ADMIN' && userId) {
+    existingNodeTypeQuery.set('ownerId', userId)
+  }
+  const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>(
+    `/node-types?${existingNodeTypeQuery.toString()}`
+  )
+  if (!existingNodeTypesResult.success) {
+    throw new Error(`Ошибка загрузки типов узлов: ${existingNodeTypesResult.error.message}`)
+  }
+  const existingNodeTypesByName = new Map<string, NodeTypeResponse>()
+  for (const existing of existingNodeTypesResult.data.content ?? []) {
+    const key = normalizeTypeName(existing.name)
+    if (!key || existingNodeTypesByName.has(key)) continue
+    existingNodeTypesByName.set(key, existing)
+  }
+  const resolvedNodeTypeIdByName = new Map<string, string>()
+
+  const newNodeTypes = nodeTypes.filter(t => t._isNew)
+  for (const nodeType of newNodeTypes) {
+    const oldId = nodeType.id
+    const normalizedName = normalizeTypeName(nodeType.name)
+
+    const resolvedExistingId = normalizedName
+      ? resolvedNodeTypeIdByName.get(normalizedName)
+      : undefined
+    if (resolvedExistingId) {
+      nodeType.id = resolvedExistingId
+      nodeType._isNew = false
+      components.forEach(c => {
+        if (c.nodeTypeId === oldId) c.nodeTypeId = resolvedExistingId
+      })
+      continue
+    }
+
+    const existingType = normalizedName
+      ? existingNodeTypesByName.get(normalizedName)
+      : undefined
+    if (existingType) {
+      nodeType.id = existingType.id
+      nodeType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
+      nodeType._isNew = false
+      if (normalizedName) resolvedNodeTypeIdByName.set(normalizedName, existingType.id)
+      components.forEach(c => {
+        if (c.nodeTypeId === oldId) c.nodeTypeId = existingType.id
+      })
+      continue
+    }
+
+    onProgress(`Создание типа узла: ${nodeType.name}`)
+    const request: NodeTypeRequest = {
+      name: nodeType.name,
+      ownerId: typeOwnerId,
+      attrs: serializeTypeAttrs(nodeType.parsedAttrs),
+    }
+    const result = await apiPost<NodeTypeResponse>('/node-types', request)
+    if (!result.success) {
+      throw new Error(
+        formatNotationEntityError('создания', 'типа узла', result.error.status, result.error.message)
+      )
+    }
+    nodeType.id = result.data.id
+    nodeType._isNew = false
+    if (normalizedName) resolvedNodeTypeIdByName.set(normalizedName, result.data.id)
+    components.forEach(c => {
+      if (c.nodeTypeId === oldId) c.nodeTypeId = result.data.id
+    })
+  }
+}
+
+async function resolveLinkTypes(
+  linkTypes: EditorLinkType[],
+  relations: EditorRelation[],
+  typeOwnerId: string,
+  role: string | undefined,
+  userId: string | undefined,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  const existingLinkTypeQuery = new URLSearchParams({ size: '1000' })
+  if (role !== 'ADMIN' && userId) {
+    existingLinkTypeQuery.set('ownerId', userId)
+  }
+  const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>(
+    `/link-types?${existingLinkTypeQuery.toString()}`
+  )
+  if (!existingLinkTypesResult.success) {
+    throw new Error(`Ошибка загрузки типов связей: ${existingLinkTypesResult.error.message}`)
+  }
+  const existingLinkTypesByName = new Map<string, LinkTypeResponse>()
+  for (const existing of existingLinkTypesResult.data.content ?? []) {
+    const key = normalizeTypeName(existing.name)
+    if (!key || existingLinkTypesByName.has(key)) continue
+    existingLinkTypesByName.set(key, existing)
+  }
+  const resolvedLinkTypeIdByName = new Map<string, string>()
+
+  const newLinkTypes = linkTypes.filter(t => t._isNew)
+  for (const linkType of newLinkTypes) {
+    const oldId = linkType.id
+    const normalizedName = normalizeTypeName(linkType.name)
+
+    const resolvedExistingId = normalizedName
+      ? resolvedLinkTypeIdByName.get(normalizedName)
+      : undefined
+    if (resolvedExistingId) {
+      linkType.id = resolvedExistingId
+      linkType._isNew = false
+      relations.forEach(r => {
+        if (r.linkTypeId === oldId) r.linkTypeId = resolvedExistingId
+      })
+      continue
+    }
+
+    const existingType = normalizedName
+      ? existingLinkTypesByName.get(normalizedName)
+      : undefined
+    if (existingType) {
+      linkType.id = existingType.id
+      linkType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
+      linkType._isNew = false
+      if (normalizedName) resolvedLinkTypeIdByName.set(normalizedName, existingType.id)
+      relations.forEach(r => {
+        if (r.linkTypeId === oldId) r.linkTypeId = existingType.id
+      })
+      continue
+    }
+
+    onProgress(`Создание типа связи: ${linkType.name}`)
+    const request: LinkTypeRequest = {
+      name: linkType.name,
+      ownerId: typeOwnerId,
+      attrs: serializeTypeAttrs(linkType.parsedAttrs),
+    }
+    const result = await apiPost<LinkTypeResponse>('/link-types', request)
+    if (!result.success) {
+      throw new Error(
+        formatNotationEntityError('создания', 'типа связи', result.error.status, result.error.message)
+      )
+    }
+    linkType.id = result.data.id
+    linkType._isNew = false
+    if (normalizedName) resolvedLinkTypeIdByName.set(normalizedName, result.data.id)
+    relations.forEach(r => {
+      if (r.linkTypeId === oldId) r.linkTypeId = result.data.id
+    })
+  }
+}
+
+async function saveComponents(
+  components: EditorComponent[],
+  relationRules: EditorRelationRule[],
+  notationId: string,
+  ownerId: string,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  for (const component of components.filter(c => c._isDeleted && !c._isNew)) {
+    onProgress(`Удаление компонента: ${component.name}`)
+    const result = await apiDelete<void>(`/components/${component.id}`)
+    if (!result.success) {
+      throw new Error(
+        formatNotationEntityError('удаления', 'компонента', result.error.status, result.error.message)
+      )
+    }
+  }
+
+  for (const component of components.filter(c => c._isNew && !c._isDeleted)) {
+    onProgress(`Создание компонента: ${component.name}`)
+    const request: ComponentRequest = {
+      name: component.name,
+      version: component.version,
+      notationId,
+      ownerId,
+      nodeTypeId: component.nodeTypeId,
+      attrs: serializeEntityAttrs(component.parsedAttrs),
+    }
+    const result = await apiPost<ComponentResponse>('/components', request)
+    if (!result.success) {
+      throw new Error(
+        formatNotationEntityError('создания', 'компонента', result.error.status, result.error.message)
+      )
+    }
+    const oldComponentId = component.id
+    component.id = result.data.id
+    component._isNew = false
+    for (const rule of relationRules) {
+      if (rule.fromComponentId === oldComponentId) {
+        rule.fromComponentId = component.id
+        rule._isDirty = true
+      }
+      if (rule.toComponentId === oldComponentId) {
+        rule.toComponentId = component.id
+        rule._isDirty = true
+      }
+    }
+  }
+
+  for (const component of components.filter(c => c._isDirty && !c._isNew && !c._isDeleted)) {
+    onProgress(`Обновление компонента: ${component.name}`)
+    const request: ComponentRequest = {
+      name: component.name,
+      version: component.version,
+      notationId,
+      ownerId,
+      nodeTypeId: component.nodeTypeId,
+      attrs: serializeEntityAttrs(component.parsedAttrs),
+    }
+    const result = await apiPut<ComponentResponse>(`/components/${component.id}`, request)
+    if (!result.success) {
+      throw new Error(
+        formatNotationEntityError('обновления', 'компонента', result.error.status, result.error.message)
+      )
+    }
+    component._isDirty = false
+  }
+}
+
+async function saveRelations(
+  relations: EditorRelation[],
+  relationRules: EditorRelationRule[],
+  notationId: string,
+  ownerId: string,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  for (const relation of relations.filter(r => r._isDeleted && !r._isNew)) {
+    onProgress(`Удаление отношения: ${relation.name}`)
+    const result = await apiDelete<void>(`/relations/${relation.id}`)
+    if (!result.success) {
+      throw new Error(`Ошибка удаления отношения: ${result.error.message}`)
+    }
+  }
+
+  for (const relation of relations.filter(r => r._isNew && !r._isDeleted)) {
+    onProgress(`Создание отношения: ${relation.name}`)
+    const oldRelationId = relation.id
+    const request: RelationRequest = {
+      name: relation.name,
+      version: relation.version,
+      notationId,
+      ownerId,
+      linkTypeId: relation.linkTypeId,
+      attrs: serializeEntityAttrs(relation.parsedAttrs),
+    }
+    const result = await apiPost<RelationResponse>('/relations', request)
+    if (!result.success) {
+      throw new Error(`Ошибка создания отношения: ${result.error.message}`)
+    }
+    relation.id = result.data.id
+    relation._isNew = false
+    for (const rule of relationRules) {
+      if (!rule.allowedRelationIds.includes(oldRelationId)) continue
+      rule.allowedRelationIds = rule.allowedRelationIds.map(relationId =>
+        relationId === oldRelationId ? relation.id : relationId
+      )
+      rule._isDirty = true
+    }
+  }
+
+  for (const relation of relations.filter(r => r._isDirty && !r._isNew && !r._isDeleted)) {
+    onProgress(`Обновление отношения: ${relation.name}`)
+    const request: RelationRequest = {
+      name: relation.name,
+      version: relation.version,
+      notationId,
+      ownerId,
+      linkTypeId: relation.linkTypeId,
+      attrs: serializeEntityAttrs(relation.parsedAttrs),
+    }
+    const result = await apiPut<RelationResponse>(`/relations/${relation.id}`, request)
+    if (!result.success) {
+      throw new Error(`Ошибка обновления отношения: ${result.error.message}`)
+    }
+    relation._isDirty = false
+  }
+}
+
+async function syncRelationRules(
+  components: EditorComponent[],
+  relations: EditorRelation[],
+  relationRules: EditorRelationRule[],
+  notationId: string,
+  ownerId: string,
+  onProgress: (msg: string) => void
+): Promise<EditorRelationRule[]> {
+  onProgress('Синхронизация правил связей')
+  const currentComponentIds = new Set(
+    components.filter(component => !component._isDeleted).map(component => component.id)
+  )
+
+  const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
+    rule =>
+      currentComponentIds.has(rule.fromComponentId) &&
+      currentComponentIds.has(rule.toComponentId)
+  )
+  for (const rule of existingRules) {
+    const deleteResult = await apiDelete<void>(`/relation-rules/${rule.id}`)
+    if (!deleteResult.success) {
+      throw new Error(`Ошибка удаления правила связи: ${deleteResult.error.message}`)
+    }
+  }
+
+  const activeRelationIds = new Set(
+    relations.filter(relation => !relation._isDeleted).map(relation => relation.id)
+  )
+  const activeRules = relationRules.filter(
+    rule =>
+      !rule._isDeleted &&
+      currentComponentIds.has(rule.fromComponentId) &&
+      currentComponentIds.has(rule.toComponentId)
+  )
+  for (const rule of activeRules) {
+    const uniqueRelationIds = Array.from(new Set(rule.allowedRelationIds)).filter(relationId =>
+      activeRelationIds.has(relationId)
+    )
+    for (const relationId of uniqueRelationIds) {
+      const request: RelationRuleRequest = {
+        relationId,
+        fromComponentId: rule.fromComponentId,
+        toComponentId: rule.toComponentId,
+        ownerId,
+      }
+      const createResult = await apiPost<RelationRuleResponse>('/relation-rules', request)
+      if (!createResult.success) {
+        throw new Error(`Ошибка создания правила связи: ${createResult.error.message}`)
+      }
+    }
+    rule.allowedRelationIds = uniqueRelationIds
+    rule._isNew = false
+    rule._isDirty = false
+  }
+
+  return activeRules
+}
+
 export function useNotationEditor(): NotationEditorReturn {
   const route = useRoute()
   const router = useRouter()
@@ -309,25 +662,13 @@ export function useNotationEditor(): NotationEditorReturn {
 
     try {
       const role = currentUser.value?.role
-      const formatNotationEntityError = (
-        action: 'создания' | 'обновления' | 'удаления',
-        entity: string,
-        status: number,
-        message: string
-      ): string => {
-        if (status === 401 || status === 403) {
-          return 'Недостаточно прав для редактирования нотации. Войдите заново или обратитесь к администратору.'
-        }
-        return `Ошибка ${action} ${entity}: ${message}`
-      }
-
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
       const typeOwnerId = role !== 'ADMIN' ? (currentUser.value?.id ?? ownerId) : ownerId
+      const onProgress = (msg: string) => { saveProgress.value = msg }
 
-      // Step 0: Update notation attrs if changed
       if (notationAttrsDirty.value && notation.value) {
-        saveProgress.value = 'Обновление атрибутов нотации'
+        onProgress('Обновление атрибутов нотации')
         const updateResult = await apiPut<NotationData>(`/notations/${notationId}`, {
           attrs: notation.value.attrs,
         })
@@ -344,367 +685,14 @@ export function useNotationEditor(): NotationEditorReturn {
         notationAttrsSnapshot.value = notation.value.attrs ?? null
       }
 
-      // Step 1: Create or bind node types
-      const existingNodeTypeQuery = new URLSearchParams({ size: '1000' })
-      if (role !== 'ADMIN' && currentUser.value?.id) {
-        existingNodeTypeQuery.set('ownerId', currentUser.value.id)
-      }
-      const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>(
-        `/node-types?${existingNodeTypeQuery.toString()}`
-      )
-      if (!existingNodeTypesResult.success) {
-        throw new Error(`Ошибка загрузки типов узлов: ${existingNodeTypesResult.error.message}`)
-      }
-      const existingNodeTypesByName = new Map<string, NodeTypeResponse>()
-      for (const existing of existingNodeTypesResult.data.content ?? []) {
-        const key = normalizeTypeName(existing.name)
-        if (!key || existingNodeTypesByName.has(key)) continue
-        existingNodeTypesByName.set(key, existing)
-      }
-      const resolvedNodeTypeIdByName = new Map<string, string>()
-
-      const newNodeTypes = nodeTypes.filter(t => t._isNew)
-      for (const nodeType of newNodeTypes) {
-        const oldId = nodeType.id
-        const normalizedName = normalizeTypeName(nodeType.name)
-
-        const resolvedExistingId = normalizedName
-          ? resolvedNodeTypeIdByName.get(normalizedName)
-          : undefined
-        if (resolvedExistingId) {
-          nodeType.id = resolvedExistingId
-          nodeType._isNew = false
-          components.forEach(c => {
-            if (c.nodeTypeId === oldId) {
-              c.nodeTypeId = resolvedExistingId
-            }
-          })
-          continue
-        }
-
-        const existingType = normalizedName
-          ? existingNodeTypesByName.get(normalizedName)
-          : undefined
-        if (existingType) {
-          nodeType.id = existingType.id
-          nodeType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
-          nodeType._isNew = false
-          if (normalizedName) {
-            resolvedNodeTypeIdByName.set(normalizedName, existingType.id)
-          }
-          components.forEach(c => {
-            if (c.nodeTypeId === oldId) {
-              c.nodeTypeId = existingType.id
-            }
-          })
-          continue
-        }
-
-        saveProgress.value = `Создание типа узла: ${nodeType.name}`
-        const request: NodeTypeRequest = {
-          name: nodeType.name,
-          ownerId: typeOwnerId,
-          attrs: serializeTypeAttrs(nodeType.parsedAttrs),
-        }
-        const result = await apiPost<NodeTypeResponse>('/node-types', request)
-        if (!result.success) {
-          throw new Error(
-            formatNotationEntityError(
-              'создания',
-              'типа узла',
-              result.error.status,
-              result.error.message
-            )
-          )
-        }
-        nodeType.id = result.data.id
-        nodeType._isNew = false
-        if (normalizedName) {
-          resolvedNodeTypeIdByName.set(normalizedName, result.data.id)
-        }
-        components.forEach(c => {
-          if (c.nodeTypeId === oldId) {
-            c.nodeTypeId = result.data.id
-          }
-        })
-      }
-
-      // Step 2: Create or bind link types
-      const existingLinkTypeQuery = new URLSearchParams({ size: '1000' })
-      if (role !== 'ADMIN' && currentUser.value?.id) {
-        existingLinkTypeQuery.set('ownerId', currentUser.value.id)
-      }
-      const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>(
-        `/link-types?${existingLinkTypeQuery.toString()}`
-      )
-      if (!existingLinkTypesResult.success) {
-        throw new Error(`Ошибка загрузки типов связей: ${existingLinkTypesResult.error.message}`)
-      }
-      const existingLinkTypesByName = new Map<string, LinkTypeResponse>()
-      for (const existing of existingLinkTypesResult.data.content ?? []) {
-        const key = normalizeTypeName(existing.name)
-        if (!key || existingLinkTypesByName.has(key)) continue
-        existingLinkTypesByName.set(key, existing)
-      }
-      const resolvedLinkTypeIdByName = new Map<string, string>()
-
-      const newLinkTypes = linkTypes.filter(t => t._isNew)
-      for (const linkType of newLinkTypes) {
-        const oldId = linkType.id
-        const normalizedName = normalizeTypeName(linkType.name)
-
-        const resolvedExistingId = normalizedName
-          ? resolvedLinkTypeIdByName.get(normalizedName)
-          : undefined
-        if (resolvedExistingId) {
-          linkType.id = resolvedExistingId
-          linkType._isNew = false
-          relations.forEach(r => {
-            if (r.linkTypeId === oldId) {
-              r.linkTypeId = resolvedExistingId
-            }
-          })
-          continue
-        }
-
-        const existingType = normalizedName
-          ? existingLinkTypesByName.get(normalizedName)
-          : undefined
-        if (existingType) {
-          linkType.id = existingType.id
-          linkType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
-          linkType._isNew = false
-          if (normalizedName) {
-            resolvedLinkTypeIdByName.set(normalizedName, existingType.id)
-          }
-          relations.forEach(r => {
-            if (r.linkTypeId === oldId) {
-              r.linkTypeId = existingType.id
-            }
-          })
-          continue
-        }
-
-        saveProgress.value = `Создание типа связи: ${linkType.name}`
-        const request: LinkTypeRequest = {
-          name: linkType.name,
-          ownerId: typeOwnerId,
-          attrs: serializeTypeAttrs(linkType.parsedAttrs),
-        }
-        const result = await apiPost<LinkTypeResponse>('/link-types', request)
-        if (!result.success) {
-          throw new Error(
-            formatNotationEntityError(
-              'создания',
-              'типа связи',
-              result.error.status,
-              result.error.message
-            )
-          )
-        }
-        linkType.id = result.data.id
-        linkType._isNew = false
-        if (normalizedName) {
-          resolvedLinkTypeIdByName.set(normalizedName, result.data.id)
-        }
-        relations.forEach(r => {
-          if (r.linkTypeId === oldId) {
-            r.linkTypeId = result.data.id
-          }
-        })
-      }
-
-      // Step 3: Delete marked components
-      const deletedComponents = components.filter(c => c._isDeleted && !c._isNew)
-      for (const component of deletedComponents) {
-        saveProgress.value = `Удаление компонента: ${component.name}`
-        const result = await apiDelete<void>(`/components/${component.id}`)
-        if (!result.success) {
-          throw new Error(
-            formatNotationEntityError(
-              'удаления',
-              'компонента',
-              result.error.status,
-              result.error.message
-            )
-          )
-        }
-      }
-
-      // Step 4: Delete marked relations
-      const deletedRelations = relations.filter(r => r._isDeleted && !r._isNew)
-      for (const relation of deletedRelations) {
-        saveProgress.value = `Удаление отношения: ${relation.name}`
-        const result = await apiDelete<void>(`/relations/${relation.id}`)
-        if (!result.success) {
-          throw new Error(`Ошибка удаления отношения: ${result.error.message}`)
-        }
-      }
-
-      // Step 5: Create new components
-      const newComponents = components.filter(c => c._isNew && !c._isDeleted)
-      for (const component of newComponents) {
-        saveProgress.value = `Создание компонента: ${component.name}`
-        const request: ComponentRequest = {
-          name: component.name,
-          version: component.version,
-          notationId,
-          ownerId,
-          nodeTypeId: component.nodeTypeId,
-          attrs: serializeEntityAttrs(component.parsedAttrs),
-        }
-        const result = await apiPost<ComponentResponse>('/components', request)
-        if (!result.success) {
-          throw new Error(
-            formatNotationEntityError(
-              'создания',
-              'компонента',
-              result.error.status,
-              result.error.message
-            )
-          )
-        }
-        const oldComponentId = component.id
-        component.id = result.data.id
-        component._isNew = false
-        for (const rule of relationRules) {
-          if (rule.fromComponentId === oldComponentId) {
-            rule.fromComponentId = component.id
-            rule._isDirty = true
-          }
-          if (rule.toComponentId === oldComponentId) {
-            rule.toComponentId = component.id
-            rule._isDirty = true
-          }
-        }
-      }
-
-      // Step 6: Update dirty components
-      const dirtyComponents = components.filter(c => c._isDirty && !c._isNew && !c._isDeleted)
-      for (const component of dirtyComponents) {
-        saveProgress.value = `Обновление компонента: ${component.name}`
-        const request: ComponentRequest = {
-          name: component.name,
-          version: component.version,
-          notationId,
-          ownerId,
-          nodeTypeId: component.nodeTypeId,
-          attrs: serializeEntityAttrs(component.parsedAttrs),
-        }
-        const result = await apiPut<ComponentResponse>(`/components/${component.id}`, request)
-        if (!result.success) {
-          throw new Error(
-            formatNotationEntityError(
-              'обновления',
-              'компонента',
-              result.error.status,
-              result.error.message
-            )
-          )
-        }
-        component._isDirty = false
-      }
-
-      // Step 7: Create new relations
-      const newRelations = relations.filter(r => r._isNew && !r._isDeleted)
-      for (const relation of newRelations) {
-        saveProgress.value = `Создание отношения: ${relation.name}`
-        const oldRelationId = relation.id
-        const request: RelationRequest = {
-          name: relation.name,
-          version: relation.version,
-          notationId,
-          ownerId,
-          linkTypeId: relation.linkTypeId,
-          attrs: serializeEntityAttrs(relation.parsedAttrs),
-        }
-        const result = await apiPost<RelationResponse>('/relations', request)
-        if (!result.success) {
-          throw new Error(`Ошибка создания отношения: ${result.error.message}`)
-        }
-        relation.id = result.data.id
-        relation._isNew = false
-        for (const rule of relationRules) {
-          if (!rule.allowedRelationIds.includes(oldRelationId)) {
-            continue
-          }
-          rule.allowedRelationIds = rule.allowedRelationIds.map(relationId =>
-            relationId === oldRelationId ? relation.id : relationId
-          )
-          rule._isDirty = true
-        }
-      }
-
-      // Step 8: Update dirty relations
-      const dirtyRelations = relations.filter(r => r._isDirty && !r._isNew && !r._isDeleted)
-      for (const relation of dirtyRelations) {
-        saveProgress.value = `Обновление отношения: ${relation.name}`
-        const request: RelationRequest = {
-          name: relation.name,
-          version: relation.version,
-          notationId,
-          ownerId,
-          linkTypeId: relation.linkTypeId,
-          attrs: serializeEntityAttrs(relation.parsedAttrs),
-        }
-        const result = await apiPut<RelationResponse>(`/relations/${relation.id}`, request)
-        if (!result.success) {
-          throw new Error(`Ошибка обновления отношения: ${result.error.message}`)
-        }
-        relation._isDirty = false
-      }
-
-      // Step 9: Sync relation rules for notation components
-      saveProgress.value = 'Синхронизация правил связей'
-      const currentComponentIds = new Set(
-        components.filter(component => !component._isDeleted).map(component => component.id)
+      await resolveNodeTypes(nodeTypes, components, typeOwnerId, role, currentUser.value?.id, onProgress)
+      await resolveLinkTypes(linkTypes, relations, typeOwnerId, role, currentUser.value?.id, onProgress)
+      await saveComponents(components, relationRules, notationId, ownerId, onProgress)
+      await saveRelations(relations, relationRules, notationId, ownerId, onProgress)
+      state.value.relationRules = await syncRelationRules(
+        components, relations, relationRules, notationId, ownerId, onProgress
       )
 
-      const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
-        rule =>
-          currentComponentIds.has(rule.fromComponentId) &&
-          currentComponentIds.has(rule.toComponentId)
-      )
-      for (const rule of existingRules) {
-        const deleteResult = await apiDelete<void>(`/relation-rules/${rule.id}`)
-        if (!deleteResult.success) {
-          throw new Error(`Ошибка удаления правила связи: ${deleteResult.error.message}`)
-        }
-      }
-
-      const activeRelationIds = new Set(
-        relations.filter(relation => !relation._isDeleted).map(relation => relation.id)
-      )
-      const activeRules = relationRules.filter(
-        rule =>
-          !rule._isDeleted &&
-          currentComponentIds.has(rule.fromComponentId) &&
-          currentComponentIds.has(rule.toComponentId)
-      )
-      for (const rule of activeRules) {
-        const uniqueRelationIds = Array.from(new Set(rule.allowedRelationIds)).filter(relationId =>
-          activeRelationIds.has(relationId)
-        )
-        for (const relationId of uniqueRelationIds) {
-          const request: RelationRuleRequest = {
-            relationId,
-            fromComponentId: rule.fromComponentId,
-            toComponentId: rule.toComponentId,
-            ownerId,
-          }
-          const createResult = await apiPost<RelationRuleResponse>('/relation-rules', request)
-          if (!createResult.success) {
-            throw new Error(`Ошибка создания правила связи: ${createResult.error.message}`)
-          }
-        }
-        rule.allowedRelationIds = uniqueRelationIds
-        rule._isNew = false
-        rule._isDirty = false
-      }
-
-      state.value.relationRules = activeRules
-
-      // Remove deleted items from state
       state.value.components = components.filter(c => !c._isDeleted)
       state.value.relations = relations.filter(r => !r._isDeleted)
 

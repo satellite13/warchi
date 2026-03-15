@@ -1,224 +1,169 @@
-import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from "vue";
-import { useI18n } from "vue-i18n";
-import { apiGet, apiPost, apiPut, apiDelete } from "./useApi";
-import { useAuth } from "./useAuth";
-import { resolveOwnerDisplayNames } from "../utils/resolveOwnerNames";
-import { compareVersions, isValidVersion, bumpMinor } from "../utils/version";
+import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from "vue"
+import { useI18n } from "vue-i18n"
+import { apiGet } from "./useApi"
+import { useAuth } from "./useAuth"
+import { resolveOwnerDisplayNames } from "../utils/resolveOwnerNames"
+import { compareVersions } from "../utils/version"
+import { useEntityCreateModal } from "./useEntityCreateModal"
+import { useEntityDeleteModal } from "./useEntityDeleteModal"
+import { useEntityRenameModal } from "./useEntityRenameModal"
+import { useEntityIconModal } from "./useEntityIconModal"
 import type {
   VersionedEntity,
   EntityGroup,
-  PaginatedResponse
-} from "../types/entities";
+  PaginatedResponse,
+} from "../types/entities"
 
 export interface EntityListConfig<T extends VersionedEntity = VersionedEntity> {
-  endpoint: string;
-  entityName: string;
-  entityNamePlural: string;
-  conflictMessage: string;
-  notFoundMessage: string;
-  /** Сообщение при 404 при создании (например, «Владелец не найден» по контракту API) */
-  createNotFoundMessage?: string;
-  /** Сообщение «Введите название» для rename-модалки */
-  enterNameMessage?: string;
-  /** Сообщение при ошибке переименования */
-  renameFailedMessage?: string;
-  /** Построить тело PUT-запроса для переименования */
-  buildRenameRequest?: (item: T, newName: string) => unknown;
-  /** Построить тело PUT-запроса для обновления attrs (например, иконка карточки) */
-  buildUpdateAttrsRequest?: (item: T, nextAttrs: string | null) => unknown;
+  endpoint: string
+  entityName: string
+  entityNamePlural: string
+  conflictMessage: string
+  notFoundMessage: string
+  createNotFoundMessage?: string
+  enterNameMessage?: string
+  renameFailedMessage?: string
+  buildRenameRequest?: (item: T, newName: string) => unknown
+  buildUpdateAttrsRequest?: (item: T, nextAttrs: string | null) => unknown
 }
 
 export interface SourceVersion {
-  id: string;
-  version: string;
+  id: string
+  version: string
 }
 
 export interface EntityListReturn<T extends VersionedEntity> {
-  items: Ref<T[]>;
-  ownerEmails: Ref<Map<string, string>>;
-  isLoading: Ref<boolean>;
-  errorMessage: Ref<string | null>;
-  searchQuery: Ref<string>;
-  selectedVersionByName: Ref<Record<string, string>>;
-  filteredItems: ComputedRef<EntityGroup<T>[]>;
-  itemCount: ComputedRef<number>;
+  items: Ref<T[]>
+  ownerEmails: Ref<Map<string, string>>
+  isLoading: Ref<boolean>
+  errorMessage: Ref<string | null>
+  searchQuery: Ref<string>
+  selectedVersionByName: Ref<Record<string, string>>
+  filteredItems: ComputedRef<EntityGroup<T>[]>
+  itemCount: ComputedRef<number>
 
-  showCreateModal: Ref<boolean>;
-  newItemName: Ref<string>;
-  newItemVersion: Ref<string>;
-  sourceVersionId: Ref<string | null>;
-  sourceVersions: ComputedRef<SourceVersion[]>;
-  isCreating: Ref<boolean>;
-  createError: Ref<string | null>;
+  showCreateModal: Ref<boolean>
+  newItemName: Ref<string>
+  newItemVersion: Ref<string>
+  sourceVersionId: Ref<string | null>
+  sourceVersions: ComputedRef<SourceVersion[]>
+  isCreating: Ref<boolean>
+  createError: Ref<string | null>
 
-  showDeleteModal: Ref<boolean>;
-  itemToDelete: Ref<T | null>;
-  isDeleting: Ref<boolean>;
-  deleteError: Ref<string | null>;
+  showDeleteModal: Ref<boolean>
+  itemToDelete: Ref<T | null>
+  isDeleting: Ref<boolean>
+  deleteError: Ref<string | null>
 
-  showRenameModal: Ref<boolean>;
-  itemToRename: Ref<T | null>;
-  renameName: Ref<string>;
-  renameError: Ref<string | null>;
-  isRenaming: Ref<boolean>;
+  showRenameModal: Ref<boolean>
+  itemToRename: Ref<T | null>
+  renameName: Ref<string>
+  renameError: Ref<string | null>
+  isRenaming: Ref<boolean>
 
-  loadItems: () => Promise<void>;
-  createItem: (ownerId: string, ownerDisplayName?: string) => Promise<T | null>;
-  deleteItem: () => Promise<boolean>;
-  openCreateModal: () => void;
-  openCreateModalFromVersion: (item: T) => void;
-  closeCreateModal: () => void;
-  openDeleteModal: (item: T) => void;
-  closeDeleteModal: () => void;
-  openRenameModal: (item: T) => void;
-  closeRenameModal: () => void;
-  renameItem: () => Promise<void>;
-  getSelectedItem: (group: EntityGroup<T>) => T | null;
-  handleVersionChange: (groupName: string, version: string) => void;
-  validateCreate: () => string | null;
+  loadItems: () => Promise<void>
+  createItem: (ownerId: string, ownerDisplayName?: string) => Promise<T | null>
+  deleteItem: () => Promise<boolean>
+  openCreateModal: () => void
+  openCreateModalFromVersion: (item: T) => void
+  closeCreateModal: () => void
+  openDeleteModal: (item: T) => void
+  closeDeleteModal: () => void
+  openRenameModal: (item: T) => void
+  closeRenameModal: () => void
+  renameItem: () => Promise<void>
+  getSelectedItem: (group: EntityGroup<T>) => T | null
+  handleVersionChange: (groupName: string, version: string) => void
+  validateCreate: () => string | null
 
-  showIconModal: Ref<boolean>;
-  itemToUpdateIcon: Ref<T | null>;
-  iconPickerValue: Ref<string>;
-  isUpdatingIcon: Ref<boolean>;
-  iconUpdateError: Ref<string | null>;
-  openIconModal: (item: T) => void;
-  closeIconModal: () => void;
-  submitIconChange: () => Promise<void>;
+  showIconModal: Ref<boolean>
+  itemToUpdateIcon: Ref<T | null>
+  iconPickerValue: Ref<string>
+  isUpdatingIcon: Ref<boolean>
+  iconUpdateError: Ref<string | null>
+  openIconModal: (item: T) => void
+  closeIconModal: () => void
+  submitIconChange: () => Promise<void>
 }
 
 export function useEntityList<T extends VersionedEntity>(
   config: EntityListConfig<T>
 ): EntityListReturn<T> {
-  const { t } = useI18n();
-  const { currentUser } = useAuth();
-  const items = ref<T[]>([]) as Ref<T[]>;
-  const ownerEmails = ref<Map<string, string>>(new Map());
-  const isLoading = ref(true);
-  const errorMessage = ref<string | null>(null);
-  const searchQuery = ref("");
-  const selectedVersionByName = ref<Record<string, string>>({});
+  const { t } = useI18n()
+  const { currentUser } = useAuth()
 
-  const showCreateModal = ref(false);
-  const newItemName = ref("");
-  const newItemVersion = ref("1.0.0");
-  const sourceVersionId = ref<string | null>(null);
-  const isCreating = ref(false);
-  const createError = ref<string | null>(null);
+  const items = ref<T[]>([]) as Ref<T[]>
+  const ownerEmails = ref<Map<string, string>>(new Map())
+  const isLoading = ref(true)
+  const errorMessage = ref<string | null>(null)
+  const searchQuery = ref("")
+  const selectedVersionByName = ref<Record<string, string>>({})
 
-  const showDeleteModal = ref(false);
-  const itemToDelete = ref<T | null>(null) as Ref<T | null>;
-  const isDeleting = ref(false);
-  const deleteError = ref<string | null>(null);
+  const normalizeEntityName = (name: string): string => name.trim().toLowerCase()
 
-  const showRenameModal = ref(false);
-  const itemToRename = ref<T | null>(null) as Ref<T | null>;
-  const renameName = ref("");
-  const renameError = ref<string | null>(null);
-  const isRenaming = ref(false);
-
-  const showIconModal = ref(false);
-  const itemToUpdateIcon = ref<T | null>(null) as Ref<T | null>;
-  const iconPickerValue = ref("");
-  const isUpdatingIcon = ref(false);
-  const iconUpdateError = ref<string | null>(null);
-
-  const normalizeEntityName = (name: string): string =>
-    name.trim().toLowerCase();
-
-  /** Удалённые сущности не участвуют в группировке и проверке версий — предложенная версия может совпадать с версией удалённой. */
   const activeItems = computed(() =>
     items.value.filter(
-      (item) => !(item && "deleted" in item && (item as VersionedEntity & { deleted?: boolean }).deleted)
+      (item) =>
+        !(item && "deleted" in item && (item as VersionedEntity & { deleted?: boolean }).deleted)
     )
-  );
+  )
 
   const groupedItems = computed(() => {
-    const groups = new Map<string, { displayName: string; versions: T[] }>();
+    const groups = new Map<string, { displayName: string; versions: T[] }>()
     activeItems.value.forEach((item) => {
-      const normalizedName = normalizeEntityName(item.name);
-      const trimmedName = item.name.trim();
+      const normalizedName = normalizeEntityName(item.name)
+      const trimmedName = item.name.trim()
       if (!groups.has(normalizedName)) {
         groups.set(normalizedName, {
           displayName: trimmedName || item.name,
-          versions: []
-        });
+          versions: [],
+        })
       }
-      groups.get(normalizedName)?.versions.push(item);
-    });
+      groups.get(normalizedName)?.versions.push(item)
+    })
 
     return Array.from(groups.values()).map((group) => {
       const sorted = [...group.versions].sort((a, b) =>
         compareVersions(b.version, a.version)
-      );
+      )
       return {
         name: sorted[0]?.name?.trim() || group.displayName,
-        versions: sorted
-      } satisfies EntityGroup<T>;
-    });
-  });
+        versions: sorted,
+      } satisfies EntityGroup<T>
+    })
+  })
 
-  watch(groupedItems, (groups) => {
-    const updates: Record<string, string> = {};
-    let hasUpdates = false;
-    for (const group of groups) {
-      const currentSelection = selectedVersionByName.value[group.name];
-      const latest = group.versions[0]?.version || "";
-      const exists = group.versions.some((item) => item.version === currentSelection);
-      if (!currentSelection || !exists) {
-        updates[group.name] = latest;
-        hasUpdates = true;
+  watch(
+    groupedItems,
+    (groups) => {
+      const updates: Record<string, string> = {}
+      let hasUpdates = false
+      for (const group of groups) {
+        const currentSelection = selectedVersionByName.value[group.name]
+        const latest = group.versions[0]?.version || ""
+        const exists = group.versions.some((item) => item.version === currentSelection)
+        if (!currentSelection || !exists) {
+          updates[group.name] = latest
+          hasUpdates = true
+        }
       }
-    }
-    if (hasUpdates) {
-      selectedVersionByName.value = {
-        ...selectedVersionByName.value,
-        ...updates
-      };
-    }
-  }, { immediate: true });
+      if (hasUpdates) {
+        selectedVersionByName.value = {
+          ...selectedVersionByName.value,
+          ...updates,
+        }
+      }
+    },
+    { immediate: true }
+  )
 
   const filteredItems = computed(() => {
-    const query = searchQuery.value.toLowerCase().trim();
-    if (!query) {
-      return groupedItems.value;
-    }
-    return groupedItems.value.filter((group) =>
-      group.name.toLowerCase().includes(query)
-    );
-  });
+    const query = searchQuery.value.toLowerCase().trim()
+    if (!query) return groupedItems.value
+    return groupedItems.value.filter((group) => group.name.toLowerCase().includes(query))
+  })
 
-  const itemCount = computed(() => filteredItems.value.length);
-
-  const suggestNextVersion = (name: string, preferredSourceId: string | null): string | null => {
-    const normalizedName = normalizeEntityName(name);
-    if (!normalizedName) return null;
-
-    const sameNameGroup = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizedName
-    );
-    if (!sameNameGroup) return null;
-
-    if (preferredSourceId) {
-      const source = sameNameGroup.versions.find((item) => item.id === preferredSourceId);
-      if (source?.version) {
-        return bumpMinor(source.version);
-      }
-    }
-
-    const maxVersion = sameNameGroup.versions[0]?.version;
-    return maxVersion ? bumpMinor(maxVersion) : null;
-  };
-
-  const sourceVersions = computed<SourceVersion[]>(() => {
-    const name = newItemName.value.trim();
-    if (!name) return [];
-    const group = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizeEntityName(name)
-    );
-    if (!group) return [];
-    return group.versions.map((item) => ({ id: item.id, version: item.version }));
-  });
+  const itemCount = computed(() => filteredItems.value.length)
 
   const loadOwnerEmails = async (ownerIds: string[], fallback: string) => {
     ownerEmails.value = await resolveOwnerDisplayNames(
@@ -226,367 +171,67 @@ export function useEntityList<T extends VersionedEntity>(
       ownerEmails.value,
       currentUser.value,
       fallback
-    );
-  };
+    )
+  }
 
   const loadItems = async () => {
-    isLoading.value = true;
-    errorMessage.value = null;
+    isLoading.value = true
+    errorMessage.value = null
 
     try {
-      const query = new URLSearchParams({
-        page: "0",
-        size: "50"
-      });
+      const query = new URLSearchParams({ page: "0", size: "50" })
       const result = await apiGet<PaginatedResponse<T>>(
         `/${config.endpoint}?${query.toString()}`
-      );
+      )
 
       if (!result.success) {
-        throw new Error(result.error.message);
+        throw new Error(result.error.message)
       }
 
-      items.value = Array.isArray(result.data.content) ? result.data.content : [];
+      items.value = Array.isArray(result.data.content) ? result.data.content : []
 
-      const ownerIds = items.value.map((item) => item.ownerId);
-      await loadOwnerEmails(ownerIds, t("common.unknownUser"));
+      const ownerIds = items.value.map((item) => item.ownerId)
+      await loadOwnerEmails(ownerIds, t("common.unknownUser"))
     } catch (error) {
       errorMessage.value =
         error instanceof Error
           ? error.message
-          : `Не удалось загрузить ${config.entityNamePlural}.`;
+          : `Не удалось загрузить ${config.entityNamePlural}.`
     } finally {
-      isLoading.value = false;
+      isLoading.value = false
     }
-  };
-
-  const validateCreate = (): string | null => {
-    if (!newItemName.value.trim()) {
-      return `Введите название ${config.entityName.toLowerCase()}`;
-    }
-    if (!newItemVersion.value.trim()) {
-      return `Введите версию ${config.entityName.toLowerCase()}`;
-    }
-    if (!isValidVersion(newItemVersion.value.trim())) {
-      return "Версия должна быть в формате X.Y.Z (например, 1.0.0)";
-    }
-    const name = newItemName.value.trim();
-    const version = newItemVersion.value.trim();
-    const sameNameGroup = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizeEntityName(name)
-    );
-    const hasExactVersionConflict = sameNameGroup?.versions.some(
-      (item) => item.version.trim() === version
-    );
-    if (hasExactVersionConflict) {
-      return config.conflictMessage;
-    }
-    const maxExisting = sameNameGroup?.versions[0]?.version;
-    if (maxExisting && compareVersions(version, maxExisting) < 0) {
-      return `Версия не может быть меньше максимальной существующей (${maxExisting}) для данного имени`;
-    }
-    return null;
-  };
-
-  const createItem = async (
-    ownerId: string,
-    ownerDisplayName?: string
-  ): Promise<T | null> => {
-    const validationError = validateCreate();
-    if (validationError) {
-      createError.value = validationError;
-      return null;
-    }
-
-    if (!ownerId) {
-      createError.value = "Пользователь не авторизован";
-      return null;
-    }
-
-    isCreating.value = true;
-    createError.value = null;
-
-    try {
-      const body = {
-        name: newItemName.value.trim(),
-        version: newItemVersion.value.trim(),
-        ownerId
-      };
-      const url = sourceVersionId.value
-        ? `/${config.endpoint}/${sourceVersionId.value}/copy`
-        : `/${config.endpoint}`;
-      const result = await apiPost<T>(url, body);
-
-      if (!result.success) {
-        if (result.error.status === 409) {
-          throw new Error(config.conflictMessage);
-        }
-        if (result.error.status === 404) {
-          throw new Error(
-            config.createNotFoundMessage ??
-              `Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../${config.endpoint} и запущен.`
-          );
-        }
-        throw new Error(result.error.message);
-      }
-
-      const created = result.data;
-      showCreateModal.value = false;
-
-      if (created?.id) {
-        const exists = items.value.some((item) => item.id === created.id);
-        items.value = exists
-          ? items.value.map((item) => (item.id === created.id ? created : item))
-          : [created, ...items.value];
-      }
-
-      if (created?.ownerId && ownerDisplayName) {
-        ownerEmails.value = new Map(ownerEmails.value);
-        ownerEmails.value.set(created.ownerId, ownerDisplayName);
-      }
-
-      if (created?.name && created?.version) {
-        selectedVersionByName.value = {
-          ...selectedVersionByName.value,
-          [created.name]: created.version
-        };
-      }
-
-      return created;
-    } catch (error) {
-      createError.value = error instanceof Error ? error.message : `Не удалось создать ${config.entityName.toLowerCase()}`;
-      return null;
-    } finally {
-      isCreating.value = false;
-    }
-  };
-
-  const deleteItem = async (): Promise<boolean> => {
-    if (!itemToDelete.value) {
-      return false;
-    }
-
-    isDeleting.value = true;
-    deleteError.value = null;
-
-    try {
-      const result = await apiDelete<void>(
-        `/${config.endpoint}/${itemToDelete.value.id}`
-      );
-
-      if (!result.success) {
-        if (result.error.status === 404) {
-          throw new Error(config.notFoundMessage);
-        }
-        throw new Error(result.error.message);
-      }
-
-      items.value = items.value.filter(
-        (item) => item.id !== itemToDelete.value?.id
-      );
-      closeDeleteModal();
-      return true;
-    } catch (error) {
-      deleteError.value = error instanceof Error ? error.message : `Не удалось удалить ${config.entityName.toLowerCase()}`;
-      return false;
-    } finally {
-      isDeleting.value = false;
-    }
-  };
-
-  const openCreateModal = () => {
-    newItemName.value = "";
-    newItemVersion.value = "1.0.0";
-    sourceVersionId.value = null;
-    createError.value = null;
-    showCreateModal.value = true;
-  };
-
-  const openCreateModalFromVersion = (item: T) => {
-    newItemName.value = item.name.trim();
-    sourceVersionId.value = item.id;
-    newItemVersion.value = bumpMinor(item.version) ?? item.version;
-    createError.value = null;
-    showCreateModal.value = true;
-  };
-
-  watch(
-    () => [newItemName.value.trim(), sourceVersionId.value, groupedItems.value, showCreateModal.value] as const,
-    ([name, preferredSourceId, _groups]) => {
-      if (!showCreateModal.value || !name) return;
-      const suggested = suggestNextVersion(name, preferredSourceId);
-      if (suggested) {
-        newItemVersion.value = suggested;
-      }
-    }
-  );
-
-  const closeCreateModal = () => {
-    showCreateModal.value = false;
-    sourceVersionId.value = null;
-  };
-
-  const openDeleteModal = (item: T) => {
-    itemToDelete.value = item;
-    deleteError.value = null;
-    showDeleteModal.value = true;
-  };
-
-  const closeDeleteModal = () => {
-    showDeleteModal.value = false;
-    itemToDelete.value = null;
-    deleteError.value = null;
-  };
-
-  const openRenameModal = (item: T) => {
-    itemToRename.value = item;
-    renameName.value = item.name;
-    renameError.value = null;
-    showRenameModal.value = true;
-  };
-
-  const closeRenameModal = () => {
-    showRenameModal.value = false;
-    itemToRename.value = null;
-    renameName.value = "";
-    renameError.value = null;
-    isRenaming.value = false;
-  };
-
-  const renameItem = async () => {
-    if (!itemToRename.value || !config.buildRenameRequest) return;
-    const trimmedName = renameName.value.trim();
-    if (!trimmedName) {
-      renameError.value = config.enterNameMessage ?? `Введите название`;
-      return;
-    }
-    const current = itemToRename.value;
-    if (trimmedName === current.name) {
-      closeRenameModal();
-      return;
-    }
-    const hasConflict = items.value.some(
-      (item) =>
-        item.id !== current.id &&
-        item.version === current.version &&
-        item.name.trim().toLowerCase() === trimmedName.toLowerCase()
-    );
-    if (hasConflict) {
-      renameError.value = config.conflictMessage;
-      return;
-    }
-
-    isRenaming.value = true;
-    renameError.value = null;
-    try {
-      const body = config.buildRenameRequest(current, trimmedName);
-      const result = await apiPut<T>(`/${config.endpoint}/${current.id}`, body);
-      if (!result.success) {
-        if (result.error.status === 409) {
-          throw new Error(config.conflictMessage);
-        }
-        throw new Error(result.error.message);
-      }
-
-      const previousName = current.name;
-      items.value = items.value.map((item) =>
-        item.id === current.id ? result.data : item
-      );
-      if (selectedVersionByName.value[previousName] === current.version) {
-        const nextSelection = { ...selectedVersionByName.value };
-        delete nextSelection[previousName];
-        nextSelection[result.data.name] = result.data.version;
-        selectedVersionByName.value = nextSelection;
-      }
-      closeRenameModal();
-    } catch (error) {
-      renameError.value =
-        error instanceof Error
-          ? error.message
-          : (config.renameFailedMessage ?? `Не удалось переименовать`);
-    } finally {
-      isRenaming.value = false;
-    }
-  };
+  }
 
   const getSelectedItem = (group: EntityGroup<T>): T | null => {
-    const selectedVersion = selectedVersionByName.value[group.name];
+    const selectedVersion = selectedVersionByName.value[group.name]
     const selected =
       group.versions.find((item) => item.version === selectedVersion) ||
       group.versions[0] ||
-      null;
+      null
     if (selected && selectedVersion !== selected.version) {
       selectedVersionByName.value = {
         ...selectedVersionByName.value,
-        [group.name]: selected.version
-      };
+        [group.name]: selected.version,
+      }
     }
-    return selected;
-  };
+    return selected
+  }
 
   const handleVersionChange = (groupName: string, version: string) => {
     selectedVersionByName.value = {
       ...selectedVersionByName.value,
-      [groupName]: version
-    };
-  };
-
-  const openIconModal = (item: T) => {
-    const withAttrs = item as T & { attrs?: string | null };
-    let currentIcon = "";
-    try {
-      const parsed = withAttrs.attrs ? JSON.parse(withAttrs.attrs) : {};
-      if (typeof parsed?.icon === "string") currentIcon = parsed.icon;
-    } catch {
-      // ignore
+      [groupName]: version,
     }
-    itemToUpdateIcon.value = item;
-    iconPickerValue.value = currentIcon;
-    iconUpdateError.value = null;
-    showIconModal.value = true;
-  };
+  }
 
-  const closeIconModal = () => {
-    showIconModal.value = false;
-    itemToUpdateIcon.value = null;
-    iconPickerValue.value = "";
-    iconUpdateError.value = null;
-    isUpdatingIcon.value = false;
-  };
-
-  const submitIconChange = async () => {
-    const item = itemToUpdateIcon.value;
-    if (!item || !config.buildUpdateAttrsRequest) return;
-    const withAttrs = item as T & { attrs?: string | null };
-    let nextAttrsObj: Record<string, unknown> = {};
-    try {
-      if (withAttrs.attrs) nextAttrsObj = JSON.parse(withAttrs.attrs) as Record<string, unknown>;
-    } catch {
-      // ignore
-    }
-    nextAttrsObj.icon = iconPickerValue.value || undefined;
-    if (nextAttrsObj.icon === undefined) delete nextAttrsObj.icon;
-    const nextAttrsStr = Object.keys(nextAttrsObj).length > 0 ? JSON.stringify(nextAttrsObj) : null;
-
-    isUpdatingIcon.value = true;
-    iconUpdateError.value = null;
-    try {
-      const body = config.buildUpdateAttrsRequest(item, nextAttrsStr);
-      const result = await apiPut<T>(`/${config.endpoint}/${item.id}`, body);
-      if (!result.success) throw new Error(result.error.message);
-      items.value = items.value.map((i) => (i.id === item.id ? result.data : i));
-      closeIconModal();
-    } catch (error) {
-      iconUpdateError.value =
-        error instanceof Error ? error.message : t("common.errorSave");
-    } finally {
-      isUpdatingIcon.value = false;
-    }
-  };
+  const createModal = useEntityCreateModal(config, items, groupedItems, ownerEmails, selectedVersionByName)
+  const deleteModal = useEntityDeleteModal(config, items)
+  const renameModal = useEntityRenameModal(config, items, selectedVersionByName)
+  const iconModal = useEntityIconModal(config, items)
 
   onMounted(() => {
-    loadItems();
-  });
+    loadItems()
+  })
 
   return {
     items,
@@ -598,47 +243,14 @@ export function useEntityList<T extends VersionedEntity>(
     filteredItems,
     itemCount,
 
-    showCreateModal,
-    newItemName,
-    newItemVersion,
-    sourceVersionId,
-    sourceVersions,
-    isCreating,
-    createError,
-
-    showDeleteModal,
-    itemToDelete,
-    isDeleting,
-    deleteError,
-
-    showRenameModal,
-    itemToRename,
-    renameName,
-    renameError,
-    isRenaming,
+    ...createModal,
+    ...deleteModal,
+    ...renameModal,
 
     loadItems,
-    createItem,
-    deleteItem,
-    openCreateModal,
-    openCreateModalFromVersion,
-    closeCreateModal,
-    openDeleteModal,
-    closeDeleteModal,
-    openRenameModal,
-    closeRenameModal,
-    renameItem,
     getSelectedItem,
     handleVersionChange,
-    validateCreate,
 
-    showIconModal,
-    itemToUpdateIcon,
-    iconPickerValue,
-    isUpdatingIcon,
-    iconUpdateError,
-    openIconModal,
-    closeIconModal,
-    submitIconChange
-  };
+    ...iconModal,
+  }
 }

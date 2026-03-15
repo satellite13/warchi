@@ -14,12 +14,6 @@ const props = withDefaults(
     canSave?: boolean
     modelName?: string
     modelVersion?: string
-    gridVisible?: boolean
-    miniMapVisible?: boolean
-    snapEnabled?: boolean
-    alignEnabled?: boolean
-    rulersEnabled?: boolean
-    lockAnchorsEnabled?: boolean
     hasActiveDiagram?: boolean
     canUndo?: boolean
     canRedo?: boolean
@@ -49,12 +43,6 @@ const props = withDefaults(
     canSave: true,
     modelName: '',
     modelVersion: '',
-    gridVisible: true,
-    miniMapVisible: true,
-    snapEnabled: false,
-    alignEnabled: true,
-    rulersEnabled: true,
-    lockAnchorsEnabled: true,
     hasActiveDiagram: false,
     canUndo: false,
     canRedo: false,

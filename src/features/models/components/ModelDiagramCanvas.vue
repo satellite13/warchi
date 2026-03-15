@@ -41,6 +41,10 @@ import {
 } from '@/config/interactiveBadgeIcons'
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
+import {
+  persistDiagramViewport,
+  restoreDiagramViewport,
+} from '../utils/diagramViewportPersistence'
 
 const props = withDefaults(
   defineProps<{
@@ -186,8 +190,6 @@ const canRedo = ref(false)
 const GRID_SIZE = 20
 const MIN_ZOOM = 0.3
 const MAX_ZOOM = 2.5
-const DIAGRAM_VIEWPORT_STORAGE_KEY = 'warchi:model-diagram-viewport:v1'
-const MAX_STORED_DIAGRAM_VIEWPORTS = 200
 const DEFAULT_NODE_WIDTH = 160
 const DEFAULT_NODE_HEIGHT = 56
 const COMPONENT_RADIUS = 8
@@ -203,86 +205,17 @@ let suppressSelectionEvent = false
 let suppressViewportPersistence = false
 let lastActiveDiagramId: string | null = null
 
-type DiagramViewportState = {
-  zoom: number
-  offsetX: number
-  offsetY: number
-  updatedAt: number
+function safePersistViewport(diagramId: string, r: DiagramRenderer) {
+  if (!suppressViewportPersistence) persistDiagramViewport(diagramId, r)
 }
 
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
-
-function readStoredDiagramViewports(): Record<string, DiagramViewportState> {
-  try {
-    const raw = window.localStorage.getItem(DIAGRAM_VIEWPORT_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object') return {}
-    const result: Record<string, DiagramViewportState> = {}
-    for (const [diagramId, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!value || typeof value !== 'object') continue
-      const candidate = value as Partial<DiagramViewportState>
-      if (
-        !isFiniteNumber(candidate.zoom) ||
-        !isFiniteNumber(candidate.offsetX) ||
-        !isFiniteNumber(candidate.offsetY)
-      ) {
-        continue
-      }
-      result[diagramId] = {
-        zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, candidate.zoom)),
-        offsetX: candidate.offsetX,
-        offsetY: candidate.offsetY,
-        updatedAt: isFiniteNumber(candidate.updatedAt) ? candidate.updatedAt : 0,
-      }
-    }
-    return result
-  } catch {
-    return {}
-  }
-}
-
-function writeStoredDiagramViewports(viewports: Record<string, DiagramViewportState>) {
-  try {
-    const entries = Object.entries(viewports)
-      .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
-      .slice(0, MAX_STORED_DIAGRAM_VIEWPORTS)
-    window.localStorage.setItem(DIAGRAM_VIEWPORT_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
-  } catch {
-    // localStorage may be unavailable (private mode/storage limits), ignore silently
-  }
-}
-
-function persistDiagramViewport(diagramId: string, currentRenderer: DiagramRenderer) {
-  if (suppressViewportPersistence) return
-  const viewports = readStoredDiagramViewports()
-  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentRenderer.zoom))
-  viewports[diagramId] = {
-    zoom,
-    offsetX: currentRenderer.offsetX,
-    offsetY: currentRenderer.offsetY,
-    updatedAt: Date.now(),
-  }
-  writeStoredDiagramViewports(viewports)
-}
-
-function restoreDiagramViewport(diagramId: string, currentRenderer: DiagramRenderer): boolean {
-  const viewports = readStoredDiagramViewports()
-  const saved = viewports[diagramId]
-  if (!saved) return false
+function safeRestoreViewport(diagramId: string, r: DiagramRenderer): boolean {
   suppressViewportPersistence = true
   try {
-    currentRenderer.viewport = {
-      zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, saved.zoom)),
-      offsetX: saved.offsetX,
-      offsetY: saved.offsetY,
-    }
+    return restoreDiagramViewport(diagramId, r)
   } finally {
     suppressViewportPersistence = false
   }
-  currentRenderer.markDirty()
-  return true
 }
 
 // Maps: papirus element ID → model entity
@@ -1999,12 +1932,12 @@ function initRenderer(r: DiagramRenderer) {
   r.on('zoom', () => {
     const diagramId = props.activeDiagram?.id
     if (!diagramId) return
-    persistDiagramViewport(diagramId, r)
+    safePersistViewport(diagramId, r)
   })
   r.on('pan', () => {
     const diagramId = props.activeDiagram?.id
     if (!diagramId) return
-    persistDiagramViewport(diagramId, r)
+    safePersistViewport(diagramId, r)
   })
 
   // Permanently patch getElementAtPoint to check edges before nodes.
@@ -2176,7 +2109,7 @@ function initRenderer(r: DiagramRenderer) {
 
   syncDiagram()
   if (lastActiveDiagramId) {
-    restoreDiagramViewport(lastActiveDiagramId, r)
+    safeRestoreViewport(lastActiveDiagramId, r)
   }
 }
 
@@ -2563,7 +2496,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (renderer && lastActiveDiagramId) {
-    persistDiagramViewport(lastActiveDiagramId, renderer)
+    safePersistViewport(lastActiveDiagramId, renderer)
   }
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -2602,10 +2535,10 @@ watch(
   () => props.activeDiagram?.id ?? null,
   (nextId, prevId) => {
     if (renderer && prevId) {
-      persistDiagramViewport(prevId, renderer)
+      safePersistViewport(prevId, renderer)
     }
     if (renderer && nextId) {
-      restoreDiagramViewport(nextId, renderer)
+      safeRestoreViewport(nextId, renderer)
     }
     lastActiveDiagramId = nextId
     if (nextId !== prevId) resetHistory()

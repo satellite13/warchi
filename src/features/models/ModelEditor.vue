@@ -8,7 +8,7 @@ import AppFooter from '../../components/layout/AppFooter.vue'
 import BaseModal from '../../components/modals/BaseModal.vue'
 import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
-import { ImageExporter, SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
+import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
   createId,
   parseLinkAttrs,
@@ -21,6 +21,8 @@ import type { EditorLink, EditorNode } from './types'
 import { useModelEditor } from './composables/useModelEditor'
 import { useModelVersionDiff } from './composables/useModelVersionDiff'
 import { useModelToolbarState } from './composables/useModelToolbarState'
+import { useNoteEditor } from './composables/useNoteEditor'
+import { useModelDiagramExport } from './composables/useModelDiagramExport'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { useAuth } from '../../composables/useAuth'
 import { getUserDisplayName } from '../../utils/userDisplay'
@@ -66,7 +68,6 @@ const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocume
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
-const showDiagramImageShareModal = ref(false)
 const showCompareModal = ref(false)
 
 const versionDiff = useModelVersionDiff(() => ({
@@ -250,9 +251,6 @@ const selectedInstanceIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
 const selectedEdgeInstanceId = ref<string | null>(null)
 const selectedCanvasElementId = ref<string | null>(null)
-const showNoteEditorModal = ref(false)
-const editingNoteInstanceId = ref<string | null>(null)
-const noteEditorText = ref('')
 const diagramRenderer = shallowRef<DiagramRenderer | null>(null)
 const diagramInteractionManager = shallowRef<InteractionManager | null>(null)
 const activeRightTab = ref('properties')
@@ -344,7 +342,7 @@ async function handleCreateBaseline() {
         const exporter = new SvgExporter(diagramRenderer.value)
         let svg = exporter.exportSVG({
           includeBackground: true,
-          backgroundColor: getDiagramExportBackgroundColor(),
+          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff',
           padding: 24,
         })
         svg = appendDiagramCaption(svg, {
@@ -624,6 +622,30 @@ const setUiError = (msg: string) => {
     uiErrorTimer = null
   }, 5000)
 }
+
+const {
+  showNoteEditorModal,
+  editingNoteInstanceId,
+  noteEditorText,
+  isNoteInstance,
+  openNoteEditor,
+  saveNoteEditor,
+  cancelNoteEditor,
+} = useNoteEditor(activeDiagram, isDiagramReadOnly, markDiagramDirty)
+
+const {
+  showDiagramImageShareModal,
+  exportActiveDiagramAsPng,
+  exportActiveDiagramAsSvg,
+  uploadDiagramPreview,
+} = useModelDiagramExport(
+  model,
+  activeDiagram,
+  diagramRenderer,
+  activeDiagramNotationName,
+  activeDiagramNotationVersion,
+  setUiError
+)
 
 const handleRenameModel = (nextName: string) => {
   const error = renameModel(nextName)
@@ -906,9 +928,6 @@ const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
 
 const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
   modelLinkId.startsWith(NOTE_EDGE_PREFIX)
-
-const isNoteInstance = (instance: { attrs?: Record<string, unknown> }): boolean =>
-  instance.attrs?.isNote === true
 
 const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
@@ -2508,37 +2527,6 @@ const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {
   openNodeDeleteDialog([], 'canvas', [instanceId])
 }
 
-const openNoteEditor = (instanceId: string) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-  const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
-  if (!instance || !isNoteInstance(instance)) return
-  const currentText = instance.attrs?.noteText
-  noteEditorText.value = typeof currentText === 'string' ? currentText : 'Новая заметка'
-  editingNoteInstanceId.value = instanceId
-  showNoteEditorModal.value = true
-}
-
-const saveNoteEditor = () => {
-  if (isDiagramReadOnly.value) return
-  const diagram = activeDiagram.value
-  const instanceId = editingNoteInstanceId.value
-  if (!diagram || !instanceId) return
-  const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
-  if (!instance || !isNoteInstance(instance)) return
-
-  const nextText = noteEditorText.value.trim()
-  if (!instance.attrs) instance.attrs = {}
-  instance.attrs.noteText = nextText.length > 0 ? nextText : 'Новая заметка'
-  markDiagramDirty(diagram.id)
-  showNoteEditorModal.value = false
-  editingNoteInstanceId.value = null
-}
-
-const cancelNoteEditor = () => {
-  showNoteEditorModal.value = false
-  editingNoteInstanceId.value = null
-}
 
 const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
   if (isDiagramReadOnly.value) return
@@ -2582,88 +2570,6 @@ const confirmDiagramDelete = () => {
   cancelDiagramDelete()
 }
 
-const sanitizeFileName = (value: string): string =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё_-]+/gi, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-
-const getDiagramExportBaseName = () => {
-  const modelName = model.value?.name?.trim() || 'model'
-  const diagramName = activeDiagram.value?.name?.trim() || 'diagram'
-  const modelPart = sanitizeFileName(modelName) || 'model'
-  const diagramPart = sanitizeFileName(diagramName) || 'diagram'
-  return `${modelPart}-${diagramPart}`
-}
-
-const getDiagramExportBackgroundColor = () =>
-  getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
-
-const exportActiveDiagramAsPng = async () => {
-  if (!activeDiagram.value || !diagramRenderer.value) {
-    setUiError('Откройте диаграмму перед экспортом.')
-    return
-  }
-
-  const exporter = new ImageExporter(diagramRenderer.value)
-  await exporter.download(`${getDiagramExportBaseName()}.png`, {
-    scale: 2,
-    padding: 24,
-    backgroundColor: getDiagramExportBackgroundColor(),
-  })
-}
-
-const exportActiveDiagramAsSvg = () => {
-  if (!activeDiagram.value || !diagramRenderer.value) {
-    setUiError('Откройте диаграмму перед экспортом.')
-    return
-  }
-
-  const exporter = new SvgExporter(diagramRenderer.value)
-  let svg = exporter.exportSVG({
-    includeBackground: true,
-    backgroundColor: getDiagramExportBackgroundColor(),
-    padding: 24,
-  })
-  svg = appendDiagramCaption(svg, {
-    diagramName: activeDiagram.value.name,
-    diagramVersion: activeDiagram.value.version,
-    notationName: activeDiagramNotationName.value,
-    notationVersion: activeDiagramNotationVersion.value,
-  })
-  const blob = new Blob([svg], { type: 'image/svg+xml' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${getDiagramExportBaseName()}.svg`
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-const uploadDiagramPreview = async (): Promise<boolean> => {
-  if (!activeDiagram.value?.id || !diagramRenderer.value) {
-    setUiError('Откройте диаграмму перед обновлением превью.')
-    return false
-  }
-  const exporter = new SvgExporter(diagramRenderer.value)
-  let svg = exporter.exportSVG({
-    includeBackground: true,
-    backgroundColor: getDiagramExportBackgroundColor(),
-    padding: 24,
-  })
-  svg = appendDiagramCaption(svg, {
-    diagramName: activeDiagram.value.name,
-    diagramVersion: activeDiagram.value.version,
-    notationName: activeDiagramNotationName.value,
-    notationVersion: activeDiagramNotationVersion.value,
-  })
-  const result = await uploadDiagramSvg(activeDiagram.value.id, svg)
-  if (result.success) return true
-  setUiError(result.error.message)
-  return false
-}
 
 const handleToolbarAction = async (event: string) => {
   switch (event) {
@@ -3085,12 +2991,6 @@ onBeforeUnmount(() => {
         :can-save="!isSaving && !isDiagramReadOnly"
         :model-name="model?.name"
         :model-version="model?.version"
-        :grid-visible="gridVisible"
-        :mini-map-visible="miniMapVisible"
-        :snap-enabled="snapEnabled"
-        :align-enabled="alignEnabled"
-        :rulers-enabled="rulersEnabled"
-        :lock-anchors-enabled="lockAnchorsEnabled"
         :has-active-diagram="!!activeDiagram"
         :can-undo="canUndo"
         :can-redo="canRedo"
@@ -3229,12 +3129,6 @@ onBeforeUnmount(() => {
               :can-save="!isSaving && !isDiagramReadOnly"
               :model-name="model?.name"
               :model-version="model?.version"
-              :grid-visible="gridVisible"
-              :mini-map-visible="miniMapVisible"
-              :snap-enabled="snapEnabled"
-              :align-enabled="alignEnabled"
-              :rulers-enabled="rulersEnabled"
-              :lock-anchors-enabled="lockAnchorsEnabled"
               :has-active-diagram="!!activeDiagram"
               :can-undo="canUndo"
               :can-redo="canRedo"

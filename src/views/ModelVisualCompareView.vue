@@ -790,6 +790,44 @@ function formatPropValue(v: unknown): string {
   return s.length > 80 ? `${s.slice(0, 77)}…` : s
 }
 
+const notationNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const notation of sharedData.value?.notations ?? []) {
+    map.set(notation.id, notation.name)
+  }
+  return map
+})
+
+const componentNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const component of sharedData.value?.components ?? []) {
+    map.set(component.id, component.name)
+  }
+  return map
+})
+
+const relationNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const relation of sharedData.value?.relations ?? []) {
+    map.set(relation.id, relation.name)
+  }
+  return map
+})
+
+function formatScopedPropertyKey(
+  notationId: string,
+  entityId: string,
+  propKey: string,
+  kind: "component" | "relation"
+): string {
+  const notationName = notationNameById.value.get(notationId) ?? notationId
+  const entityName =
+    kind === "component"
+      ? (componentNameById.value.get(entityId) ?? entityId)
+      : (relationNameById.value.get(entityId) ?? entityId)
+  return `${notationName} / ${entityName} / ${propKey}`
+}
+
 function flattenComponentProperties(
   componentProperties: Record<string, Record<string, Record<string, unknown>>>
 ): Array<{ key: string; value: unknown }> {
@@ -797,7 +835,10 @@ function flattenComponentProperties(
   for (const [notationId, byComponent] of Object.entries(componentProperties)) {
     for (const [componentId, props] of Object.entries(byComponent)) {
       for (const [propKey, value] of Object.entries(props)) {
-        out.push({ key: `${notationId}/${componentId}/${propKey}`, value })
+        out.push({
+          key: formatScopedPropertyKey(notationId, componentId, propKey, "component"),
+          value,
+        })
       }
     }
   }
@@ -811,7 +852,10 @@ function flattenRelationProperties(
   for (const [notationId, byRelation] of Object.entries(relationProperties)) {
     for (const [relationId, props] of Object.entries(byRelation)) {
       for (const [propKey, value] of Object.entries(props)) {
-        out.push({ key: `${notationId}/${relationId}/${propKey}`, value })
+        out.push({
+          key: formatScopedPropertyKey(notationId, relationId, propKey, "relation"),
+          value,
+        })
       }
     }
   }

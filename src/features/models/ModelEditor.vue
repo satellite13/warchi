@@ -1,6 +1,5 @@
 <script setup lang="ts">
-/* eslint-disable @typescript-eslint/no-explicit-any -- Papirus integration requires dynamic runtime node access */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost, uploadDiagramSvg } from '../../composables/useApi'
@@ -9,17 +8,19 @@ import AppFooter from '../../components/layout/AppFooter.vue'
 import BaseModal from '../../components/modals/BaseModal.vue'
 import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
-import { ImageExporter, SvgExporter } from '@ngroznykh/papirus'
+import { ImageExporter, SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
   createId,
   parseLinkAttrs,
   parseNodeAttrs,
   resolveComponentByNodeType,
   resolveRelationByLinkType,
+  type DiagramAttrs,
 } from './modelAttrs'
 import type { EditorLink, EditorNode } from './types'
 import { useModelEditor } from './composables/useModelEditor'
 import { useModelVersionDiff } from './composables/useModelVersionDiff'
+import { useModelToolbarState } from './composables/useModelToolbarState'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { useAuth } from '../../composables/useAuth'
 import { getUserDisplayName } from '../../utils/userDisplay'
@@ -30,7 +31,6 @@ import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
-import type { ToolbarButton } from '../notations/layout/IconToolbar.vue'
 import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from '../notations/notationAttrs'
 import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import TabPanel from '../../components/layout/TabPanel.vue'
@@ -253,8 +253,8 @@ const selectedCanvasElementId = ref<string | null>(null)
 const showNoteEditorModal = ref(false)
 const editingNoteInstanceId = ref<string | null>(null)
 const noteEditorText = ref('')
-const diagramRenderer = ref<any>(null)
-const diagramInteractionManager = ref<any>(null)
+const diagramRenderer = shallowRef<DiagramRenderer | null>(null)
+const diagramInteractionManager = shallowRef<InteractionManager | null>(null)
 const activeRightTab = ref('properties')
 const rightPanelTabs = computed(() => {
   const tabs: { id: string; label: string; icon: string }[] = [
@@ -268,175 +268,38 @@ const rightPanelTabs = computed(() => {
 const { canShare: canShareModel } = useCanShare(model, currentUser)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
-const gridVisible = ref(true)
-const miniMapVisible = ref(true)
-const snapEnabled = ref(false)
-const alignEnabled = ref(true)
-const rulersEnabled = ref(true)
-const lockAnchorsEnabled = ref(true)
-const attachToOutlineEnabled = ref(true)
-const selectionSyncEnabled = ref(true)
-const canvasSettingsVisible = ref(true)
-const paletteVisible = ref(true)
-const autoLinkInGroups = ref(true)
-/** Режим «только навигация»: панорама и зум без редактирования элементов. */
-const diagramNavigationOnlyMode = ref(false)
-type EdgePathType = 'straight' | 'polyline' | 'editable-polyline' | 'bezier'
-const defaultEdgeType = ref<EdgePathType>('bezier')
 const NOTE_NODE_PREFIX = '__diagram-note__:'
 const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
 
-type ToolbarState = {
-  gridVisible: boolean
-  miniMapVisible: boolean
-  snapEnabled: boolean
-  alignEnabled: boolean
-  rulersEnabled: boolean
-  lockAnchorsEnabled: boolean
-  attachToOutlineEnabled: boolean
-  canvasSettingsVisible: boolean
-  paletteVisible: boolean
-  defaultEdgeType: EdgePathType
-  autoLinkInGroups: boolean
-}
-
-const TOOLBAR_STATE_STORAGE_PREFIX = 'warchi:model-editor:toolbar-state'
-
-const getToolbarStateStorageKey = (userId: string | null): string =>
-  userId ? `${TOOLBAR_STATE_STORAGE_PREFIX}:${userId}` : `${TOOLBAR_STATE_STORAGE_PREFIX}:anonymous`
-
-const readToolbarState = (userId: string | null): Partial<ToolbarState> | null => {
-  if (typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem(getToolbarStateStorageKey(userId))
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as Partial<ToolbarState>
-    return parsed && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
-  if (!stateValue) return
-  if (typeof stateValue.gridVisible === 'boolean') gridVisible.value = stateValue.gridVisible
-  if (typeof stateValue.miniMapVisible === 'boolean')
-    miniMapVisible.value = stateValue.miniMapVisible
-  if (typeof stateValue.snapEnabled === 'boolean') snapEnabled.value = stateValue.snapEnabled
-  if (typeof stateValue.alignEnabled === 'boolean') alignEnabled.value = stateValue.alignEnabled
-  if (typeof stateValue.rulersEnabled === 'boolean') rulersEnabled.value = stateValue.rulersEnabled
-  if (typeof stateValue.lockAnchorsEnabled === 'boolean')
-    lockAnchorsEnabled.value = stateValue.lockAnchorsEnabled
-  if (typeof stateValue.attachToOutlineEnabled === 'boolean')
-    attachToOutlineEnabled.value = stateValue.attachToOutlineEnabled
-  if (typeof stateValue.canvasSettingsVisible === 'boolean')
-    canvasSettingsVisible.value = stateValue.canvasSettingsVisible
-  if (typeof stateValue.paletteVisible === 'boolean')
-    paletteVisible.value = stateValue.paletteVisible
-  const validEdgeTypes: EdgePathType[] = ['straight', 'polyline', 'editable-polyline', 'bezier']
-  if (
-    typeof stateValue.defaultEdgeType === 'string' &&
-    validEdgeTypes.includes(stateValue.defaultEdgeType as EdgePathType)
-  ) {
-    defaultEdgeType.value = stateValue.defaultEdgeType as EdgePathType
-  }
-  if (typeof stateValue.autoLinkInGroups === 'boolean') {
-    autoLinkInGroups.value = stateValue.autoLinkInGroups
-  }
-}
-
-const persistToolbarState = (userId: string | null) => {
-  if (typeof window === 'undefined') return
-  const nextState: ToolbarState = {
-    gridVisible: gridVisible.value,
-    miniMapVisible: miniMapVisible.value,
-    snapEnabled: snapEnabled.value,
-    alignEnabled: alignEnabled.value,
-    rulersEnabled: rulersEnabled.value,
-    lockAnchorsEnabled: lockAnchorsEnabled.value,
-    attachToOutlineEnabled: attachToOutlineEnabled.value,
-    canvasSettingsVisible: canvasSettingsVisible.value,
-    paletteVisible: paletteVisible.value,
-    defaultEdgeType: defaultEdgeType.value,
-    autoLinkInGroups: autoLinkInGroups.value,
-  }
-  window.localStorage.setItem(getToolbarStateStorageKey(userId), JSON.stringify(nextState))
-}
-
 const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
-const canvasToggleButtons = computed<ToolbarButton[]>(() => [
-  {
-    icon: 'grid_on',
-    event: 'toggle-grid',
-    title: t('toolbar.grid'),
-    active: gridVisible.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'map',
-    event: 'toggle-minimap',
-    title: t('toolbar.minimap'),
-    active: miniMapVisible.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'my_location',
-    event: 'toggle-snap',
-    title: t('toolbar.snapToGrid'),
-    active: snapEnabled.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'align_horizontal_left',
-    event: 'toggle-align',
-    title: t('toolbar.smartAlign'),
-    active: alignEnabled.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'straighten',
-    event: 'toggle-rulers',
-    title: t('toolbar.rulers'),
-    active: rulersEnabled.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'commit',
-    event: 'toggle-lock-anchors',
-    title: t('toolbar.lockLinkAnchors'),
-    active: lockAnchorsEnabled.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'route',
-    event: 'toggle-outline',
-    title: t('toolbar.outline'),
-    active: attachToOutlineEnabled.value,
-    disabled: !activeDiagram.value,
-  },
-  {
-    icon: 'account_tree',
-    event: 'toggle-auto-link-in-groups',
-    title: t('models.autoLinkInGroups'),
-    active: autoLinkInGroups.value,
-    disabled: !activeDiagram.value,
-  },
-])
-
-const defaultLinkTypeOptions = computed<{ value: EdgePathType; label: string; icon: string }[]>(() => [
-  { value: 'straight', label: t('diagram.linkTypeStraight'), icon: 'remove' },
-  { value: 'polyline', label: t('diagram.linkTypePolyline'), icon: 'timeline' },
-  { value: 'editable-polyline', label: t('diagram.linkTypeEditablePolyline'), icon: 'polyline' },
-  { value: 'bezier', label: t('diagram.linkTypeBezier'), icon: 'line_curve' },
-])
-
 const activeDiagram = computed(() =>
   selectedDiagramId.value
     ? (state.value.diagrams.find(
         diagram => diagram.id === selectedDiagramId.value && !diagram._isDeleted
       ) ?? null)
     : null
+)
+
+const {
+  gridVisible,
+  miniMapVisible,
+  snapEnabled,
+  alignEnabled,
+  rulersEnabled,
+  lockAnchorsEnabled,
+  attachToOutlineEnabled,
+  selectionSyncEnabled,
+  canvasSettingsVisible,
+  paletteVisible,
+  autoLinkInGroups,
+  diagramNavigationOnlyMode,
+  defaultEdgeType,
+  canvasToggleButtons,
+  defaultLinkTypeOptions,
+} = useModelToolbarState(
+  computed(() => currentUser.value?.id ?? null),
+  computed(() => !!activeDiagram.value)
 )
 
 /** Версии текущей диаграммы (тот же model + name), от новых к старым по семверу */
@@ -565,33 +428,6 @@ watch(
   { immediate: true }
 )
 
-watch(
-  () => currentUser.value?.id ?? null,
-  userId => {
-    applyToolbarState(readToolbarState(userId))
-  },
-  { immediate: true }
-)
-
-watch(
-  [
-    gridVisible,
-    miniMapVisible,
-    snapEnabled,
-    alignEnabled,
-    rulersEnabled,
-    lockAnchorsEnabled,
-    attachToOutlineEnabled,
-    canvasSettingsVisible,
-    paletteVisible,
-    defaultEdgeType,
-    autoLinkInGroups,
-    () => currentUser.value?.id ?? null,
-  ],
-  ([, , , , , , , , , , , userId]) => {
-    persistToolbarState(userId as string | null)
-  }
-)
 
 watch(
   () => activeDiagram.value?.notationId ?? null,
@@ -1689,7 +1525,7 @@ watch(
   }
 )
 
-const setDiagramAttrs = (next: any) => {
+const setDiagramAttrs = (next: DiagramAttrs) => {
   const diagram = activeDiagram.value
   if (!diagram) return
   if (isDiagramReadOnly.value) return
@@ -2996,7 +2832,7 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   markLinkDirty(link.id)
 }
 
-const handleCanvasContextChange = (ctx: { renderer: any; interactionManager: any }) => {
+const handleCanvasContextChange = (ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }) => {
   diagramRenderer.value = ctx.renderer
   diagramInteractionManager.value = ctx.interactionManager
 }

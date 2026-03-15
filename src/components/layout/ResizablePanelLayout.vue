@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from "vue"
+import { loadJson, saveJson } from "@/utils/localStorage"
 
 const props = withDefaults(
   defineProps<{
@@ -37,30 +38,16 @@ type WorkspaceSettings = {
 }
 
 function readWorkspaceSettings(): Partial<WorkspaceSettings> {
-  if (typeof window === "undefined") return {}
-  try {
-    const raw = window.localStorage.getItem(props.storageKey)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as Partial<WorkspaceSettings>
-    return parsed && typeof parsed === "object" ? parsed : {}
-  } catch {
-    return {}
-  }
+  return loadJson<WorkspaceSettings>(props.storageKey) ?? {}
 }
 
 function persistWorkspaceSettings(): void {
-  if (typeof window === "undefined") return
-  const next: WorkspaceSettings = {
+  saveJson<WorkspaceSettings>(props.storageKey, {
     leftCollapsed: leftCollapsed.value,
     rightCollapsed: rightCollapsed.value,
     leftWidth: leftWidth.value,
     rightWidth: rightWidth.value,
-  }
-  try {
-    window.localStorage.setItem(props.storageKey, JSON.stringify(next))
-  } catch {
-    // ignore quota/storage access errors
-  }
+  })
 }
 
 function clampSideWidth(value: number): number {

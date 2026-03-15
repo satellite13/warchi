@@ -1,78 +1,63 @@
-import {ref, watch, type Ref} from "vue";
+import { ref, watch, type Ref } from 'vue'
+import { loadJson, saveJson } from '@/utils/localStorage'
 
 export type ToolbarState = {
-  gridVisible: boolean;
-  miniMapVisible: boolean;
-  snapEnabled: boolean;
-  alignEnabled: boolean;
-  rulersEnabled: boolean;
-};
+  gridVisible: boolean
+  miniMapVisible: boolean
+  snapEnabled: boolean
+  alignEnabled: boolean
+  rulersEnabled: boolean
+}
 
-const TOOLBAR_STATE_STORAGE_PREFIX = "warchi:notation-editor:toolbar-state";
+const STORAGE_PREFIX = 'warchi:notation-editor:toolbar-state'
 
-const getToolbarStateStorageKey = (userId: string | null): string =>
-  userId ? `${TOOLBAR_STATE_STORAGE_PREFIX}:${userId}` : `${TOOLBAR_STATE_STORAGE_PREFIX}:anonymous`;
-
-const readToolbarState = (userId: string | null): Partial<ToolbarState> | null => {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(getToolbarStateStorageKey(userId));
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<ToolbarState>;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-};
+function getStorageKey(userId: string | null): string {
+  return userId ? `${STORAGE_PREFIX}:${userId}` : `${STORAGE_PREFIX}:anonymous`
+}
 
 export function useNotationToolbarState(userId: Ref<string | null>) {
-  const gridVisible = ref(true);
-  const miniMapVisible = ref(true);
-  const snapEnabled = ref(false);
-  const alignEnabled = ref(true);
-  const rulersEnabled = ref(true);
+  const gridVisible = ref(true)
+  const miniMapVisible = ref(true)
+  const snapEnabled = ref(false)
+  const alignEnabled = ref(true)
+  const rulersEnabled = ref(true)
 
-  const applyToolbarState = (stateValue: Partial<ToolbarState> | null) => {
-    if (!stateValue) return;
-    if (typeof stateValue.gridVisible === "boolean") gridVisible.value = stateValue.gridVisible;
-    if (typeof stateValue.miniMapVisible === "boolean") miniMapVisible.value = stateValue.miniMapVisible;
-    if (typeof stateValue.snapEnabled === "boolean") snapEnabled.value = stateValue.snapEnabled;
-    if (typeof stateValue.alignEnabled === "boolean") alignEnabled.value = stateValue.alignEnabled;
-    if (typeof stateValue.rulersEnabled === "boolean") rulersEnabled.value = stateValue.rulersEnabled;
-  };
+  function applyState(saved: Partial<ToolbarState> | null) {
+    if (!saved) return
+    if (typeof saved.gridVisible === 'boolean') gridVisible.value = saved.gridVisible
+    if (typeof saved.miniMapVisible === 'boolean') miniMapVisible.value = saved.miniMapVisible
+    if (typeof saved.snapEnabled === 'boolean') snapEnabled.value = saved.snapEnabled
+    if (typeof saved.alignEnabled === 'boolean') alignEnabled.value = saved.alignEnabled
+    if (typeof saved.rulersEnabled === 'boolean') rulersEnabled.value = saved.rulersEnabled
+  }
 
-  const persistToolbarState = (userIdValue: string | null) => {
-    if (typeof window === "undefined") return;
-    const nextState: ToolbarState = {
+  function persistState(userIdValue: string | null) {
+    const next: ToolbarState = {
       gridVisible: gridVisible.value,
       miniMapVisible: miniMapVisible.value,
       snapEnabled: snapEnabled.value,
       alignEnabled: alignEnabled.value,
-      rulersEnabled: rulersEnabled.value
-    };
-    window.localStorage.setItem(getToolbarStateStorageKey(userIdValue), JSON.stringify(nextState));
-  };
+      rulersEnabled: rulersEnabled.value,
+    }
+    saveJson(getStorageKey(userIdValue), next)
+  }
 
-  watch(
-    userId,
-    (id) => {
-      applyToolbarState(readToolbarState(id));
-    },
-    {immediate: true}
-  );
+  watch(userId, id => applyState(loadJson<ToolbarState>(getStorageKey(id))), {
+    immediate: true,
+  })
 
   watch(
     [gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled, userId],
     ([, , , , , id]) => {
-      persistToolbarState(id as string | null);
+      persistState(id as string | null)
     }
-  );
+  )
 
   return {
     gridVisible,
     miniMapVisible,
     snapEnabled,
     alignEnabled,
-    rulersEnabled
-  };
+    rulersEnabled,
+  }
 }

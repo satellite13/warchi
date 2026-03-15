@@ -218,6 +218,7 @@ export const modelsMessages = {
       copy: 'Copy',
       propertiesTab: 'Properties',
       figureStyleTab: 'Figure Style',
+      defaultLinkType: 'Default link type',
       autoLinkInGroups: 'Auto-links in groups',
       compareWithVersion: 'Compare with version',
       compareTitle: 'Model version comparison',

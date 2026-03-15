@@ -63,6 +63,7 @@ export const notationsMessages = {
       notationAccessTitle: 'Доступ к нотации',
       propertiesTab: 'Свойства',
       figureStyleTab: 'Стиль фигуры',
+      defaultLinkType: 'Тип линии по умолчанию',
       documentation: 'Страница в Wiki',
     },
   },

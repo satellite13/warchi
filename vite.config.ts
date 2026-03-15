@@ -44,6 +44,21 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "happy-dom",
       setupFiles: ["./src/test/setup.ts"],
+      exclude: ["tests/**", "node_modules/**"],
+      coverage: {
+        provider: "v8",
+        include: ["src/**/*.{ts,vue}"],
+        exclude: [
+          "src/**/*.test.ts",
+          "src/**/*.d.ts",
+          "src/test/**",
+          "src/main.ts",
+          "src/i18n/**",
+          "src/router/**",
+          "src/env.d.ts",
+        ],
+        reporter: ["text", "html"],
+      },
     },
     server: {
       proxy: {

@@ -19,7 +19,7 @@ defineProps<{
 .card-skeleton {
   display: flex;
   flex-direction: column;
-  width: 260px;
+  width: 320px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);

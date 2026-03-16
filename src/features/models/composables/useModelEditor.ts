@@ -73,6 +73,42 @@ const toEditorDiagram = (row: DiagramResponse): EditorDiagram => ({
 const withoutDeleted = <T extends { _isDeleted?: boolean }>(rows: T[]): T[] =>
   rows.filter(row => !row._isDeleted)
 
+const fetchAllRelationRulesByNotationIds = async (
+  notationIds: string[]
+): Promise<RelationRuleResponse[]> => {
+  if (notationIds.length === 0) return []
+
+  const pageSize = 200
+  const collected: RelationRuleResponse[] = []
+
+  for (const notationId of notationIds) {
+    let page = 0
+    while (true) {
+      const query = new URLSearchParams({
+        notationId,
+        page: String(page),
+        size: String(pageSize),
+      })
+      const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+        `/relation-rules?${query.toString()}`
+      )
+      if (!result.success) {
+        throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
+      }
+
+      const content = result.data.content ?? []
+      collected.push(...content)
+
+      if (result.data.last === true || content.length < pageSize) {
+        break
+      }
+      page += 1
+    }
+  }
+
+  return collected
+}
+
 function formatSaveEntityError(
   action: 'создания' | 'обновления' | 'удаления',
   entity: string,
@@ -388,7 +424,6 @@ export const useModelEditor = (): ModelEditorReturn => {
         linkTypesResult,
         componentsResult,
         relationsResult,
-        relationRulesResult,
       ] = await Promise.all([
         apiGet<ModelData>(`/models/${modelId}`),
         apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
@@ -410,7 +445,6 @@ export const useModelEditor = (): ModelEditorReturn => {
         ),
         apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
         apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
-        apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`),
       ])
 
       if (!modelResult.success) {
@@ -427,20 +461,23 @@ export const useModelEditor = (): ModelEditorReturn => {
       modelInitialName.value = modelResult.data.name
       modelDirty.value = false
       modelCatalog.value = modelsResult.success ? (modelsResult.data.content ?? []) : []
+      const diagrams = diagramsResult.success ? (diagramsResult.data.content ?? []).map(toEditorDiagram) : []
+      const notationIds = Array.from(
+        new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))
+      )
+      const relationRules = await fetchAllRelationRulesByNotationIds(notationIds)
       state.value = {
         modelId,
         ownerId: modelResult.data.ownerId,
         nodes: nodesResult.success ? (nodesResult.data.content ?? []).map(toEditorNode) : [],
         links: linksResult.success ? (linksResult.data.content ?? []).map(toEditorLink) : [],
-        diagrams: diagramsResult.success
-          ? (diagramsResult.data.content ?? []).map(toEditorDiagram)
-          : [],
+        diagrams,
         notations: notationsResult.success ? (notationsResult.data.content ?? []) : [],
         nodeTypes: nodeTypesResult.success ? (nodeTypesResult.data.content ?? []) : [],
         linkTypes: linkTypesResult.success ? (linkTypesResult.data.content ?? []) : [],
         components: componentsResult.success ? (componentsResult.data.content ?? []) : [],
         relations: relationsResult.success ? (relationsResult.data.content ?? []) : [],
-        relationRules: relationRulesResult.success ? (relationRulesResult.data.content ?? []) : [],
+        relationRules,
       }
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить модель.'

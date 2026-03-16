@@ -160,7 +160,7 @@ const formattedUpdatedAt = computed(() => {
   position: absolute;
   top: 0;
   left: 0;
-  width: 260px;
+  width: 320px;
   height: 100%;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -187,7 +187,7 @@ const formattedUpdatedAt = computed(() => {
 .model-card {
   display: flex;
   flex-direction: column;
-  width: 260px;
+  width: 320px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);

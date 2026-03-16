@@ -25,7 +25,7 @@ const emit = defineEmits<{
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  width: 260px;
+  width: 320px;
   min-height: 200px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);

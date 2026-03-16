@@ -42,6 +42,7 @@ const {
   notation,
   state,
   isLoading,
+  errorMessage,
   isSaving,
   saveError,
   saveSuccess,
@@ -727,82 +728,93 @@ onBeforeUnmount(() => {
       />
     </template>
     <template #default>
-      <NotationMainPanelLayout>
-        <template #left>
-          <NotationComponentList
-            v-if="!isLoading"
-            :state="state"
-            :selected-id="selectedEntityId"
-            :sync-selection-enabled="selectionSyncEnabled"
-            @select="handleSelect"
-            @toggle-sync-selection="toggleSelectionSync"
-            @create-component="openComponentModal"
-            @create-relation="openRelationModal"
-            @remove-item="handleRemoveItem"
-          />
-        </template>
-        <template #default>
-          <div class="notation-canvas-area">
-            <div class="notation-canvas-area__toolbar">
-              <NotationAppHeader
-                canvas-mode
-                :has-unsaved-changes="hasUnsavedChanges"
-                :notation-name="notation?.name"
-                :notation-version="notation?.version"
-                :grid-visible="gridVisible"
-                :mini-map-visible="miniMapVisible"
-                :snap-enabled="snapEnabled"
-                :align-enabled="alignEnabled"
-                :rulers-enabled="rulersEnabled"
-                :can-undo="canUndo"
-                :can-redo="canRedo"
-                :can-share="canShareNotation"
-                :is-admin="isAdmin"
-                @action="handleToolbarAction"
-                @share="showShareModal = true"
-              />
-            </div>
-            <NotationDiagram
-              ref="diagramRef"
+      <div class="notation-editor-surface">
+        <NotationMainPanelLayout>
+          <template #left>
+            <NotationComponentList
               v-if="!isLoading"
               :state="state"
               :selected-id="selectedEntityId"
-              @select="handleDiagramSelect"
+              :sync-selection-enabled="selectionSyncEnabled"
+              @select="handleSelect"
+              @toggle-sync-selection="toggleSelectionSync"
+              @create-component="openComponentModal"
+              @create-relation="openRelationModal"
+              @remove-item="handleRemoveItem"
             />
-          </div>
-        </template>
-        <template #right>
-          <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
-            <CustomPropertiesPanel
-              v-if="activeRightTab === 'properties'"
-              :selected-item="selectedItem"
-              :node-types="state.nodeTypes"
-              :link-types="state.linkTypes"
-              :type-properties="selectedItemTypeProperties"
-              :all-components="state.components"
-              :all-relations="state.relations"
-              :relation-rules="state.relationRules"
-              :is-component-type-locked="selectedComponentUsedInModelNodes"
-              :is-relation-type-locked="selectedRelationUsedInModelLinks"
-              :on-component-type-change="handleComponentTypeChanged"
-              :on-relation-type-change="handleRelationTypeChanged"
-              :on-create-node-type="handleCreateNodeType"
-              :on-create-relation-type="handleCreateRelationType"
-              :on-mutate-item="handleMutateItem"
-              :on-mutate-relation-rules="handleMutateRelationRules"
-              :on-open-document="handleOpenEntityDoc"
-            />
-            <NodeStylePanel
-              v-if="activeRightTab === 'style'"
-              :selected-element-id="selectedDiagramElementId"
-              :interaction-manager="interactionManager"
-              :renderer="diagramRenderer"
-              :current-diagram-style="selectedDiagramStyle"
-              @style-change="handleStyleChange"
-            />
-          </TabPanel>
-        </template>
-      </NotationMainPanelLayout>
+          </template>
+          <template #default>
+            <div class="notation-canvas-area">
+              <div class="notation-canvas-area__toolbar">
+                <NotationAppHeader
+                  canvas-mode
+                  :has-unsaved-changes="hasUnsavedChanges"
+                  :notation-name="notation?.name"
+                  :notation-version="notation?.version"
+                  :grid-visible="gridVisible"
+                  :mini-map-visible="miniMapVisible"
+                  :snap-enabled="snapEnabled"
+                  :align-enabled="alignEnabled"
+                  :rulers-enabled="rulersEnabled"
+                  :can-undo="canUndo"
+                  :can-redo="canRedo"
+                  :can-share="canShareNotation"
+                  :is-admin="isAdmin"
+                  @action="handleToolbarAction"
+                  @share="showShareModal = true"
+                />
+              </div>
+              <NotationDiagram
+                ref="diagramRef"
+                v-if="!isLoading"
+                :state="state"
+                :selected-id="selectedEntityId"
+                @select="handleDiagramSelect"
+              />
+            </div>
+          </template>
+          <template #right>
+            <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
+              <CustomPropertiesPanel
+                v-if="activeRightTab === 'properties'"
+                :selected-item="selectedItem"
+                :node-types="state.nodeTypes"
+                :link-types="state.linkTypes"
+                :type-properties="selectedItemTypeProperties"
+                :all-components="state.components"
+                :all-relations="state.relations"
+                :relation-rules="state.relationRules"
+                :is-component-type-locked="selectedComponentUsedInModelNodes"
+                :is-relation-type-locked="selectedRelationUsedInModelLinks"
+                :on-component-type-change="handleComponentTypeChanged"
+                :on-relation-type-change="handleRelationTypeChanged"
+                :on-create-node-type="handleCreateNodeType"
+                :on-create-relation-type="handleCreateRelationType"
+                :on-mutate-item="handleMutateItem"
+                :on-mutate-relation-rules="handleMutateRelationRules"
+                :on-open-document="handleOpenEntityDoc"
+              />
+              <NodeStylePanel
+                v-if="activeRightTab === 'style'"
+                :selected-element-id="selectedDiagramElementId"
+                :interaction-manager="interactionManager"
+                :renderer="diagramRenderer"
+                :current-diagram-style="selectedDiagramStyle"
+                @style-change="handleStyleChange"
+              />
+            </TabPanel>
+          </template>
+        </NotationMainPanelLayout>
+
+        <div v-if="isLoading" class="notation-loading-overlay">
+          <UiIcon name="sync" class="notation-loading-overlay__icon spin" />
+          <span>{{ t('common.loading') }}</span>
+        </div>
+        <div v-else-if="errorMessage" class="notation-loading-overlay notation-loading-overlay--error">
+          <UiIcon name="error" class="notation-loading-overlay__icon" />
+          <span>{{ errorMessage }}</span>
+        </div>
+      </div>
     </template>
     <template #footer>
       <AppFooter />
@@ -975,6 +987,35 @@ onBeforeUnmount(() => {
   position: relative;
   height: 100%;
   min-height: 0;
+}
+
+.notation-editor-surface {
+  position: relative;
+  height: 100%;
+}
+
+.notation-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--base-bg) 84%, transparent);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.notation-loading-overlay--error {
+  color: var(--danger);
+}
+
+.notation-loading-overlay__icon {
+  width: 24px;
+  height: 24px;
 }
 
 .notation-canvas-area__toolbar {

@@ -3647,9 +3647,13 @@ onBeforeUnmount(() => {
     @select-version="versionDiff.loadCompareTarget"
   />
 
-  <div v-if="isLoading" class="overlay-loading">{{ t('common.loading') }}</div>
+  <div v-if="isLoading" class="overlay-loading">
+    <UiIcon name="sync" class="overlay-loading__icon spin" />
+    <span>{{ t('common.loading') }}</span>
+  </div>
   <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">
-    {{ errorMessage }}
+    <UiIcon name="error" class="overlay-loading__icon" />
+    <span>{{ errorMessage }}</span>
   </div>
 </template>
 
@@ -3658,15 +3662,24 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.7);
+  gap: 10px;
+  background: color-mix(in srgb, var(--base-bg) 84%, transparent);
+  color: var(--text-muted);
   z-index: 2000;
-  font-size: 16px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .overlay-loading--error {
   color: var(--danger);
+}
+
+.overlay-loading__icon {
+  width: 24px;
+  height: 24px;
 }
 
 .form-grid {

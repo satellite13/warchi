@@ -73,37 +73,28 @@ const toEditorDiagram = (row: DiagramResponse): EditorDiagram => ({
 const withoutDeleted = <T extends { _isDeleted?: boolean }>(rows: T[]): T[] =>
   rows.filter(row => !row._isDeleted)
 
+const RELATION_RULES_FETCH_SIZE = 5000
+
 const fetchAllRelationRulesByNotationIds = async (
   notationIds: string[]
 ): Promise<RelationRuleResponse[]> => {
   if (notationIds.length === 0) return []
 
-  const pageSize = 200
   const collected: RelationRuleResponse[] = []
 
   for (const notationId of notationIds) {
-    let page = 0
-    while (true) {
-      const query = new URLSearchParams({
-        notationId,
-        page: String(page),
-        size: String(pageSize),
-      })
-      const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-        `/relation-rules?${query.toString()}`
-      )
-      if (!result.success) {
-        throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
-      }
-
-      const content = result.data.content ?? []
-      collected.push(...content)
-
-      if (result.data.last === true || content.length < pageSize) {
-        break
-      }
-      page += 1
+    const query = new URLSearchParams({
+      notationId,
+      page: '0',
+      size: String(RELATION_RULES_FETCH_SIZE),
+    })
+    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+      `/relation-rules?${query.toString()}`
+    )
+    if (!result.success) {
+      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
     }
+    collected.push(...(result.data.content ?? []))
   }
 
   return collected

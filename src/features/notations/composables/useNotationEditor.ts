@@ -131,6 +131,8 @@ function normalizeTypeName(name: string): string {
   return name.trim().toLowerCase()
 }
 
+const RELATION_RULES_FETCH_SIZE = 5000
+
 function buildRelationRuleKey(
   fromComponentId: string,
   toComponentId: string,
@@ -161,33 +163,18 @@ async function runTasksWithConcurrencyLimit(
 const fetchAllRelationRulesByNotation = async (
   notationId: string
 ): Promise<RelationRuleResponse[]> => {
-  const pageSize = 200
-  let page = 0
-  const collected: RelationRuleResponse[] = []
-
-  while (true) {
-    const query = new URLSearchParams({
-      notationId,
-      page: String(page),
-      size: String(pageSize),
-    })
-    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-      `/relation-rules?${query.toString()}`
-    )
-    if (!result.success) {
-      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
-    }
-
-    const content = result.data.content ?? []
-    collected.push(...content)
-
-    if (result.data.last === true || content.length < pageSize) {
-      break
-    }
-    page += 1
+  const query = new URLSearchParams({
+    notationId,
+    page: '0',
+    size: String(RELATION_RULES_FETCH_SIZE),
+  })
+  const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+    `/relation-rules?${query.toString()}`
+  )
+  if (!result.success) {
+    throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
   }
-
-  return collected
+  return result.data.content ?? []
 }
 
 function formatNotationEntityError(

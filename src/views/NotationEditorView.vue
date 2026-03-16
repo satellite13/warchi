@@ -992,6 +992,10 @@ onBeforeUnmount(() => {
 .notation-editor-surface {
   position: relative;
   height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .notation-loading-overlay {

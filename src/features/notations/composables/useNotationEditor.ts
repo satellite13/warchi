@@ -131,6 +131,33 @@ function normalizeTypeName(name: string): string {
   return name.trim().toLowerCase()
 }
 
+function buildRelationRuleKey(
+  fromComponentId: string,
+  toComponentId: string,
+  relationId: string
+): string {
+  return `${fromComponentId}::${toComponentId}::${relationId}`
+}
+
+async function runTasksWithConcurrencyLimit(
+  tasks: Array<() => Promise<void>>,
+  concurrencyLimit: number
+): Promise<void> {
+  if (tasks.length === 0) return
+  const limit = Math.max(1, concurrencyLimit)
+  let nextIndex = 0
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (nextIndex < tasks.length) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+      await tasks[currentIndex]()
+    }
+  })
+
+  await Promise.all(workers)
+}
+
 const fetchAllRelationRulesByNotation = async (
   notationId: string
 ): Promise<RelationRuleResponse[]> => {
@@ -467,6 +494,7 @@ async function syncRelationRules(
   onProgress: (msg: string) => void
 ): Promise<EditorRelationRule[]> {
   onProgress('Синхронизация правил связей')
+  const REQUEST_CONCURRENCY = 8
   const currentComponentIds = new Set(
     components.filter(component => !component._isDeleted).map(component => component.id)
   )
@@ -476,12 +504,6 @@ async function syncRelationRules(
       currentComponentIds.has(rule.fromComponentId) &&
       currentComponentIds.has(rule.toComponentId)
   )
-  for (const rule of existingRules) {
-    const deleteResult = await apiDelete<void>(`/relation-rules/${rule.id}`)
-    if (!deleteResult.success) {
-      throw new Error(`Ошибка удаления правила связи: ${deleteResult.error.message}`)
-    }
-  }
 
   const activeRelationIds = new Set(
     relations.filter(relation => !relation._isDeleted).map(relation => relation.id)
@@ -492,26 +514,82 @@ async function syncRelationRules(
       currentComponentIds.has(rule.fromComponentId) &&
       currentComponentIds.has(rule.toComponentId)
   )
+  const desiredKeys = new Set<string>()
+  const existingRuleIdsByKey = new Map<string, string[]>()
+
+  for (const existingRule of existingRules) {
+    const key = buildRelationRuleKey(
+      existingRule.fromComponentId,
+      existingRule.toComponentId,
+      existingRule.relationId
+    )
+    const existingIds = existingRuleIdsByKey.get(key)
+    if (existingIds) {
+      existingIds.push(existingRule.id)
+    } else {
+      existingRuleIdsByKey.set(key, [existingRule.id])
+    }
+  }
+
+  const createRequests: RelationRuleRequest[] = []
   for (const rule of activeRules) {
     const uniqueRelationIds = Array.from(new Set(rule.allowedRelationIds)).filter(relationId =>
       activeRelationIds.has(relationId)
     )
     for (const relationId of uniqueRelationIds) {
-      const request: RelationRuleRequest = {
+      const key = buildRelationRuleKey(rule.fromComponentId, rule.toComponentId, relationId)
+      desiredKeys.add(key)
+
+      const existingIds = existingRuleIdsByKey.get(key)
+      if (existingIds && existingIds.length > 0) {
+        // Keep one matching row, remove potential duplicates later.
+        existingIds.pop()
+        continue
+      }
+
+      createRequests.push({
         relationId,
         fromComponentId: rule.fromComponentId,
         toComponentId: rule.toComponentId,
         ownerId,
-      }
-      const createResult = await apiPost<RelationRuleResponse>('/relation-rules', request)
-      if (!createResult.success) {
-        throw new Error(`Ошибка создания правила связи: ${createResult.error.message}`)
-      }
+      })
     }
+
     rule.allowedRelationIds = uniqueRelationIds
     rule._isNew = false
     rule._isDirty = false
   }
+
+  const deleteIds: string[] = []
+  for (const [key, ids] of existingRuleIdsByKey.entries()) {
+    if (!desiredKeys.has(key)) {
+      deleteIds.push(...ids)
+      continue
+    }
+    if (ids.length > 0) {
+      deleteIds.push(...ids)
+    }
+  }
+
+  await runTasksWithConcurrencyLimit(
+    deleteIds.map(ruleId => async () => {
+      const deleteResult = await apiDelete<void>(`/relation-rules/${ruleId}`)
+      if (!deleteResult.success) {
+        throw new Error(`Ошибка удаления правила связи: ${deleteResult.error.message}`)
+      }
+    }),
+    REQUEST_CONCURRENCY
+  )
+
+  await runTasksWithConcurrencyLimit(
+    createRequests.map(request => async () => {
+      const createResult = await apiPost<RelationRuleResponse>('/relation-rules', request)
+      if (!createResult.success) {
+        throw new Error(`Ошибка создания правила связи: ${createResult.error.message}`)
+      }
+    }),
+    REQUEST_CONCURRENCY
+  )
 
   return activeRules
 }

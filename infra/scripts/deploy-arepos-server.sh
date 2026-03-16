@@ -41,14 +41,25 @@ if [ -z "$VERSION" ]; then
   fi
 fi
 
+APP_VERSION=$(./gradlew properties -q | grep "^version:" | awk '{print $2}')
+if [ -z "$APP_VERSION" ]; then
+  echo -e "${RED}[ERROR]${NC} Не удалось определить app version из Gradle"
+  exit 1
+fi
+
 echo -e "${GREEN}[INFO]${NC} Версия: $VERSION"
 
 echo -e "${GREEN}[INFO]${NC} Сборка JAR..."
 ./gradlew bootJar
 
-JAR_FILE=$(find build/libs -name "*.jar" ! -name "*-plain.jar" | head -1)
+JAR_FILE="build/libs/arepos-server-${APP_VERSION}.jar"
 if [ -z "$JAR_FILE" ]; then
   echo -e "${RED}[ERROR]${NC} JAR не найден в build/libs/"
+  exit 1
+fi
+if [ ! -f "$JAR_FILE" ]; then
+  echo -e "${RED}[ERROR]${NC} Ожидаемый JAR не найден: $JAR_FILE"
+  echo -e "${RED}[ERROR]${NC} Проверьте версию и содержимое build/libs/"
   exit 1
 fi
 

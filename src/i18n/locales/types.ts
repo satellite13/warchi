@@ -108,6 +108,7 @@ export const typesMessages = {
     },
     shapes: {
       title: 'Формы узлов',
+      accessTitle: 'Доступ к форме',
       editorDescriptionLink: 'Помощь',
       listTitle: 'Фигуры',
       noShapes: 'Нет форм',
@@ -244,6 +245,7 @@ export const typesMessages = {
     },
     shapes: {
       title: 'Node shapes',
+      accessTitle: 'Shape access',
       editorDescriptionLink: 'Help',
       listTitle: 'Shapes',
       noShapes: 'No shapes',

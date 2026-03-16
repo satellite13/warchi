@@ -10,6 +10,7 @@ defineProps<{
   name: string
   outline: OutlineSegment[]
   canEdit: boolean
+  canShare?: boolean
   isDirty: boolean
   isSaving: boolean
   isDeleting: boolean
@@ -19,6 +20,7 @@ defineProps<{
 const emit = defineEmits<{
   save: []
   delete: []
+  share: []
   openDoc: []
   "update:name": [value: string]
   "update:outline": [value: OutlineSegment[]]
@@ -59,6 +61,16 @@ const { t } = useI18n()
           <UiIcon name="help" />
         </RouterLink>
         <template v-if="canEdit">
+          <button
+            v-if="canShare"
+            type="button"
+            class="btn btn--secondary"
+            :disabled="isSaving || isDeleting"
+            @click="emit('share')"
+          >
+            <UiIcon name="share" />
+            {{ t("common.share") }}
+          </button>
           <button
             type="button"
             class="btn btn--soft-danger"

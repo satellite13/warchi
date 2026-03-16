@@ -7,9 +7,11 @@ import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
 import type { OutlineSegment } from "../notations/notationAttrs"
 import BaseModal from "../../components/modals/BaseModal.vue"
 import DocumentEditorModal from "../../components/modals/DocumentEditorModal.vue"
+import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
 import { apiPost } from "../../composables/useApi"
+import { useAuth } from "../../composables/useAuth"
 
 const { t } = useI18n()
 const {
@@ -30,6 +32,8 @@ const saveError = ref<string | null>(null)
 const localName = ref("")
 const localOutline = ref<OutlineSegment[]>([])
 const showDeleteConfirm = ref(false)
+const showShareModal = ref(false)
+const { currentUser, isAdmin } = useAuth()
 
 function parseOutlineJson(json: string | null): OutlineSegment[] {
   if (!json) return []
@@ -42,6 +46,12 @@ function parseOutlineJson(json: string | null): OutlineSegment[] {
 }
 
 const canEditSelected = computed(() => selectedDetail.value?.canEdit ?? false)
+const canShareSelected = computed(() => {
+  const shape = selectedDetail.value
+  const userId = currentUser.value?.id
+  if (!shape || !userId) return false
+  return isAdmin.value || shape.ownerId === userId
+})
 
 /** Есть несохранённые изменения относительно данных с сервера */
 const isDirty = computed(() => {
@@ -250,12 +260,14 @@ onBeforeUnmount(() => {
               :name="localName"
               :outline="localOutline"
               :can-edit="canEditSelected"
+              :can-share="canShareSelected"
               :is-dirty="isDirty"
               :is-saving="isSaving"
               :is-deleting="isDeleting"
               :has-doc="!!getShapeDocFileId()"
               @save="handleSave"
               @delete="openDeleteConfirm"
+              @share="showShareModal = true"
               @open-doc="openDocModal"
               @update:name="localName = $event"
               @update:outline="localOutline = $event"
@@ -271,6 +283,14 @@ onBeforeUnmount(() => {
       :file-id="docModalFileId"
       @close="handleDocModalClose"
       @saved="handleDocSaved"
+    />
+
+    <ShareAccessModal
+      v-if="showShareModal && selectedDetail"
+      :title="t('shapes.accessTitle')"
+      resource-type="NODE_SHAPE"
+      :resource-id="selectedDetail.id"
+      @close="showShareModal = false"
     />
 
     <BaseModal

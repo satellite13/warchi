@@ -349,7 +349,7 @@ export interface AuditLogResponse {
 
 // Access shares
 
-export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE'
+export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE'
 export type SharePermission = 'VIEW' | 'EDIT'
 
 export interface AccessShareRequest {

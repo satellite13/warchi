@@ -20,6 +20,7 @@ const {
   nodeTypes,
   linkTypes,
   selectedType,
+  selectedTypeId,
   isLoading,
   isSaving,
   saveError,
@@ -45,25 +46,36 @@ onMounted(() => {
 })
 
 // Load document when selected type changes; register ref so type docs appear in wiki
-watch(selectedType, async (item) => {
-  if (item && !item._isNew) {
-    await loadDocument(item.parsedAttrs.documentFileId)
-    const fileId = item.parsedAttrs.documentFileId
-    if (fileId && item.id) {
-      try {
-        if (item.kind === 'node') {
-          await apiPost<{ fileId: string; label: string }>('/documents', { fileId, nodeTypeId: item.id })
-        } else {
-          await apiPost<{ fileId: string; label: string }>('/documents', { fileId, linkTypeId: item.id })
+watch(
+  () => selectedTypeId.value,
+  async (currentId, previousId) => {
+    if (currentId === previousId) return
+    const item = selectedType.value
+    if (item && !item._isNew) {
+      await loadDocument(item.parsedAttrs.documentFileId)
+      const fileId = item.parsedAttrs.documentFileId
+      if (fileId && item.id) {
+        try {
+          if (item.kind === 'node') {
+            await apiPost<{ fileId: string; label: string }>('/documents', {
+              fileId,
+              nodeTypeId: item.id,
+            })
+          } else {
+            await apiPost<{ fileId: string; label: string }>('/documents', {
+              fileId,
+              linkTypeId: item.id,
+            })
+          }
+        } catch {
+          // ref may already exist or permission issue; ignore
         }
-      } catch {
-        // ref may already exist or permission issue; ignore
       }
+    } else {
+      resetDocument()
     }
-  } else {
-    resetDocument()
   }
-})
+)
 
 const showDocModal = ref(false)
 

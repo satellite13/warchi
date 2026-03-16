@@ -441,13 +441,14 @@ export function useTypeEditor() {
     }
   }
 
-  watch(selectedType, (item) => {
-    if (item) {
-      loadUsages(item)
-    } else {
-      typeUsages.value = []
-    }
-  })
+watch(selectedTypeId, () => {
+  const item = selectedType.value
+  if (item) {
+    loadUsages(item)
+  } else {
+    typeUsages.value = []
+  }
+})
 
   return {
     currentUserId,

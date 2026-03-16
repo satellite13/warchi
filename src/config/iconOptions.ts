@@ -7,10 +7,23 @@ import { INTERACTIVE_BADGE_ICONS } from './interactiveBadgeIcons'
 
 export type IconOption = { id: string; label: string }
 
-export const COMBINED_ICON_OPTIONS: IconOption[] = [
+export function sanitizeIconOptions(options: IconOption[]): IconOption[] {
+  const seen = new Set<string>()
+  return options.flatMap((option) => {
+    const id = option.id.trim()
+    if (!id || seen.has(id)) return []
+    seen.add(id)
+    return [{ id, label: option.label }]
+  })
+}
+
+/**
+ * Архимейт-иконки идут первыми и имеют приоритет при совпадении id.
+ */
+export const COMBINED_ICON_OPTIONS: IconOption[] = sanitizeIconOptions([
   ...ARCHIMATE_ICON_OPTIONS.map(({ id, label }) => ({ id, label })),
   ...INTERACTIVE_BADGE_ICONS,
-]
+])
 
 /** Иконки по умолчанию для сущностей. */
 export const DEFAULT_ENTITY_ICONS = {

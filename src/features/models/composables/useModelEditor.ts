@@ -53,6 +53,10 @@ type ModelEditorReturn = {
   renameModel: (nextName: string) => string | null
   handleBack: () => void
   createDiagramBaseline: (diagramId: string) => Promise<EditorDiagram | null>
+  ensureNotationRelationsAndRules: (
+    notationId: string,
+    options?: { force?: boolean }
+  ) => Promise<void>
 }
 
 const toEditorNode = (row: NodeResponse): EditorNode => ({
@@ -74,6 +78,7 @@ const withoutDeleted = <T extends { _isDeleted?: boolean }>(rows: T[]): T[] =>
   rows.filter(row => !row._isDeleted)
 
 const RELATION_RULES_FETCH_SIZE = 5000
+const RELATIONS_FETCH_SIZE = 5000
 
 const fetchAllRelationRulesByNotationIds = async (
   notationIds: string[]
@@ -98,6 +103,19 @@ const fetchAllRelationRulesByNotationIds = async (
   }
 
   return collected
+}
+
+const fetchAllRelationsByNotationId = async (notationId: string): Promise<RelationResponse[]> => {
+  const query = new URLSearchParams({
+    notationId,
+    page: '0',
+    size: String(RELATIONS_FETCH_SIZE),
+  })
+  const result = await apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
+  if (!result.success) {
+    throw new Error(`Ошибка загрузки relations: ${result.error.message}`)
+  }
+  return result.data.content ?? []
 }
 
 function formatSaveEntityError(
@@ -365,6 +383,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const modelCatalog = ref<ModelData[]>([])
   let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
   let saveErrorTimer: ReturnType<typeof setTimeout> | null = null
+  const loadedRelationRuleNotationIds = new Set<string>()
 
   onScopeDispose(() => {
     if (saveSuccessTimer) {
@@ -457,6 +476,10 @@ export const useModelEditor = (): ModelEditorReturn => {
         new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))
       )
       const relationRules = await fetchAllRelationRulesByNotationIds(notationIds)
+      loadedRelationRuleNotationIds.clear()
+      for (const notationId of notationIds) {
+        loadedRelationRuleNotationIds.add(notationId)
+      }
       state.value = {
         modelId,
         ownerId: modelResult.data.ownerId,
@@ -581,6 +604,39 @@ export const useModelEditor = (): ModelEditorReturn => {
     return editorDiagram
   }
 
+  const ensureNotationRelationsAndRules = async (
+    notationId: string,
+    options?: { force?: boolean }
+  ): Promise<void> => {
+    if (!notationId) return
+    const force = options?.force === true
+    if (!force && loadedRelationRuleNotationIds.has(notationId)) return
+
+    const [relations, rules] = await Promise.all([
+      fetchAllRelationsByNotationId(notationId),
+      fetchAllRelationRulesByNotationIds([notationId]),
+    ])
+
+    const previousRelationIds = new Set(
+      state.value.relations.filter(relation => relation.notationId === notationId).map(relation => relation.id)
+    )
+    for (const relation of relations) {
+      previousRelationIds.add(relation.id)
+    }
+
+    state.value.relations = [
+      ...state.value.relations.filter(relation => relation.notationId !== notationId),
+      ...relations,
+    ]
+
+    state.value.relationRules = [
+      ...state.value.relationRules.filter(rule => !previousRelationIds.has(rule.relationId)),
+      ...rules,
+    ]
+
+    loadedRelationRuleNotationIds.add(notationId)
+  }
+
   return {
     model,
     state,
@@ -600,5 +656,6 @@ export const useModelEditor = (): ModelEditorReturn => {
     renameModel,
     handleBack,
     createDiagramBaseline,
+    ensureNotationRelationsAndRules,
   }
 }

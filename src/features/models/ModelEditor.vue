@@ -68,6 +68,7 @@ const {
   markModelDirty,
   renameModel,
   createDiagramBaseline,
+  ensureNotationRelationsAndRules,
 } = useModelEditor()
 const { currentUser, isAdmin } = useAuth()
 const { t } = useI18n()
@@ -280,6 +281,15 @@ watch(
       newerNotationVersions.value = []
       return
     }
+    try {
+      await ensureNotationRelationsAndRules(notationId)
+    } catch (error) {
+      setUiError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось загрузить правила связей для активной нотации.'
+      )
+    }
     const result = await apiGet<NotationResponse[]>(`/notations/${notationId}/newer-versions`)
     if (result.success) {
       newerNotationVersions.value = result.data
@@ -288,6 +298,23 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  selectedDiagramId,
+  async () => {
+    const notationId = activeNotationId.value
+    if (!notationId) return
+    try {
+      await ensureNotationRelationsAndRules(notationId, { force: true })
+    } catch (error) {
+      setUiError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось обновить relations и правила связей для диаграммы.'
+      )
+    }
+  }
 )
 
 

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-17
+
+### Changed
+- Connection creation preview in model and notation editors now uses a straight line by default while dragging a new link.
+
 ## [0.1.0] - 2026-03-15
 
 ### Added

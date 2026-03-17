@@ -182,7 +182,8 @@ const fetchAllRelationRulesByNotation = async (
 
     const batch = result.data.content ?? []
     collected.push(...batch)
-    if (result.data.last || page + 1 >= result.data.totalPages) break
+    const totalPages = result.data.totalPages ?? 1
+    if (result.data.last || page + 1 >= totalPages) break
     page += 1
   }
 

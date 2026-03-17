@@ -1814,8 +1814,25 @@ const startConnectNodes = (
 
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
+  console.debug('[connect:attempt]', {
+    notationId,
+    sourceModelNodeId,
+    targetModelNodeId,
+    sourceComponentId,
+    targetComponentId,
+    sourceNodeName: sourceNode.name,
+    targetNodeName: targetNode.name,
+  })
   if (!sourceComponentId || !targetComponentId) {
     setUiError('Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.')
+    console.warn('[connect:block]', {
+      reason: 'missing_component_binding',
+      notationId,
+      sourceModelNodeId,
+      targetModelNodeId,
+      sourceComponentId,
+      targetComponentId,
+    })
     return
   }
 
@@ -1824,15 +1841,45 @@ const startConnectNodes = (
       rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
     )
     .map(rule => rule.relationId)
+  console.debug('[connect:rules]', {
+    notationId,
+    sourceComponentId,
+    targetComponentId,
+    ruleRelationIds,
+    relationRulesCount: state.value.relationRules.length,
+  })
   if (ruleRelationIds.length === 0) {
     setUiError('Для этой пары компонентов нет разрешённых связей по правилам нотации.')
+    console.warn('[connect:block]', {
+      reason: 'no_rule_relations',
+      notationId,
+      sourceComponentId,
+      targetComponentId,
+    })
     return
   }
   const allowedRelations = state.value.relations.filter(
     relation => relation.notationId === notationId && ruleRelationIds.includes(relation.id)
   )
+  console.debug('[connect:allowed-relations]', {
+    notationId,
+    ruleRelationIds,
+    allowedRelations: allowedRelations.map(item => ({
+      id: item.id,
+      name: item.name,
+      linkTypeId: item.linkTypeId,
+    })),
+    relationsCount: state.value.relations.length,
+  })
   if (allowedRelations.length === 0) {
     setUiError('Для этой пары компонентов нет доступных relation по правилам нотации.')
+    console.warn('[connect:block]', {
+      reason: 'no_allowed_relations',
+      notationId,
+      sourceComponentId,
+      targetComponentId,
+      ruleRelationIds,
+    })
     return
   }
   pendingConnection.value = {
@@ -2083,9 +2130,18 @@ const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boole
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
   if (!sourceComponentId || !targetComponentId) return false
-  return state.value.relationRules.some(
+  const allowed = state.value.relationRules.some(
     rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
   )
+  console.debug('[connect:canConnect]', {
+    notationId,
+    sourceModelNodeId,
+    targetModelNodeId,
+    sourceComponentId,
+    targetComponentId,
+    allowed,
+  })
+  return allowed
 }
 
 const handleReconnectEdge = (

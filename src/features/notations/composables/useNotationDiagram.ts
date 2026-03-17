@@ -639,6 +639,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       gridSize: GRID_SIZE,
       alignToNodes: true,
       alignmentScreenTolerance: 40,
+      previewPathType: 'straight',
       keymap: { deleteKeys: [] }
     })
     // Notation editor does not support interactive port-to-port connections.

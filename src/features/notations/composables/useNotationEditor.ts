@@ -163,18 +163,30 @@ async function runTasksWithConcurrencyLimit(
 const fetchAllRelationRulesByNotation = async (
   notationId: string
 ): Promise<RelationRuleResponse[]> => {
-  const query = new URLSearchParams({
-    notationId,
-    page: '0',
-    size: String(RELATION_RULES_FETCH_SIZE),
-  })
-  const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-    `/relation-rules?${query.toString()}`
-  )
-  if (!result.success) {
-    throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
+  const collected: RelationRuleResponse[] = []
+  let page = 0
+
+  // Backend returns paginated relation-rules; load all pages to avoid hidden rules.
+  while (true) {
+    const query = new URLSearchParams({
+      notationId,
+      page: String(page),
+      size: String(RELATION_RULES_FETCH_SIZE),
+    })
+    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+      `/relation-rules?${query.toString()}`
+    )
+    if (!result.success) {
+      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
+    }
+
+    const batch = result.data.content ?? []
+    collected.push(...batch)
+    if (result.data.last || page + 1 >= result.data.totalPages) break
+    page += 1
   }
-  return result.data.content ?? []
+
+  return collected
 }
 
 function formatNotationEntityError(
@@ -572,6 +584,10 @@ async function syncRelationRules(
     createRequests.map(request => async () => {
       const createResult = await apiPost<RelationRuleResponse>('/relation-rules', request)
       if (!createResult.success) {
+        // Rule may already exist (parallel save or stale local cache); treat conflict as idempotent success.
+        if (createResult.error.status === 409) {
+          return
+        }
         throw new Error(`Ошибка создания правила связи: ${createResult.error.message}`)
       }
     }),

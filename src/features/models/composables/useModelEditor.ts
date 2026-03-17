@@ -88,34 +88,52 @@ const fetchAllRelationRulesByNotationIds = async (
   const collected: RelationRuleResponse[] = []
 
   for (const notationId of notationIds) {
-    const query = new URLSearchParams({
-      notationId,
-      page: '0',
-      size: String(RELATION_RULES_FETCH_SIZE),
-    })
-    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-      `/relation-rules?${query.toString()}`
-    )
-    if (!result.success) {
-      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
+    let page = 0
+    while (true) {
+      const query = new URLSearchParams({
+        notationId,
+        page: String(page),
+        size: String(RELATION_RULES_FETCH_SIZE),
+      })
+      const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
+        `/relation-rules?${query.toString()}`
+      )
+      if (!result.success) {
+        throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
+      }
+      const batch = result.data.content ?? []
+      collected.push(...batch)
+      if (result.data.last || page + 1 >= result.data.totalPages) break
+      page += 1
     }
-    collected.push(...(result.data.content ?? []))
   }
 
   return collected
 }
 
 const fetchAllRelationsByNotationId = async (notationId: string): Promise<RelationResponse[]> => {
-  const query = new URLSearchParams({
-    notationId,
-    page: '0',
-    size: String(RELATIONS_FETCH_SIZE),
-  })
-  const result = await apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
-  if (!result.success) {
-    throw new Error(`Ошибка загрузки relations: ${result.error.message}`)
+  const collected: RelationResponse[] = []
+  let page = 0
+
+  while (true) {
+    const query = new URLSearchParams({
+      notationId,
+      page: String(page),
+      size: String(RELATIONS_FETCH_SIZE),
+    })
+    const result = await apiGet<PaginatedResponse<RelationResponse>>(
+      `/relations?${query.toString()}`
+    )
+    if (!result.success) {
+      throw new Error(`Ошибка загрузки relations: ${result.error.message}`)
+    }
+    const batch = result.data.content ?? []
+    collected.push(...batch)
+    if (result.data.last || page + 1 >= result.data.totalPages) break
+    page += 1
   }
-  return result.data.content ?? []
+
+  return collected
 }
 
 function formatSaveEntityError(

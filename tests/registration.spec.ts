@@ -32,7 +32,7 @@ test.describe('Registration', () => {
     await page.locator('button.submit').click()
 
     // Verify redirect to home page or success message
-    const homeRedirect = page.waitForURL('/', { timeout: 10000 }).then(() => true)
+    const homeRedirect = page.waitForURL('/home', { timeout: 10000 }).then(() => true)
     const successMsg = page.locator('.msg--success').waitFor({ timeout: 10000 }).then(() => true)
     const errorMsg = page.locator('.msg--error').waitFor({ timeout: 10000 }).then(() => true)
 
@@ -48,7 +48,7 @@ test.describe('Registration', () => {
       await expect(page.locator('.msg--error')).toBeVisible()
     } else {
       // Either redirected to home or success message shown
-      const atHome = page.url().endsWith('/') || page.url().endsWith('/#/')
+      const atHome = page.url().endsWith('/home') || page.url().endsWith('/')
       const hasSuccess = await page.locator('.msg--success').isVisible().catch(() => false)
       expect(atHome || hasSuccess).toBeTruthy()
     }

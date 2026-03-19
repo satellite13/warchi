@@ -9,6 +9,8 @@ import { serializeTypeAttrs, type CustomProperty } from '../notations/notationAt
 import { useCanShare } from '../../composables/useCanShare'
 import BaseModal from '../../components/modals/BaseModal.vue'
 import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
+import BatchShareModal from '../../components/modals/BatchShareModal.vue'
+import type { BatchShareItem } from '../../components/modals/BatchShareModal.vue'
 import TypeSidebar from './components/TypeSidebar.vue'
 import TypeForm from './components/TypeForm.vue'
 import TypeAside from './components/TypeAside.vue'
@@ -37,7 +39,7 @@ const {
   isDirty,
 } = useTypeEditor()
 
-const { documentFileId, isBrokenRef, loadDocument, resetDocument } = useTypeDocument()
+const { documentFileId, loadDocument, resetDocument } = useTypeDocument()
 
 const { t } = useI18n()
 
@@ -231,6 +233,55 @@ const attrsJson = computed(() => {
     return raw
   }
 })
+
+// --- Batch selection mode ---
+const selectionMode = ref(false)
+const checkedTypeIds = ref(new Set<string>())
+const showBatchShareModal = ref(false)
+
+function toggleSelectionMode() {
+  selectionMode.value = !selectionMode.value
+  if (!selectionMode.value) {
+    checkedTypeIds.value = new Set()
+  }
+}
+
+function toggleCheck(id: string) {
+  const next = new Set(checkedTypeIds.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  checkedTypeIds.value = next
+}
+
+const batchShareItems = computed<BatchShareItem[]>(() => {
+  const items: BatchShareItem[] = []
+  for (const id of checkedTypeIds.value) {
+    const nodeType = nodeTypes.value.find(t => t.id === id)
+    if (nodeType) {
+      items.push({ id: nodeType.id, name: nodeType.name, resourceType: 'NODE_TYPE' })
+      continue
+    }
+    const linkType = linkTypes.value.find(t => t.id === id)
+    if (linkType) {
+      items.push({ id: linkType.id, name: linkType.name, resourceType: 'LINK_TYPE' })
+    }
+  }
+  return items
+})
+
+function handleBatchShare() {
+  if (batchShareItems.value.length === 0) return
+  showBatchShareModal.value = true
+}
+
+function handleBatchShareDone() {
+  showBatchShareModal.value = false
+  selectionMode.value = false
+  checkedTypeIds.value = new Set()
+}
 </script>
 
 <template>
@@ -242,8 +293,13 @@ const attrsJson = computed(() => {
       :current-user-id="currentUserId"
       :selected-type-id="selectedType?.id ?? null"
       :is-loading="isLoading"
+      :selection-mode="selectionMode"
+      :checked-ids="checkedTypeIds"
       @select-type="handleSelectType"
       @add-type="handleAddType"
+      @toggle-selection-mode="toggleSelectionMode"
+      @toggle-check="toggleCheck"
+      @batch-share="handleBatchShare"
     />
 
     <!-- Center + Right panels -->
@@ -324,6 +380,13 @@ const attrsJson = computed(() => {
       :resource-type="shareResourceType"
       :resource-id="selectedType.id"
       @close="showShareModal = false"
+    />
+
+    <BatchShareModal
+      v-if="showBatchShareModal && batchShareItems.length > 0"
+      :items="batchShareItems"
+      @close="showBatchShareModal = false"
+      @done="handleBatchShareDone"
     />
 
     <DocumentEditorModal

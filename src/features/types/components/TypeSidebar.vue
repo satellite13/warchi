@@ -11,11 +11,16 @@ const props = defineProps<{
   currentUserId: string | null
   selectedTypeId: string | null
   isLoading: boolean
+  selectionMode: boolean
+  checkedIds: Set<string>
 }>()
 
 const emit = defineEmits<{
   selectType: [id: string]
   addType: [kind: "node" | "link"]
+  toggleSelectionMode: []
+  toggleCheck: [id: string]
+  batchShare: []
 }>()
 
 const typeSearchQuery = ref("")
@@ -47,6 +52,22 @@ const filteredLinkTypes = computed(() => {
 })
 
 const totalCount = computed(() => props.nodeTypes.length + props.linkTypes.length)
+const checkedCount = computed(() => props.checkedIds.size)
+
+function isCheckable(item: TypeItem): boolean {
+  return !item._isNew && !!props.currentUserId && item.ownerId === props.currentUserId
+}
+
+function handleItemClick(id: string) {
+  if (props.selectionMode) {
+    const item = props.nodeTypes.find(t => t.id === id) ?? props.linkTypes.find(t => t.id === id)
+    if (item && isCheckable(item)) {
+      emit("toggleCheck", id)
+    }
+  } else {
+    emit("selectType", id)
+  }
+}
 
 const nodeTypesExpanded = ref(true)
 const linkTypesExpanded = ref(true)
@@ -63,12 +84,23 @@ const linkTypesExpanded = ref(true)
         <button
           type="button"
           class="add-btn"
+          :class="{ 'add-btn--active': selectionMode }"
+          :title="t('types.selectMode')"
+          @click="emit('toggleSelectionMode')"
+        >
+          <UiIcon name="checklist" />
+        </button>
+        <button
+          v-if="!selectionMode"
+          type="button"
+          class="add-btn"
           :title="t('types.addNodeType')"
           @click="emit('addType', 'node')"
         >
           <UiIcon :name="DEFAULT_ENTITY_ICONS.nodeType" />
         </button>
         <button
+          v-if="!selectionMode"
           type="button"
           class="add-btn"
           :title="t('types.addLinkType')"
@@ -129,14 +161,26 @@ const linkTypesExpanded = ref(true)
               v-for="(typeItem, idx) in filteredNodeTypes"
               :key="typeItem.id"
               class="type-sidebar__item"
-              :class="{ 'type-sidebar__item--active': selectedTypeId === typeItem.id }"
+              :class="{
+                'type-sidebar__item--active': !selectionMode && selectedTypeId === typeItem.id,
+                'type-sidebar__item--checked': selectionMode && checkedIds.has(typeItem.id),
+              }"
               :style="{ animationDelay: `${idx * 30}ms` }"
               role="button"
               tabindex="0"
-              @click="emit('selectType', typeItem.id)"
-              @keydown.enter.prevent="emit('selectType', typeItem.id)"
-              @keydown.space.prevent="emit('selectType', typeItem.id)"
+              @click="handleItemClick(typeItem.id)"
+              @keydown.enter.prevent="handleItemClick(typeItem.id)"
+              @keydown.space.prevent="handleItemClick(typeItem.id)"
             >
+              <input
+                v-if="selectionMode"
+                type="checkbox"
+                class="type-sidebar__checkbox"
+                :checked="checkedIds.has(typeItem.id)"
+                :disabled="!isCheckable(typeItem)"
+                tabindex="-1"
+                @click.stop="handleItemClick(typeItem.id)"
+              >
               <img
                 v-if="typeItem.parsedAttrs?.icon"
                 class="type-sidebar__item-icon type-sidebar__item-icon--svg"
@@ -179,14 +223,26 @@ const linkTypesExpanded = ref(true)
               v-for="(typeItem, idx) in filteredLinkTypes"
               :key="typeItem.id"
               class="type-sidebar__item type-sidebar__item--link"
-              :class="{ 'type-sidebar__item--active': selectedTypeId === typeItem.id }"
+              :class="{
+                'type-sidebar__item--active': !selectionMode && selectedTypeId === typeItem.id,
+                'type-sidebar__item--checked': selectionMode && checkedIds.has(typeItem.id),
+              }"
               :style="{ animationDelay: `${idx * 30}ms` }"
               role="button"
               tabindex="0"
-              @click="emit('selectType', typeItem.id)"
-              @keydown.enter.prevent="emit('selectType', typeItem.id)"
-              @keydown.space.prevent="emit('selectType', typeItem.id)"
+              @click="handleItemClick(typeItem.id)"
+              @keydown.enter.prevent="handleItemClick(typeItem.id)"
+              @keydown.space.prevent="handleItemClick(typeItem.id)"
             >
+              <input
+                v-if="selectionMode"
+                type="checkbox"
+                class="type-sidebar__checkbox"
+                :checked="checkedIds.has(typeItem.id)"
+                :disabled="!isCheckable(typeItem)"
+                tabindex="-1"
+                @click.stop="handleItemClick(typeItem.id)"
+              >
               <img
                 v-if="typeItem.parsedAttrs?.icon"
                 class="type-sidebar__item-icon type-sidebar__item-icon--svg"
@@ -207,6 +263,20 @@ const linkTypesExpanded = ref(true)
       </div>
       </template>
     </div>
+
+    <Transition name="batch-bar">
+      <div v-if="selectionMode && checkedCount > 0" class="type-sidebar__batch-bar">
+        <span class="type-sidebar__batch-count">{{ t("types.selectedCount", { count: checkedCount }) }}</span>
+        <button
+          type="button"
+          class="btn btn--primary type-sidebar__batch-share-btn"
+          @click="emit('batchShare')"
+        >
+          <UiIcon name="share" />
+          {{ t("types.shareSelected") }}
+        </button>
+      </div>
+    </Transition>
   </aside>
 </template>
 
@@ -595,5 +665,89 @@ const linkTypesExpanded = ref(true)
   text-transform: uppercase;
   flex-shrink: 0;
   letter-spacing: 0.02em;
+}
+
+/* Selection mode */
+
+.add-btn--active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.type-sidebar__checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  margin: 0;
+}
+
+.type-sidebar__checkbox:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.type-sidebar__item--checked {
+  background: var(--primary-soft);
+  border-left-color: var(--primary);
+}
+
+.type-sidebar__item--link.type-sidebar__item--checked {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-left-color: var(--accent);
+}
+
+.type-sidebar__batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.type-sidebar__batch-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.type-sidebar__batch-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.type-sidebar__batch-share-btn:hover {
+  background: var(--primary-hover);
+}
+
+.type-sidebar__batch-share-btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.batch-bar-enter-active,
+.batch-bar-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.batch-bar-enter-from,
+.batch-bar-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
 }
 </style>

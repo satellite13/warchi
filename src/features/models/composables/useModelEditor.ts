@@ -478,8 +478,6 @@ export const useModelEditor = (): ModelEditorReturn => {
         linksResult,
         diagramsResult,
         notationsResult,
-        nodeTypesResult,
-        linkTypesResult,
         componentsResult,
         relationsResult,
       ] = await Promise.all([
@@ -495,12 +493,6 @@ export const useModelEditor = (): ModelEditorReturn => {
           `/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`
         ),
         apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-        apiGet<PaginatedResponse<NodeTypeResponse>>(
-          `/node-types?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
-        ),
-        apiGet<PaginatedResponse<LinkTypeResponse>>(
-          `/link-types?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
-        ),
         apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
         apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
       ])
@@ -523,9 +515,18 @@ export const useModelEditor = (): ModelEditorReturn => {
       const notationIds = Array.from(
         new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))
       )
-      const relationRules = await fetchAllRelationRulesByNotationIds(notationIds, {
-        includeAttrs: false,
-      })
+
+      const typesQuery = new URLSearchParams({ size: '1000' })
+      typesQuery.set('modelId', modelId)
+      for (const nid of notationIds) {
+        typesQuery.append('notationId', nid)
+      }
+
+      const [nodeTypesResult, linkTypesResult, relationRules] = await Promise.all([
+        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${typesQuery.toString()}`),
+        fetchAllRelationRulesByNotationIds(notationIds, { includeAttrs: false }),
+      ])
       loadedRelationRuleNotationIds.clear()
       for (const notationId of notationIds) {
         loadedRelationRuleNotationIds.add(notationId)

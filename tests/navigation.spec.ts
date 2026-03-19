@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Navigation', () => {
   test('home page loads after login', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/home')
     await expect(page.locator('.hero')).toBeVisible()
   })
 
@@ -40,6 +40,6 @@ test.describe('Navigation', () => {
 
   test('authenticated user redirected from login to home', async ({ page }) => {
     await page.goto('/login')
-    await expect(page).toHaveURL('/')
+    await expect(page).toHaveURL('/home')
   })
 })

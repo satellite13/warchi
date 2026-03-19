@@ -107,6 +107,9 @@ export const typesMessages = {
       docVersions: 'Версии',
       docNoVersions: 'Нет версий.',
       docBackToCurrent: 'К текущей версии',
+      selectMode: 'Режим выбора',
+      selectedCount: 'Выбрано: {count}',
+      shareSelected: 'Поделиться',
     },
     shapes: {
       title: 'Формы узлов',
@@ -246,6 +249,9 @@ export const typesMessages = {
       docVersions: 'Versions',
       docNoVersions: 'No versions.',
       docBackToCurrent: 'Back to current',
+      selectMode: 'Selection mode',
+      selectedCount: 'Selected: {count}',
+      shareSelected: 'Share',
     },
     shapes: {
       title: 'Node shapes',

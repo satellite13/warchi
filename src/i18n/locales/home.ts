@@ -60,6 +60,11 @@ export const homeMessages = {
       loadSharesError: 'Не удалось загрузить выданные доступы.',
       grantShareError: 'Не удалось выдать доступ.',
       revokeShareError: 'Не удалось отозвать доступ.',
+      batchShareTitle: 'Массовый доступ',
+      batchShareHint: 'Доступ будет выдан ко всем выбранным типам:',
+      batchShareProgress: 'Выдача доступов: {done} из {total}',
+      batchShareDone: 'Готово: {success} успешно, {failed} ошибок',
+      batchShareSubmit: 'Выдать доступ ко всем',
     },
     diagramShare: {
       title: 'Ссылка на картинку',
@@ -134,6 +139,11 @@ export const homeMessages = {
       loadSharesError: 'Failed to load granted access.',
       grantShareError: 'Failed to grant access.',
       revokeShareError: 'Failed to revoke access.',
+      batchShareTitle: 'Batch share',
+      batchShareHint: 'Access will be granted to all selected types:',
+      batchShareProgress: 'Granting access: {done} of {total}',
+      batchShareDone: 'Done: {success} succeeded, {failed} failed',
+      batchShareSubmit: 'Grant access to all',
     },
     diagramShare: {
       title: 'Share as image link',

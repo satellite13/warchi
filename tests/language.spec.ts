@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Language switching', () => {
   test('default language is RU and can switch to EN and back', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/home')
     await expect(page.locator('.hero')).toBeVisible({ timeout: 10000 })
 
     // Default language should be RU — check for Russian text in stat cards

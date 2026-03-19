@@ -12,7 +12,7 @@ setup('authenticate', async ({ page }) => {
   await page.locator('button.submit').click()
 
   // Wait for redirect to home page after successful login
-  await expect(page).toHaveURL('/', { timeout: 10000 })
+  await expect(page).toHaveURL('/home', { timeout: 10000 })
   await expect(page.locator('.hero')).toBeVisible()
 
   await page.context().storageState({ path: 'tests/.auth/user.json' })

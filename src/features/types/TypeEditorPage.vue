@@ -37,7 +37,7 @@ const {
   isDirty,
 } = useTypeEditor()
 
-const { documentFileId, loadDocument, resetDocument } = useTypeDocument()
+const { documentFileId, isBrokenRef, loadDocument, resetDocument } = useTypeDocument()
 
 const { t } = useI18n()
 
@@ -85,7 +85,7 @@ function openDocModal() {
 
 async function handleDocumentSavedFromModal(fileId: string) {
   if (!selectedType.value) return
-  if (!selectedType.value.parsedAttrs.documentFileId) {
+  if (selectedType.value.parsedAttrs.documentFileId !== fileId) {
     selectedType.value.parsedAttrs.documentFileId = fileId
     await saveType(selectedType.value)
   }

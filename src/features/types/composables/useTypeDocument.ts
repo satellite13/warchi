@@ -39,6 +39,8 @@ export function useTypeDocument() {
     updateDocDirty()
   }
 
+  const isBrokenRef = ref(false)
+
   /** Loads document content for a given fileId */
   async function loadDocument(fileId: string | undefined | null) {
     documentContent.value = ''
@@ -46,6 +48,7 @@ export function useTypeDocument() {
     documentFileId.value = null
     docError.value = null
     isDocDirty.value = false
+    isBrokenRef.value = false
 
     if (!fileId) return
 
@@ -58,11 +61,21 @@ export function useTypeDocument() {
         documentContent.value = content
         savedContent.value = content
       } else {
+        isBrokenRef.value = true
         docError.value = t('types.docLoadError')
       }
     } finally {
       isDocLoading.value = false
     }
+  }
+
+  function clearBrokenRef() {
+    documentFileId.value = null
+    documentContent.value = ''
+    savedContent.value = ''
+    docError.value = null
+    isBrokenRef.value = false
+    isDocDirty.value = false
   }
 
   /** Creates a new markdown file and returns the file ID */
@@ -182,6 +195,7 @@ export function useTypeDocument() {
     documentFileId.value = null
     isDocDirty.value = false
     docError.value = null
+    isBrokenRef.value = false
     docVersions.value = []
   }
 
@@ -191,6 +205,7 @@ export function useTypeDocument() {
     isDocLoading,
     isDocSaving,
     docError,
+    isBrokenRef,
     docVersions,
     isLoadingVersions,
     isDocDirty,
@@ -200,5 +215,6 @@ export function useTypeDocument() {
     loadVersions,
     loadVersion,
     resetDocument,
+    clearBrokenRef,
   }
 }

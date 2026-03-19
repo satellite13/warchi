@@ -182,13 +182,15 @@ export function useNotationExport(
       const importedId = toStringOr(item.id, createId());
       const id = createId();
       nodeTypeIdMap.set(importedId, id);
+      const parsedAttrs = parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {}));
+      delete parsedAttrs.documentFileId;
       return {
         id,
         name: toStringOr(item.name, t("notations.defaultNodeTypeName")),
         ownerId: toStringOr(item.ownerId, baseOwnerId),
         createdAt: null,
         updatedAt: null,
-        parsedAttrs: parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+        parsedAttrs,
         _isNew: true
       };
     });
@@ -197,13 +199,15 @@ export function useNotationExport(
       const importedId = toStringOr(item.id, createId());
       const id = createId();
       linkTypeIdMap.set(importedId, id);
+      const parsedAttrs = parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {}));
+      delete parsedAttrs.documentFileId;
       return {
         id,
         name: toStringOr(item.name, t("notations.defaultLinkTypeName")),
         ownerId: toStringOr(item.ownerId, baseOwnerId),
         createdAt: null,
         updatedAt: null,
-        parsedAttrs: parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+        parsedAttrs,
         _isNew: true
       };
     });
@@ -238,6 +242,8 @@ export function useNotationExport(
       const mappedNodeTypeId = nodeTypeIdMap.get(importedNodeTypeId) ?? importedNodeTypeId;
       const id = createId();
       componentIdMap.set(importedComponentId, id);
+      const parsedAttrs = parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {}));
+      delete parsedAttrs.documentFileId;
       return {
         id,
         name: toStringOr(item.name, t("notations.newComponentTitle")),
@@ -247,7 +253,7 @@ export function useNotationExport(
         nodeTypeId: nodeTypeIds.has(mappedNodeTypeId) ? mappedNodeTypeId : defaultNodeTypeId,
         createdAt: null,
         updatedAt: null,
-        parsedAttrs: parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+        parsedAttrs,
         _isNew: true,
         _isDirty: false,
         _isDeleted: false
@@ -260,6 +266,8 @@ export function useNotationExport(
       const mappedLinkTypeId = linkTypeIdMap.get(importedLinkTypeId) ?? importedLinkTypeId;
       const id = createId();
       relationIdMap.set(importedRelationId, id);
+      const parsedAttrs = parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {}));
+      delete parsedAttrs.documentFileId;
       return {
         id,
         name: toStringOr(item.name, t("notations.defaultRelationName")),
@@ -269,7 +277,7 @@ export function useNotationExport(
         linkTypeId: linkTypeIds.has(mappedLinkTypeId) ? mappedLinkTypeId : defaultLinkTypeId,
         createdAt: null,
         updatedAt: null,
-        parsedAttrs: parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {})),
+        parsedAttrs,
         _isNew: true,
         _isDirty: false,
         _isDeleted: false

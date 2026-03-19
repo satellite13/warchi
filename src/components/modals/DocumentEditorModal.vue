@@ -35,6 +35,7 @@ const {
   isDocLoading,
   isDocSaving,
   docError,
+  isBrokenRef,
   docVersions,
   isLoadingVersions,
   isDocDirty,
@@ -44,6 +45,7 @@ const {
   loadVersions,
   loadVersion,
   resetDocument,
+  clearBrokenRef,
 } = useTypeDocument()
 
 const isEditing = ref(false)
@@ -95,6 +97,11 @@ function handleLoadVersion(versionNumber: number) {
     viewingOldVersion.value = true
     viewingVersionNumber.value = versionNumber
   }
+}
+
+function handleCreateNew() {
+  clearBrokenRef()
+  isEditing.value = true
 }
 
 function handleBackToCurrent() {
@@ -237,6 +244,20 @@ function formatSize(bytes: number): string {
           <!-- Loading -->
           <div v-if="isDocLoading" class="doc-modal__placeholder">
             {{ t('common.loading') }}
+          </div>
+
+          <!-- Broken reference -->
+          <div v-else-if="isBrokenRef" class="doc-modal__broken-ref">
+            <UiIcon name="link_off" class="doc-modal__broken-ref-icon" />
+            <p class="doc-modal__broken-ref-text">{{ t('types.docBrokenRef') }}</p>
+            <button
+              type="button"
+              class="doc-modal-btn doc-modal-btn--primary"
+              @click="handleCreateNew"
+            >
+              <UiIcon name="add" />
+              {{ t('types.docCreateNew') }}
+            </button>
           </div>
 
           <!-- Error -->
@@ -535,6 +556,29 @@ function formatSize(bytes: number): string {
   text-align: center;
   font-size: 14px;
   color: var(--text-subtle);
+}
+
+.doc-modal__broken-ref {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.doc-modal__broken-ref-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--warning);
+}
+
+.doc-modal__broken-ref-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.5;
 }
 
 .doc-modal__error {

@@ -1,4 +1,4 @@
-import { apiGet } from "../api/apiClient";
+import { apiGet, apiPost } from "../api/apiClient";
 import { getUserDisplayName } from "./userDisplay";
 import type { UserInfo } from "../types/entities";
 
@@ -22,6 +22,21 @@ export async function resolveOwnerDisplayNames(
   }
 
   const toLoad = [...new Set(ownerIds)].filter((id) => id && !result.has(id));
+  if (toLoad.length === 0) return result;
+
+  const batchResult = await apiPost<Record<string, UserInfo>>(
+    "/users/public/batch",
+    { ids: toLoad }
+  );
+  if (batchResult.success) {
+    for (const [id, user] of Object.entries(batchResult.data)) {
+      result.set(id, getUserDisplayName(user, user.email ?? fallback));
+    }
+    for (const id of toLoad) {
+      if (!result.has(id)) result.set(id, fallback);
+    }
+    return result;
+  }
 
   await Promise.all(
     toLoad.map(async (id) => {

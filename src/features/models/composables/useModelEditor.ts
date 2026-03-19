@@ -33,6 +33,12 @@ import {
   type EditorNode,
   type ModelEditorState,
 } from '../types'
+import {
+  buildBatchSaveRequest,
+  batchSave,
+  hasBatchChanges,
+  applyBatchRemapping,
+} from './useModelBatchSave'
 
 type ModelEditorReturn = {
   model: Ref<ModelData | null>
@@ -613,10 +619,22 @@ export const useModelEditor = (): ModelEditorReturn => {
         modelDirty.value = false
       }
 
-      const newNodeIdMap = await saveNodes(nodes, modelId, ownerId, onProgress)
-      remapNodeIds(newNodeIdMap, links, diagrams)
-      await saveLinks(links, diagrams, modelId, ownerId, onProgress)
-      await saveDiagrams(diagrams, ownerId, modelId, onProgress)
+      let usedBatch = false
+      const batchRequest = buildBatchSaveRequest(nodes, links, diagrams)
+      if (hasBatchChanges(batchRequest)) {
+        const batchResult = await batchSave(modelId, batchRequest)
+        if (batchResult) {
+          applyBatchRemapping(batchResult, nodes, links, diagrams)
+          usedBatch = true
+        }
+      }
+
+      if (!usedBatch) {
+        const newNodeIdMap = await saveNodes(nodes, modelId, ownerId, onProgress)
+        remapNodeIds(newNodeIdMap, links, diagrams)
+        await saveLinks(links, diagrams, modelId, ownerId, onProgress)
+        await saveDiagrams(diagrams, ownerId, modelId, onProgress)
+      }
 
       state.value.nodes = withoutDeleted(state.value.nodes)
       state.value.links = withoutDeleted(state.value.links)

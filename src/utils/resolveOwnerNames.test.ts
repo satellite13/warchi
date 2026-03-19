@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/apiClient', () => ({
   apiGet: vi.fn(),
+  apiPost: vi.fn(),
 }))
 
 vi.mock('@/utils/userDisplay', () => ({
@@ -15,12 +16,14 @@ vi.mock('@/utils/userDisplay', () => ({
 }))
 
 import { resolveOwnerDisplayNames } from '@/utils/resolveOwnerNames'
-import { apiGet } from '@/api/apiClient'
+import { apiGet, apiPost } from '@/api/apiClient'
 
 const mockedApiGet = vi.mocked(apiGet)
+const mockedApiPost = vi.mocked(apiPost)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockedApiPost.mockResolvedValue({ success: false, error: { status: 500, message: 'not available' } })
 })
 
 describe('resolveOwnerDisplayNames', () => {
@@ -76,12 +79,40 @@ describe('resolveOwnerDisplayNames', () => {
       data: { id: 'u2', firstName: 'A', lastName: 'B', email: null },
     })
     await resolveOwnerDisplayNames(['u2', 'u2', 'u2'], new Map(), null, '?')
+    expect(mockedApiPost).toHaveBeenCalledTimes(1)
     expect(mockedApiGet).toHaveBeenCalledTimes(1)
   })
 
   it('skips empty string ids', async () => {
     const result = await resolveOwnerDisplayNames(['', ''], new Map(), null, '?')
+    expect(mockedApiPost).not.toHaveBeenCalled()
     expect(mockedApiGet).not.toHaveBeenCalled()
     expect(result.size).toBe(0)
+  })
+
+  it('uses batch endpoint when available', async () => {
+    mockedApiPost.mockResolvedValueOnce({
+      success: true,
+      data: { u2: { id: 'u2', firstName: 'Jane', lastName: 'Doe', email: 'jane@test.com' } },
+    })
+    const result = await resolveOwnerDisplayNames(['u2'], new Map(), null, '?')
+    expect(mockedApiPost).toHaveBeenCalledWith('/users/public/batch', { ids: ['u2'] })
+    expect(mockedApiGet).not.toHaveBeenCalled()
+    expect(result.get('u2')).toBe('Jane Doe')
+  })
+
+  it('falls back to individual requests when batch fails', async () => {
+    mockedApiPost.mockResolvedValueOnce({
+      success: false,
+      error: { status: 404, message: 'Not found' },
+    })
+    mockedApiGet.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'u2', firstName: 'Jane', lastName: 'Doe', email: 'jane@test.com' },
+    })
+    const result = await resolveOwnerDisplayNames(['u2'], new Map(), null, '?')
+    expect(mockedApiPost).toHaveBeenCalledTimes(1)
+    expect(mockedApiGet).toHaveBeenCalledWith('/users/u2/public')
+    expect(result.get('u2')).toBe('Jane Doe')
   })
 })

@@ -31,6 +31,7 @@ import {
   type EditorRelationRule,
   createEmptyEditorState,
 } from '../types'
+import { syncRelationRulesViaApi } from './useRelationRulesSync'
 
 export interface NotationEditorReturn {
   notation: Ref<NotationData | null>
@@ -495,23 +496,39 @@ async function syncRelationRules(
   onProgress: (msg: string) => void
 ): Promise<EditorRelationRule[]> {
   onProgress('Синхронизация правил связей')
-  const REQUEST_CONCURRENCY = 8
   const currentComponentIds = new Set(
     components.filter(component => !component._isDeleted).map(component => component.id)
   )
-
-  const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
-    rule =>
-      currentComponentIds.has(rule.fromComponentId) &&
-      currentComponentIds.has(rule.toComponentId)
-  )
-
   const activeRelationIds = new Set(
     relations.filter(relation => !relation._isDeleted).map(relation => relation.id)
   )
   const activeRules = relationRules.filter(
     rule =>
       !rule._isDeleted &&
+      currentComponentIds.has(rule.fromComponentId) &&
+      currentComponentIds.has(rule.toComponentId)
+  )
+
+  const syncResult = await syncRelationRulesViaApi(
+    notationId,
+    relationRules,
+    currentComponentIds,
+    activeRelationIds
+  )
+  if (syncResult) {
+    for (const rule of activeRules) {
+      rule.allowedRelationIds = Array.from(new Set(rule.allowedRelationIds)).filter(id =>
+        activeRelationIds.has(id)
+      )
+      rule._isNew = false
+      rule._isDirty = false
+    }
+    return activeRules
+  }
+
+  const REQUEST_CONCURRENCY = 8
+  const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
+    rule =>
       currentComponentIds.has(rule.fromComponentId) &&
       currentComponentIds.has(rule.toComponentId)
   )

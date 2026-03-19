@@ -493,3 +493,478 @@ describe('buildDiagramDiffStateMaps edge instance matching', () => {
     expect(state.diffStateByEdgeInstanceId['edge-inst-1']).toBe('modified')
   })
 })
+
+// ---------------------------------------------------------------------------
+// computeModelDiff — golden contract tests
+// ---------------------------------------------------------------------------
+
+describe('computeModelDiff — golden contract tests', () => {
+  it('full hierarchical diff — rename, add, remove across 3-level tree', () => {
+    const baseRoot = makeNode({ id: 'n1', name: 'Root', stableId: 'stable-n1' })
+    const baseModule = makeNode({
+      id: 'n2',
+      name: 'Module',
+      parentNodeId: 'n1',
+      stableId: 'stable-n2',
+    })
+    const baseComponent = makeNode({
+      id: 'n3',
+      name: 'Component',
+      parentNodeId: 'n2',
+      stableId: 'stable-n3',
+    })
+
+    const targetRoot = makeNode({ id: 'n1', name: 'Root', stableId: 'stable-n1' })
+    const targetModule = makeNode({
+      id: 'n4',
+      name: 'ModuleRenamed',
+      parentNodeId: 'n1',
+      stableId: 'stable-n2',
+    })
+    const targetNewChild = makeNode({ id: 'n5', name: 'NewChild', parentNodeId: 'n1' })
+
+    const diff = computeModelDiff(
+      { nodes: [baseRoot, baseModule, baseComponent], links: [], diagrams: [] },
+      { nodes: [targetRoot, targetModule, targetNewChild], links: [], diagrams: [] },
+    )
+
+    expect(diff).toEqual({
+      nodes: [
+        { kind: 'modified', path: 'Root/Module', base: baseModule, target: targetModule },
+        { kind: 'removed', path: 'Root/Module/Component', node: baseComponent },
+        { kind: 'added', path: 'Root/NewChild', node: targetNewChild },
+      ],
+      links: [],
+      diagrams: [],
+    })
+  })
+
+  it('link diff with stableId and key matching', () => {
+    const baseNodes = [
+      makeNode({ id: 'n1', name: 'A' }),
+      makeNode({ id: 'n2', name: 'B' }),
+      makeNode({ id: 'n3', name: 'C' }),
+    ]
+    const targetNodes = [
+      makeNode({ id: 'n1', name: 'A' }),
+      makeNode({ id: 'n2', name: 'B' }),
+      makeNode({ id: 'n3', name: 'C' }),
+    ]
+
+    const baseL1 = makeLink({ id: 'l1', sourceId: 'n1', targetId: 'n2', stableId: 'sl1' })
+    const baseL2 = makeLink({ id: 'l2', sourceId: 'n1', targetId: 'n3' })
+    const baseL3 = makeLink({ id: 'l3', sourceId: 'n2', targetId: 'n3' })
+
+    const targetL4 = makeLink({
+      id: 'l4',
+      sourceId: 'n1',
+      targetId: 'n2',
+      stableId: 'sl1',
+      attrs: '{"x":1}',
+    })
+    const targetL5 = makeLink({ id: 'l5', sourceId: 'n1', targetId: 'n3' })
+    const targetL6 = makeLink({ id: 'l6', sourceId: 'n3', targetId: 'n1' })
+
+    const diff = computeModelDiff(
+      { nodes: baseNodes, links: [baseL1, baseL2, baseL3], diagrams: [] },
+      { nodes: targetNodes, links: [targetL4, targetL5, targetL6], diagrams: [] },
+    )
+
+    expect(diff).toEqual({
+      nodes: [],
+      links: [
+        { kind: 'modified', sourcePath: 'A', targetPath: 'B', base: baseL1, target: targetL4 },
+        { kind: 'removed', sourcePath: 'B', targetPath: 'C', link: baseL3 },
+        { kind: 'added', sourcePath: 'C', targetPath: 'A', link: targetL6 },
+      ],
+      diagrams: [],
+    })
+  })
+
+  it('diagram diff with version deduplication — only latest base version compared', () => {
+    const node = makeNode({ id: 'n1', name: 'Root' })
+
+    const baseOldVer = makeDiagram({
+      id: 'd1',
+      name: 'Overview',
+      version: '1.0.0',
+      notationId: 'not1',
+    })
+    const baseLatestVer = makeDiagram({
+      id: 'd2',
+      name: 'Overview',
+      version: '2.0.0',
+      notationId: 'not1',
+    })
+    const baseDetail = makeDiagram({
+      id: 'd3',
+      name: 'Detail',
+      version: '1.0.0',
+      notationId: 'not1',
+    })
+
+    const targetOverview = makeDiagram({
+      id: 'd4',
+      name: 'Overview',
+      version: '2.1.0',
+      notationId: 'not1',
+    })
+    const targetDetail = makeDiagram({
+      id: 'd5',
+      name: 'Detail',
+      version: '1.0.0',
+      notationId: 'not1',
+    })
+
+    const diff = computeModelDiff(
+      { nodes: [node], links: [], diagrams: [baseOldVer, baseLatestVer, baseDetail] },
+      {
+        nodes: [makeNode({ id: 'n1', name: 'Root' })],
+        links: [],
+        diagrams: [targetOverview, targetDetail],
+      },
+    )
+
+    expect(diff).toEqual({
+      nodes: [],
+      links: [],
+      diagrams: [
+        { kind: 'modified', name: 'Overview', base: baseLatestVer, target: targetOverview },
+      ],
+    })
+  })
+
+  it('full integration golden test — complete ModelVersionDiff with all fields', () => {
+    makeNode({ id: 'n1', name: 'Root', stableId: 'stable-n1' })
+    makeNode({ id: 'n2', name: 'Alpha', parentNodeId: 'n1', stableId: 'stable-n2' })
+    makeNode({ id: 'n3', name: 'Beta', parentNodeId: 'n1', stableId: 'stable-n3' })
+    makeLink({ id: 'l1', sourceId: 'n2', targetId: 'n3', stableId: 'stable-l1' })
+    makeDiagram({ id: 'd1', name: 'Main', version: '1.0.0', notationId: 'not1' })
+
+    makeNode({ id: 'n1', name: 'Root', stableId: 'stable-n1' })
+    makeNode({
+      id: 'n2',
+      name: 'Alpha',
+      parentNodeId: 'n1',
+      stableId: 'stable-n2',
+      attrs: '{"color":"red"}',
+    })
+    makeNode({ id: 'n4', name: 'Gamma', parentNodeId: 'n1' })
+    makeLink({ id: 'l2', sourceId: 'n2', targetId: 'n4' })
+    makeDiagram({ id: 'd2', name: 'Main', version: '1.1.0', notationId: 'not1' })
+    makeDiagram({ id: 'd3', name: 'Extra', version: '1.0.0', notationId: 'not1' })
+
+    const diff = computeModelDiff(
+      {
+        nodes: [
+          { id: 'n1', name: 'Root', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', stableId: 'stable-n1' },
+          { id: 'n2', name: 'Alpha', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1', stableId: 'stable-n2' },
+          { id: 'n3', name: 'Beta', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1', stableId: 'stable-n3' },
+        ],
+        links: [
+          { id: 'l1', sourceId: 'n2', targetId: 'n3', modelId: 'm1', ownerId: 'o1', linkTypeId: 'lt1', stableId: 'stable-l1' },
+        ],
+        diagrams: [
+          { id: 'd1', name: 'Main', version: '1.0.0', modelId: 'm1', ownerId: 'o1', notationId: 'not1' },
+        ],
+      },
+      {
+        nodes: [
+          { id: 'n1', name: 'Root', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', stableId: 'stable-n1' },
+          { id: 'n2', name: 'Alpha', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1', stableId: 'stable-n2', attrs: '{"color":"red"}' },
+          { id: 'n4', name: 'Gamma', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1' },
+        ],
+        links: [
+          { id: 'l2', sourceId: 'n2', targetId: 'n4', modelId: 'm1', ownerId: 'o1', linkTypeId: 'lt1' },
+        ],
+        diagrams: [
+          { id: 'd2', name: 'Main', version: '1.1.0', modelId: 'm1', ownerId: 'o1', notationId: 'not1' },
+          { id: 'd3', name: 'Extra', version: '1.0.0', modelId: 'm1', ownerId: 'o1', notationId: 'not1' },
+        ],
+      },
+    )
+
+    expect(diff).toEqual({
+      nodes: [
+        {
+          kind: 'modified',
+          path: 'Root/Alpha',
+          base: {
+            id: 'n2',
+            name: 'Alpha',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+            stableId: 'stable-n2',
+          },
+          target: {
+            id: 'n2',
+            name: 'Alpha',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+            stableId: 'stable-n2',
+            attrs: '{"color":"red"}',
+          },
+        },
+        {
+          kind: 'removed',
+          path: 'Root/Beta',
+          node: {
+            id: 'n3',
+            name: 'Beta',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+            stableId: 'stable-n3',
+          },
+        },
+        {
+          kind: 'added',
+          path: 'Root/Gamma',
+          node: {
+            id: 'n4',
+            name: 'Gamma',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+          },
+        },
+      ],
+      links: [
+        {
+          kind: 'removed',
+          sourcePath: 'Root/Alpha',
+          targetPath: 'Root/Beta',
+          link: {
+            id: 'l1',
+            sourceId: 'n2',
+            targetId: 'n3',
+            modelId: 'm1',
+            ownerId: 'o1',
+            linkTypeId: 'lt1',
+            stableId: 'stable-l1',
+          },
+        },
+        {
+          kind: 'added',
+          sourcePath: 'Root/Alpha',
+          targetPath: 'Root/Gamma',
+          link: {
+            id: 'l2',
+            sourceId: 'n2',
+            targetId: 'n4',
+            modelId: 'm1',
+            ownerId: 'o1',
+            linkTypeId: 'lt1',
+          },
+        },
+      ],
+      diagrams: [
+        {
+          kind: 'modified',
+          name: 'Main',
+          base: {
+            id: 'd1',
+            name: 'Main',
+            version: '1.0.0',
+            modelId: 'm1',
+            ownerId: 'o1',
+            notationId: 'not1',
+          },
+          target: {
+            id: 'd2',
+            name: 'Main',
+            version: '1.1.0',
+            modelId: 'm1',
+            ownerId: 'o1',
+            notationId: 'not1',
+          },
+        },
+        {
+          kind: 'added',
+          name: 'Extra',
+          diagram: {
+            id: 'd3',
+            name: 'Extra',
+            version: '1.0.0',
+            modelId: 'm1',
+            ownerId: 'o1',
+            notationId: 'not1',
+          },
+        },
+      ],
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildDiagramDiffStateMaps — golden contract tests
+// ---------------------------------------------------------------------------
+
+describe('buildDiagramDiffStateMaps — golden contract tests', () => {
+  const goldenDiff = {
+    nodes: [
+      {
+        kind: 'removed' as const,
+        path: 'Root/OldNode',
+        node: {
+          id: 'n-rem',
+          name: 'OldNode',
+          modelId: 'm1',
+          ownerId: 'o1',
+          nodeTypeId: 'nt1',
+        },
+      },
+      {
+        kind: 'added' as const,
+        path: 'Root/NewNode',
+        node: {
+          id: 'n-add',
+          name: 'NewNode',
+          modelId: 'm1',
+          ownerId: 'o1',
+          nodeTypeId: 'nt1',
+        },
+      },
+      {
+        kind: 'modified' as const,
+        path: 'Root/Changed',
+        base: {
+          id: 'n-mod-b',
+          name: 'Changed',
+          modelId: 'm1',
+          ownerId: 'o1',
+          nodeTypeId: 'nt1',
+        },
+        target: {
+          id: 'n-mod-t',
+          name: 'Changed',
+          modelId: 'm1',
+          ownerId: 'o1',
+          nodeTypeId: 'nt1',
+          attrs: '{"v":2}',
+        },
+      },
+    ],
+    links: [
+      {
+        kind: 'removed' as const,
+        sourcePath: 'Root/A',
+        targetPath: 'Root/B',
+        link: {
+          id: 'l-rem',
+          sourceId: 'a',
+          targetId: 'b',
+          modelId: 'm1',
+          ownerId: 'o1',
+          linkTypeId: 'lt1',
+        },
+      },
+      {
+        kind: 'added' as const,
+        sourcePath: 'Root/C',
+        targetPath: 'Root/D',
+        link: {
+          id: 'l-add',
+          sourceId: 'c',
+          targetId: 'd',
+          modelId: 'm1',
+          ownerId: 'o1',
+          linkTypeId: 'lt1',
+        },
+      },
+      {
+        kind: 'modified' as const,
+        sourcePath: 'Root/E',
+        targetPath: 'Root/F',
+        base: {
+          id: 'l-mod-b',
+          sourceId: 'e',
+          targetId: 'f',
+          modelId: 'm1',
+          ownerId: 'o1',
+          linkTypeId: 'lt1',
+        },
+        target: {
+          id: 'l-mod-t',
+          sourceId: 'e',
+          targetId: 'f',
+          modelId: 'm1',
+          ownerId: 'o1',
+          linkTypeId: 'lt1',
+          attrs: '{"changed":true}',
+        },
+      },
+    ],
+    diagrams: [],
+  }
+
+  it('base side — full output maps with all three diff kinds', () => {
+    const state = buildDiagramDiffStateMaps(
+      goldenDiff,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      ['n-rem', 'n-mod-b', 'n-untouched'],
+      [
+        { edgeInstanceId: 'ei1', modelLinkId: 'l-rem', sourceId: 'a', targetId: 'b', linkTypeId: 'lt1' },
+        { edgeInstanceId: 'ei2', modelLinkId: 'l-mod-b', sourceId: 'e', targetId: 'f', linkTypeId: 'lt1' },
+        { edgeInstanceId: 'ei3', modelLinkId: 'l-clean', sourceId: 'x', targetId: 'y', linkTypeId: 'lt1' },
+      ],
+      'base',
+    )
+
+    expect(state).toEqual({
+      diffStateByModelNodeId: {
+        'n-rem': 'removed',
+        'n-mod-b': 'modified',
+      },
+      diffStateByModelLinkId: {
+        'l-rem': 'removed',
+        'l-mod-b': 'modified',
+      },
+      diffStateByEdgeInstanceId: {
+        ei1: 'removed',
+        ei2: 'modified',
+      },
+    })
+  })
+
+  it('target side — full output maps with all three diff kinds', () => {
+    const state = buildDiagramDiffStateMaps(
+      goldenDiff,
+      new Map(),
+      new Map(),
+      [],
+      [],
+      ['n-add', 'n-mod-t', 'n-untouched'],
+      [
+        { edgeInstanceId: 'ei4', modelLinkId: 'l-add', sourceId: 'c', targetId: 'd', linkTypeId: 'lt1' },
+        { edgeInstanceId: 'ei5', modelLinkId: 'l-mod-t', sourceId: 'e', targetId: 'f', linkTypeId: 'lt1' },
+        { edgeInstanceId: 'ei6', modelLinkId: 'l-clean', sourceId: 'x', targetId: 'y', linkTypeId: 'lt1' },
+      ],
+      'target',
+    )
+
+    expect(state).toEqual({
+      diffStateByModelNodeId: {
+        'n-add': 'added',
+        'n-mod-t': 'modified',
+      },
+      diffStateByModelLinkId: {
+        'l-add': 'added',
+        'l-mod-t': 'modified',
+      },
+      diffStateByEdgeInstanceId: {
+        ei4: 'added',
+        ei5: 'modified',
+      },
+    })
+  })
+})

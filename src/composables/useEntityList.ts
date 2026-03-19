@@ -25,6 +25,7 @@ export interface EntityListConfig<T extends VersionedEntity = VersionedEntity> {
   renameFailedMessage?: string
   buildRenameRequest?: (item: T, newName: string) => unknown
   buildUpdateAttrsRequest?: (item: T, nextAttrs: string | null) => unknown
+  useGroupedEndpoint?: boolean
 }
 
 export interface SourceVersion {
@@ -174,21 +175,34 @@ export function useEntityList<T extends VersionedEntity>(
     )
   }
 
+  const loadItemsGrouped = async (): Promise<boolean> => {
+    if (!config.useGroupedEndpoint) return false
+    const groupedResult = await apiGet<{ groups: EntityGroup<T>[] }>(
+      `/${config.endpoint}/grouped`
+    )
+    if (!groupedResult.success || !groupedResult.data.groups) return false
+    items.value = groupedResult.data.groups.flatMap((g) => g.versions)
+    return true
+  }
+
   const loadItems = async () => {
     isLoading.value = true
     errorMessage.value = null
 
     try {
-      const query = new URLSearchParams({ page: "0", size: "50" })
-      const result = await apiGet<PaginatedResponse<T>>(
-        `/${config.endpoint}?${query.toString()}`
-      )
+      const loaded = await loadItemsGrouped()
+      if (!loaded) {
+        const query = new URLSearchParams({ page: "0", size: "50" })
+        const result = await apiGet<PaginatedResponse<T>>(
+          `/${config.endpoint}?${query.toString()}`
+        )
 
-      if (!result.success) {
-        throw new Error(result.error.message)
+        if (!result.success) {
+          throw new Error(result.error.message)
+        }
+
+        items.value = Array.isArray(result.data.content) ? result.data.content : []
       }
-
-      items.value = Array.isArray(result.data.content) ? result.data.content : []
 
       const ownerIds = items.value.map((item) => item.ownerId)
       await loadOwnerEmails(ownerIds, t("common.unknownUser"))

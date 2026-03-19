@@ -284,7 +284,7 @@ describe("useModelEditor — golden save contract", () => {
     expect(result).toBe(true)
 
     const nodePostCalls = apiPostMock.mock.calls.filter(
-      (call: [string, unknown]) => call[0] === "/nodes"
+      (call: unknown[]) => call[0] === "/nodes"
     )
     expect(nodePostCalls).toHaveLength(3)
     expect(nodePostCalls[0]?.[1]).toEqual(
@@ -553,10 +553,10 @@ describe("useModelEditor — golden save contract", () => {
     expect(result).toBe(true)
 
     const nodeCall = apiPostMock.mock.calls.find(
-      (call: [string, unknown]) => call[0] === "/nodes"
+      (call: unknown[]) => call[0] === "/nodes"
     )
     const linkCall = apiPostMock.mock.calls.find(
-      (call: [string, unknown]) => call[0] === "/links"
+      (call: unknown[]) => call[0] === "/links"
     )
     expect(nodeCall).toBeDefined()
     expect(linkCall).toBeDefined()

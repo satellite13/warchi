@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-03-20
+
+### Added
+- Improved dashboard data grouping and owner-name resolution flows for clearer aggregated views.
+
+### Changed
+- Enhanced model/notation editing workflows including more robust batch save and relation-rules synchronization behavior.
+- Improved batch sharing behavior and type/document editor integrations for smoother cross-entity updates.
+
 ## [0.1.1] - 2026-03-17
 
 ### Changed

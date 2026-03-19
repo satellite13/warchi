@@ -172,6 +172,7 @@ const fetchAllRelationRulesByNotation = async (
       notationId,
       page: String(page),
       size: String(RELATION_RULES_FETCH_SIZE),
+      includeAttrs: 'true',
     })
     const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
       `/relation-rules?${query.toString()}`

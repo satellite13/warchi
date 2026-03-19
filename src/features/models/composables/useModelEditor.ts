@@ -57,6 +57,7 @@ type ModelEditorReturn = {
     notationId: string,
     options?: { force?: boolean }
   ) => Promise<void>
+  isNotationRelationsAndRulesLoading: (notationId: string | null | undefined) => boolean
 }
 
 const toEditorNode = (row: NodeResponse): EditorNode => ({
@@ -81,9 +82,11 @@ const RELATION_RULES_FETCH_SIZE = 5000
 const RELATIONS_FETCH_SIZE = 5000
 
 const fetchAllRelationRulesByNotationIds = async (
-  notationIds: string[]
+  notationIds: string[],
+  options?: { includeAttrs?: boolean }
 ): Promise<RelationRuleResponse[]> => {
   if (notationIds.length === 0) return []
+  const includeAttrs = options?.includeAttrs ?? true
 
   const collected: RelationRuleResponse[] = []
 
@@ -94,6 +97,7 @@ const fetchAllRelationRulesByNotationIds = async (
         notationId,
         page: String(page),
         size: String(RELATION_RULES_FETCH_SIZE),
+        includeAttrs: String(includeAttrs),
       })
       const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
         `/relation-rules?${query.toString()}`
@@ -404,6 +408,30 @@ export const useModelEditor = (): ModelEditorReturn => {
   let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
   let saveErrorTimer: ReturnType<typeof setTimeout> | null = null
   const loadedRelationRuleNotationIds = new Set<string>()
+  const loadingRelationRuleNotationCounts = ref<Record<string, number>>({})
+  const relationRuleLoadsByNotation = new Map<string, Promise<void>>()
+
+  const incrementRelationRuleLoading = (notationId: string): void => {
+    const next = { ...loadingRelationRuleNotationCounts.value }
+    next[notationId] = (next[notationId] ?? 0) + 1
+    loadingRelationRuleNotationCounts.value = next
+  }
+
+  const decrementRelationRuleLoading = (notationId: string): void => {
+    const next = { ...loadingRelationRuleNotationCounts.value }
+    const current = next[notationId] ?? 0
+    if (current <= 1) {
+      delete next[notationId]
+    } else {
+      next[notationId] = current - 1
+    }
+    loadingRelationRuleNotationCounts.value = next
+  }
+
+  const isNotationRelationsAndRulesLoading = (notationId: string | null | undefined): boolean => {
+    if (!notationId) return false
+    return (loadingRelationRuleNotationCounts.value[notationId] ?? 0) > 0
+  }
 
   onScopeDispose(() => {
     if (saveSuccessTimer) {
@@ -495,7 +523,9 @@ export const useModelEditor = (): ModelEditorReturn => {
       const notationIds = Array.from(
         new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))
       )
-      const relationRules = await fetchAllRelationRulesByNotationIds(notationIds)
+      const relationRules = await fetchAllRelationRulesByNotationIds(notationIds, {
+        includeAttrs: false,
+      })
       loadedRelationRuleNotationIds.clear()
       for (const notationId of notationIds) {
         loadedRelationRuleNotationIds.add(notationId)
@@ -631,30 +661,44 @@ export const useModelEditor = (): ModelEditorReturn => {
     if (!notationId) return
     const force = options?.force === true
     if (!force && loadedRelationRuleNotationIds.has(notationId)) return
-
-    const [relations, rules] = await Promise.all([
-      fetchAllRelationsByNotationId(notationId),
-      fetchAllRelationRulesByNotationIds([notationId]),
-    ])
-
-    const previousRelationIds = new Set(
-      state.value.relations.filter(relation => relation.notationId === notationId).map(relation => relation.id)
-    )
-    for (const relation of relations) {
-      previousRelationIds.add(relation.id)
+    const existingLoad = relationRuleLoadsByNotation.get(notationId)
+    if (existingLoad) {
+      await existingLoad
+      if (!force) return
     }
 
-    state.value.relations = [
-      ...state.value.relations.filter(relation => relation.notationId !== notationId),
-      ...relations,
-    ]
+    incrementRelationRuleLoading(notationId)
+    const loadPromise = (async () => {
+      const [relations, rules] = await Promise.all([
+        fetchAllRelationsByNotationId(notationId),
+        fetchAllRelationRulesByNotationIds([notationId], { includeAttrs: false }),
+      ])
 
-    state.value.relationRules = [
-      ...state.value.relationRules.filter(rule => !previousRelationIds.has(rule.relationId)),
-      ...rules,
-    ]
+      const previousRelationIds = new Set(
+        state.value.relations.filter(relation => relation.notationId === notationId).map(relation => relation.id)
+      )
+      for (const relation of relations) {
+        previousRelationIds.add(relation.id)
+      }
 
-    loadedRelationRuleNotationIds.add(notationId)
+      state.value.relations = [
+        ...state.value.relations.filter(relation => relation.notationId !== notationId),
+        ...relations,
+      ]
+
+      state.value.relationRules = [
+        ...state.value.relationRules.filter(rule => !previousRelationIds.has(rule.relationId)),
+        ...rules,
+      ]
+
+      loadedRelationRuleNotationIds.add(notationId)
+    })()
+      .finally(() => {
+        relationRuleLoadsByNotation.delete(notationId)
+        decrementRelationRuleLoading(notationId)
+      })
+    relationRuleLoadsByNotation.set(notationId, loadPromise)
+    await loadPromise
   }
 
   return {
@@ -677,5 +721,6 @@ export const useModelEditor = (): ModelEditorReturn => {
     handleBack,
     createDiagramBaseline,
     ensureNotationRelationsAndRules,
+    isNotationRelationsAndRulesLoading,
   }
 }

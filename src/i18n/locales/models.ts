@@ -127,6 +127,9 @@ export const modelsMessages = {
       comparePropWasRight: 'Было (справа)',
       comparePropBecame: 'Стало (справа)',
       comparePropBecameLeft: 'Стало (слева)',
+      relationRulesLoading: 'Загружаем правила связей для текущей нотации…',
+      relationRulesLoadingConnectBlocked:
+        'Правила связей для текущей нотации еще загружаются. Повторите действие через несколько секунд.',
     },
   },
   en: {
@@ -256,6 +259,9 @@ export const modelsMessages = {
       comparePropWasRight: 'Was (right)',
       comparePropBecame: 'Became (right)',
       comparePropBecameLeft: 'Became (left)',
+      relationRulesLoading: 'Loading relation rules for the current notation…',
+      relationRulesLoadingConnectBlocked:
+        'Relation rules for the current notation are still loading. Please try again in a few seconds.',
     },
   },
 }

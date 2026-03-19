@@ -69,6 +69,7 @@ const {
   renameModel,
   createDiagramBaseline,
   ensureNotationRelationsAndRules,
+  isNotationRelationsAndRulesLoading,
 } = useModelEditor()
 const { currentUser, isAdmin } = useAuth()
 const { t } = useI18n()
@@ -238,6 +239,9 @@ watch([isDiagramReadOnly, activeRightTab], () => {
 })
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
+const isActiveNotationRulesLoading = computed(() =>
+  isNotationRelationsAndRulesLoading(activeNotationId.value)
+)
 const newerNotationVersions = ref<NotationResponse[]>([])
 const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
 const fallbackNotationMetaLoading = ref(false)
@@ -1757,6 +1761,11 @@ const startConnectNodes = (
   sourceOutlineParam?: number,
   targetOutlineParam?: number
 ) => {
+  if (isActiveNotationRulesLoading.value) {
+    setUiError(t('models.relationRulesLoadingConnectBlocked'))
+    return
+  }
+
   const diagram = activeDiagram.value
   if (!diagram) return
   if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
@@ -2072,6 +2081,7 @@ const createOrReuseLink = (linkId: string | null) => {
 }
 
 const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boolean => {
+  if (isActiveNotationRulesLoading.value) return false
   if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
     return true
   }
@@ -3185,6 +3195,15 @@ onBeforeUnmount(() => {
             @open-diagram="selectDiagram"
             @open-document="handleOpenDocumentFromBadge"
           />
+          <div
+            v-if="activeDiagram && isActiveNotationRulesLoading"
+            class="relation-rules-loading-badge"
+            role="status"
+            aria-live="polite"
+          >
+            <UiIcon name="sync" class="relation-rules-loading-badge__icon spin" />
+            <span>{{ t('models.relationRulesLoading') }}</span>
+          </div>
         </div>
 
         <template #right>
@@ -3817,6 +3836,30 @@ onBeforeUnmount(() => {
   position: relative;
   height: 100%;
   min-height: 0;
+}
+
+.relation-rules-loading-badge {
+  position: absolute;
+  right: 12px;
+  top: 56px;
+  z-index: 14;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 90%, var(--primary-soft));
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(3px);
+}
+
+.relation-rules-loading-badge__icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary);
 }
 
 .canvas-settings-toggle {

@@ -349,7 +349,14 @@ export interface AuditLogResponse {
 
 // Permissions
 
-export type PermissionResourceType = 'MODEL' | 'NOTATION' | 'DIAGRAM' | 'NODE_SHAPE' | 'ADMIN_PANEL'
+export type PermissionResourceType =
+  | 'MODEL'
+  | 'NOTATION'
+  | 'DIAGRAM'
+  | 'NODE_TYPE'
+  | 'LINK_TYPE'
+  | 'NODE_SHAPE'
+  | 'ADMIN_PANEL'
 export type PermissionAction = 'VIEW' | 'EDIT' | 'MANAGE'
 
 export interface PermissionCheckRequest {

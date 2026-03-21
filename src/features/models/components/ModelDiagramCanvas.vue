@@ -722,6 +722,9 @@ const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefi
 
 const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attrs?.isNote === true
 
+const isDirectoryNoteInstance = (instance: DiagramNodeInstance): boolean =>
+  instance.attrs?.isDirectoryNote === true
+
 const getNoteText = (instance: DiagramNodeInstance): string => {
   const value = instance.attrs?.noteText
   return typeof value === 'string' && value.trim().length > 0 ? value : t('diagram.newNote')
@@ -1455,6 +1458,20 @@ function handleCanvasMouseUpSyncEditablePolyline() {
   detectEditablePolylineControlPointChanges()
 }
 
+function handleCanvasDoubleClickOpenDirectory(event: MouseEvent) {
+  if (!renderer || !props.activeDiagram) return
+  const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
+  const hitElement = renderer.getElementAtPoint(worldPoint)
+  if (!(hitElement instanceof DiagramNode)) return
+  const entity = nodeIdToInstance.get(hitElement.id)
+  if (!entity) return
+  const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
+  if (!instance || !isDirectoryNoteInstance(instance)) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  emit('findInTree', entity.modelNodeId)
+}
+
 // ── Detect label changes from inline editing ──
 function detectLabelChanges() {
   if (!renderer) return
@@ -1871,6 +1888,7 @@ function initRenderer(r: DiagramRenderer) {
   renderer = r
   lastActiveDiagramId = props.activeDiagram?.id ?? null
   r.getCanvas().addEventListener('click', handleCanvasClickPrioritizeEdge)
+  r.getCanvas().addEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
   window.addEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
 
   // Grid overlay
@@ -2246,11 +2264,15 @@ const getLockAnchorsEnabled = () => lockAnchorsEnabled.value
 
 // ── Drop handling ──
 const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
-  const notationId = activeNotationId.value
-  if (!notationId) return false
-
   const node = props.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
   if (!node) return false
+  const nodeType = props.nodeTypes.find(item => item.id === node.nodeTypeId)
+  if ((nodeType?.name ?? '').trim().toLowerCase() === 'directory') {
+    return true
+  }
+
+  const notationId = activeNotationId.value
+  if (!notationId) return false
 
   const existingComponentId = node.parsedAttrs.notationComponents[notationId]?.componentId
   if (existingComponentId) {
@@ -2481,6 +2503,7 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
   renderer?.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
+  renderer?.getCanvas().removeEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
   window.removeEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
   renderer?.destroy()
   renderer = null

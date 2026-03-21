@@ -16,6 +16,7 @@ import {
   resolveComponentByNodeType,
   resolveRelationByLinkType,
   type DiagramAttrs,
+  type DiagramNodeInstance,
 } from './modelAttrs'
 import type { EditorLink, EditorNode } from './types'
 import { useModelEditor } from './composables/useModelEditor'
@@ -140,6 +141,7 @@ const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(nul
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const NOTE_NODE_PREFIX = '__diagram-note__:'
 const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
+const NOTE_PASTE_STEP = 24
 
 const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
@@ -867,12 +869,39 @@ const reindexTreeOrders = () => {
 }
 
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const noteClipboard = ref<DiagramNodeInstance[] | null>(null)
+const notePasteCount = ref(0)
 
 const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
   modelNodeId.startsWith(NOTE_NODE_PREFIX)
 
 const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
   modelLinkId.startsWith(NOTE_EDGE_PREFIX)
+
+const isDirectoryNoteInstanceId = (instanceId: string): boolean => {
+  const diagram = activeDiagram.value
+  if (!diagram) return false
+  const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+  return instance?.attrs?.isDirectoryNote === true
+}
+
+const isNoteLikeConnection = (
+  sourceModelNodeId: string,
+  targetModelNodeId: string,
+  sourceInstanceId: string,
+  targetInstanceId: string
+): boolean => {
+  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
+    return true
+  }
+  if (isDirectoryNode(sourceModelNodeId) || isDirectoryNode(targetModelNodeId)) {
+    return true
+  }
+  if (isDirectoryNoteInstanceId(sourceInstanceId) || isDirectoryNoteInstanceId(targetInstanceId)) {
+    return true
+  }
+  return false
+}
 
 const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
@@ -1466,6 +1495,26 @@ const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
 }
 
 const onDeleteKeydown = (event: KeyboardEvent) => {
+  const isCtrlOrMeta = event.ctrlKey || event.metaKey
+  const key = event.code.startsWith('Key')
+    ? event.code.slice(3).toLowerCase()
+    : event.key.toLowerCase()
+  const skipHotkeys = shouldSkipDeleteHotkey(event)
+
+  if (isCtrlOrMeta && !event.shiftKey && key === 'c') {
+    if (!skipHotkeys && copySelectedNotesToClipboard()) {
+      event.preventDefault()
+    }
+    return
+  }
+
+  if (isCtrlOrMeta && !event.shiftKey && key === 'v') {
+    if (!skipHotkeys && pasteCopiedNotes()) {
+      event.preventDefault()
+    }
+    return
+  }
+
   if (event.key !== 'Delete' && event.key !== 'Backspace') return
   if (!activeDiagram.value) return
   if (isDiagramReadOnly.value) return
@@ -1488,6 +1537,102 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
     selectedModelLinkId.value,
     selectedEdgeInstanceId.value ?? undefined
   )
+}
+
+const getSelectedDiagramInstances = (): DiagramNodeInstance[] => {
+  const diagram = activeDiagram.value
+  if (!diagram) return []
+
+  const byId = new Map<string, DiagramNodeInstance>()
+
+  if (selectedInstanceIds.value.length > 0) {
+    const selectedSet = new Set(selectedInstanceIds.value)
+    for (const instance of diagram.parsedAttrs.instances.nodes) {
+      if (selectedSet.has(instance.id)) {
+        byId.set(instance.id, instance)
+      }
+    }
+  } else if (selectedModelNodeIds.value.length > 0) {
+    const selectedSet = new Set(selectedModelNodeIds.value)
+    for (const instance of diagram.parsedAttrs.instances.nodes) {
+      if (selectedSet.has(instance.modelNodeId)) {
+        byId.set(instance.id, instance)
+      }
+    }
+  }
+
+  return Array.from(byId.values())
+}
+
+const copySelectedNotesToClipboard = (): boolean => {
+  if (!activeDiagram.value) return false
+
+  const selectedNotes = getSelectedDiagramInstances()
+    .filter(instance => isNoteInstance(instance))
+    .map(instance => deepClone(instance))
+
+  if (selectedNotes.length === 0) return false
+
+  noteClipboard.value = selectedNotes
+  notePasteCount.value = 0
+  return true
+}
+
+const pasteCopiedNotes = (): boolean => {
+  const diagram = activeDiagram.value
+  if (!diagram || isDiagramReadOnly.value) return false
+  if (!noteClipboard.value || noteClipboard.value.length === 0) return false
+
+  const pasteOffset = NOTE_PASTE_STEP * (notePasteCount.value + 1)
+  const pastedNotes = noteClipboard.value.map(source => {
+    const nextId = createId()
+    return {
+      ...deepClone(source),
+      id: nextId,
+      modelNodeId: `${NOTE_NODE_PREFIX}${nextId}`,
+      x: source.x + pasteOffset,
+      y: source.y + pasteOffset,
+    } satisfies DiagramNodeInstance
+  })
+
+  const pastedInstanceIds = pastedNotes.map(note => note.id)
+  const pastedModelNodeIds = pastedNotes.map(note => note.modelNodeId)
+
+  executeDiagramHistoryCommand({
+    execute: () => {
+      const existingIds = new Set(diagram.parsedAttrs.instances.nodes.map(item => item.id))
+      for (const note of pastedNotes) {
+        if (!existingIds.has(note.id)) {
+          diagram.parsedAttrs.instances.nodes.push(deepClone(note))
+        }
+      }
+      selectedModelNodeIds.value = pastedModelNodeIds
+      selectedInstanceIds.value = pastedInstanceIds
+      selectedModelLinkId.value = null
+      selectedEdgeInstanceId.value = null
+      selectedCanvasElementId.value =
+        pastedInstanceIds.length === 1 ? `instance-${pastedInstanceIds[0]}` : null
+      markDiagramDirty(diagram.id)
+    },
+    undo: () => {
+      const pastedSet = new Set(pastedInstanceIds)
+      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+        item => !pastedSet.has(item.id)
+      )
+      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+        edge => !pastedSet.has(edge.sourceInstanceId) && !pastedSet.has(edge.targetInstanceId)
+      )
+      selectedModelNodeIds.value = []
+      selectedInstanceIds.value = []
+      selectedModelLinkId.value = null
+      selectedEdgeInstanceId.value = null
+      selectedCanvasElementId.value = null
+      markDiagramDirty(diagram.id)
+    },
+  })
+
+  notePasteCount.value += 1
+  return true
 }
 
 watch(
@@ -1549,6 +1694,61 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
   if (!diagram) return
   const node = state.value.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
   if (!node) return
+  if (isDirectoryNode(modelNodeId)) {
+    const directoryNoteInstance = {
+      id: createId(),
+      modelNodeId,
+      x,
+      y,
+      width: 230,
+      height: 126,
+      attrs: {
+        isNote: true,
+        isDirectoryNote: true,
+        noteText: node.name,
+        diagramStyle: {
+          nodeShape: 'rectangle',
+          fillColor: '#eaf2ff',
+          strokeColor: '#6f94ff',
+          strokeWidth: 1.5,
+          labelColor: '#233a80',
+          labelFontSize: 13,
+          labelAlign: 'left',
+          labelInset: 12,
+          labelPlacement: 'center',
+          iconName: 'folder',
+          iconPlacement: 'top-left',
+          iconWidth: 16,
+          iconHeight: 16,
+          iconInset: 8,
+        },
+      } as Record<string, unknown>,
+    }
+
+    executeDiagramHistoryCommand({
+      execute: () => {
+        const alreadyExists = diagram.parsedAttrs.instances.nodes.some(
+          item => item.id === directoryNoteInstance.id
+        )
+        if (!alreadyExists) {
+          diagram.parsedAttrs.instances.nodes.push(deepClone(directoryNoteInstance))
+        }
+        markDiagramDirty(diagram.id)
+      },
+      undo: () => {
+        diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+          item => item.id !== directoryNoteInstance.id
+        )
+        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+          edge =>
+            edge.sourceInstanceId !== directoryNoteInstance.id &&
+            edge.targetInstanceId !== directoryNoteInstance.id
+        )
+        markDiagramDirty(diagram.id)
+      },
+    })
+    return
+  }
   const hasBinding = ensureNodeBindingByNodeType(node)
   if (!hasBinding) {
     return
@@ -1774,7 +1974,9 @@ const startConnectNodes = (
 
   const diagram = activeDiagram.value
   if (!diagram) return
-  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
+  if (
+    isNoteLikeConnection(sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId)
+  ) {
     const modelLinkId = `${NOTE_EDGE_PREFIX}${createId()}`
     const edgeAttrs: Record<string, unknown> = {
       isDiagramOnly: true,
@@ -2089,6 +2291,9 @@ const createOrReuseLink = (linkId: string | null) => {
 const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boolean => {
   if (isActiveNotationRulesLoading.value) return false
   if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
+    return true
+  }
+  if (isDirectoryNode(sourceModelNodeId) || isDirectoryNode(targetModelNodeId)) {
     return true
   }
   const notationId = activeNotationId.value

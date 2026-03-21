@@ -142,6 +142,50 @@ function handleCreateFromSelectedVersion(group: {
   if (!selected) return;
   openCreateModalFromVersion(selected);
 }
+
+function canEditSelected(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}): boolean {
+  const selected = getSelectedItem(group);
+  if (!selected) return false;
+  return selected.accessPermission === "OWNER" ||
+    selected.accessPermission === "ADMIN" ||
+    selected.accessPermission === "EDIT";
+}
+
+function canShareSelected(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}): boolean {
+  const selected = getSelectedItem(group);
+  if (!selected?.ownerId || !currentUser.value?.id) return false;
+  return selected.ownerId === currentUser.value.id;
+}
+
+function handleDelete(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}) {
+  const selected = getSelectedItem(group);
+  if (!selected || !canEditSelected(group)) return;
+  openDeleteModal(selected);
+}
+
+function handleRename(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}) {
+  const selected = getSelectedItem(group);
+  if (!selected || !canEditSelected(group)) return;
+  openRenameModal(selected);
+}
+
+function formatDeleteEntityName(item: VersionedEntity | null): string {
+  if (!item) return "";
+  const ownerLabel = ownerEmails.value.get(item.ownerId) ?? t("common.unknownUser");
+  return `${item.name} v${item.version} — ${ownerLabel}`;
+}
 </script>
 
 <template>
@@ -179,20 +223,18 @@ function handleCreateFromSelectedVersion(group: {
         :versions="group.versions.map((item) => item.version)"
         :owner-email="ownerEmails.get(getSelectedItem(group)?.ownerId || '')"
         :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission, locale)"
-        :can-share="
-          !!getSelectedItem(group)?.ownerId &&
-          !!currentUser?.id &&
-          getSelectedItem(group)?.ownerId === currentUser.id
-        "
+        :can-share="canShareSelected(group)"
+        :can-delete="canEditSelected(group)"
+        :can-rename="canEditSelected(group)"
         :updated-at="getSelectedItem(group)?.updatedAt"
         :icon="canChangeIcon ? (parseIconFromAttrs(getSelectedItem(group)?.attrs) ?? icon) : undefined"
-        :can-change-icon="canChangeIcon"
+        :can-change-icon="canChangeIcon && canEditSelected(group)"
         :show-version-tree-button="showVersionTree"
         :show-create-from-version-button="showCreateFromVersionButton"
         :version-tree-i18n-prefix="showVersionTree ? i18nPrefix : undefined"
         @click="getSelectedItem(group) && openEntity(getSelectedItem(group)!.id)"
-        @delete="getSelectedItem(group) && openDeleteModal(getSelectedItem(group)!)"
-        @rename="getSelectedItem(group) && openRenameModal(getSelectedItem(group)!)"
+        @delete="handleDelete(group)"
+        @rename="handleRename(group)"
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
         @show-version-tree="openVersionTreeModal(group)"
         @create-from-version="handleCreateFromSelectedVersion(group)"
@@ -229,7 +271,7 @@ function handleCreateFromSelectedVersion(group: {
       v-if="showDeleteModal"
       :title="t(`${i18nPrefix}.deleteTitle`)"
       :entity-label="t(`${i18nPrefix}.entityLabelAccusative`)"
-      :entity-name="itemToDelete?.name"
+      :entity-name="formatDeleteEntityName(itemToDelete)"
       :is-deleting="isDeleting"
       :error="deleteError"
       @close="closeDeleteModal"

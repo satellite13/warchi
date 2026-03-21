@@ -13,6 +13,8 @@ const props = defineProps<{
   ownerEmail?: string;
   accessLabel?: string;
   canShare?: boolean;
+  canDelete?: boolean;
+  canRename?: boolean;
   updatedAt?: string | null;
   /** Иконка в шапке плашки (id из public/icons). Если задана, слот #icon не используется. */
   icon?: string;
@@ -81,10 +83,12 @@ const formattedUpdatedAt = computed(() => {
     </div>
     <div class="model-card__body">
       <button class="model-card__delete" type="button" :aria-label="t('common.delete')" :title="t('common.delete')"
+              v-if="canDelete !== false"
               @click.stop="emit('delete')">
         <UiIcon name="delete" :alt="t('common.delete')" />
       </button>
       <button class="model-card__rename" type="button" :aria-label="t('common.rename')" :title="t('common.rename')"
+              v-if="canRename !== false"
               @click.stop="emit('rename')">
         <UiIcon name="edit" :alt="t('common.rename')" />
       </button>

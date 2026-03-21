@@ -52,18 +52,13 @@ const {
   loadNotation,
   saveChanges,
 } = useNotationEditor()
-const { currentUser, isAdmin } = useAuth()
+const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const showShareModal = ref(false)
 const { canShare: canShareNotation } = useCanShare(notation, currentUser)
 const canInspectAttrsJson = computed(() => {
   const permission = notation.value?.accessPermission ?? null
-  return (
-    isAdmin.value ||
-    permission === 'ADMIN' ||
-    permission === 'OWNER' ||
-    permission === 'EDIT'
-  )
+  return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
 })
 
 // Document modal state

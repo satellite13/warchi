@@ -72,18 +72,13 @@ const {
   ensureNotationRelationsAndRules,
   isNotationRelationsAndRulesLoading,
 } = useModelEditor()
-const { currentUser, isAdmin } = useAuth()
+const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const { t } = useI18n()
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
 const canInspectDiagramJson = computed(() => {
   const permission = model.value?.accessPermission ?? null
-  return (
-    isAdmin.value ||
-    permission === 'ADMIN' ||
-    permission === 'OWNER' ||
-    permission === 'EDIT'
-  )
+  return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
 })
 
 const selectedNodeId = ref<string | null>(null)

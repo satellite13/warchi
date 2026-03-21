@@ -357,6 +357,7 @@ export type PermissionResourceType =
   | 'LINK_TYPE'
   | 'NODE_SHAPE'
   | 'FILE'
+  | 'SHARE'
   | 'ADMIN_PANEL'
 export type PermissionAction = 'VIEW' | 'EDIT' | 'MANAGE'
 

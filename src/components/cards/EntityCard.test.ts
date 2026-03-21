@@ -23,6 +23,8 @@ const defaultProps = {
   id: 'test-id-1',
   name: 'Test Model',
   version: '1.0.0',
+  canDelete: true,
+  canRename: true,
 }
 
 const mountCard = (props = {}) =>

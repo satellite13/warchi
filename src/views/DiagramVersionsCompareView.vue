@@ -507,7 +507,8 @@ function handleLeftSelectNodes(ids: string[]): void {
   if (path !== undefined) selectedElement.value = { kind: "node", path, side: "left" }
 }
 
-function handleLeftSelectLink(linkId: string): void {
+function handleLeftSelectLink(linkId: string | null): void {
+  if (!linkId) return
   const link = versionData.value?.links.find((l) => l.id === linkId)
   if (!link || !leftPathMap.value) return
   const sp = leftPathMap.value.get(link.sourceId)
@@ -556,7 +557,8 @@ function handleRightSelectNodes(ids: string[]): void {
   if (path !== undefined) selectedElement.value = { kind: "node", path, side: "right" }
 }
 
-function handleRightSelectLink(linkId: string): void {
+function handleRightSelectLink(linkId: string | null): void {
+  if (!linkId) return
   const link = versionData.value?.links.find((l) => l.id === linkId)
   if (!link || !rightPathMap.value) return
   const sp = rightPathMap.value.get(link.sourceId)

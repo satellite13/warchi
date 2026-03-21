@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-21
+
+### Added
+- Added node folder tabs in the diagram editor for faster navigation across model structure.
+- Added clipboard support for note instances in Model Editor.
+
+### Changed
+- Improved model link handling flows in editor interactions.
+- Added delete/rename actions in entity cards and catalogs to streamline item management.
+
 ## [0.2.0] - 2026-03-21
 
 ### Added

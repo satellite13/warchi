@@ -39,6 +39,93 @@ save_state() {
   fi
 }
 
+init_pg_extensions() {
+  local init_user="$1"
+  local init_password="$2"
+  local pod_name="pg-ext-init-$(date +%s)"
+  local dsn="host=${PG_HOST} port=6432 dbname=${DB_NAME} user=${init_user} sslmode=require"
+  local sql_file
+  local output
+  local status_line
+
+  if [ -z "$init_user" ] || [ -z "$init_password" ]; then
+    log_warn "Пропускаем инициализацию расширений PostgreSQL: не заданы учетные данные"
+    save_state "PG_EXTENSIONS_STATUS" "skipped-no-credentials"
+    return 0
+  fi
+
+  sql_file="$(mktemp)"
+  cat > "$sql_file" <<'SQL'
+DO $$
+BEGIN
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping pgcrypto extension: insufficient privileges';
+  END;
+
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping pg_trgm extension: insufficient privileges';
+  END;
+END
+$$;
+
+\pset tuples_only on
+\pset format unaligned
+\pset fieldsep ','
+SELECT
+  EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto'),
+  EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'),
+  (to_regproc('gen_random_uuid') IS NOT NULL);
+SQL
+
+  output="$(kubectl -n "$NAMESPACE" run "$pod_name" \
+    --image=postgres:16-alpine \
+    --restart=Never \
+    --rm \
+    -i \
+    --env="PGPASSWORD=${init_password}" \
+    --command -- sh -ceu "psql \"$dsn\" -v ON_ERROR_STOP=1 -f -" < "$sql_file" 2>&1)" || {
+      rm -f "$sql_file"
+      log_warn "Не удалось проверить/инициализировать расширения PostgreSQL автоматически"
+      log_warn "Проверьте доступность БД и права пользователя '$init_user'"
+      save_state "PG_EXTENSIONS_STATUS" "check-failed"
+      return 0
+    }
+
+  rm -f "$sql_file"
+  echo "$output"
+
+  status_line="$(printf '%s\n' "$output" | awk -F',' '/^(t|f),(t|f),(t|f)$/ {line=$0} END {print line}')"
+  case "$status_line" in
+    "t,t,t")
+      log_info "Расширения PostgreSQL готовы: pgcrypto=t, pg_trgm=t, gen_random_uuid=t"
+      save_state "PG_EXTENSIONS_STATUS" "ready"
+      ;;
+    "t,f,t")
+      log_warn "pg_trgm не установлен (поиск будет с fallback индексами), но gen_random_uuid доступна"
+      save_state "PG_EXTENSIONS_STATUS" "partial-no-pgtrgm"
+      ;;
+    "f,f,t"|"f,t,t")
+      log_warn "pgcrypto не установлен, но gen_random_uuid доступна (возможно через core PostgreSQL)"
+      save_state "PG_EXTENSIONS_STATUS" "partial-pgcrypto-missing"
+      ;;
+    "t,t,f"|"t,f,f"|"f,t,f"|"f,f,f")
+      log_warn "gen_random_uuid недоступна. Liquibase-миграции arepos-server могут упасть"
+      log_warn "Запустите CREATE EXTENSION pgcrypto под ролью с привилегиями на БД $DB_NAME"
+      save_state "PG_EXTENSIONS_STATUS" "missing-gen-random-uuid"
+      ;;
+    *)
+      log_warn "Не удалось определить статус расширений PostgreSQL из вывода psql"
+      save_state "PG_EXTENSIONS_STATUS" "unknown"
+      ;;
+  esac
+}
+
 # Проверка yc CLI
 if ! command -v yc >/dev/null 2>&1; then
   log_error "yc CLI не установлен. Установите: https://yandex.cloud/docs/cli/quickstart"
@@ -51,7 +138,7 @@ yc config set cloud-id "$YC_CLOUD_ID"
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 1/7  Сеть (VPC)                        ${NC}"
+echo -e "${GREEN} 1/8  Сеть (VPC)                        ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 NETWORK_ID=$(yc vpc network list --format json | python3 -c "
@@ -95,7 +182,7 @@ save_state "SUBNET_ID" "$SUBNET_ID"
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 2/7  Сервисные аккаунты (IAM)          ${NC}"
+echo -e "${GREEN} 2/8  Сервисные аккаунты (IAM)          ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 create_sa() {
@@ -148,7 +235,7 @@ log_info "Роли назначены"
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 3/7  Container Registry                ${NC}"
+echo -e "${GREEN} 3/8  Container Registry                ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 REGISTRY_ID=$(yc container registry list --format json | python3 -c "
@@ -174,7 +261,7 @@ yc container registry configure-docker
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 4/7  Managed Kubernetes                ${NC}"
+echo -e "${GREEN} 4/8  Managed Kubernetes                ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 CLUSTER_ID=$(yc managed-kubernetes cluster list --format json | python3 -c "
@@ -245,7 +332,7 @@ save_state "NODE_GROUP_ID" "$NODE_GROUP_ID"
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 5/7  Managed PostgreSQL                ${NC}"
+echo -e "${GREEN} 5/8  Managed PostgreSQL                ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 PG_CLUSTER_ID=$(yc managed-postgresql cluster list --format json | python3 -c "
@@ -282,7 +369,7 @@ log_info "PostgreSQL host: $PG_HOST"
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 6/7  Object Storage (S3)               ${NC}"
+echo -e "${GREEN} 6/8  Object Storage (S3)               ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # Создаём static key для S3
@@ -313,12 +400,26 @@ fi
 
 echo
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} 7/7  Подключение kubectl               ${NC}"
+echo -e "${GREEN} 7/8  Подключение kubectl               ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 yc managed-kubernetes cluster get-credentials "$CLUSTER_ID" --external --force
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 log_info "kubectl настроен, namespace '$NAMESPACE' создан"
+
+echo
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN} 8/8  Проверка расширений PostgreSQL    ${NC}"
+echo -e "${GREEN}========================================${NC}"
+
+DB_INIT_USER="${DB_ADMIN_USER:-$DB_USER}"
+DB_INIT_PASSWORD="${DB_ADMIN_PASSWORD:-$DB_PASSWORD}"
+if [ "$DB_INIT_USER" != "$DB_USER" ]; then
+  log_info "Для инициализации расширений используется админ-пользователь '$DB_INIT_USER'"
+else
+  log_info "Для инициализации расширений используется пользователь БД '$DB_INIT_USER'"
+fi
+init_pg_extensions "$DB_INIT_USER" "$DB_INIT_PASSWORD"
 
 echo
 echo -e "${GREEN}========================================${NC}"
@@ -329,6 +430,7 @@ echo "Созданные ресурсы сохранены в: $STATE_FILE"
 echo
 echo "Следующие шаги:"
 echo "  1. ./create-secrets.sh    — создать K8s secrets"
-echo "  2. Установить NGINX Ingress:"
+echo "  2. ./check-db-extensions.sh — проверить расширения PostgreSQL"
+echo "  3. Установить NGINX Ingress:"
 echo "     helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace"
-echo "  3. ./deploy-all.sh        — задеплоить приложения"
+echo "  4. ./deploy-all.sh        — задеплоить приложения"

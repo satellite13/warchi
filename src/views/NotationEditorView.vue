@@ -515,7 +515,11 @@ const handleSelect = (
   }
 }
 
-const handleDiagramSelect = (id: string, kind: 'component' | 'relation') => {
+const handleDiagramSelect = (id: string | null, kind: 'component' | 'relation' | null) => {
+  if (!id || !kind) {
+    selectedEntity.value = null
+    return
+  }
   handleSelect(kind, id, 'diagram')
 }
 

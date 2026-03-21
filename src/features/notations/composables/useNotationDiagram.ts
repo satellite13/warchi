@@ -47,7 +47,7 @@ export type EntityKind = "component" | "relation"
 export interface NotationDiagramOptions {
   state: Ref<NotationEditorState>
   selectedId: Ref<string | null>
-  onSelect: (id: string, kind: EntityKind) => void
+  onSelect: (id: string | null, kind: EntityKind | null) => void
 }
 
 
@@ -506,7 +506,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   }
 
   function updateSelection(renderer: DiagramRenderer, selectedEntityId?: string | null) {
-    const id = selectedEntityId ?? selectedId.value
+    const id = selectedEntityId === undefined ? selectedId.value : selectedEntityId
     syncSelectionManagerFromEntityId(id)
     const activeComponents = state.value.components.filter((c) => !c._isDeleted)
 
@@ -697,9 +697,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       if (syncingRelationSelection || syncingSelectionFromState) {
         return
       }
-      // SelectionManager.select() emits an intermediate empty selection before final id.
-      // Ignore this transient event to avoid restoring stale selection from state sync.
       if (elementIds.length === 0) {
+        onSelect(null, null)
+        updateSelection(renderer, null)
         return
       }
       if (elementIds.length === 1) {

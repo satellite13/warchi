@@ -701,38 +701,74 @@ const pendingDeleteDiagramName = computed(() => {
 const getLinkTypeName = (linkTypeId: string): string =>
   state.value.linkTypes.find(item => item.id === linkTypeId)?.name ?? 'Неизвестный тип'
 
-const extractLinkLabelValue = (link: EditorLink): string => {
+const resolveRelationForLink = (link: EditorLink): RelationResponse | null => {
   const notationId = activeNotationId.value
-  if (!notationId) return 'без метки'
+  if (!notationId) return null
 
-  const relationId =
+  const explicitRelationId =
     link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
-  if (!relationId) return 'без метки'
+  if (explicitRelationId) {
+    const explicitRelation = state.value.relations.find(
+      item => item.id === explicitRelationId && item.notationId === notationId
+    )
+    if (explicitRelation) return explicitRelation
+  }
+
+  return (
+    state.value.relations.find(
+      item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
+    ) ?? null
+  )
+}
+
+const formatCustomPropertyValue = (value: unknown): string => {
+  if (typeof value === 'boolean') return value ? t('common.yes') : t('common.no')
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value.length > 0 ? value : '""'
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  try {
+    const serialized = JSON.stringify(value)
+    return serialized ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const getReuseLinkCustomProperties = (
+  link: EditorLink
+): Array<{ name: string; value: string }> => {
+  const notationId = activeNotationId.value
+  if (!notationId) return []
+
+  const relation = resolveRelationForLink(link)
+  if (!relation) return []
 
   const scopedValues = getDiagramScopedLinkValues({
     diagram: activeDiagram.value?.parsedAttrs,
     modelLinkId: link.id,
     notationId,
-    relationId,
+    relationId: relation.id,
     linkAttrsFallback: link.parsedAttrs,
-    edgeInstanceId: selectedLinkEdgeInstanceId.value,
   })
-  if (!scopedValues) return 'без метки'
+  const relationProperties = parseEntityAttrs(relation.attrs ?? null).customProperties
 
-  for (const key of ['label', 'name', 'title', 'метка']) {
-    const value = scopedValues[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
+  const result: Array<{ name: string; value: string }> = []
+  for (const property of relationProperties) {
+    if (!Object.prototype.hasOwnProperty.call(scopedValues, property.name)) continue
+    result.push({
+      name: property.name,
+      value: formatCustomPropertyValue(scopedValues[property.name]),
+    })
   }
 
-  for (const value of Object.values(scopedValues)) {
-    if (typeof value === 'string' && value.trim()) return value.trim()
+  for (const [name, value] of Object.entries(scopedValues)) {
+    if (result.some(item => item.name === name)) continue
+    result.push({ name, value: formatCustomPropertyValue(value) })
   }
 
-  return 'без метки'
+  return result
 }
-
-const formatReuseLinkOption = (link: EditorLink): string =>
-  `${getLinkTypeName(link.linkTypeId)}: ${extractLinkLabelValue(link)}`
 
 const directoryNodeType = computed(
   () =>
@@ -3693,7 +3729,32 @@ onBeforeUnmount(() => {
         class="choice-item"
         @click="handleSelectExistingLink(link.id)"
       >
-        {{ t('models.useExistingLink', { link: formatReuseLinkOption(link) }) }}
+        <div class="reuse-link-option">
+          <div class="reuse-link-option__title">
+            {{ t('models.useExistingLink') }}
+          </div>
+          <div class="reuse-link-option__meta">
+            {{ t('models.reuseLinkTypeLabel') }}: {{ getLinkTypeName(link.linkTypeId) }}
+          </div>
+          <div class="reuse-link-option__props">
+            <div class="reuse-link-option__props-title">
+              {{ t('models.reuseLinkCustomPropertiesLabel') }}
+            </div>
+            <div
+              v-for="property in getReuseLinkCustomProperties(link)"
+              :key="`${link.id}-${property.name}`"
+              class="reuse-link-option__prop"
+            >
+              {{ property.name }}: {{ property.value }}
+            </div>
+            <div
+              v-if="getReuseLinkCustomProperties(link).length === 0"
+              class="reuse-link-option__empty"
+            >
+              {{ t('models.reuseLinkNoCustomProperties') }}
+            </div>
+          </div>
+        </div>
       </button>
       <button
         type="button"
@@ -4026,6 +4087,44 @@ onBeforeUnmount(() => {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.reuse-link-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reuse-link-option__title {
+  font-weight: 600;
+  color: var(--base-text);
+}
+
+.reuse-link-option__meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.reuse-link-option__props {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.reuse-link-option__props-title {
+  color: var(--text-muted);
+}
+
+.reuse-link-option__prop {
+  color: var(--base-text);
+}
+
+.reuse-link-option__empty {
+  color: var(--text-subtle);
 }
 
 .leave-text {

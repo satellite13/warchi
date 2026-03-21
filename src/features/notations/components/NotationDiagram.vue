@@ -11,7 +11,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  select: [id: string, kind: EntityKind];
+  select: [id: string | null, kind: EntityKind | null];
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);

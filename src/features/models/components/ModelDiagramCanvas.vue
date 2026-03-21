@@ -139,7 +139,7 @@ const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs]
   selectNodes: [modelNodeIds: string[]]
   selectInstanceIds: [instanceIds: string[]]
-  selectLink: [modelLinkId: string]
+  selectLink: [modelLinkId: string | null]
   selectEdgeInstanceId: [edgeInstanceId: string | null]
   selectCanvasElementId: [elementId: string | null]
   canvasContextChange: [
@@ -1757,7 +1757,9 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   manager.selection.on('select', (elementIds: string[]) => {
     if (suppressSelectionEvent) return
     if (elementIds.length === 0) {
+      emit('selectNodes', [])
       emit('selectInstanceIds', [])
+      emit('selectLink', null)
       emit('selectEdgeInstanceId', null)
       emit('selectCanvasElementId', null)
       return

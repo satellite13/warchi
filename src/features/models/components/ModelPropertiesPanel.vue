@@ -14,6 +14,7 @@ const props = withDefaults(
     activeNotationId: string | null
     selectedNode: EditorNode | null
     selectedLink: EditorLink | null
+    nodeCustomProperties?: CustomProperty[]
     nodeBindingComponentId: string | null
     linkBindingRelationId: string | null
     availableComponents: ComponentResponse[]
@@ -35,6 +36,7 @@ const props = withDefaults(
     diagrams: () => [],
     modelDocuments: () => [],
     wikiDocuments: () => [],
+    nodeCustomProperties: () => [],
   }
 )
 
@@ -58,14 +60,17 @@ const selectedRelation = computed(
 )
 
 const nodeProperties = computed<CustomProperty[]>(() => {
+  if (props.nodeCustomProperties && props.nodeCustomProperties.length > 0) {
+    return props.nodeCustomProperties
+  }
   if (!selectedComponent.value) return []
-  const props = parseEntityAttrs(selectedComponent.value.attrs ?? null).customProperties
-  return props.filter(p => !p.system)
+  const customProperties = parseEntityAttrs(selectedComponent.value.attrs ?? null).customProperties
+  return customProperties.filter(p => !p.system)
 })
 const linkProperties = computed<CustomProperty[]>(() => {
   if (!selectedRelation.value) return []
-  const props = parseEntityAttrs(selectedRelation.value.attrs ?? null).customProperties
-  return props.filter(p => !p.system)
+  const customProperties = parseEntityAttrs(selectedRelation.value.attrs ?? null).customProperties
+  return customProperties.filter(p => !p.system)
 })
 
 const currentMode = computed<'node' | 'link' | 'empty'>(() => {
@@ -185,7 +190,7 @@ const documentSelectOptions = computed(() => {
       <div class="mp-body">
         <!-- NODE binding -->
         <template v-if="currentMode === 'node' && selectedNode">
-          <section class="mp-section">
+          <section v-if="activeNotationId" class="mp-section">
             <span class="mp-section__title">{{ t('diagram.notationComponent') }}</span>
             <select
               class="mp-select"

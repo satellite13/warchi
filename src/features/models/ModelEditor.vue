@@ -41,7 +41,13 @@ import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
-import { parseEntityAttrs, parseTypeAttrs, type DiagramStyle } from '../notations/notationAttrs'
+import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
+import {
+  parseEntityAttrs,
+  parseTypeAttrs,
+  type CustomProperty,
+  type DiagramStyle,
+} from '../notations/notationAttrs'
 import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import TabPanel from '../../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
@@ -127,15 +133,6 @@ const selectedCanvasElementId = ref<string | null>(null)
 const diagramRenderer = shallowRef<DiagramRenderer | null>(null)
 const diagramInteractionManager = shallowRef<InteractionManager | null>(null)
 const activeRightTab = ref('properties')
-const rightPanelTabs = computed(() => {
-  const tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'properties', label: t('models.propertiesTab'), icon: 'tune' },
-  ]
-  if (!isDiagramReadOnly.value) {
-    tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
-  }
-  return tabs
-})
 const { canShare: canShareModel } = useCanShare(model, currentUser)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
@@ -238,12 +235,6 @@ async function handleCreateBaseline() {
 
 watch(selectedDiagramId, () => {
   baselineError.value = null
-})
-
-watch([isDiagramReadOnly, activeRightTab], () => {
-  if (isDiagramReadOnly.value && activeRightTab.value === 'style') {
-    activeRightTab.value = 'properties'
-  }
 })
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
@@ -410,6 +401,13 @@ const selectedLinkEdgeInstanceId = computed<string | null>(() => {
   return null
 })
 
+const fallbackNodeNotationId = computed(() => {
+  const node = selectedNode.value
+  if (!node) return null
+  const notationKeys = Object.keys(node.parsedAttrs.notationComponents)
+  return notationKeys.length > 0 ? notationKeys[0] ?? null : null
+})
+const nodeContextNotationId = computed(() => activeNotationId.value ?? fallbackNodeNotationId.value)
 const availableNodeComponents = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
@@ -418,14 +416,32 @@ const availableNodeComponents = computed(() => {
 })
 
 const nodeBindingComponentId = computed(() => {
-  const notationId = activeNotationId.value
+  const notationId = nodeContextNotationId.value
   const node = selectedNode.value
   if (!notationId || !node) return null
   return node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
 })
 
+const selectedNodeComponent = computed(() => {
+  const notationId = nodeContextNotationId.value
+  const componentId = nodeBindingComponentId.value
+  if (!notationId || !componentId) return null
+  return (
+    state.value.components.find(
+      component => component.id === componentId && component.notationId === notationId
+    ) ?? null
+  )
+})
+
+const nodeCustomProperties = computed<CustomProperty[]>(() => {
+  if (!selectedNodeComponent.value) return []
+  return parseEntityAttrs(selectedNodeComponent.value.attrs ?? null).customProperties.filter(
+    property => !property.system
+  )
+})
+
 const nodeScopedValues = computed<Record<string, unknown>>(() => {
-  const notationId = activeNotationId.value
+  const notationId = nodeContextNotationId.value
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
   if (!notationId || !componentId || !node) return {}
@@ -572,6 +588,48 @@ const {
   saveNoteEditor,
   cancelNoteEditor,
 } = useNoteEditor(activeDiagram, isDiagramReadOnly, markDiagramDirty)
+
+const canShowTraceabilityTab = computed(() => !!selectedNode.value)
+const canEditSelectedElementStyle = computed(() => {
+  const diagram = activeDiagram.value
+  const selectedElementId = selectedCanvasElementId.value
+  if (!diagram || !selectedElementId) return false
+
+  if (selectedElementId.startsWith('instance-')) {
+    const instanceId = selectedElementId.slice('instance-'.length)
+    const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+    return !!instance && !isNoteInstance(instance)
+  }
+
+  if (selectedElementId.startsWith('edge-')) {
+    const edgeId = selectedElementId.slice('edge-'.length)
+    const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+    return !!edge && edge.attrs?.isDiagramOnly !== true
+  }
+
+  return false
+})
+const canShowStyleTab = computed(
+  () => !!activeDiagram.value && !isDiagramReadOnly.value && canEditSelectedElementStyle.value
+)
+const rightPanelTabs = computed(() => {
+  const tabs: { id: string; label: string; icon: string }[] = [
+    { id: 'properties', label: t('models.propertiesTab'), icon: 'tune' },
+  ]
+  if (canShowTraceabilityTab.value) {
+    tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'account_tree' })
+  }
+  if (canShowStyleTab.value) {
+    tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
+  }
+  return tabs
+})
+
+watch([rightPanelTabs, activeRightTab], () => {
+  if (!rightPanelTabs.value.some(tab => tab.id === activeRightTab.value)) {
+    activeRightTab.value = 'properties'
+  }
+})
 
 const {
   showDiagramImageShareModal,
@@ -2918,23 +2976,39 @@ const handleToolbarAction = async (event: string) => {
 }
 
 const setNodeScopedValue = (key: string, value: unknown) => {
-  const notationId = activeNotationId.value
+  const notationId = nodeContextNotationId.value
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
   const diagram = activeDiagram.value
-  if (!notationId || !componentId || !node || !diagram) return
-  const changed = setDiagramScopedNodeValue({
-    diagram: diagram.parsedAttrs,
-    modelNodeId: node.id,
-    notationId,
-    componentId,
-    key,
-    value,
-    nodeAttrsFallback: node.parsedAttrs,
-    instanceId: selectedNodeInstanceId.value,
-  })
-  if (changed) {
-    markDiagramDirty(diagram.id)
+  if (!notationId || !componentId || !node) return
+
+  if (diagram) {
+    const changed = setDiagramScopedNodeValue({
+      diagram: diagram.parsedAttrs,
+      modelNodeId: node.id,
+      notationId,
+      componentId,
+      key,
+      value,
+      nodeAttrsFallback: node.parsedAttrs,
+      instanceId: selectedNodeInstanceId.value,
+    })
+    if (changed) {
+      markDiagramDirty(diagram.id)
+    }
+    return
+  }
+
+  if (!node.parsedAttrs.componentProperties[notationId]) {
+    node.parsedAttrs.componentProperties[notationId] = {}
+  }
+  if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
+    node.parsedAttrs.componentProperties[notationId][componentId] = {}
+  }
+  const target = node.parsedAttrs.componentProperties[notationId][componentId]!
+  if (!Object.is(target[key], value)) {
+    target[key] = value
+    markNodeDirty(node.id)
   }
 }
 
@@ -3465,6 +3539,7 @@ onBeforeUnmount(() => {
               :active-notation-id="activeNotationId"
               :selected-node="selectedNode"
               :selected-link="selectedLink"
+              :node-custom-properties="nodeCustomProperties"
               :node-binding-component-id="nodeBindingComponentId"
               :link-binding-relation-id="linkBindingRelationId"
               :available-components="availableNodeComponents"
@@ -3482,8 +3557,15 @@ onBeforeUnmount(() => {
               @create-document-for-property="(name) => !isDiagramReadOnly && handleCreateDocumentForProperty(name)"
               :on-open-node-document="handleOpenNodeDoc"
             />
+            <ModelTraceabilityPanel
+              v-if="activeRightTab === 'traceability' && selectedNode"
+              :selected-node="selectedNode"
+              :nodes="state.nodes.filter(node => !node._isDeleted)"
+              :links="state.links.filter(link => !link._isDeleted)"
+              :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
+            />
             <NodeStylePanel
-              v-if="activeRightTab === 'style' && !isDiagramReadOnly"
+              v-if="activeRightTab === 'style' && canShowStyleTab"
               :selected-element-id="selectedCanvasElementId"
               :interaction-manager="diagramInteractionManager"
               :renderer="diagramRenderer"

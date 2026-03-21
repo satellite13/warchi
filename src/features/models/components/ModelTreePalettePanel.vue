@@ -289,6 +289,41 @@ const focusNode = (nodeId: string) => {
   })
 }
 
+type TreeNodeRow = {
+  kind: "node"
+  node: EditorNode
+  depth: number
+}
+
+type TreeDiagramRow = {
+  kind: "diagram"
+  nodeId: string
+  diagram: EditorDiagram
+  depth: number
+}
+
+type TreeRow = TreeNodeRow | TreeDiagramRow
+
+const treeRows = computed<TreeRow[]>(() => {
+  const rows: TreeRow[] = []
+
+  const pushNode = (node: EditorNode, depth: number) => {
+    rows.push({ kind: "node", node, depth })
+    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return
+    for (const diagram of nodeDiagrams(node.id)) {
+      rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })
+    }
+    for (const child of filteredChildNodes(node.id)) {
+      pushNode(child, depth + 1)
+    }
+  }
+
+  for (const rootNode of filteredRootNodes.value) {
+    pushNode(rootNode, 0)
+  }
+  return rows
+})
+
 defineExpose({ expandToNode, focusNode })
 </script>
 
@@ -344,398 +379,159 @@ defineExpose({ expandToNode, focusNode })
       @dragover.self.prevent="onTreeDragOver($event, null)"
       @drop.self.prevent="onTreeDrop($event, null)"
     >
-      <div v-if="filteredRootNodes.length === 0" class="tree__empty">
+      <div v-if="treeRows.length === 0" class="tree__empty">
         <UiIcon name="account_tree" class="tree__empty-icon" />
         <span class="tree__empty-text">{{ t("models.noNodes") }}</span>
         <span class="tree__empty-hint">{{ t("models.createFolderOrNodeHint") }}</span>
       </div>
-      <template v-for="node in filteredRootNodes" :key="node.id">
-        <div class="tree-node">
+      <template v-for="row in treeRows" :key="row.kind === 'node' ? row.node.id : row.diagram.id">
+        <div v-if="row.kind === 'node'" class="tree-node">
           <div
-            class="tree-node__row"
-            :class="{ 'tree-node__row--active': selectedNodeId === node.id, ...getDropClass(node.id) }"
-            :data-tree-node-id="node.id"
+            class="tree-node__row tree-node__row--flattened"
+            :class="{ 'tree-node__row--active': selectedNodeId === row.node.id, ...getDropClass(row.node.id) }"
+            :style="{ '--tree-depth': String(row.depth) }"
+            :data-tree-node-id="row.node.id"
             :draggable="!props.navigationOnlyMode"
-            @dragstart="onDragNodeStart($event, node.id)"
-            @dragover.prevent="onTreeDragOver($event, node.id)"
+            @dragstart="onDragNodeStart($event, row.node.id)"
+            @dragover.prevent="onTreeDragOver($event, row.node.id)"
             @dragleave="onTreeDragLeave"
-            @drop.prevent="onTreeDrop($event, node.id)"
+            @drop.prevent="onTreeDrop($event, row.node.id)"
           >
             <button
-              v-if="isDirectory(node)"
+              v-if="isDirectory(row.node)"
               type="button"
               class="tree-node__toggle"
-              @click="toggleNode(node.id)"
+              @click="toggleNode(row.node.id)"
             >
-              <UiIcon :name="expandedNodes.has(node.id) ? 'expand_more' : 'chevron_right'" />
+              <UiIcon :name="expandedNodes.has(row.node.id) ? 'expand_more' : 'chevron_right'" />
             </button>
             <button
               type="button"
               class="tree-node__select"
-              :class="{ 'tree-node__select--unused': !isDirectory(node) && !isNodeUsed(node.id) }"
-              @click="emit('selectNode', node.id)"
-              @dblclick="isDirectory(node) && toggleNode(node.id)"
+              :class="{ 'tree-node__select--unused': !isDirectory(row.node) && !isNodeUsed(row.node.id) }"
+              @click="emit('selectNode', row.node.id)"
+              @dblclick="isDirectory(row.node) && toggleNode(row.node.id)"
             >
               <img
-                v-if="nodeTypeIconById.get(node.nodeTypeId)"
+                v-if="nodeTypeIconById.get(row.node.nodeTypeId)"
                 class="tree-node__icon-svg"
-                :src="`/icons/${nodeTypeIconById.get(node.nodeTypeId)}.svg`"
-                :alt="node.name"
+                :src="`/icons/${nodeTypeIconById.get(row.node.nodeTypeId)}.svg`"
+                :alt="row.node.name"
               >
               <UiIcon
                 v-else
-                :name="isDirectory(node) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
+                :name="isDirectory(row.node) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
                 class="tree-node__icon-symbol"
               />
               <input
-                v-if="renamingNodeId === node.id"
+                v-if="renamingNodeId === row.node.id"
                 v-model="renamingNodeName"
                 class="tree-node__rename-input"
                 type="text"
                 @click.stop
-                @keydown.enter.prevent="commitRenameNode(node)"
+                @keydown.enter.prevent="commitRenameNode(row.node)"
                 @keydown.esc.prevent="cancelRenameNode"
-                @blur="commitRenameNode(node)"
+                @blur="commitRenameNode(row.node)"
               >
-              <span v-else class="tree-node__name">{{ node.name }}</span>
-              <span v-if="!isDirectory(node)" class="tree-node__type">{{ nodeTypeNameById.get(node.nodeTypeId) }}</span>
+              <span v-else class="tree-node__name">{{ row.node.name }}</span>
+              <span v-if="!isDirectory(row.node)" class="tree-node__type">{{ nodeTypeNameById.get(row.node.nodeTypeId) }}</span>
             </button>
             <div class="tree-node__actions">
               <button
-                v-if="isDirectory(node)"
+                v-if="isDirectory(row.node)"
                 type="button"
                 class="mini-btn"
                 :title="t('models.addChildFolder')"
-                @click.stop="emit('createFolder', node.id)"
+                @click.stop="emit('createFolder', row.node.id)"
               >
                 <UiIcon name="create_new_folder" />
               </button>
               <button
-                v-if="isDirectory(node)"
+                v-if="isDirectory(row.node)"
                 type="button"
                 class="mini-btn"
                 :title="t('models.addChildNode')"
-                @click.stop="emit('createNode', node.id)"
+                @click.stop="emit('createNode', row.node.id)"
               >
                 <UiIcon name="add_box" />
               </button>
               <button
-                v-if="isDirectory(node)"
+                v-if="isDirectory(row.node)"
                 type="button"
                 class="mini-btn"
                 :title="t('models.createDiagramTitle')"
-                @click.stop="emit('createDiagram', node.id)"
+                @click.stop="emit('createDiagram', row.node.id)"
               >
                 <UiIcon name="add_chart" />
               </button>
               <button
-                v-if="isDirectory(node)"
+                v-if="isDirectory(row.node)"
                 type="button"
                 class="mini-btn"
                 :title="t('models.renameFolder')"
-                @click.stop="startRenameNode(node)"
+                @click.stop="startRenameNode(row.node)"
               >
                 <UiIcon name="edit" />
               </button>
-              <button type="button" class="mini-btn mini-btn--danger" :title="t('common.delete')" @click.stop="emit('deleteNode', node.id)">
+              <button
+                type="button"
+                class="mini-btn mini-btn--danger"
+                :title="t('common.delete')"
+                @click.stop="emit('deleteNode', row.node.id)"
+              >
                 <UiIcon name="delete" />
               </button>
             </div>
           </div>
+        </div>
 
-          <div v-if="expandedNodes.has(node.id)" class="tree-node__children">
-            <div
-              v-for="diagram in nodeDiagrams(node.id)"
-              :key="diagram.id"
-              class="diagram-row"
-              :class="{ 'diagram-row--active': selectedDiagramId === diagram.id }"
-              :draggable="!props.navigationOnlyMode"
-              @dragstart="onDragDiagramStart($event, diagram.id)"
+        <div
+          v-else
+          class="diagram-row diagram-row--flattened"
+          :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
+          :style="{ '--tree-depth': String(row.depth) }"
+          :draggable="!props.navigationOnlyMode"
+          @dragstart="onDragDiagramStart($event, row.diagram.id)"
+        >
+          <button
+            v-if="renamingDiagramId !== row.diagram.id"
+            type="button"
+            class="diagram-row__select"
+            :title="t('models.openDiagramDoubleClick')"
+            @dblclick="emit('openDiagram', row.diagram.id)"
+          >
+            <UiIcon name="table_chart" />
+            <span>{{ row.diagram.name }}</span>
+            <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
+          </button>
+          <div v-else class="diagram-row__select diagram-row__rename-wrap">
+            <UiIcon name="table_chart" />
+            <input
+              v-model="renamingDiagramName"
+              class="diagram-row__rename-input"
+              type="text"
+              @click.stop
+              @keydown.enter.prevent="commitRenameDiagram(row.diagram)"
+              @keydown.esc.prevent="cancelRenameDiagram"
+              @blur="commitRenameDiagram(row.diagram)"
             >
-              <button
-                v-if="renamingDiagramId !== diagram.id"
-                type="button"
-                class="diagram-row__select"
-                :title="t('models.openDiagramDoubleClick')"
-                @dblclick="emit('openDiagram', diagram.id)"
-              >
-                <UiIcon name="table_chart" />
-                <span>{{ diagram.name }}</span>
-                <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
-              </button>
-              <div
-                v-else
-                class="diagram-row__select diagram-row__rename-wrap"
-              >
-                <UiIcon name="table_chart" />
-                <input
-                  v-model="renamingDiagramName"
-                  class="diagram-row__rename-input"
-                  type="text"
-                  @click.stop
-                  @keydown.enter.prevent="commitRenameDiagram(diagram)"
-                  @keydown.esc.prevent="cancelRenameDiagram"
-                  @blur="commitRenameDiagram(diagram)"
-                >
-              </div>
-              <button
-                v-if="renamingDiagramId !== diagram.id"
-                type="button"
-                class="mini-btn diagram-row__edit-btn"
-                :title="t('models.renameDiagram')"
-                @click.stop="startRenameDiagram(diagram)"
-              >
-                <UiIcon name="edit" />
-              </button>
-              <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
-                <UiIcon name="delete" />
-              </button>
-            </div>
-
-            <div
-              v-for="child in filteredChildNodes(node.id)"
-              :key="child.id"
-              class="tree-node tree-node--nested"
-            >
-              <div
-                class="tree-node__row"
-                :class="{ 'tree-node__row--active': selectedNodeId === child.id, ...getDropClass(child.id) }"
-                :data-tree-node-id="child.id"
-                :draggable="!props.navigationOnlyMode"
-                @dragstart="onDragNodeStart($event, child.id)"
-                @dragover.prevent="onTreeDragOver($event, child.id)"
-                @dragleave="onTreeDragLeave"
-                @drop.prevent="onTreeDrop($event, child.id)"
-              >
-                <button
-                  v-if="isDirectory(child)"
-                  type="button"
-                  class="tree-node__toggle"
-                  @click="toggleNode(child.id)"
-                >
-                  <UiIcon :name="expandedNodes.has(child.id) ? 'expand_more' : 'chevron_right'" />
-                </button>
-                <button
-                  type="button"
-                  class="tree-node__select"
-                  :class="{ 'tree-node__select--unused': !isDirectory(child) && !isNodeUsed(child.id) }"
-                  @click="emit('selectNode', child.id)"
-                  @dblclick="isDirectory(child) && toggleNode(child.id)"
-                >
-                  <img
-                    v-if="nodeTypeIconById.get(child.nodeTypeId)"
-                    class="tree-node__icon-svg"
-                    :src="`/icons/${nodeTypeIconById.get(child.nodeTypeId)}.svg`"
-                    :alt="child.name"
-                  >
-                  <UiIcon
-                    v-else
-                    :name="isDirectory(child) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
-                    class="tree-node__icon-symbol"
-                  />
-                  <input
-                    v-if="renamingNodeId === child.id"
-                    v-model="renamingNodeName"
-                    class="tree-node__rename-input"
-                    type="text"
-                    @click.stop
-                    @keydown.enter.prevent="commitRenameNode(child)"
-                    @keydown.esc.prevent="cancelRenameNode"
-                    @blur="commitRenameNode(child)"
-                  >
-                  <span v-else class="tree-node__name">{{ child.name }}</span>
-                  <span v-if="!isDirectory(child)" class="tree-node__type">{{ nodeTypeNameById.get(child.nodeTypeId) }}</span>
-                </button>
-                <div class="tree-node__actions">
-                  <button
-                    v-if="isDirectory(child)"
-                    type="button"
-                    class="mini-btn"
-                    :title="t('models.addChildFolder')"
-                    @click.stop="emit('createFolder', child.id)"
-                  >
-                    <UiIcon name="create_new_folder" />
-                  </button>
-                  <button
-                    v-if="isDirectory(child)"
-                    type="button"
-                    class="mini-btn"
-                    :title="t('models.addChildNode')"
-                    @click.stop="emit('createNode', child.id)"
-                  >
-                    <UiIcon name="add_box" />
-                  </button>
-                  <button
-                    v-if="isDirectory(child)"
-                    type="button"
-                    class="mini-btn"
-                    :title="t('models.renameFolder')"
-                    @click.stop="startRenameNode(child)"
-                  >
-                    <UiIcon name="edit" />
-                  </button>
-                  <button
-                    v-if="isDirectory(child)"
-                    type="button"
-                    class="mini-btn"
-                    @click.stop="emit('createDiagram', child.id)"
-                  >
-                    <UiIcon name="add_chart" />
-                  </button>
-                  <button type="button" class="mini-btn mini-btn--danger" @click.stop="emit('deleteNode', child.id)">
-                    <UiIcon name="delete" />
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="isDirectory(child) && expandedNodes.has(child.id)" class="tree-node__children">
-                <div
-                  v-for="diagram in nodeDiagrams(child.id)"
-                  :key="diagram.id"
-                  class="diagram-row"
-                  :class="{ 'diagram-row--active': selectedDiagramId === diagram.id }"
-                  :draggable="!props.navigationOnlyMode"
-                  @dragstart="onDragDiagramStart($event, diagram.id)"
-                >
-                  <button
-                    v-if="renamingDiagramId !== diagram.id"
-                    type="button"
-                    class="diagram-row__select"
-                    :title="t('models.openDiagramDoubleClick')"
-                    @dblclick="emit('openDiagram', diagram.id)"
-                  >
-                    <UiIcon name="table_chart" />
-                    <span>{{ diagram.name }}</span>
-                    <span v-if="selectedDiagramId === diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
-                  </button>
-                  <div
-                    v-else
-                    class="diagram-row__select diagram-row__rename-wrap"
-                  >
-                    <UiIcon name="table_chart" />
-                    <input
-                      v-model="renamingDiagramName"
-                      class="diagram-row__rename-input"
-                      type="text"
-                      @click.stop
-                      @keydown.enter.prevent="commitRenameDiagram(diagram)"
-                      @keydown.esc.prevent="cancelRenameDiagram"
-                      @blur="commitRenameDiagram(diagram)"
-                    >
-                  </div>
-                  <button
-                    v-if="renamingDiagramId !== diagram.id"
-                    type="button"
-                    class="mini-btn diagram-row__edit-btn"
-                    :title="t('models.renameDiagram')"
-                    @click.stop="startRenameDiagram(diagram)"
-                  >
-                    <UiIcon name="edit" />
-                  </button>
-                  <button type="button" class="mini-btn mini-btn--danger" @click="emit('deleteDiagram', diagram.id)">
-                    <UiIcon name="delete" />
-                  </button>
-                </div>
-
-                <div
-                  v-for="grandchild in filteredChildNodes(child.id)"
-                  :key="grandchild.id"
-                  class="tree-node tree-node--nested"
-                >
-                  <div
-                    class="tree-node__row"
-                    :class="{ 'tree-node__row--active': selectedNodeId === grandchild.id, ...getDropClass(grandchild.id) }"
-                    :data-tree-node-id="grandchild.id"
-                    :draggable="!props.navigationOnlyMode"
-                    @dragstart="onDragNodeStart($event, grandchild.id)"
-                    @dragover.prevent="onTreeDragOver($event, grandchild.id)"
-                    @dragleave="onTreeDragLeave"
-                    @drop.prevent="onTreeDrop($event, grandchild.id)"
-                  >
-                    <button
-                      v-if="isDirectory(grandchild)"
-                      type="button"
-                      class="tree-node__toggle"
-                      @click="toggleNode(grandchild.id)"
-                    >
-                      <UiIcon :name="expandedNodes.has(grandchild.id) ? 'expand_more' : 'chevron_right'" />
-                    </button>
-                    <button
-                      type="button"
-                      class="tree-node__select"
-                      :class="{ 'tree-node__select--unused': !isDirectory(grandchild) && !isNodeUsed(grandchild.id) }"
-                      @click="emit('selectNode', grandchild.id)"
-                      @dblclick="isDirectory(grandchild) && toggleNode(grandchild.id)"
-                    >
-                      <img
-                        v-if="nodeTypeIconById.get(grandchild.nodeTypeId)"
-                        class="tree-node__icon-svg"
-                        :src="`/icons/${nodeTypeIconById.get(grandchild.nodeTypeId)}.svg`"
-                        :alt="grandchild.name"
-                      >
-                      <UiIcon
-                        v-else
-                        :name="isDirectory(grandchild) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
-                        class="tree-node__icon-symbol"
-                      />
-                      <input
-                        v-if="renamingNodeId === grandchild.id"
-                        v-model="renamingNodeName"
-                        class="tree-node__rename-input"
-                        type="text"
-                        @click.stop
-                        @keydown.enter.prevent="commitRenameNode(grandchild)"
-                        @keydown.esc.prevent="cancelRenameNode"
-                        @blur="commitRenameNode(grandchild)"
-                      >
-                      <span v-else class="tree-node__name">{{ grandchild.name }}</span>
-                      <span v-if="!isDirectory(grandchild)" class="tree-node__type">{{ nodeTypeNameById.get(grandchild.nodeTypeId) }}</span>
-                    </button>
-                    <div class="tree-node__actions">
-                      <button
-                        v-if="isDirectory(grandchild)"
-                        type="button"
-                        class="mini-btn"
-                        :title="t('models.addChildFolder')"
-                        @click.stop="emit('createFolder', grandchild.id)"
-                      >
-                        <UiIcon name="create_new_folder" />
-                      </button>
-                      <button
-                        v-if="isDirectory(grandchild)"
-                        type="button"
-                        class="mini-btn"
-                        :title="t('models.addChildNode')"
-                        @click.stop="emit('createNode', grandchild.id)"
-                      >
-                        <UiIcon name="add_box" />
-                      </button>
-                      <button
-                        v-if="isDirectory(grandchild)"
-                        type="button"
-                        class="mini-btn"
-                        :title="t('models.renameFolder')"
-                        @click.stop="startRenameNode(grandchild)"
-                      >
-                        <UiIcon name="edit" />
-                      </button>
-                      <button
-                        v-if="isDirectory(grandchild)"
-                        type="button"
-                        class="mini-btn"
-                        @click.stop="emit('createDiagram', grandchild.id)"
-                      >
-                        <UiIcon name="add_chart" />
-                      </button>
-                      <button type="button" class="mini-btn mini-btn--danger" @click.stop="emit('deleteNode', grandchild.id)">
-                        <UiIcon name="delete" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
+          <button
+            v-if="renamingDiagramId !== row.diagram.id"
+            type="button"
+            class="mini-btn diagram-row__edit-btn"
+            :title="t('models.renameDiagram')"
+            @click.stop="startRenameDiagram(row.diagram)"
+          >
+            <UiIcon name="edit" />
+          </button>
+          <button
+            type="button"
+            class="mini-btn mini-btn--danger"
+            @click="emit('deleteDiagram', row.diagram.id)"
+          >
+            <UiIcon name="delete" />
+          </button>
         </div>
       </template>
     </div>
@@ -986,6 +782,10 @@ defineExpose({ expandToNode, focusNode })
   transition: background 0.15s ease, border-left-color 0.15s ease;
 }
 
+.tree-node__row--flattened {
+  padding-left: calc(10px + (var(--tree-depth, 0) * 16px));
+}
+
 .tree-node__row:hover {
   background: var(--surface-strong);
 }
@@ -1134,6 +934,11 @@ defineExpose({ expandToNode, focusNode })
   border-left: 3px solid transparent;
   box-sizing: border-box;
   transition: background 0.15s ease, border-left-color 0.15s ease;
+}
+
+.diagram-row--flattened {
+  margin-left: 0;
+  padding-left: calc(10px + (var(--tree-depth, 0) * 16px));
 }
 
 .diagram-row:hover {

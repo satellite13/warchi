@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-21
+
+### Added
+- Added support for `FILE` resources in the frontend permission contract for policy-based access checks.
+
+### Changed
+- Migrated critical editor actions to policy-driven permission checks and removed remaining role-based privileged branches.
+- Extended permission resource coverage for node and link types to keep UI authorization behavior consistent.
+
 ## [0.1.4] - 2026-03-20
 
 ### Added

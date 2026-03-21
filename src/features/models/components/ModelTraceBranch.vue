@@ -45,7 +45,7 @@ const isCycle = (nodeId: string) => props.path.includes(nodeId)
             type="button"
             class="tb__node"
             :class="{ 'tb__node--cycle': isCycle(resolveNextNodeId(link)) }"
-            @dblclick="emit('setRoot', resolveNextNodeId(link))"
+            @click="emit('setRoot', resolveNextNodeId(link))"
           >
             <span class="tb__node-dot" />
             <span class="tb__node-name">

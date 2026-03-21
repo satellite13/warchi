@@ -2482,6 +2482,24 @@ const handleFindInTree = (modelNodeId: string) => {
   treePanelRef.value?.focusNode?.(modelNodeId)
 }
 
+const handleTraceabilityFocusNode = (modelNodeId: string) => {
+  const diagram = activeDiagram.value
+  if (!diagram) return
+  const hasNodeOnDiagram = diagram.parsedAttrs.instances.nodes.some(
+    instance => instance.modelNodeId === modelNodeId
+  )
+  if (!hasNodeOnDiagram) return
+
+  selectedModelLinkId.value = null
+  selectedEdgeInstanceId.value = null
+  selectedInstanceIds.value = []
+  selectedModelNodeIds.value = [modelNodeId]
+
+  nextTick(() => {
+    diagramCanvasRef.value?.zoomToSelection()
+  })
+}
+
 const handleTreeSelectNode = (nodeId: string) => {
   selectedNodeId.value = nodeId
   if (!selectionSyncEnabled.value) return
@@ -3563,6 +3581,8 @@ onBeforeUnmount(() => {
               :nodes="state.nodes.filter(node => !node._isDeleted)"
               :links="state.links.filter(link => !link._isDeleted)"
               :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
+              @open-diagram="selectDiagram"
+              @focus-node="handleTraceabilityFocusNode"
             />
             <NodeStylePanel
               v-if="activeRightTab === 'style' && canShowStyleTab"
@@ -3580,6 +3600,8 @@ onBeforeUnmount(() => {
               :nodes="state.nodes.filter((n) => !n._isDeleted)"
               :links="state.links.filter((l) => !l._isDeleted)"
               :diagrams="state.diagrams.filter((d) => !d._isDeleted)"
+              @open-diagram="selectDiagram"
+              @focus-node="handleTraceabilityFocusNode"
             />
           </TabPanel>
         </template>

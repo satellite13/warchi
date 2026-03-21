@@ -13,6 +13,11 @@ const props = defineProps<{
   diagrams: EditorDiagram[]
 }>()
 
+const emit = defineEmits<{
+  'open-diagram': [diagramId: string]
+  'focus-node': [nodeId: string]
+}>()
+
 const { t } = useI18n()
 
 const direction = ref<DirectionMode>('down')
@@ -22,6 +27,7 @@ const forwardStack = ref<string[]>([])
 const expandedLinkKeys = ref<Set<string>>(new Set())
 const diagramsOpen = ref(true)
 const treeOpen = ref(true)
+const suppressNextSelectionReset = ref(false)
 
 const nodeById = computed(() => {
   const map = new Map<string, EditorNode>()
@@ -91,6 +97,11 @@ const incomingCount = computed(() => {
 watch(
   () => props.selectedNode?.id ?? null,
   (nodeId) => {
+    if (suppressNextSelectionReset.value && nodeId === rootNodeId.value) {
+      suppressNextSelectionReset.value = false
+      return
+    }
+    suppressNextSelectionReset.value = false
     rootNodeId.value = nodeId
     backStack.value = []
     forwardStack.value = []
@@ -99,6 +110,12 @@ watch(
   },
   { immediate: true },
 )
+
+const focusRootOnDiagram = () => {
+  if (!rootNodeId.value) return
+  suppressNextSelectionReset.value = true
+  emit('focus-node', rootNodeId.value)
+}
 
 const getLinksForNode = (nodeId: string): EditorLink[] =>
   direction.value === 'down'
@@ -205,25 +222,13 @@ const toggleDirection = () => {
     </div>
 
     <template v-else>
-      <!-- Breadcrumb navigation -->
-      <div v-if="breadcrumbs.length > 1" class="tp-breadcrumb">
-        <template v-for="(crumb, idx) in breadcrumbs" :key="crumb.id">
-          <span v-if="idx > 0" class="tp-breadcrumb__sep">/</span>
-          <button
-            type="button"
-            class="tp-breadcrumb__item"
-            :class="{ 'tp-breadcrumb__item--current': idx === breadcrumbs.length - 1 }"
-            :disabled="idx === breadcrumbs.length - 1"
-            @click="navigateToBreadcrumb(crumb.id)"
-          >
-            {{ crumb.name }}
-          </button>
-        </template>
-      </div>
-
       <!-- Diagrams section -->
       <div class="tp-section">
-        <button type="button" class="tp-section__head" @click="diagramsOpen = !diagramsOpen">
+        <button
+          type="button"
+          class="tp-section__head tp-section__head--no-hover"
+          @click="diagramsOpen = !diagramsOpen"
+        >
           <UiIcon
             name="chevron_right"
             class="tp-section__chevron"
@@ -243,6 +248,9 @@ const toggleDirection = () => {
                 v-for="diagram in diagramsUsingRootNode"
                 :key="diagram.id"
                 class="tp-diagram"
+                @mousedown.prevent
+                @selectstart.prevent
+                @dblclick.prevent="emit('open-diagram', diagram.id)"
               >
                 <UiIcon name="table_chart" class="tp-diagram__icon" />
                 <span class="tp-diagram__name">{{ diagram.name }}</span>
@@ -312,8 +320,22 @@ const toggleDirection = () => {
 
         <Transition name="tp-collapse">
           <div v-if="treeOpen && rootNode" class="tp-section__body tp-section__body--tree">
+            <div v-if="breadcrumbs.length > 1" class="tp-breadcrumb tp-breadcrumb--in-tree">
+              <template v-for="(crumb, idx) in breadcrumbs" :key="crumb.id">
+                <span v-if="idx > 0" class="tp-breadcrumb__sep">/</span>
+                <button
+                  type="button"
+                  class="tp-breadcrumb__item"
+                  :class="{ 'tp-breadcrumb__item--current': idx === breadcrumbs.length - 1 }"
+                  :disabled="idx === breadcrumbs.length - 1"
+                  @click="navigateToBreadcrumb(crumb.id)"
+                >
+                  {{ crumb.name }}
+                </button>
+              </template>
+            </div>
             <div class="tp-tree">
-              <div class="tp-tree__root">
+              <div class="tp-tree__root" @click="focusRootOnDiagram">
                 <span class="tp-tree__root-dot" />
                 <span class="tp-tree__root-name">{{ rootNode.name }}</span>
               </div>
@@ -382,6 +404,11 @@ const toggleDirection = () => {
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: none;
+}
+
+.tp-breadcrumb--in-tree {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
 }
 
 .tp-breadcrumb::-webkit-scrollbar {
@@ -457,6 +484,10 @@ const toggleDirection = () => {
 
 .tp-section__head:hover {
   background: var(--surface-strong);
+}
+
+.tp-section__head--no-hover:hover {
+  background: none;
 }
 
 .tp-section__head--tree {
@@ -660,7 +691,15 @@ const toggleDirection = () => {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
   transition: background 0.12s ease;
+}
+
+.tp-diagram * {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .tp-diagram:hover {
@@ -706,6 +745,7 @@ const toggleDirection = () => {
   border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
   border-radius: 6px;
   margin-bottom: 4px;
+  cursor: pointer;
 }
 
 .tp-tree__root-dot {

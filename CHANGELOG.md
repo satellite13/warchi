@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-22
+
+### Added
+- Added traceability exploration capabilities in Model Editor with focused trace branch inspection.
+- Added traceability panel enhancements for clearer branch structure and navigation context.
+
+### Changed
+- Improved Model Editor traceability interactions and focus behavior for faster dependency analysis.
+- Updated related localization strings for the new traceability UX.
+
 ## [0.2.1] - 2026-03-21
 
 ### Added

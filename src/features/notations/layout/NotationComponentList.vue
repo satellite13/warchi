@@ -234,7 +234,13 @@ watch(tagsExpanded, (value) => {
         @keydown.enter.prevent="emit('select', item.kind, item.id)"
         @keydown.space.prevent="emit('select', item.kind, item.id)"
       >
+        <UiIcon
+          v-if="item.kind === 'relation'"
+          :name="DEFAULT_ENTITY_ICONS.link"
+          class="component-item__icon"
+        />
         <img
+          v-else
           :src="`/icons/${item.paletteIcon}.svg`"
           :alt="item.name"
           class="component-item__icon-img"

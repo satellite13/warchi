@@ -452,14 +452,18 @@ function handleInteractiveIconChange(value: string) {
   font-weight: 500;
   color: var(--primary);
   background: var(--primary-soft);
-  padding: 2px 8px;
+  padding: 0 8px;
+  height: 18px;
   border-radius: 6px;
   white-space: nowrap;
   flex-shrink: 0;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .property-row__type-icon {
-  font-size: 13px;
+  width: 11px !important;
+  height: 11px !important;
 }
 
 .property-row__required-badge {
@@ -467,10 +471,15 @@ function handleInteractiveIconChange(value: string) {
   font-weight: 500;
   color: var(--warning);
   background: var(--warning-soft);
-  padding: 2px 8px;
+  padding: 0 8px;
+  height: 18px;
   border-radius: 6px;
   white-space: nowrap;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .property-row__system-badge {
@@ -478,10 +487,15 @@ function handleInteractiveIconChange(value: string) {
   font-weight: 500;
   color: var(--info, #0ea5e9);
   background: var(--info-soft, rgba(14, 165, 233, 0.12));
-  padding: 2px 8px;
+  padding: 0 8px;
+  height: 18px;
   border-radius: 6px;
   white-space: nowrap;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .property-row__body {
@@ -547,8 +561,8 @@ function handleInteractiveIconChange(value: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -582,18 +596,38 @@ function handleInteractiveIconChange(value: string) {
   font-weight: 500;
   color: var(--accent);
   background: var(--accent-soft);
-  padding: 2px 8px;
+  padding: 0 8px;
+  height: 18px;
   border-radius: 6px;
   white-space: nowrap;
   flex-shrink: 0;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .property-row--sm .property-row__from-type-badge {
-  padding: 1px 7px;
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
 }
 
 .property-row__from-type-icon {
-  font-size: 13px;
+  width: 11px !important;
+  height: 11px !important;
+}
+
+.property-row--sm .property-row__type-badge,
+.property-row--sm .property-row__required-badge,
+.property-row--sm .property-row__system-badge {
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.property-row--sm .property-row__type-icon,
+.property-row--sm .property-row__from-type-icon {
+  width: 10px !important;
+  height: 10px !important;
 }
 
 .property-row__warning {

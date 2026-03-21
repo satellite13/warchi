@@ -755,8 +755,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -767,7 +767,8 @@ onBeforeUnmount(() => {
 }
 
 .link-btn--icon .ui-icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .link-btn--icon:hover {

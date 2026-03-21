@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
@@ -47,6 +47,22 @@ const filteredCustomProperties = computed(() => {
   if (!query) return allProps
   return allProps.filter((p) => p.name.toLowerCase().includes(query))
 })
+
+watch(
+  () => [props.selectedType.id, (props.selectedType.parsedAttrs.customProperties ?? []).map((p) => p.id)] as const,
+  ([typeId, nextIds], [prevTypeId, prevIds]) => {
+    if (typeId !== prevTypeId) {
+      expandedIds.clear()
+      return
+    }
+    const prevSet = new Set(prevIds)
+    for (const id of nextIds) {
+      if (!prevSet.has(id)) {
+        expandedIds.add(id)
+      }
+    }
+  }
+)
 </script>
 
 <template>
@@ -185,14 +201,6 @@ const filteredCustomProperties = computed(() => {
           class="form-section__empty"
         >
           {{ t("types.noProperties") }}
-          <button
-            type="button"
-            class="link-btn--icon"
-            :title="t('types.addProperty')"
-            @click="emit('addProperty')"
-          >
-            <UiIcon name="add" />
-          </button>
         </div>
 
         <div v-else-if="filteredCustomProperties.length === 0" class="form-section__empty">
@@ -407,8 +415,8 @@ const filteredCustomProperties = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -419,7 +427,8 @@ const filteredCustomProperties = computed(() => {
 }
 
 .add-btn .ui-icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .add-btn:hover {
@@ -427,31 +436,6 @@ const filteredCustomProperties = computed(() => {
   border-color: var(--primary);
   color: var(--primary);
   transform: scale(1.08);
-}
-
-.link-btn--icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.link-btn--icon .ui-icon {
-  font-size: 16px;
-}
-
-.link-btn--icon:hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
 }
 
 /* Properties */

@@ -1053,6 +1053,10 @@ function isStickyNoteNode(node: DiagramNode): boolean {
   return isCustomShapeNode(node) && (node as unknown as { noteShape?: boolean }).noteShape === true
 }
 
+function isFolderTabNode(node: DiagramNode): boolean {
+  return isCustomShapeNode(node) && (node as unknown as { folderShape?: boolean }).folderShape === true
+}
+
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
   if (node instanceof DiamondNode) return 'diamond'
   if (node instanceof CircleNode) return 'circle'
@@ -1086,12 +1090,22 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   }
 
   const stickyNoteFactory = diagramShapeFactories['sticky-note']
+  const folderTabFactory = diagramShapeFactories['folder-tab']
   const beveledFactory = diagramShapeFactories['beveled-rectangle']
   const trapezoidFactory = diagramShapeFactories['trapezoid']
   const slantedFactory = diagramShapeFactories['slanted-rectangle']
 
   let node: DiagramNode
-  if (isNoteInstance(instance) && shape === 'rectangle') {
+  if (isDirectoryNoteInstance(instance) && shape === 'rectangle') {
+    const folderNode = new CustomShapeNode({
+      ...commonOptions,
+      path: folderTabFactory.path,
+      svgPath: folderTabFactory.svgPath,
+    })
+    folderNode.shapeType = 'rectangle'
+    ;(folderNode as unknown as { folderShape?: boolean }).folderShape = true
+    node = folderNode
+  } else if (isNoteInstance(instance) && shape === 'rectangle') {
     const noteNode = new CustomShapeNode({
       ...commonOptions,
       path: stickyNoteFactory.path,
@@ -1172,10 +1186,13 @@ function syncDiagram() {
       const ds = getEffectiveStyle(instance)
       const expectedShape = getComponentShape(ds)
       const existingShape = getNodeShapeFromNode(existing)
-      const shouldUseStickyNote = isNoteInstance(instance) && expectedShape === 'rectangle'
+      const shouldUseFolderTab = isDirectoryNoteInstance(instance) && expectedShape === 'rectangle'
+      const shouldUseStickyNote =
+        isNoteInstance(instance) && !isDirectoryNoteInstance(instance) && expectedShape === 'rectangle'
+      const needsFolderTabRebuild = shouldUseFolderTab && !isFolderTabNode(existing)
       const needsStickyNoteRebuild = shouldUseStickyNote && !isStickyNoteNode(existing)
 
-      if (expectedShape !== existingShape || needsStickyNoteRebuild) {
+      if (expectedShape !== existingShape || needsFolderTabRebuild || needsStickyNoteRebuild) {
         renderer.removeNode(papNodeId)
         renderer.addNode(createInstanceNode(instance))
         continue

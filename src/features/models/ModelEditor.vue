@@ -1586,10 +1586,11 @@ const pasteCopiedNotes = (): boolean => {
   const pasteOffset = NOTE_PASTE_STEP * (notePasteCount.value + 1)
   const pastedNotes = noteClipboard.value.map(source => {
     const nextId = createId()
+    const isDirectoryNote = source.attrs?.isDirectoryNote === true
     return {
       ...deepClone(source),
       id: nextId,
-      modelNodeId: `${NOTE_NODE_PREFIX}${nextId}`,
+      modelNodeId: isDirectoryNote ? source.modelNodeId : `${NOTE_NODE_PREFIX}${nextId}`,
       x: source.x + pasteOffset,
       y: source.y + pasteOffset,
     } satisfies DiagramNodeInstance
@@ -1716,11 +1717,6 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
           labelAlign: 'left',
           labelInset: 12,
           labelPlacement: 'center',
-          iconName: 'folder',
-          iconPlacement: 'top-left',
-          iconWidth: 16,
-          iconHeight: 16,
-          iconInset: 8,
         },
       } as Record<string, unknown>,
     }

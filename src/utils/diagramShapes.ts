@@ -9,7 +9,8 @@ export type DiagramShapeId =
   | "beveled-rectangle"
   | "trapezoid"
   | "slanted-rectangle"
-  | "sticky-note";
+  | "sticky-note"
+  | "folder-tab";
 
 export interface DiagramShapeFactory {
   path: (width: number, height: number) => Path2D;
@@ -69,6 +70,28 @@ function stickyNoteSvgPath(w: number, h: number): string {
   return `M 0 0 L ${w - cut} 0 L ${w} ${cut} L ${w} ${h} L 0 ${h} Z`;
 }
 
+function folderTabPath(width: number, height: number): Path2D {
+  const path = new Path2D();
+  const tabHeight = Math.max(8, Math.min(height * 0.18, 16));
+  const tabWidth = Math.max(34, Math.min(width * 0.24, width - 20));
+  const rightSlope = Math.max(5, Math.min(width * 0.03, 8));
+  path.moveTo(0, 0);
+  path.lineTo(tabWidth, 0);
+  path.lineTo(tabWidth + rightSlope, tabHeight);
+  path.lineTo(width, tabHeight);
+  path.lineTo(width, height);
+  path.lineTo(0, height);
+  path.closePath();
+  return path;
+}
+
+function folderTabSvgPath(w: number, h: number): string {
+  const tabHeight = Math.max(8, Math.min(h * 0.18, 16));
+  const tabWidth = Math.max(34, Math.min(w * 0.24, w - 20));
+  const rightSlope = Math.max(5, Math.min(w * 0.03, 8));
+  return `M 0 0 L ${tabWidth} 0 L ${tabWidth + rightSlope} ${tabHeight} L ${w} ${tabHeight} L ${w} ${h} L 0 ${h} Z`;
+}
+
 export const diagramShapeFactories: Record<
   DiagramShapeId,
   DiagramShapeFactory
@@ -88,5 +111,9 @@ export const diagramShapeFactories: Record<
   "sticky-note": {
     path: stickyNotePath,
     svgPath: stickyNoteSvgPath,
+  },
+  "folder-tab": {
+    path: folderTabPath,
+    svgPath: folderTabSvgPath,
   },
 };

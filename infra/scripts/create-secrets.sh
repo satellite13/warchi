@@ -40,6 +40,24 @@ DB_URL="jdbc:postgresql://${PG_HOST}:6432/${DB_NAME}?sslmode=verify-full"
 
 echo -e "${GREEN}[INFO]${NC} Создание secrets в namespace '$NAMESPACE'..."
 
+# 0. Secret для pull из Yandex Container Registry (если доступен yc CLI)
+if command -v yc >/dev/null 2>&1; then
+  echo -e "${GREEN}[INFO]${NC} Создание secret yc-cr-pull-secret..."
+  YC_IAM_TOKEN=$(yc iam create-token)
+  if [ -n "$YC_IAM_TOKEN" ]; then
+    kubectl create secret docker-registry yc-cr-pull-secret \
+      --namespace "$NAMESPACE" \
+      --docker-server=cr.yandex \
+      --docker-username=oauth \
+      --docker-password="$YC_IAM_TOKEN" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  else
+    echo -e "${YELLOW}[WARN]${NC} Не удалось получить IAM token через yc, пропускаем yc-cr-pull-secret"
+  fi
+else
+  echo -e "${YELLOW}[WARN]${NC} yc CLI не найден, пропускаем yc-cr-pull-secret"
+fi
+
 # 1. Secret для PostgreSQL
 echo -e "${GREEN}[INFO]${NC} Создание secret arepos-db-secret..."
 kubectl create secret generic arepos-db-secret \

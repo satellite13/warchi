@@ -6,6 +6,7 @@ set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -75,7 +76,11 @@ docker buildx build \
   .
 
 echo -e "${GREEN}[INFO]${NC} Push: $REMOTE_IMAGE"
-docker push "$REMOTE_IMAGE"
+if [ "${SKIP_DOCKER_PUSH:-false}" = "true" ]; then
+  echo -e "${YELLOW}[WARN]${NC} SKIP_DOCKER_PUSH=true, пропускаем docker push"
+else
+  docker push "$REMOTE_IMAGE"
+fi
 
 # Helm deploy
 echo -e "${GREEN}[INFO]${NC} Деплой через Helm..."
@@ -94,4 +99,4 @@ helm upgrade --install arepos-server "$AREPOS_DIR/charts/arepos-server" \
 rm -f "$TEMP_VALUES"
 
 echo -e "${GREEN}[INFO]${NC} arepos-server $VERSION задеплоен"
-kubectl rollout status deployment/arepos-server -n "$NAMESPACE" --timeout=180s
+kubectl rollout status deployment/arepos-server -n "$NAMESPACE" --timeout=600s

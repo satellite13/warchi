@@ -3,7 +3,10 @@
 
 image:
   repository: cr.yandex/<REGISTRY_ID>/arepos-server
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: yc-cr-pull-secret
 
 # Отключаем in-cluster PostgreSQL — используем Yandex Managed PostgreSQL
 postgresql:
@@ -45,3 +48,30 @@ env:
       secretKeyRef:
         name: arepos-server-auth-secret
         key: admin-secret
+
+# Cerbos (in-cluster) в режиме ENFORCE
+cerbos:
+  enabled: true
+  deploy: true
+  mode: "ENFORCE"
+
+authz:
+  cerbosShadowEnabled: false
+  cerbosEnforceEnabled: true
+  cerbosFailOpen: false
+
+# В ENFORCE-режиме и при холодном старте инициализация может быть долгой.
+startupProbe:
+  failureThreshold: 60
+  periodSeconds: 10
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+
+# ENFORCE + Liquibase + JPA инициализация требует больше памяти на старте.
+resources:
+  requests:
+    cpu: 300m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi

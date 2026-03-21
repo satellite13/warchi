@@ -3,7 +3,10 @@
 
 image:
   repository: cr.yandex/<REGISTRY_ID>/warchi
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: yc-cr-pull-secret
 
 ingress:
   enabled: true

@@ -3574,6 +3574,13 @@ onBeforeUnmount(() => {
               @style-change="handleDiagramElementStyleChange"
               @restore-style="restoreStyleFromNotation"
             />
+            <ModelTraceabilityPanel
+              v-if="activeRightTab === 'traceability'"
+              :selected-node="selectedNode"
+              :nodes="state.nodes.filter((n) => !n._isDeleted)"
+              :links="state.links.filter((l) => !l._isDeleted)"
+              :diagrams="state.diagrams.filter((d) => !d._isDeleted)"
+            />
           </TabPanel>
         </template>
       </ModelMainPanelLayout>

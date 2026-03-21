@@ -21,32 +21,39 @@ const links = computed(() => props.getLinksForNode(props.nodeId))
 const linkLabel = (link: EditorLink) => {
   const source = props.nodeById.get(link.sourceId)?.name ?? link.sourceId
   const target = props.nodeById.get(link.targetId)?.name ?? link.targetId
-  return `${source} -> ${target}`
+  return `${source} → ${target}`
 }
 
 const isCycle = (nodeId: string) => props.path.includes(nodeId)
 </script>
 
 <template>
-  <div class="trace-tree__branch">
-    <div v-for="link in links" :key="link.id" class="trace-tree__item">
-      <button type="button" class="trace-tree__link" @click="toggleLink(nodeId, link.id)">
+  <div v-if="links.length > 0" class="tb">
+    <div v-for="link in links" :key="link.id" class="tb__item">
+      <button type="button" class="tb__link" @click="toggleLink(nodeId, link.id)">
         <UiIcon
-          class="trace-tree__link-expand-icon"
+          class="tb__expand"
           :name="isLinkExpanded(nodeId, link.id) ? 'expand_more' : 'chevron_right'"
         />
-        <UiIcon name="route" class="trace-tree__link-icon" />
-        <span class="trace-tree__link-label">{{ linkLabel(link) }}</span>
+        <UiIcon name="route" class="tb__link-icon" />
+        <span class="tb__link-text">{{ linkLabel(link) }}</span>
       </button>
-      <div v-if="isLinkExpanded(nodeId, link.id)" class="trace-tree__child">
+
+      <div v-if="isLinkExpanded(nodeId, link.id)" class="tb__children">
         <template v-if="nodeById.get(resolveNextNodeId(link))">
           <button
             type="button"
-            class="trace-tree__node"
+            class="tb__node"
+            :class="{ 'tb__node--cycle': isCycle(resolveNextNodeId(link)) }"
             @dblclick="emit('setRoot', resolveNextNodeId(link))"
           >
-            <UiIcon name="account_tree" class="trace-tree__node-icon" />
-            <span class="trace-tree__node-label">{{ nodeById.get(resolveNextNodeId(link))?.name }}</span>
+            <span class="tb__node-dot" />
+            <span class="tb__node-name">
+              {{ nodeById.get(resolveNextNodeId(link))?.name }}
+            </span>
+            <span v-if="isCycle(resolveNextNodeId(link))" class="tb__node-cycle-badge">
+              ∞
+            </span>
           </button>
           <ModelTraceBranch
             v-if="!isCycle(resolveNextNodeId(link))"
@@ -66,59 +73,133 @@ const isCycle = (nodeId: string) => props.path.includes(nodeId)
 </template>
 
 <style scoped>
-.trace-tree__branch {
+.tb {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-left: 14px;
-  padding-left: 10px;
-  border-left: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+  gap: 2px;
+  margin-left: 11px;
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
-.trace-tree__item {
+.tb__item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  position: relative;
 }
 
-.trace-tree__link,
-.trace-tree__node {
+.tb__item::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 13px;
+  width: 10px;
+  height: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.tb__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+
+.tb__link:hover {
+  background: var(--surface-strong);
+  color: var(--base-text);
+}
+
+.tb__expand {
+  width: 14px;
+  height: 14px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.tb__link-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--accent, var(--text-subtle));
+  flex-shrink: 0;
+}
+
+.tb__link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.tb__children {
+  margin-left: 8px;
+  margin-top: 1px;
+}
+
+.tb__node {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 4px 9px;
   border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 0;
-  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+  font-family: inherit;
   cursor: pointer;
-  text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: all 0.12s ease;
 }
 
-.trace-tree__link:hover,
-.trace-tree__node:hover {
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
-  background: var(--surface-strong);
+.tb__node:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: var(--primary-soft);
 }
 
-.trace-tree__link-expand-icon {
-  color: var(--text-subtle);
+.tb__node--cycle {
+  opacity: 0.55;
+  cursor: default;
+  border-style: dashed;
 }
 
-.trace-tree__link-icon,
-.trace-tree__node-icon {
-  color: var(--primary);
+.tb__node--cycle:hover {
+  border-color: var(--border);
+  background: var(--surface-muted);
 }
 
-.trace-tree__link-label,
-.trace-tree__node-label {
+.tb__node-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
+}
+
+.tb__node--cycle .tb__node-dot {
+  background: var(--text-subtle);
+}
+
+.tb__node-name {
+  font-size: 12px;
   color: var(--base-text);
-  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
 }
 
-.trace-tree__child {
-  margin-left: 14px;
-  margin-top: 2px;
+.tb__node-cycle-badge {
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-weight: 600;
 }
-
 </style>

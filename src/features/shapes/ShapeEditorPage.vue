@@ -11,7 +11,7 @@ import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
 import { apiPost } from "../../composables/useApi"
-import { useAuth } from "../../composables/useAuth"
+import { usePermissions } from "../../composables/usePermissions"
 
 const { t } = useI18n()
 const {
@@ -33,7 +33,7 @@ const localName = ref("")
 const localOutline = ref<OutlineSegment[]>([])
 const showDeleteConfirm = ref(false)
 const showShareModal = ref(false)
-const { currentUser, isAdmin } = useAuth()
+const { checkPermission } = usePermissions()
 
 function parseOutlineJson(json: string | null): OutlineSegment[] {
   if (!json) return []
@@ -46,12 +46,7 @@ function parseOutlineJson(json: string | null): OutlineSegment[] {
 }
 
 const canEditSelected = computed(() => selectedDetail.value?.canEdit ?? false)
-const canShareSelected = computed(() => {
-  const shape = selectedDetail.value
-  const userId = currentUser.value?.id
-  if (!shape || !userId) return false
-  return isAdmin.value || shape.ownerId === userId
-})
+const canShareSelected = ref(false)
 
 /** Есть несохранённые изменения относительно данных с сервера */
 const isDirty = computed(() => {
@@ -73,6 +68,7 @@ watch(selectedShapeId, async (id) => {
   selectedDetail.value = null
   localName.value = ""
   localOutline.value = []
+  canShareSelected.value = false
   if (!id) return
   const detail = await fetchById(id)
   selectedDetail.value = detail
@@ -81,6 +77,13 @@ watch(selectedShapeId, async (id) => {
     localOutline.value = parseOutlineJson(detail.outline).length
       ? parseOutlineJson(detail.outline)
       : [...DEFAULT_RECTANGLE_OUTLINE]
+    canShareSelected.value = await checkPermission({
+      resourceType: 'NODE_SHAPE',
+      resourceId: detail.id,
+      action: 'MANAGE',
+    })
+  } else {
+    canShareSelected.value = false
   }
 })
 

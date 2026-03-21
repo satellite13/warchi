@@ -12,6 +12,7 @@ import ShareAccessModal from '../components/modals/ShareAccessModal.vue'
 import { apiGet, apiPost } from '../composables/useApi'
 import { useAuth } from '../composables/useAuth'
 import { useCanShare } from '../composables/useCanShare'
+import { usePermissions } from '../composables/usePermissions'
 import NotationMainPanelLayout from '../features/notations/layout/NotationMainPanelLayout.vue'
 import NotationAppHeader from '../features/notations/layout/NotationAppHeader.vue'
 import NotationComponentList from '../features/notations/layout/NotationComponentList.vue'
@@ -52,8 +53,18 @@ const {
   saveChanges,
 } = useNotationEditor()
 const { currentUser, isAdmin } = useAuth()
+const { checkPermission } = usePermissions()
 const showShareModal = ref(false)
 const { canShare: canShareNotation } = useCanShare(notation, currentUser)
+const canInspectAttrsJson = computed(() => {
+  const permission = notation.value?.accessPermission ?? null
+  return (
+    isAdmin.value ||
+    permission === 'ADMIN' ||
+    permission === 'OWNER' ||
+    permission === 'EDIT'
+  )
+})
 
 // Document modal state
 const showDocModal = ref(false)
@@ -628,7 +639,16 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'show-attrs-json':
-      if (isAdmin.value) openAttrsJson()
+      if (
+        notation.value?.id &&
+        (await checkPermission({
+          resourceType: 'NOTATION',
+          resourceId: notation.value.id,
+          action: 'EDIT',
+        }))
+      ) {
+        openAttrsJson()
+      }
       break
     case 'export-notation':
       exportNotation()
@@ -722,7 +742,7 @@ onBeforeUnmount(() => {
         :can-undo="canUndo"
         :can-redo="canRedo"
         :can-share="canShareNotation"
-        :is-admin="isAdmin"
+        :is-admin="canInspectAttrsJson"
         @action="handleToolbarAction"
         @share="showShareModal = true"
       />
@@ -759,7 +779,7 @@ onBeforeUnmount(() => {
                   :can-undo="canUndo"
                   :can-redo="canRedo"
                   :can-share="canShareNotation"
-                  :is-admin="isAdmin"
+                  :is-admin="canInspectAttrsJson"
                   @action="handleToolbarAction"
                   @share="showShareModal = true"
                 />

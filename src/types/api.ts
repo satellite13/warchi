@@ -347,6 +347,23 @@ export interface AuditLogResponse {
   changedAt?: string | null
 }
 
+// Permissions
+
+export type PermissionResourceType = 'MODEL' | 'NOTATION' | 'DIAGRAM' | 'NODE_SHAPE' | 'ADMIN_PANEL'
+export type PermissionAction = 'VIEW' | 'EDIT' | 'MANAGE'
+
+export interface PermissionCheckRequest {
+  resourceType: PermissionResourceType
+  resourceId: string
+  actions: PermissionAction[]
+}
+
+export interface PermissionCheckResponse {
+  resourceType: PermissionResourceType
+  resourceId: string
+  decisions: Record<string, boolean>
+}
+
 // Access shares
 
 export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE'

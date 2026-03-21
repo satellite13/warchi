@@ -31,6 +31,7 @@ import {
   setDiagramScopedNodeValue,
 } from './utils/diagramScopedProperties'
 import { useAuth } from '../../composables/useAuth'
+import { usePermissions } from '../../composables/usePermissions'
 import { getUserDisplayName } from '../../utils/userDisplay'
 import type { UserInfo } from '../../types/entities'
 import { useCanShare } from '../../composables/useCanShare'
@@ -72,8 +73,18 @@ const {
   isNotationRelationsAndRulesLoading,
 } = useModelEditor()
 const { currentUser, isAdmin } = useAuth()
+const { checkPermission } = usePermissions()
 const { t } = useI18n()
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
+const canInspectDiagramJson = computed(() => {
+  const permission = model.value?.accessPermission ?? null
+  return (
+    isAdmin.value ||
+    permission === 'ADMIN' ||
+    permission === 'OWNER' ||
+    permission === 'EDIT'
+  )
+})
 
 const selectedNodeId = ref<string | null>(null)
 const showShareModal = ref(false)
@@ -2654,7 +2665,16 @@ const handleToolbarAction = async (event: string) => {
       selectedEdgeInstanceId.value = null
       break
     case 'show-diagram-json':
-      if (isAdmin.value) openDiagramJson()
+      if (
+        model.value?.id &&
+        (await checkPermission({
+          resourceType: 'MODEL',
+          resourceId: model.value.id,
+          action: 'EDIT',
+        }))
+      ) {
+        openDiagramJson()
+      }
       break
     case 'open-model-doc':
       handleOpenModelDoc()
@@ -3003,7 +3023,7 @@ onBeforeUnmount(() => {
         :is-diagram-read-only="isDiagramReadOnly"
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
-        :is-admin="isAdmin"
+        :is-admin="canInspectDiagramJson"
         :show-compare-button="!!model?.id"
         :model-id="model?.id ?? null"
         @action="handleToolbarAction"
@@ -3131,7 +3151,7 @@ onBeforeUnmount(() => {
               :can-share="canShareModel"
               :navigation-only-mode="diagramNavigationOnlyMode"
               :is-diagram-read-only="isDiagramReadOnly"
-              :is-admin="isAdmin"
+              :is-admin="canInspectDiagramJson"
               :can-open-notation="canOpenActiveDiagramNotation"
               @action="handleToolbarAction"
               @rename-model="handleRenameModel"

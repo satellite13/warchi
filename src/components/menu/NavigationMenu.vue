@@ -1,11 +1,31 @@
 <script setup lang="ts">
+import { ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
+import { usePermissions } from "../../composables/usePermissions";
 import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
 
-const { isAdmin } = useAuth();
+const { currentUser } = useAuth();
+const { checkPermission } = usePermissions();
 const { t } = useI18n();
+const canViewAdmin = ref(false);
+
+watch(
+  () => currentUser.value?.id,
+  async (userId) => {
+    if (!userId) {
+      canViewAdmin.value = false;
+      return;
+    }
+    canViewAdmin.value = await checkPermission({
+      resourceType: "ADMIN_PANEL",
+      resourceId: userId,
+      action: "VIEW",
+    });
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -34,7 +54,7 @@ const { t } = useI18n();
     <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="account_circle" :alt="t('nav.profile')" />{{ t("nav.profile") }}
     </RouterLink>
-    <RouterLink v-if="isAdmin" to="/admin" class="app-nav__link" active-class="app-nav__link--active">
+    <RouterLink v-if="canViewAdmin" to="/admin" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="admin_panel_settings" :alt="t('nav.admin')" />{{ t("nav.admin") }}
     </RouterLink>
   </nav>

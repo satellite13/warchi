@@ -790,7 +790,7 @@
       <section class="hero container">
         <div class="hero__tag">
           <span class="dot"></span>
-          v0.2 &mdash; open source, self-hosted
+          <span id="hero-version">v0.3</span> &mdash; open source, self-hosted
         </div>
         <h1>
           Архитектурный<br />
@@ -1095,7 +1095,7 @@
     <!-- Footer -->
     <footer class="footer">
       <div class="container footer__inner">
-        <span class="footer__copy">&copy; 2026 wArchi</span>
+        <span class="footer__copy">&copy; 2026 wArchi · Версия: <span id="app-version">0.3.0</span></span>
         <div class="footer__links">
           <a href="/docs/overview">Документация</a>
           <a href="/wiki">Wiki</a>
@@ -1118,6 +1118,34 @@
       });
     }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
     reveals.forEach(function(el) { observer.observe(el); });
+
+    // Runtime app version from /version.json (generated on build)
+    var appVersionEl = document.getElementById('app-version');
+    var heroVersionEl = document.getElementById('hero-version');
+    if (appVersionEl || heroVersionEl) {
+      fetch('/version.json', { cache: 'no-store' })
+        .then(function(response) {
+          if (!response.ok) throw new Error('version fetch failed');
+          return response.json();
+        })
+        .then(function(payload) {
+          if (payload && typeof payload.version === 'string' && payload.version.trim()) {
+            if (appVersionEl) {
+              appVersionEl.textContent = payload.version;
+            }
+            if (heroVersionEl) {
+              var parts = payload.version.split('.');
+              var shortVersion = parts.length >= 2
+                ? parts[0] + '.' + parts[1]
+                : payload.version;
+              heroVersionEl.textContent = 'v' + shortVersion;
+            }
+          }
+        })
+        .catch(function() {
+          // Keep fallback value from HTML if version endpoint is unavailable.
+        });
+    }
 
     // Navigate parent frame
     document.addEventListener('click', function(event) {

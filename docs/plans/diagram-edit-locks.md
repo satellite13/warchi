@@ -107,5 +107,5 @@ sequenceDiagram
 - Scheduler очистки TTL
 - `useDiagramLock` + ModelEditor + poll viewer
 - Бейджи в дереве + i18n
-- Админ-вкладка `/admin/diagram-locks`
-- Тесты бэкенда и фронта
+- [x] **Админ-вкладка `/admin/diagram-locks`** — реализовано: [AdminDiagramLocksView.vue](../../src/views/AdminDiagramLocksView.vue), роут `admin/diagram-locks` в [router/index.ts](../../src/router/index.ts), вкладка в [AdminLayout.vue](../../src/layouts/AdminLayout.vue) (`force-release`, список без `modelId` для админа)
+- [x] **Тесты** — `DiagramEditLocksControllerTest` (acquire/release/list/force-release, heartbeat, админ-лист без `modelId`, `diagramUpdatedAt` после PUT диаграммы, `diagramUpdatedAt` в `LOCKED_BY_OTHER`); фронт: `useDiagramEditLock.test.ts` (`isDiagramServerNewerThanLocal`)

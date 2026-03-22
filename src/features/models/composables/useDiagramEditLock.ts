@@ -10,6 +10,18 @@ const LOCKS_LIST_MS = 15_000
 
 const LOCKED_BY_OTHER = "LOCKED_BY_OTHER"
 
+/** Сравнение ISO-времён диаграммы: сервер новее локального снимка (для кнопки «Загрузить с сервера»). */
+export function isDiagramServerNewerThanLocal(
+  remoteIso: string | null,
+  localIso: string | null | undefined
+): boolean {
+  if (!remoteIso || !localIso) return false
+  const r = Date.parse(remoteIso)
+  const l = Date.parse(localIso)
+  if (Number.isNaN(r) || Number.isNaN(l)) return false
+  return r > l
+}
+
 function isLockStatusPayload(value: unknown): value is DiagramLockStatusResponse {
   if (value === null || typeof value !== "object") return false
   const o = value as Record<string, unknown>
@@ -110,18 +122,10 @@ export function useDiagramEditLock(options: {
   }
 
   function evaluateServerNewer(localUpdatedAt: string | null | undefined): void {
-    const remote = remoteDiagramUpdatedAt.value
-    if (!remote || !localUpdatedAt) {
-      serverNewerWhileBlocked.value = false
-      return
-    }
-    const r = Date.parse(remote)
-    const l = Date.parse(localUpdatedAt)
-    if (Number.isNaN(r) || Number.isNaN(l)) {
-      serverNewerWhileBlocked.value = false
-      return
-    }
-    serverNewerWhileBlocked.value = r > l
+    serverNewerWhileBlocked.value = isDiagramServerNewerThanLocal(
+      remoteDiagramUpdatedAt.value,
+      localUpdatedAt
+    )
   }
 
   async function applyLockForSelection(): Promise<void> {

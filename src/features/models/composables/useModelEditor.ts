@@ -46,6 +46,8 @@ type ModelEditorReturn = {
   state: Ref<ModelEditorState>
   isLoading: Ref<boolean>
   errorMessage: Ref<string | null>
+  /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
+  modelDirty: Ref<boolean>
   isSaving: Ref<boolean>
   saveError: Ref<string | null>
   saveSuccess: Ref<boolean>
@@ -724,6 +726,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     state,
     isLoading,
     errorMessage,
+    modelDirty,
     isSaving,
     saveError,
     saveSuccess,

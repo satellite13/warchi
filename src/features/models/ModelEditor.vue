@@ -21,6 +21,7 @@ import {
 import type { EditorLink, EditorNode } from './types'
 import { useDiagramEditLock } from './composables/useDiagramEditLock'
 import { useModelEditor } from './composables/useModelEditor'
+import { useModelLiveSync } from './composables/useModelLiveSync'
 import { useModelVersionDiff } from './composables/useModelVersionDiff'
 import { useModelToolbarState } from './composables/useModelToolbarState'
 import { useNoteEditor } from './composables/useNoteEditor'
@@ -64,6 +65,7 @@ const {
   state,
   isLoading,
   errorMessage,
+  modelDirty,
   isSaving,
   saveError,
   saveSuccess,
@@ -80,6 +82,21 @@ const {
   ensureNotationRelationsAndRules,
   isNotationRelationsAndRulesLoading,
 } = useModelEditor()
+
+const modelLiveSyncEnabled = computed(
+  () => !!model.value && !isLoading.value && !errorMessage.value
+)
+
+useModelLiveSync({
+  modelId: computed(() => state.value.modelId || null),
+  state,
+  model,
+  enabled: modelLiveSyncEnabled,
+  isLoading,
+  isSaving,
+  modelDirty,
+  ensureNotationRelationsAndRules,
+})
 const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const { t } = useI18n()

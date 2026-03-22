@@ -247,11 +247,9 @@ Payload: `id`, минимальные поля или полный row, `updated
 
 ## Чеклист задач (кратко)
 
-- Выбор MVP: poll vs SSE/WS + контракт комнаты `modelId`
-- Сервер: после commit — генерация событий + **роутер подписок** по `modelId` (эволюция: outbox)
-- Клиент: **коалесценция по ключу сущности** (LWW + приоритет delete) перед применением к state
-- Подписка в ModelEditor + merge с `_isDirty`
-- Покрытие источников: дерево, палитра, лейбл
-- Тесты: coalesce, delete-vs-update, echo, дедуп по `eventId`
+- [x] **MVP poll (клиент):** `useModelLiveSync` + [`modelEntityMerge.ts`](../../src/features/models/utils/modelEntityMerge.ts) — периодический GET нод/связей/диаграмм/модели, merge с уважением `_isNew` / `_isDirty` / `_isDeleted`; пауза при `isSaving`, `isLoading`, скрытой вкладке; обновление node/link types и `ensureNotationRelationsAndRules` для новых `notationId` на диаграммах. Подключено в [`ModelEditor.vue`](../../src/features/models/ModelEditor.vue).
+- Сервер: после commit — генерация событий + **роутер подписок** по `modelId` (эволюция: outbox); **SSE/WebSocket** вместо poll
+- Клиент (push): **коалесценция по ключу сущности** (LWW + приоритет delete) для потока событий; игнор echo по `clientOpId` / `actorUserId`
+- Тесты push: coalesce, delete-vs-update, echo, дедуп по `eventId` (сейчас есть unit-тесты merge: [`modelEntityMerge.test.ts`](../../src/features/models/utils/modelEntityMerge.test.ts))
 - Зафиксировать `revision`/триггер в БД или сервисный счётчик; контракт JSON в OpenAPI при появлении push API
 - Перспектива: канал `diagram:{id}` + seq/ops для multi-user canvas (отдельный эпик)

@@ -5,7 +5,7 @@
 | План | Файл | Суть |
 |------|------|------|
 | **1. Блокировки диаграмм** | [diagram-edit-locks.md](diagram-edit-locks.md) | Lock по `diagramId`, heartbeat/TTL, view-only, дерево, админ force-release |
-| **2. Live sync модели** | [model-live-sync.md](model-live-sync.md) | Актуальность дерева/нод/связей у нескольких клиентов (poll или push по `modelId`) |
+| **2. Live sync модели** | [model-live-sync.md](model-live-sync.md) | Актуальность дерева/нод/связей у нескольких клиентов (poll или push по `modelId`). **MVP:** poll + merge в warchi (`useModelLiveSync`). |
 | **3. Конфликты batch-save** | [model-batch-save-conflicts.md](model-batch-save-conflicts.md) | `baseUpdatedAt`, 409 с `conflicts`, refetch и мерж в `state` |
 
 Отдельно от трёх эпиков выше — **real-time canvas** (несколько пользователей на одной диаграмме, WebSocket, курсоры, ops): это не дублирует live sync модели; см. **[collaborative-editing-plan.md](../collaborative-editing-plan.md)**. Имеет смысл после или параллельно с п.2, когда отпадёт необходимость в эксклюзивном lock (п.1) для сценария «все редактируют одну диаграмму».

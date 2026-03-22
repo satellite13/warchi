@@ -1,4 +1,4 @@
-# Warchi
+# wArchi
 
 Frontend SPA for architectural modeling workflows: managing models, notations, visual styles, and versioned entities.
 

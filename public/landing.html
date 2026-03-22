@@ -1031,7 +1031,7 @@
               <p>Быстрый старт для локальной разработки и небольших команд.</p>
               <pre><code><span class="comment"># Клонируем репозитории</span>
 <span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server
-<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warch
+<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git
 
 <span class="comment"># Собираем и запускаем бэкенд</span>
 <span class="cmd">cd</span> arepos-server
@@ -1042,7 +1042,7 @@
   arepos-server
 
 <span class="comment"># Собираем и запускаем фронтенд</span>
-<span class="cmd">cd</span> ../warch
+<span class="cmd">cd</span> ../warchi
 <span class="cmd">docker build</span> -t warchi \
   --build-arg VITE_API_BASE_URL=http://localhost:8080 .
 <span class="cmd">docker run</span> -d -p 80:80 warchi</code></pre>
@@ -1099,7 +1099,7 @@
         <div class="footer__links">
           <a href="/docs/overview">Документация</a>
           <a href="/wiki">Wiki</a>
-          <a href="https://gitverse.ru/ngroznykh/warch" target="_blank" rel="noopener">wArchi</a>
+          <a href="https://gitverse.ru/ngroznykh/warchi.git" target="_blank" rel="noopener">wArchi</a>
           <a href="https://gitverse.ru/ngroznykh/arepos-server" target="_blank" rel="noopener">arepos-server</a>
           <a href="mailto:nikolay@groznykh.ru">Связаться</a>
         </div>

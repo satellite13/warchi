@@ -1,16 +1,20 @@
 <script setup lang="ts">
+import { computed } from "vue"
+
 /**
  * UI-иконка из public/icons/{name}.svg. Замена шрифта Material Symbols.
  */
-defineProps<{
+const props = defineProps<{
   name: string
   alt?: string
 }>()
+
+const src = computed(() => `${import.meta.env.BASE_URL}icons/${props.name}.svg`)
 </script>
 
 <template>
   <img
-    :src="`/icons/${name}.svg`"
+    :src="src"
     class="ui-icon"
     :alt="alt ?? ''"
   >

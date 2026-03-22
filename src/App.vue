@@ -41,7 +41,20 @@ onUnmounted(() => {
   <Teleport to="body">
     <div v-if="isOutage" class="outage-blocker" role="alertdialog" aria-modal="true">
       <div class="outage-blocker__panel">
-        <UiIcon name="sync_problem" class="outage-blocker__icon" />
+        <svg
+          class="outage-blocker__icon"
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            fill="currentColor"
+            d="M3 12c0 2.21.91 4.2 2.36 5.64L3 20h6v-6l-2.24 2.24A6.003 6.003 0 0 1 5 12a5.99 5.99 0 0 1 4-5.65V4.26C5.55 5.15 3 8.27 3 12zm8 5h2v-2h-2v2zM21 4h-6v6l2.24-2.24A6.003 6.003 0 0 1 19 12a5.99 5.99 0 0 1-4 5.65v2.09c3.45-.89 6-4.01 6-7.74 0-2.21-.91-4.2-2.36-5.64L21 4zm-10 9h2V7h-2v6z"
+          />
+        </svg>
         <h2 class="outage-blocker__title">{{ t("common.outageTitle") }}</h2>
         <p class="outage-blocker__text">
           {{ outage?.kind === "authz_unavailable"
@@ -137,9 +150,12 @@ onUnmounted(() => {
 }
 
 .outage-blocker__icon {
+  display: block;
   width: 28px;
   height: 28px;
   color: var(--warning);
+  opacity: 0.85;
+  flex-shrink: 0;
 }
 
 .outage-blocker__title {

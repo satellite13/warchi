@@ -3581,6 +3581,7 @@ onBeforeUnmount(() => {
               :nodes="state.nodes.filter(node => !node._isDeleted)"
               :links="state.links.filter(link => !link._isDeleted)"
               :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
+              :link-types="state.linkTypes"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />

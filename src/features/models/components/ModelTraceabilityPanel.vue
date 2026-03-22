@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { LinkTypeResponse } from '../../../types/api'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import ModelTraceBranch from './ModelTraceBranch.vue'
 
@@ -11,6 +12,7 @@ const props = defineProps<{
   nodes: EditorNode[]
   links: EditorLink[]
   diagrams: EditorDiagram[]
+  linkTypes: LinkTypeResponse[]
 }>()
 
 const emit = defineEmits<{
@@ -21,7 +23,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const direction = ref<DirectionMode>('down')
+const ALL_LINK_TYPES_FILTER = '__all__'
 const rootNodeId = ref<string | null>(null)
+const selectedLinkTypeFilter = ref<string>(ALL_LINK_TYPES_FILTER)
 const backStack = ref<string[]>([])
 const forwardStack = ref<string[]>([])
 const expandedLinkKeys = ref<Set<string>>(new Set())
@@ -52,6 +56,28 @@ const linksByTargetId = computed(() => {
   }
   return map
 })
+
+const linkTypeNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const linkType of props.linkTypes) {
+    map.set(linkType.id, linkType.name)
+  }
+  return map
+})
+
+const getLinkTypeName = (linkTypeId: string): string =>
+  linkTypeNameById.value.get(linkTypeId) ?? t('models.traceabilityUnknownLinkType')
+
+const linkTypeOptions = computed(() => {
+  const usedTypeIds = new Set(props.links.map((link) => link.linkTypeId))
+  return Array.from(usedTypeIds)
+    .map((id) => ({ id, name: getLinkTypeName(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+})
+
+const matchesSelectedLinkType = (link: EditorLink): boolean =>
+  selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER ||
+  link.linkTypeId === selectedLinkTypeFilter.value
 
 const rootNode = computed(() => {
   const rootId = rootNodeId.value
@@ -85,13 +111,13 @@ const breadcrumbs = computed(() => {
 const outgoingCount = computed(() => {
   const rootId = rootNodeId.value
   if (!rootId) return 0
-  return (linksBySourceId.value.get(rootId) ?? []).length
+  return (linksBySourceId.value.get(rootId) ?? []).filter(matchesSelectedLinkType).length
 })
 
 const incomingCount = computed(() => {
   const rootId = rootNodeId.value
   if (!rootId) return 0
-  return (linksByTargetId.value.get(rootId) ?? []).length
+  return (linksByTargetId.value.get(rootId) ?? []).filter(matchesSelectedLinkType).length
 })
 
 watch(
@@ -111,6 +137,14 @@ watch(
   { immediate: true },
 )
 
+watch(linkTypeOptions, (options) => {
+  if (selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER) return
+  const selectedExists = options.some((option) => option.id === selectedLinkTypeFilter.value)
+  if (!selectedExists) {
+    selectedLinkTypeFilter.value = ALL_LINK_TYPES_FILTER
+  }
+})
+
 const focusRootOnDiagram = () => {
   if (!rootNodeId.value) return
   suppressNextSelectionReset.value = true
@@ -119,8 +153,8 @@ const focusRootOnDiagram = () => {
 
 const getLinksForNode = (nodeId: string): EditorLink[] =>
   direction.value === 'down'
-    ? (linksBySourceId.value.get(nodeId) ?? [])
-    : (linksByTargetId.value.get(nodeId) ?? [])
+    ? (linksBySourceId.value.get(nodeId) ?? []).filter(matchesSelectedLinkType)
+    : (linksByTargetId.value.get(nodeId) ?? []).filter(matchesSelectedLinkType)
 
 const resolveNextNodeId = (link: EditorLink): string =>
   direction.value === 'down' ? link.targetId : link.sourceId
@@ -295,6 +329,17 @@ const toggleDirection = () => {
                 {{ direction === 'down' ? outgoingCount : incomingCount }}
               </span>
             </button>
+            <label class="tp-nav__filter">
+              <UiIcon name="filter_alt" class="tp-nav__filter-icon" />
+              <select v-model="selectedLinkTypeFilter" class="tp-nav__filter-select">
+                <option :value="ALL_LINK_TYPES_FILTER">
+                  {{ t('models.traceabilityAllLinkTypes') }}
+                </option>
+                <option v-for="typeOption in linkTypeOptions" :key="typeOption.id" :value="typeOption.id">
+                  {{ typeOption.name }}
+                </option>
+              </select>
+            </label>
             <div class="tp-nav__arrows">
               <button
                 type="button"
@@ -344,6 +389,7 @@ const toggleDirection = () => {
                 :path="[rootNode.id]"
                 :node-by-id="nodeById"
                 :get-links-for-node="getLinksForNode"
+                :get-link-type-name="getLinkTypeName"
                 :resolve-next-node-id="resolveNextNodeId"
                 :is-link-expanded="isLinkExpanded"
                 :toggle-link="toggleLink"
@@ -589,6 +635,41 @@ const toggleDirection = () => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.tp-nav__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.tp-nav__filter-icon {
+  width: 13px;
+  height: 13px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.tp-nav__filter-select {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  min-width: 0;
+  max-width: 130px;
+  outline: none;
+  cursor: pointer;
+}
+
+.tp-nav__filter-select:focus {
+  color: var(--base-text);
 }
 
 .tp-nav__dir {

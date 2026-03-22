@@ -7,6 +7,7 @@ const props = defineProps<{
   path: string[]
   nodeById: Map<string, EditorNode>
   getLinksForNode: (nodeId: string) => EditorLink[]
+  getLinkTypeName: (linkTypeId: string) => string
   resolveNextNodeId: (link: EditorLink) => string
   isLinkExpanded: (nodeId: string, linkId: string) => boolean
   toggleLink: (nodeId: string, linkId: string) => void
@@ -24,6 +25,8 @@ const linkLabel = (link: EditorLink) => {
   return `${source} → ${target}`
 }
 
+const linkTypeLabel = (link: EditorLink): string => props.getLinkTypeName(link.linkTypeId)
+
 const isCycle = (nodeId: string) => props.path.includes(nodeId)
 </script>
 
@@ -37,6 +40,7 @@ const isCycle = (nodeId: string) => props.path.includes(nodeId)
         />
         <UiIcon name="route" class="tb__link-icon" />
         <span class="tb__link-text">{{ linkLabel(link) }}</span>
+        <span class="tb__link-type">{{ linkTypeLabel(link) }}</span>
       </button>
 
       <div v-if="isLinkExpanded(nodeId, link.id)" class="tb__children">
@@ -61,6 +65,7 @@ const isCycle = (nodeId: string) => props.path.includes(nodeId)
             :path="[...path, resolveNextNodeId(link)]"
             :node-by-id="nodeById"
             :get-links-for-node="getLinksForNode"
+            :get-link-type-name="getLinkTypeName"
             :resolve-next-node-id="resolveNextNodeId"
             :is-link-expanded="isLinkExpanded"
             :toggle-link="toggleLink"
@@ -139,7 +144,18 @@ const isCycle = (nodeId: string) => props.path.includes(nodeId)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 180px;
+  max-width: 150px;
+}
+
+.tb__link-type {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--base-text) 8%, transparent);
+  color: var(--text-subtle);
+  font-size: 10px;
+  line-height: 1.2;
 }
 
 .tb__children {

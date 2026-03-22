@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue"
 import { apiGet, apiPost, apiPut, apiDelete } from "./useApi"
 import type { PaginatedResponse } from "../types/entities"
+import { paginatedTotalElements } from "../utils/paginatedResponse"
 import type {
   NodeShapeResponse,
   NodeShapeRequest,
@@ -33,7 +34,7 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
       return false
     }
     list.value = result.data.content ?? []
-    totalElements.value = result.data.totalElements ?? 0
+    totalElements.value = paginatedTotalElements(result.data)
     return true
   }
 

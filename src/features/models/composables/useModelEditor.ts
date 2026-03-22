@@ -17,6 +17,7 @@ import type {
   RelationResponse,
   RelationRuleResponse,
 } from '../../../types/api'
+import { paginatedIsLastPage } from '../../../utils/paginatedResponse'
 import { compareVersions } from '../../../utils/version'
 import {
   parseDiagramAttrs,
@@ -113,8 +114,7 @@ const fetchAllRelationRulesByNotationIds = async (
       }
       const batch = result.data.content ?? []
       collected.push(...batch)
-      const totalPages = result.data.totalPages ?? 1
-      if (result.data.last || page + 1 >= totalPages) break
+      if (paginatedIsLastPage(result.data, page)) break
       page += 1
     }
   }
@@ -140,8 +140,7 @@ const fetchAllRelationsByNotationId = async (notationId: string): Promise<Relati
     }
     const batch = result.data.content ?? []
     collected.push(...batch)
-    const totalPages = result.data.totalPages ?? 1
-    if (result.data.last || page + 1 >= totalPages) break
+    if (paginatedIsLastPage(result.data, page)) break
     page += 1
   }
 

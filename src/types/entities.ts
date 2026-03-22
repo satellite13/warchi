@@ -34,8 +34,18 @@ export interface UserInfo {
   position?: string | null;
 }
 
+/** Метаданные страницы в ответах Spring Data 3.3+ при сериализации Page через PagedModel. */
+export interface SpringPagedModelPage {
+  size: number;
+  number: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface PaginatedResponse<T> {
   content?: T[];
+  /** Spring Data VIA_DTO: поля пагинации внутри `page`. */
+  page?: SpringPagedModelPage;
   totalElements?: number;
   totalPages?: number;
   number?: number;

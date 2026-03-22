@@ -14,6 +14,7 @@ import type {
   RelationRuleResponse,
   RelationRuleRequest,
 } from '../../../types/api'
+import { paginatedIsLastPage } from '../../../utils/paginatedResponse'
 import {
   createId,
   parseEntityAttrs,
@@ -183,8 +184,7 @@ const fetchAllRelationRulesByNotation = async (
 
     const batch = result.data.content ?? []
     collected.push(...batch)
-    const totalPages = result.data.totalPages ?? 1
-    if (result.data.last || page + 1 >= totalPages) break
+    if (paginatedIsLastPage(result.data, page)) break
     page += 1
   }
 

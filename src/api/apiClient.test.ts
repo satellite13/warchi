@@ -156,7 +156,7 @@ describe('apiClient', () => {
 
       expect(result).toEqual({
         success: false,
-        error: { status: 404, message: 'Not found' },
+        error: { status: 404, message: 'Not found', details: { message: 'Not found' } },
       })
     })
 

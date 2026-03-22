@@ -63,6 +63,17 @@ export interface DiagramUpdateRequest {
   attrs?: string | null
 }
 
+/** GET /diagram-locks, POST …/acquire (200), тело 409 при LOCKED_BY_OTHER */
+export interface DiagramLockStatusResponse {
+  diagramId: string
+  isLocked: boolean
+  lockedByUserId?: string | null
+  lockedByDisplay?: string | null
+  expiresAt?: string | null
+  diagramUpdatedAt?: string | null
+  reason?: string | null
+}
+
 // Nodes
 
 export interface NodeResponse {

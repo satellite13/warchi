@@ -19,6 +19,7 @@ import {
   type DiagramNodeInstance,
 } from './modelAttrs'
 import type { EditorLink, EditorNode } from './types'
+import { useDiagramEditLock } from './composables/useDiagramEditLock'
 import { useModelEditor } from './composables/useModelEditor'
 import { useModelVersionDiff } from './composables/useModelVersionDiff'
 import { useModelToolbarState } from './composables/useModelToolbarState'
@@ -188,12 +189,44 @@ const diagramVersionsForCurrentName = computed(() => {
 const latestDiagramVersion = computed(() => diagramVersionsForCurrentName.value[0] ?? null)
 
 /** Открыта старая версия — только просмотр, без редактирования */
-const isDiagramReadOnly = computed(
+const isDiagramReadOnlyBaseline = computed(
   () =>
     !!activeDiagram.value &&
     !!latestDiagramVersion.value &&
     activeDiagram.value.id !== latestDiagramVersion.value.id
 )
+
+const diagramEditLock = useDiagramEditLock({
+  modelId: computed(() => state.value.modelId ?? null),
+  selectedDiagramId,
+  isActiveDiagramLatest: computed(
+    () =>
+      !!activeDiagram.value &&
+      !!latestDiagramVersion.value &&
+      activeDiagram.value.id === latestDiagramVersion.value.id
+  ),
+  canEditModel: canInspectDiagramJson,
+})
+
+const isDiagramReadOnly = computed(
+  () => isDiagramReadOnlyBaseline.value || diagramEditLock.isBlockedByOther.value
+)
+
+watch(
+  [() => diagramEditLock.isBlockedByOther.value, () => activeDiagram.value?.updatedAt],
+  () => {
+    if (diagramEditLock.isBlockedByOther.value) {
+      diagramEditLock.evaluateServerNewer(activeDiagram.value?.updatedAt ?? null)
+    }
+  }
+)
+
+async function handleReloadModelForDiagramLock() {
+  await diagramEditLock.reloadAfterRemoteChange(loadModel)
+}
+
+/** Разворачиваем ref для пропса дерева (composable возвращает голые ref) */
+const diagramLocksForTree = computed(() => diagramEditLock.locksList.value)
 
 const baselineCreating = ref(false)
 const baselineError = ref<string | null>(null)
@@ -3370,6 +3403,8 @@ onBeforeUnmount(() => {
             :tree-root-node-id="treeRootNodeId"
             :selected-node-id="selectedNodeId"
             :selected-diagram-id="selectedDiagramId"
+            :diagram-locks="diagramLocksForTree"
+            :current-user-id="currentUser?.id ?? null"
             :model-name="model?.name"
             :sync-selection-enabled="selectionSyncEnabled"
             :navigation-only-mode="diagramNavigationOnlyMode"
@@ -3390,7 +3425,11 @@ onBeforeUnmount(() => {
 
         <div
           class="model-canvas-area"
-          :class="{ 'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram }"
+          :class="{
+            'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram,
+            'model-canvas-area--has-diagram-lock-banner':
+              !!activeDiagram && diagramEditLock.isBlockedByOther,
+          }"
         >
           <template v-if="activeDiagram && !isDiagramReadOnly">
             <button
@@ -3461,6 +3500,34 @@ onBeforeUnmount(() => {
                 version: newerNotationVersions[0]?.version ?? '',
               })
             }}
+          </div>
+          <div
+            v-if="activeDiagram && diagramEditLock.isBlockedByOther"
+            class="model-canvas-area__diagram-lock-banner"
+            :class="{
+              'model-canvas-area__diagram-lock-banner--below-notation':
+                newerNotationVersions.length > 0 && activeDiagram,
+            }"
+          >
+            <span class="material-symbols-outlined model-canvas-area__diagram-lock-icon">lock</span>
+            <span class="model-canvas-area__diagram-lock-text">{{
+              t('models.diagramLockHeldBy', { name: diagramEditLock.lockHolderDisplay || '—' })
+            }}</span>
+            <button
+              type="button"
+              class="model-canvas-area__diagram-lock-action"
+              @click="diagramEditLock.tryAcquireAfterFreed"
+            >
+              {{ t('models.diagramLockRetryEdit') }}
+            </button>
+            <button
+              v-if="diagramEditLock.serverNewerWhileBlocked"
+              type="button"
+              class="model-canvas-area__diagram-lock-action model-canvas-area__diagram-lock-action--primary"
+              @click="handleReloadModelForDiagramLock"
+            >
+              {{ t('models.diagramLockReload') }}
+            </button>
           </div>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
@@ -4451,8 +4518,74 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.model-canvas-area__diagram-lock-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--base-text);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.model-canvas-area__diagram-lock-banner--below-notation {
+  top: 42px;
+}
+
+.model-canvas-area__diagram-lock-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.model-canvas-area__diagram-lock-text {
+  flex: 1;
+  min-width: 140px;
+}
+
+.model-canvas-area__diagram-lock-action {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--base-text);
+  cursor: pointer;
+}
+
+.model-canvas-area__diagram-lock-action:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.model-canvas-area__diagram-lock-action--primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.model-canvas-area__diagram-lock-action--primary:hover {
+  filter: brightness(1.05);
+}
+
 .model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
   top: 42px;
+}
+
+.model-canvas-area--has-diagram-lock-banner .model-canvas-area__toolbar {
+  top: 42px;
+}
+
+.model-canvas-area--has-newer-banner.model-canvas-area--has-diagram-lock-banner .model-canvas-area__toolbar {
+  top: 84px;
 }
 
 .model-canvas-area__toolbar {

@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "../../../utils/version"
 import { parseTypeAttrs } from "../../notations/notationAttrs"
-import type { NodeTypeResponse } from "../../../types/api"
+import type { DiagramLockStatusResponse, NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 import { useTreeSearch } from "../composables/useTreeSearch"
 
@@ -15,10 +15,25 @@ const props = defineProps<{
   treeRootNodeId?: string | null
   selectedNodeId: string | null
   selectedDiagramId: string | null
+  /** Активные блокировки редактирования диаграмм (GET /diagram-locks) */
+  diagramLocks?: DiagramLockStatusResponse[]
+  currentUserId?: string | null
   modelName?: string
   syncSelectionEnabled?: boolean
   navigationOnlyMode?: boolean
 }>()
+
+const diagramLocksResolved = computed(() => props.diagramLocks ?? [])
+
+function diagramLockFor(id: string): DiagramLockStatusResponse | null {
+  return diagramLocksResolved.value.find((l) => l.diagramId === id && l.isLocked) ?? null
+}
+
+function diagramLockBadgeTitle(lock: DiagramLockStatusResponse): string {
+  const mine = props.currentUserId && lock.lockedByUserId === props.currentUserId
+  if (mine) return t("models.diagramLockBadgeYou")
+  return t("models.diagramLockBadgeOther", { name: lock.lockedByDisplay || "—" })
+}
 
 const emit = defineEmits<{
   selectNode: [nodeId: string]
@@ -502,6 +517,13 @@ defineExpose({ expandToNode, focusNode })
           >
             <UiIcon name="table_chart" />
             <span>{{ row.diagram.name }}</span>
+            <span
+              v-if="diagramLockFor(row.diagram.id)"
+              class="diagram-row__badge diagram-row__badge--lock"
+              :title="diagramLockBadgeTitle(diagramLockFor(row.diagram.id)!)"
+            >
+              <UiIcon name="lock" class="diagram-row__lock-icon" />
+            </span>
             <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
           </button>
           <div v-else class="diagram-row__select diagram-row__rename-wrap">
@@ -998,6 +1020,18 @@ defineExpose({ expandToNode, focusNode })
   margin-left: 8px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.diagram-row__badge--lock {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.diagram-row__lock-icon {
+  font-size: 14px;
 }
 
 .diagram-row__rename-wrap {

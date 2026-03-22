@@ -1,5 +1,19 @@
 # Совместное редактирование диаграмм (курсоры и действия)
 
+Этот документ — **план слоя real-time для одной диаграммы** (комната `diagram:{diagramId}`): presence, поток операций на canvas, debounce-сохранение в БД. Это **не дубликат** [plans/model-live-sync.md](plans/model-live-sync.md): там — шина **модели** (`model:{modelId}`: ноды, связи, `diagram_updated` после REST save, коалесценция по сущности). Оба канала сосуществуют: дерево и сущности подтягиваются по модели, жесты на холсте — по диаграмме.
+
+**Фазы внедрения:**
+
+| Фаза | Документ | Смысл |
+|------|----------|--------|
+| 1 | [plans/diagram-edit-locks.md](plans/diagram-edit-locks.md) | Эксклюзивная запись одной диаграммы (lock + view-only). |
+| 2 | **этот файл** | Несколько редакторов на одном canvas: WebSocket/STOMP, ops, автосейв; lock ослабляется или заменяется soft-presence. |
+| Параллельно / до | [plans/model-live-sync.md](plans/model-live-sync.md), [plans/model-batch-save-conflicts.md](plans/model-batch-save-conflicts.md) | Актуальность модели и мерж при save — отдельно от частоты курсоров. |
+
+Детали **двухканальной** архитектуры (не смешивать presence с entity-событиями, seq/snapshot при реконнекте, перспектива CRDT) — в [plans/model-live-sync.md](plans/model-live-sync.md) (раздел «Эволюция архитектуры: к одновременному редактированию диаграммы»).
+
+**См. также:** индекс эпиков — [plans/modeling-collaboration-index.md](plans/modeling-collaboration-index.md).
+
 ## Текущее состояние
 
 - **warchi**: редактор диаграмм в [ModelDiagramCanvas.vue](src/features/models/components/ModelDiagramCanvas.vue) — Papirus `DiagramRenderer`, состояние диаграммы в `activeDiagram.parsedAttrs` (nodes/edges), сохранение через `emit('updateDiagram', next)` и REST API.

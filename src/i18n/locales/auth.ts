@@ -45,6 +45,7 @@ export const authMessages = {
     admin: {
       tabUsers: 'Пользователи',
       tabDeleted: 'Удалённые',
+      tabDiagramLocks: 'Блокировки диаграмм',
     },
     adminUsers: {
       title: 'Пользователи',
@@ -70,6 +71,18 @@ export const authMessages = {
       passwordUpdated: 'Пароль пользователя {email} обновлен',
       changePassword: 'Сменить пароль',
       newPassword: 'Новый пароль',
+    },
+    adminDiagramLocks: {
+      title: 'Блокировки редактирования диаграмм',
+      subtitle: 'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
+      diagramId: 'Диаграмма (id)',
+      holder: 'Кто держит',
+      expires: 'Истекает',
+      forceRelease: 'Снять',
+      confirmForce: 'Снять блокировку? Пользователь потеряет эксклюзивное редактирование.',
+      empty: 'Нет активных блокировок',
+      loading: 'Загрузка...',
+      refresh: 'Обновить',
     },
     adminDeleted: {
       title: 'Удалённые объекты',
@@ -133,6 +146,7 @@ export const authMessages = {
     admin: {
       tabUsers: 'Users',
       tabDeleted: 'Deleted',
+      tabDiagramLocks: 'Diagram locks',
     },
     adminUsers: {
       title: 'Users',
@@ -158,6 +172,18 @@ export const authMessages = {
       passwordUpdated: 'Password for {email} updated',
       changePassword: 'Change password',
       newPassword: 'New password',
+    },
+    adminDiagramLocks: {
+      title: 'Diagram edit locks',
+      subtitle: 'Active locks (TTL on server). Force release is for administrators only.',
+      diagramId: 'Diagram (id)',
+      holder: 'Held by',
+      expires: 'Expires',
+      forceRelease: 'Release',
+      confirmForce: 'Release this lock? The user will lose exclusive editing.',
+      empty: 'No active locks',
+      loading: 'Loading...',
+      refresh: 'Refresh',
     },
     adminDeleted: {
       title: 'Deleted items',

@@ -30,6 +30,13 @@ const { t } = useI18n();
         >
           {{ t("admin.tabDeleted") }}
         </RouterLink>
+        <RouterLink
+          to="/admin/diagram-locks"
+          class="admin-tabs__link"
+          :class="{ 'admin-tabs__link--active': route.path.startsWith('/admin/diagram-locks') }"
+        >
+          {{ t("admin.tabDiagramLocks") }}
+        </RouterLink>
       </nav>
       <div class="admin-content">
         <RouterView />

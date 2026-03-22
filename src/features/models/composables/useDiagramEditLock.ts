@@ -1,0 +1,234 @@
+import { onBeforeUnmount, ref, watch, type Ref } from "vue"
+import { buildApiUrl } from "@/api/config"
+import { getAccessToken } from "@/composables/authStorage"
+import { apiGet, apiPost } from "@/composables/useApi"
+import type { DiagramLockStatusResponse } from "@/types/api"
+
+const HEARTBEAT_MS = 60_000
+const POLL_MS = 12_000
+const LOCKS_LIST_MS = 15_000
+
+const LOCKED_BY_OTHER = "LOCKED_BY_OTHER"
+
+function isLockStatusPayload(value: unknown): value is DiagramLockStatusResponse {
+  if (value === null || typeof value !== "object") return false
+  const o = value as Record<string, unknown>
+  return typeof o.diagramId === "string" && typeof o.isLocked === "boolean"
+}
+
+/**
+ * Эксклюзивная блокировка редактирования строки диаграммы (см. arepos diagram-locks API).
+ */
+export function useDiagramEditLock(options: {
+  modelId: Ref<string | null | undefined>
+  selectedDiagramId: Ref<string | null>
+  /** true, если открыта последняя версия диаграммы с данным именем (можно редактировать контент) */
+  isActiveDiagramLatest: Ref<boolean>
+  /** Можно ли вообще редактировать модель (OWNER / EDIT / ADMIN) */
+  canEditModel: Ref<boolean>
+}) {
+  const locksList = ref<DiagramLockStatusResponse[]>([])
+  /** Чужой lock на текущей выбранной диаграмме — блокируем редактирование canvas */
+  const isBlockedByOther = ref(false)
+  const lockHolderDisplay = ref<string | null>(null)
+  /** diagramUpdatedAt с сервера из последнего 409 — для баннера «обновилась» */
+  const remoteDiagramUpdatedAt = ref<string | null>(null)
+  const serverNewerWhileBlocked = ref(false)
+
+  let heldDiagramId: string | null = null
+  let lockOpSeq = 0
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  let locksListTimer: ReturnType<typeof setInterval> | null = null
+
+  const clearHeartbeat = (): void => {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+  }
+
+  const clearPoll = (): void => {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+  }
+
+  const clearLocksListTimer = (): void => {
+    if (locksListTimer !== null) {
+      clearInterval(locksListTimer)
+      locksListTimer = null
+    }
+  }
+
+  const startHeartbeat = (diagramId: string): void => {
+    clearHeartbeat()
+    heartbeatTimer = setInterval(() => {
+      void apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/heartbeat`, {})
+    }, HEARTBEAT_MS)
+  }
+
+  async function releaseHeld(): Promise<void> {
+    const id = heldDiagramId
+    if (!id) return
+    heldDiagramId = null
+    clearHeartbeat()
+    await apiPost(`/diagram-locks/${id}/release`, {})
+  }
+
+  async function fetchLocksList(): Promise<void> {
+    const mid = options.modelId.value
+    if (!mid) {
+      locksList.value = []
+      return
+    }
+    const res = await apiGet<DiagramLockStatusResponse[]>(
+      `/diagram-locks?modelId=${encodeURIComponent(mid)}`
+    )
+    if (res.success && Array.isArray(res.data)) {
+      locksList.value = res.data
+    }
+  }
+
+  function evaluateServerNewer(localUpdatedAt: string | null | undefined): void {
+    const remote = remoteDiagramUpdatedAt.value
+    if (!remote || !localUpdatedAt) {
+      serverNewerWhileBlocked.value = false
+      return
+    }
+    const r = Date.parse(remote)
+    const l = Date.parse(localUpdatedAt)
+    if (Number.isNaN(r) || Number.isNaN(l)) {
+      serverNewerWhileBlocked.value = false
+      return
+    }
+    serverNewerWhileBlocked.value = r > l
+  }
+
+  async function applyLockForSelection(): Promise<void> {
+    const seq = ++lockOpSeq
+    await releaseHeld()
+    clearPoll()
+    isBlockedByOther.value = false
+    lockHolderDisplay.value = null
+    remoteDiagramUpdatedAt.value = null
+    serverNewerWhileBlocked.value = false
+
+    const diagramId = options.selectedDiagramId.value
+    const canEdit = options.canEditModel.value
+    const latest = options.isActiveDiagramLatest.value
+
+    if (!diagramId || !canEdit || !latest) {
+      if (seq !== lockOpSeq) return
+      return
+    }
+
+    const res = await apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/acquire`, {})
+    if (seq !== lockOpSeq) return
+
+    if (res.success && res.data) {
+      heldDiagramId = diagramId
+      startHeartbeat(diagramId)
+      void fetchLocksList()
+      return
+    }
+
+    if (!res.success && res.error.status === 409 && isLockStatusPayload(res.error.details)) {
+      const d = res.error.details
+      if (d.reason === LOCKED_BY_OTHER) {
+        isBlockedByOther.value = true
+        lockHolderDisplay.value = d.lockedByDisplay ?? null
+        remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
+        pollTimer = setInterval(() => {
+          void pollWhileBlocked(diagramId)
+        }, POLL_MS)
+      }
+    }
+    void fetchLocksList()
+  }
+
+  async function pollWhileBlocked(diagramId: string): Promise<void> {
+    await fetchLocksList()
+    const entry = locksList.value.find((l) => l.diagramId === diagramId)
+    if (!entry || !entry.isLocked) {
+      clearPoll()
+      await applyLockForSelection()
+    }
+  }
+
+  async function tryAcquireAfterFreed(): Promise<void> {
+    await applyLockForSelection()
+  }
+
+  async function reloadAfterRemoteChange(loadModel: () => Promise<void>): Promise<void> {
+    await loadModel()
+    serverNewerWhileBlocked.value = false
+    await applyLockForSelection()
+  }
+
+  watch(
+    () => [options.selectedDiagramId.value, options.isActiveDiagramLatest.value, options.canEditModel.value] as const,
+    () => {
+      void applyLockForSelection()
+    }
+  )
+
+  watch(
+    () => options.modelId.value,
+    (mid) => {
+      void fetchLocksList()
+      clearLocksListTimer()
+      if (!mid) {
+        return
+      }
+      locksListTimer = setInterval(() => {
+        void fetchLocksList()
+      }, LOCKS_LIST_MS)
+    },
+    { immediate: true }
+  )
+
+  const onBeforeWindowUnload = (): void => {
+    const id = heldDiagramId
+    if (!id) return
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    const token = getAccessToken()
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    void fetch(buildApiUrl(`/diagram-locks/${id}/release`), {
+      method: "POST",
+      headers,
+      body: "{}",
+      keepalive: true,
+    })
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", onBeforeWindowUnload)
+  }
+
+  onBeforeUnmount(() => {
+    clearHeartbeat()
+    clearPoll()
+    clearLocksListTimer()
+    if (typeof window !== "undefined") {
+      window.removeEventListener("beforeunload", onBeforeWindowUnload)
+    }
+    void releaseHeld()
+  })
+
+  return {
+    locksList,
+    isBlockedByOther,
+    lockHolderDisplay,
+    remoteDiagramUpdatedAt,
+    serverNewerWhileBlocked,
+    fetchLocksList,
+    tryAcquireAfterFreed,
+    reloadAfterRemoteChange,
+    evaluateServerNewer,
+    releaseHeld,
+  }
+}

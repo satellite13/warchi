@@ -20,15 +20,18 @@ import {
 export type ApiError = {
   status: number
   message: string
+  /** Raw JSON body when server returned an object (e.g. 409 diagram lock payload) */
+  details?: unknown
 }
 
 export type ApiResult<T> =
   | { success: true; data: T }
   | { success: false; error: ApiError }
 
-const createApiError = (status: number, message: string): ApiError => ({
+const createApiError = (status: number, message: string, details?: unknown): ApiError => ({
   status,
   message,
+  ...(details !== undefined ? { details } : {}),
 })
 
 type AuthResponse = {
@@ -218,12 +221,18 @@ export async function apiFetch<T>(
       if (outageKind) {
         reportAvailabilityOutage(outageKind, normalizedMessage)
       }
+      let errorDetails: unknown
+      try {
+        const parsed = JSON.parse(text) as unknown
+        if (parsed !== null && typeof parsed === "object") {
+          errorDetails = parsed
+        }
+      } catch {
+        /* not JSON */
+      }
       return {
         success: false,
-        error: createApiError(
-          response.status,
-          normalizedMessage
-        ),
+        error: createApiError(response.status, normalizedMessage, errorDetails),
       }
     }
 

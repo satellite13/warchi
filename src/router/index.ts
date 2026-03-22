@@ -29,6 +29,11 @@ const router = createRouter({
           path: "deleted",
           name: "admin-deleted",
           component: () => import("../views/AdminDeletedView.vue")
+        },
+        {
+          path: "diagram-locks",
+          name: "admin-diagram-locks",
+          component: () => import("../views/AdminDiagramLocksView.vue")
         }
       ]
     },

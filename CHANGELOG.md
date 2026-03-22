@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-22
+
+### Added
+- Added link type labels for each relation in the Model Editor traceability tree.
+- Added a link type filter in the traceability panel to focus branch traversal by relation kind.
+
+### Changed
+- Updated traceability tree counters and branch expansion to respect the selected link type filter.
+
 ## [0.3.0] - 2026-03-22
 
 ### Added

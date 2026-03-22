@@ -167,7 +167,7 @@ export function useTypeEditor() {
     saveError.value = null
 
     const attrs = serializeTypeAttrs(item.parsedAttrs)
-    const requestOwnerId = currentUser.value?.role === "ADMIN" ? item.ownerId : undefined
+    const requestOwnerId = item.ownerId || undefined
 
     try {
       if (item._isNew) {

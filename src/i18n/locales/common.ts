@@ -41,6 +41,11 @@ export const commonMessages = {
       confirmDelete: 'Вы уверены, что хотите удалить {entity}',
       deleteIrreversible: 'Это действие нельзя отменить.',
       newVersionAvailable: 'Новая версия v{version} доступна. Обновление...',
+      outageTitle: 'Сервис временно недоступен',
+      outageAuthzMessage: 'Сервис авторизации недоступен. Работа с приложением временно невозможна.',
+      outageBackendMessage: 'Backend недоступен. Работа с приложением временно невозможна.',
+      outageRetry: 'Повторить',
+      outageChecking: 'Проверка...',
     },
     toolbar: {
       navigationMode: 'Режим навигации (только перемещение и зум)',
@@ -144,6 +149,11 @@ export const commonMessages = {
       confirmDelete: 'Are you sure you want to delete {entity}',
       deleteIrreversible: 'This action cannot be undone.',
       newVersionAvailable: 'New version v{version} available. Updating...',
+      outageTitle: 'Service is temporarily unavailable',
+      outageAuthzMessage: 'Authorization service is unavailable. The application cannot be used right now.',
+      outageBackendMessage: 'Backend is unavailable. The application cannot be used right now.',
+      outageRetry: 'Retry',
+      outageChecking: 'Checking...',
     },
     toolbar: {
       navigationMode: 'Navigation mode (pan and zoom only)',

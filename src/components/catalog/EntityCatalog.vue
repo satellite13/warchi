@@ -159,8 +159,8 @@ function canShareSelected(group: {
   versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
 }): boolean {
   const selected = getSelectedItem(group);
-  if (!selected?.ownerId || !currentUser.value?.id) return false;
-  return selected.ownerId === currentUser.value.id;
+  if (!selected) return false;
+  return selected.accessPermission === "OWNER" || selected.accessPermission === "ADMIN";
 }
 
 function handleDelete(group: {

@@ -181,8 +181,7 @@ function cancelSwitch() {
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
-const currentUserObj = computed(() => (currentUserId.value ? { id: currentUserId.value } : null))
-const { canShare: canShareBase } = useCanShare(selectedType, currentUserObj)
+const { canShare: canShareBase } = useCanShare(selectedType)
 const canShareSelectedType = computed(() => canShareBase.value && !selectedType.value?._isNew)
 const shareResourceType = computed<ShareResourceType>(() =>
   selectedType.value?.kind === 'link' ? 'LINK_TYPE' : 'NODE_TYPE'

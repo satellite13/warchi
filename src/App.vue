@@ -4,12 +4,14 @@ import { RouterView, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { AUTH_CLEARED_EVENT } from "./composables/authStorage";
 import { useAuth } from "./composables/useAuth";
+import { useAvailabilityGuard } from "./composables/useAvailabilityGuard";
 import { useVersionCheck } from "./composables/useVersionCheck";
 
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
 const { isAuthenticated, loadCurrentUser } = useAuth();
+const { outage, isOutage, isRetrying, retryNow } = useAvailabilityGuard();
 const { showNewVersionToast, newVersion } = useVersionCheck();
 
 const handleAuthCleared = () => {
@@ -35,6 +37,24 @@ onUnmounted(() => {
 
 <template>
   <RouterView/>
+
+  <Teleport to="body">
+    <div v-if="isOutage" class="outage-blocker" role="alertdialog" aria-modal="true">
+      <div class="outage-blocker__panel">
+        <UiIcon name="sync_problem" class="outage-blocker__icon" />
+        <h2 class="outage-blocker__title">{{ t("common.outageTitle") }}</h2>
+        <p class="outage-blocker__text">
+          {{ outage?.kind === "authz_unavailable"
+            ? t("common.outageAuthzMessage")
+            : t("common.outageBackendMessage") }}
+        </p>
+        <p class="outage-blocker__hint">{{ outage?.message }}</p>
+        <button class="outage-blocker__retry" :disabled="isRetrying" @click="retryNow">
+          {{ isRetrying ? t("common.outageChecking") : t("common.outageRetry") }}
+        </button>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- New version toast -->
   <Teleport to="body">
@@ -91,5 +111,69 @@ onUnmounted(() => {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
+}
+
+.outage-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 22, 30, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.outage-blocker__panel {
+  width: min(520px, calc(100vw - 32px));
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.25);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.outage-blocker__icon {
+  width: 28px;
+  height: 28px;
+  color: var(--warning);
+}
+
+.outage-blocker__title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--base-text);
+}
+
+.outage-blocker__text {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.outage-blocker__hint {
+  margin: 0 0 8px;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+.outage-blocker__retry {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  border-radius: var(--radius-sm);
+  height: 36px;
+  padding: 0 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.outage-blocker__retry:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 </style>

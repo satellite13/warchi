@@ -11,6 +11,11 @@ import {
   setAccessToken,
   setRefreshToken,
 } from "../composables/authStorage"
+import {
+  clearOutage,
+  reportAvailabilityOutage,
+  type AvailabilityOutageKind,
+} from "../composables/useAvailabilityGuard"
 
 export type ApiError = {
   status: number
@@ -158,6 +163,19 @@ const normalizeApiErrorMessage = (
   return message
 }
 
+const isAuthzUnavailableMessage = (message: string): boolean =>
+  message.trim().toLowerCase().includes("authorization service is unavailable")
+
+const resolveOutageKind = (status: number, message: string): AvailabilityOutageKind | null => {
+  if (status === 503 && isAuthzUnavailableMessage(message)) {
+    return "authz_unavailable"
+  }
+  if (status === 502 || status === 503 || status === 504 || status === 0) {
+    return "backend_unavailable"
+  }
+  return null
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -195,24 +213,32 @@ export async function apiFetch<T>(
       }
 
       const rawMessage = extractErrorMessage(response.status, text)
+      const normalizedMessage = normalizeApiErrorMessage(response.status, path, rawMessage)
+      const outageKind = resolveOutageKind(response.status, normalizedMessage)
+      if (outageKind) {
+        reportAvailabilityOutage(outageKind, normalizedMessage)
+      }
       return {
         success: false,
         error: createApiError(
           response.status,
-          normalizeApiErrorMessage(response.status, path, rawMessage)
+          normalizedMessage
         ),
       }
     }
 
+    clearOutage()
     // 204 No Content и пустое тело — не парсим JSON (контракт API)
     const data = (text.length > 0 ? JSON.parse(text) : undefined) as T
     return { success: true, data }
   } catch (error) {
+    const fallbackMessage = error instanceof Error ? error.message : "Ошибка подключения"
+    reportAvailabilityOutage("backend_unavailable", fallbackMessage)
     return {
       success: false,
       error: createApiError(
         0,
-        error instanceof Error ? error.message : "Ошибка подключения"
+        fallbackMessage
       ),
     }
   }
@@ -265,21 +291,29 @@ export async function uploadDiagramSvg(
         }
       }
       const rawMessage = extractErrorMessage(response.status, text)
+      const normalizedMessage = normalizeApiErrorMessage(response.status, url, rawMessage)
+      const outageKind = resolveOutageKind(response.status, normalizedMessage)
+      if (outageKind) {
+        reportAvailabilityOutage(outageKind, normalizedMessage)
+      }
       return {
         success: false,
         error: createApiError(
           response.status,
-          normalizeApiErrorMessage(response.status, url, rawMessage)
+          normalizedMessage
         ),
       }
     }
+    clearOutage()
     return { success: true, data: undefined as void }
   } catch (error) {
+    const fallbackMessage = error instanceof Error ? error.message : "Ошибка подключения"
+    reportAvailabilityOutage("backend_unavailable", fallbackMessage)
     return {
       success: false,
       error: createApiError(
         0,
-        error instanceof Error ? error.message : "Ошибка подключения"
+        fallbackMessage
       ),
     }
   }

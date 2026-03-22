@@ -1,7 +1,6 @@
 import { ref, computed, onScopeDispose, type Ref, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiGet, apiPost, apiPut, apiDelete } from '../../../composables/useApi'
-import { useAuth } from '../../../composables/useAuth'
 import type { NotationData, PaginatedResponse } from '../../../types/entities'
 import type {
   NodeTypeResponse,
@@ -208,14 +207,9 @@ async function resolveNodeTypes(
   nodeTypes: EditorNodeType[],
   components: EditorComponent[],
   typeOwnerId: string,
-  role: string | undefined,
-  userId: string | undefined,
   onProgress: (msg: string) => void
 ): Promise<void> {
   const existingNodeTypeQuery = new URLSearchParams({ size: '1000' })
-  if (role !== 'ADMIN' && userId) {
-    existingNodeTypeQuery.set('ownerId', userId)
-  }
   const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>(
     `/node-types?${existingNodeTypeQuery.toString()}`
   )
@@ -286,14 +280,9 @@ async function resolveLinkTypes(
   linkTypes: EditorLinkType[],
   relations: EditorRelation[],
   typeOwnerId: string,
-  role: string | undefined,
-  userId: string | undefined,
   onProgress: (msg: string) => void
 ): Promise<void> {
   const existingLinkTypeQuery = new URLSearchParams({ size: '1000' })
-  if (role !== 'ADMIN' && userId) {
-    existingLinkTypeQuery.set('ownerId', userId)
-  }
   const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>(
     `/link-types?${existingLinkTypeQuery.toString()}`
   )
@@ -619,7 +608,6 @@ async function syncRelationRules(
 export function useNotationEditor(): NotationEditorReturn {
   const route = useRoute()
   const router = useRouter()
-  const { currentUser } = useAuth()
 
   const notation = ref<NotationData | null>(null)
   const notationAttrsSnapshot = ref<string | null>(null)
@@ -761,10 +749,9 @@ export function useNotationEditor(): NotationEditorReturn {
     saveProgress.value = ''
 
     try {
-      const role = currentUser.value?.role
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
-      const typeOwnerId = role !== 'ADMIN' ? (currentUser.value?.id ?? ownerId) : ownerId
+      const typeOwnerId = ownerId
       const onProgress = (msg: string) => { saveProgress.value = msg }
 
       if (notationAttrsDirty.value && notation.value) {
@@ -785,8 +772,8 @@ export function useNotationEditor(): NotationEditorReturn {
         notationAttrsSnapshot.value = notation.value.attrs ?? null
       }
 
-      await resolveNodeTypes(nodeTypes, components, typeOwnerId, role, currentUser.value?.id, onProgress)
-      await resolveLinkTypes(linkTypes, relations, typeOwnerId, role, currentUser.value?.id, onProgress)
+      await resolveNodeTypes(nodeTypes, components, typeOwnerId, onProgress)
+      await resolveLinkTypes(linkTypes, relations, typeOwnerId, onProgress)
       await saveComponents(components, relationRules, notationId, ownerId, onProgress)
       await saveRelations(relations, relationRules, notationId, ownerId, onProgress)
       state.value.relationRules = await syncRelationRules(

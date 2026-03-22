@@ -55,7 +55,7 @@ const {
 const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const showShareModal = ref(false)
-const { canShare: canShareNotation } = useCanShare(notation, currentUser)
+const { canShare: canShareNotation } = useCanShare(notation)
 const canInspectAttrsJson = computed(() => {
   const permission = notation.value?.accessPermission ?? null
   return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'

@@ -63,7 +63,7 @@ export interface DiagramUpdateRequest {
   attrs?: string | null
 }
 
-/** GET /diagram-locks, POST …/acquire (200), тело 409 при LOCKED_BY_OTHER */
+/** GET /diagram-locks; POST …/acquire — всегда 200, при занятости чужим `reason: LOCKED_BY_OTHER` */
 export interface DiagramLockStatusResponse {
   diagramId: string
   isLocked: boolean

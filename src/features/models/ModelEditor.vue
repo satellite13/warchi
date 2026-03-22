@@ -196,6 +196,14 @@ const isDiagramReadOnlyBaseline = computed(
     activeDiagram.value.id !== latestDiagramVersion.value.id
 )
 
+/** Диаграмма с таким id уже сохранена на сервере (не temp id до первого save) */
+const isSelectedDiagramPersistedOnServer = computed(() => {
+  const id = selectedDiagramId.value
+  if (!id) return false
+  const d = state.value.diagrams.find(diagram => diagram.id === id && !diagram._isDeleted)
+  return !!d && !d._isNew
+})
+
 const diagramEditLock = useDiagramEditLock({
   modelId: computed(() => state.value.modelId ?? null),
   selectedDiagramId,
@@ -206,6 +214,7 @@ const diagramEditLock = useDiagramEditLock({
       activeDiagram.value.id === latestDiagramVersion.value.id
   ),
   canEditModel: canInspectDiagramJson,
+  isSelectedDiagramPersistedOnServer,
 })
 
 const isDiagramReadOnly = computed(
@@ -213,7 +222,11 @@ const isDiagramReadOnly = computed(
 )
 
 watch(
-  [() => diagramEditLock.isBlockedByOther.value, () => activeDiagram.value?.updatedAt],
+  [
+    () => diagramEditLock.isBlockedByOther.value,
+    () => activeDiagram.value?.updatedAt,
+    () => diagramEditLock.remoteDiagramUpdatedAt.value,
+  ],
   () => {
     if (diagramEditLock.isBlockedByOther.value) {
       diagramEditLock.evaluateServerNewer(activeDiagram.value?.updatedAt ?? null)
@@ -225,8 +238,13 @@ async function handleReloadModelForDiagramLock() {
   await diagramEditLock.reloadAfterRemoteChange(loadModel)
 }
 
-/** Разворачиваем ref для пропса дерева (composable возвращает голые ref) */
+/** Разворачиваем ref из useDiagramEditLock для шаблона (вложенные ref в объекте не разворачиваются) */
 const diagramLocksForTree = computed(() => diagramEditLock.locksList.value)
+const diagramLockBlockedByOther = computed(() => diagramEditLock.isBlockedByOther.value)
+const diagramLockHolderName = computed(() => diagramEditLock.lockHolderDisplay.value ?? '—')
+const diagramLockServerNewerWhileBlocked = computed(
+  () => diagramEditLock.serverNewerWhileBlocked.value
+)
 
 const baselineCreating = ref(false)
 const baselineError = ref<string | null>(null)
@@ -3427,8 +3445,6 @@ onBeforeUnmount(() => {
           class="model-canvas-area"
           :class="{
             'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram,
-            'model-canvas-area--has-diagram-lock-banner':
-              !!activeDiagram && diagramEditLock.isBlockedByOther,
           }"
         >
           <template v-if="activeDiagram && !isDiagramReadOnly">
@@ -3501,34 +3517,6 @@ onBeforeUnmount(() => {
               })
             }}
           </div>
-          <div
-            v-if="activeDiagram && diagramEditLock.isBlockedByOther"
-            class="model-canvas-area__diagram-lock-banner"
-            :class="{
-              'model-canvas-area__diagram-lock-banner--below-notation':
-                newerNotationVersions.length > 0 && activeDiagram,
-            }"
-          >
-            <span class="material-symbols-outlined model-canvas-area__diagram-lock-icon">lock</span>
-            <span class="model-canvas-area__diagram-lock-text">{{
-              t('models.diagramLockHeldBy', { name: diagramEditLock.lockHolderDisplay || '—' })
-            }}</span>
-            <button
-              type="button"
-              class="model-canvas-area__diagram-lock-action"
-              @click="diagramEditLock.tryAcquireAfterFreed"
-            >
-              {{ t('models.diagramLockRetryEdit') }}
-            </button>
-            <button
-              v-if="diagramEditLock.serverNewerWhileBlocked"
-              type="button"
-              class="model-canvas-area__diagram-lock-action model-canvas-area__diagram-lock-action--primary"
-              @click="handleReloadModelForDiagramLock"
-            >
-              {{ t('models.diagramLockReload') }}
-            </button>
-          </div>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
               canvas-mode
@@ -3542,16 +3530,20 @@ onBeforeUnmount(() => {
               :can-share="canShareModel"
               :navigation-only-mode="diagramNavigationOnlyMode"
               :is-diagram-read-only="isDiagramReadOnly"
+              :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
+              :diagram-lock-holder-display="diagramLockHolderName"
+              :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
               :is-admin="canInspectDiagramJson"
               :can-open-notation="canOpenActiveDiagramNotation"
               @action="handleToolbarAction"
               @rename-model="handleRenameModel"
               @share="showShareModal = true"
               @open-notation="handleOpenNotationEditor"
+              @diagram-lock-reload="handleReloadModelForDiagramLock"
             />
           </div>
           <ModelDiagramCanvas
-            :key="`${activeDiagram?.id ?? 'none'}-${isDiagramReadOnly}`"
+            :key="activeDiagram?.id ?? 'none'"
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
             :read-only="isDiagramReadOnly"
@@ -4518,74 +4510,8 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.model-canvas-area__diagram-lock-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--base-text);
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border);
-}
-
-.model-canvas-area__diagram-lock-banner--below-notation {
-  top: 42px;
-}
-
-.model-canvas-area__diagram-lock-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.model-canvas-area__diagram-lock-text {
-  flex: 1;
-  min-width: 140px;
-}
-
-.model-canvas-area__diagram-lock-action {
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--base-text);
-  cursor: pointer;
-}
-
-.model-canvas-area__diagram-lock-action:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.model-canvas-area__diagram-lock-action--primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
-}
-
-.model-canvas-area__diagram-lock-action--primary:hover {
-  filter: brightness(1.05);
-}
-
 .model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
   top: 42px;
-}
-
-.model-canvas-area--has-diagram-lock-banner .model-canvas-area__toolbar {
-  top: 42px;
-}
-
-.model-canvas-area--has-newer-banner.model-canvas-area--has-diagram-lock-banner .model-canvas-area__toolbar {
-  top: 84px;
 }
 
 .model-canvas-area__toolbar {

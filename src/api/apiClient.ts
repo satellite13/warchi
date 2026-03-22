@@ -20,7 +20,7 @@ import {
 export type ApiError = {
   status: number
   message: string
-  /** Raw JSON body when server returned an object (e.g. 409 diagram lock payload) */
+  /** Сырой JSON тела ответа при ошибке (если объект), напр. старые 409 или произвольные поля */
   details?: unknown
 }
 

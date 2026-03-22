@@ -8,7 +8,7 @@
 - Heartbeat **60 с**, TTL **180 с**.
 - **Снятие блокировки:** только **администратор** (`force-release`).
 - Viewer после `release`: баннер **«освободилась»** + CTA **«Перейти в редактирование»**; если `diagramUpdatedAt` новее — **«обновилась»** + **«Перезагрузить»**.
-- Гонка нескольких viewers: **first-come-first-served** через атомарный `acquire`; проигравшие — **409** с метаданными держателя.
+- Гонка нескольких viewers: **first-come-first-served** через атомарный `acquire`; проигравшие — **200** с `reason: LOCKED_BY_OTHER` (не 409 — чтобы `fetch` не засорял консоль).
 - **Тот же пользователь** после краша браузера: `acquire` при живом lock → **200** + продление `expires_at` (идемпотентно).
 
 ## Backend
@@ -28,13 +28,13 @@
 
 Права: acquire/heartbeat/release — `canEditDiagram`.
 
-**Acquire:** свободно/истекло → выдать; тот же user → 200 + refresh TTL; другой user → 409 + `reason: LOCKED_BY_OTHER`, `lockedBy*`, `expiresAt`, `diagramUpdatedAt`.
+**Acquire:** всегда **200**; свободно/истекло → выдать; тот же user → refresh TTL; другой user → то же тело + `reason: LOCKED_BY_OTHER`, `lockedBy*`, `expiresAt`, `diagramUpdatedAt`.
 
-**Параллельные acquire:** один 200, остальные 409 (одинаковое тело).
+**Параллельные acquire:** один ответ «держу я», остальные — тело с `LOCKED_BY_OTHER` (тот же JSON-контракт).
 
-### Контракт GET / 409
+### Контракт тела ответа
 
-- `diagramId`, `isLocked`, `lockedByUserId`, `lockedByDisplay`, `expiresAt`, `diagramUpdatedAt`.
+- `diagramId`, `isLocked`, `lockedByUserId`, `lockedByDisplay`, `expiresAt`, `diagramUpdatedAt`, опционально `reason`.
 
 ### TTL
 
@@ -43,7 +43,7 @@
 
 ## Frontend
 
-- [ModelEditor.vue](../../src/features/models/ModelEditor.vue): при открытии диаграммы `acquire`; успех → edit; 409 → `readOnly` ([ModelDiagramCanvas.vue](../../src/features/models/components/ModelDiagramCanvas.vue)); heartbeat 60 с; `release` на смене/закрытии/beforeunload.
+- [ModelEditor.vue](../../src/features/models/ModelEditor.vue): при открытии диаграммы `acquire`; без `LOCKED_BY_OTHER` → edit; иначе `readOnly` ([ModelDiagramCanvas.vue](../../src/features/models/components/ModelDiagramCanvas.vue)); heartbeat 60 с; `release` на смене/закрытии/beforeunload.
 - Composable `useDiagramLock`.
 - Viewer: poll lock **10–15 с**; баннеры + CTA + повторный `acquire`.
 - [ModelTreePalettePanel.vue](../../src/features/models/components/ModelTreePalettePanel.vue): бейджи; i18n [models.ts](../../src/i18n/locales/models.ts) / [auth.ts](../../src/i18n/locales/auth.ts).
@@ -74,7 +74,7 @@ sequenceDiagram
 
   B->>FE: openDiagram
   FE->>BE: acquire
-  BE-->>FE: 409
+  BE-->>FE: 200 reason LOCKED_BY_OTHER
   FE-->>B: viewOnly
 
   A->>FE: close
@@ -84,9 +84,9 @@ sequenceDiagram
   end
   B->>BE: acquire
   alt win
-    BE-->>FE: 200
+    BE-->>FE: 200 held
   else lose
-    BE-->>FE: 409
+    BE-->>FE: 200 LOCKED_BY_OTHER
   end
 ```
 

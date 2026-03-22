@@ -37,6 +37,12 @@ const props = withDefaults(
     showCompareButton?: boolean
     /** id текущей версии модели (для перехода к сравнению версий диаграммы). */
     modelId?: string | null
+    /** Диаграмма занята другим пользователем (эксклюзивный lock) */
+    diagramLockBlockedByOther?: boolean
+    /** Email/отображаемое имя держателя lock (для подписи рядом с иконкой) */
+    diagramLockHolderDisplay?: string
+    /** На сервере диаграмма новее локальной — показать CTA «Загрузить с сервера» */
+    diagramLockServerNewer?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -65,6 +71,9 @@ const props = withDefaults(
     isAdmin: false,
     showCompareButton: false,
     modelId: null,
+    diagramLockBlockedByOther: false,
+    diagramLockHolderDisplay: '',
+    diagramLockServerNewer: false,
   }
 )
 
@@ -78,6 +87,7 @@ const emit = defineEmits<{
   selectDiagramVersion: [diagramId: string]
   createBaseline: []
   compare: []
+  diagramLockReload: []
 }>()
 
 const isRenamingModel = ref(false)
@@ -253,7 +263,31 @@ const canCreateBaseline = computed(
 <template>
   <div v-if="canvasMode" class="model-header-canvas">
     <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
-    <span v-if="isDiagramReadOnly" class="model-header__readonly-indicator" :title="t('models.viewOnly')">
+    <div
+      v-if="isDiagramReadOnly && diagramLockBlockedByOther"
+      class="model-header__diagram-lock-group"
+    >
+      <span
+        class="model-header__readonly-indicator model-header__readonly-indicator--lock-held"
+        :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
+      >
+        <UiIcon name="lock" class="model-header__readonly-icon" />
+        <span class="model-header__readonly-text">{{ diagramLockHolderDisplay || '—' }}</span>
+      </span>
+      <button
+        v-if="diagramLockServerNewer"
+        type="button"
+        class="model-header__diagram-lock-reload-btn"
+        @click="emit('diagramLockReload')"
+      >
+        {{ t('models.diagramLockReload') }}
+      </button>
+    </div>
+    <span
+      v-else-if="isDiagramReadOnly"
+      class="model-header__readonly-indicator"
+      :title="t('models.viewOnly')"
+    >
       <UiIcon name="visibility" class="model-header__readonly-icon" />
       <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
     </span>
@@ -385,7 +419,31 @@ const canCreateBaseline = computed(
     </div>
     <div v-if="!hideToolbar" class="model-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
-      <span v-if="isDiagramReadOnly" class="model-header__readonly-indicator" :title="t('models.viewOnly')">
+      <div
+        v-if="isDiagramReadOnly && diagramLockBlockedByOther"
+        class="model-header__diagram-lock-group"
+      >
+        <span
+          class="model-header__readonly-indicator model-header__readonly-indicator--lock-held"
+          :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
+        >
+          <UiIcon name="lock" class="model-header__readonly-icon" />
+          <span class="model-header__readonly-text">{{ diagramLockHolderDisplay || '—' }}</span>
+        </span>
+        <button
+          v-if="diagramLockServerNewer"
+          type="button"
+          class="model-header__diagram-lock-reload-btn"
+          @click="emit('diagramLockReload')"
+        >
+          {{ t('models.diagramLockReload') }}
+        </button>
+      </div>
+      <span
+        v-else-if="isDiagramReadOnly"
+        class="model-header__readonly-indicator"
+        :title="t('models.viewOnly')"
+      >
         <UiIcon name="visibility" class="model-header__readonly-icon" />
         <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
       </span>
@@ -409,13 +467,40 @@ const canCreateBaseline = computed(
 
 .model-header-canvas {
   display: inline-flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.model-header__diagram-lock-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 1;
+  pointer-events: auto;
+}
+
+.model-header__diagram-lock-reload-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.model-header__diagram-lock-reload-btn:hover {
+  filter: brightness(1.06);
 }
 
 .model-header-canvas :deep(.icon-toolbar) {
@@ -616,8 +701,24 @@ const canCreateBaseline = computed(
   border: 1px solid var(--primary);
 }
 
-.model-header__readonly-icon {
-  font-size: 18px;
+.model-header__readonly-icon :deep(.ui-icon) {
+  width: 18px;
+  height: 18px;
+  opacity: 1;
+}
+
+.model-header__readonly-indicator--lock-held {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  max-width: min(100%, 420px);
+}
+
+.model-header__readonly-indicator--lock-held .model-header__readonly-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-header__readonly-text {

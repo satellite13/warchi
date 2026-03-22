@@ -26,12 +26,17 @@ export function useDiagramEditLock(options: {
   isActiveDiagramLatest: Ref<boolean>
   /** Можно ли вообще редактировать модель (OWNER / EDIT / ADMIN) */
   canEditModel: Ref<boolean>
+  /**
+   * Диаграмма уже есть на сервере (не локальный черновик с temp id).
+   * Иначе acquire вернёт 404 — блокировка по несуществующему diagram id не имеет смысла.
+   */
+  isSelectedDiagramPersistedOnServer: Ref<boolean>
 }) {
   const locksList = ref<DiagramLockStatusResponse[]>([])
   /** Чужой lock на текущей выбранной диаграмме — блокируем редактирование canvas */
   const isBlockedByOther = ref(false)
   const lockHolderDisplay = ref<string | null>(null)
-  /** diagramUpdatedAt с сервера из последнего 409 — для баннера «обновилась» */
+  /** diagramUpdatedAt с сервера: acquire при LOCKED_BY_OTHER и актуализация из GET /diagram-locks */
   const remoteDiagramUpdatedAt = ref<string | null>(null)
   const serverNewerWhileBlocked = ref(false)
 
@@ -88,6 +93,19 @@ export function useDiagramEditLock(options: {
     )
     if (res.success && Array.isArray(res.data)) {
       locksList.value = res.data
+      syncRemoteUpdatedAtFromLocksList()
+    }
+  }
+
+  /** Подтягивает свежий diagramUpdatedAt с сервера при поллинге списка locks (после сохранения держателем lock). */
+  function syncRemoteUpdatedAtFromLocksList(): void {
+    if (!isBlockedByOther.value) return
+    const diagramId = options.selectedDiagramId.value
+    if (!diagramId) return
+    const entry = locksList.value.find((l) => l.diagramId === diagramId)
+    const at = entry?.diagramUpdatedAt
+    if (at) {
+      remoteDiagramUpdatedAt.value = at
     }
   }
 
@@ -118,9 +136,12 @@ export function useDiagramEditLock(options: {
     const diagramId = options.selectedDiagramId.value
     const canEdit = options.canEditModel.value
     const latest = options.isActiveDiagramLatest.value
+    const persisted = options.isSelectedDiagramPersistedOnServer.value
 
-    if (!diagramId || !canEdit || !latest) {
+    if (!diagramId || !canEdit || !latest || !persisted) {
       if (seq !== lockOpSeq) return
+      // После releaseHeld() сервер уже без lock — без refresh дерево показывало бы старый locksList до LOCKS_LIST_MS
+      void fetchLocksList()
       return
     }
 
@@ -128,18 +149,32 @@ export function useDiagramEditLock(options: {
     if (seq !== lockOpSeq) return
 
     if (res.success && res.data) {
+      const d = res.data
+      if (d.reason === LOCKED_BY_OTHER) {
+        isBlockedByOther.value = true
+        lockHolderDisplay.value = d.lockedByDisplay ?? null
+        remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
+        void pollWhileBlocked(diagramId)
+        pollTimer = setInterval(() => {
+          void pollWhileBlocked(diagramId)
+        }, POLL_MS)
+        void fetchLocksList()
+        return
+      }
       heldDiagramId = diagramId
       startHeartbeat(diagramId)
       void fetchLocksList()
       return
     }
 
+    // Совместимость: старый бэкенд мог отдавать 409 + тело в error.details
     if (!res.success && res.error.status === 409 && isLockStatusPayload(res.error.details)) {
       const d = res.error.details
       if (d.reason === LOCKED_BY_OTHER) {
         isBlockedByOther.value = true
         lockHolderDisplay.value = d.lockedByDisplay ?? null
         remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
+        void pollWhileBlocked(diagramId)
         pollTimer = setInterval(() => {
           void pollWhileBlocked(diagramId)
         }, POLL_MS)
@@ -157,10 +192,6 @@ export function useDiagramEditLock(options: {
     }
   }
 
-  async function tryAcquireAfterFreed(): Promise<void> {
-    await applyLockForSelection()
-  }
-
   async function reloadAfterRemoteChange(loadModel: () => Promise<void>): Promise<void> {
     await loadModel()
     serverNewerWhileBlocked.value = false
@@ -168,7 +199,13 @@ export function useDiagramEditLock(options: {
   }
 
   watch(
-    () => [options.selectedDiagramId.value, options.isActiveDiagramLatest.value, options.canEditModel.value] as const,
+    () =>
+      [
+        options.selectedDiagramId.value,
+        options.isActiveDiagramLatest.value,
+        options.canEditModel.value,
+        options.isSelectedDiagramPersistedOnServer.value,
+      ] as const,
     () => {
       void applyLockForSelection()
     }
@@ -205,8 +242,19 @@ export function useDiagramEditLock(options: {
     })
   }
 
+  /** Пока вкладка в фоне — отпускаем lock, чтобы другой редактор мог работать; при возврате снова пытаемся взять. */
+  const onDocumentVisibilityChange = (): void => {
+    if (typeof document === "undefined") return
+    if (document.visibilityState === "hidden") {
+      void releaseHeld().then(() => fetchLocksList())
+      return
+    }
+    void applyLockForSelection()
+  }
+
   if (typeof window !== "undefined") {
     window.addEventListener("beforeunload", onBeforeWindowUnload)
+    document.addEventListener("visibilitychange", onDocumentVisibilityChange)
   }
 
   onBeforeUnmount(() => {
@@ -215,6 +263,7 @@ export function useDiagramEditLock(options: {
     clearLocksListTimer()
     if (typeof window !== "undefined") {
       window.removeEventListener("beforeunload", onBeforeWindowUnload)
+      document.removeEventListener("visibilitychange", onDocumentVisibilityChange)
     }
     void releaseHeld()
   })
@@ -226,7 +275,6 @@ export function useDiagramEditLock(options: {
     remoteDiagramUpdatedAt,
     serverNewerWhileBlocked,
     fetchLocksList,
-    tryAcquireAfterFreed,
     reloadAfterRemoteChange,
     evaluateServerNewer,
     releaseHeld,

@@ -2587,6 +2587,8 @@ watch(
     setupInteractionManager(interactionManager, renderer, navOnly)
     bindInteractionEvents(interactionManager, renderer)
     emit('canvasContextChange', { renderer, interactionManager })
+    syncDiagram()
+    renderer.markDirty()
   }
 )
 

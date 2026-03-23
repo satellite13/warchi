@@ -241,6 +241,10 @@ Payload: `id`, минимальные поля или полный row, `updated
 - Можно внедрять **после** diagram locks.
 - Конфликты при одновременном редактировании **одной** сущности закрываются планом **model-batch-save-conflicts** (оптимистичная версия + мерж); live sync их не отменяет.
 
+## Связанный багфикс batch-save (целостность диаграммы)
+
+При poll после сохранения экземпляры могли «пропадать», если в БД в `diagram.attrs` оставались **временные UUID** нод/связей: серверный `remapDiagramAttrs` не обходил вложенный формат warchi `instances.nodes` / `instances.edges`. Исправлено в **arepos-server** (`ModelBatchSaveController.remapDiagramAttrs`).
+
 ## Тесты
 
 - Применение событий к state; игнор echo; сценарий dirty + входящее `node_updated`.

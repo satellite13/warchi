@@ -102,10 +102,12 @@ sequenceDiagram
 
 ## Чеклист задач (кратко)
 
-- Таблица `diagram_edit_locks` + Liquibase
-- API acquire / heartbeat / release / list / force-release + права
-- Scheduler очистки TTL
-- `useDiagramLock` + ModelEditor + poll viewer
-- Бейджи в дереве + i18n
-- [x] **Админ-вкладка `/admin/diagram-locks`** — реализовано: [AdminDiagramLocksView.vue](../../src/views/AdminDiagramLocksView.vue), роут `admin/diagram-locks` в [router/index.ts](../../src/router/index.ts), вкладка в [AdminLayout.vue](../../src/layouts/AdminLayout.vue) (`force-release`, список без `modelId` для админа)
-- [x] **Тесты** — `DiagramEditLocksControllerTest` (acquire/release/list/force-release, heartbeat, админ-лист без `modelId`, `diagramUpdatedAt` после PUT диаграммы, `diagramUpdatedAt` в `LOCKED_BY_OTHER`); фронт: `useDiagramEditLock.test.ts` (`isDiagramServerNewerThanLocal`)
+- [x] Таблица `diagram_edit_locks` + Liquibase
+- [x] API acquire / heartbeat / release / list / force-release + права (acquire всегда **200**, конфликт — `reason: LOCKED_BY_OTHER`)
+- [x] Scheduler очистки TTL
+- [x] **`useDiagramEditLock`** (имя в коде) + [ModelEditor.vue](../../src/features/models/ModelEditor.vue) + poll списка locks; view-only при чужом lock; **«Загрузить с сервера»** при новее `diagramUpdatedAt` (в т.ч. после poll); `release` / heartbeat / вкладка в фоне
+- [x] Бейджи в дереве + i18n
+- [x] **Админ-вкладка `/admin/diagram-locks`** — [AdminDiagramLocksView.vue](../../src/views/AdminDiagramLocksView.vue), [router](../../src/router/index.ts), [AdminLayout.vue](../../src/layouts/AdminLayout.vue)
+- [x] **Тесты** — `DiagramEditLocksControllerTest`; фронт: `useDiagramEditLock.test.ts`
+
+**Отличия от исходного текста плана:** composable — `useDiagramEditLock`; тексты/CTA для viewer сосредоточены в шапке/тулбаре модели, не обязательно отдельные баннеры как в черновике. При необходимости — довести UX до дословного чеклиста «баннеры».

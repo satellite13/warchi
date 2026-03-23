@@ -6,9 +6,9 @@
 
 | Фаза | Документ | Смысл |
 |------|----------|--------|
-| 1 | [plans/diagram-edit-locks.md](plans/diagram-edit-locks.md) | Эксклюзивная запись одной диаграммы (lock + view-only). |
-| 2 | **этот файл** | Несколько редакторов на одном canvas: WebSocket/STOMP, ops, автосейв; lock ослабляется или заменяется soft-presence. |
-| Параллельно / до | [plans/model-live-sync.md](plans/model-live-sync.md), [plans/model-batch-save-conflicts.md](plans/model-batch-save-conflicts.md) | Актуальность модели и мерж при save — отдельно от частоты курсоров. |
+| 1 | [plans/diagram-edit-locks.md](plans/diagram-edit-locks.md) | Эксклюзивная запись одной диаграммы (lock + view-only). **Статус: реализовано** (API, TTL, админка, warchi). |
+| 2 | **этот файл** | Несколько редакторов на одном canvas: WebSocket/STOMP, ops, автосейв; lock ослабляется или заменяется soft-presence. **Не начато.** |
+| Параллельно / до | [plans/model-live-sync.md](plans/model-live-sync.md), [plans/model-batch-save-conflicts.md](plans/model-batch-save-conflicts.md) | Актуальность модели и мерж при save — отдельно от частоты курсоров. **MVP live sync (poll + merge) — сделан**; конфликты batch-save — нет. |
 
 Детали **двухканальной** архитектуры (не смешивать presence с entity-событиями, seq/snapshot при реконнекте, перспектива CRDT) — в [plans/model-live-sync.md](plans/model-live-sync.md) (раздел «Эволюция архитектуры: к одновременному редактированию диаграммы»).
 

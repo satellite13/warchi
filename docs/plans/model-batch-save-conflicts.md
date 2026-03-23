@@ -56,6 +56,7 @@
 
 ## Чеклист задач (кратко)
 
+- [x] **Целостность attrs диаграммы при batch-save:** remap временных id нод и связей внутри **`instances.nodes` / `instances.edges`** (формат warchi). Раньше обрабатывались только корневые `nodes`/`edges` в JSON — в БД сохранялись temp UUID, что ломало канвас после poll live sync. См. `ModelBatchSaveController.remapDiagramAttrs` (arepos-server).
 - `baseUpdatedAt`/ETag в batch и в CRUD fallback
 - Backend: 409 + `conflicts[]` (+ опционально снимки)
 - Frontend: мерж, модалки, повтор save

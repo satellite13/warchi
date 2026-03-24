@@ -19,23 +19,24 @@ todos:
     status: pending
 ---
 
-# План: трассировка (жирный/курсив) и перетаскивание связи на диаграмму
+# Трассировка: стиль по активной диаграмме + DnD связи на canvas
 
-## Контекст в коде
+## Текущий срез (24.03.2026)
 
-- Панель трассировки: [`ModelTraceabilityPanel.vue`](../../src/features/models/components/ModelTraceabilityPanel.vue) + [`ModelTraceBranch.vue`](../../src/features/models/components/ModelTraceBranch.vue) — строки связей в `.tb__link`.
-- Текущая диаграмма и нотация: `activeDiagram` / `activeNotationId` в [`ModelEditor.vue`](../../src/features/models/ModelEditor.vue).
-- На диаграмме ребро хранится в `diagram.parsedAttrs.instances.edges[]` с полем `modelLinkId` (совпадает с `EditorLink.id`).
-- Добавление **существующей** модельной связи на холст уже реализовано цепочкой `handleSelectExistingLink` → `createOrReuseLink(linkId)` при заполненном `pendingConnection` (источник/цель — `sourceInstanceId` / `targetInstanceId`). См. ~2583–2690 в `ModelEditor.vue`.
+- В проекте уже есть панель трассировки: [`ModelTraceabilityPanel.vue`](../../src/features/models/components/ModelTraceabilityPanel.vue) + [`ModelTraceBranch.vue`](../../src/features/models/components/ModelTraceBranch.vue).
+- Трассировка сейчас рендерит дерево и навигацию, но **не учитывает activeDiagram** для стилей link-строк.
+- В canvas DnD поддерживает `application/x-notation-component-id`, `application/x-model-node-id`, `application/x-model-diagram-note`, но **не** `application/x-warchi-model-link-id` (см. [`ModelDiagramCanvas.vue`](../../src/features/models/components/ModelDiagramCanvas.vue)).
+- В редакторе уже есть готовый механизм использования существующей связи: `handleSelectExistingLink(linkId)` + `createOrReuseLink(linkId)` при заполненном `pendingConnection` (см. [`ModelEditor.vue`](../../src/features/models/ModelEditor.vue)).
+- В `models`-локалях нет строк для причин “почему link нельзя перетащить” из трассировки.
 
 ```mermaid
 flowchart LR
-  subgraph panel [TracePanel]
-    LinkRow[Link row bold or italic]
-    Drag[Drag handle optional]
+  subgraph panel [Traceability panel]
+    LinkRow[Link row]
+    Drag[Drag handle]
   end
   subgraph canvas [ModelDiagramCanvas]
-    Drop[onDrop]
+    Drop[onDrop + emit placeExistingModelLink]
   end
   subgraph editor [ModelEditor]
     Place[placeTraceLinkOnDiagram]
@@ -47,61 +48,86 @@ flowchart LR
   Place --> Create
 ```
 
-## 1. Жирный / курсив в дереве трассировки
+## Цель
 
-**Правило:** сравниваем каждую отображаемую в дереве связь `EditorLink` с **активной** диаграммой (если она открыта и не read-only в контексте отображения — достаточно факта «есть `activeDiagram`»).
+Сделать в трассировке быстрый визуальный ответ и прямое действие:
 
-- Собрать `Set` из `modelLinkId` всех рёбер `activeDiagram.parsedAttrs.instances.edges` (игнорировать только диаграмменные/заметочные префиксы по аналогии с [`isDiagramOnlyEdgeModelLinkId`](../../src/features/models/ModelEditor.vue), если такие `modelLinkId` теоретически попадут в дерево — обычно нет).
-- Для строки связи в [`ModelTraceBranch.vue`](../../src/features/models/components/ModelTraceBranch.vue):
-  - **нет активной диаграммы** — нейтральный стиль (как сейчас), без курсива/жирного;
-  - **связь есть на диаграмме** — `font-weight: 600/700` на тексте связи (и при желании иконку не трогать);
-  - **связи нет на диаграмме** — `font-style: italic`.
+- **жирный** — связь уже есть на текущей диаграмме;
+- *курсив* — связи на текущей диаграмме нет (и её можно добавить);
+- drag этой связи из панели сразу на canvas с созданием edge-инстанса для существующего `EditorLink`.
 
-Передача данных: из `ModelEditor` в `ModelTraceabilityPanel` передать, например, `activeDiagram: EditorDiagram | null` (или только `linkIdsOnActiveDiagram: Set<string>` / callback `isModelLinkOnActiveDiagram(linkId)`), затем пропсом в `ModelTraceBranch`.
+## Границы и допущения
 
-**Уточнение по охвату:** логично стилизовать **все** видимые в дереве связи на текущей ветке (не только «первый уровень» от изначально выбранной ноды). Если нужен только первый уровень — это отдельный флажок в пропсах.
+- Backend не меняется.
+- Формат `diagram.attrs.instances.edges[].modelLinkId` не меняется.
+- Drag разрешается только когда связь реально может быть размещена на активной диаграмме.
+- Если активной диаграммы нет или она read-only, панель остаётся информативной, но без drag.
 
-## 2. Drag-and-drop «отсутствующей» связи на канвас
+## План реализации
 
-**Цель:** по drop на холсте создать экземпляр ребра для уже существующего `EditorLink`, соединив **первые найденные** экземпляры нод с `modelNodeId` = `link.sourceId` / `link.targetId` на активной диаграмме (как уже делает `selectedNodeInstanceId`: `.find` по `modelNodeId` — строка ~672–675 `ModelEditor.vue`).
+### 1) Жирный / курсив в дереве трассировки
 
-**Когда разрешать drag** (все условия):
+Правило отображения относительно активной диаграммы:
 
-- Открыта диаграмма, не read-only (`isDiagramReadOnly` / аналог).
-- Для `link.id` **ещё нет** ребра на этой диаграмме: `!edges.some(e => e.modelLinkId === link.id)`.
-- На диаграмме есть экземпляр для `link.sourceId` и для `link.targetId`.
-- Есть relation для пары нотация + `link.linkTypeId` (как в `handleSelectExistingLink`).
-- `canConnect(link.sourceId, link.targetId)` ([`ModelEditor.vue`](../../src/features/models/ModelEditor.vue) ~2698) — согласованность с правилами нотации.
+- `activeDiagram` отсутствует -> нейтральный стиль;
+- `link.id` присутствует в `activeDiagram.parsedAttrs.instances.edges[].modelLinkId` -> текст связи `font-weight: 600`;
+- отсутствует -> `font-style: italic`.
 
-Если чего-то не хватает — **не** выставлять `draggable`, курсор `not-allowed`, опционально `title` с причиной (i18n).
+Технически:
 
-**Реализация DnD:**
+- в `ModelEditor` собрать `Set<string>` linkId активной диаграммы;
+- пробросить в `ModelTraceabilityPanel` и далее в `ModelTraceBranch`;
+- в `ModelTraceBranch` добавить классы, например `tb__link--on-diagram` / `tb__link--missing-on-diagram`.
 
-- MIME-тип, например `application/x-warchi-model-link-id` (уникальный префикс), значение — `link.id`.
-- Точка старта: отдельная иконка «хват» рядом со строкой связи (чтобы не конфликтовать с кнопкой раскрытия ветки), с `@dragstart` / `@dragend`.
-- В [`ModelDiagramCanvas.vue`](../../src/features/models/components/ModelDiagramCanvas.vue): расширить `hasDragType` / `isAllowedDropEvent` / `onDragOver` / `onDrop` по образцу `application/x-model-node-id` (~2305–2402). На drop — `emit('placeExistingModelLink', linkId)` (новое событие).
-- В `ModelEditor`: обработчик вызывает новую функцию `placeTraceLinkOnDiagram(linkId)`, которая:
-  - валидирует те же условия ещё раз (на случай гонки);
-  - находит `sourceInstanceId` / `targetInstanceId`;
-  - выставляет `pendingRelationId` и `pendingConnection` (порты без указания, как при простом соединении);
-  - вызывает `createOrReuseLink(linkId)`.
+### 2) Drag-and-drop “отсутствующей” связи на canvas
 
-Координаты drop для самого ребра не нужны — маршрут строится между нодами; при необходимости позже можно использовать точку для якорей/лейбла (вне скоупа).
+Новый payload: `application/x-warchi-model-link-id = link.id`.
 
-## 3. Локализация и тесты
+Разрешать drag только если одновременно:
 
-- Строки в [`src/i18n/locales/models.ts`](../../src/i18n/locales/models.ts): подсказка для drag, короткие причины «нельзя перетащить» (нет обеих нод на диаграмме, связь уже на диаграмме, нет relation для типа в этой нотации).
-- Юнит-тест на чистую функцию (новый файл рядом с панелью или в `utils/`): вход — `link`, `diagram`, `notationId`, `relations`, `relationRules`, `nodes`; выход — `{ onDiagram, draggable, reason? }`. Это покрывает ветвление без монтирования Vue.
+- есть `activeDiagram` и режим не read-only;
+- такой `link.id` ещё не размещён на диаграмме;
+- на диаграмме есть инстансы для `link.sourceId` и `link.targetId`;
+- есть relation для пары (`activeNotationId`, `link.linkTypeId`);
+- `canConnect(sourceId, targetId)` разрешает связь.
 
-## 4. Затронутые файлы (кратко)
+Интеграция:
+
+- `ModelTraceBranch`: drag-handle на строке связи, `@dragstart`/`@dragend`.
+- `ModelDiagramCanvas`: расширить `isAllowedDropEvent/onDragOver/onDrop`, добавить emit `placeExistingModelLink(linkId)`.
+- `ModelEditor`: обработчик `placeTraceLinkOnDiagram(linkId)`:
+  - повторная валидация условий (защита от гонок);
+  - поиск `sourceInstanceId/targetInstanceId`;
+  - установка `pendingRelationId` + `pendingConnection`;
+  - вызов существующего `createOrReuseLink(linkId)`.
+
+Координаты drop для ребра не обязательны: геометрия строится по endpoint-инстансам.
+
+### 3) Локализация + тесты
+
+- Добавить i18n-ключи в [`src/i18n/locales/models.ts`](../../src/i18n/locales/models.ts):
+  - подсказка drag;
+  - причины disabled-состояния (`alreadyOnDiagram`, `missingEndpointInstances`, `missingRelation`, `connectNotAllowed`, `readOnly`, `noActiveDiagram`).
+- Добавить unit-тесты для чистой функции вычисления статуса link в трассировке:
+  - вход: `link`, `activeDiagram`, `activeNotationId`, `relations`, `nodesOnDiagram`, `readOnly`, `canConnect`;
+  - выход: `{ onDiagram: boolean, draggable: boolean, reason?: string }`.
+
+## Acceptance criteria
+
+- При открытой диаграмме link-строки в трассировке явно различаются по состоянию (жирный/курсив).
+- “Отсутствующая” связь перетаскивается из трассировки на canvas и создаётся как edge существующего `EditorLink`.
+- Drag недоступен в невалидных состояниях и сообщает понятную причину (tooltip/i18n).
+- Повторный drop той же связи не создаёт дубль.
+
+## Затронутые файлы
 
 | Файл | Изменения |
 | --- | --- |
-| [`ModelEditor.vue`](../../src/features/models/ModelEditor.vue) | Пропсы в `ModelTraceabilityPanel`; `placeTraceLinkOnDiagram`; обработчик emit от канваса |
-| [`ModelTraceabilityPanel.vue`](../../src/features/models/components/ModelTraceabilityPanel.vue) | Проброс `activeDiagram` / предиката на диаграмму |
-| [`ModelTraceBranch.vue`](../../src/features/models/components/ModelTraceBranch.vue) | Классы жирный/курсив; drag-handle + `readOnly`/флаги |
-| [`ModelDiagramCanvas.vue`](../../src/features/models/components/ModelDiagramCanvas.vue) | Новый тип DnD + emit |
-| [`models.ts` (i18n)](../../src/i18n/locales/models.ts) | Новые ключи |
-| Новый `*.test.ts` | Логика готовности связи к drop |
+| [`ModelEditor.vue`](../../src/features/models/ModelEditor.vue) | Проброс статуса activeDiagram в трассировку; `placeTraceLinkOnDiagram`; обработчик emit от canvas |
+| [`ModelTraceabilityPanel.vue`](../../src/features/models/components/ModelTraceabilityPanel.vue) | Приём/проброс данных о link-id активной диаграммы |
+| [`ModelTraceBranch.vue`](../../src/features/models/components/ModelTraceBranch.vue) | Визуальные состояния link; drag-handle; tooltip причин disable |
+| [`ModelDiagramCanvas.vue`](../../src/features/models/components/ModelDiagramCanvas.vue) | Поддержка DnD payload для model-link + emit |
+| [`src/i18n/locales/models.ts`](../../src/i18n/locales/models.ts) | Новые строки для drag/disable причин |
+| Новый `*.test.ts` | Тесты вычисления статуса link (onDiagram/draggable/reason) |
 
-**Backend / papirus:** не требуются, если не меняется формат сохранения диаграммы (он уже поддерживает `modelLinkId` на ребре).
+Backend/papirus не требуются.

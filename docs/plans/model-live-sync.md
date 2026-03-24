@@ -1,6 +1,6 @@
 # Синхронизация модели между пользователями (live sync)
 
-**Связанные планы:** [индекс](modeling-collaboration-index.md) · [блокировки диаграмм](diagram-edit-locks.md) · [конфликты batch-save](model-batch-save-conflicts.md)
+**Связанные планы:** [индекс](modeling-collaboration-index.md) · [блокировки диаграмм](diagram-edit-locks.md) · [конфликты batch-save](model-batch-save-conflicts.md) · [gap-to-implementation + go/no-go](model-live-sync-gap-go-no-go.md)
 
 **Не путать с:** блокировка **одной** диаграммы — в отдельном плане. Здесь — общее состояние **модели** (ноды, связи, отображение в дереве).
 

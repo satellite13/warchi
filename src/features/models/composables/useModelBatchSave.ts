@@ -306,9 +306,34 @@ export function applyBatchRemapping(
   response: BatchSaveResponse,
   nodes: EditorNode[],
   links: EditorLink[],
-  diagrams: EditorDiagram[]
+  diagrams: EditorDiagram[],
+  request?: BatchSaveRequest
 ): void {
   const { nodeIdMap, linkIdMap, diagramIdMap } = response
+
+  // Build sets of IDs that were actually included in the batch request,
+  // so we only clear dirty/new flags for those entities (not ones edited concurrently).
+  const batchNodeIds = request
+    ? new Set([
+        ...request.nodes.create.map((n) => n.tempId),
+        ...request.nodes.update.map((n) => n.id),
+        ...request.nodes.delete,
+      ])
+    : null
+  const batchLinkIds = request
+    ? new Set([
+        ...request.links.create.map((l) => l.tempId),
+        ...request.links.update.map((l) => l.id),
+        ...request.links.delete,
+      ])
+    : null
+  const batchDiagramIds = request
+    ? new Set([
+        ...request.diagrams.create.map((d) => d.tempId),
+        ...request.diagrams.update.map((d) => d.id),
+        ...request.diagrams.delete,
+      ])
+    : null
 
   for (const node of nodes) {
     if (node._isNew && nodeIdMap[node.id]) {
@@ -318,7 +343,9 @@ export function applyBatchRemapping(
     if (node.parentNodeId && nodeIdMap[node.parentNodeId]) {
       node.parentNodeId = nodeIdMap[node.parentNodeId]!
     }
-    node._isDirty = false
+    if (!batchNodeIds || batchNodeIds.has(node.id)) {
+      node._isDirty = false
+    }
   }
 
   for (const link of links) {
@@ -334,7 +361,9 @@ export function applyBatchRemapping(
         }
       }
     }
-    link._isDirty = false
+    if (!batchLinkIds || batchLinkIds.has(link.id)) {
+      link._isDirty = false
+    }
   }
 
   for (const diagram of diagrams) {
@@ -350,6 +379,8 @@ export function applyBatchRemapping(
       diagram.id = diagramIdMap[diagram.id]!
       diagram._isNew = false
     }
-    diagram._isDirty = false
+    if (!batchDiagramIds || batchDiagramIds.has(diagram.id)) {
+      diagram._isDirty = false
+    }
   }
 }

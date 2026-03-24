@@ -196,6 +196,16 @@ const alignEnabled = ref(props.alignEnabled)
 const rulersEnabled = ref(props.rulersEnabled)
 const lockAnchorsEnabled = ref(props.lockAnchorsEnabled)
 const attachToOutlineEnabled = ref(props.attachToOutlineEnabled)
+
+// Sync local refs when parent changes props after mount
+watch(() => props.paletteVisible, (v) => { paletteVisible.value = v })
+watch(() => props.gridVisible, (v) => { gridVisible.value = v })
+watch(() => props.miniMapVisible, (v) => { miniMapVisible.value = v })
+watch(() => props.snapEnabled, (v) => { snapEnabled.value = v })
+watch(() => props.alignEnabled, (v) => { alignEnabled.value = v })
+watch(() => props.rulersEnabled, (v) => { rulersEnabled.value = v })
+watch(() => props.lockAnchorsEnabled, (v) => { lockAnchorsEnabled.value = v })
+watch(() => props.attachToOutlineEnabled, (v) => { attachToOutlineEnabled.value = v })
 const canUndo = ref(false)
 const canRedo = ref(false)
 

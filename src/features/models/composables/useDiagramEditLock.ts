@@ -91,7 +91,13 @@ export function useDiagramEditLock(options: {
     if (!id) return
     heldDiagramId = null
     clearHeartbeat()
-    await apiPost(`/diagram-locks/${id}/release`, {})
+    try {
+      await apiPost(`/diagram-locks/${id}/release`, {})
+    } catch {
+      // Release failed (network error, server down). The server-side lock
+      // will expire via heartbeat timeout — log but do not block the caller.
+      console.warn(`[DiagramEditLock] Failed to release lock for diagram ${id}`)
+    }
   }
 
   async function fetchLocksList(): Promise<void> {
@@ -158,10 +164,7 @@ export function useDiagramEditLock(options: {
         isBlockedByOther.value = true
         lockHolderDisplay.value = d.lockedByDisplay ?? null
         remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
-        void pollWhileBlocked(diagramId)
-        pollTimer = setInterval(() => {
-          void pollWhileBlocked(diagramId)
-        }, POLL_MS)
+        startBlockedPoll(diagramId)
         void fetchLocksList()
         return
       }
@@ -178,13 +181,23 @@ export function useDiagramEditLock(options: {
         isBlockedByOther.value = true
         lockHolderDisplay.value = d.lockedByDisplay ?? null
         remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
-        void pollWhileBlocked(diagramId)
-        pollTimer = setInterval(() => {
-          void pollWhileBlocked(diagramId)
-        }, POLL_MS)
+        startBlockedPoll(diagramId)
       }
     }
     void fetchLocksList()
+  }
+
+  /** Start interval-based polling while blocked. First poll fires immediately. */
+  function startBlockedPoll(diagramId: string): void {
+    clearPoll()
+    // Fire first poll immediately, then schedule subsequent polls.
+    // setInterval is set *before* the first poll to avoid the race where
+    // a fast poll → applyLockForSelection creates a new interval that gets
+    // overwritten by a late setInterval call.
+    pollTimer = setInterval(() => {
+      void pollWhileBlocked(diagramId)
+    }, POLL_MS)
+    void pollWhileBlocked(diagramId)
   }
 
   async function pollWhileBlocked(diagramId: string): Promise<void> {

@@ -641,6 +641,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
   const saveChanges = async (): Promise<boolean> => {
     if (!model.value) return false
+    if (isSaving.value) return false
     isSaving.value = true
     saveError.value = null
     saveSuccess.value = false
@@ -674,7 +675,7 @@ export const useModelEditor = (): ModelEditorReturn => {
             scheduleSaveErrorClear()
             return false
           }
-          applyBatchRemapping(batchResult.data, nodes, links, diagrams)
+          applyBatchRemapping(batchResult.data, nodes, links, diagrams, batchRequest)
           await refreshBatchSavedEntityTimestamps(
             { nodes, links, diagrams },
             batchRequest,

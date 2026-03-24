@@ -672,9 +672,9 @@ const activeDiagramNotationName = computed(() => {
   const notation = state.value.notations.find(item => item.id === notationId)
   if (notation) return notation.name
   if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.name
-  if (fallbackNotationMetaLoading.value) return 'Нотация загружается...'
+  if (fallbackNotationMetaLoading.value) return t('models.notationLoading')
   if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
-  return 'Нотация недоступна'
+  return t('models.notationUnavailable')
 })
 const activeDiagramNotationVersion = computed(() => {
   const notationId = activeDiagram.value?.notationId
@@ -710,7 +710,7 @@ watch(
       setUiError(
         error instanceof Error
           ? error.message
-          : 'Не удалось загрузить правила связей для активной нотации.'
+          : t('models.notationRelationRulesLoadFailed')
       )
     }
     const result = await apiGet<NotationResponse[]>(`/notations/${notationId}/newer-versions`)
@@ -734,7 +734,7 @@ watch(
       setUiError(
         error instanceof Error
           ? error.message
-          : 'Не удалось обновить relations и правила связей для диаграммы.'
+          : t('models.notationRelationRulesRefreshFailed')
       )
     }
   }
@@ -758,10 +758,10 @@ watch(
     if (!result.success) {
       fallbackNotationMetaError.value =
         result.error.status === 404
-          ? 'Метаданные нотации недоступны (backend не обновлён или нотация удалена)'
+          ? t('models.notationMetaUnavailable')
           : result.error.status === 403
-            ? 'Нет доступа к нотации'
-            : 'Не удалось загрузить нотацию'
+            ? t('models.notationAccessDenied')
+            : t('models.notationLoadFailed')
       return
     }
     fallbackNotationMeta.value = result.data
@@ -1182,12 +1182,12 @@ const pendingDeleteNodeSingleName = computed(() => {
       item => item.id === instanceId
     )
     if (!instance) return ''
-    if (isNoteInstance(instance)) return 'Заметка'
+    if (isNoteInstance(instance)) return t('models.noteName')
     return state.value.nodes.find(item => item.id === instance.modelNodeId)?.name ?? ''
   }
   const nodeId = pendingDeleteNodeIds.value[0]
   if (!nodeId) return ''
-  if (isDiagramNoteModelNodeId(nodeId)) return 'Заметка'
+  if (isDiagramNoteModelNodeId(nodeId)) return t('models.noteName')
   return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
 })
 const pendingDeleteDiagramName = computed(() => {
@@ -1197,7 +1197,7 @@ const pendingDeleteDiagramName = computed(() => {
 })
 
 const getLinkTypeName = (linkTypeId: string): string =>
-  state.value.linkTypes.find(item => item.id === linkTypeId)?.name ?? 'Неизвестный тип'
+  state.value.linkTypes.find(item => item.id === linkTypeId)?.name ?? t('models.unknownLinkType')
 
 const resolveRelationForLink = (link: EditorLink): RelationResponse | null => {
   const notationId = activeNotationId.value
@@ -1552,7 +1552,7 @@ const bindLinkRelation = (
 
 const openCreateFolder = (parentNodeId: string | null) => {
   if (!directoryNodeType.value) {
-    setUiError('Тип Directory не найден. Невозможно создать папку.')
+    setUiError(t('models.directoryTypeNotFound'))
     return
   }
   createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'folder' }
@@ -1564,7 +1564,7 @@ const openCreateFolder = (parentNodeId: string | null) => {
 
 const openCreateRegularNode = (parentNodeId: string | null) => {
   if (nonDirectoryNodeTypes.value.length === 0) {
-    setUiError('Нет доступных типов нод, кроме Directory.')
+    setUiError(t('models.noAvailableNodeTypes'))
     return
   }
   createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'node' }
@@ -1615,7 +1615,7 @@ const createDiagram = () => {
   if (!createDiagramNodeId.value || !newDiagramName.value.trim() || !newDiagramNotationId.value)
     return
   if (hasDiagramNameVersionConflict.value) {
-    setUiError('Диаграмма с таким именем и версией уже существует в модели.')
+    setUiError(t('models.diagramConflictMessage'))
     return
   }
   uiError.value = null
@@ -1785,7 +1785,7 @@ const switchDiagramWithoutSave = async () => {
     diagram => diagram.id === targetDiagramId && !diagram._isDeleted
   )
   if (!restoredTarget) {
-    setUiError('Не удалось открыть выбранную диаграмму после обновления данных.')
+    setUiError(t('models.diagramSwitchFailed'))
     cancelDiagramSwitch()
     return
   }
@@ -1817,7 +1817,7 @@ const validateRequiredCustomProperties = (): string | null => {
       for (const property of requiredTypeProps) {
         const value = node.parsedAttrs.typeProperties[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
-          return `У ноды "${node.name}" не заполнено обязательное свойство типа "${property.name}" (${nodeType.name}).`
+          return t('models.validationNodeTypePropRequired', { node: node.name, prop: property.name })
         }
       }
     }
@@ -1841,7 +1841,7 @@ const validateRequiredCustomProperties = (): string | null => {
       for (const property of requiredProperties) {
         const value = scopedValues[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
-          return `У ноды "${node.name}" не заполнено обязательное свойство "${property.name}" (компонент "${component.name}").`
+          return t('models.validationNodeComponentPropRequired', { node: node.name, prop: property.name, diagram: component.name })
         }
       }
     }
@@ -1869,7 +1869,7 @@ const validateRequiredCustomProperties = (): string | null => {
       for (const property of requiredProperties) {
         const value = scopedValues[property.name]
         if (!isRequiredPropertyFilled(value, property.type)) {
-          return `У связи "${relation.name}" не заполнено обязательное свойство "${property.name}".`
+          return t('models.validationLinkPropRequired', { link: relation.name, prop: property.name })
         }
       }
     }
@@ -2234,7 +2234,7 @@ const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
     showComponentChoiceModal.value = true
     return false
   }
-  setUiError('В выбранной нотации нет подходящего компонента для типа узла.')
+  setUiError(t('models.noMatchingComponent'))
   return false
 }
 
@@ -2344,7 +2344,7 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
   if (isDiagramReadOnly.value) return
   const diagram = activeDiagram.value
   if (!diagram || !diagram.nodeId) {
-    setUiError('Нельзя создать ноду без активной директории диаграммы.')
+    setUiError(t('models.cannotCreateNodeWithoutDirectory'))
     return
   }
   const component = state.value.components.find(item => item.id === componentId)
@@ -2353,7 +2353,7 @@ const createNodeFromPaletteComponent = (componentId: string, x: number, y: numbe
   const notationId = activeNotationId.value
   const defaultDirectoryPath = nodeTypeDefaultDirectoryById.value.get(component.nodeTypeId) ?? ''
   if (defaultDirectoryPath && !directoryNodeType.value) {
-    setUiError('Для автосоздания пути нужен тип узла Directory.')
+    setUiError(t('models.directoryTypeRequiredForAutoPath'))
     return
   }
   const parsedComponentAttrs = parseEntityAttrs(component.attrs ?? null)
@@ -2457,7 +2457,7 @@ const createDiagramNote = (x: number, y: number) => {
     height: 120,
     attrs: {
       isNote: true,
-      noteText: 'Новая заметка',
+      noteText: t('models.newNoteText'),
       diagramStyle: {
         nodeShape: 'rectangle',
         fillColor: '#fff9c4',
@@ -2576,7 +2576,7 @@ const startConnectNodes = (
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
   if (!sourceComponentId || !targetComponentId) {
-    setUiError('Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.')
+    setUiError(t('models.noComponentsForLink'))
     return
   }
 
@@ -2586,14 +2586,14 @@ const startConnectNodes = (
     )
     .map(rule => rule.relationId)
   if (ruleRelationIds.length === 0) {
-    setUiError('Для этой пары компонентов нет разрешённых связей по правилам нотации.')
+    setUiError(t('models.noAllowedRelationRules'))
     return
   }
   const allowedRelations = state.value.relations.filter(
     relation => relation.notationId === notationId && ruleRelationIds.includes(relation.id)
   )
   if (allowedRelations.length === 0) {
-    setUiError('Для этой пары компонентов нет доступных relation по правилам нотации.')
+    setUiError(t('models.noAvailableRelations'))
     return
   }
   pendingConnection.value = {
@@ -3683,7 +3683,7 @@ const restoreStyleFromNotation = () => {
       : null
 
     if (!component) {
-      setUiError('Для выбранной фигуры не найден компонент нотации.')
+      setUiError(t('models.figureComponentNotFound'))
       return
     }
 
@@ -3710,7 +3710,7 @@ const restoreStyleFromNotation = () => {
       : null
 
     if (!relation) {
-      setUiError('Для выбранной связи не найден relation нотации.')
+      setUiError(t('models.edgeRelationNotFound'))
       return
     }
 
@@ -3783,6 +3783,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener('keydown', onDeleteKeydown)
+  if (uiErrorTimer) {
+    clearTimeout(uiErrorTimer)
+    uiErrorTimer = null
+  }
 })
 </script>
 

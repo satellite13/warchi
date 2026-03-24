@@ -415,7 +415,7 @@ const canCreateBaseline = computed(
         </template>
       </template>
       <span v-if="notationOwnerInfo" class="model-header__info-owner">{{ notationOwnerInfo }}</span>
-      <span v-if="!diagramName" class="model-header__info-muted">Диаграмма не выбрана</span>
+      <span v-if="!diagramName" class="model-header__info-muted">{{ t('models.noDiagramSelected') }}</span>
     </div>
     <div v-if="!hideToolbar" class="model-header__center">
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />

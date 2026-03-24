@@ -17,7 +17,7 @@ const RETRY_INTERVAL_MS = 4000
 
 function clearRetryTimer() {
   if (retryTimer !== null) {
-    window.clearInterval(retryTimer)
+    window.clearTimeout(retryTimer)
     retryTimer = null
   }
 }
@@ -34,16 +34,23 @@ async function pingBackend(): Promise<boolean> {
   }
 }
 
-function startAutoRetry() {
+function scheduleNextRetry() {
   if (typeof window === "undefined" || retryTimer !== null) return
-  retryTimer = window.setInterval(async () => {
+  retryTimer = window.setTimeout(async () => {
+    retryTimer = null
     isRetrying.value = true
     const ok = await pingBackend()
     isRetrying.value = false
     if (ok) {
       clearOutage()
+    } else {
+      scheduleNextRetry()
     }
   }, RETRY_INTERVAL_MS)
+}
+
+function startAutoRetry() {
+  scheduleNextRetry()
 }
 
 export function reportAvailabilityOutage(kind: AvailabilityOutageKind, message: string) {

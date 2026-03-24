@@ -147,7 +147,9 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
     ghost.style.whiteSpace = "nowrap"
     document.body.appendChild(ghost)
     event.dataTransfer.setDragImage(ghost, 10, 10)
-    requestAnimationFrame(() => document.body.removeChild(ghost))
+    requestAnimationFrame(() => {
+      if (ghost.parentNode) ghost.parentNode.removeChild(ghost)
+    })
   }
 }
 

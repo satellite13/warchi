@@ -300,7 +300,7 @@ export async function uploadDiagramSvg(
         }
       }
       const rawMessage = extractErrorMessage(response.status, text)
-      const normalizedMessage = normalizeApiErrorMessage(response.status, url, rawMessage)
+      const normalizedMessage = normalizeApiErrorMessage(response.status, `/diagrams/${diagramId}/svg`, rawMessage)
       const outageKind = resolveOutageKind(response.status, normalizedMessage)
       if (outageKind) {
         reportAvailabilityOutage(outageKind, normalizedMessage)

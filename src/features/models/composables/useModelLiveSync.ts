@@ -104,9 +104,18 @@ export function useModelLiveSync(options: {
         apiGet<ModelData>(`/models/${mid}`),
       ])
 
-      if (!nodesRes.success || !linksRes.success || !diagramsRes.success) {
+      if (
+        !nodesRes.success ||
+        !linksRes.success ||
+        !diagramsRes.success ||
+        !modelRes.success
+      ) {
         return
       }
+
+      // Guard against stale results: if modelId changed while requests were in flight,
+      // discard results to avoid overwriting the newly loaded model's state.
+      if (options.modelId.value !== mid) return
 
       const remoteNodes = nodesRes.data.content ?? []
       const remoteLinks = linksRes.data.content ?? []
@@ -239,11 +248,17 @@ export function useModelLiveSync(options: {
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
 
+    // connectPush triggers pullRemoteSnapshot in its onConnect callback,
+    // so we only pull here if the tab is visible and WS is not being set up
+    // (to avoid a duplicate pull when onConnect fires quickly).
     connectPush()
 
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
       return
     }
+    // The onConnect callback in connectPush also pulls — the inFlight guard
+    // ensures only one pull runs at a time, so this is safe but may be redundant.
+    // We keep it for the case where WS connection is slow or fails.
     void pullRemoteSnapshot()
   }
 

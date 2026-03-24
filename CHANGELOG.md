@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-25
+
+### Fixed
+- Custom searchable and multi-select dropdowns stay within the viewport: panels open upward when the control is below mid-screen, with height clamped to available space.
+
+### Changed
+- Multi-select panel is teleported to `document.body` and uses the same placement rules as searchable selects (avoids clipping inside scrollable side panels).
+
 ## [0.4.0] - 2026-03-25
 
 ### Added

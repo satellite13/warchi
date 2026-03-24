@@ -4117,130 +4117,127 @@ onBeforeUnmount(() => {
   <BaseModal
     v-if="batchSaveConflict && batchSaveConflict.length > 0"
     :title="t('models.batchSaveConflictTitle')"
-    max-width="min(96vw, 880px)"
+    max-width="min(96vw, 780px)"
     @close="dismissBatchSaveConflict"
   >
-    <div class="batch-save-conflict__body">
-      <p class="batch-save-conflict__intro">
+    <div class="bsc__body">
+      <p class="bsc__intro">
         {{ t('models.batchSaveConflictIntro', { count: batchSaveConflict.length }) }}
       </p>
-      <p class="batch-save-conflict__repeat-hint">{{ t('models.batchSaveConflictRepeatHint') }}</p>
-      <p class="batch-save-conflict__scope-hint">{{ t('models.batchSaveConflictNotOnlyListedHint') }}</p>
-      <p v-if="batchConflictCrossLinkWarnings.loading" class="batch-save-conflict__cross-muted">
+
+      <!-- Cross-deleted links warning -->
+      <p v-if="batchConflictCrossLinkWarnings.loading" class="bsc__hint">
         {{ t('models.batchSaveConflictCrossDeletedLinksLoading') }}
       </p>
       <p
         v-else-if="batchConflictCrossLinkWarnings.error"
-        class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error"
+        class="bsc__alert bsc__alert--error"
       >
         {{ batchConflictCrossLinkWarnings.error }}
       </p>
       <div
         v-else-if="batchConflictCrossLinkWarnings.items.length > 0"
-        class="batch-save-conflict__cross-block"
+        class="bsc__alert bsc__alert--warn"
       >
-        <p class="batch-save-conflict__cross-title">{{ t('models.batchSaveConflictCrossDeletedLinksTitle') }}</p>
-        <ul class="batch-save-conflict__cross-list">
+        <strong>{{ t('models.batchSaveConflictCrossDeletedLinksTitle') }}</strong>
+        <ul class="bsc__cross-list">
           <li
             v-for="(cw, cwi) in batchConflictCrossLinkWarnings.items"
             :key="`${cw.modelLinkId}-${cwi}`"
-            class="batch-save-conflict__cross-item"
           >
-            <span class="batch-save-conflict__cross-diag">{{ formatBatchCrossLinkDiagramNames(cw.diagramNames) }}</span>
-            <span class="batch-save-conflict__cross-sep"> — </span>
-            <span>{{ cw.edgeSummary }}</span>
+            <span class="bsc__cross-diag">{{ formatBatchCrossLinkDiagramNames(cw.diagramNames) }}</span>
+            {{ cw.edgeSummary }}
           </li>
         </ul>
       </div>
-      <div class="batch-save-conflict__choices" role="group" :aria-label="t('models.batchSaveConflictChoicesAria')">
-        <div class="batch-save-conflict__choice">
-          <strong class="batch-save-conflict__choice-title">{{
-            t('models.batchSaveConflictChoiceReloadTitle')
-          }}</strong>
-          <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceReloadDesc') }}</p>
-        </div>
-        <div class="batch-save-conflict__choice batch-save-conflict__choice--overwrite">
-          <strong class="batch-save-conflict__choice-title">{{
-            t('models.batchSaveConflictChoiceOverwriteTitle')
-          }}</strong>
-          <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceOverwriteDesc') }}</p>
-        </div>
-      </div>
-      <ul class="batch-save-conflict__list">
-        <li v-for="row in batchSaveConflictRows" :key="row.key">
-          <div class="batch-save-conflict__row">
-            <span class="batch-save-conflict__kind">{{ row.kindLabel }}</span>
-            <span class="batch-save-conflict__name">{{ row.primary }}</span>
+
+      <!-- Conflict list -->
+      <div class="bsc__list">
+        <div v-for="row in batchSaveConflictRows" :key="row.key" class="bsc__item">
+          <div class="bsc__item-head">
+            <span class="bsc__tag">{{ row.kindLabel }}</span>
+            <span class="bsc__item-name">{{ row.primary }}</span>
           </div>
-          <p v-if="row.context" class="batch-save-conflict__context">
-            {{ row.context }}
-          </p>
-          <p v-if="row.detail" class="batch-save-conflict__meta">
-            {{ row.detail }}
-          </p>
-          <details class="batch-save-conflict__compare">
-            <summary class="batch-save-conflict__compare-summary">
-              {{ t('models.batchSaveConflictCompareToggle') }}
-            </summary>
-            <p v-if="row.compareServerError" class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error">
-              {{ t('models.batchSaveConflictCompareError') }}: {{ row.compareServerError }}
-            </p>
-            <p v-else-if="row.compareServerLoading" class="batch-save-conflict__compare-status">
-              {{ t('models.batchSaveConflictCompareLoading') }}
-            </p>
-            <p
-              v-else-if="row.compareTimestampOnlySinceDiagramOpen"
-              class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
-            >
-              {{ t('models.batchSaveConflictCompareTimestampSinceDiagramOpen') }}
-            </p>
-            <p
-              v-else-if="row.compareOnlyTimestampDiff"
-              class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
-            >
-              {{ t('models.batchSaveConflictCompareTimestampOnly') }}
-            </p>
-            <div v-if="row.compareRows.length > 0" class="batch-save-conflict__table-wrap">
-              <table class="batch-save-conflict__field-table">
-                <thead>
-                  <tr>
-                    <th scope="col">{{ t('models.batchSaveConflictFieldColField') }}</th>
-                    <th scope="col">{{ t('models.batchSaveConflictFieldColLocal') }}</th>
-                    <th scope="col">{{ t('models.batchSaveConflictFieldColServer') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="fr in row.compareRows"
-                    :key="fr.field"
-                    :class="{ 'batch-save-conflict__field-table--diff': fr.differs }"
-                  >
-                    <td class="batch-save-conflict__field-key">{{ fr.fieldLabel ?? fr.field }}</td>
-                    <td class="batch-save-conflict__field-val">
-                      <pre class="batch-save-conflict__field-pre">{{ fr.local }}</pre>
-                    </td>
-                    <td class="batch-save-conflict__field-val">
-                      <pre class="batch-save-conflict__field-pre">{{ fr.server }}</pre>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+          <p v-if="row.context" class="bsc__item-context">{{ row.context }}</p>
+          <p v-if="row.detail" class="bsc__item-meta">{{ row.detail }}</p>
+          <details class="bsc__details">
+            <summary>{{ t('models.batchSaveConflictCompareToggle') }}</summary>
+            <div class="bsc__details-body">
+              <p v-if="row.compareServerError" class="bsc__alert bsc__alert--error">
+                {{ t('models.batchSaveConflictCompareError') }}: {{ row.compareServerError }}
+              </p>
+              <p v-else-if="row.compareServerLoading" class="bsc__hint">
+                {{ t('models.batchSaveConflictCompareLoading') }}
+              </p>
+              <p
+                v-else-if="row.compareTimestampOnlySinceDiagramOpen || row.compareOnlyTimestampDiff"
+                class="bsc__hint bsc__hint--italic"
+              >
+                {{ row.compareTimestampOnlySinceDiagramOpen
+                  ? t('models.batchSaveConflictCompareTimestampSinceDiagramOpen')
+                  : t('models.batchSaveConflictCompareTimestampOnly') }}
+              </p>
+              <div v-if="row.compareRows.length > 0" class="bsc__table-wrap">
+                <table class="bsc__table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('models.batchSaveConflictFieldColField') }}</th>
+                      <th>{{ t('models.batchSaveConflictFieldColLocal') }}</th>
+                      <th>{{ t('models.batchSaveConflictFieldColServer') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="fr in row.compareRows"
+                      :key="fr.field"
+                      :class="{ 'bsc__table--diff': fr.differs }"
+                    >
+                      <td class="bsc__td-key">{{ fr.fieldLabel ?? fr.field }}</td>
+                      <td class="bsc__td-val"><pre>{{ fr.local }}</pre></td>
+                      <td class="bsc__td-val"><pre>{{ fr.server }}</pre></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </details>
-        </li>
-      </ul>
-    </div>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="dismissBatchSaveConflict">
+        </div>
+      </div>
+
+      <!-- Action cards -->
+      <div class="bsc__actions" role="group" :aria-label="t('models.batchSaveConflictChoicesAria')">
+        <button
+          type="button"
+          class="bsc__action bsc__action--reload"
+          @click="handleBatchConflictReload"
+        >
+          <span class="bsc__action-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3.5 10a6.5 6.5 0 0 1 11.25-4.43" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M16.5 10a6.5 6.5 0 0 1-11.25 4.43" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14 2.5v3.5h-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 17.5v-3.5h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="bsc__action-content">
+            <strong>{{ t('models.batchSaveConflictReload') }}</strong>
+            <span>{{ t('models.batchSaveConflictChoiceReloadDesc') }}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="bsc__action bsc__action--overwrite"
+          @click="handleBatchConflictOverwrite"
+        >
+          <span class="bsc__action-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10l4 4 8-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="bsc__action-content">
+            <strong>{{ t('models.batchSaveConflictOverwrite') }}</strong>
+            <span>{{ t('models.batchSaveConflictChoiceOverwriteDesc') }}</span>
+          </span>
+        </button>
+      </div>
+
+      <button type="button" class="bsc__dismiss" @click="dismissBatchSaveConflict">
         {{ t('common.cancel') }}
       </button>
-      <button type="button" class="btn btn--primary" @click="handleBatchConflictReload">
-        {{ t('models.batchSaveConflictReload') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="handleBatchConflictOverwrite">
-        {{ t('models.batchSaveConflictOverwrite') }}
-      </button>
-    </template>
+    </div>
   </BaseModal>
 
   <BaseModal
@@ -5246,158 +5243,124 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.batch-save-conflict__intro {
-  margin: 0 0 12px;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--base-text);
-}
-
-.batch-save-conflict__body {
-  max-height: min(68vh, 720px);
+/* ── Batch-save conflict dialog ──────────────── */
+.bsc__body {
+  max-height: min(72vh, 740px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
 }
 
-.batch-save-conflict__repeat-hint {
-  margin: 0 0 12px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
-
-.batch-save-conflict__scope-hint {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-muted);
-  background: var(--surface-muted);
-  border-radius: 8px;
-  border: 1px solid var(--border);
-}
-
-.batch-save-conflict__cross-muted {
-  margin: 0 0 12px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.batch-save-conflict__cross-block {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--warning);
-  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
-}
-
-.batch-save-conflict__cross-title {
-  margin: 0 0 8px;
+.bsc__intro {
+  margin: 0 0 16px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--base-text);
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
-.batch-save-conflict__cross-list {
-  margin: 0;
-  padding-left: 18px;
+/* Alerts & hints */
+.bsc__hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.bsc__hint--italic {
+  font-style: italic;
+}
+
+.bsc__alert {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.bsc__alert strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.bsc__alert--error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.bsc__alert--warn {
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  background: color-mix(in srgb, var(--warning) 6%, var(--surface));
   color: var(--base-text);
 }
 
-.batch-save-conflict__cross-item {
-  margin: 4px 0;
+.bsc__cross-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.batch-save-conflict__cross-diag {
+.bsc__cross-list li {
+  margin: 2px 0;
+}
+
+.bsc__cross-diag {
   font-weight: 500;
 }
 
-.batch-save-conflict__cross-sep {
-  color: var(--text-muted);
+.bsc__cross-diag::after {
+  content: ' — ';
+  color: var(--text-subtle);
 }
 
-.batch-save-conflict__choices {
-  display: grid;
-  gap: 10px;
-  margin: 0 0 16px;
-}
-
-@media (min-width: 640px) {
-  .batch-save-conflict__choices {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.batch-save-conflict__choice {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-}
-
-.batch-save-conflict__choice--overwrite {
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
-  background: color-mix(in srgb, var(--danger) 6%, var(--surface-muted));
-}
-
-.batch-save-conflict__choice-title {
-  display: block;
-  font-size: 13px;
-  margin-bottom: 6px;
-  color: var(--base-text);
-}
-
-.batch-save-conflict__choice-text {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-
-.batch-save-conflict__list {
-  margin: 0 0 12px;
-  padding-left: 1.2rem;
-  font-size: 13px;
-}
-
-.batch-save-conflict__list li {
-  margin-bottom: 10px;
-}
-
-.batch-save-conflict__row {
+/* Conflict list */
+.bsc__list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 20px;
+}
+
+.bsc__item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.bsc__item:hover {
+  border-color: var(--border);
+}
+
+.bsc__item-head {
+  display: flex;
   align-items: baseline;
-  gap: 6px 10px;
+  gap: 8px;
 }
 
-.batch-save-conflict__kind {
+.bsc__tag {
   flex-shrink: 0;
+  font-size: 10px;
   font-weight: 600;
-  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+  background: var(--surface-strong);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
 }
 
-.batch-save-conflict__name {
-  font-size: 14px;
+.bsc__item-name {
+  font-size: 13px;
   font-weight: 500;
   color: var(--base-text);
   word-break: break-word;
 }
 
-.batch-save-conflict__context {
-  margin: 4px 0 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
-
-.batch-save-conflict__meta {
+.bsc__item-context {
   margin: 4px 0 0;
   padding-left: 0;
   font-size: 12px;
@@ -5405,57 +5368,69 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-.batch-save-conflict__compare {
-  margin-top: 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  padding: 6px 8px;
-  background: var(--surface);
+.bsc__item-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-subtle);
 }
 
-.batch-save-conflict__compare-summary {
+/* Compare details */
+.bsc__details {
+  margin-top: 6px;
+}
+
+.bsc__details summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--primary);
   user-select: none;
+  padding: 2px 0;
 }
 
-.batch-save-conflict__table-wrap {
-  margin-top: 10px;
-  max-height: 280px;
+.bsc__details summary:hover {
+  text-decoration: underline;
+}
+
+.bsc__details-body {
+  padding-top: 8px;
+}
+
+.bsc__table-wrap {
+  max-height: 240px;
   overflow: auto;
   border-radius: 6px;
   border: 1px solid var(--border);
 }
 
-.batch-save-conflict__field-table {
+.bsc__table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-.batch-save-conflict__field-table th,
-.batch-save-conflict__field-table td {
-  padding: 6px 8px;
+.bsc__table th,
+.bsc__table td {
+  padding: 5px 8px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--border);
 }
 
-.batch-save-conflict__field-table th {
-  font-size: 11px;
+.bsc__table th {
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
   background: var(--surface-muted);
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
-.batch-save-conflict__field-key {
+.bsc__td-key {
   font-family: ui-monospace, monospace;
   font-size: 11px;
   color: var(--text-muted);
@@ -5463,11 +5438,11 @@ onBeforeUnmount(() => {
   word-break: break-word;
 }
 
-.batch-save-conflict__field-val {
+.bsc__td-val {
   width: 36%;
 }
 
-.batch-save-conflict__field-pre {
+.bsc__td-val pre {
   margin: 0;
   font-family: ui-monospace, monospace;
   font-size: 11px;
@@ -5476,26 +5451,116 @@ onBeforeUnmount(() => {
   word-break: break-word;
 }
 
-.batch-save-conflict__field-table--diff {
-  background: color-mix(in srgb, var(--warning) 12%, transparent);
+.bsc__table--diff {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
 }
 
-.batch-save-conflict__field-table--diff .batch-save-conflict__field-key {
+.bsc__table--diff .bsc__td-key {
   font-weight: 600;
   color: var(--base-text);
 }
 
-.batch-save-conflict__compare-status {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
+/* Action cards */
+.bsc__actions {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.batch-save-conflict__compare-status--error {
+@media (min-width: 560px) {
+  .bsc__actions {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.bsc__action {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.bsc__action:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.bsc__action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.bsc__action--reload:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+.bsc__action--overwrite:hover {
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+  background: color-mix(in srgb, var(--danger) 4%, var(--surface));
+}
+
+.bsc__action-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.bsc__action--reload .bsc__action-icon {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.bsc__action--overwrite .bsc__action-icon {
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
-.batch-save-conflict__compare-status--muted {
-  font-style: italic;
+.bsc__action-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bsc__action-content strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--base-text);
+}
+
+.bsc__action-content span:last-child {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.bsc__dismiss {
+  display: block;
+  margin: 0 auto;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-subtle);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.bsc__dismiss:hover {
+  color: var(--text-muted);
+  background: var(--surface-strong);
 }
 </style>

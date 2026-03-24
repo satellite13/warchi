@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import {
+  computeDropdownPanelPlacement,
+  DROPDOWN_SEARCH_BLOCK_PX,
+  type DropdownPanelPlacement,
+} from '@/utils/dropdownPanelPosition'
 
 export type MultiSelectOption = { id: string; label: string }
 
@@ -29,6 +34,21 @@ const isOpen = ref(false)
 const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const rootRef = ref<HTMLElement | null>(null)
+const controlRef = ref<HTMLDivElement | null>(null)
+const panelPlacement = ref<DropdownPanelPlacement | null>(null)
+
+function multiSelectHeaderBlockPx(): number {
+  return props.options.length > 5 ? DROPDOWN_SEARCH_BLOCK_PX : 6
+}
+
+function updatePanelPosition(): void {
+  if (!controlRef.value) return
+  const rect = controlRef.value.getBoundingClientRect()
+  panelPlacement.value = computeDropdownPanelPlacement(rect, {
+    headerBlockPx: multiSelectHeaderBlockPx(),
+    preferredMaxListHeight: 160,
+  })
+}
 
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -56,7 +76,11 @@ const toggle = () => {
   } else {
     isOpen.value = true
     searchQuery.value = ''
-    nextTick(() => searchInputRef.value?.focus())
+    updatePanelPosition()
+    nextTick(() => {
+      updatePanelPosition()
+      searchInputRef.value?.focus()
+    })
   }
 }
 
@@ -72,10 +96,21 @@ const toggleOption = (id: string) => {
 
 const handleClickOutside = (e: MouseEvent) => {
   if (!isOpen.value) return
-  if (rootRef.value && !rootRef.value.contains(e.target as Node)) {
-    isOpen.value = false
-  }
+  const target = e.target as HTMLElement
+  if (rootRef.value?.contains(target)) return
+  if (target.closest('.multi-select-panel')) return
+  isOpen.value = false
 }
+
+watch(isOpen, (open) => {
+  if (open) {
+    window.addEventListener('scroll', updatePanelPosition, true)
+    window.addEventListener('resize', updatePanelPosition)
+  } else {
+    window.removeEventListener('scroll', updatePanelPosition, true)
+    window.removeEventListener('resize', updatePanelPosition)
+  }
+})
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside, true)
@@ -83,12 +118,14 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside, true)
+  window.removeEventListener('scroll', updatePanelPosition, true)
+  window.removeEventListener('resize', updatePanelPosition)
 })
 </script>
 
 <template>
   <div ref="rootRef" class="multi-select" :class="{ 'multi-select--disabled': disabled }">
-    <div class="multi-select__control" @click.stop="toggle">
+    <div ref="controlRef" class="multi-select__control" @click.stop="toggle">
       <span
         class="multi-select__value"
         :class="{ 'multi-select__value--placeholder': modelValue.length === 0 }"
@@ -97,35 +134,50 @@ onBeforeUnmount(() => {
       </span>
       <UiIcon :name="isOpen ? 'expand_less' : 'expand_more'" class="multi-select__arrow" />
     </div>
-    <div v-if="isOpen" class="multi-select__panel">
-      <input
-        v-if="options.length > 5"
-        ref="searchInputRef"
-        v-model="searchQuery"
-        class="multi-select__search"
-        type="text"
-        :placeholder="searchPlaceholder"
-        @click.stop
-      />
-      <div class="multi-select__list">
-        <button
-          v-for="option in filteredOptions"
-          :key="option.id"
-          type="button"
-          class="multi-select__item"
-          :class="{ 'multi-select__item--active': selectedSet.has(option.id) }"
-          @click.stop="toggleOption(option.id)"
+    <Teleport to="body">
+      <div
+        v-if="isOpen && panelPlacement"
+        class="multi-select-panel multi-select__panel"
+        :style="{
+          ...(panelPlacement.top !== undefined ? { top: `${panelPlacement.top}px` } : {}),
+          ...(panelPlacement.bottom !== undefined ? { bottom: `${panelPlacement.bottom}px` } : {}),
+          left: `${panelPlacement.left}px`,
+          width: `${panelPlacement.width}px`,
+          maxHeight: `${panelPlacement.maxPanelHeight}px`,
+        }"
+      >
+        <input
+          v-if="options.length > 5"
+          ref="searchInputRef"
+          v-model="searchQuery"
+          class="multi-select__search"
+          type="text"
+          :placeholder="searchPlaceholder"
+          @click.stop
         >
-          <span class="multi-select__check">
-            <UiIcon v-if="selectedSet.has(option.id)" name="check" />
-          </span>
-          <span class="multi-select__item-label">{{ option.label }}</span>
-        </button>
-        <div v-if="filteredOptions.length === 0" class="multi-select__empty">
-          {{ emptyText || '—' }}
+        <div
+          class="multi-select__list"
+          :style="{ maxHeight: `${panelPlacement.maxListHeight}px` }"
+        >
+          <button
+            v-for="option in filteredOptions"
+            :key="option.id"
+            type="button"
+            class="multi-select__item"
+            :class="{ 'multi-select__item--active': selectedSet.has(option.id) }"
+            @click.stop="toggleOption(option.id)"
+          >
+            <span class="multi-select__check">
+              <UiIcon v-if="selectedSet.has(option.id)" name="check" />
+            </span>
+            <span class="multi-select__item-label">{{ option.label }}</span>
+          </button>
+          <div v-if="filteredOptions.length === 0" class="multi-select__empty">
+            {{ emptyText || '—' }}
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -181,16 +233,16 @@ onBeforeUnmount(() => {
 }
 
 .multi-select__panel {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
+  position: fixed;
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  z-index: 100;
+  z-index: 10000;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .multi-select__search {
@@ -211,7 +263,8 @@ onBeforeUnmount(() => {
 }
 
 .multi-select__list {
-  max-height: 160px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 3px;
 }

@@ -790,7 +790,7 @@
       <section class="hero container">
         <div class="hero__tag">
           <span class="dot"></span>
-          <span id="hero-version">v0.3</span> &mdash; open source, self-hosted
+          <span id="hero-version">v0.4</span> &mdash; open source, self-hosted
         </div>
         <h1>
           Архитектурный<br />
@@ -798,8 +798,9 @@
           нового поколения
         </h1>
         <p class="hero__sub">
-          Единая метамодель, нотации ArchiMate / C4 / BPMN / UML,
-          серверное версионирование и командная работа &mdash; без обмена файлами.
+          Единая метамодель и нотации ArchiMate / C4 / BPMN / UML, серверное SemVer,
+          синхронизация изменений модели в реальном времени, блокировка редактирования диаграммы,
+          трассировка связей и разрешение конфликтов при сохранении &mdash; всё в браузере, без обмена файлами.
         </p>
         <div class="hero__actions">
           <a class="btn btn--primary" href="/login">
@@ -838,8 +839,8 @@
               <div class="stat__label">Версионирование</div>
             </div>
             <div class="stat reveal reveal-delay-2">
-              <div class="stat__value">REST<span class="unit"> API</span></div>
-              <div class="stat__label">Интеграция</div>
+              <div class="stat__value">Live</div>
+              <div class="stat__label">Синхронизация модели</div>
             </div>
             <div class="stat reveal reveal-delay-3">
               <div class="stat__value">AGPL<span class="unit">-3.0</span></div>
@@ -855,7 +856,8 @@
           <div class="section__label">Возможности</div>
           <h2 class="reveal">Всё для enterprise-<br>архитектуры</h2>
           <p class="section__sub reveal">
-            От моделирования до совместной работы &mdash; единая платформа вместо набора разрозненных инструментов.
+            От моделирования до совместной работы: live-обновления дерева и связей, аккуратные блокировки на canvas
+            и понятные сценарии при конфликте сохранения.
           </p>
           <div class="features-grid">
             <div class="fcard reveal">
@@ -870,21 +872,21 @@
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
               <h3>Совместная работа</h3>
-              <p>Архитекторы, аналитики и заказчики работают в браузере. Без обмена файлами, без конфликтов.</p>
+              <p>Несколько человек в одной модели: изменения нод и связей подтягиваются без перезагрузки страницы. Редактирование последней версии диаграммы защищено блокировкой.</p>
             </div>
             <div class="fcard reveal reveal-delay-2">
               <div class="fcard__icon fcard__icon--amber">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
               <h3>Версионирование</h3>
-              <p>Сравнивайте версии моделей, откатывайте изменения. Серверный SemVer без Git-артефактов.</p>
+              <p>Сравнивайте версии моделей и диаграмм, ведите историю на сервере по SemVer. При расхождении с сервером &mdash; сравнение полей и выбор: подтянуть данные или перезаписать.</p>
             </div>
             <div class="fcard reveal">
               <div class="fcard__icon fcard__icon--blue">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" stroke="#3888ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
               <h3>Canvas-редактор</h3>
-              <p>Рисуйте диаграммы прямо в браузере. Фигуры привязаны к типам нотации, а не свободно рисуются.</p>
+              <p>Диаграммы в браузере с привязкой к типам нотации. Панель трассировки показывает, какие связи уже на открытой диаграмме; допустимые связи можно перетащить на холст.</p>
             </div>
             <div class="fcard reveal reveal-delay-1">
               <div class="fcard__icon fcard__icon--green">
@@ -897,8 +899,8 @@
               <div class="fcard__icon fcard__icon--amber">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>REST API</h3>
-              <p>Интегрируйте с CI/CD, CMDB или BI. OpenAPI-спецификация, JWT-аутентификация.</p>
+              <h3>REST и события</h3>
+              <p>REST и OpenAPI для интеграций, JWT-аутентификация. Для live-сценариев &mdash; подписка на обновления модели по WebSocket/STOMP (режим настраивается на клиенте).</p>
             </div>
           </div>
         </div>
@@ -926,7 +928,7 @@
             </div>
             <div class="bento-card reveal reveal-delay-1">
               <h3>История версий</h3>
-              <p>Каждое изменение фиксируется. Сравнивайте, откатывайте, ведите changelog.</p>
+              <p>Каждое изменение фиксируется. Сравнивайте версии, разбирайте конфликты пакетного сохранения по полям, откатывайте при необходимости.</p>
               <div class="vtree">
                 <div class="vtree__item">
                   <div class="vtree__line"></div>
@@ -958,6 +960,7 @@
                 <div><span class="prompt">$</span> docker compose up <span class="flag">-d</span> <span class="comment"># PostgreSQL + MinIO + сервер</span></div>
                 <div><span class="prompt">$</span> open <span class="flag">http://localhost:5173</span> <span class="comment"># открыть wArchi</span></div>
                 <div><span class="prompt">$</span> curl <span class="flag">-s</span> localhost:8080/api/v1/models | jq <span class="comment"># REST API</span></div>
+                <div><span class="comment"># Опционально: VITE_MODEL_LIVE_SYNC_MODE=hybrid в .env.local клиента</span></div>
               </div>
             </div>
           </div>
@@ -976,7 +979,7 @@
             <div class="acard reveal">
               <div class="acard__role">Architect</div>
               <h3>Архитекторы</h3>
-              <p>Ведите целевую и текущую архитектуру в единой модели. Трассируйте каждое изменение через версии.</p>
+              <p>Ведите целевую и текущую архитектуру в единой модели. Используйте трассировку и версии, чтобы видеть зависимости и эволюцию.</p>
             </div>
             <div class="acard reveal reveal-delay-1">
               <div class="acard__role">Analyst</div>
@@ -1014,6 +1017,10 @@
             <details class="faq-item reveal reveal-delay-3">
               <summary>Какие нотации поддерживаются?</summary>
               <div class="faq-body">ArchiMate 3.2, C4 Model, BPMN 2.0, UML. Кроме того, можно создавать собственные нотации с пользовательскими типами элементов.</div>
+            </details>
+            <details class="faq-item reveal">
+              <summary>Как устроено одновременное редактирование?</summary>
+              <div class="faq-body">Состояние модели (ноды, связи) может обновляться у всех открывших модель через live sync. Редактирование последней версии одной диаграммы защищается блокировкой: второй пользователь видит, что canvas занят, и может работать в режиме просмотра или с другой диаграммой.</div>
             </details>
           </div>
         </div>
@@ -1095,7 +1102,7 @@
     <!-- Footer -->
     <footer class="footer">
       <div class="container footer__inner">
-        <span class="footer__copy">&copy; 2026 wArchi · Версия: <span id="app-version">0.3.0</span></span>
+        <span class="footer__copy">&copy; 2026 wArchi · Версия: <span id="app-version">0.4.0</span></span>
         <div class="footer__links">
           <a href="/docs/overview">Документация</a>
           <a href="/wiki">Wiki</a>

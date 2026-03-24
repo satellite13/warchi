@@ -35,6 +35,12 @@ function diagramLockBadgeTitle(lock: DiagramLockStatusResponse): string {
   return t("models.diagramLockBadgeOther", { name: lock.lockedByDisplay || "—" })
 }
 
+function isDiagramLockedByCurrentUser(diagramId: string): boolean {
+  const lock = diagramLockFor(diagramId)
+  if (!lock || !props.currentUserId) return false
+  return lock.lockedByUserId === props.currentUserId
+}
+
 const emit = defineEmits<{
   selectNode: [nodeId: string]
   openDiagram: [diagramId: string]
@@ -520,6 +526,7 @@ defineExpose({ expandToNode, focusNode })
             <span
               v-if="diagramLockFor(row.diagram.id)"
               class="diagram-row__badge diagram-row__badge--lock"
+              :class="{ 'diagram-row__badge--lock-own': isDiagramLockedByCurrentUser(row.diagram.id) }"
               :title="diagramLockBadgeTitle(diagramLockFor(row.diagram.id)!)"
             >
               <UiIcon name="lock" class="diagram-row__lock-icon" />
@@ -1028,6 +1035,11 @@ defineExpose({ expandToNode, focusNode })
   padding: 2px 6px;
   color: var(--warning);
   border-color: var(--warning);
+}
+
+.diagram-row__badge--lock-own {
+  color: var(--success);
+  border-color: var(--success);
 }
 
 .diagram-row__lock-icon {

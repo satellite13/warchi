@@ -8,6 +8,18 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INFRA_DIR="$SCRIPT_DIR/.."
+STATE_FILE="$INFRA_DIR/state.env"
+if [ -f "$STATE_FILE" ]; then
+  # shellcheck source=/dev/null
+  source "$STATE_FILE"
+fi
+NAMESPACE="${NAMESPACE:-arch}"
+
+# shellcheck source=guard-no-orbstack.sh
+source "$SCRIPT_DIR/guard-no-orbstack.sh"
+assert_not_orbstack
+confirm_kubectl_deploy_target
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN} Деплой wArchi в Yandex Cloud           ${NC}"

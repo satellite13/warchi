@@ -10,6 +10,10 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=guard-no-orbstack.sh
+source "$SCRIPT_DIR/guard-no-orbstack.sh"
+assert_not_orbstack
+
 INFRA_DIR="$SCRIPT_DIR/.."
 PROJECT_ROOT="$INFRA_DIR/.."
 STATE_FILE="$INFRA_DIR/state.env"
@@ -21,6 +25,8 @@ fi
 # Путь к проекту arepos-server (рядом с warchi)
 AREPOS_DIR="${AREPOS_DIR:-$PROJECT_ROOT/../arepos-server}"
 NAMESPACE="${NAMESPACE:-arch}"
+confirm_kubectl_deploy_target
+
 VERSION="${1:-}"
 
 if [ -z "$REGISTRY_ID" ]; then

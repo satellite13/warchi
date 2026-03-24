@@ -10,6 +10,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=guard-no-orbstack.sh
+source "$SCRIPT_DIR/guard-no-orbstack.sh"
 ENV_FILE="$SCRIPT_DIR/../env.local"
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -404,6 +406,7 @@ echo -e "${GREEN} 7/8  Подключение kubectl               ${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 yc managed-kubernetes cluster get-credentials "$CLUSTER_ID" --external --force
+assert_not_orbstack
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 log_info "kubectl настроен, namespace '$NAMESPACE' создан"
 

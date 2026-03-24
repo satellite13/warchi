@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LinkTypeResponse } from '../../../types/api'
+import type { LinkTypeResponse, RelationResponse } from '../../../types/api'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
+import { computeTraceabilityLinkStatus, type TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
 import ModelTraceBranch from './ModelTraceBranch.vue'
 
 type DirectionMode = 'down' | 'up'
@@ -13,6 +14,12 @@ const props = defineProps<{
   links: EditorLink[]
   diagrams: EditorDiagram[]
   linkTypes: LinkTypeResponse[]
+  activeDiagram: EditorDiagram | null
+  activeNotationId: string | null
+  isDiagramReadOnly: boolean
+  relations: RelationResponse[]
+  canConnect: (sourceModelNodeId: string, targetModelNodeId: string) => boolean
+  isDiagramOnlyEdgeModelLinkId?: (modelLinkId: string) => boolean
 }>()
 
 const emit = defineEmits<{
@@ -217,6 +224,17 @@ const toggleDirection = () => {
   direction.value = direction.value === 'down' ? 'up' : 'down'
   expandedLinkKeys.value = new Set()
 }
+
+const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
+  computeTraceabilityLinkStatus({
+    link,
+    activeDiagram: props.activeDiagram,
+    activeNotationId: props.activeNotationId,
+    isDiagramReadOnly: props.isDiagramReadOnly,
+    relations: props.relations,
+    canConnect: props.canConnect,
+    isDiagramOnlyEdgeModelLinkId: props.isDiagramOnlyEdgeModelLinkId,
+  })
 </script>
 
 <template>
@@ -393,6 +411,7 @@ const toggleDirection = () => {
                 :resolve-next-node-id="resolveNextNodeId"
                 :is-link-expanded="isLinkExpanded"
                 :toggle-link="toggleLink"
+                :get-link-status="getLinkStatus"
                 @set-root="setRootFromTree"
               />
             </div>

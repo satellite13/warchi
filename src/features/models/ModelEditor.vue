@@ -2734,6 +2734,48 @@ const handleSelectExistingLink = (linkId: string) => {
   createOrReuseLink(linkId)
 }
 
+const placeTraceLinkOnDiagram = (linkId: string) => {
+  const diagram = activeDiagram.value
+  const notationId = activeNotationId.value
+  if (!diagram || !notationId || isDiagramReadOnly.value) return
+
+  const link = state.value.links.find(item => item.id === linkId && !item._isDeleted)
+  if (!link) return
+
+  const alreadyOnDiagram = diagram.parsedAttrs.instances.edges.some(
+    edge => edge.modelLinkId === link.id
+  )
+  if (alreadyOnDiagram) return
+
+  const relation = state.value.relations.find(
+    item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
+  )
+  if (!relation) return
+
+  if (!canConnect(link.sourceId, link.targetId)) return
+
+  const sourceInstance = diagram.parsedAttrs.instances.nodes.find(
+    instance => instance.modelNodeId === link.sourceId
+  )
+  const targetInstance = diagram.parsedAttrs.instances.nodes.find(
+    instance => instance.modelNodeId === link.targetId
+  )
+  if (!sourceInstance || !targetInstance) return
+
+  pendingConnection.value = {
+    sourceModelNodeId: link.sourceId,
+    targetModelNodeId: link.targetId,
+    sourceInstanceId: sourceInstance.id,
+    targetInstanceId: targetInstance.id,
+    sourcePortId: undefined,
+    targetPortId: undefined,
+    sourceOutlineParam: undefined,
+    targetOutlineParam: undefined,
+  }
+  pendingRelationId.value = relation.id
+  createOrReuseLink(link.id)
+}
+
 const createOrReuseLink = (linkId: string | null) => {
   const notationId = activeNotationId.value
   const diagram = activeDiagram.value
@@ -4003,6 +4045,7 @@ onBeforeUnmount(() => {
             @create-node-from-component="createNodeFromPaletteComponent"
             @create-note="createDiagramNote"
             @add-existing-node="addExistingNodeToDiagram"
+            @place-existing-model-link="placeTraceLinkOnDiagram"
             @connect-nodes="startConnectNodes"
             @request-auto-link="handleRequestAutoLink"
             @reconnect-edge="handleReconnectEdge"
@@ -4065,6 +4108,12 @@ onBeforeUnmount(() => {
               :links="state.links.filter(link => !link._isDeleted)"
               :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
               :link-types="state.linkTypes"
+              :active-diagram="activeDiagram"
+              :active-notation-id="activeNotationId"
+              :is-diagram-read-only="isDiagramReadOnly"
+              :relations="state.relations"
+              :can-connect="canConnect"
+              :is-diagram-only-edge-model-link-id="isDiagramOnlyEdgeModelLinkId"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />
@@ -4085,6 +4134,12 @@ onBeforeUnmount(() => {
               :links="state.links.filter((l) => !l._isDeleted)"
               :diagrams="state.diagrams.filter((d) => !d._isDeleted)"
               :link-types="state.linkTypes"
+              :active-diagram="activeDiagram"
+              :active-notation-id="activeNotationId"
+              :is-diagram-read-only="isDiagramReadOnly"
+              :relations="state.relations"
+              :can-connect="canConnect"
+              :is-diagram-only-edge-model-link-id="isDiagramOnlyEdgeModelLinkId"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />

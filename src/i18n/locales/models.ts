@@ -188,6 +188,16 @@ export const modelsMessages = {
       traceabilityDiagramsTitle: 'Используется в диаграммах',
       traceabilityNoDiagrams: 'Эта нода не размещена ни на одной диаграмме',
       traceabilityTreeTitle: 'Дерево трассировки',
+      traceabilityDragHint: 'Перетащите связь на диаграмму',
+      traceabilityDragDisabledNoActiveDiagram: 'Откройте диаграмму, чтобы перетащить связь',
+      traceabilityDragDisabledReadOnly: 'Диаграмма открыта в режиме только чтение',
+      traceabilityDragDisabledAlreadyOnDiagram: 'Эта связь уже размещена на диаграмме',
+      traceabilityDragDisabledMissingEndpointInstances:
+        'Для перетаскивания оба конца связи должны быть размещены на диаграмме',
+      traceabilityDragDisabledMissingRelation:
+        'В активной нотации нет relation для типа этой связи',
+      traceabilityDragDisabledConnectNotAllowed:
+        'Правила нотации запрещают соединение между этими нодами',
       defaultLinkType: 'Тип линии по умолчанию',
       autoLinkInGroups: 'Автолинки в группах',
       compareWithVersion: 'Сравнить с версией',
@@ -446,6 +456,16 @@ export const modelsMessages = {
       traceabilityDiagramsTitle: 'Used in diagrams',
       traceabilityNoDiagrams: 'This node is not placed on any diagram',
       traceabilityTreeTitle: 'Trace tree',
+      traceabilityDragHint: 'Drag the link onto the diagram',
+      traceabilityDragDisabledNoActiveDiagram: 'Open a diagram to drag this link',
+      traceabilityDragDisabledReadOnly: 'The active diagram is read-only',
+      traceabilityDragDisabledAlreadyOnDiagram: 'This link is already placed on the diagram',
+      traceabilityDragDisabledMissingEndpointInstances:
+        'Both link endpoints must be present on the diagram to drag it',
+      traceabilityDragDisabledMissingRelation:
+        'No relation for this link type in the active notation',
+      traceabilityDragDisabledConnectNotAllowed:
+        'Notation rules do not allow connecting these nodes',
       defaultLinkType: 'Default link type',
       autoLinkInGroups: 'Auto-links in groups',
       compareWithVersion: 'Compare with version',

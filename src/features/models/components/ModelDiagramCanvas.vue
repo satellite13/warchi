@@ -149,6 +149,7 @@ const emit = defineEmits<{
   createNodeFromComponent: [componentId: string, x: number, y: number]
   createNote: [x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
+  placeExistingModelLink: [modelLinkId: string]
   connectNodes: [
     sourceModelNodeId: string,
     targetModelNodeId: string,
@@ -2342,6 +2343,8 @@ const hasDragType = (event: DragEvent, type: string): boolean =>
   Boolean(event.dataTransfer?.types?.includes(type))
 
 const isAllowedDropEvent = (event: DragEvent): boolean => {
+  const modelLinkId = event.dataTransfer?.getData('application/x-warchi-model-link-id')
+  if (modelLinkId) return true
   const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) return true
   const notePayload = event.dataTransfer?.getData('application/x-model-diagram-note')
@@ -2372,7 +2375,9 @@ const onDragOver = (event: DragEvent) => {
   const hasComponentPayload = hasDragType(event, 'application/x-notation-component-id')
   const hasModelNodePayload = hasDragType(event, 'application/x-model-node-id')
   const hasNotePayload = hasDragType(event, 'application/x-model-diagram-note')
-  if (!hasComponentPayload && !hasModelNodePayload && !hasNotePayload) {
+  const hasModelLinkPayload = hasDragType(event, 'application/x-warchi-model-link-id')
+  if (!hasComponentPayload && !hasModelNodePayload && !hasNotePayload && !hasModelLinkPayload) {
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none'
     return
   }
 
@@ -2388,6 +2393,10 @@ const onDragOver = (event: DragEvent) => {
     }
   }
 
+  if (event.dataTransfer) {
+    // Adding existing model entities via DnD creates/reuses data instead of moving DOM elements.
+    event.dataTransfer.dropEffect = 'copy'
+  }
   event.preventDefault()
 }
 
@@ -2412,6 +2421,12 @@ const onDrop = (event: DragEvent) => {
   const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) {
     emit('addExistingNode', modelNodeId, x, y)
+    return
+  }
+
+  const modelLinkId = event.dataTransfer?.getData('application/x-warchi-model-link-id')
+  if (modelLinkId) {
+    emit('placeExistingModelLink', modelLinkId)
   }
 }
 

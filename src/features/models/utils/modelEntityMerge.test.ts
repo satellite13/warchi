@@ -22,26 +22,26 @@ describe("mergeEntityListFromRemote", () => {
       { id: "a", v: 2 },
     ]
     const out = mergeEntityListFromRemote(local, remote, toLoc)
-    expect(out.map((x) => x.id)).toEqual(["b", "a"])
-    expect(out.find((x) => x.id === "a")?.v).toBe(2)
-    expect(out.find((x) => x.id === "b")?.v).toBe(2)
+    expect(out.items.map((x) => x.id)).toEqual(["b", "a"])
+    expect(out.items.find((x) => x.id === "a")?.v).toBe(2)
+    expect(out.items.find((x) => x.id === "b")?.v).toBe(2)
   })
 
   it("keeps dirty local instead of remote", () => {
     const local: TLoc[] = [{ id: "a", v: 99, _isDirty: true }]
     const remote: TRow[] = [{ id: "a", v: 2 }]
     const out = mergeEntityListFromRemote(local, remote, toLoc)
-    expect(out).toHaveLength(1)
-    expect(out[0]!.v).toBe(99)
-    expect(out[0]!._isDirty).toBe(true)
+    expect(out.items).toHaveLength(1)
+    expect(out.items[0]!.v).toBe(99)
+    expect(out.items[0]!._isDirty).toBe(true)
   })
 
   it("keeps pending delete local when row still on server", () => {
     const local: TLoc[] = [{ id: "a", v: 1, _isDeleted: true }]
     const remote: TRow[] = [{ id: "a", v: 2 }]
     const out = mergeEntityListFromRemote(local, remote, toLoc)
-    expect(out[0]!._isDeleted).toBe(true)
-    expect(out[0]!.v).toBe(1)
+    expect(out.items[0]!._isDeleted).toBe(true)
+    expect(out.items[0]!.v).toBe(1)
   })
 
   it("drops clean local rows missing on server", () => {
@@ -51,7 +51,9 @@ describe("mergeEntityListFromRemote", () => {
     ]
     const remote: TRow[] = [{ id: "b", v: 2 }]
     const out = mergeEntityListFromRemote(local, remote, toLoc)
-    expect(out.map((x) => x.id)).toEqual(["b"])
+    expect(out.items.map((x) => x.id)).toEqual(["b"])
+    expect(out.missingRemoteIds).toEqual(["gone"])
+    expect(out.droppedIds).toEqual(["gone"])
   })
 
   it("appends local-only _isNew rows", () => {
@@ -61,15 +63,29 @@ describe("mergeEntityListFromRemote", () => {
     ]
     const remote: TRow[] = [{ id: "a", v: 2 }]
     const out = mergeEntityListFromRemote(local, remote, toLoc)
-    expect(out.map((x) => x.id)).toEqual(["a", "temp1"])
-    expect(out.find((x) => x.id === "temp1")?._isNew).toBe(true)
+    expect(out.items.map((x) => x.id)).toEqual(["a", "temp1"])
+    expect(out.items.find((x) => x.id === "temp1")?._isNew).toBe(true)
   })
 
   it("keeps dirty orphan not on server", () => {
     const local: TLoc[] = [{ id: "orphan", v: 3, _isDirty: true }]
     const remote: TRow[] = []
     const out = mergeEntityListFromRemote(local, remote, toLoc)
-    expect(out).toEqual(local)
+    expect(out.items).toEqual(local)
+    expect(out.missingRemoteIds).toEqual(["orphan"])
+    expect(out.droppedIds).toEqual([])
+  })
+
+  it("reports remote-deleted clean node in merge metadata", () => {
+    const local: TLoc[] = [
+      { id: "deleted-node", v: 1 },
+      { id: "alive", v: 2 },
+    ]
+    const remote: TRow[] = [{ id: "alive", v: 3 }]
+    const out = mergeEntityListFromRemote(local, remote, toLoc)
+    expect(out.items.map((x) => x.id)).toEqual(["alive"])
+    expect(out.missingRemoteIds).toEqual(["deleted-node"])
+    expect(out.droppedIds).toEqual(["deleted-node"])
   })
 })
 

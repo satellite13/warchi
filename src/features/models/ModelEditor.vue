@@ -4114,114 +4114,116 @@ onBeforeUnmount(() => {
     max-width="min(96vw, 880px)"
     @close="dismissBatchSaveConflict"
   >
-    <p class="batch-save-conflict__intro">
-      {{ t('models.batchSaveConflictIntro', { count: batchSaveConflict.length }) }}
-    </p>
-    <p class="batch-save-conflict__repeat-hint">{{ t('models.batchSaveConflictRepeatHint') }}</p>
-    <p class="batch-save-conflict__scope-hint">{{ t('models.batchSaveConflictNotOnlyListedHint') }}</p>
-    <p v-if="batchConflictCrossLinkWarnings.loading" class="batch-save-conflict__cross-muted">
-      {{ t('models.batchSaveConflictCrossDeletedLinksLoading') }}
-    </p>
-    <p
-      v-else-if="batchConflictCrossLinkWarnings.error"
-      class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error"
-    >
-      {{ batchConflictCrossLinkWarnings.error }}
-    </p>
-    <div
-      v-else-if="batchConflictCrossLinkWarnings.items.length > 0"
-      class="batch-save-conflict__cross-block"
-    >
-      <p class="batch-save-conflict__cross-title">{{ t('models.batchSaveConflictCrossDeletedLinksTitle') }}</p>
-      <ul class="batch-save-conflict__cross-list">
-        <li
-          v-for="(cw, cwi) in batchConflictCrossLinkWarnings.items"
-          :key="`${cw.modelLinkId}-${cwi}`"
-          class="batch-save-conflict__cross-item"
-        >
-          <span class="batch-save-conflict__cross-diag">{{ formatBatchCrossLinkDiagramNames(cw.diagramNames) }}</span>
-          <span class="batch-save-conflict__cross-sep"> — </span>
-          <span>{{ cw.edgeSummary }}</span>
+    <div class="batch-save-conflict__body">
+      <p class="batch-save-conflict__intro">
+        {{ t('models.batchSaveConflictIntro', { count: batchSaveConflict.length }) }}
+      </p>
+      <p class="batch-save-conflict__repeat-hint">{{ t('models.batchSaveConflictRepeatHint') }}</p>
+      <p class="batch-save-conflict__scope-hint">{{ t('models.batchSaveConflictNotOnlyListedHint') }}</p>
+      <p v-if="batchConflictCrossLinkWarnings.loading" class="batch-save-conflict__cross-muted">
+        {{ t('models.batchSaveConflictCrossDeletedLinksLoading') }}
+      </p>
+      <p
+        v-else-if="batchConflictCrossLinkWarnings.error"
+        class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error"
+      >
+        {{ batchConflictCrossLinkWarnings.error }}
+      </p>
+      <div
+        v-else-if="batchConflictCrossLinkWarnings.items.length > 0"
+        class="batch-save-conflict__cross-block"
+      >
+        <p class="batch-save-conflict__cross-title">{{ t('models.batchSaveConflictCrossDeletedLinksTitle') }}</p>
+        <ul class="batch-save-conflict__cross-list">
+          <li
+            v-for="(cw, cwi) in batchConflictCrossLinkWarnings.items"
+            :key="`${cw.modelLinkId}-${cwi}`"
+            class="batch-save-conflict__cross-item"
+          >
+            <span class="batch-save-conflict__cross-diag">{{ formatBatchCrossLinkDiagramNames(cw.diagramNames) }}</span>
+            <span class="batch-save-conflict__cross-sep"> — </span>
+            <span>{{ cw.edgeSummary }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="batch-save-conflict__choices" role="group" :aria-label="t('models.batchSaveConflictChoicesAria')">
+        <div class="batch-save-conflict__choice">
+          <strong class="batch-save-conflict__choice-title">{{
+            t('models.batchSaveConflictChoiceReloadTitle')
+          }}</strong>
+          <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceReloadDesc') }}</p>
+        </div>
+        <div class="batch-save-conflict__choice batch-save-conflict__choice--overwrite">
+          <strong class="batch-save-conflict__choice-title">{{
+            t('models.batchSaveConflictChoiceOverwriteTitle')
+          }}</strong>
+          <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceOverwriteDesc') }}</p>
+        </div>
+      </div>
+      <ul class="batch-save-conflict__list">
+        <li v-for="row in batchSaveConflictRows" :key="row.key">
+          <div class="batch-save-conflict__row">
+            <span class="batch-save-conflict__kind">{{ row.kindLabel }}</span>
+            <span class="batch-save-conflict__name">{{ row.primary }}</span>
+          </div>
+          <p v-if="row.context" class="batch-save-conflict__context">
+            {{ row.context }}
+          </p>
+          <p v-if="row.detail" class="batch-save-conflict__meta">
+            {{ row.detail }}
+          </p>
+          <details class="batch-save-conflict__compare">
+            <summary class="batch-save-conflict__compare-summary">
+              {{ t('models.batchSaveConflictCompareToggle') }}
+            </summary>
+            <p v-if="row.compareServerError" class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error">
+              {{ t('models.batchSaveConflictCompareError') }}: {{ row.compareServerError }}
+            </p>
+            <p v-else-if="row.compareServerLoading" class="batch-save-conflict__compare-status">
+              {{ t('models.batchSaveConflictCompareLoading') }}
+            </p>
+            <p
+              v-else-if="row.compareTimestampOnlySinceDiagramOpen"
+              class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
+            >
+              {{ t('models.batchSaveConflictCompareTimestampSinceDiagramOpen') }}
+            </p>
+            <p
+              v-else-if="row.compareOnlyTimestampDiff"
+              class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
+            >
+              {{ t('models.batchSaveConflictCompareTimestampOnly') }}
+            </p>
+            <div v-if="row.compareRows.length > 0" class="batch-save-conflict__table-wrap">
+              <table class="batch-save-conflict__field-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ t('models.batchSaveConflictFieldColField') }}</th>
+                    <th scope="col">{{ t('models.batchSaveConflictFieldColLocal') }}</th>
+                    <th scope="col">{{ t('models.batchSaveConflictFieldColServer') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="fr in row.compareRows"
+                    :key="fr.field"
+                    :class="{ 'batch-save-conflict__field-table--diff': fr.differs }"
+                  >
+                    <td class="batch-save-conflict__field-key">{{ fr.fieldLabel ?? fr.field }}</td>
+                    <td class="batch-save-conflict__field-val">
+                      <pre class="batch-save-conflict__field-pre">{{ fr.local }}</pre>
+                    </td>
+                    <td class="batch-save-conflict__field-val">
+                      <pre class="batch-save-conflict__field-pre">{{ fr.server }}</pre>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
         </li>
       </ul>
     </div>
-    <div class="batch-save-conflict__choices" role="group" :aria-label="t('models.batchSaveConflictChoicesAria')">
-      <div class="batch-save-conflict__choice">
-        <strong class="batch-save-conflict__choice-title">{{
-          t('models.batchSaveConflictChoiceReloadTitle')
-        }}</strong>
-        <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceReloadDesc') }}</p>
-      </div>
-      <div class="batch-save-conflict__choice batch-save-conflict__choice--overwrite">
-        <strong class="batch-save-conflict__choice-title">{{
-          t('models.batchSaveConflictChoiceOverwriteTitle')
-        }}</strong>
-        <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceOverwriteDesc') }}</p>
-      </div>
-    </div>
-    <ul class="batch-save-conflict__list">
-      <li v-for="row in batchSaveConflictRows" :key="row.key">
-        <div class="batch-save-conflict__row">
-          <span class="batch-save-conflict__kind">{{ row.kindLabel }}</span>
-          <span class="batch-save-conflict__name">{{ row.primary }}</span>
-        </div>
-        <p v-if="row.context" class="batch-save-conflict__context">
-          {{ row.context }}
-        </p>
-        <p v-if="row.detail" class="batch-save-conflict__meta">
-          {{ row.detail }}
-        </p>
-        <details class="batch-save-conflict__compare">
-          <summary class="batch-save-conflict__compare-summary">
-            {{ t('models.batchSaveConflictCompareToggle') }}
-          </summary>
-          <p v-if="row.compareServerError" class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error">
-            {{ t('models.batchSaveConflictCompareError') }}: {{ row.compareServerError }}
-          </p>
-          <p v-else-if="row.compareServerLoading" class="batch-save-conflict__compare-status">
-            {{ t('models.batchSaveConflictCompareLoading') }}
-          </p>
-          <p
-            v-else-if="row.compareTimestampOnlySinceDiagramOpen"
-            class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
-          >
-            {{ t('models.batchSaveConflictCompareTimestampSinceDiagramOpen') }}
-          </p>
-          <p
-            v-else-if="row.compareOnlyTimestampDiff"
-            class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
-          >
-            {{ t('models.batchSaveConflictCompareTimestampOnly') }}
-          </p>
-          <div v-if="row.compareRows.length > 0" class="batch-save-conflict__table-wrap">
-            <table class="batch-save-conflict__field-table">
-              <thead>
-                <tr>
-                  <th scope="col">{{ t('models.batchSaveConflictFieldColField') }}</th>
-                  <th scope="col">{{ t('models.batchSaveConflictFieldColLocal') }}</th>
-                  <th scope="col">{{ t('models.batchSaveConflictFieldColServer') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="fr in row.compareRows"
-                  :key="fr.field"
-                  :class="{ 'batch-save-conflict__field-table--diff': fr.differs }"
-                >
-                  <td class="batch-save-conflict__field-key">{{ fr.fieldLabel ?? fr.field }}</td>
-                  <td class="batch-save-conflict__field-val">
-                    <pre class="batch-save-conflict__field-pre">{{ fr.local }}</pre>
-                  </td>
-                  <td class="batch-save-conflict__field-val">
-                    <pre class="batch-save-conflict__field-pre">{{ fr.server }}</pre>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </details>
-      </li>
-    </ul>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="dismissBatchSaveConflict">
         {{ t('common.cancel') }}
@@ -5243,6 +5245,13 @@ onBeforeUnmount(() => {
   font-size: 14px;
   line-height: 1.45;
   color: var(--base-text);
+}
+
+.batch-save-conflict__body {
+  max-height: min(68vh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .batch-save-conflict__repeat-hint {

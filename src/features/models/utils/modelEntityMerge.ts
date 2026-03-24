@@ -12,6 +12,17 @@ export type MergeableEntity = {
   _isDeleted?: boolean
 }
 
+export type MergeEntityListFromRemoteResult<L extends MergeableEntity> = {
+  items: L[]
+  /**
+   * Локальные id, которых нет в снимке сервера (пропали/удалены на сервере
+   * или ещё не записаны локально).
+   */
+  missingRemoteIds: string[]
+  /** Подмножество `missingRemoteIds`, реально исключённое из результата merge. */
+  droppedIds: string[]
+}
+
 /**
  * @param local — текущие строки редактора
  * @param remoteRows — снимок с сервера (тот же порядок, что в API)
@@ -21,10 +32,12 @@ export function mergeEntityListFromRemote<L extends MergeableEntity, R extends {
   local: L[],
   remoteRows: R[],
   toEditor: (r: R) => L
-): L[] {
+): MergeEntityListFromRemoteResult<L> {
   const remoteMap = new Map(remoteRows.map((r) => [r.id, r]))
   const localById = new Map(local.map((l) => [l.id, l]))
   const result: L[] = []
+  const missingRemoteIds: string[] = []
+  const droppedIds: string[] = []
 
   for (const r of remoteRows) {
     const loc = localById.get(r.id)
@@ -36,16 +49,23 @@ export function mergeEntityListFromRemote<L extends MergeableEntity, R extends {
   }
 
   for (const loc of local) {
+    if (!remoteMap.has(loc.id)) {
+      missingRemoteIds.push(loc.id)
+    }
     if (loc._isNew && !remoteMap.has(loc.id)) {
       result.push(loc)
       continue
     }
     if (!remoteMap.has(loc.id) && !loc._isNew && (loc._isDirty || loc._isDeleted)) {
       result.push(loc)
+      continue
+    }
+    if (!remoteMap.has(loc.id) && !loc._isNew && !loc._isDirty && !loc._isDeleted) {
+      droppedIds.push(loc.id)
     }
   }
 
-  return result
+  return { items: result, missingRemoteIds, droppedIds }
 }
 
 /**

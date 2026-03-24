@@ -115,21 +115,24 @@ export function useModelLiveSync(options: {
       const diagramsBefore = options.state.value.diagrams
       const notationIdsBefore = new Set(collectNotationIds(diagramsBefore))
 
-      const nextNodes = mergeEntityListFromRemote(
+      const mergedNodes = mergeEntityListFromRemote(
         options.state.value.nodes,
         remoteNodes,
         toEditorNode
       )
-      const nextLinks = mergeEntityListFromRemote(
+      const mergedLinks = mergeEntityListFromRemote(
         options.state.value.links,
         remoteLinks,
         toEditorLink
       )
-      let nextDiagrams = mergeEntityListFromRemote(
+      const mergedDiagrams = mergeEntityListFromRemote(
         options.state.value.diagrams,
         remoteDiagrams,
         toEditorDiagram
       )
+      const nextNodes = mergedNodes.items
+      const nextLinks = mergedLinks.items
+      let nextDiagrams = mergedDiagrams.items
       const openId = options.openDiagramId?.value
       if (openId) {
         nextDiagrams = preserveOpenDiagramCanvasAfterRemoteMerge(

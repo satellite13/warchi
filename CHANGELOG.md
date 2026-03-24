@@ -4,13 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-25
+
 ### Added
-- Added configurable model live sync modes in frontend (`ws`, `poll`, `hybrid`) with polling fallback and interval control via env.
-- Added dedicated Model Editor composables for loading, save orchestration, conflict resolution, and notation relations/rules loading.
+- Model live sync on the frontend: configurable modes (`ws`, `poll`, `hybrid`), STOMP subscription, and polling fallback via environment variables.
+- Diagram edit locks: acquire/release while editing the latest diagram version, lock holder display, and admin view for open locks.
+- Batch save conflict handling in Model Editor with field-level compare, reload vs overwrite, and cross-deleted link warnings where relevant.
+- Traceability panel: highlight whether a model link is already on the active diagram; drag an eligible link from traceability onto the canvas to place its edge.
+- Availability guard and related login/docs flows for clearer behavior when the API is unreachable.
 
 ### Changed
-- Updated authentication redirect behavior so login preserves protected-route redirect while successful sign-up always returns to home.
-- Refreshed technical and in-app documentation to match current save conflict, live sync, and auth flows.
+- Model Editor refactored into smaller composables for load, save pipeline, notation relations/rules loading, and merge after reload.
+- Authentication redirect: login preserves return to a protected route; successful registration still lands on home.
+- In-app and technical documentation updated for live sync, diagram locks, save conflicts, and auth.
 
 ## [0.3.1] - 2026-03-22
 

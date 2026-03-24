@@ -21,6 +21,19 @@
 1. **MVP:** периодический `GET` снимка модели (узлы+связи±диаграммы) или лёгкий `editor-snapshot` раз в N с.
 2. **Целевой:** **SSE или WebSocket**, комната **`modelId`**, тема в духе `/topic/model/{modelId}` (см. [collaborative-editing-plan.md](../collaborative-editing-plan.md)).
 
+## Конфигурация фронтенда (реализовано)
+
+В `warchi` режим задаётся через env:
+
+- `VITE_MODEL_LIVE_SYNC_MODE=ws|poll|hybrid` (по умолчанию `hybrid`);
+- `VITE_MODEL_LIVE_POLL_MS=15000` (минимум 1000 мс).
+
+Поведение по режимам:
+
+- `ws` — только STOMP/WebSocket + pull по событиям;
+- `poll` — только периодический pull;
+- `hybrid` — STOMP как основной канал и fallback polling при потере WS.
+
 ## Сервер: сохранение → события → доставка подписчикам
 
 Поток, согласованный с REST-сохранением (например [ModelBatchSaveController.kt](../../../arepos-server/src/main/kotlin/ru/kavader/arepos/controller/ModelBatchSaveController.kt)):

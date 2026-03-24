@@ -93,6 +93,8 @@ BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./deploy.sh
 | `VITE_API_PROXY_TARGET` | `http://localhost:8080` | URL backend API |
 | `VITE_API_BASE_URL` | пусто | Базовый URL API |
 | `VITE_API_VERSION` | `v1` | Версия API |
+| `VITE_MODEL_LIVE_SYNC_MODE` | `hybrid` | Режим live sync модели: `ws`, `poll` или `hybrid` (WebSocket + fallback polling) |
+| `VITE_MODEL_LIVE_POLL_MS` | `15000` | Интервал опроса (мс) для режима `poll` и fallback в `hybrid` |
 
 ## Архитектура
 

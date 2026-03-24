@@ -1,6 +1,6 @@
 # Administration
 
-Administration pages are available to users with the **ADMIN** role.
+Administration pages are available to users with `ADMIN_PANEL:VIEW` permission. In practice this is typically granted to users with the **ADMIN** role.
 
 ## Users
 

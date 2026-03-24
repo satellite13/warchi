@@ -35,7 +35,7 @@ bash -n ./deploy.sh
 
 ## Branching and Pull Request Workflow
 
-1. Create a feature branch from `master`
+1. Create a feature branch from the current default branch (`master`/`main`, depending on repository settings)
 2. Keep commits focused and atomic
 3. Add/update tests for behavior changes
 4. Update docs when behavior or operations changed

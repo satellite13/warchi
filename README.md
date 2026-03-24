@@ -93,6 +93,8 @@ Configured via `.env.local`:
 | `VITE_API_PROXY_TARGET` | `http://localhost:8080` | Backend API URL |
 | `VITE_API_BASE_URL` | empty | API base URL |
 | `VITE_API_VERSION` | `v1` | API version |
+| `VITE_MODEL_LIVE_SYNC_MODE` | `hybrid` | Model live sync mode: `ws`, `poll`, or `hybrid` (WebSocket + polling fallback) |
+| `VITE_MODEL_LIVE_POLL_MS` | `15000` | Polling interval (ms) used in `poll` mode and as fallback in `hybrid` |
 
 ## Architecture Notes
 

@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added configurable model live sync modes in frontend (`ws`, `poll`, `hybrid`) with polling fallback and interval control via env.
+- Added dedicated Model Editor composables for loading, save orchestration, conflict resolution, and notation relations/rules loading.
+
+### Changed
+- Updated authentication redirect behavior so login preserves protected-route redirect while successful sign-up always returns to home.
+- Refreshed technical and in-app documentation to match current save conflict, live sync, and auth flows.
+
 ## [0.3.1] - 2026-03-22
 
 ### Added

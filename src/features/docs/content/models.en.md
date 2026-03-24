@@ -155,6 +155,14 @@ Button labels match the in-app `models` locale strings.
 
 **Who can edit the canvas** on an open diagram is also governed by an **edit lock** (one editor at a time) — see [Diagrams](/docs/diagrams).
 
+### Live sync between users
+
+The model editor uses live sync for shared models:
+
+- when other users change model data, the client pulls fresh model, node, link, and diagram state;
+- synchronization uses WebSocket notifications with periodic polling fallback;
+- your local unsaved draft remains visible in the current tab, and conflicting records are resolved via the save conflict dialog.
+
 ## Deleting a Model
 
 To delete a model, use the delete button in the model list. Deletion is irreversible and affects all model data.

@@ -7,6 +7,7 @@
 - **Models** — create and edit architectural models with version support
 - **Notations** — visual configuration of components and relations (shapes, styles, behavior)
 - **Diagrams** — graphical editor with navigation tools, auto-layout, PNG/SVG export, and JSON view
+- **Model live sync** — cross-user model synchronization with WebSocket and polling fallback support
 - **Diagram baselines** — create a new diagram version from current state and switch between versions
 - **Version comparison** — visual comparison for model versions and diagram versions with highlights and property table
 - **Types** — manage node/link types including custom and system properties
@@ -53,7 +54,7 @@ See comparison details in:
 
 ## Permissions and Sharing
 
-The system uses a role-based model and ACL permissions:
+The system uses a combination of roles and policy/ACL permissions:
 
 - **ADMIN** — full access to all resources.
 - **USER** — works with their own resources and those shared with them.

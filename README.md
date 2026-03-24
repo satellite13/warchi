@@ -93,7 +93,6 @@ Configured via `.env.local`:
 | `VITE_API_PROXY_TARGET` | `http://localhost:8080` | Backend API URL |
 | `VITE_API_BASE_URL` | empty | API base URL |
 | `VITE_API_VERSION` | `v1` | API version |
-| `VITE_CANVAS_*` | empty | Canvas/editor settings |
 
 ## Architecture Notes
 

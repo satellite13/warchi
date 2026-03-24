@@ -274,12 +274,9 @@ VITE_API_PROXY_TARGET=http://localhost:8080   # Backend URL for dev proxy
 VITE_API_BASE_URL=                            # API base path (usually empty)
 VITE_API_VERSION=v1                           # API version prefix
 
-# Canvas settings (optional)
-VITE_CANVAS_WORLD_WIDTH=5000
-VITE_CANVAS_WORLD_HEIGHT=3000
-VITE_CANVAS_ZOOM_MIN=0.25
-VITE_CANVAS_ZOOM_MAX=4
-# ... see .env.example for full list
+# Model live sync (optional)
+VITE_MODEL_LIVE_SYNC_MODE=hybrid              # ws | poll | hybrid
+VITE_MODEL_LIVE_POLL_MS=15000                 # polling interval in ms
 ```
 
 ## Styling Guidelines

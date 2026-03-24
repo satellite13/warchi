@@ -43,6 +43,7 @@ describe('diagramScopedProperties', () => {
           },
         },
       },
+      typeProperties: {},
     }
 
     const values = getDiagramScopedNodeValues({
@@ -68,6 +69,7 @@ describe('diagramScopedProperties', () => {
           },
         },
       },
+      typeProperties: {},
     }
 
     const changed = setDiagramScopedNodeValue({

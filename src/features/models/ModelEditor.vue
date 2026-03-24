@@ -18,6 +18,16 @@ import {
   type DiagramAttrs,
   type DiagramNodeInstance,
 } from './modelAttrs'
+import type { BatchConflictItem } from './composables/useModelBatchSave'
+import {
+  batchConflictCompareKey,
+  buildConflictCompareRows,
+  type ConflictTranslateFn,
+  computeMissingServerLinksOnCanvas,
+  type MissingServerLinkOnCanvasRow,
+  fetchServerConflictEntity,
+  filterConflictCompareRowsForUi,
+} from './utils/batchSaveConflictDisplay'
 import type { EditorLink, EditorNode } from './types'
 import { useDiagramEditLock } from './composables/useDiagramEditLock'
 import { useModelEditor } from './composables/useModelEditor'
@@ -36,7 +46,8 @@ import {
 import { useAuth } from '../../composables/useAuth'
 import { usePermissions } from '../../composables/usePermissions'
 import { getUserDisplayName } from '../../utils/userDisplay'
-import type { UserInfo } from '../../types/entities'
+import type { PaginatedResponse, UserInfo } from '../../types/entities'
+import { paginatedIsLastPage } from '../../utils/paginatedResponse'
 import { useCanShare } from '../../composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
@@ -56,9 +67,15 @@ import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import { bumpMinor, compareVersions } from '../../utils/version'
 import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
-import type { NotationMetaResponse, NotationResponse, RelationResponse } from '../../types/api'
+import type {
+  LinkResponse,
+  NotationMetaResponse,
+  NotationResponse,
+  RelationResponse,
+} from '../../types/api'
 import { useWikiDocuments } from '../../composables/useWikiDocuments'
 import { useDocumentModal } from './composables/useDocumentModal'
+import { formatDate } from '../../utils/formatDate'
 
 const {
   model,
@@ -81,25 +98,26 @@ const {
   createDiagramBaseline,
   ensureNotationRelationsAndRules,
   isNotationRelationsAndRulesLoading,
+  batchSaveConflict,
+  resolveBatchSaveReload,
+  resolveBatchSaveOverwrite,
+  dismissBatchSaveConflict,
 } = useModelEditor()
 
 const modelLiveSyncEnabled = computed(
   () => !!model.value && !isLoading.value && !errorMessage.value
 )
 
-useModelLiveSync({
-  modelId: computed(() => state.value.modelId || null),
-  state,
-  model,
-  enabled: modelLiveSyncEnabled,
-  isLoading,
-  isSaving,
-  modelDirty,
-  ensureNotationRelationsAndRules,
-})
 const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+const batchConflictFieldT: ConflictTranslateFn = (key, params) =>
+  String(t(key, (params ?? {}) as Record<string, unknown>))
+
+function formatBatchCrossLinkDiagramNames(names: readonly string[]): string {
+  return names.map(n => `«${n}»`).join(', ')
+}
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
 const canInspectDiagramJson = computed(() => {
   const permission = model.value?.accessPermission ?? null
@@ -107,14 +125,57 @@ const canInspectDiagramJson = computed(() => {
 })
 
 const selectedNodeId = ref<string | null>(null)
+const selectedDiagramId = ref<string | null>(null)
+/** `updatedAt` диаграммы с сервера на момент последнего переключения на её вкладку (для текста «только метка времени с момента открытия»). */
+const diagramConflictOpenBaselineUpdatedAt = ref<Record<string, string>>({})
+
+watch(
+  () => state.value.modelId,
+  () => {
+    diagramConflictOpenBaselineUpdatedAt.value = {}
+  }
+)
+
+watch(
+  () => selectedDiagramId.value,
+  id => {
+    if (!id) return
+    const d = state.value.diagrams.find(x => x.id === id && !x._isDeleted)
+    const u = d?.updatedAt
+    if (typeof u === 'string' && u.length > 0) {
+      diagramConflictOpenBaselineUpdatedAt.value = {
+        ...diagramConflictOpenBaselineUpdatedAt.value,
+        [id]: u,
+      }
+    }
+  },
+  { flush: 'post', immediate: true }
+)
+
+/** После сохранения `updatedAt` обновляется, вкладка та же — синхронизируем baseline для подсказок в модалке конфликта. */
+watch(
+  () => {
+    const id = selectedDiagramId.value
+    if (!id) return null
+    const d = state.value.diagrams.find(x => x.id === id && !x._isDeleted)
+    if (!d || d._isDirty) return null
+    const u = d.updatedAt
+    if (typeof u !== 'string' || !u.length) return null
+    return { id, u }
+  },
+  v => {
+    if (!v) return
+    diagramConflictOpenBaselineUpdatedAt.value = {
+      ...diagramConflictOpenBaselineUpdatedAt.value,
+      [v.id]: v.u,
+    }
+  },
+  { flush: 'post' }
+)
 const showShareModal = ref(false)
 const showCompareModal = ref(false)
 
-const versionDiff = useModelVersionDiff(() => ({
-  nodes: state.value.nodes.filter((n) => !n._isDeleted),
-  links: state.value.links.filter((l) => !l._isDeleted),
-  diagrams: state.value.diagrams.filter((d) => !d._isDeleted),
-}))
+const versionDiff = useModelVersionDiff()
 
 // Document modal — initialized later after all dependencies are defined (see useDocumentModal call below)
 
@@ -134,6 +195,285 @@ function handleCompareModalClose() {
   versionDiff.clearCompare()
 }
 
+function batchConflictKindLabel(kind: string): string {
+  switch (kind) {
+    case 'node':
+      return t('models.batchSaveConflictKindNode')
+    case 'link':
+      return t('models.batchSaveConflictKindLink')
+    case 'diagram':
+      return t('models.batchSaveConflictKindDiagram')
+    default:
+      return kind
+  }
+}
+
+function conflictShortId(id: string): string {
+  if (id.length <= 13) return id
+  return `${id.slice(0, 8)}…`
+}
+
+function batchConflictNodeContextLine(c: BatchConflictItem): string | null {
+  if (c.kind !== 'node') return null
+  const { nodes, nodeTypes } = state.value
+  const n =
+    nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
+  if (!n) return null
+  const typeName = nodeTypes.find(nt => nt.id === n.nodeTypeId)?.name?.trim()
+  const typePart = typeName
+    ? t('models.batchSaveConflictNodeTypeLabel', { name: typeName })
+    : t('models.batchSaveConflictNodeTypeUnknown')
+  let parentPart: string
+  if (!n.parentNodeId) {
+    parentPart = t('models.batchSaveConflictNodeRootParent')
+  } else {
+    const p = nodes.find(x => x.id === n.parentNodeId)
+    const parentName = p?.name?.trim()
+    parentPart = parentName
+      ? t('models.batchSaveConflictNodeParentLabel', { name: parentName })
+      : t('models.batchSaveConflictNodeParentMissing')
+  }
+  return `${typePart} · ${parentPart}`
+}
+
+function batchConflictPrimaryLine(c: BatchConflictItem): string {
+  const { nodes, links, diagrams, linkTypes } = state.value
+  if (c.kind === 'node') {
+    const n =
+      nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
+    const name = n?.name?.trim()
+    if (name) return name
+    if (n) return t('models.batchSaveConflictUnnamedNode')
+    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('node') })
+  }
+  if (c.kind === 'link') {
+    const l =
+      links.find(x => x.id === c.id && !x._isDeleted) ?? links.find(x => x.id === c.id)
+    if (l) {
+      const src = nodes.find(x => x.id === l.sourceId)
+      const tgt = nodes.find(x => x.id === l.targetId)
+      const srcName = src?.name?.trim() || conflictShortId(l.sourceId)
+      const tgtName = tgt?.name?.trim() || conflictShortId(l.targetId)
+      const lt = linkTypes.find(x => x.id === l.linkTypeId)
+      const typeName = lt?.name?.trim()
+      if (typeName) {
+        return t('models.batchSaveConflictLinkWithType', { type: typeName, from: srcName, to: tgtName })
+      }
+      return t('models.batchSaveConflictLinkLine', { from: srcName, to: tgtName })
+    }
+    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('link') })
+  }
+  if (c.kind === 'diagram') {
+    const d =
+      diagrams.find(x => x.id === c.id && !x._isDeleted) ??
+      diagrams.find(x => x.id === c.id)
+    if (d) {
+      return t('models.batchSaveConflictDiagramLine', { name: d.name, version: d.version })
+    }
+    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('diagram') })
+  }
+  return conflictShortId(c.id)
+}
+
+function batchConflictDetailLine(c: BatchConflictItem): string | null {
+  const loc = locale.value === 'en' ? 'en' : undefined
+  const your = c.clientBaseUpdatedAt
+    ? t('models.batchSaveConflictYourBaseTime', {
+        time: formatDate(c.clientBaseUpdatedAt, loc),
+      })
+    : null
+  const server = c.serverUpdatedAt
+    ? t('models.batchSaveConflictServerTime', {
+        time: formatDate(c.serverUpdatedAt, loc),
+      })
+    : null
+  if (your && server) return `${your} · ${server}`
+  return server ?? your
+}
+
+async function handleBatchConflictReload(): Promise<void> {
+  await resolveBatchSaveReload()
+}
+
+async function handleBatchConflictOverwrite(): Promise<void> {
+  await resolveBatchSaveOverwrite()
+}
+
+const batchConflictCompare = ref<
+  Record<
+    string,
+    {
+      rows: ReturnType<typeof buildConflictCompareRows>
+      serverLoading: boolean
+      serverError: string | null
+    }
+  >
+>({})
+
+let batchConflictFetchGen = 0
+let batchConflictCrossLinkGen = 0
+
+const batchConflictCrossLinkWarnings = ref<{
+  loading: boolean
+  error: string | null
+  items: MissingServerLinkOnCanvasRow[]
+}>({ loading: false, error: null, items: [] })
+
+/** Id связей на сервере после последнего опроса при открытой модалке конфликта (для пересчёта предупреждений при смене диаграммы). */
+const batchConflictServerLinkIds = ref<ReadonlySet<string> | null>(null)
+
+function recomputeBatchCrossLinkWarningItems(): void {
+  const ids = batchConflictServerLinkIds.value
+  if (!ids) return
+  const sid = selectedDiagramId.value
+  const activeDiag = sid
+    ? state.value.diagrams.find(d => d.id === sid && !d._isDeleted)
+    : undefined
+  const onlyDiagramId = activeDiag?.id
+  const items = computeMissingServerLinksOnCanvas(
+    state.value,
+    ids,
+    batchConflictFieldT,
+    onlyDiagramId
+  )
+  batchConflictCrossLinkWarnings.value = {
+    ...batchConflictCrossLinkWarnings.value,
+    items,
+  }
+}
+
+watch(
+  () => batchSaveConflict.value,
+  list => {
+    batchConflictFetchGen += 1
+    const gen = batchConflictFetchGen
+    if (!list?.length) {
+      batchConflictCompare.value = {}
+      batchConflictCrossLinkGen += 1
+      batchConflictServerLinkIds.value = null
+      batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
+      return
+    }
+    const next: Record<
+      string,
+      {
+        rows: ReturnType<typeof buildConflictCompareRows>
+        serverLoading: boolean
+        serverError: string | null
+      }
+    > = {}
+    for (const c of list) {
+      const key = batchConflictCompareKey(c)
+      next[key] = {
+        rows: buildConflictCompareRows(c, state.value, null, true, null, batchConflictFieldT),
+        serverLoading: true,
+        serverError: null,
+      }
+    }
+    batchConflictCompare.value = next
+
+    batchConflictCrossLinkGen += 1
+    const gCross = batchConflictCrossLinkGen
+    batchConflictServerLinkIds.value = null
+    batchConflictCrossLinkWarnings.value = { loading: true, error: null, items: [] }
+    void (async () => {
+      const mid = state.value.modelId
+      if (!mid) {
+        if (gCross === batchConflictCrossLinkGen) {
+          batchConflictServerLinkIds.value = null
+          batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
+        }
+        return
+      }
+      const collected: LinkResponse[] = []
+      let page = 0
+      const pageSize = 2000
+      while (true) {
+        const q = new URLSearchParams({ size: String(pageSize), page: String(page) })
+        const r = await apiGet<PaginatedResponse<LinkResponse>>(
+          `/links?modelId=${encodeURIComponent(mid)}&${q.toString()}`
+        )
+        if (gCross !== batchConflictCrossLinkGen) return
+        if (!r.success) {
+          batchConflictServerLinkIds.value = null
+          batchConflictCrossLinkWarnings.value = { loading: false, error: r.error.message, items: [] }
+          return
+        }
+        const chunk = r.data.content ?? []
+        collected.push(...chunk)
+        if (paginatedIsLastPage(r.data, page)) break
+        page += 1
+      }
+      if (gCross !== batchConflictCrossLinkGen) return
+      const serverIds = new Set(collected.map(l => l.id))
+      batchConflictServerLinkIds.value = serverIds
+      batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
+      recomputeBatchCrossLinkWarningItems()
+    })()
+
+    void Promise.all(
+      list.map(async c => {
+        const key = batchConflictCompareKey(c)
+        const res = await fetchServerConflictEntity(c, apiGet)
+        if (gen !== batchConflictFetchGen) return
+        if (!batchConflictCompare.value[key]) return
+        batchConflictCompare.value = {
+          ...batchConflictCompare.value,
+          [key]: {
+            serverLoading: false,
+            serverError: res.ok ? null : res.error,
+            rows: buildConflictCompareRows(
+              c,
+              state.value,
+              res.ok ? res.data : null,
+              false,
+              res.ok ? null : res.error,
+              batchConflictFieldT
+            ),
+          },
+        }
+      })
+    )
+  }
+)
+
+const batchSaveConflictRows = computed(() => {
+  const list = batchSaveConflict.value
+  if (!list?.length) return []
+  return list.map((c, idx) => {
+    const key = batchConflictCompareKey(c)
+    const cmp = batchConflictCompare.value[key]
+    const rawRows = cmp?.rows ?? []
+    const compareServerLoading = cmp?.serverLoading ?? true
+    const compareServerError = cmp?.serverError ?? null
+    const compareRows = compareServerLoading
+      ? []
+      : filterConflictCompareRowsForUi(rawRows)
+    const compareOnlyTimestampDiff =
+      !compareServerLoading &&
+      compareRows.length === 0 &&
+      rawRows.some(r => r.differs)
+    const openBaseline = diagramConflictOpenBaselineUpdatedAt.value[c.id]
+    const compareTimestampOnlySinceDiagramOpen =
+      compareOnlyTimestampDiff &&
+      c.kind === 'diagram' &&
+      c.clientBaseUpdatedAt != null &&
+      openBaseline === c.clientBaseUpdatedAt
+    return {
+      key: `${c.kind}-${c.id}-${idx}`,
+      kindLabel: batchConflictKindLabel(c.kind),
+      primary: batchConflictPrimaryLine(c),
+      context: batchConflictNodeContextLine(c),
+      detail: batchConflictDetailLine(c),
+      compareRows,
+      compareServerLoading,
+      compareServerError,
+      compareOnlyTimestampDiff,
+      compareTimestampOnlySinceDiagramOpen,
+    }
+  })
+})
+
 const compareModalState = computed(() => ({
   relatedVersions: versionDiff.relatedVersions.value,
   relatedVersionsLoading: versionDiff.relatedVersionsLoading.value,
@@ -142,7 +482,6 @@ const compareModalState = computed(() => ({
   compareTargetError: versionDiff.compareTargetError.value,
   diff: versionDiff.diff.value,
 }))
-const selectedDiagramId = ref<string | null>(null)
 const selectedModelNodeIds = ref<string[]>([])
 const selectedInstanceIds = ref<string[]>([])
 const selectedModelLinkId = ref<string | null>(null)
@@ -167,6 +506,19 @@ const activeDiagram = computed(() =>
       ) ?? null)
     : null
 )
+
+useModelLiveSync({
+  modelId: computed(() => state.value.modelId || null),
+  state,
+  model,
+  enabled: modelLiveSyncEnabled,
+  isLoading,
+  isSaving,
+  modelDirty,
+  ensureNotationRelationsAndRules,
+  openDiagramId: selectedDiagramId,
+  currentUserId: computed(() => currentUser.value?.id ?? null),
+})
 
 const {
   gridVisible,
@@ -469,13 +821,6 @@ const selectedLinkEdgeInstanceId = computed<string | null>(() => {
   return null
 })
 
-const fallbackNodeNotationId = computed(() => {
-  const node = selectedNode.value
-  if (!node) return null
-  const notationKeys = Object.keys(node.parsedAttrs.notationComponents)
-  return notationKeys.length > 0 ? notationKeys[0] ?? null : null
-})
-const nodeContextNotationId = computed(() => activeNotationId.value ?? fallbackNodeNotationId.value)
 const availableNodeComponents = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
@@ -483,15 +828,16 @@ const availableNodeComponents = computed(() => {
   return resolveComponentByNodeType(state.value.components, notationId, node.nodeTypeId)
 })
 
+/** Только нотация открытой диаграммы: свойства компонента привязаны к экземпляру на диаграмме, без fallback по «первой» нотации из attrs ноды. */
 const nodeBindingComponentId = computed(() => {
-  const notationId = nodeContextNotationId.value
+  const notationId = activeNotationId.value
   const node = selectedNode.value
   if (!notationId || !node) return null
   return node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
 })
 
 const selectedNodeComponent = computed(() => {
-  const notationId = nodeContextNotationId.value
+  const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
   if (!notationId || !componentId) return null
   return (
@@ -508,8 +854,26 @@ const nodeCustomProperties = computed<CustomProperty[]>(() => {
   )
 })
 
+const selectedNodeTypeEntity = computed(() => {
+  const node = selectedNode.value
+  if (!node) return null
+  return state.value.nodeTypes.find(nt => nt.id === node.nodeTypeId) ?? null
+})
+
+const nodeTypeCustomProperties = computed<CustomProperty[]>(() => {
+  const nt = selectedNodeTypeEntity.value
+  if (!nt) return []
+  return parseEntityAttrs(nt.attrs ?? null).customProperties.filter(property => !property.system)
+})
+
+const nodeTypeScopedValues = computed<Record<string, unknown>>(() => {
+  const node = selectedNode.value
+  if (!node) return {}
+  return node.parsedAttrs.typeProperties
+})
+
 const nodeScopedValues = computed<Record<string, unknown>>(() => {
-  const notationId = nodeContextNotationId.value
+  const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
   if (!notationId || !componentId || !node) return {}
@@ -544,6 +908,8 @@ async function fetchDocumentsFromApi() {
   if (notationId) params.set('notationId', notationId)
   const componentId = nodeBindingComponentId.value
   if (componentId) params.set('componentId', componentId)
+  const nodeTypeId = selectedNode.value?.nodeTypeId ?? null
+  if (nodeTypeId) params.set('nodeTypeId', nodeTypeId)
   const nodeId = selectedNode.value?.id ?? null
   if (nodeId) params.set('nodeId', nodeId)
   const res = await apiGet<{ fileId: string; label: string }[]>(`/documents?${params.toString()}`)
@@ -551,7 +917,13 @@ async function fetchDocumentsFromApi() {
   else documentsFromApi.value = []
 }
 watch(
-  () => [state.value.modelId, activeNotationId.value, nodeBindingComponentId.value, selectedNode.value?.id],
+  () => [
+    state.value.modelId,
+    activeNotationId.value,
+    nodeBindingComponentId.value,
+    selectedNode.value?.id,
+    selectedNode.value?.nodeTypeId,
+  ],
   () => { fetchDocumentsFromApi() },
   { immediate: true }
 )
@@ -1432,9 +1804,23 @@ const isRequiredPropertyFilled = (value: unknown, type: string): boolean => {
 const validateRequiredCustomProperties = (): string | null => {
   const componentById = new Map(state.value.components.map(component => [component.id, component]))
   const relationById = new Map(state.value.relations.map(relation => [relation.id, relation]))
+  const nodeTypeById = new Map(state.value.nodeTypes.map(nt => [nt.id, nt]))
 
   for (const node of state.value.nodes) {
     if (node._isDeleted) continue
+
+    const nodeType = nodeTypeById.get(node.nodeTypeId)
+    if (nodeType) {
+      const requiredTypeProps = parseEntityAttrs(nodeType.attrs ?? null).customProperties.filter(
+        property => property.required && !property.system
+      )
+      for (const property of requiredTypeProps) {
+        const value = node.parsedAttrs.typeProperties[property.name]
+        if (!isRequiredPropertyFilled(value, property.type)) {
+          return `У ноды "${node.name}" не заполнено обязательное свойство типа "${property.name}" (${nodeType.name}).`
+        }
+      }
+    }
 
     for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
       const component = componentById.get(binding.componentId)
@@ -3061,8 +3447,17 @@ const handleToolbarAction = async (event: string) => {
   }
 }
 
+const setNodeTypePropertyValue = (key: string, value: unknown) => {
+  const node = selectedNode.value
+  if (!node) return
+  if (!Object.is(node.parsedAttrs.typeProperties[key], value)) {
+    node.parsedAttrs.typeProperties[key] = value
+    markNodeDirty(node.id)
+  }
+}
+
 const setNodeScopedValue = (key: string, value: unknown) => {
-  const notationId = nodeContextNotationId.value
+  const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
   const node = selectedNode.value
   const diagram = activeDiagram.value
@@ -3143,6 +3538,7 @@ const {
   markNodeDirty,
   markDiagramDirty,
   setNodeScopedValue,
+  setNodeTypePropertyValue,
   t,
 })
 
@@ -3634,6 +4030,8 @@ onBeforeUnmount(() => {
               :selected-node="selectedNode"
               :selected-link="selectedLink"
               :node-custom-properties="nodeCustomProperties"
+              :node-type-custom-properties="nodeTypeCustomProperties"
+              :node-type-scoped-values="nodeTypeScopedValues"
               :node-binding-component-id="nodeBindingComponentId"
               :link-binding-relation-id="linkBindingRelationId"
               :available-components="availableNodeComponents"
@@ -3646,9 +4044,12 @@ onBeforeUnmount(() => {
               :read-only="isDiagramReadOnly"
               @bind-node-component="(id) => selectedNode && !isDiagramReadOnly && bindNodeComponent(selectedNode, id)"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
+              @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
-              @create-document-for-property="(name) => !isDiagramReadOnly && handleCreateDocumentForProperty(name)"
+              @create-document-for-property="
+                (name, scope) => !isDiagramReadOnly && handleCreateDocumentForProperty(name, scope)
+              "
               :on-open-node-document="handleOpenNodeDoc"
             />
             <ModelTraceabilityPanel
@@ -3706,6 +4107,133 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
   </Teleport>
+
+  <BaseModal
+    v-if="batchSaveConflict && batchSaveConflict.length > 0"
+    :title="t('models.batchSaveConflictTitle')"
+    max-width="min(96vw, 880px)"
+    @close="dismissBatchSaveConflict"
+  >
+    <p class="batch-save-conflict__intro">
+      {{ t('models.batchSaveConflictIntro', { count: batchSaveConflict.length }) }}
+    </p>
+    <p class="batch-save-conflict__repeat-hint">{{ t('models.batchSaveConflictRepeatHint') }}</p>
+    <p class="batch-save-conflict__scope-hint">{{ t('models.batchSaveConflictNotOnlyListedHint') }}</p>
+    <p v-if="batchConflictCrossLinkWarnings.loading" class="batch-save-conflict__cross-muted">
+      {{ t('models.batchSaveConflictCrossDeletedLinksLoading') }}
+    </p>
+    <p
+      v-else-if="batchConflictCrossLinkWarnings.error"
+      class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error"
+    >
+      {{ batchConflictCrossLinkWarnings.error }}
+    </p>
+    <div
+      v-else-if="batchConflictCrossLinkWarnings.items.length > 0"
+      class="batch-save-conflict__cross-block"
+    >
+      <p class="batch-save-conflict__cross-title">{{ t('models.batchSaveConflictCrossDeletedLinksTitle') }}</p>
+      <ul class="batch-save-conflict__cross-list">
+        <li
+          v-for="(cw, cwi) in batchConflictCrossLinkWarnings.items"
+          :key="`${cw.modelLinkId}-${cwi}`"
+          class="batch-save-conflict__cross-item"
+        >
+          <span class="batch-save-conflict__cross-diag">{{ formatBatchCrossLinkDiagramNames(cw.diagramNames) }}</span>
+          <span class="batch-save-conflict__cross-sep"> — </span>
+          <span>{{ cw.edgeSummary }}</span>
+        </li>
+      </ul>
+    </div>
+    <div class="batch-save-conflict__choices" role="group" :aria-label="t('models.batchSaveConflictChoicesAria')">
+      <div class="batch-save-conflict__choice">
+        <strong class="batch-save-conflict__choice-title">{{
+          t('models.batchSaveConflictChoiceReloadTitle')
+        }}</strong>
+        <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceReloadDesc') }}</p>
+      </div>
+      <div class="batch-save-conflict__choice batch-save-conflict__choice--overwrite">
+        <strong class="batch-save-conflict__choice-title">{{
+          t('models.batchSaveConflictChoiceOverwriteTitle')
+        }}</strong>
+        <p class="batch-save-conflict__choice-text">{{ t('models.batchSaveConflictChoiceOverwriteDesc') }}</p>
+      </div>
+    </div>
+    <ul class="batch-save-conflict__list">
+      <li v-for="row in batchSaveConflictRows" :key="row.key">
+        <div class="batch-save-conflict__row">
+          <span class="batch-save-conflict__kind">{{ row.kindLabel }}</span>
+          <span class="batch-save-conflict__name">{{ row.primary }}</span>
+        </div>
+        <p v-if="row.context" class="batch-save-conflict__context">
+          {{ row.context }}
+        </p>
+        <p v-if="row.detail" class="batch-save-conflict__meta">
+          {{ row.detail }}
+        </p>
+        <details class="batch-save-conflict__compare">
+          <summary class="batch-save-conflict__compare-summary">
+            {{ t('models.batchSaveConflictCompareToggle') }}
+          </summary>
+          <p v-if="row.compareServerError" class="batch-save-conflict__compare-status batch-save-conflict__compare-status--error">
+            {{ t('models.batchSaveConflictCompareError') }}: {{ row.compareServerError }}
+          </p>
+          <p v-else-if="row.compareServerLoading" class="batch-save-conflict__compare-status">
+            {{ t('models.batchSaveConflictCompareLoading') }}
+          </p>
+          <p
+            v-else-if="row.compareTimestampOnlySinceDiagramOpen"
+            class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
+          >
+            {{ t('models.batchSaveConflictCompareTimestampSinceDiagramOpen') }}
+          </p>
+          <p
+            v-else-if="row.compareOnlyTimestampDiff"
+            class="batch-save-conflict__compare-status batch-save-conflict__compare-status--muted"
+          >
+            {{ t('models.batchSaveConflictCompareTimestampOnly') }}
+          </p>
+          <div v-if="row.compareRows.length > 0" class="batch-save-conflict__table-wrap">
+            <table class="batch-save-conflict__field-table">
+              <thead>
+                <tr>
+                  <th scope="col">{{ t('models.batchSaveConflictFieldColField') }}</th>
+                  <th scope="col">{{ t('models.batchSaveConflictFieldColLocal') }}</th>
+                  <th scope="col">{{ t('models.batchSaveConflictFieldColServer') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="fr in row.compareRows"
+                  :key="fr.field"
+                  :class="{ 'batch-save-conflict__field-table--diff': fr.differs }"
+                >
+                  <td class="batch-save-conflict__field-key">{{ fr.fieldLabel ?? fr.field }}</td>
+                  <td class="batch-save-conflict__field-val">
+                    <pre class="batch-save-conflict__field-pre">{{ fr.local }}</pre>
+                  </td>
+                  <td class="batch-save-conflict__field-val">
+                    <pre class="batch-save-conflict__field-pre">{{ fr.server }}</pre>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </li>
+    </ul>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="dismissBatchSaveConflict">
+        {{ t('common.cancel') }}
+      </button>
+      <button type="button" class="btn btn--primary" @click="handleBatchConflictReload">
+        {{ t('models.batchSaveConflictReload') }}
+      </button>
+      <button type="button" class="btn btn--danger" @click="handleBatchConflictOverwrite">
+        {{ t('models.batchSaveConflictOverwrite') }}
+      </button>
+    </template>
+  </BaseModal>
 
   <BaseModal
     v-if="showCreateNodeModal"
@@ -4708,5 +5236,251 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--text-subtle);
   text-align: center;
+}
+
+.batch-save-conflict__intro {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--base-text);
+}
+
+.batch-save-conflict__repeat-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__scope-hint {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.batch-save-conflict__cross-muted {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__cross-block {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+
+.batch-save-conflict__cross-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--base-text);
+}
+
+.batch-save-conflict__cross-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--base-text);
+}
+
+.batch-save-conflict__cross-item {
+  margin: 4px 0;
+}
+
+.batch-save-conflict__cross-diag {
+  font-weight: 500;
+}
+
+.batch-save-conflict__cross-sep {
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__choices {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+@media (min-width: 640px) {
+  .batch-save-conflict__choices {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.batch-save-conflict__choice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.batch-save-conflict__choice--overwrite {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface-muted));
+}
+
+.batch-save-conflict__choice-title {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--base-text);
+}
+
+.batch-save-conflict__choice-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__list {
+  margin: 0 0 12px;
+  padding-left: 1.2rem;
+  font-size: 13px;
+}
+
+.batch-save-conflict__list li {
+  margin-bottom: 10px;
+}
+
+.batch-save-conflict__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.batch-save-conflict__kind {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--base-text);
+  word-break: break-word;
+}
+
+.batch-save-conflict__context {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__meta {
+  margin: 4px 0 0;
+  padding-left: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__compare {
+  margin-top: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  background: var(--surface);
+}
+
+.batch-save-conflict__compare-summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  user-select: none;
+}
+
+.batch-save-conflict__table-wrap {
+  margin-top: 10px;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.batch-save-conflict__field-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.batch-save-conflict__field-table th,
+.batch-save-conflict__field-table td {
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-save-conflict__field-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.batch-save-conflict__field-key {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 28%;
+  word-break: break-word;
+}
+
+.batch-save-conflict__field-val {
+  width: 36%;
+}
+
+.batch-save-conflict__field-pre {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.batch-save-conflict__field-table--diff {
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.batch-save-conflict__field-table--diff .batch-save-conflict__field-key {
+  font-weight: 600;
+  color: var(--base-text);
+}
+
+.batch-save-conflict__compare-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.batch-save-conflict__compare-status--error {
+  color: var(--danger);
+}
+
+.batch-save-conflict__compare-status--muted {
+  font-style: italic;
 }
 </style>

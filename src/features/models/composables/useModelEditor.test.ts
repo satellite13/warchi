@@ -24,12 +24,78 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: routerPushMock })
 }))
 
+const batchSavePath = "/models/model-1/batch-save"
+
+function setupApiGetForBatchTimestampRefresh(): void {
+  apiGetMock.mockImplementation(async (path: string) => {
+    const p = String(path)
+    const nodeM = /^\/nodes\/([^/?]+)$/.exec(p)
+    if (nodeM) {
+      return {
+        success: true,
+        data: {
+          id: nodeM[1],
+          name: "n",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeTypeId: "type-1",
+          parentNodeId: null,
+          attrs: null,
+          updatedAt: "2099-01-01T00:00:00.000Z"
+        }
+      }
+    }
+    const linkM = /^\/links\/([^/?]+)$/.exec(p)
+    if (linkM) {
+      return {
+        success: true,
+        data: {
+          id: linkM[1],
+          sourceId: "a",
+          targetId: "b",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          linkTypeId: "lt-1",
+          attrs: null,
+          updatedAt: "2099-01-01T00:00:00.000Z"
+        }
+      }
+    }
+    const diagM = /^\/diagrams\/([^/?]+)$/.exec(p)
+    if (diagM) {
+      return {
+        success: true,
+        data: {
+          id: diagM[1],
+          name: "D",
+          version: "1.0.0",
+          notationId: "notation-1",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeId: null,
+          attrs: "{}",
+          updatedAt: "2099-01-01T00:00:00.000Z"
+        }
+      }
+    }
+    return { success: true, data: { content: [] } }
+  })
+}
+
 describe("useModelEditor save order", () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
-    apiGetMock.mockResolvedValue({ success: true, data: { content: [] } })
-    apiPostMock.mockResolvedValue({ success: true, data: { id: "created-id" } })
+    setupApiGetForBatchTimestampRefresh()
+    apiPostMock.mockImplementation(async (path: string) => {
+      if (String(path) === batchSavePath) {
+        return {
+          success: true,
+          data: { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} }
+        }
+      }
+      return { success: true, data: { id: "created-id" } }
+    })
     apiPutMock.mockImplementation(async (path: string) => {
       if (path === "/nodes/node-child") {
         return {
@@ -109,20 +175,16 @@ describe("useModelEditor save order", () => {
     stopScope!()
 
     expect(result).toBe(true)
-    expect(apiPutMock).toHaveBeenCalledWith(
-      "/nodes/node-child",
-      expect.objectContaining({
-        parentNodeId: null
-      })
-    )
-    expect(apiDeleteMock).toHaveBeenCalledWith("/nodes/node-folder")
-
-    const putOrder = apiPutMock.mock.invocationCallOrder[0] ?? 0
-    const deleteOrder = apiDeleteMock.mock.invocationCallOrder[0] ?? 0
-    expect(putOrder).toBeLessThan(deleteOrder)
+    const batchCall = apiPostMock.mock.calls.find((c: unknown[]) => c[0] === batchSavePath)
+    expect(batchCall).toBeDefined()
+    const body = batchCall![1] as {
+      nodes: { update: { id: string; parentNodeId: unknown }[]; delete: string[] }
+    }
+    expect(body.nodes.update.some(u => u.id === "node-child" && u.parentNodeId === null)).toBe(true)
+    expect(body.nodes.delete).toContain("node-folder")
   })
 
-  it("updates diagram versions from latest to oldest", async () => {
+  it("batch diagram updates follow diagrams array order in state", async () => {
     let saveChanges: (() => Promise<boolean>) | null = null
     let stopScope: (() => void) | null = null
 
@@ -186,35 +248,40 @@ describe("useModelEditor save order", () => {
     stopScope!()
 
     expect(result).toBe(true)
-    const firstPath = apiPutMock.mock.calls[0]?.[0]
-    const secondPath = apiPutMock.mock.calls[1]?.[0]
-    expect(firstPath).toBe("/diagrams/diagram-v2")
-    expect(secondPath).toBe("/diagrams/diagram-v1")
+    const batchCall = apiPostMock.mock.calls.find((c: unknown[]) => c[0] === batchSavePath)
+    expect(batchCall).toBeDefined()
+    const body = batchCall![1] as { diagrams: { update: { id: string }[] } }
+    // Порядок update в batch — как в `state.diagrams` (без сортировки по версии).
+    expect(body.diagrams.update.map(d => d.id)).toEqual(["diagram-v1", "diagram-v2"])
   })
 })
 
 describe("useModelEditor — golden save contract", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    apiGetMock.mockResolvedValue({ success: true, data: { content: [] } })
-    apiPostMock.mockResolvedValue({ success: true, data: { id: "created-id" } })
+    setupApiGetForBatchTimestampRefresh()
+    apiPostMock.mockImplementation(async (path: string) => {
+      if (String(path) === batchSavePath) {
+        return {
+          success: true,
+          data: {
+            nodeIdMap: {
+              "temp-parent": "server-parent",
+              "temp-child": "server-child",
+              "temp-grandchild": "server-grandchild"
+            },
+            linkIdMap: {},
+            diagramIdMap: {}
+          }
+        }
+      }
+      return { success: true, data: { id: "created-id" } }
+    })
     apiPutMock.mockResolvedValue({ success: true, data: {} })
     apiDeleteMock.mockResolvedValue({ success: true, data: undefined })
   })
 
   it("saveNodes creates in topological order", async () => {
-    apiPostMock.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({
-      success: true,
-      data: {
-        id:
-          body.name === "Parent"
-            ? "server-parent"
-            : body.name === "Child"
-              ? "server-child"
-              : "server-grandchild",
-        parentNodeId: body.parentNodeId ?? null
-      }
-    }))
 
     let saveChanges: (() => Promise<boolean>) | null = null
     let stopScope: (() => void) | null = null
@@ -283,34 +350,44 @@ describe("useModelEditor — golden save contract", () => {
 
     expect(result).toBe(true)
 
-    const nodePostCalls = apiPostMock.mock.calls.filter(
-      (call: unknown[]) => call[0] === "/nodes"
-    )
-    expect(nodePostCalls).toHaveLength(3)
-    expect(nodePostCalls[0]?.[1]).toEqual(
+    const batchCall = apiPostMock.mock.calls.find((c: unknown[]) => c[0] === batchSavePath)
+    expect(batchCall).toBeDefined()
+    const creates = (batchCall![1] as { nodes: { create: Record<string, unknown>[] } }).nodes.create
+    expect(creates).toHaveLength(3)
+    expect(creates[0]).toEqual(
       expect.objectContaining({ name: "Parent", parentNodeId: null })
     )
-    expect(nodePostCalls[1]?.[1]).toEqual(
-      expect.objectContaining({ name: "Child", parentNodeId: "server-parent" })
+    expect(creates[1]).toEqual(
+      expect.objectContaining({ name: "Child", parentNodeId: "temp-parent" })
     )
-    expect(nodePostCalls[2]?.[1]).toEqual(
-      expect.objectContaining({ name: "Grandchild", parentNodeId: "server-child" })
+    expect(creates[2]).toEqual(
+      expect.objectContaining({ name: "Grandchild", parentNodeId: "temp-child" })
     )
   })
 
   it("remapNodeIds updates links and diagram instances", async () => {
     apiPostMock.mockImplementation(async (path: string) => {
-      if (path === "/nodes")
-        return { success: true, data: { id: "server-node-1", parentNodeId: null } }
+      if (String(path) === batchSavePath) {
+        return {
+          success: true,
+          data: {
+            nodeIdMap: { "temp-node-1": "server-node-1" },
+            linkIdMap: {},
+            diagramIdMap: {}
+          }
+        }
+      }
       return { success: true, data: { id: "created-id" } }
     })
 
     let saveChanges: (() => Promise<boolean>) | null = null
     let stopScope: (() => void) | null = null
+    let editorRef: ReturnType<typeof useModelEditor> | null = null
 
     const scope = effectScope()
     scope.run(() => {
       const editor = useModelEditor()
+      editorRef = editor
       editor.model.value = {
         id: "model-1",
         name: "Model",
@@ -378,29 +455,41 @@ describe("useModelEditor — golden save contract", () => {
     })
 
     await saveChanges!()
+
+    const batchCall = apiPostMock.mock.calls.find((c: unknown[]) => c[0] === batchSavePath)
+    expect(batchCall).toBeDefined()
+    const linkUpd = (batchCall![1] as { links: { update: { sourceId: string }[] } }).links.update[0]
+    expect(linkUpd?.sourceId).toBe("temp-node-1")
+
+    const d0 = editorRef!.state.value.diagrams[0]
+    expect(d0?.parsedAttrs.instances.nodes[0]?.modelNodeId).toBe("server-node-1")
+
     stopScope!()
-
-    expect(apiPutMock.mock.calls[0]?.[0]).toBe("/links/link-1")
-    expect(apiPutMock.mock.calls[0]?.[1]?.sourceId).toBe("server-node-1")
-
-    expect(apiPutMock.mock.calls[1]?.[0]).toBe("/diagrams/diagram-1")
-    const diagramAttrs = JSON.parse(apiPutMock.mock.calls[1]?.[1]?.attrs)
-    expect(diagramAttrs.instances.nodes[0].modelNodeId).toBe("server-node-1")
   })
 
   it("saveLinks remaps edge IDs in diagrams", async () => {
     apiPostMock.mockImplementation(async (path: string) => {
-      if (path === "/links")
-        return { success: true, data: { id: "server-link-1" } }
+      if (String(path) === batchSavePath) {
+        return {
+          success: true,
+          data: {
+            nodeIdMap: {},
+            linkIdMap: { "temp-link-1": "server-link-1" },
+            diagramIdMap: {}
+          }
+        }
+      }
       return { success: true, data: { id: "created-id" } }
     })
 
     let saveChanges: (() => Promise<boolean>) | null = null
     let stopScope: (() => void) | null = null
+    let editorRef: ReturnType<typeof useModelEditor> | null = null
 
     const scope = effectScope()
     scope.run(() => {
       const editor = useModelEditor()
+      editorRef = editor
       editor.model.value = {
         id: "model-1",
         name: "Model",
@@ -411,7 +500,26 @@ describe("useModelEditor — golden save contract", () => {
       editor.state.value = {
         modelId: "model-1",
         ownerId: "owner-1",
-        nodes: [],
+        nodes: [
+          {
+            id: "node-a",
+            name: "A",
+            modelId: "model-1",
+            ownerId: "owner-1",
+            nodeTypeId: "type-1",
+            parentNodeId: null,
+            parsedAttrs: parseNodeAttrs(null)
+          },
+          {
+            id: "node-b",
+            name: "B",
+            modelId: "model-1",
+            ownerId: "owner-1",
+            nodeTypeId: "type-1",
+            parentNodeId: null,
+            parsedAttrs: parseNodeAttrs(null)
+          }
+        ],
         links: [
           {
             id: "temp-link-1",
@@ -437,7 +545,10 @@ describe("useModelEditor — golden save contract", () => {
             updatedAt: null,
             parsedAttrs: {
               instances: {
-                nodes: [],
+                nodes: [
+                  { id: "inst-src", modelNodeId: "node-a", x: 0, y: 0 },
+                  { id: "inst-tgt", modelNodeId: "node-b", x: 100, y: 0 }
+                ],
                 edges: [
                   {
                     id: "edge-1",
@@ -464,19 +575,25 @@ describe("useModelEditor — golden save contract", () => {
     })
 
     await saveChanges!()
-    stopScope!()
 
-    expect(apiPutMock.mock.calls[0]?.[0]).toBe("/diagrams/diagram-1")
-    const attrs = JSON.parse(apiPutMock.mock.calls[0]?.[1]?.attrs)
-    expect(attrs.instances.edges[0].modelLinkId).toBe("server-link-1")
+    const edge = editorRef!.state.value.diagrams[0]?.parsedAttrs.instances.edges[0]
+    expect(edge?.modelLinkId).toBe("server-link-1")
+
+    stopScope!()
   })
 
   it("save order: nodes → links → diagrams", async () => {
     apiPostMock.mockImplementation(async (path: string) => {
-      if (path === "/nodes")
-        return { success: true, data: { id: "server-node", parentNodeId: null } }
-      if (path === "/links")
-        return { success: true, data: { id: "server-link" } }
+      if (String(path) === batchSavePath) {
+        return {
+          success: true,
+          data: {
+            nodeIdMap: { "temp-node": "server-node" },
+            linkIdMap: { "temp-link": "server-link" },
+            diagramIdMap: {}
+          }
+        }
+      }
       return { success: true, data: { id: "created-id" } }
     })
 
@@ -552,23 +669,15 @@ describe("useModelEditor — golden save contract", () => {
 
     expect(result).toBe(true)
 
-    const nodeCall = apiPostMock.mock.calls.find(
-      (call: unknown[]) => call[0] === "/nodes"
-    )
-    const linkCall = apiPostMock.mock.calls.find(
-      (call: unknown[]) => call[0] === "/links"
-    )
-    expect(nodeCall).toBeDefined()
-    expect(linkCall).toBeDefined()
-    expect(apiPutMock.mock.calls[0]?.[0]).toBe("/diagrams/diagram-1")
-
-    const nodeIdx = apiPostMock.mock.calls.indexOf(nodeCall!)
-    const linkIdx = apiPostMock.mock.calls.indexOf(linkCall!)
-    const nodeOrder = apiPostMock.mock.invocationCallOrder[nodeIdx] ?? 0
-    const linkOrder = apiPostMock.mock.invocationCallOrder[linkIdx] ?? 0
-    const diagramOrder = apiPutMock.mock.invocationCallOrder[0] ?? 0
-
-    expect(nodeOrder).toBeLessThan(linkOrder)
-    expect(linkOrder).toBeLessThan(diagramOrder)
+    const batchCall = apiPostMock.mock.calls.find((c: unknown[]) => c[0] === batchSavePath)
+    expect(batchCall).toBeDefined()
+    const body = batchCall![1] as {
+      nodes: { create: unknown[] }
+      links: { create: unknown[] }
+      diagrams: { update: unknown[] }
+    }
+    expect(body.nodes.create.length).toBeGreaterThan(0)
+    expect(body.links.create.length).toBeGreaterThan(0)
+    expect(body.diagrams.update.length).toBeGreaterThan(0)
   })
 })

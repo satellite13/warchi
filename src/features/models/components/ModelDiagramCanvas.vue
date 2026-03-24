@@ -54,6 +54,7 @@ import {
   readControlPointsFromEdge,
 } from '../utils/diagramCanvasSync'
 import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
+import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 
 const props = withDefaults(
   defineProps<{
@@ -854,6 +855,28 @@ function getNodeScopedPropertyValues(
 ): Record<string, unknown> {
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
+  const typeProps = node ? { ...node.parsedAttrs.typeProperties } : {}
+  if (!node || !notationId) return typeProps
+  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (!componentId) return typeProps
+  const diagramScoped = getDiagramScopedNodeValues({
+    diagram: props.activeDiagram?.parsedAttrs,
+    modelNodeId,
+    notationId,
+    componentId,
+    nodeAttrsFallback: node.parsedAttrs,
+    instanceId: nodeInstanceId,
+  })
+  return { ...typeProps, ...diagramScoped }
+}
+
+/** Только scoped-значения компонента нотации (без typeProperties), для шаблона `${prop}`. */
+function getComponentScopedPropertyValuesOnly(
+  modelNodeId: string,
+  nodeInstanceId?: string
+): Record<string, unknown> {
+  const node = nodeById.value.get(modelNodeId)
+  const notationId = activeNotationId.value
   if (!node || !notationId) return {}
   const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
   if (!componentId) return {}
@@ -867,6 +890,14 @@ function getNodeScopedPropertyValues(
   })
 }
 
+function getNodeTypeCustomProperties(modelNodeId: string): CustomProperty[] {
+  const node = nodeById.value.get(modelNodeId)
+  if (!node) return []
+  const nodeType = props.nodeTypes.find(nt => nt.id === node.nodeTypeId)
+  if (!nodeType) return []
+  return parseEntityAttrs(nodeType.attrs ?? null).customProperties.filter(p => !p.system)
+}
+
 function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[] {
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
@@ -875,7 +906,7 @@ function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[]
   if (!componentId) return []
   const component = props.components.find(c => c.id === componentId)
   if (!component) return []
-  return parseEntityAttrs(component.attrs ?? null).customProperties
+  return parseEntityAttrs(component.attrs ?? null).customProperties.filter(p => !p.system)
 }
 
 function buildInteractiveBadgeIconUrl(materialIconName: string): string {
@@ -915,25 +946,6 @@ function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{
   return result
 }
 
-function resolveLabelTemplate(
-  template: string,
-  name: string,
-  customProperties: CustomProperty[],
-  scopedValues: Record<string, unknown>
-): string {
-  return template
-    .replace(/\$\{(\w+)\}/g, (_match, key: string) => {
-      if (key === 'name') return name
-      const prop = customProperties.find(p => p.name === key)
-      if (prop) {
-        const val = scopedValues[key] ?? prop.defaultValue
-        return val != null ? String(val) : ''
-      }
-      return ''
-    })
-    .replace(/\\n/g, '\n')
-}
-
 function buildNodeLabel(
   name: string,
   ds?: DiagramStyle,
@@ -943,9 +955,17 @@ function buildNodeLabel(
   const hasTemplate = !!ds?.labelTemplate
   let displayText = name
   if (hasTemplate && modelNodeId) {
-    const customProps = getNodeComponentCustomProperties(modelNodeId)
-    const scopedValues = getNodeScopedPropertyValues(modelNodeId, nodeInstanceId)
-    displayText = resolveLabelTemplate(ds!.labelTemplate!, name, customProps, scopedValues)
+    const node = nodeById.value.get(modelNodeId)
+    const typeProps = getNodeTypeCustomProperties(modelNodeId)
+    const compProps = getNodeComponentCustomProperties(modelNodeId)
+    const typeValues = node ? { ...node.parsedAttrs.typeProperties } : {}
+    const componentValues = getComponentScopedPropertyValuesOnly(modelNodeId, nodeInstanceId)
+    displayText = resolveDiagramNodeLabelTemplate(ds!.labelTemplate!, name, {
+      typeProperties: typeProps,
+      typeValues,
+      componentProperties: compProps,
+      componentValues,
+    })
   }
 
   const labelInset = ds?.labelInset
@@ -1238,7 +1258,10 @@ function syncDiagram() {
   for (const edge of instanceEdges.value) {
     const modelLink = linkById.value.get(edge.modelLinkId)
     const isDiagramOnlyEdge = edge.attrs?.isDiagramOnly === true
-    if (!isDiagramOnlyEdge && (!modelLink || modelLink._isDeleted)) continue
+    // Связь помечена удалённой в модели — не рисуем.
+    if (!isDiagramOnlyEdge && modelLink?._isDeleted) continue
+    // Связи нет в props.links (например poll после удаления на сервере), но ребро ещё в attrs —
+    // всё равно рисуем, иначе стрелка пропадает при неизменном JSON диаграммы.
 
     // Skip rendering if relation has group=true and target is inside source
     if (shouldSkipEdgeRendering(edge)) continue

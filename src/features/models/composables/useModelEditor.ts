@@ -17,9 +17,11 @@ import type {
   RelationResponse,
   RelationRuleResponse,
 } from '../../../types/api'
+import { clonePlainDeep } from '../../../utils/clonePlainDeep'
 import { paginatedIsLastPage } from '../../../utils/paginatedResponse'
 import { compareVersions } from '../../../utils/version'
 import {
+  type DiagramAttrs,
   parseDiagramAttrs,
   parseLinkAttrs,
   parseNodeAttrs,
@@ -34,11 +36,17 @@ import {
   type EditorNode,
   type ModelEditorState,
 } from '../types'
+import { mergeDiagramAttrsAfterBatchConflictReload } from '../utils/mergeLocalCustomPropsAfterReload'
+import { applyDiagramGarbageSanitizeToState } from '../utils/sanitizeDiagramInstances'
 import {
-  buildBatchSaveRequest,
-  batchSave,
-  hasBatchChanges,
   applyBatchRemapping,
+  batchSave,
+  buildBatchSaveRequest,
+  hasBatchChanges,
+  isValidBatchResponse,
+  parseBatchSaveConflictDetails,
+  refreshBatchSavedEntityTimestamps,
+  type BatchConflictItem,
 } from './useModelBatchSave'
 
 type ModelEditorReturn = {
@@ -67,6 +75,14 @@ type ModelEditorReturn = {
     options?: { force?: boolean }
   ) => Promise<void>
   isNotationRelationsAndRulesLoading: (notationId: string | null | undefined) => boolean
+  /** Конфликт версий при batch-save (409); null если нет */
+  batchSaveConflict: Ref<BatchConflictItem[] | null>
+  /** Подтянуть модель с сервера и закрыть диалог конфликта */
+  resolveBatchSaveReload: () => Promise<void>
+  /** Повторить сохранение с force=true (перезаписать сервер) */
+  resolveBatchSaveOverwrite: () => Promise<boolean>
+  /** Закрыть диалог конфликта без действия */
+  dismissBatchSaveConflict: () => void
 }
 
 const toEditorNode = (row: NodeResponse): EditorNode => ({
@@ -228,6 +244,8 @@ async function saveNodes(
       node.id = result.data.id
       node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
       node._isNew = false
+      const createdU = result.data.updatedAt
+      if (typeof createdU === 'string' && createdU.length > 0) node.updatedAt = createdU
       pendingNewNodes.splice(i, 1)
       pendingNewNodeIds.delete(oldId)
       i -= 1
@@ -260,6 +278,8 @@ async function saveNodes(
     }
     node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
     node._isDirty = false
+    const nodeU = result.data.updatedAt
+    if (typeof nodeU === 'string' && nodeU.length > 0) node.updatedAt = nodeU
   }
 
   for (const node of nodes.filter(row => row._isDeleted && !row._isNew)) {
@@ -325,6 +345,8 @@ async function saveLinks(
     const oldId = link.id
     link.id = result.data.id
     link._isNew = false
+    const linkCreatedU = result.data.updatedAt
+    if (typeof linkCreatedU === 'string' && linkCreatedU.length > 0) link.updatedAt = linkCreatedU
     for (const diagram of diagrams) {
       for (const edge of diagram.parsedAttrs.instances.edges) {
         if (edge.modelLinkId === oldId) edge.modelLinkId = result.data.id
@@ -345,6 +367,8 @@ async function saveLinks(
     const result = await apiPut<LinkResponse>(`/links/${link.id}`, request)
     if (!result.success) throw new Error(`Ошибка обновления связи: ${result.error.message}`)
     link._isDirty = false
+    const linkU = result.data.updatedAt
+    if (typeof linkU === 'string' && linkU.length > 0) link.updatedAt = linkU
   }
 }
 
@@ -375,6 +399,8 @@ async function saveDiagrams(
     if (!result.success) throw new Error(`Ошибка создания диаграммы: ${result.error.message}`)
     diagram.id = result.data.id
     diagram._isNew = false
+    const dCreatedU = result.data.updatedAt
+    if (typeof dCreatedU === 'string' && dCreatedU.length > 0) diagram.updatedAt = dCreatedU
   }
 
   const dirtyDiagrams = diagrams
@@ -394,6 +420,8 @@ async function saveDiagrams(
     const result = await apiPut<DiagramResponse>(`/diagrams/${diagram.id}`, request)
     if (!result.success) throw new Error(`Ошибка обновления диаграммы: ${result.error.message}`)
     diagram._isDirty = false
+    const dU = result.data.updatedAt
+    if (typeof dU === 'string' && dU.length > 0) diagram.updatedAt = dU
   }
 }
 
@@ -409,6 +437,8 @@ export const useModelEditor = (): ModelEditorReturn => {
   const saveError = ref<string | null>(null)
   const saveSuccess = ref(false)
   const saveProgress = ref('')
+  const pendingForceBatch = ref(false)
+  const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
   const modelDirty = ref(false)
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
@@ -601,12 +631,21 @@ export const useModelEditor = (): ModelEditorReturn => {
     return null
   }
 
+  const scheduleSaveErrorClear = (): void => {
+    if (saveErrorTimer) clearTimeout(saveErrorTimer)
+    saveErrorTimer = setTimeout(() => {
+      saveError.value = null
+      saveErrorTimer = null
+    }, 5000)
+  }
+
   const saveChanges = async (): Promise<boolean> => {
     if (!model.value) return false
     isSaving.value = true
     saveError.value = null
     saveSuccess.value = false
     saveProgress.value = ''
+    batchSaveConflict.value = null
 
     try {
       const { ownerId, modelId, nodes, links, diagrams } = state.value
@@ -621,12 +660,41 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
 
       let usedBatch = false
-      const batchRequest = buildBatchSaveRequest(nodes, links, diagrams)
+      const forceBatch = pendingForceBatch.value
+      pendingForceBatch.value = false
+
+      applyDiagramGarbageSanitizeToState(state.value)
+
+      const batchRequest = buildBatchSaveRequest(nodes, links, diagrams, { force: forceBatch })
       if (hasBatchChanges(batchRequest)) {
         const batchResult = await batchSave(modelId, batchRequest)
-        if (batchResult) {
-          applyBatchRemapping(batchResult, nodes, links, diagrams)
+        if (batchResult.success) {
+          if (!isValidBatchResponse(batchResult.data)) {
+            saveError.value = 'Некорректный ответ сервера при пакетном сохранении.'
+            scheduleSaveErrorClear()
+            return false
+          }
+          applyBatchRemapping(batchResult.data, nodes, links, diagrams)
+          await refreshBatchSavedEntityTimestamps(
+            { nodes, links, diagrams },
+            batchRequest,
+            batchResult.data
+          )
           usedBatch = true
+        } else if (batchResult.error.status === 409) {
+          const conflicts = parseBatchSaveConflictDetails(batchResult.error.details)
+          if (conflicts && conflicts.length > 0) {
+            batchSaveConflict.value = conflicts
+            return false
+          }
+          saveError.value =
+            batchResult.error.message || 'Конфликт версий при сохранении (данные изменены на сервере).'
+          scheduleSaveErrorClear()
+          return false
+        } else {
+          saveError.value = batchResult.error.message
+          scheduleSaveErrorClear()
+          return false
         }
       }
 
@@ -650,11 +718,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       return true
     } catch (error) {
       saveError.value = error instanceof Error ? error.message : 'Не удалось сохранить изменения.'
-      if (saveErrorTimer) clearTimeout(saveErrorTimer)
-      saveErrorTimer = setTimeout(() => {
-        saveError.value = null
-        saveErrorTimer = null
-      }, 5000)
+      scheduleSaveErrorClear()
       return false
     } finally {
       isSaving.value = false
@@ -721,6 +785,58 @@ export const useModelEditor = (): ModelEditorReturn => {
     await loadPromise
   }
 
+  const resolveBatchSaveReload = async (): Promise<void> => {
+    const conflicts = batchSaveConflict.value ? [...batchSaveConflict.value] : []
+    batchSaveConflict.value = null
+
+    const diagramBeforeReload = new Map<
+      string,
+      { localAttrs: EditorDiagram['parsedAttrs']; serverAttrs: DiagramAttrs }
+    >()
+
+    const diagramConflicts = conflicts.filter(c => c.kind === 'diagram')
+    await Promise.all(
+      diagramConflicts.map(async c => {
+        const d = state.value.diagrams.find(item => item.id === c.id)
+        if (!d) return
+        const enc = encodeURIComponent(c.id)
+        const r = await apiGet<DiagramResponse>(`/diagrams/${enc}`)
+        if (!r.success) return
+        diagramBeforeReload.set(c.id, {
+          localAttrs: clonePlainDeep(d.parsedAttrs),
+          serverAttrs: parseDiagramAttrs(r.data.attrs ?? null),
+        })
+      })
+    )
+
+    await loadModel()
+
+    if (errorMessage.value || conflicts.length === 0) return
+
+    for (const c of conflicts) {
+      if (c.kind !== 'diagram') continue
+      const snap = diagramBeforeReload.get(c.id)
+      const d = state.value.diagrams.find(item => item.id === c.id)
+      if (!snap || !d) continue
+      d.parsedAttrs = mergeDiagramAttrsAfterBatchConflictReload(
+        snap.localAttrs,
+        snap.serverAttrs,
+        d.parsedAttrs
+      )
+      d._isDirty = true
+    }
+  }
+
+  const resolveBatchSaveOverwrite = async (): Promise<boolean> => {
+    batchSaveConflict.value = null
+    pendingForceBatch.value = true
+    return saveChanges()
+  }
+
+  const dismissBatchSaveConflict = (): void => {
+    batchSaveConflict.value = null
+  }
+
   return {
     model,
     state,
@@ -743,5 +859,9 @@ export const useModelEditor = (): ModelEditorReturn => {
     createDiagramBaseline,
     ensureNotationRelationsAndRules,
     isNotationRelationsAndRulesLoading,
+    batchSaveConflict,
+    resolveBatchSaveReload,
+    resolveBatchSaveOverwrite,
+    dismissBatchSaveConflict,
   }
 }

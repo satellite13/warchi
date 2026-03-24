@@ -1,3 +1,7 @@
+/** ICU escape for literal `{` / `}` inside vue-i18n messages (otherwise `{…}` is parsed as placeholders). */
+const _i18nL = '\x7B\x27\x7B\x27\x7D'
+const _i18nR = '\x7B\x27\x7D\x27\x7D'
+
 export const diagramMessages = {
   ru: {
     diagram: {
@@ -51,7 +55,22 @@ export const diagramMessages = {
       openOrCreateDiagram: 'Откройте или создайте диаграмму',
       selectDiagramInTree: 'Выберите диаграмму в дереве слева',
       tagsPlaceholder: 'tag1, tag2',
-      compositeLabelPlaceholder: "{'${name} — ${status}'}",
+      compositeLabelPlaceholder:
+        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+      compositeLabelSyntax:
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' — имя ноды; #' +
+        _i18nL +
+        'ключ' +
+        _i18nR +
+        ' — свойство типа ноды; $' +
+        _i18nL +
+        'ключ' +
+        _i18nR +
+        ' — свойство компонента нотации.',
       showNotationPalette: 'Показать палитру нотации',
       palette: 'Палитра',
       hidePalette: 'Скрыть палитру',
@@ -190,7 +209,22 @@ export const diagramMessages = {
       openOrCreateDiagram: 'Open or create a diagram',
       selectDiagramInTree: 'Select a diagram in the tree on the left',
       tagsPlaceholder: 'tag1, tag2',
-      compositeLabelPlaceholder: "{'${name} — ${status}'}",
+      compositeLabelPlaceholder:
+        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+      compositeLabelSyntax:
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' — node name; #' +
+        _i18nL +
+        'key' +
+        _i18nR +
+        ' — node-type custom property; $' +
+        _i18nL +
+        'key' +
+        _i18nR +
+        ' — notation component custom property.',
       showNotationPalette: 'Show notation palette',
       palette: 'Palette',
       hidePalette: 'Hide palette',

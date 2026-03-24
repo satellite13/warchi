@@ -26,13 +26,12 @@ export type ModelVersionDiffState = {
   compareTargetError: string | null
 }
 
-export function useModelVersionDiff(
-  getBaseData: () => {
-    nodes: NodeResponse[]
-    links: LinkResponse[]
-    diagrams: DiagramResponse[]
-  }
-) {
+/**
+ * Сравнение текущей версии модели с другой: база всегда снимок с API (`loadBaseFromApi`),
+ * а не несохранённый state редактора — иначе attrs диаграммы на строке объекта расходятся с `parsedAttrs`
+ * (live sync / холст), и diff по диаграммам считался бы не от фактического состояния на сервере.
+ */
+export function useModelVersionDiff() {
   const relatedVersions = ref<ModelData[]>([])
   const relatedVersionsLoading = ref(false)
   const relatedVersionsError = ref<string | null>(null)
@@ -135,8 +134,8 @@ export function useModelVersionDiff(
 
   const diff = computed<ModelVersionDiff | null>(() => {
     const target = compareTargetData.value
-    if (!target) return null
-    const base = baseData.value ?? getBaseData()
+    const base = baseData.value
+    if (!target || !base) return null
     return computeModelDiff(base, target)
   })
 

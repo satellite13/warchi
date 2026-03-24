@@ -1801,7 +1801,13 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </div>
                 <div class="sp-field">
                   <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
-                  <input class="sp-input sp-input--full" :value="labelTemplate" placeholder="${name} — ${status}" @input="handleLabelTemplateChange(($event.target as HTMLInputElement).value)">
+                  <input
+                    class="sp-input sp-input--full"
+                    :value="labelTemplate"
+                    :placeholder="t('diagram.compositeLabelPlaceholder')"
+                    @input="handleLabelTemplateChange(($event.target as HTMLInputElement).value)"
+                  >
+                  <p class="sp-field__hint sp-field__hint--small">{{ t('diagram.compositeLabelSyntax') }}</p>
                 </div>
                 <LabeledFieldRow :label="t('nodeStyle.color')">
                   <ColorWithAlphaField
@@ -2327,6 +2333,17 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   white-space: nowrap;
   flex-shrink: 0;
   min-width: 48px;
+}
+
+.sp-field__hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-subtle);
+}
+
+.sp-field__hint--small {
+  font-size: 10px;
 }
 
 /* ---- Field grid ---- */

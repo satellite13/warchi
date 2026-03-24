@@ -14,6 +14,8 @@ export type ModelNodeAttrs = {
   treeOrder: number
   notationComponents: Record<string, NodeComponentBinding>
   componentProperties: Record<string, Record<string, Record<string, unknown>>>
+  /** Значения кастомных свойств типа ноды (общие для модели, не зависят от диаграммы) */
+  typeProperties: Record<string, unknown>
   /** UUID файла markdown-документации */
   documentFileId?: string
 }
@@ -191,6 +193,7 @@ export const parseNodeAttrs = (raw: string | null | undefined): ModelNodeAttrs =
     treeOrder,
     notationComponents: toNodeBindings(data.notationComponents),
     componentProperties: toScopedMap(data.componentProperties),
+    typeProperties: toClonedRecord(data.typeProperties),
   }
   if (typeof data.documentFileId === 'string' && data.documentFileId.trim().length > 0) {
     result.documentFileId = data.documentFileId.trim()

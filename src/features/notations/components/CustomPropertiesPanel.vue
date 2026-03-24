@@ -82,10 +82,20 @@ const labelTemplatePreview = computed(() => {
   if (!item) return ''
   const template = item.parsedAttrs.diagramStyle?.labelTemplate
   if (!template) return item.name
+  const typeProps = (props.typeProperties ?? []).filter(p => !p.system)
+  const componentProps = item.parsedAttrs.customProperties.filter(p => !p.system)
   return template
+    .replace(/#\{(\w+)\}/g, (_match: string, key: string) => {
+      const prop = typeProps.find(p => p.name === key)
+      if (prop) {
+        const val = prop.defaultValue
+        return val != null ? String(val) : ''
+      }
+      return ''
+    })
     .replace(/\$\{(\w+)\}/g, (_match: string, key: string) => {
       if (key === 'name') return item.name
-      const prop = item.parsedAttrs.customProperties.find(p => p.name === key)
+      const prop = componentProps.find(p => p.name === key)
       if (prop) {
         const val = prop.defaultValue
         return val != null ? String(val) : ''
@@ -387,6 +397,7 @@ onBeforeUnmount(() => {
           rows="2"
           @input="handleLabelTemplateInput(($event.target as HTMLTextAreaElement).value)"
         ></textarea>
+        <p class="properties-panel__label-template-syntax">{{ t('diagram.compositeLabelSyntax') }}</p>
         <div v-if="labelTemplateValue" class="properties-panel__label-template-preview">
           <span class="properties-panel__label-template-preview-label"
             >{{ t('diagram.resultLabel') }}:</span
@@ -717,6 +728,13 @@ onBeforeUnmount(() => {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
   background: var(--surface);
+}
+
+.properties-panel__label-template-syntax {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-subtle);
 }
 
 .properties-panel__label-template-preview {

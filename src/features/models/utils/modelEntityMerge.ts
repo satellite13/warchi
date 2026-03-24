@@ -3,6 +3,8 @@
  * Локальные черновики (_isNew / _isDirty / _isDeleted) не перезаписываются с сервера.
  */
 
+import type { EditorDiagram } from "../types"
+
 export type MergeableEntity = {
   id: string
   _isNew?: boolean
@@ -44,4 +46,33 @@ export function mergeEntityListFromRemote<L extends MergeableEntity, R extends {
   }
 
   return result
+}
+
+/**
+ * После poll диаграмма «как на сервере» перезаписывает чистую локальную строку целиком, в т.ч. attrs.instances.
+ * Для **открытой** вкладки диаграммы оставляем локальные экземпляры на холсте, чтобы не исчезали рёбра при удалении
+ * связи другим пользователем (до сохранения / сравнения с сервером). Метаданные и прочие поля attrs — с сервера.
+ */
+export function preserveOpenDiagramCanvasAfterRemoteMerge(
+  merged: EditorDiagram[],
+  previous: EditorDiagram[],
+  openDiagramId: string | null | undefined
+): EditorDiagram[] {
+  if (!openDiagramId) return merged
+  const prev = previous.find((d) => d.id === openDiagramId)
+  const idx = merged.findIndex((d) => d.id === openDiagramId)
+  if (!prev || idx < 0) return merged
+  if (prev._isDirty || prev._isNew || prev._isDeleted) return merged
+
+  const row = merged[idx]
+  const instances = prev.parsedAttrs.instances
+  const next = [...merged]
+  next[idx] = {
+    ...row,
+    parsedAttrs: {
+      ...row.parsedAttrs,
+      instances,
+    },
+  }
+  return next
 }

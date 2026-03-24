@@ -164,29 +164,31 @@ In the model editor, when this property is filled for a node, the corresponding 
 
 ### Label Templates
 
-For notation components you can set a composite label template that defines what text is displayed on the diagram node.
+For notation components you can set a **composite label template**: what text is shown on the diagram node. The template can include the node name, **node type** fields, and **notation component** fields; users edit values in the [model editor](/docs/models) (node properties panel).
 
 #### Syntax
 
-The template uses placeholders in the form `${...}`:
+- `${name}` — **node name** on the diagram (reserved; not a component custom property)
+- `#{key}` — **node type** custom property value (key as in [Types](/docs/types))
+- `${key}` — **notation component** custom property value (key from the component properties section below)
 
-- `${name}` — component name (reserved)
-- `${propertyName}` — value of a custom property by name
+**Important:** **`#`** is only for node type fields; **`$`** is for the node name (`name`) or component fields.
 
-If no template is set, the component name is displayed (default behavior).
+If no template is set, the node name is shown (default behavior).
 
 #### Examples
 
 | Template | Result |
 |----------|--------|
-| `${name}` | `API Gateway` |
-| `${name} [${status}]` | `API Gateway [active]` |
-| `${protocol}://${name}:${port}` | `https://API Gateway:8080` |
-| `${name}\n${status}` | `API Gateway` (first line) `active` (second line) |
+| `${name}` | node name only, e.g. `API Gateway` |
+| `${name} · #{code} · ${status}` | name, code from node type, status from component |
+| `${name} [${status}]` | name and **component** property `status`, e.g. `API Gateway [active]` |
+| `${protocol}://${name}:${port}` | if `protocol` and `port` are **component** fields — composite text with node name |
+| `${name}\n#{description}` | name on first line, **type** description on second |
 
 #### Line Breaks
 
-For multi-line labels use `\n` in the template. For example, the template `${name}\n${status}` will display the name on the first line and status on the second.
+For multi-line labels use `\n` in the template. For example, `${name}\n${status}` shows the name on the first line and **component** `status` on the second.
 
 #### Where to Configure
 
@@ -198,8 +200,10 @@ The label template can be set in two places:
 #### Behavior
 
 - If a property from the template is not found — the placeholder is replaced with an empty string
-- When double-clicking a node to rename, only the component name is shown, not the template result
-- In the model editor, values are taken from the properties of the specific instance, or from notation defaults if absent
+- When double-clicking a node to rename, only the node name is shown, not the template result
+- In the **model editor**, values come from the node properties panel: **Node type properties** and **Notation component properties**; if missing, defaults from the type and notation schemas apply
+- In the notation editor **preview**, schema defaults are used; for node type fields, type defaults apply (same as in the UI)
+- **Migration:** node type values used to be expressible as `${key}`; use **`#{key}`** for the node type and keep `${key}` for **component** fields only
 - Templates are supported only for nodes (not for links)
 
 ### Label Alignment

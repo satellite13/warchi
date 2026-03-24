@@ -89,10 +89,22 @@ The palette panel contains available element types defined in the model's notati
 
 ### Properties Panel (right panel)
 
-When selecting an element in the tree or on the diagram, the properties panel displays:
+When you select an element in the tree or on the diagram, the properties panel opens (**Properties**, **Traceability** tabs; for a node on the canvas, **Style** as well):
 
-- **Style** — visual properties of the element (color, shape, size), with the ability to restore styles from the notation
-- **Custom properties** — values of properties defined in the element type
+- **Style** tab — appearance of the **instance** on the diagram (color, shape, size), with the option to restore styles from the notation.
+
+#### Custom properties for a node (Properties tab)
+
+For a **node** in the model, two separate blocks of fields are shown (when defined in the type catalog and in the notation):
+
+1. **Node type properties** — schema is defined in [Types](/docs/types) for the corresponding node type. Values are **shared for that node across the whole model** (all diagrams). Each field shows a **node type** source badge and a **diagram label placeholder** hint: `#{propertyName}`.
+2. **Notation component properties** — schema is defined in the [notation editor](/docs/notations) for the component. Values are **diagram-scoped** (the same model node can have different values on different diagrams). Label placeholder: `${propertyName}`. UI badge: **component**.
+
+The node’s display name on the shape is controlled separately in the composite label template: **`${name}`** is reserved and is **not** a component custom property.
+
+Full placeholder syntax is described under [Notations → Label templates](/docs/notations).
+
+For **links**, the Properties tab shows fields from the link type and from the notation relation (bound to the notation in a similar way).
 
 #### Style panel field hints
 
@@ -119,9 +131,29 @@ For the active diagram, the **Diagram Info** action is available in the toolbar.
 
 ## Saving
 
-The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, all required properties of components are validated.
+The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply.
 
 When switching or closing a diagram with unsaved changes, the system will prompt to save, discard, or return to editing.
+
+### Save conflict
+
+If you and another user **changed the same node, link, or diagram** so the server already has a newer version, clicking **Save** may **abort** the batch save so other people’s edits are not overwritten silently. A **Save conflict** dialog opens:
+
+- At the top, **two explanation blocks** (reload from server vs overwrite server) describe each path.
+- Below, a **list of conflicting entities** with timestamps: what version your edit was based on, and the server’s last change time.
+- On **each row**, expand the compare section: the table lists **only fields where your draft and the server differ** (main fields and top-level keys in `attrs`). Timestamps for “what version you edited from” stay in the list row caption, not repeated in the table. Server values load per id; while loading, the table is hidden.
+- Below the intro text: while the dialog is open, a **second** conflict dialog does not open by itself; after you choose an action and **Save** again, the server is checked anew — if someone else saved in the meantime, you **may see the conflict dialog again**.
+
+Pick **one** of the two main actions at the bottom:
+
+- **Reload from server** — **full model reload** from the API. Conflicting **nodes and links** get **current server values** for every field (including attrs) so others’ tree edits are preserved; fields where you and the server already matched stay matched. If a **diagram** is listed: metadata and diagram attrs (except the canvas) come from the server; if the on-canvas **instances** block differed, **your** canvas copy is kept (no parallel canvas editing). Then **Save** again.  
+  **Note:** unsaved edits to **other** model objects (not in the conflict list) are **lost** on full reload — you keep server data plus the diagram canvas exception above.
+- **Overwrite server with my data** — save again with force overwrite; other users’ changes to those objects are lost.
+- **Cancel** — close the dialog; local edits stay, but you cannot finish saving until you choose a strategy.
+
+Button labels match the in-app `models` locale strings.
+
+**Who can edit the canvas** on an open diagram is also governed by an **edit lock** (one editor at a time) — see [Diagrams](/docs/diagrams).
 
 ## Deleting a Model
 

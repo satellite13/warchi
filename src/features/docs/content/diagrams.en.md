@@ -85,6 +85,18 @@ When this is useful:
 
 The diagram editor provides a graphical canvas for placing and connecting model components.
 
+### Edit lock
+
+Only **one user** can **edit the canvas** of a given diagram at a time. When you open a diagram, the client requests a lock; while you hold it, others with access usually see the diagram in **view-only** mode (no moving elements or saving canvas changes).
+
+- The **model tree** shows **who holds the lock** — you or someone else.
+- If you opened the diagram while another user was editing, after the lock is released you can use an action such as **Try to edit** (request the lock again).
+- If you were viewing and the diagram **changed on the server**, you may be offered **Reload from server** to fetch the latest state.
+- The lock is **refreshed periodically** while the editor is open; after long idle time or a disconnected session it may **expire**, allowing another user to edit.
+- **Administrators** can force-release a stuck lock from the admin area.
+
+Changes elsewhere — **model tree**, **links**, and other entities — are still saved with **Save** in the model editor; parallel edits can trigger a **save conflict** — see [Models → Saving](/docs/models).
+
 ### Adding Elements
 
 Elements can be added to the diagram in several ways:
@@ -114,6 +126,10 @@ To create a link between elements:
 - **Zoom** — mouse wheel or trackpad gestures
 - **Pan canvas** — drag on empty space, middle mouse button, or `Space` + drag
 - **Fit to screen** — toolbar button, scales the canvas to fit all elements
+
+### Node label (composite template)
+
+Text on a node shape can be driven by a **template** in the notation component: `${name}` for the node name, `#{…}` for **node type** fields, `${…}` for **component** fields (except the reserved `name`). Values are edited in the node **properties panel** in the [model editor](/docs/models). See [Models](/docs/models) and [Notations → Label templates](/docs/notations).
 
 ## Toolbar
 

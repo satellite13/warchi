@@ -23,7 +23,7 @@ import {
   customOutlineToPath2D,
   customOutlineToSvgPath
 } from "@/utils/customOutlinePath"
-import type { DiagramStyle } from "../notationAttrs"
+import type { CustomProperty, DiagramStyle } from "../notationAttrs"
 import type {
   NotationEditorState,
   EditorComponent,
@@ -183,6 +183,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     resolveRelationStyle,
   } = useNotationStyles(state)
 
+  function typeCustomPropertiesForComponent(component: EditorComponent): CustomProperty[] {
+    const nt = state.value.nodeTypes.find((n) => n.id === component.nodeTypeId)
+    if (!nt) return []
+    return (nt.parsedAttrs.customProperties ?? []).filter((p) => !p.system)
+  }
+
   function createComponentNode(
     item: EditorComponent,
     x: number,
@@ -197,7 +203,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       y,
       width: visual.width,
       height: visual.height,
-      label: buildNodeLabel(item.name, ds, item.parsedAttrs.customProperties),
+      label: buildNodeLabel(
+        item.name,
+        ds,
+        item.parsedAttrs.customProperties.filter((p) => !p.system),
+        typeCustomPropertiesForComponent(item),
+      ),
       style: visual.style,
       anchorPoints: resolveComponentAnchorPoints(ds),
       contentInset: (ds?.contentInset ?? 0) as unknown as number,
@@ -284,7 +295,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const visual = resolveComponentStyle(component)
         disableTransformerFrame(existing)
         // Update label using template if available
-        const newLabel = buildNodeLabel(component.name, ds, component.parsedAttrs.customProperties)
+        const newLabel = buildNodeLabel(
+          component.name,
+          ds,
+          component.parsedAttrs.customProperties.filter((p) => !p.system),
+          typeCustomPropertiesForComponent(component),
+        )
         if (typeof newLabel === "string") {
           existing.label = newLabel
         } else {

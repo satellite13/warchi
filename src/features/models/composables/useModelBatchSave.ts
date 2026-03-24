@@ -1,8 +1,18 @@
-import { apiPost } from '../../../composables/useApi'
+import { apiGet, apiPost } from '../../../composables/useApi'
+import type { ApiResult } from '../../../api/apiClient'
+import type { DiagramResponse, LinkResponse, NodeResponse } from '../../../types/api'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import { serializeNodeAttrs, serializeLinkAttrs, serializeDiagramAttrs } from '../modelAttrs'
 
+export type BatchConflictItem = {
+  kind: string
+  id: string
+  serverUpdatedAt: string | null
+  clientBaseUpdatedAt: string | null
+}
+
 export interface BatchSaveRequest {
+  force?: boolean
   nodes: {
     create: Array<{
       tempId: string
@@ -17,6 +27,7 @@ export interface BatchSaveRequest {
       nodeTypeId: string
       parentNodeId: string | null
       attrs: string | null
+      baseUpdatedAt?: string | null
     }>
     delete: string[]
   }
@@ -34,6 +45,7 @@ export interface BatchSaveRequest {
       targetId: string
       linkTypeId: string
       attrs: string | null
+      baseUpdatedAt?: string | null
     }>
     delete: string[]
   }
@@ -53,6 +65,7 @@ export interface BatchSaveRequest {
       notationId: string
       nodeId: string | null
       attrs: string | null
+      baseUpdatedAt?: string | null
     }>
     delete: string[]
   }
@@ -67,9 +80,11 @@ export interface BatchSaveResponse {
 export function buildBatchSaveRequest(
   nodes: EditorNode[],
   links: EditorLink[],
-  diagrams: EditorDiagram[]
+  diagrams: EditorDiagram[],
+  options?: { force?: boolean }
 ): BatchSaveRequest {
   return {
+    ...(options?.force === true ? { force: true } : {}),
     nodes: {
       create: nodes
         .filter(n => n._isNew && !n._isDeleted)
@@ -88,6 +103,7 @@ export function buildBatchSaveRequest(
           nodeTypeId: n.nodeTypeId,
           parentNodeId: n.parentNodeId ?? null,
           attrs: serializeNodeAttrs(n.parsedAttrs),
+          baseUpdatedAt: n.updatedAt ?? null,
         })),
       delete: nodes.filter(n => n._isDeleted && !n._isNew).map(n => n.id),
     },
@@ -109,6 +125,7 @@ export function buildBatchSaveRequest(
           targetId: l.targetId,
           linkTypeId: l.linkTypeId,
           attrs: serializeLinkAttrs(l.parsedAttrs),
+          baseUpdatedAt: l.updatedAt ?? null,
         })),
       delete: links.filter(l => l._isDeleted && !l._isNew).map(l => l.id),
     },
@@ -132,13 +149,14 @@ export function buildBatchSaveRequest(
           notationId: d.notationId,
           nodeId: d.nodeId ?? null,
           attrs: serializeDiagramAttrs(d.parsedAttrs),
+          baseUpdatedAt: d.updatedAt ?? null,
         })),
       delete: diagrams.filter(d => d._isDeleted && !d._isNew).map(d => d.id),
     },
   }
 }
 
-function isValidBatchResponse(data: unknown): data is BatchSaveResponse {
+export function isValidBatchResponse(data: unknown): data is BatchSaveResponse {
   if (!data || typeof data !== 'object') return false
   const obj = data as Record<string, unknown>
   return (
@@ -151,17 +169,33 @@ function isValidBatchResponse(data: unknown): data is BatchSaveResponse {
   )
 }
 
+export function parseBatchSaveConflictDetails(details: unknown): BatchConflictItem[] | null {
+  if (!details || typeof details !== 'object') return null
+  const record = details as Record<string, unknown>
+  if (!Array.isArray(record.conflicts)) return null
+  const out: BatchConflictItem[] = []
+  for (const row of record.conflicts) {
+    if (!row || typeof row !== 'object') continue
+    const c = row as Record<string, unknown>
+    if (typeof c.kind !== 'string' || typeof c.id !== 'string') continue
+    out.push({
+      kind: c.kind,
+      id: c.id,
+      serverUpdatedAt: typeof c.serverUpdatedAt === 'string' ? c.serverUpdatedAt : null,
+      clientBaseUpdatedAt: typeof c.clientBaseUpdatedAt === 'string' ? c.clientBaseUpdatedAt : null,
+    })
+  }
+  return out.length > 0 ? out : null
+}
+
 export async function batchSave(
   modelId: string,
   request: BatchSaveRequest
-): Promise<BatchSaveResponse | null> {
-  const result = await apiPost<BatchSaveResponse>(
+): Promise<ApiResult<BatchSaveResponse>> {
+  return apiPost<BatchSaveResponse>(
     `/models/${encodeURIComponent(modelId)}/batch-save`,
     request
   )
-  if (!result.success) return null
-  if (!isValidBatchResponse(result.data)) return null
-  return result.data
 }
 
 export function hasBatchChanges(request: BatchSaveRequest): boolean {
@@ -176,6 +210,96 @@ export function hasBatchChanges(request: BatchSaveRequest): boolean {
     request.diagrams.update.length > 0 ||
     request.diagrams.delete.length > 0
   )
+}
+
+/**
+ * Id сущностей, у которых на сервере обновилась `updatedAt` после batch-save (нужен GET, т.к. ответ batch не возвращает метки времени).
+ */
+export function collectEntityIdsForBatchTimestampRefresh(
+  request: BatchSaveRequest,
+  response: BatchSaveResponse
+): { nodeIds: string[]; linkIds: string[]; diagramIds: string[] } {
+  const nodeIds = new Set<string>()
+  const linkIds = new Set<string>()
+  const diagramIds = new Set<string>()
+
+  for (const u of request.nodes.update) nodeIds.add(u.id)
+  for (const u of request.links.update) linkIds.add(u.id)
+  for (const u of request.diagrams.update) diagramIds.add(u.id)
+
+  for (const c of request.nodes.create) {
+    const nid = response.nodeIdMap[c.tempId]
+    if (nid) nodeIds.add(nid)
+  }
+  for (const c of request.links.create) {
+    const lid = response.linkIdMap[c.tempId]
+    if (lid) linkIds.add(lid)
+  }
+  for (const c of request.diagrams.create) {
+    const did = response.diagramIdMap[c.tempId]
+    if (did) diagramIds.add(did)
+  }
+
+  return {
+    nodeIds: [...nodeIds],
+    linkIds: [...linkIds],
+    diagramIds: [...diagramIds],
+  }
+}
+
+/**
+ * После успешного batch-save сервер выставляет новый `updatedAt`, а клиент оставляет старый → следующий save даёт ложный 409.
+ * Подтягиваем только метки времени через GET по id.
+ */
+export async function refreshBatchSavedEntityTimestamps(
+  state: { nodes: EditorNode[]; links: EditorLink[]; diagrams: EditorDiagram[] },
+  request: BatchSaveRequest,
+  response: BatchSaveResponse
+): Promise<void> {
+  const { nodeIds, linkIds, diagramIds } = collectEntityIdsForBatchTimestampRefresh(request, response)
+
+  const tasks: Promise<void>[] = []
+
+  for (const id of nodeIds) {
+    tasks.push(
+      (async (): Promise<void> => {
+        const r = await apiGet<NodeResponse>(`/nodes/${encodeURIComponent(id)}`)
+        if (!r.success) return
+        const row = state.nodes.find(n => n.id === id)
+        if (!row) return
+        const u = r.data.updatedAt
+        if (typeof u === 'string' && u.length > 0) row.updatedAt = u
+      })()
+    )
+  }
+
+  for (const id of linkIds) {
+    tasks.push(
+      (async (): Promise<void> => {
+        const r = await apiGet<LinkResponse>(`/links/${encodeURIComponent(id)}`)
+        if (!r.success) return
+        const row = state.links.find(l => l.id === id)
+        if (!row) return
+        const u = r.data.updatedAt
+        if (typeof u === 'string' && u.length > 0) row.updatedAt = u
+      })()
+    )
+  }
+
+  for (const id of diagramIds) {
+    tasks.push(
+      (async (): Promise<void> => {
+        const r = await apiGet<DiagramResponse>(`/diagrams/${encodeURIComponent(id)}`)
+        if (!r.success) return
+        const row = state.diagrams.find(d => d.id === id)
+        if (!row) return
+        const u = r.data.updatedAt
+        if (typeof u === 'string' && u.length > 0) row.updatedAt = u
+      })()
+    )
+  }
+
+  await Promise.all(tasks)
 }
 
 export function applyBatchRemapping(

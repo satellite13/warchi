@@ -3,7 +3,9 @@ import { apiPost } from '@/composables/useApi'
 import type { EditorNode } from '../types'
 
 type DocModalTarget = { kind: 'model' | 'node' | 'diagram'; id: string } | null
-type DocModalContext = { kind: 'property'; propertyKey: string } | null
+type DocModalContext =
+  | { kind: 'property'; propertyKey: string; scope?: 'nodeType' | 'notationComponent' }
+  | null
 
 export interface DocumentModalDeps {
   model: Ref<{ name: string; attrs?: string | null } | null>
@@ -21,6 +23,7 @@ export interface DocumentModalDeps {
   markNodeDirty: (id: string) => void
   markDiagramDirty: (id: string) => void
   setNodeScopedValue: (key: string, value: unknown) => void
+  setNodeTypePropertyValue: (key: string, value: unknown) => void
   t: (key: string) => string
 }
 
@@ -92,9 +95,12 @@ export function useDocumentModal(deps: DocumentModalDeps) {
     showDocModal.value = true
   }
 
-  function handleCreateDocumentForProperty(propertyName: string) {
+  function handleCreateDocumentForProperty(
+    propertyName: string,
+    scope?: 'nodeType' | 'notationComponent'
+  ) {
     docModalTarget.value = null
-    docModalContext.value = { kind: 'property', propertyKey: propertyName }
+    docModalContext.value = { kind: 'property', propertyKey: propertyName, scope }
     docModalTitle.value = ''
     docModalFileId.value = null
     showDocModal.value = true
@@ -103,25 +109,46 @@ export function useDocumentModal(deps: DocumentModalDeps) {
   async function handleDocSaved(fileId: string) {
     const ctx = docModalContext.value
     if (ctx?.kind === 'property') {
-      deps.setNodeScopedValue(ctx.propertyKey, fileId)
       const modelId = deps.state.value.modelId
       const nodeId = deps.selectedNode.value?.id ?? null
+      const nodeTypeId = deps.selectedNode.value?.nodeTypeId ?? null
       const notationId = deps.activeNotationId.value
       const componentId = deps.nodeBindingComponentId.value
-      if (modelId && (nodeId ?? notationId ?? componentId)) {
-        const res = await apiPost<{ fileId: string; label: string }>('/documents', {
-          fileId,
-          modelId: modelId ?? undefined,
-          nodeId: nodeId ?? undefined,
-          notationId: notationId ?? undefined,
-          componentId: componentId ?? undefined,
-        })
-        if (res.success) {
-          const existing = deps.documentsFromApi.value.find(
-            (d) => d.fileId === res.data.fileId,
-          )
-          if (!existing)
-            deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
+
+      if (ctx.scope === 'nodeType') {
+        deps.setNodeTypePropertyValue(ctx.propertyKey, fileId)
+        if (modelId && nodeId && nodeTypeId) {
+          const res = await apiPost<{ fileId: string; label: string }>('/documents', {
+            fileId,
+            modelId,
+            nodeId,
+            nodeTypeId,
+          })
+          if (res.success) {
+            const existing = deps.documentsFromApi.value.find(
+              (d) => d.fileId === res.data.fileId,
+            )
+            if (!existing)
+              deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
+          }
+        }
+      } else {
+        deps.setNodeScopedValue(ctx.propertyKey, fileId)
+        if (modelId && (nodeId ?? notationId ?? componentId)) {
+          const res = await apiPost<{ fileId: string; label: string }>('/documents', {
+            fileId,
+            modelId: modelId ?? undefined,
+            nodeId: nodeId ?? undefined,
+            notationId: notationId ?? undefined,
+            componentId: componentId ?? undefined,
+          })
+          if (res.success) {
+            const existing = deps.documentsFromApi.value.find(
+              (d) => d.fileId === res.data.fileId,
+            )
+            if (!existing)
+              deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
+          }
         }
       }
       docModalContext.value = null

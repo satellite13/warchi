@@ -1,5 +1,12 @@
+import { Client } from "@stomp/stompjs"
 import { onBeforeUnmount, watch, type Ref } from "vue"
+import { buildModelSyncWsUrl } from "@/api/modelSyncWs"
 import { apiGet } from "@/composables/useApi"
+import {
+  AUTH_CLEARED_EVENT,
+  AUTH_UPDATED_EVENT,
+  getAccessToken,
+} from "@/composables/authStorage"
 import type {
   DiagramResponse,
   LinkResponse,
@@ -10,9 +17,11 @@ import type {
 import type { ModelData, PaginatedResponse } from "@/types/entities"
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from "../types"
-import { mergeEntityListFromRemote } from "../utils/modelEntityMerge"
+import {
+  mergeEntityListFromRemote,
+  preserveOpenDiagramCanvasAfterRemoteMerge,
+} from "../utils/modelEntityMerge"
 
-const DEFAULT_POLL_MS = 10_000
 const FETCH_SIZE = 1000
 
 const toEditorNode = (row: NodeResponse): EditorNode => ({
@@ -30,8 +39,15 @@ const toEditorDiagram = (row: DiagramResponse): EditorDiagram => ({
   parsedAttrs: parseDiagramAttrs(row.attrs ?? null),
 })
 
+type PullSnapshotOptions = {
+  /** Push / переподключение / возврат на вкладку — не ждать окончания локального save. */
+  ignoreSavingGuard?: boolean
+}
+
 /**
- * MVP live sync: периодический poll узлов/связей/диаграмм и слияние в state без перезаписи локальных черновиков.
+ * Live sync по событию: STOMP `/topic/models/{modelId}` → один проход merge с API (ноды, связи, диаграммы, модель).
+ * Периодического poll нет. Разовый pull: при старте сессии (вкладка видима), после STOMP connect/reconnect,
+ * при `model_changed`, при возврате на вкладку (догон после фона).
  * См. docs/plans/model-live-sync.md
  */
 export function useModelLiveSync(options: {
@@ -42,17 +58,18 @@ export function useModelLiveSync(options: {
   isLoading: Ref<boolean>
   isSaving: Ref<boolean>
   modelDirty: Ref<boolean>
-  pollIntervalMs?: number
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
+  openDiagramId?: Ref<string | null | undefined>
+  currentUserId?: Ref<string | null | undefined>
 }): void {
-  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_MS
-  let timer: ReturnType<typeof setInterval> | null = null
   let inFlight = false
+  let stompClient: Client | null = null
 
-  const stopPolling = (): void => {
-    if (timer !== null) {
-      clearInterval(timer)
-      timer = null
+  const disconnectPush = (): void => {
+    const c = stompClient
+    stompClient = null
+    if (c) {
+      void c.deactivate()
     }
   }
 
@@ -65,9 +82,10 @@ export function useModelLiveSync(options: {
     return [...set]
   }
 
-  const pollOnce = async (): Promise<void> => {
+  const pullRemoteSnapshot = async (pullOpts?: PullSnapshotOptions): Promise<void> => {
     if (inFlight) return
-    if (!options.enabled.value || options.isLoading.value || options.isSaving.value) return
+    if (!options.enabled.value || options.isLoading.value) return
+    if (!pullOpts?.ignoreSavingGuard && options.isSaving.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
 
@@ -107,11 +125,19 @@ export function useModelLiveSync(options: {
         remoteLinks,
         toEditorLink
       )
-      const nextDiagrams = mergeEntityListFromRemote(
+      let nextDiagrams = mergeEntityListFromRemote(
         options.state.value.diagrams,
         remoteDiagrams,
         toEditorDiagram
       )
+      const openId = options.openDiagramId?.value
+      if (openId) {
+        nextDiagrams = preserveOpenDiagramCanvasAfterRemoteMerge(
+          nextDiagrams,
+          diagramsBefore,
+          openId
+        )
+      }
 
       options.state.value.nodes = nextNodes
       options.state.value.links = nextLinks
@@ -162,45 +188,103 @@ export function useModelLiveSync(options: {
     }
   }
 
-  const startPolling = (): void => {
-    stopPolling()
+  const connectPush = (): void => {
+    disconnectPush()
     if (!options.enabled.value) return
     const mid = options.modelId.value
-    if (!mid) return
+    if (!mid || typeof mid !== "string") return
+    const token = getAccessToken()
+    if (!token) return
+
+    const url = buildModelSyncWsUrl(token)
+    if (!url) return
+
+    const client = new Client({
+      brokerURL: url,
+      reconnectDelay: 5000,
+      heartbeatIncoming: 15000,
+      heartbeatOutgoing: 15000,
+      onConnect: () => {
+        client.subscribe(`/topic/models/${mid}`, message => {
+          try {
+            const parsed = JSON.parse(message.body) as {
+              type?: string
+              modelId?: string
+              actorUserId?: string
+            }
+            if (parsed.type !== "model_changed" || parsed.modelId !== mid) {
+              return
+            }
+            const self = options.currentUserId?.value
+            if (self && parsed.actorUserId === self) {
+              return
+            }
+            void pullRemoteSnapshot({ ignoreSavingGuard: true })
+          } catch {
+            /* ignore malformed */
+          }
+        })
+        void pullRemoteSnapshot({ ignoreSavingGuard: true })
+      },
+    })
+    stompClient = client
+    void client.activate()
+  }
+
+  const resyncSession = (): void => {
+    if (!options.enabled.value) return
+    const mid = options.modelId.value
+    if (!mid || typeof mid !== "string") return
+
+    connectPush()
+
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
       return
     }
-    void pollOnce()
-    timer = setInterval(() => {
-      void pollOnce()
-    }, pollIntervalMs)
+    void pullRemoteSnapshot()
   }
 
   watch(
     () => [options.enabled.value, options.modelId.value] as const,
     () => {
-      startPolling()
+      resyncSession()
     },
     { flush: "post", immediate: true }
   )
 
   const onDocumentVisibilityChange = (): void => {
     if (typeof document === "undefined") return
-    if (document.visibilityState === "hidden") {
-      stopPolling()
-      return
-    }
-    startPolling()
+    if (document.visibilityState === "hidden") return
+    if (!options.enabled.value) return
+    const mid = options.modelId.value
+    if (!mid || typeof mid !== "string") return
+    void pullRemoteSnapshot({ ignoreSavingGuard: true })
+  }
+
+  const onAuthUpdated = (): void => {
+    connectPush()
+  }
+
+  const onAuthCleared = (): void => {
+    disconnectPush()
   }
 
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onDocumentVisibilityChange)
   }
+  if (typeof window !== "undefined") {
+    window.addEventListener(AUTH_UPDATED_EVENT, onAuthUpdated)
+    window.addEventListener(AUTH_CLEARED_EVENT, onAuthCleared)
+  }
 
   onBeforeUnmount(() => {
-    stopPolling()
+    disconnectPush()
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", onDocumentVisibilityChange)
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener(AUTH_UPDATED_EVENT, onAuthUpdated)
+      window.removeEventListener(AUTH_CLEARED_EVENT, onAuthCleared)
     }
   })
 }

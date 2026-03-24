@@ -13,6 +13,7 @@ function makeNode(overrides: Partial<EditorNode> & { id: string; name: string })
       treeOrder: 0,
       notationComponents: {},
       componentProperties: {},
+      typeProperties: {},
     },
     _isNew: false,
     _isDirty: false,
@@ -68,9 +69,36 @@ describe('useTreeSearch', () => {
 
     it('sorts by treeOrder then by index', () => {
       const tree = setup([
-        makeNode({ id: 'c', name: 'C', parsedAttrs: { treeOrder: 2, notationComponents: {}, componentProperties: {} } }),
-        makeNode({ id: 'a', name: 'A', parsedAttrs: { treeOrder: 1, notationComponents: {}, componentProperties: {} } }),
-        makeNode({ id: 'b', name: 'B', parsedAttrs: { treeOrder: 1, notationComponents: {}, componentProperties: {} } }),
+        makeNode({
+          id: 'c',
+          name: 'C',
+          parsedAttrs: {
+            treeOrder: 2,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: {},
+          },
+        }),
+        makeNode({
+          id: 'a',
+          name: 'A',
+          parsedAttrs: {
+            treeOrder: 1,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: {},
+          },
+        }),
+        makeNode({
+          id: 'b',
+          name: 'B',
+          parsedAttrs: {
+            treeOrder: 1,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: {},
+          },
+        }),
       ])
       expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a', 'b', 'c'])
     })

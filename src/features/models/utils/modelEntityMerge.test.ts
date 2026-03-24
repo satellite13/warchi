@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { mergeEntityListFromRemote, type MergeableEntity } from "./modelEntityMerge"
+import {
+  mergeEntityListFromRemote,
+  preserveOpenDiagramCanvasAfterRemoteMerge,
+  type MergeableEntity,
+} from "./modelEntityMerge"
+import type { EditorDiagram } from "../types"
 
 type TRow = { id: string; v: number }
 type TLoc = MergeableEntity & { id: string; v: number }
@@ -65,5 +70,51 @@ describe("mergeEntityListFromRemote", () => {
     const remote: TRow[] = []
     const out = mergeEntityListFromRemote(local, remote, toLoc)
     expect(out).toEqual(local)
+  })
+})
+
+describe("preserveOpenDiagramCanvasAfterRemoteMerge", () => {
+  const baseDiagram = (id: string, name: string, instances: EditorDiagram["parsedAttrs"]["instances"]): EditorDiagram => ({
+    id,
+    name,
+    version: "1.0.0",
+    ownerId: "o",
+    modelId: "m",
+    notationId: "n1",
+    nodeId: null,
+    parsedAttrs: {
+      instances,
+      documentFileId: undefined,
+    },
+  })
+
+  it("replaces instances from previous row when diagram is open and not dirty", () => {
+    const localInst = {
+      nodes: [{ id: "i1", modelNodeId: "n1", x: 0, y: 0, width: 10, height: 10 }],
+      edges: [{ id: "e1", modelLinkId: "L1", sourceInstanceId: "i1", targetInstanceId: "i1" }],
+    }
+    const remoteInst = { nodes: [], edges: [] }
+    const previous: EditorDiagram[] = [baseDiagram("d1", "D", localInst)]
+    const merged: EditorDiagram[] = [baseDiagram("d1", "D remote", remoteInst)]
+    const out = preserveOpenDiagramCanvasAfterRemoteMerge(merged, previous, "d1")
+    expect(out[0]!.name).toBe("D remote")
+    expect(out[0]!.parsedAttrs.instances).toEqual(localInst)
+  })
+
+  it("does nothing when diagram is dirty", () => {
+    const previous: EditorDiagram[] = [{ ...baseDiagram("d1", "D", { nodes: [], edges: [] }), _isDirty: true }]
+    const remoteInst = {
+      nodes: [{ id: "i1", modelNodeId: "n1", x: 1, y: 1, width: 10, height: 10 }],
+      edges: [],
+    }
+    const merged: EditorDiagram[] = [baseDiagram("d1", "D", remoteInst)]
+    const out = preserveOpenDiagramCanvasAfterRemoteMerge(merged, previous, "d1")
+    expect(out[0]!.parsedAttrs.instances).toEqual(remoteInst)
+  })
+
+  it("no open id — unchanged", () => {
+    const merged: EditorDiagram[] = [baseDiagram("d1", "D", { nodes: [], edges: [] })]
+    const out = preserveOpenDiagramCanvasAfterRemoteMerge(merged, [], null)
+    expect(out).toBe(merged)
   })
 })

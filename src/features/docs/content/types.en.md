@@ -89,6 +89,8 @@ Without relation rules in notation, interactive linking on diagrams may be unava
 
 Node and link types can have custom properties. These properties are available when editing instances in the model.
 
+For **node types**, field values are edited in the model under **Node type properties** (one value per node across the whole model). In the diagram **label template**, those fields use **`#{propertyName}`**; **notation component** fields use **`${propertyName}`** (see [Notations](/docs/notations) and [Models](/docs/models)).
+
 Supported property types:
 
 - **Text** — string value

@@ -205,6 +205,8 @@ Save operations process entities in order:
 2. Update modified entities
 3. Delete marked entities
 
+**Batch save conflict (HTTP 409):** `POST /models/{id}/batch-save` sends `baseUpdatedAt` on updates; mismatch yields `conflicts[]`. In the UI ([`ModelEditor.vue`](src/features/models/ModelEditor.vue)), users choose **reload from server** vs **force overwrite**, with per-entity **field diff** compare (differing fields only; see [`batchSaveConflictDisplay.ts`](src/features/models/utils/batchSaveConflictDisplay.ts)). Product docs: [`docs/plans/model-batch-save-conflicts.md`](docs/plans/model-batch-save-conflicts.md); in-app help: `/docs/models` (Saving → conflict).
+
 ### Custom Properties System
 
 Flexible schema using JSON `attrs` field:
@@ -348,6 +350,8 @@ All user-facing strings must be in `src/i18n/messages.ts` with both `ru` and `en
 3. Add UI controls in component forms
 4. Update serialization if needed
 
+**Model nodes:** type-level properties live in `nodes.attrs.typeProperties`; notation-component properties stay diagram-scoped — see `docs/model-node-type-vs-component-properties.md`.
+
 ## Deployment
 
 ### Docker Build
@@ -378,6 +382,7 @@ Environment variables for deployment:
 
 | File | Purpose |
 |------|---------|
+| `docs/model-node-type-vs-component-properties.md` | Node **type** vs **notation component** custom properties, `typeProperties`, label template `#{…}` / `${…}`, UI и ключевой код |
 | `src/router/index.ts` | Route definitions with auth guards |
 | `src/composables/useApi.ts` | Typed API fetch with error handling |
 | `src/composables/useAuth.ts` | Authentication state and methods |

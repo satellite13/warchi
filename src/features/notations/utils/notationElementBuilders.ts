@@ -25,32 +25,49 @@ export function resolveComponentAnchorPoints(
   }
 }
 
+/**
+ * Превью шаблона в редакторе нотации (без значений модели):
+ * - `#{prop}` — свойства **типа ноды** (передаётся `typeProperties`);
+ * - `${prop}` — свойства **компонента**;
+ * - `${name}` — имя элемента на палитре.
+ */
 export function resolveLabelTemplate(
   template: string,
   name: string,
   customProperties: CustomProperty[],
+  typeProperties: CustomProperty[] = [],
 ): string {
-  return template
-    .replace(/\$\{(\w+)\}/g, (_match, key: string) => {
-      if (key === 'name') return name
-      const prop = customProperties.find((p) => p.name === key)
-      if (prop) {
-        const val = prop.defaultValue
-        return val != null ? String(val) : ''
-      }
-      return ''
-    })
-    .replace(/\\n/g, '\n')
+  let out = template
+  out = out.replace(/#\{(\w+)\}/g, (_m, key: string) => {
+    const prop = typeProperties.find((p) => p.name === key)
+    if (!prop) return ''
+    const val = prop.defaultValue
+    return val != null ? String(val) : ''
+  })
+  out = out.replace(/\$\{(\w+)\}/g, (_m, key: string) => {
+    if (key === 'name') return name
+    const prop = customProperties.find((p) => p.name === key)
+    if (!prop) return ''
+    const val = prop.defaultValue
+    return val != null ? String(val) : ''
+  })
+  return out.replace(/\\n/g, '\n')
 }
 
 export function buildNodeLabel(
   name: string,
   ds?: DiagramStyle,
   customProperties?: CustomProperty[],
+  typeProperties?: CustomProperty[],
 ): string | TextLabelOptions {
   const hasTemplate = !!ds?.labelTemplate
   const displayText = hasTemplate
-    ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [])
+    ? resolveLabelTemplate(
+        ds!.labelTemplate!,
+        name,
+        customProperties ?? [],
+        typeProperties ?? [],
+      )
     : name
 
   const labelInset = ds?.labelInset

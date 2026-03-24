@@ -64,6 +64,17 @@ describe('resolveLabelTemplate', () => {
     const props = [makeCustomProp({ id: '1', name: 'tag' })]
     expect(resolveLabelTemplate('${tag}', 'X', props)).toBe('')
   })
+
+  it('resolves #{key} from type properties', () => {
+    const typeProps = [makeCustomProp({ id: 't1', name: 'code', defaultValue: 'T0' })]
+    const compProps = [makeCustomProp({ id: 'c1', name: 'status', defaultValue: 'ok' })]
+    expect(resolveLabelTemplate('#{code} · ${status}', 'N', compProps, typeProps)).toBe('T0 · ok')
+  })
+
+  it('does not read type schema for ${prop}', () => {
+    const typeProps = [makeCustomProp({ id: 't1', name: 'code', defaultValue: 'X' })]
+    expect(resolveLabelTemplate('${code}', 'N', [], typeProps)).toBe('')
+  })
 })
 
 describe('buildNodeLabel', () => {

@@ -15,29 +15,35 @@ import type {
   NodeTypeResponse,
 } from "@/types/api"
 import type { ModelData, PaginatedResponse } from "@/types/entities"
-import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
-import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from "../types"
+import type { EditorDiagram, ModelEditorState } from "../types"
 import {
   mergeEntityListFromRemote,
   preserveOpenDiagramCanvasAfterRemoteMerge,
 } from "../utils/modelEntityMerge"
+import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 
 const FETCH_SIZE = 1000
+const DEFAULT_FALLBACK_POLL_MS = 15_000
 
-const toEditorNode = (row: NodeResponse): EditorNode => ({
-  ...row,
-  parsedAttrs: parseNodeAttrs(row.attrs ?? null),
-})
+type ModelLiveSyncMode = "ws" | "poll" | "hybrid"
 
-const toEditorLink = (row: LinkResponse): EditorLink => ({
-  ...row,
-  parsedAttrs: parseLinkAttrs(row.attrs ?? null),
-})
+function parseModelLiveSyncMode(raw: string | undefined): ModelLiveSyncMode {
+  const normalized = raw?.trim().toLowerCase()
+  if (normalized === "ws" || normalized === "poll" || normalized === "hybrid") {
+    return normalized
+  }
+  return "hybrid"
+}
 
-const toEditorDiagram = (row: DiagramResponse): EditorDiagram => ({
-  ...row,
-  parsedAttrs: parseDiagramAttrs(row.attrs ?? null),
-})
+function parseModelLivePollMs(raw: string | undefined): number {
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return DEFAULT_FALLBACK_POLL_MS
+  if (parsed < 1000) return 1000
+  return Math.floor(parsed)
+}
+
+const MODEL_LIVE_SYNC_MODE = parseModelLiveSyncMode(import.meta.env.VITE_MODEL_LIVE_SYNC_MODE)
+const MODEL_LIVE_POLL_MS = parseModelLivePollMs(import.meta.env.VITE_MODEL_LIVE_POLL_MS)
 
 type PullSnapshotOptions = {
   /** Push / переподключение / возврат на вкладку — не ждать окончания локального save. */
@@ -46,7 +52,11 @@ type PullSnapshotOptions = {
 
 /**
  * Live sync по событию: STOMP `/topic/models/{modelId}` → один проход merge с API (ноды, связи, диаграммы, модель).
- * Периодического poll нет. Разовый pull: при старте сессии (вкладка видима), после STOMP connect/reconnect,
+ * Режимы:
+ * - ws: только STOMP + pull по событию
+ * - poll: только периодический pull
+ * - hybrid (default): STOMP primary + polling fallback при потере WS
+ * Дополнительно: разовый pull при старте сессии (вкладка видима), после STOMP connect/reconnect,
  * при `model_changed`, при возврате на вкладку (догон после фона).
  * См. docs/plans/model-live-sync.md
  */
@@ -64,13 +74,38 @@ export function useModelLiveSync(options: {
 }): void {
   let inFlight = false
   let stompClient: Client | null = null
+  let fallbackPollTimer: ReturnType<typeof setInterval> | null = null
+  let wsConnected = false
+
+  const isWsEnabled = MODEL_LIVE_SYNC_MODE === "ws" || MODEL_LIVE_SYNC_MODE === "hybrid"
+  const isPollEnabled = MODEL_LIVE_SYNC_MODE === "poll" || MODEL_LIVE_SYNC_MODE === "hybrid"
 
   const disconnectPush = (): void => {
     const c = stompClient
     stompClient = null
+    wsConnected = false
     if (c) {
       void c.deactivate()
     }
+  }
+
+  const stopFallbackPoll = (): void => {
+    if (fallbackPollTimer !== null) {
+      clearInterval(fallbackPollTimer)
+      fallbackPollTimer = null
+    }
+  }
+
+  const startFallbackPoll = (): void => {
+    if (!isPollEnabled) return
+    if (!options.enabled.value || options.isLoading.value) return
+    const mid = options.modelId.value
+    if (!mid || typeof mid !== "string") return
+    if (fallbackPollTimer !== null) return
+    fallbackPollTimer = setInterval(() => {
+      void pullRemoteSnapshot()
+    }, MODEL_LIVE_POLL_MS)
+    void pullRemoteSnapshot()
   }
 
   const collectNotationIds = (diagrams: EditorDiagram[]): string[] => {
@@ -202,6 +237,7 @@ export function useModelLiveSync(options: {
 
   const connectPush = (): void => {
     disconnectPush()
+    if (!isWsEnabled) return
     if (!options.enabled.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
@@ -217,6 +253,8 @@ export function useModelLiveSync(options: {
       heartbeatIncoming: 15000,
       heartbeatOutgoing: 15000,
       onConnect: () => {
+        wsConnected = true
+        stopFallbackPoll()
         client.subscribe(`/topic/models/${mid}`, message => {
           try {
             const parsed = JSON.parse(message.body) as {
@@ -238,20 +276,58 @@ export function useModelLiveSync(options: {
         })
         void pullRemoteSnapshot({ ignoreSavingGuard: true })
       },
+      onDisconnect: () => {
+        wsConnected = false
+        if (options.enabled.value) {
+          startFallbackPoll()
+        }
+      },
+      onStompError: () => {
+        wsConnected = false
+        if (options.enabled.value) {
+          startFallbackPoll()
+        }
+      },
+      onWebSocketClose: () => {
+        wsConnected = false
+        if (options.enabled.value) {
+          startFallbackPoll()
+        }
+      },
     })
     stompClient = client
     void client.activate()
+    if (isPollEnabled) {
+      startFallbackPoll()
+    }
   }
 
   const resyncSession = (): void => {
-    if (!options.enabled.value) return
+    if (!options.enabled.value) {
+      disconnectPush()
+      stopFallbackPoll()
+      return
+    }
     const mid = options.modelId.value
-    if (!mid || typeof mid !== "string") return
+    if (!mid || typeof mid !== "string") {
+      disconnectPush()
+      stopFallbackPoll()
+      return
+    }
 
     // connectPush triggers pullRemoteSnapshot in its onConnect callback,
     // so we only pull here if the tab is visible and WS is not being set up
     // (to avoid a duplicate pull when onConnect fires quickly).
-    connectPush()
+    if (isWsEnabled) {
+      connectPush()
+    } else {
+      disconnectPush()
+    }
+    if (isPollEnabled) {
+      startFallbackPoll()
+    } else {
+      stopFallbackPoll()
+    }
 
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
       return
@@ -272,19 +348,36 @@ export function useModelLiveSync(options: {
 
   const onDocumentVisibilityChange = (): void => {
     if (typeof document === "undefined") return
-    if (document.visibilityState === "hidden") return
+    if (document.visibilityState === "hidden") {
+      if (MODEL_LIVE_SYNC_MODE === "hybrid") {
+        stopFallbackPoll()
+      }
+      return
+    }
     if (!options.enabled.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
+    if (isPollEnabled) {
+      startFallbackPoll()
+    }
+    if (isWsEnabled && !wsConnected) {
+      connectPush()
+    }
     void pullRemoteSnapshot({ ignoreSavingGuard: true })
   }
 
   const onAuthUpdated = (): void => {
-    connectPush()
+    if (isWsEnabled) {
+      connectPush()
+    }
+    if (isPollEnabled) {
+      startFallbackPoll()
+    }
   }
 
   const onAuthCleared = (): void => {
     disconnectPush()
+    stopFallbackPoll()
   }
 
   if (typeof document !== "undefined") {
@@ -297,6 +390,7 @@ export function useModelLiveSync(options: {
 
   onBeforeUnmount(() => {
     disconnectPush()
+    stopFallbackPoll()
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", onDocumentVisibilityChange)
     }

@@ -82,11 +82,15 @@ const handleSubmit = async () => {
   if (result.success) {
     successMessage.value =
       mode.value === "login" ? t("auth.successLogin") : t("auth.successRegister");
-    const redirectTarget =
-      typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
-        ? route.query.redirect
-        : null;
-    await router.push(redirectTarget ?? { name: "home" });
+    if (mode.value === "login") {
+      const redirectTarget =
+        typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
+          ? route.query.redirect
+          : null;
+      await router.push(redirectTarget ?? { name: "home" });
+    } else {
+      await router.push({ name: "home" });
+    }
   } else {
     errorMessage.value = result.error || t("auth.defaultError");
   }

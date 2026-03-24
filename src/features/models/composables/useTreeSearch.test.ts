@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computed, ref } from 'vue'
-import { useTreeSearch } from '@/features/models/composables/useTreeSearch'
+import { useTreeSearch } from '@/features/models/composables'
 import type { EditorNode } from '@/features/models/types'
 
 function makeNode(overrides: Partial<EditorNode> & { id: string; name: string }): EditorNode {

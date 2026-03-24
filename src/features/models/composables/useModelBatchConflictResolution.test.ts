@@ -1,0 +1,168 @@
+import { ref } from "vue"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { parseDiagramAttrs } from "../modelAttrs"
+import { createEmptyModelEditorState, type ModelEditorState } from "../types"
+import { useModelBatchConflictResolution } from "./useModelBatchConflictResolution"
+
+const { apiGetMock, mergeDiagramAttrsAfterBatchConflictReloadMock } = vi.hoisted(() => ({
+  apiGetMock: vi.fn(),
+  mergeDiagramAttrsAfterBatchConflictReloadMock: vi.fn(),
+}))
+
+vi.mock("../../../composables/useApi", () => ({
+  apiGet: apiGetMock,
+}))
+
+vi.mock("../utils/mergeLocalCustomPropsAfterReload", () => ({
+  mergeDiagramAttrsAfterBatchConflictReload: mergeDiagramAttrsAfterBatchConflictReloadMock,
+}))
+
+describe("useModelBatchConflictResolution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("resolveBatchSaveReload merges local/server attrs after reload", async () => {
+    const localAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "local",
+      })
+    )
+    const serverAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "server",
+      })
+    )
+    const reloadedAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "reloaded",
+      })
+    )
+    const mergedAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "merged",
+      })
+    )
+
+    apiGetMock.mockResolvedValue({
+      success: true,
+      data: {
+        id: "d-1",
+        name: "Diagram",
+        version: "1.0.0",
+        notationId: "notation-1",
+        modelId: "model-1",
+        ownerId: "owner-1",
+        nodeId: null,
+        attrs: JSON.stringify({
+          instances: { nodes: [], edges: [] },
+          documentFileId: "server",
+        }),
+      },
+    })
+    mergeDiagramAttrsAfterBatchConflictReloadMock.mockReturnValue(mergedAttrs)
+
+    const state = ref<ModelEditorState>({
+      ...createEmptyModelEditorState(),
+      modelId: "model-1",
+      ownerId: "owner-1",
+      diagrams: [
+        {
+          id: "d-1",
+          name: "Diagram",
+          version: "1.0.0",
+          notationId: "notation-1",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeId: null,
+          parsedAttrs: localAttrs,
+          _isDirty: false,
+        },
+      ],
+    })
+    const batchSaveConflict = ref([
+      { kind: "diagram", id: "d-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
+    ])
+    const errorMessage = ref<string | null>(null)
+    const pendingForceBatch = ref(false)
+    const loadModel = vi.fn(async () => {
+      const d = state.value.diagrams.find(item => item.id === "d-1")
+      if (!d) return
+      d.parsedAttrs = reloadedAttrs
+    })
+
+    const { resolveBatchSaveReload } = useModelBatchConflictResolution({
+      state,
+      batchSaveConflict,
+      errorMessage,
+      pendingForceBatch,
+      loadModel,
+      saveChanges: async () => true,
+    })
+
+    await resolveBatchSaveReload()
+
+    expect(batchSaveConflict.value).toBeNull()
+    expect(apiGetMock).toHaveBeenCalledWith("/diagrams/d-1")
+    expect(loadModel).toHaveBeenCalledTimes(1)
+    expect(mergeDiagramAttrsAfterBatchConflictReloadMock).toHaveBeenCalledWith(
+      localAttrs,
+      serverAttrs,
+      reloadedAttrs
+    )
+    expect(state.value.diagrams[0]?.parsedAttrs).toStrictEqual(mergedAttrs)
+    expect(state.value.diagrams[0]?._isDirty).toBe(true)
+  })
+
+  it("resolveBatchSaveOverwrite sets force flag and delegates to saveChanges", async () => {
+    const state = ref(createEmptyModelEditorState())
+    const batchSaveConflict = ref([
+      { kind: "node", id: "n-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
+    ])
+    const errorMessage = ref<string | null>(null)
+    const pendingForceBatch = ref(false)
+    const loadModel = vi.fn(async () => {})
+    const saveChanges = vi.fn(async () => true)
+
+    const { resolveBatchSaveOverwrite } = useModelBatchConflictResolution({
+      state,
+      batchSaveConflict,
+      errorMessage,
+      pendingForceBatch,
+      loadModel,
+      saveChanges,
+    })
+
+    const result = await resolveBatchSaveOverwrite()
+
+    expect(result).toBe(true)
+    expect(batchSaveConflict.value).toBeNull()
+    expect(pendingForceBatch.value).toBe(true)
+    expect(saveChanges).toHaveBeenCalledTimes(1)
+  })
+
+  it("dismissBatchSaveConflict clears conflict state", () => {
+    const state = ref(createEmptyModelEditorState())
+    const batchSaveConflict = ref([
+      { kind: "diagram", id: "d-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
+    ])
+    const errorMessage = ref<string | null>(null)
+    const pendingForceBatch = ref(false)
+
+    const { dismissBatchSaveConflict } = useModelBatchConflictResolution({
+      state,
+      batchSaveConflict,
+      errorMessage,
+      pendingForceBatch,
+      loadModel: async () => {},
+      saveChanges: async () => false,
+    })
+
+    dismissBatchSaveConflict()
+    expect(batchSaveConflict.value).toBeNull()
+  })
+})

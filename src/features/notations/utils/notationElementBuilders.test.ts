@@ -9,6 +9,7 @@ import {
   buildMarker,
 } from '@/features/notations/utils/notationElementBuilders'
 import type { DiagramStyle, CustomProperty } from '@/features/notations/notationAttrs'
+import type { TextLabelOptions } from '@ngroznykh/papirus'
 
 function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name: string }): CustomProperty {
   return {
@@ -18,6 +19,11 @@ function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name:
     max: null,
     ...overrides,
   }
+}
+
+function expectTextLabelOptions(value: string | TextLabelOptions): TextLabelOptions {
+  expect(typeof value).toBe('object')
+  return value as TextLabelOptions
 }
 
 describe('resolveComponentAnchorPoints', () => {
@@ -88,29 +94,28 @@ describe('buildNodeLabel', () => {
 
   it('returns TextLabelOptions with style when labelColor set', () => {
     const ds: DiagramStyle = { labelColor: '#ff0000' }
-    const result = buildNodeLabel('Node', ds)
-    expect(typeof result).toBe('object')
-    expect((result as any).text).toBe('Node')
-    expect((result as any).style.color).toBe('#ff0000')
+    const result = expectTextLabelOptions(buildNodeLabel('Node', ds))
+    expect(result.text).toBe('Node')
+    expect(result.style?.color).toBe('#ff0000')
   })
 
   it('returns TextLabelOptions with template', () => {
     const ds: DiagramStyle = { labelTemplate: '<<${name}>>' }
-    const result = buildNodeLabel('Test', ds) as any
+    const result = expectTextLabelOptions(buildNodeLabel('Test', ds))
     expect(result.text).toBe('<<Test>>')
     expect(result.editableText).toBe('Test')
   })
 
   it('includes labelFontSize and labelAlign', () => {
     const ds: DiagramStyle = { labelFontSize: 14, labelAlign: 'center' }
-    const result = buildNodeLabel('N', ds) as any
-    expect(result.style.fontSize).toBe(14)
-    expect(result.style.align).toBe('center')
+    const result = expectTextLabelOptions(buildNodeLabel('N', ds))
+    expect(result.style?.fontSize).toBe(14)
+    expect(result.style?.align).toBe('center')
   })
 
   it('includes inset when labelInset set', () => {
     const ds: DiagramStyle = { labelInset: 8 }
-    const result = buildNodeLabel('N', ds) as any
+    const result = expectTextLabelOptions(buildNodeLabel('N', ds))
     expect(result.inset).toBe(8)
   })
 })
@@ -123,14 +128,14 @@ describe('buildEdgeLabel', () => {
 
   it('returns TextLabelOptions when labelColor set', () => {
     const ds: DiagramStyle = { labelColor: '#00f' }
-    const result = buildEdgeLabel('E', ds) as any
+    const result = expectTextLabelOptions(buildEdgeLabel('E', ds))
     expect(result.text).toBe('E')
-    expect(result.style.color).toBe('#00f')
+    expect(result.style?.color).toBe('#00f')
   })
 
   it('includes inset', () => {
     const ds: DiagramStyle = { labelInset: 4 }
-    const result = buildEdgeLabel('E', ds) as any
+    const result = expectTextLabelOptions(buildEdgeLabel('E', ds))
     expect(result.inset).toBe(4)
   })
 })

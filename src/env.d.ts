@@ -4,6 +4,8 @@ interface ImportMetaEnv {
   readonly VITE_API_PROXY_TARGET?: string;
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_API_VERSION?: string;
+  readonly VITE_MODEL_LIVE_SYNC_MODE?: "ws" | "poll" | "hybrid";
+  readonly VITE_MODEL_LIVE_POLL_MS?: string;
   readonly APP_VERSION?: string;
   readonly APP_BUILD_TIME?: string;
 }

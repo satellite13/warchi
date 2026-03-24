@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BatchConflictItem } from '../composables/useModelBatchSave'
+import type { BatchConflictItem } from '../composables'
 import { createEmptyModelEditorState } from '../types'
 import {
   buildConflictCompareRows,

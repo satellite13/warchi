@@ -53,7 +53,7 @@ describe('normalizeUser', () => {
   })
 
   it('normalizes unknown role to USER', () => {
-    const result = normalizeUser({ ...baseUser, role: 'UNKNOWN' as any })
+    const result = normalizeUser({ ...baseUser, role: 'UNKNOWN' as unknown as User['role'] })
     expect(result.role).toBe('USER')
   })
 

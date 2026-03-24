@@ -3,7 +3,6 @@ import { test, expect } from '@playwright/test'
 test.describe('User profile page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/profile')
-    await page.waitForLoadState('networkidle')
   })
 
   test('shows profile heading and subtitle', async ({ page }) => {

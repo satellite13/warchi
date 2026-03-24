@@ -1,6 +1,6 @@
 import type { ApiResult } from '@/api/apiClient'
 import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
-import type { BatchConflictItem } from '../composables/useModelBatchSave'
+import type { BatchConflictItem } from '../composables'
 import {
   type DiagramAttrs,
   type DiagramEdgeInstance,

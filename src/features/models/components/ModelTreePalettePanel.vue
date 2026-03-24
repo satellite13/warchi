@@ -6,7 +6,7 @@ import { compareVersions } from "../../../utils/version"
 import { parseTypeAttrs } from "../../notations/notationAttrs"
 import type { DiagramLockStatusResponse, NodeTypeResponse } from "../../../types/api"
 import type { EditorDiagram, EditorNode } from "../types"
-import { useTreeSearch } from "../composables/useTreeSearch"
+import { useTreeSearch } from "../composables"
 
 const props = defineProps<{
   nodes: EditorNode[]

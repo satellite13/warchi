@@ -18,7 +18,7 @@ import {
   type DiagramAttrs,
   type DiagramNodeInstance,
 } from './modelAttrs'
-import type { BatchConflictItem } from './composables/useModelBatchSave'
+import type { BatchConflictItem } from './composables'
 import {
   batchConflictCompareKey,
   buildConflictCompareRows,
@@ -29,13 +29,15 @@ import {
   filterConflictCompareRowsForUi,
 } from './utils/batchSaveConflictDisplay'
 import type { EditorLink, EditorNode } from './types'
-import { useDiagramEditLock } from './composables/useDiagramEditLock'
-import { useModelEditor } from './composables/useModelEditor'
-import { useModelLiveSync } from './composables/useModelLiveSync'
-import { useModelVersionDiff } from './composables/useModelVersionDiff'
-import { useModelToolbarState } from './composables/useModelToolbarState'
-import { useNoteEditor } from './composables/useNoteEditor'
-import { useModelDiagramExport } from './composables/useModelDiagramExport'
+import {
+  useDiagramEditLock,
+  useModelDiagramExport,
+  useModelEditor,
+  useModelLiveSync,
+  useModelToolbarState,
+  useModelVersionDiff,
+  useNoteEditor,
+} from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import {
   getDiagramScopedLinkValues,
@@ -74,7 +76,7 @@ import type {
   RelationResponse,
 } from '../../types/api'
 import { useWikiDocuments } from '../../composables/useWikiDocuments'
-import { useDocumentModal } from './composables/useDocumentModal'
+import { useDocumentModal } from './composables'
 import { formatDate } from '../../utils/formatDate'
 
 const {

@@ -33,7 +33,6 @@ test.describe('Navigation', () => {
 
   test('navigate to profile', async ({ page }) => {
     await page.goto('/profile')
-    await page.waitForLoadState('networkidle')
     // Profile page should show some user info
     await expect(page.locator('body')).toBeVisible()
   })

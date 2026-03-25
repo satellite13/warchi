@@ -229,13 +229,12 @@ const remotePointerScreen = computed((): { left: string; top: string } | null =>
   const r = renderer
   const container = containerRef.value
   if (!p?.visible || !r || !container) return null
-  const canvas = r.getCanvas()
   const contRect = container.getBoundingClientRect()
-  const cRect = canvas.getBoundingClientRect()
+  // worldToScreen возвращает координаты уже в системе viewport (включает getBoundingClientRect canvas)
   const pt = r.worldToScreen(p.worldX, p.worldY)
   return {
-    left: `${cRect.left - contRect.left + pt.x}px`,
-    top: `${cRect.top - contRect.top + pt.y}px`,
+    left: `${pt.x - contRect.left}px`,
+    top: `${pt.y - contRect.top}px`,
   }
 })
 

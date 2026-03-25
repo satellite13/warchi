@@ -21,6 +21,19 @@
 1. **MVP:** периодический `GET` снимка модели (узлы+связи±диаграммы) или лёгкий `editor-snapshot` раз в N с.
 2. **Целевой:** **SSE или WebSocket**, комната **`modelId`**, тема в духе `/topic/model/{modelId}` (см. [collaborative-editing-plan.md](../collaborative-editing-plan.md)).
 
+## STOMP payload `model_changed` (v2, реализовано)
+
+Сервер шлёт в `/topic/models/{modelId}` объект с полями:
+
+- `v`: `2`
+- `type`: `model_changed`
+- `eventId`: UUID строкой (дедуп на клиенте)
+- `modelId`, `source`, `serverTime`, опционально `actorUserId`
+- `modelRevision`: монотонный счётчик мутаций модели (`models.sync_revision`)
+- опционально `events`: массив гранулярных событий `{ type, entity, id, revision }` (например `node_updated` / `link_deleted`)
+
+Клиент: [`useModelLiveSync`](../../src/features/models/composables/useModelLiveSync.ts) — LRU по `eventId`, микробатч pull по `queueMicrotask`, телеметрия `CustomEvent` [`warchi-model-live-sync`](../../src/features/models/utils/modelLiveSyncTelemetry.ts).
+
 ## Конфигурация фронтенда (реализовано)
 
 В `warchi` режим задаётся через env:
@@ -265,8 +278,11 @@ Payload: `id`, минимальные поля или полный row, `updated
 ## Чеклист задач (кратко)
 
 - [x] **Клиент (pull по событию):** `useModelLiveSync` + [`modelEntityMerge.ts`](../../src/features/models/utils/modelEntityMerge.ts) — STOMP `model_changed` → разовый GET нод/связей/диаграмм/модели; дополнительно pull при старте сессии (вкладка видима), после STOMP connect/reconnect и при возврате на вкладку; merge с уважением `_isNew` / `_isDirty` / `_isDeleted`; пауза при `isSaving` (кроме push/reconnect), `isLoading`; обновление node/link types и `ensureNotationRelationsAndRules` для новых `notationId` на диаграммах. Подключено в [`ModelEditor.vue`](../../src/features/models/ModelEditor.vue). Добавлен fallback polling (режимы `ws`/`poll`/`hybrid`, по умолчанию `hybrid`) для деградации при недоступном WS.
-- Сервер: после commit — генерация событий + **роутер подписок** по `modelId` (эволюция: outbox); **SSE/WebSocket** вместо poll
-- Клиент (push): **коалесценция по ключу сущности** (LWW + приоритет delete) для потока событий; игнор echo по `clientOpId` / `actorUserId`
-- Тесты push: coalesce, delete-vs-update, echo, дедуп по `eventId` (сейчас есть unit-тесты merge: [`modelEntityMerge.test.ts`](../../src/features/models/utils/modelEntityMerge.test.ts))
-- Зафиксировать `revision`/триггер в БД или сервисный счётчик; контракт JSON в OpenAPI при появлении push API
+- [x] **Этап 1 (hardening):** `eventId` + `modelRevision` на сервере, LRU-дедуп и телеметрия на клиенте ([`modelLiveSyncEventDedup.ts`](../../src/features/models/utils/modelLiveSyncEventDedup.ts), [`modelLiveSyncTelemetry.ts`](../../src/features/models/utils/modelLiveSyncTelemetry.ts)); unit-тесты дедупа и коалесцера ([`modelLiveSyncEventDedup.test.ts`](../../src/features/models/utils/modelLiveSyncEventDedup.test.ts), [`modelSyncGranularCoalesce.test.ts`](../../src/features/models/utils/modelSyncGranularCoalesce.test.ts)).
+- [x] **Этап 2 (частично):** гранулярные события в поле `events` + `modelRevision`; клиент коалесцирует список (последнее по `entity:id`), pull по-прежнему полный snapshot (патчи без GET — следующий шаг).
+- [x] **Этап 3 (outbox):** таблица `model_sync_outbox`, воркер, метрики; включение флагом `MODEL_SYNC_OUTBOX_ENABLED`; runbook в репозитории **arepos-server**: `docs/ops/model-sync-outbox-runbook.md`.
+- Сервер: **SSE/WebSocket** вместо poll для прочих сценариев — по необходимости
+- Клиент (push): полноценная **коалесценция LWW + приоритет delete** и применение патчей без GET — по необходимости
+- Тесты push: расширить интеграционными; merge: [`modelEntityMerge.test.ts`](../../src/features/models/utils/modelEntityMerge.test.ts)
+- Контракт JSON в OpenAPI при стабилизации push API
 - Перспектива: канал `diagram:{id}` + seq/ops для multi-user canvas (отдельный эпик)

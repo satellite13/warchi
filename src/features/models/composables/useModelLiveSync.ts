@@ -20,6 +20,15 @@ import {
   mergeEntityListFromRemote,
   preserveOpenDiagramCanvasAfterRemoteMerge,
 } from "../utils/modelEntityMerge"
+import { createModelChangedEventIdDeduper } from "../utils/modelLiveSyncEventDedup"
+import {
+  emitModelLiveSyncTelemetry,
+  type ModelLiveSyncPullReason,
+} from "../utils/modelLiveSyncTelemetry"
+import {
+  coalesceModelSyncGranularEvents,
+  parseGranularSyncEventsFromPayload,
+} from "../utils/modelSyncGranularCoalesce"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 
 const FETCH_SIZE = 1000
@@ -48,6 +57,8 @@ const MODEL_LIVE_POLL_MS = parseModelLivePollMs(import.meta.env.VITE_MODEL_LIVE_
 type PullSnapshotOptions = {
   /** Push / переподключение / возврат на вкладку — не ждать окончания локального save. */
   ignoreSavingGuard?: boolean
+  /** Для телеметрии `pull_trigger` (см. WARCHI_MODEL_LIVE_SYNC_EVENT). */
+  reason?: ModelLiveSyncPullReason
 }
 
 /**
@@ -80,6 +91,8 @@ export function useModelLiveSync(options: {
   let stompClient: Client | null = null
   let fallbackPollTimer: ReturnType<typeof setInterval> | null = null
   let wsConnected = false
+  const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
+  let stompPullCoalesceScheduled = false
 
   const isWsEnabled = MODEL_LIVE_SYNC_MODE === "ws" || MODEL_LIVE_SYNC_MODE === "hybrid"
   const isPollEnabled = MODEL_LIVE_SYNC_MODE === "poll" || MODEL_LIVE_SYNC_MODE === "hybrid"
@@ -107,9 +120,9 @@ export function useModelLiveSync(options: {
     if (!mid || typeof mid !== "string") return
     if (fallbackPollTimer !== null) return
     fallbackPollTimer = setInterval(() => {
-      void pullRemoteSnapshot()
+      void pullRemoteSnapshot({ reason: "poll_timer" })
     }, MODEL_LIVE_POLL_MS)
-    void pullRemoteSnapshot()
+    void pullRemoteSnapshot({ reason: "poll_timer" })
   }
 
   const collectNotationIds = (diagrams: EditorDiagram[]): string[] => {
@@ -129,6 +142,13 @@ export function useModelLiveSync(options: {
     if (!mid || typeof mid !== "string") return
 
     inFlight = true
+    if (pullOpts?.reason) {
+      emitModelLiveSyncTelemetry({
+        kind: "pull_trigger",
+        modelId: mid,
+        reason: pullOpts.reason,
+      })
+    }
     try {
       const [nodesRes, linksRes, diagramsRes, modelRes] = await Promise.all([
         apiGet<PaginatedResponse<NodeResponse>>(
@@ -241,6 +261,17 @@ export function useModelLiveSync(options: {
     }
   }
 
+  const scheduleStompModelChangedPull = (): void => {
+    if (stompPullCoalesceScheduled) {
+      return
+    }
+    stompPullCoalesceScheduled = true
+    queueMicrotask(() => {
+      stompPullCoalesceScheduled = false
+      void pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "stomp_model_changed" })
+    })
+  }
+
   const connectPush = (): void => {
     disconnectPush()
     if (!isWsEnabled) return
@@ -267,6 +298,12 @@ export function useModelLiveSync(options: {
             if (typeof parsed.modelId !== "string" || parsed.modelId !== mid) {
               return
             }
+            emitModelLiveSyncTelemetry({
+              kind: "ws_message_received",
+              modelId: mid,
+              messageType: typeof parsed.type === "string" ? parsed.type : "",
+              eventId: typeof parsed.eventId === "string" ? parsed.eventId : undefined,
+            })
             options.onModelTopicBroadcast?.(parsed)
             if (parsed.type !== "model_changed") {
               return
@@ -275,12 +312,20 @@ export function useModelLiveSync(options: {
             if (self && parsed.actorUserId === self) {
               return
             }
-            void pullRemoteSnapshot({ ignoreSavingGuard: true })
+            const eid = parsed.eventId
+            if (!modelChangedEventIdDeduper.consume(eid)) {
+              if (typeof eid === "string" && eid.length > 0) {
+                emitModelLiveSyncTelemetry({ kind: "ws_message_deduped", modelId: mid, eventId: eid })
+              }
+              return
+            }
+            void coalesceModelSyncGranularEvents(parseGranularSyncEventsFromPayload(parsed.events))
+            scheduleStompModelChangedPull()
           } catch {
             /* ignore malformed */
           }
         })
-        void pullRemoteSnapshot({ ignoreSavingGuard: true })
+        void pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "ws_connect" })
       },
       onDisconnect: () => {
         wsConnected = false
@@ -341,7 +386,7 @@ export function useModelLiveSync(options: {
     // The onConnect callback in connectPush also pulls — the inFlight guard
     // ensures only one pull runs at a time, so this is safe but may be redundant.
     // We keep it for the case where WS connection is slow or fails.
-    void pullRemoteSnapshot()
+    void pullRemoteSnapshot({ reason: "session_resync" })
   }
 
   watch(
@@ -369,7 +414,7 @@ export function useModelLiveSync(options: {
     if (isWsEnabled && !wsConnected) {
       connectPush()
     }
-    void pullRemoteSnapshot({ ignoreSavingGuard: true })
+    void pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "visibility" })
   }
 
   const onAuthUpdated = (): void => {
@@ -379,6 +424,7 @@ export function useModelLiveSync(options: {
     if (isPollEnabled) {
       startFallbackPoll()
     }
+    void pullRemoteSnapshot({ reason: "auth_refresh" })
   }
 
   const onAuthCleared = (): void => {

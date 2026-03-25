@@ -1,6 +1,6 @@
 # Model Live Sync — Gap-to-Implementation и Go/No-Go
 
-Связан с планом: [model-live-sync.md](model-live-sync.md)
+Связан с планом: [model-live-sync.md](model-live-sync.md) · [план этапов 1–3 (hardening → granular → outbox)](model-live-sync-stages-1-3-plan.md)
 
 ## Цель документа
 
@@ -18,7 +18,8 @@
 Реализован рабочий контур **signal + pull**:
 
 - frontend: `useModelLiveSync` с режимами `ws` / `poll` / `hybrid`;
-- backend: STOMP-уведомление `model_changed` в `/topic/models/{modelId}`;
+- backend: STOMP в `/topic/models/{modelId}` — в первую очередь `model_changed` (полный pull снимка); дополнительно по тому же topic рассылаются **`diagram_live`**, **`diagram_pointer`**, **`diagram_spectators`** (см. `ModelSyncBroadcaster` в arepos-server) — отдельная обработка на клиенте через `onModelTopicBroadcast`, без замены granular push по сущностям модели;
+- для `model_changed`: игнор «своего» echo по совпадению **`actorUserId`** с текущим пользователем (не полноценный `eventId` / `clientOpId`);
 - merge snapshot в редакторе с уважением локальных `_isNew / _isDirty / _isDeleted`;
 - fallback polling при проблемах с WS.
 
@@ -38,26 +39,26 @@
 ### P1 (надёжность production)
 
 - нет outbox/after-commit публикации с ретраями;
-- нет idempotency-паттерна на клиенте (`eventId` + LRU дедуп);
+- нет idempotency-паттерна на клиенте (**`eventId` + LRU дедуп**); частичный отсев echo по `actorUserId` для `model_changed` не покрывает повторы от брокера и at-least-once доставку;
 - нет наблюдаемости realtime-контура (lag/ошибки публикации/доля fallback).
 
 ### P2 (следующая продуктовая фаза)
 
-- нет отдельного high-frequency канала `diagram:{diagramId}` для одновременного редактирования одного canvas;
-- нет `seq/ops` (или альтернативного согласованного протокола) для realtime-операций диаграммы.
+- нет **отдельной** комнаты/топика `diagram:{diagramId}` и согласованного high-frequency протокола для одновременного редактирования одного canvas (`seq/ops`, ordering, conflict policy);
+- сообщения `diagram_live` / pointer / spectators идут в **той же** комнате `modelId` — это не замена отдельного канала и не полноценный multi-editor canvas по плану в [model-live-sync.md](model-live-sync.md) (раздел про `diagram:{id}`).
 
 ---
 
 ## Go / No-Go
 
-## Go сейчас, если:
+### Go сейчас, если
 
 - есть заметная нагрузка на snapshot pull;
 - появляются жалобы на лаги/дёргание/долгий догон;
 - в одной модели регулярно работает много пользователей одновременно;
 - нужен более строгий операционный SLA по доставке событий.
 
-## No-Go сейчас, если:
+### No-Go сейчас, если
 
 - текущий UX устраивает;
 - основная боль (обновление без F5) уже снята;
@@ -69,7 +70,7 @@
 
 - **Go:** сделать этап hardening (Этап 1 ниже) в ближайшем спринте.
 - **Conditional Go:** этап granular push только по метрикам/сигналам.
-- **No-Go сейчас:** отдельный realtime-канал диаграммы (это другой эпик).
+- **No-Go сейчас:** эпик отдельного realtime-канала диаграммы с ordering/conflict policy (**Этап 4**); текущие `diagram_*` push в topic модели этот эпик не закрывают.
 
 ---
 
@@ -79,11 +80,11 @@
 
 ### Этап 1 — Hardening текущего режима (рекомендуется сейчас)
 
-- `A1` Backend: унифицировать envelope `model_changed`, добавить `eventId` — **2 SP**
-- `A2` Frontend: дедуп по `eventId` (LRU последних N) в `useModelLiveSync` — **3 SP**
+- `A1` Backend: унифицировать envelope `model_changed` (и при необходимости остальных типов в том же topic), добавить **`eventId`** — **2 SP**
+- `A2` Frontend: дедуп по `eventId` (LRU последних N) в `useModelLiveSync` — **3 SP** *(базовый skip по `actorUserId` для `model_changed` уже есть)*
 - `A3` Frontend: telemetry (`ws_message_received`, `ws_message_deduped`, `pull_trigger_reason`) — **2 SP**
 - `A4` Backend tests: интеграционные тесты публикации в topic на мутациях model/node/link/diagram/batch-save — **3 SP**
-- `A5` Frontend tests: echo-ignore + dedup + reconnect pull — **3 SP**
+- `A5` Frontend tests: echo-ignore (`actorUserId` / будущий `eventId`) + dedup + reconnect pull — **3 SP**
 - `A6` Docs: обновить `model-live-sync.md` статусом после hardening — **1 SP**
 
 Итого: **14 SP**

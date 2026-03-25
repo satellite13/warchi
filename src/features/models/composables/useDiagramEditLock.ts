@@ -55,6 +55,7 @@ export function useDiagramEditLock(options: {
   const lockForceRevoked = ref(false)
 
   let heldDiagramId: string | null = null
+  let heldByUserId: string | null = null
   let lockOpSeq = 0
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -92,6 +93,7 @@ export function useDiagramEditLock(options: {
     const id = heldDiagramId
     if (!id) return
     heldDiagramId = null
+    heldByUserId = null
     clearHeartbeat()
     try {
       await apiPost(`/diagram-locks/${id}/release`, {})
@@ -119,17 +121,21 @@ export function useDiagramEditLock(options: {
   }
 
   /**
-   * Если мы держали lock, но его больше нет в списке с сервера —
-   * админ снял блокировку (force-release). Останавливаем heartbeat,
+   * Если мы держали lock, но в списке его нет или он теперь у другого
+   * пользователя — админ снял блокировку (force-release) и, возможно,
+   * её уже перехватил другой пользователь. Останавливаем heartbeat,
    * сбрасываем hold и уведомляем пользователя.
    */
   function checkHeldLockRevoked(serverLocks: DiagramLockStatusResponse[]): void {
     if (!heldDiagramId) return
-    const stillHeld = serverLocks.some(
-      (l) => l.diagramId === heldDiagramId && l.isLocked
-    )
-    if (!stillHeld) {
+    const entry = serverLocks.find((l) => l.diagramId === heldDiagramId)
+    const stillOurs =
+      entry != null &&
+      entry.isLocked &&
+      (heldByUserId == null || entry.lockedByUserId === heldByUserId)
+    if (!stillOurs) {
       heldDiagramId = null
+      heldByUserId = null
       clearHeartbeat()
       lockForceRevoked.value = true
     }
@@ -189,6 +195,7 @@ export function useDiagramEditLock(options: {
         return
       }
       heldDiagramId = diagramId
+      heldByUserId = d.lockedByUserId ?? null
       startHeartbeat(diagramId)
       void fetchLocksList()
       return

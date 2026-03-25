@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-03-25
+
+### Added
+- In-app notification when an administrator force-releases your diagram lock.
+- Admin diagram lock table shows resolved diagram paths for each lock.
+
+### Changed
+- Redesigned admin area tabs and the diagram lock indicator in the editor.
+
+### Fixed
+- Diagram locks: verify you still hold the lock before saving; detect another user taking the lock or admin force-release via lock-list polling; after force-release, reload server-backed state and exit conflicting edit paths without incorrectly re-acquiring a released lock.
+
 ## [0.4.1] - 2026-03-25
 
 ### Fixed

@@ -268,18 +268,26 @@ const canCreateBaseline = computed(
       class="model-header__diagram-lock-group"
     >
       <span
-        class="model-header__readonly-indicator model-header__readonly-indicator--lock-held"
+        class="lock-chip"
         :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
       >
-        <UiIcon name="lock" class="model-header__readonly-icon" />
-        <span class="model-header__readonly-text">{{ diagramLockHolderDisplay || '—' }}</span>
+        <span class="lock-chip__pulse"></span>
+        <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
+          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
       </span>
       <button
         v-if="diagramLockServerNewer"
         type="button"
-        class="model-header__diagram-lock-reload-btn"
+        class="lock-reload-btn"
         @click="emit('diagramLockReload')"
       >
+        <svg class="lock-reload-btn__icon" viewBox="0 0 14 14" fill="none">
+          <path d="M12 2v3.5h-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M10.8 8.5a4.5 4.5 0 11-.9-5.2L12 5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
         {{ t('models.diagramLockReload') }}
       </button>
     </div>
@@ -424,18 +432,26 @@ const canCreateBaseline = computed(
         class="model-header__diagram-lock-group"
       >
         <span
-          class="model-header__readonly-indicator model-header__readonly-indicator--lock-held"
+          class="lock-chip"
           :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
         >
-          <UiIcon name="lock" class="model-header__readonly-icon" />
-          <span class="model-header__readonly-text">{{ diagramLockHolderDisplay || '—' }}</span>
+          <span class="lock-chip__pulse"></span>
+          <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
+            <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+            <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+          <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
         </span>
         <button
           v-if="diagramLockServerNewer"
           type="button"
-          class="model-header__diagram-lock-reload-btn"
+          class="lock-reload-btn"
           @click="emit('diagramLockReload')"
         >
+          <svg class="lock-reload-btn__icon" viewBox="0 0 14 14" fill="none">
+            <path d="M12 2v3.5h-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M10.8 8.5a4.5 4.5 0 11-.9-5.2L12 5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
           {{ t('models.diagramLockReload') }}
         </button>
       </div>
@@ -487,21 +503,7 @@ const canCreateBaseline = computed(
   pointer-events: auto;
 }
 
-.model-header__diagram-lock-reload-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--primary);
-  background: var(--primary);
-  color: #fff;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.model-header__diagram-lock-reload-btn:hover {
-  filter: brightness(1.06);
-}
+/* (lock-reload-btn styles above) */
 
 .model-header-canvas :deep(.icon-toolbar) {
   padding: 2px 3px;
@@ -707,23 +709,86 @@ const canCreateBaseline = computed(
   opacity: 1;
 }
 
-.model-header__readonly-indicator--lock-held {
-  color: var(--warning);
-  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
-  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
-  max-width: min(100%, 420px);
+.model-header__readonly-text {
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
-.model-header__readonly-indicator--lock-held .model-header__readonly-text {
+/* ─── Lock chip (blocked by another user) ──────── */
+.lock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning);
+  border-radius: 16px;
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  max-width: min(100%, 360px);
+  position: relative;
+  overflow: hidden;
+}
+
+.lock-chip__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  animation: lock-chip-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes lock-chip-pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.lock-chip__icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.lock-chip__name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.01em;
+  position: relative;
 }
 
-.model-header__readonly-text {
+/* ─── Reload button ────────────────────────────── */
+.lock-reload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  font-family: inherit;
+  border-radius: 7px;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+
+.lock-reload-btn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.lock-reload-btn__icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 .model-header__right-spacer {

@@ -527,11 +527,14 @@ defineExpose({ expandToNode, focusNode })
             <span>{{ row.diagram.name }}</span>
             <span
               v-if="diagramLockFor(row.diagram.id)"
-              class="diagram-row__badge diagram-row__badge--lock"
-              :class="{ 'diagram-row__badge--lock-own': isDiagramLockedByCurrentUser(row.diagram.id) }"
+              class="diagram-row__lock-pip"
+              :class="{ 'diagram-row__lock-pip--own': isDiagramLockedByCurrentUser(row.diagram.id) }"
               :title="diagramLockBadgeTitle(diagramLockFor(row.diagram.id)!)"
             >
-              <UiIcon name="lock" class="diagram-row__lock-icon" />
+              <svg class="diagram-row__lock-pip-icon" viewBox="0 0 12 12" fill="none">
+                <rect x="2" y="5.5" width="8" height="5.5" rx="1" stroke="currentColor" stroke-width="1.2" />
+                <path d="M3.5 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+              </svg>
             </span>
             <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
           </button>
@@ -1031,21 +1034,39 @@ defineExpose({ expandToNode, focusNode })
   flex-shrink: 0;
 }
 
-.diagram-row__badge--lock {
+.diagram-row__lock-pip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border-radius: 5px;
+  background: var(--warning-soft);
   color: var(--warning);
-  border-color: var(--warning);
+  flex-shrink: 0;
+  animation: lock-pip-appear 0.2s ease;
 }
 
-.diagram-row__badge--lock-own {
+.diagram-row__lock-pip--own {
+  background: var(--success-soft);
   color: var(--success);
-  border-color: var(--success);
 }
 
-.diagram-row__lock-icon {
-  font-size: 14px;
+.diagram-row__lock-pip-icon {
+  width: 12px;
+  height: 12px;
+}
+
+@keyframes lock-pip-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .diagram-row__rename-wrap {

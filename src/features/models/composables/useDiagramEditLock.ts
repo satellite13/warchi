@@ -84,23 +84,7 @@ export function useDiagramEditLock(options: {
   const startHeartbeat = (diagramId: string): void => {
     clearHeartbeat()
     heartbeatTimer = setInterval(() => {
-      void apiPost<DiagramLockStatusResponse>(
-        `/diagram-locks/${diagramId}/heartbeat`,
-        {},
-      ).then((res) => {
-        // Heartbeat failed or lock no longer held → admin force-released
-        if (heldDiagramId !== diagramId) return
-        const revoked =
-          !res.success ||
-          (res.data && !res.data.isLocked) ||
-          (res.data && res.data.reason === LOCKED_BY_OTHER)
-        if (revoked) {
-          heldDiagramId = null
-          clearHeartbeat()
-          lockForceRevoked.value = true
-          void fetchLocksList()
-        }
-      })
+      void apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/heartbeat`, {})
     }, HEARTBEAT_MS)
   }
 
@@ -129,7 +113,25 @@ export function useDiagramEditLock(options: {
     )
     if (res.success && Array.isArray(res.data)) {
       locksList.value = res.data
+      checkHeldLockRevoked(res.data)
       syncRemoteUpdatedAtFromLocksList()
+    }
+  }
+
+  /**
+   * Если мы держали lock, но его больше нет в списке с сервера —
+   * админ снял блокировку (force-release). Останавливаем heartbeat,
+   * сбрасываем hold и уведомляем пользователя.
+   */
+  function checkHeldLockRevoked(serverLocks: DiagramLockStatusResponse[]): void {
+    if (!heldDiagramId) return
+    const stillHeld = serverLocks.some(
+      (l) => l.diagramId === heldDiagramId && l.isLocked
+    )
+    if (!stillHeld) {
+      heldDiagramId = null
+      clearHeartbeat()
+      lockForceRevoked.value = true
     }
   }
 

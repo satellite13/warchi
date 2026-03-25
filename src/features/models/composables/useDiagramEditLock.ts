@@ -138,6 +138,9 @@ export function useDiagramEditLock(options: {
       heldByUserId = null
       clearHeartbeat()
       lockForceRevoked.value = true
+      // Попытаться заново взять лок — получим LOCKED_BY_OTHER →
+      // isBlockedByOther = true → canvas станет read-only
+      void applyLockForSelection()
     }
   }
 

@@ -622,8 +622,10 @@ let lockRevokedToastTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(
   () => diagramEditLock.lockForceRevoked.value,
-  (revoked) => {
+  async (revoked) => {
     if (!revoked) return
+    // Сбросить несохранённые изменения — перезагрузить состояние с сервера
+    await loadModel()
     lockRevokedToast.value = true
     if (lockRevokedToastTimer) clearTimeout(lockRevokedToastTimer)
     lockRevokedToastTimer = setTimeout(() => {

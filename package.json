@@ -1,7 +1,7 @@
 {
   "name": "warchi",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "type": "module",
   "engines": {
     "node": ">=20.19.0 <21 || >=22.12.0"
@@ -29,7 +29,7 @@
   "dependencies": {
     "@ckpack/vue-color": "^1.6.0",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.5.8",
+    "@ngroznykh/papirus": "^0.5.9",
     "@stomp/stompjs": "^7.3.0",
     "marked": "^17.0.4",
     "md-editor-v3": "^6.4.0",

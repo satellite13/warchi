@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-03-25
+
+### Fixed
+- Diagram export to SVG: edges that use explicit start/end markers no longer draw an extra arrow on an end where the marker is `none` (aligned with on-canvas rendering).
+
 ## [0.4.3] - 2026-03-25
 
 ### Added

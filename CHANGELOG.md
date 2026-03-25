@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-03-25
+
+### Added
+- Live diagram view for spectators: updates over the model sync channel, remote pointer on the canvas, and a compact viewers list in the editor header.
+- Client-side granular model sync helpers: event deduplication/coalescing and optional sync telemetry for debugging.
+
+### Changed
+- Model live sync and merge path tuned for granular server events and high-frequency updates.
+
 ## [0.4.2] - 2026-03-25
 
 ### Added

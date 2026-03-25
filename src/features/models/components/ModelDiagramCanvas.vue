@@ -1514,6 +1514,7 @@ function findTopEdgeAtPoint(worldPoint: { x: number; y: number }): Edge | null {
 function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
   if (!renderer || !interactionManager || !props.activeDiagram) return
   if (event.ctrlKey || event.metaKey || event.shiftKey) return
+  if (renderer.blocksDiagramPointerAtScreen(event.clientX, event.clientY)) return
 
   const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
   const hitEdge = findTopEdgeAtPoint(worldPoint)
@@ -1547,6 +1548,7 @@ function handleCanvasMouseUpSyncEditablePolyline() {
 
 function handleCanvasDoubleClickOpenDirectory(event: MouseEvent) {
   if (!renderer || !props.activeDiagram) return
+  if (renderer.blocksDiagramPointerAtScreen(event.clientX, event.clientY)) return
   const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
   const hitElement = renderer.getElementAtPoint(worldPoint)
   if (!(hitElement instanceof DiagramNode)) return

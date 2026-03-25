@@ -51,6 +51,8 @@ export function useDiagramEditLock(options: {
   /** diagramUpdatedAt с сервера: acquire при LOCKED_BY_OTHER и актуализация из GET /diagram-locks */
   const remoteDiagramUpdatedAt = ref<string | null>(null)
   const serverNewerWhileBlocked = ref(false)
+  /** Админ принудительно снял блокировку — пользователь должен быть уведомлён */
+  const lockForceRevoked = ref(false)
 
   let heldDiagramId: string | null = null
   let lockOpSeq = 0
@@ -82,7 +84,23 @@ export function useDiagramEditLock(options: {
   const startHeartbeat = (diagramId: string): void => {
     clearHeartbeat()
     heartbeatTimer = setInterval(() => {
-      void apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/heartbeat`, {})
+      void apiPost<DiagramLockStatusResponse>(
+        `/diagram-locks/${diagramId}/heartbeat`,
+        {},
+      ).then((res) => {
+        // Heartbeat failed or lock no longer held → admin force-released
+        if (heldDiagramId !== diagramId) return
+        const revoked =
+          !res.success ||
+          (res.data && !res.data.isLocked) ||
+          (res.data && res.data.reason === LOCKED_BY_OTHER)
+        if (revoked) {
+          heldDiagramId = null
+          clearHeartbeat()
+          lockForceRevoked.value = true
+          void fetchLocksList()
+        }
+      })
     }, HEARTBEAT_MS)
   }
 
@@ -285,15 +303,21 @@ export function useDiagramEditLock(options: {
     void releaseHeld()
   })
 
+  function dismissForceRevoked(): void {
+    lockForceRevoked.value = false
+  }
+
   return {
     locksList,
     isBlockedByOther,
     lockHolderDisplay,
     remoteDiagramUpdatedAt,
     serverNewerWhileBlocked,
+    lockForceRevoked,
     fetchLocksList,
     reloadAfterRemoteChange,
     evaluateServerNewer,
     releaseHeld,
+    dismissForceRevoked,
   }
 }

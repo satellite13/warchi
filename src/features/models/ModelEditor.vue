@@ -617,6 +617,22 @@ const diagramLockServerNewerWhileBlocked = computed(
   () => diagramEditLock.serverNewerWhileBlocked.value
 )
 
+const lockRevokedToast = ref(false)
+let lockRevokedToastTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(
+  () => diagramEditLock.lockForceRevoked.value,
+  (revoked) => {
+    if (!revoked) return
+    lockRevokedToast.value = true
+    if (lockRevokedToastTimer) clearTimeout(lockRevokedToastTimer)
+    lockRevokedToastTimer = setTimeout(() => {
+      lockRevokedToast.value = false
+      diagramEditLock.dismissForceRevoked()
+    }, 6000)
+  },
+)
+
 const baselineCreating = ref(false)
 const baselineError = ref<string | null>(null)
 async function handleCreateBaseline() {
@@ -4169,6 +4185,15 @@ onBeforeUnmount(() => {
     </Transition>
   </Teleport>
 
+  <Teleport to="body">
+    <Transition name="toast">
+      <div v-if="lockRevokedToast" class="save-toast save-toast--warning">
+        <UiIcon name="lock_open" class="save-toast__icon" />
+        <span>{{ t('models.diagramLockForceRevoked') }}</span>
+      </div>
+    </Transition>
+  </Teleport>
+
   <BaseModal
     v-if="batchSaveConflict && batchSaveConflict.length > 0"
     :title="t('models.batchSaveConflictTitle')"
@@ -5164,6 +5189,12 @@ onBeforeUnmount(() => {
   background: var(--danger-soft);
   color: var(--danger);
   border: 1px solid var(--danger-soft);
+}
+
+.save-toast--warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent);
 }
 
 .save-toast__icon {

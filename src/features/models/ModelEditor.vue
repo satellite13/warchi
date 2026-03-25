@@ -617,24 +617,6 @@ const diagramLockServerNewerWhileBlocked = computed(
   () => diagramEditLock.serverNewerWhileBlocked.value
 )
 
-const lockRevokedToast = ref(false)
-let lockRevokedToastTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(
-  () => diagramEditLock.lockForceRevoked.value,
-  async (revoked) => {
-    if (!revoked) return
-    // Сбросить несохранённые изменения — перезагрузить состояние с сервера
-    await loadModel()
-    lockRevokedToast.value = true
-    if (lockRevokedToastTimer) clearTimeout(lockRevokedToastTimer)
-    lockRevokedToastTimer = setTimeout(() => {
-      lockRevokedToast.value = false
-      diagramEditLock.dismissForceRevoked()
-    }, 6000)
-  },
-)
-
 const baselineCreating = ref(false)
 const baselineError = ref<string | null>(null)
 async function handleCreateBaseline() {
@@ -3816,6 +3798,18 @@ const cancelLeave = () => {
   pendingRoute = null
 }
 
+/** Админ снял блокировку — выкинуть из диаграммы без сохранения */
+watch(
+  () => diagramEditLock.lockForceRevoked.value,
+  (revoked) => {
+    if (!revoked) return
+    diagramEditLock.dismissForceRevoked()
+    alert(t('models.diagramLockForceRevoked'))
+    allowLeave.value = true
+    router.push({ name: 'models' })
+  },
+)
+
 onBeforeRouteLeave((to) => {
   if (allowLeave.value) {
     allowLeave.value = false
@@ -4183,15 +4177,6 @@ onBeforeUnmount(() => {
       <div v-else-if="saveError || uiError" class="save-toast save-toast--error">
         <UiIcon name="error" class="save-toast__icon" />
         <span>{{ saveError || uiError }}</span>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <Teleport to="body">
-    <Transition name="toast">
-      <div v-if="lockRevokedToast" class="save-toast save-toast--warning">
-        <UiIcon name="lock_open" class="save-toast__icon" />
-        <span>{{ t('models.diagramLockForceRevoked') }}</span>
       </div>
     </Transition>
   </Teleport>
@@ -5193,11 +5178,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--danger-soft);
 }
 
-.save-toast--warning {
-  background: var(--warning-soft);
-  color: var(--warning);
-  border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent);
-}
 
 .save-toast__icon {
   width: 20px;

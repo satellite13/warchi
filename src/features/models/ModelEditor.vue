@@ -31,6 +31,7 @@ import {
 import type { EditorLink, EditorNode } from './types'
 import {
   useDiagramEditLock,
+  useDiagramRealtimeCollab,
   useModelDiagramExport,
   useModelEditor,
   useModelLiveSync,
@@ -509,19 +510,6 @@ const activeDiagram = computed(() =>
     : null
 )
 
-useModelLiveSync({
-  modelId: computed(() => state.value.modelId || null),
-  state,
-  model,
-  enabled: modelLiveSyncEnabled,
-  isLoading,
-  isSaving,
-  modelDirty,
-  ensureNotationRelationsAndRules,
-  openDiagramId: selectedDiagramId,
-  currentUserId: computed(() => currentUser.value?.id ?? null),
-})
-
 const {
   gridVisible,
   miniMapVisible,
@@ -615,6 +603,56 @@ const diagramLockBlockedByOther = computed(() => diagramEditLock.isBlockedByOthe
 const diagramLockHolderName = computed(() => diagramEditLock.lockHolderDisplay.value ?? '—')
 const diagramLockServerNewerWhileBlocked = computed(
   () => diagramEditLock.serverNewerWhileBlocked.value
+)
+
+const isDiagramLockHolder = computed(
+  () =>
+    canInspectDiagramJson.value &&
+    !!activeDiagram.value &&
+    !!latestDiagramVersion.value &&
+    activeDiagram.value.id === latestDiagramVersion.value.id &&
+    isSelectedDiagramPersistedOnServer.value &&
+    !diagramEditLock.isBlockedByOther.value
+)
+
+const {
+  remoteEditorPointer,
+  diagramSpectators,
+  onLiveCollaborationGesture,
+  scheduleDebouncedLivePush,
+  handleModelTopicBroadcast,
+  onCanvasMouseMoveForPointer,
+  onCanvasMouseLeaveForPointer,
+} = useDiagramRealtimeCollab({
+  state,
+  selectedDiagramId,
+  currentUserId: computed(() => currentUser.value?.id ?? null),
+  getDiagramRenderer: () => diagramRenderer.value,
+  isLockHolder: isDiagramLockHolder,
+  isSpectator: diagramLockBlockedByOther,
+})
+
+useModelLiveSync({
+  modelId: computed(() => state.value.modelId || null),
+  state,
+  model,
+  enabled: modelLiveSyncEnabled,
+  isLoading,
+  isSaving,
+  modelDirty,
+  ensureNotationRelationsAndRules,
+  openDiagramId: selectedDiagramId,
+  currentUserId: computed(() => currentUser.value?.id ?? null),
+  preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),
+  onModelTopicBroadcast: handleModelTopicBroadcast,
+})
+
+watch(
+  () => activeDiagram.value?.parsedAttrs.instances,
+  () => {
+    scheduleDebouncedLivePush()
+  },
+  { deep: true }
 )
 
 const baselineCreating = ref(false)
@@ -4010,6 +4048,7 @@ onBeforeUnmount(() => {
               :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
               :diagram-lock-holder-display="diagramLockHolderName"
               :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
+              :diagram-spectators="diagramSpectators"
               :is-admin="canInspectDiagramJson"
               :can-open-notation="canOpenActiveDiagramNotation"
               @action="handleToolbarAction"
@@ -4040,6 +4079,10 @@ onBeforeUnmount(() => {
             :auto-link-in-groups="autoLinkInGroups"
             :lock-anchors-enabled="lockAnchorsEnabled"
             :attach-to-outline-enabled="attachToOutlineEnabled"
+            :remote-editor-pointer="remoteEditorPointer"
+            :diagram-live-broadcast-enabled="isDiagramLockHolder"
+            :on-remote-pointer-track="onCanvasMouseMoveForPointer"
+            :on-remote-pointer-leave="onCanvasMouseLeaveForPointer"
             :selected-model-node-ids="selectedModelNodeIds"
             :selected-model-link-id="selectedModelLinkId"
             :selected-edge-instance-id="selectedEdgeInstanceId"
@@ -4072,6 +4115,7 @@ onBeforeUnmount(() => {
             @request-delete-link="handleRequestDeleteLink"
             @select-canvas-element-id="selectedCanvasElementId = $event"
             @canvas-context-change="handleCanvasContextChange"
+            @live-collaboration-gesture="onLiveCollaborationGesture"
             @palette-visible-change="paletteVisible = $event"
             @open-diagram="selectDiagram"
             @open-document="handleOpenDocumentFromBadge"

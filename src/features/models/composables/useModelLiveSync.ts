@@ -71,6 +71,10 @@ export function useModelLiveSync(options: {
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
   openDiagramId?: Ref<string | null | undefined>
   currentUserId?: Ref<string | null | undefined>
+  /** false = для открытой диаграммы подставлять instances с сервера при pull (режим зрителя) */
+  preserveOpenDiagramCanvasInstances?: Ref<boolean>
+  /** Все сообщения по topic модели с совпадающим modelId (включая diagram_live и т.д.) */
+  onModelTopicBroadcast?: (msg: Record<string, unknown>) => void
 }): void {
   let inFlight = false
   let stompClient: Client | null = null
@@ -179,10 +183,12 @@ export function useModelLiveSync(options: {
       let nextDiagrams = mergedDiagrams.items
       const openId = options.openDiagramId?.value
       if (openId) {
+        const preserveInstances = options.preserveOpenDiagramCanvasInstances?.value ?? true
         nextDiagrams = preserveOpenDiagramCanvasAfterRemoteMerge(
           nextDiagrams,
           diagramsBefore,
-          openId
+          openId,
+          { preserveInstances }
         )
       }
 
@@ -257,12 +263,12 @@ export function useModelLiveSync(options: {
         stopFallbackPoll()
         client.subscribe(`/topic/models/${mid}`, message => {
           try {
-            const parsed = JSON.parse(message.body) as {
-              type?: string
-              modelId?: string
-              actorUserId?: string
+            const parsed = JSON.parse(message.body) as Record<string, unknown>
+            if (typeof parsed.modelId !== "string" || parsed.modelId !== mid) {
+              return
             }
-            if (parsed.type !== "model_changed" || parsed.modelId !== mid) {
+            options.onModelTopicBroadcast?.(parsed)
+            if (parsed.type !== "model_changed") {
               return
             }
             const self = options.currentUserId?.value

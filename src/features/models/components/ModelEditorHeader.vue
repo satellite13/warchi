@@ -43,6 +43,8 @@ const props = withDefaults(
     diagramLockHolderDisplay?: string
     /** На сервере диаграмма новее локальной — показать CTA «Загрузить с сервера» */
     diagramLockServerNewer?: boolean
+    /** Зрители смотрят диаграмму (только для держателя lock) */
+    diagramSpectators?: { userId: string; displayName: string }[]
   }>(),
   {
     hasUnsavedChanges: false,
@@ -74,6 +76,7 @@ const props = withDefaults(
     diagramLockBlockedByOther: false,
     diagramLockHolderDisplay: '',
     diagramLockServerNewer: false,
+    diagramSpectators: () => [],
   }
 )
 
@@ -263,6 +266,21 @@ const canCreateBaseline = computed(
 <template>
   <div v-if="canvasMode" class="model-header-canvas">
     <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+    <div
+      v-if="hasActiveDiagram && !diagramLockBlockedByOther && (diagramSpectators?.length ?? 0) > 0"
+      class="model-header__spectators"
+      :title="
+        diagramSpectators?.map((s) => s.displayName).join(', ') ??
+        ''
+      "
+    >
+      <UiIcon name="visibility" class="model-header__spectators-icon" />
+      <span
+        v-for="s in diagramSpectators"
+        :key="s.userId"
+        class="model-header__spectator-chip"
+      >{{ s.displayName }}</span>
+    </div>
     <div
       v-if="isDiagramReadOnly && diagramLockBlockedByOther"
       class="model-header__diagram-lock-group"
@@ -491,6 +509,34 @@ const canCreateBaseline = computed(
   border-radius: 9px;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.model-header__spectators {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  max-width: 280px;
+  min-width: 0;
+}
+
+.model-header__spectators-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.model-header__spectator-chip {
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--base-text);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-header__diagram-lock-group {

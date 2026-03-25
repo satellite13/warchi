@@ -76,8 +76,12 @@ export function mergeEntityListFromRemote<L extends MergeableEntity, R extends {
 export function preserveOpenDiagramCanvasAfterRemoteMerge(
   merged: EditorDiagram[],
   previous: EditorDiagram[],
-  openDiagramId: string | null | undefined
+  openDiagramId: string | null | undefined,
+  options?: { preserveInstances?: boolean }
 ): EditorDiagram[] {
+  if (options?.preserveInstances === false) {
+    return merged
+  }
   if (!openDiagramId) return merged
   const prev = previous.find((d) => d.id === openDiagramId)
   const idx = merged.findIndex((d) => d.id === openDiagramId)

@@ -133,4 +133,21 @@ describe("preserveOpenDiagramCanvasAfterRemoteMerge", () => {
     const out = preserveOpenDiagramCanvasAfterRemoteMerge(merged, [], null)
     expect(out).toBe(merged)
   })
+
+  it("preserveInstances false keeps remote instances for open diagram", () => {
+    const localInst = {
+      nodes: [{ id: "i1", modelNodeId: "n1", x: 0, y: 0, width: 10, height: 10 }],
+      edges: [],
+    }
+    const remoteInst = {
+      nodes: [{ id: "i2", modelNodeId: "n2", x: 5, y: 5, width: 10, height: 10 }],
+      edges: [],
+    }
+    const previous: EditorDiagram[] = [baseDiagram("d1", "D", localInst)]
+    const merged: EditorDiagram[] = [baseDiagram("d1", "D remote", remoteInst)]
+    const out = preserveOpenDiagramCanvasAfterRemoteMerge(merged, previous, "d1", {
+      preserveInstances: false,
+    })
+    expect(out[0]!.parsedAttrs.instances).toEqual(remoteInst)
+  })
 })

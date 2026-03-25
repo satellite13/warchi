@@ -29,7 +29,7 @@
   "dependencies": {
     "@ckpack/vue-color": "^1.6.0",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.5.7",
+    "@ngroznykh/papirus": "file:../papirus",
     "@stomp/stompjs": "^7.3.0",
     "marked": "^17.0.4",
     "md-editor-v3": "^6.4.0",

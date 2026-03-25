@@ -85,6 +85,12 @@ const props = withDefaults(
     diffStateByModelNodeId?: Record<string, 'added' | 'removed' | 'modified'>
     diffStateByModelLinkId?: Record<string, 'added' | 'removed' | 'modified'>
     diffStateByEdgeInstanceId?: Record<string, 'added' | 'removed' | 'modified'>
+    /** Курсор удалённого редактора (мировые координаты) — только для зрителя */
+    remoteEditorPointer?: { worldX: number; worldY: number; visible: boolean } | null
+    /** Держатель lock: подавлять live во время жестов и слать pointer */
+    diagramLiveBroadcastEnabled?: boolean
+    onRemotePointerTrack?: (clientX: number, clientY: number) => void
+    onRemotePointerLeave?: () => void
   }>(),
   {
     connectionValidator: null,
@@ -105,6 +111,10 @@ const props = withDefaults(
     diffStateByModelNodeId: undefined,
     diffStateByModelLinkId: undefined,
     diffStateByEdgeInstanceId: undefined,
+    remoteEditorPointer: null,
+    diagramLiveBroadcastEnabled: false,
+    onRemotePointerTrack: undefined,
+    onRemotePointerLeave: undefined,
   }
 )
 
@@ -183,6 +193,7 @@ const emit = defineEmits<{
     availableRelations: RelationResponse[],
     existingLinksNotOnDiagram: EditorLink[],
   ]
+  liveCollaborationGesture: [phase: 'block' | 'unblock']
 }>()
 const { t } = useI18n()
 
@@ -209,6 +220,32 @@ watch(() => props.lockAnchorsEnabled, (v) => { lockAnchorsEnabled.value = v })
 watch(() => props.attachToOutlineEnabled, (v) => { attachToOutlineEnabled.value = v })
 const canUndo = ref(false)
 const canRedo = ref(false)
+/** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
+const viewportRev = ref(0)
+
+const remotePointerScreen = computed((): { left: string; top: string } | null => {
+  void viewportRev.value
+  const p = props.remoteEditorPointer
+  const r = renderer
+  const container = containerRef.value
+  if (!p?.visible || !r || !container) return null
+  const canvas = r.getCanvas()
+  const contRect = container.getBoundingClientRect()
+  const cRect = canvas.getBoundingClientRect()
+  const pt = r.worldToScreen(p.worldX, p.worldY)
+  return {
+    left: `${cRect.left - contRect.left + pt.x}px`,
+    top: `${cRect.top - contRect.top + pt.y}px`,
+  }
+})
+
+function onContainerPointerMove(e: MouseEvent): void {
+  props.onRemotePointerTrack?.(e.clientX, e.clientY)
+}
+
+function onContainerPointerLeave(): void {
+  props.onRemotePointerLeave?.()
+}
 
 const GRID_SIZE = 20
 const MIN_ZOOM = 0.3
@@ -1934,6 +1971,25 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
       detectEditablePolylineControlPointChanges()
     })
   })
+
+  if (props.diagramLiveBroadcastEnabled) {
+    const block = (): void => {
+      emit('liveCollaborationGesture', 'block')
+    }
+    const unblock = (): void => {
+      emit('liveCollaborationGesture', 'unblock')
+    }
+    manager.drag.on('dragstart', block)
+    manager.drag.on('dragend', unblock)
+    manager.resize.on('resizeStart', block)
+    manager.resize.on('resizeEnd', unblock)
+    manager.connection.on('connectionStart', block)
+    manager.connection.on('connectionEnd', unblock)
+    manager.connection.on('edgeReconnectStart', block)
+    manager.connection.on('edgeReconnect', unblock)
+    manager.connection.on('controlPointDragStart', block)
+    manager.connection.on('controlPointDragEnd', unblock)
+  }
 }
 
 // ── Renderer init ──
@@ -1981,11 +2037,13 @@ function initRenderer(r: DiagramRenderer) {
   setupInteractionManager(interactionManager, r, navOnly)
   bindInteractionEvents(interactionManager, r)
   r.on('zoom', () => {
+    viewportRev.value += 1
     const diagramId = props.activeDiagram?.id
     if (!diagramId) return
     safePersistViewport(diagramId, r)
   })
   r.on('pan', () => {
+    viewportRev.value += 1
     const diagramId = props.activeDiagram?.id
     if (!diagramId) return
     safePersistViewport(diagramId, r)
@@ -2586,6 +2644,13 @@ onBeforeUnmount(() => {
 // Watch for data changes
 watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
 watch(
+  () => props.remoteEditorPointer,
+  () => {
+    viewportRev.value += 1
+  },
+  { deep: true }
+)
+watch(
   () => [props.diffStateByModelNodeId, props.diffStateByModelLinkId, props.diffStateByEdgeInstanceId],
   () => syncDiagram(),
   { deep: true }
@@ -2617,7 +2682,7 @@ watch(
 
 // Re-apply interactions when navigation-only mode or readOnly changes (Papirus does not support changing navigationOnly at runtime)
 watch(
-  () => [props.readOnly, props.navigationOnlyMode],
+  () => [props.readOnly, props.navigationOnlyMode, props.diagramLiveBroadcastEnabled],
   () => {
     if (!renderer) return
     const navOnly = props.readOnly || props.navigationOnlyMode
@@ -2773,11 +2838,20 @@ defineExpose({
     :class="{ 'diagram-canvas--disabled': !activeDiagram }"
     @dragover="onDragOver"
     @drop="onDrop"
+    @mousemove="onContainerPointerMove"
+    @mouseleave="onContainerPointerLeave"
   >
     <canvas
       ref="canvasRef"
       class="diagram-canvas__canvas"
       :class="{ 'diagram-canvas__canvas--hidden': !activeDiagram }"
+    />
+
+    <div
+      v-if="remotePointerScreen && activeDiagram"
+      class="diagram-canvas__remote-pointer"
+      :style="remotePointerScreen"
+      aria-hidden="true"
     />
 
     <div v-if="!activeDiagram" class="diagram-canvas__placeholder">
@@ -2872,6 +2946,20 @@ defineExpose({
 
 .diagram-canvas__canvas--hidden {
   display: none;
+}
+
+.diagram-canvas__remote-pointer {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 20;
 }
 
 .diagram-canvas--disabled {

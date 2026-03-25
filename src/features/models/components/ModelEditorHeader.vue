@@ -261,6 +261,12 @@ const canCreateBaseline = computed(
     (props.diagramVersions?.length ?? 0) >= 1 &&
     !props.baselineCreating
 )
+
+function spectatorInitials(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
 </script>
 
 <template>
@@ -269,17 +275,20 @@ const canCreateBaseline = computed(
     <div
       v-if="hasActiveDiagram && !diagramLockBlockedByOther && (diagramSpectators?.length ?? 0) > 0"
       class="model-header__spectators"
-      :title="
-        diagramSpectators?.map((s) => s.displayName).join(', ') ??
-        ''
-      "
     >
-      <UiIcon name="visibility" class="model-header__spectators-icon" />
       <span
-        v-for="s in diagramSpectators"
+        v-for="(s, i) in diagramSpectators!.slice(0, 3)"
         :key="s.userId"
-        class="model-header__spectator-chip"
-      >{{ s.displayName }}</span>
+        class="model-header__spectator-avatar"
+        :style="{ zIndex: 3 - i }"
+        :title="s.displayName"
+      >{{ spectatorInitials(s.displayName) }}</span>
+      <span
+        v-if="diagramSpectators!.length > 3"
+        class="model-header__spectator-avatar model-header__spectator-avatar--overflow"
+        :style="{ zIndex: 0 }"
+        :title="diagramSpectators!.slice(3).map((s) => s.displayName).join(', ')"
+      >+{{ diagramSpectators!.length - 3 }}</span>
     </div>
     <div
       v-if="isDiagramReadOnly && diagramLockBlockedByOther"
@@ -513,30 +522,44 @@ const canCreateBaseline = computed(
 
 .model-header__spectators {
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
-  max-width: 280px;
-  min-width: 0;
-}
-
-.model-header__spectators-icon {
-  font-size: 16px;
-  color: var(--text-muted);
   flex-shrink: 0;
+  padding-left: 4px;
 }
 
-.model-header__spectator-chip {
-  font-size: 11px;
-  line-height: 1.2;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
-  color: var(--base-text);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.model-header__spectator-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--primary);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  position: relative;
+  margin-left: -6px;
+  cursor: default;
+  transition: transform 0.15s ease;
+}
+
+.model-header__spectator-avatar:first-child {
+  margin-left: 0;
+}
+
+.model-header__spectator-avatar:hover {
+  transform: translateY(-2px);
+}
+
+.model-header__spectator-avatar--overflow {
+  background: var(--surface-strong);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .model-header__diagram-lock-group {

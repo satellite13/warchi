@@ -1886,6 +1886,10 @@ const saveWithValidation = async (): Promise<boolean> => {
     setUiError(validationError)
     return false
   }
+  // Проверить, что лок ещё наш, до начала сохранения
+  const lockOk = await diagramEditLock.verifyLockBeforeSave()
+  if (!lockOk) return false
+
   diagramCanvasRef.value?.flushCanvasState()
   await nextTick()
   const ok = await saveChanges()

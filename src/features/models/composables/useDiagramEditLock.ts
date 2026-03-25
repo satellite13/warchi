@@ -319,6 +319,36 @@ export function useDiagramEditLock(options: {
     lockForceRevoked.value = false
   }
 
+  /**
+   * Проверить перед сохранением, что наш лок ещё действует.
+   * Делает GET /diagram-locks по модели и сверяет holder.
+   * Возвращает true если можно сохранять, false если лок потерян.
+   */
+  async function verifyLockBeforeSave(): Promise<boolean> {
+    if (!heldDiagramId) return true // нет лока — сохранение модели без canvas-правок
+    const mid = options.modelId.value
+    if (!mid) return true
+    const res = await apiGet<DiagramLockStatusResponse[]>(
+      `/diagram-locks?modelId=${encodeURIComponent(mid)}`
+    )
+    if (!res.success) return false
+    const entry = res.data.find((l) => l.diagramId === heldDiagramId)
+    const stillOurs =
+      entry != null &&
+      entry.isLocked &&
+      (heldByUserId == null || entry.lockedByUserId === heldByUserId)
+    if (!stillOurs) {
+      // Лок потерян — запускаем стандартный flow отзыва
+      heldDiagramId = null
+      heldByUserId = null
+      clearHeartbeat()
+      lockForceRevoked.value = true
+      void applyLockForSelection()
+      return false
+    }
+    return true
+  }
+
   return {
     locksList,
     isBlockedByOther,
@@ -331,5 +361,6 @@ export function useDiagramEditLock(options: {
     evaluateServerNewer,
     releaseHeld,
     dismissForceRevoked,
+    verifyLockBeforeSave,
   }
 }

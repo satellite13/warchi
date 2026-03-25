@@ -75,7 +75,7 @@ export const authMessages = {
     adminDiagramLocks: {
       title: 'Блокировки редактирования диаграмм',
       subtitle: 'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
-      diagramId: 'Диаграмма (id)',
+      diagram: 'Диаграмма',
       holder: 'Кто держит',
       expires: 'Истекает',
       forceRelease: 'Снять',
@@ -176,7 +176,7 @@ export const authMessages = {
     adminDiagramLocks: {
       title: 'Diagram edit locks',
       subtitle: 'Active locks (TTL on server). Force release is for administrators only.',
-      diagramId: 'Diagram (id)',
+      diagram: 'Diagram',
       holder: 'Held by',
       expires: 'Expires',
       forceRelease: 'Release',

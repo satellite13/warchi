@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost } from '@/composables/useApi'
-import type { DiagramLockStatusResponse } from '@/types/api'
+import type { DiagramLockStatusResponse, DiagramResponse } from '@/types/api'
+import type { ModelData } from '@/types/entities'
 import { formatDate } from '@/utils/formatDate'
 
 const { t, locale } = useI18n()
@@ -13,7 +14,44 @@ const errorMessage = ref<string | null>(null)
 const releasingId = ref<string | null>(null)
 const lastRefreshed = ref<Date | null>(null)
 
+/** diagramId → { modelName, diagramName } */
+const pathCache = reactive<Record<string, { modelName: string; diagramName: string }>>({})
+/** modelId → name (avoid duplicate fetches) */
+const modelNameCache: Record<string, string> = {}
+
 const lockCount = computed(() => locks.value.length)
+
+function diagramPath(diagramId: string): string | null {
+  const entry = pathCache[diagramId]
+  if (!entry) return null
+  return `${entry.modelName} / ${entry.diagramName}`
+}
+
+async function resolveModelName(modelId: string): Promise<string> {
+  if (modelNameCache[modelId]) return modelNameCache[modelId]
+  const res = await apiGet<ModelData>(`/models/${modelId}`)
+  const name = res.success ? res.data.name : modelId
+  modelNameCache[modelId] = name
+  return name
+}
+
+async function resolvePaths(diagramIds: string[]): Promise<void> {
+  const toResolve = diagramIds.filter((id) => !pathCache[id])
+  if (toResolve.length === 0) return
+
+  await Promise.all(
+    toResolve.map(async (diagramId) => {
+      const res = await apiGet<DiagramResponse>(`/diagrams/${diagramId}`)
+      if (!res.success) {
+        pathCache[diagramId] = { modelName: '?', diagramName: diagramId }
+        return
+      }
+      const diagram = res.data
+      const modelName = await resolveModelName(diagram.modelId)
+      pathCache[diagramId] = { modelName, diagramName: diagram.name }
+    }),
+  )
+}
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -25,6 +63,7 @@ async function loadLocks(): Promise<void> {
   if (res.success && Array.isArray(res.data)) {
     locks.value = res.data
     lastRefreshed.value = new Date()
+    void resolvePaths(res.data.map((l) => l.diagramId))
   } else {
     locks.value = []
     if (!res.success) {
@@ -156,7 +195,7 @@ onBeforeUnmount(() => {
       <table class="dl-table">
         <thead>
           <tr>
-            <th>{{ t('adminDiagramLocks.diagramId') }}</th>
+            <th>{{ t('adminDiagramLocks.diagram') }}</th>
             <th>{{ t('adminDiagramLocks.holder') }}</th>
             <th>{{ t('adminDiagramLocks.expires') }}</th>
             <th></th>
@@ -170,7 +209,14 @@ onBeforeUnmount(() => {
             :class="{ 'dl-table__row--busy': releasingId === row.diagramId }"
           >
             <td>
-              <code class="dl-mono">{{ row.diagramId }}</code>
+              <div class="dl-diagram-path">
+                <span v-if="diagramPath(row.diagramId)" class="dl-diagram-path__text">
+                  {{ diagramPath(row.diagramId) }}
+                </span>
+                <code class="dl-mono" :class="{ 'dl-mono--secondary': diagramPath(row.diagramId) }">
+                  {{ row.diagramId }}
+                </code>
+              </div>
             </td>
             <td class="dl-table__holder">
               {{ row.lockedByDisplay || row.lockedByUserId || '—' }}
@@ -468,6 +514,19 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+/* ─── Diagram path ─────────────────────────────── */
+.dl-diagram-path {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dl-diagram-path__text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--base-text);
+}
+
 /* ─── Mono code ────────────────────────────────── */
 .dl-mono {
   font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
@@ -477,6 +536,13 @@ onBeforeUnmount(() => {
   border-radius: 5px;
   color: var(--text-muted);
   word-break: break-all;
+}
+
+.dl-mono--secondary {
+  font-size: 10px;
+  padding: 1px 6px;
+  color: var(--text-subtle);
+  background: transparent;
 }
 
 /* ─── Release button ───────────────────────────── */

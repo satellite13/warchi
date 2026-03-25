@@ -50,7 +50,7 @@ env:
         key: admin-secret
   # Model live sync outbox (arepos-server: docs/ops/model-sync-outbox-runbook.md). true — после миграции 034 и осознанного включения.
   - name: MODEL_SYNC_OUTBOX_ENABLED
-    value: "false"
+    value: "true"
 
 # Cerbos (in-cluster) в режиме ENFORCE
 cerbos:

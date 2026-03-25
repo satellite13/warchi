@@ -138,9 +138,8 @@ export function useDiagramEditLock(options: {
       heldByUserId = null
       clearHeartbeat()
       lockForceRevoked.value = true
-      // Попытаться заново взять лок — получим LOCKED_BY_OTHER →
-      // isBlockedByOther = true → canvas станет read-only
-      void applyLockForSelection()
+      // НЕ вызываем applyLockForSelection() — иначе можем заново
+      // взять лок, который никто не отпустит (пользователя выкидывает)
     }
   }
 
@@ -338,12 +337,11 @@ export function useDiagramEditLock(options: {
       entry.isLocked &&
       (heldByUserId == null || entry.lockedByUserId === heldByUserId)
     if (!stillOurs) {
-      // Лок потерян — запускаем стандартный flow отзыва
+      // Лок потерян — пользователя выкинет watch на lockForceRevoked
       heldDiagramId = null
       heldByUserId = null
       clearHeartbeat()
       lockForceRevoked.value = true
-      void applyLockForSelection()
       return false
     }
     return true

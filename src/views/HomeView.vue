@@ -13,11 +13,16 @@ import { formatDate } from "../utils/formatDate"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
+import changelogFr from "../../CHANGELOG.fr.md?raw"
 
 const router = useRouter()
 const { t, locale } = useI18n()
 
-const changelogRaw = computed(() => (locale.value === "en" ? changelogEn : changelogRu))
+const changelogRaw = computed(() => {
+  if (locale.value === "ru") return changelogRu
+  if (locale.value === "fr") return changelogFr
+  return changelogEn
+})
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
 const appVersion = import.meta.env.APP_VERSION ?? "dev"

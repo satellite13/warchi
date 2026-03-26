@@ -279,7 +279,7 @@ function batchConflictPrimaryLine(c: BatchConflictItem): string {
 }
 
 function batchConflictDetailLine(c: BatchConflictItem): string | null {
-  const loc = locale.value === 'en' ? 'en' : undefined
+  const loc = locale.value === 'ru' ? undefined : locale.value === 'fr' ? 'fr' : 'en'
   const your = c.clientBaseUpdatedAt
     ? t('models.batchSaveConflictYourBaseTime', {
         time: formatDate(c.clientBaseUpdatedAt, loc),

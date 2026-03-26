@@ -24,6 +24,24 @@ describe('toAccessLabel', () => {
     })
   })
 
+  describe('French locale', () => {
+    it('returns "À moi" for OWNER', () => {
+      expect(toAccessLabel('OWNER', 'fr')).toBe('À moi')
+    })
+
+    it('returns "Partagé : édition" for EDIT', () => {
+      expect(toAccessLabel('EDIT', 'fr')).toBe('Partagé : édition')
+    })
+
+    it('returns "Partagé : lecture" for VIEW', () => {
+      expect(toAccessLabel('VIEW', 'fr')).toBe('Partagé : lecture')
+    })
+
+    it('returns "Accès administrateur" for ADMIN', () => {
+      expect(toAccessLabel('ADMIN', 'fr')).toBe('Accès administrateur')
+    })
+  })
+
   describe('English locale', () => {
     it('returns "Mine" for OWNER', () => {
       expect(toAccessLabel('OWNER', 'en')).toBe('Mine')

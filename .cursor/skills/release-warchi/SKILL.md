@@ -30,12 +30,12 @@ description: Executes the full release cycle for warchi: commit changes, bump ve
 - При изменении зависимостей зафиксировать `package-lock.json`
 - Если изменения маленькие поднимаем патч-версию, если большие — мажорную или минорную, в зависимости от семантики изменений
 
-### 4. Обновить CHANGELOG.md и CHANGELOG.ru.md 
+### 4. Обновить CHANGELOG.md, CHANGELOG.ru.md и CHANGELOG.fr.md
 
 - Добавить секцию `## [X.Y.Z] - YYYY-MM-DD`
-- Заполнить Added / Changed / Fixed
+- Заполнить Added / Changed / Fixed (и эквиваленты в RU/FR)
 - Обновить ссылки внизу: `[Unreleased]`, `[X.Y.Z]`
-- Включать в CHANGELOG.md and CHANGELOG.ru.md только функциональные изменения, а не технические детали релиза (например, "обновили зависимости" не должно быть в CHANGELOG.md,CHANGELOG.ru.md)
+- Включать в три файла changelog только функциональные изменения, а не технические детали релиза (например, «обновили зависимости» не должно попадать в changelog)
 
 ### 5. Проверки перед релизом
 
@@ -46,7 +46,7 @@ description: Executes the full release cycle for warchi: commit changes, bump ve
 
 ### 6. Релизный коммит
 
-- `git add CHANGELOG.md CHANGELOG.ru.md package.json package-lock.json <прочие релизные файлы>`
+- `git add CHANGELOG.md CHANGELOG.ru.md CHANGELOG.fr.md package.json package-lock.json <прочие релизные файлы>`
 - `git commit -m "Release X.Y.Z."`
 
 ### 7. Аннотированный тег

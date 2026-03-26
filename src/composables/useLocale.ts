@@ -3,7 +3,7 @@ import { useI18n } from "vue-i18n";
 import { LOCALE_STORAGE_KEY } from "../i18n";
 import type { SupportedLocale } from "../i18n/messages";
 
-const SUPPORTED_LOCALES: SupportedLocale[] = ["ru", "en"];
+const SUPPORTED_LOCALES: SupportedLocale[] = ["ru", "en", "fr"];
 
 const isSupportedLocale = (value: string): value is SupportedLocale => {
   return SUPPORTED_LOCALES.includes(value as SupportedLocale);

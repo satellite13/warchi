@@ -1,3 +1,5 @@
+import { modelsMessagesFr } from './models.fr.generated'
+
 export const modelsMessages = {
   ru: {
     models: {
@@ -538,4 +540,5 @@ export const modelsMessages = {
       edgeRelationNotFound: 'Notation relation not found for the selected edge.',
     },
   },
+  fr: modelsMessagesFr,
 }

@@ -5,7 +5,7 @@ export const LOCALE_STORAGE_KEY = "warchi.locale";
 const DEFAULT_LOCALE: SupportedLocale = "ru";
 
 const isSupportedLocale = (value: string | null): value is SupportedLocale => {
-  return value === "ru" || value === "en";
+  return value === "ru" || value === "en" || value === "fr";
 };
 
 const initialLocaleRaw =

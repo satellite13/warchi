@@ -28,7 +28,7 @@ const { t, locale } = useI18n()
 
 function sortTypes(types: TypeItem[]): TypeItem[] {
   return [...types].sort((a, b) =>
-    (a.name || "~~~").localeCompare((b.name || "~~~"), locale.value === "en" ? "en" : "ru", {
+    (a.name || "~~~").localeCompare((b.name || "~~~"), locale.value === "ru" ? "ru" : locale.value === "fr" ? "fr" : "en", {
       sensitivity: "base",
       numeric: true
     })

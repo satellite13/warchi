@@ -25,7 +25,7 @@ const filteredShapes = computed(() => {
 
 const sortedShapes = computed(() =>
   [...filteredShapes.value].sort((a, b) =>
-    (a.name || "~~~").localeCompare(b.name || "~~~", locale.value === "en" ? "en" : "ru", {
+    (a.name || "~~~").localeCompare(b.name || "~~~", locale.value === "ru" ? "ru" : locale.value === "fr" ? "fr" : "en", {
       sensitivity: "base",
       numeric: true
     })

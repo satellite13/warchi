@@ -103,7 +103,34 @@
       transition: color 0.2s;
     }
     .header-nav a:hover { color: var(--text-primary); }
-    .header-actions { display: flex; gap: 12px; align-items: center; }
+    .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .lang-switch {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border-dim);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .lang-switch__btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: color 0.2s, background 0.2s;
+    }
+    .lang-switch__btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .lang-switch__btn--active {
+      color: var(--accent-bright);
+      background: rgba(56, 136, 255, 0.12);
+    }
 
     /* ─── Buttons ─── */
     .btn {
@@ -180,6 +207,7 @@
       line-height: 1.05;
       letter-spacing: -0.03em;
       margin-bottom: 20px;
+      padding-bottom: 10px;
       background: linear-gradient(180deg, #f0f2f8 0%, #8a8ea3 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -773,14 +801,19 @@
           <span class="logo__text">wArchi</span>
         </a>
         <nav class="header-nav">
-          <a href="#features">Возможности</a>
-          <a href="#platform">Платформа</a>
-          <a href="#audience">Для кого</a>
-          <a href="#faq">FAQ</a>
+          <a href="#features" data-i18n="navFeatures">Возможности</a>
+          <a href="#platform" data-i18n="navPlatform">Платформа</a>
+          <a href="#audience" data-i18n="navAudience">Для кого</a>
+          <a href="#faq" data-i18n="navFaq">FAQ</a>
         </nav>
         <div class="header-actions">
-          <a class="btn btn--ghost btn--sm" href="/docs/overview">Документация</a>
-          <a class="btn btn--primary btn--sm" href="/login">Войти</a>
+          <div class="lang-switch" id="landing-lang-switch" role="group" aria-label="Язык интерфейса">
+            <button type="button" class="lang-switch__btn lang-switch__btn--active" data-landing-lang="ru" aria-pressed="true">RU</button>
+            <button type="button" class="lang-switch__btn" data-landing-lang="en" aria-pressed="false">EN</button>
+            <button type="button" class="lang-switch__btn" data-landing-lang="fr" aria-pressed="false">FR</button>
+          </div>
+          <a class="btn btn--ghost btn--sm" href="/docs/overview" data-i18n="navDocs">Документация</a>
+          <a class="btn btn--primary btn--sm" href="/login" data-i18n="navLogin">Войти</a>
         </div>
       </div>
     </header>
@@ -790,14 +823,14 @@
       <section class="hero container">
         <div class="hero__tag">
           <span class="dot"></span>
-          <span id="hero-version">v0.4</span> &mdash; open source, self-hosted
+          <span id="hero-version">v0.4</span><span data-i18n="heroTagSuffix"> — open source, self-hosted</span>
         </div>
-        <h1>
+        <h1 data-i18n-html="heroTitleHtml">
           Архитектурный<br />
           <span class="accent-word">репозиторий</span><br />
           нового поколения
         </h1>
-        <p class="hero__sub">
+        <p class="hero__sub" data-i18n="heroSub">
           Единая метамодель и нотации ArchiMate / C4 / BPMN / UML, серверное SemVer,
           синхронизация изменений модели в реальном времени, блокировка редактирования диаграммы,
           трассировка связей и разрешение конфликтов при сохранении &mdash; всё в браузере, без обмена файлами.
@@ -805,9 +838,9 @@
         <div class="hero__actions">
           <a class="btn btn--primary" href="/login">
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Попробовать бесплатно
+            <span data-i18n="ctaTryFree">Попробовать бесплатно</span>
           </a>
-          <a class="btn btn--ghost" href="/docs/overview">Читать документацию</a>
+          <a class="btn btn--ghost" href="/docs/overview" data-i18n="ctaReadDocs">Читать документацию</a>
         </div>
 
         <div class="hero-visual reveal">
@@ -816,10 +849,10 @@
               <span class="hero-visual__dot"></span>
               <span class="hero-visual__dot"></span>
               <span class="hero-visual__dot"></span>
-              <span class="hero-visual__title">wArchi &mdash; diagram editor</span>
+              <span class="hero-visual__title" data-i18n="visualTitle">wArchi — редактор диаграмм</span>
             </div>
             <div class="hero-visual__body">
-              <img class="hero-visual__img" src="/landing-screenshot.png" alt="Интерфейс wArchi" />
+              <img class="hero-visual__img" src="/landing-screenshot.png" alt="Интерфейс wArchi" data-i18n-alt="imgAlt" />
               <div class="hero-visual__overlay"></div>
             </div>
           </div>
@@ -832,19 +865,19 @@
           <div class="stats__grid">
             <div class="stat reveal">
               <div class="stat__value">4<span class="unit">+</span></div>
-              <div class="stat__label">Нотации</div>
+              <div class="stat__label" data-i18n="statNotations">Нотации</div>
             </div>
             <div class="stat reveal reveal-delay-1">
               <div class="stat__value">SemVer</div>
-              <div class="stat__label">Версионирование</div>
+              <div class="stat__label" data-i18n="statVersioning">Версионирование</div>
             </div>
             <div class="stat reveal reveal-delay-2">
               <div class="stat__value">Live</div>
-              <div class="stat__label">Синхронизация модели</div>
+              <div class="stat__label" data-i18n="statLiveSync">Синхронизация модели</div>
             </div>
             <div class="stat reveal reveal-delay-3">
               <div class="stat__value">AGPL<span class="unit">-3.0</span></div>
-              <div class="stat__label">Лицензия</div>
+              <div class="stat__label" data-i18n="statLicense">Лицензия</div>
             </div>
           </div>
         </div>
@@ -853,9 +886,9 @@
       <!-- Features -->
       <section id="features" class="section">
         <div class="container">
-          <div class="section__label">Возможности</div>
-          <h2 class="reveal">Всё для enterprise-<br>архитектуры</h2>
-          <p class="section__sub reveal">
+          <div class="section__label" data-i18n="featuresLabel">Возможности</div>
+          <h2 class="reveal" data-i18n-html="featuresHeadingHtml">Всё для enterprise-<br>архитектуры</h2>
+          <p class="section__sub reveal" data-i18n="featuresSub">
             От моделирования до совместной работы: live-обновления дерева и связей, аккуратные блокировки на canvas
             и понятные сценарии при конфликте сохранения.
           </p>
@@ -864,43 +897,43 @@
               <div class="fcard__icon fcard__icon--blue">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#3888ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>Единая метамодель</h3>
-              <p>Связывайте бизнес, приложения и технологии без дублирования. Каждый элемент живёт в модели один раз.</p>
+              <h3 data-i18n="f1t">Единая метамодель</h3>
+              <p data-i18n="f1p">Связывайте бизнес, приложения и технологии без дублирования. Каждый элемент живёт в модели один раз.</p>
             </div>
             <div class="fcard reveal reveal-delay-1">
               <div class="fcard__icon fcard__icon--green">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>Совместная работа</h3>
-              <p>Несколько человек в одной модели: изменения нод и связей подтягиваются без перезагрузки страницы. Редактирование последней версии диаграммы защищено блокировкой.</p>
+              <h3 data-i18n="f2t">Совместная работа</h3>
+              <p data-i18n="f2p">Несколько человек в одной модели: изменения нод и связей подтягиваются без перезагрузки страницы. Редактирование последней версии диаграммы защищено блокировкой.</p>
             </div>
             <div class="fcard reveal reveal-delay-2">
               <div class="fcard__icon fcard__icon--amber">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>Версионирование</h3>
-              <p>Сравнивайте версии моделей и диаграмм, ведите историю на сервере по SemVer. При расхождении с сервером &mdash; сравнение полей и выбор: подтянуть данные или перезаписать.</p>
+              <h3 data-i18n="f3t">Версионирование</h3>
+              <p data-i18n="f3p">Сравнивайте версии моделей и диаграмм, ведите историю на сервере по SemVer. При расхождении с сервером &mdash; сравнение полей и выбор: подтянуть данные или перезаписать.</p>
             </div>
             <div class="fcard reveal">
               <div class="fcard__icon fcard__icon--blue">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" stroke="#3888ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>Canvas-редактор</h3>
-              <p>Диаграммы в браузере с привязкой к типам нотации. Панель трассировки показывает, какие связи уже на открытой диаграмме; допустимые связи можно перетащить на холст.</p>
+              <h3 data-i18n="f4t">Canvas-редактор</h3>
+              <p data-i18n="f4p">Диаграммы в браузере с привязкой к типам нотации. Панель трассировки показывает, какие связи уже на открытой диаграмме; допустимые связи можно перетащить на холст.</p>
             </div>
             <div class="fcard reveal reveal-delay-1">
               <div class="fcard__icon fcard__icon--green">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>On-premises</h3>
-              <p>Полный контроль: разворачивайте в закрытом контуре. Docker, Kubernetes, Helm-чарт из коробки.</p>
+              <h3 data-i18n="f5t">On-premises</h3>
+              <p data-i18n="f5p">Полный контроль: разворачивайте в закрытом контуре. Docker, Kubernetes, Helm-чарт из коробки.</p>
             </div>
             <div class="fcard reveal reveal-delay-2">
               <div class="fcard__icon fcard__icon--amber">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
-              <h3>REST и события</h3>
-              <p>REST и OpenAPI для интеграций, JWT-аутентификация. Для live-сценариев &mdash; подписка на обновления модели по WebSocket/STOMP (режим настраивается на клиенте).</p>
+              <h3 data-i18n="f6t">REST и события</h3>
+              <p data-i18n="f6p">REST и OpenAPI для интеграций, JWT-аутентификация. Для live-сценариев &mdash; подписка на обновления модели по WebSocket/STOMP (режим настраивается на клиенте).</p>
             </div>
           </div>
         </div>
@@ -909,15 +942,15 @@
       <!-- Platform / Bento -->
       <section id="platform" class="section" style="padding-top: 0;">
         <div class="container">
-          <div class="section__label">Платформа</div>
-          <h2 class="reveal">Как это устроено</h2>
-          <p class="section__sub reveal">
+          <div class="section__label" data-i18n="platformLabel">Платформа</div>
+          <h2 class="reveal" data-i18n="platformHeading">Как это устроено</h2>
+          <p class="section__sub reveal" data-i18n="platformSub">
             Архитектура, знакомая инженерам &mdash; стандартные инструменты, открытый стек.
           </p>
           <div class="bento">
             <div class="bento-card reveal">
-              <h3>Нотации</h3>
-              <p>Поддерживаем популярные фреймворки. Создавайте собственные нотации и типы элементов.</p>
+              <h3 data-i18n="bentoNotationsT">Нотации</h3>
+              <p data-i18n="bentoNotationsP">Поддерживаем популярные фреймворки. Создавайте собственные нотации и типы элементов.</p>
               <div class="notation-tags">
                 <span class="ntag ntag--active">ArchiMate</span>
                 <span class="ntag">C4 Model</span>
@@ -927,40 +960,40 @@
               </div>
             </div>
             <div class="bento-card reveal reveal-delay-1">
-              <h3>История версий</h3>
-              <p>Каждое изменение фиксируется. Сравнивайте версии, разбирайте конфликты пакетного сохранения по полям, откатывайте при необходимости.</p>
+              <h3 data-i18n="bentoVersionT">История версий</h3>
+              <p data-i18n="bentoVersionP">Каждое изменение фиксируется. Сравнивайте версии, разбирайте конфликты пакетного сохранения по полям, откатывайте при необходимости.</p>
               <div class="vtree">
                 <div class="vtree__item">
                   <div class="vtree__line"></div>
                   <div class="vtree__dot"></div>
                   <span class="vtree__ver">v1.3.0</span>
-                  <span class="vtree__msg">Добавлен слой мотивации</span>
-                  <span class="vtree__time">2 мин</span>
+                  <span class="vtree__msg" data-i18n="vtree1">Добавлен слой мотивации</span>
+                  <span class="vtree__time" data-i18n="vtree1time">2 мин</span>
                 </div>
                 <div class="vtree__item">
                   <div class="vtree__line"></div>
                   <div class="vtree__dot"></div>
                   <span class="vtree__ver">v1.2.0</span>
-                  <span class="vtree__msg">Обновлены бизнес-процессы</span>
-                  <span class="vtree__time">1 час</span>
+                  <span class="vtree__msg" data-i18n="vtree2">Обновлены бизнес-процессы</span>
+                  <span class="vtree__time" data-i18n="vtree2time">1 час</span>
                 </div>
                 <div class="vtree__item">
                   <div class="vtree__line"></div>
                   <div class="vtree__dot"></div>
                   <span class="vtree__ver">v1.1.0</span>
-                  <span class="vtree__msg">Первичная структура</span>
-                  <span class="vtree__time">вчера</span>
+                  <span class="vtree__msg" data-i18n="vtree3">Первичная структура</span>
+                  <span class="vtree__time" data-i18n="vtree3time">вчера</span>
                 </div>
               </div>
             </div>
             <div class="bento-card bento-card--wide reveal">
-              <h3>Быстрый старт</h3>
-              <p>Три команды &mdash; и репозиторий готов к работе.</p>
+              <h3 data-i18n="quickstartT">Быстрый старт</h3>
+              <p data-i18n="quickstartP">Три команды &mdash; и репозиторий готов к работе.</p>
               <div class="terminal">
-                <div><span class="prompt">$</span> docker compose up <span class="flag">-d</span> <span class="comment"># PostgreSQL + MinIO + сервер</span></div>
-                <div><span class="prompt">$</span> open <span class="flag">http://localhost:5173</span> <span class="comment"># открыть wArchi</span></div>
-                <div><span class="prompt">$</span> curl <span class="flag">-s</span> localhost:8080/api/v1/models | jq <span class="comment"># REST API</span></div>
-                <div><span class="comment"># Опционально: VITE_MODEL_LIVE_SYNC_MODE=hybrid в .env.local клиента</span></div>
+                <div><span class="prompt">$</span> docker compose up <span class="flag">-d</span> <span class="comment" id="term-comment-1"># PostgreSQL + MinIO + сервер</span></div>
+                <div><span class="prompt">$</span> open <span class="flag">http://localhost:5173</span> <span class="comment" id="term-comment-2"># открыть wArchi</span></div>
+                <div><span class="prompt">$</span> curl <span class="flag">-s</span> localhost:8080/api/v1/models | jq <span class="comment" id="term-comment-3"># REST API</span></div>
+                <div><span class="comment" id="term-comment-4"># Опционально: VITE_MODEL_LIVE_SYNC_MODE=hybrid в .env.local клиента</span></div>
               </div>
             </div>
           </div>
@@ -970,26 +1003,26 @@
       <!-- Audience -->
       <section id="audience" class="section">
         <div class="container">
-          <div class="section__label">Для кого</div>
-          <h2 class="reveal">Создан для команд,<br>управляющих архитектурой</h2>
-          <p class="section__sub reveal">
+          <div class="section__label" data-i18n="audienceLabel">Для кого</div>
+          <h2 class="reveal" data-i18n-html="audienceHeadingHtml">Создан для команд,<br>управляющих архитектурой</h2>
+          <p class="section__sub reveal" data-i18n="audienceSub">
             Enterprise-архитекторы, аналитики и платформенные инженеры.
           </p>
           <div class="audience-grid">
             <div class="acard reveal">
-              <div class="acard__role">Architect</div>
-              <h3>Архитекторы</h3>
-              <p>Ведите целевую и текущую архитектуру в единой модели. Используйте трассировку и версии, чтобы видеть зависимости и эволюцию.</p>
+              <div class="acard__role" data-i18n="aud1role">Architect</div>
+              <h3 data-i18n="aud1t">Архитекторы</h3>
+              <p data-i18n="aud1p">Ведите целевую и текущую архитектуру в единой модели. Используйте трассировку и версии, чтобы видеть зависимости и эволюцию.</p>
             </div>
             <div class="acard reveal reveal-delay-1">
-              <div class="acard__role">Analyst</div>
-              <h3>Аналитики</h3>
-              <p>Привязывайте процессы и требования к архитектурным элементам. Визуализируйте связи на диаграммах.</p>
+              <div class="acard__role" data-i18n="aud2role">Analyst</div>
+              <h3 data-i18n="aud2t">Аналитики</h3>
+              <p data-i18n="aud2p">Привязывайте процессы и требования к архитектурным элементам. Визуализируйте связи на диаграммах.</p>
             </div>
             <div class="acard reveal reveal-delay-2">
-              <div class="acard__role">Platform</div>
-              <h3>CTO и платформенные команды</h3>
-              <p>Разворачивайте on-premises, интегрируйте через REST API, управляйте стандартами нотаций.</p>
+              <div class="acard__role" data-i18n="aud3role">Platform</div>
+              <h3 data-i18n="aud3t">CTO и платформенные команды</h3>
+              <p data-i18n="aud3p">Разворачивайте on-premises, интегрируйте через REST API, управляйте стандартами нотаций.</p>
             </div>
           </div>
         </div>
@@ -998,29 +1031,29 @@
       <!-- FAQ -->
       <section id="faq" class="section">
         <div class="container">
-          <div class="section__label">FAQ</div>
-          <h2 class="reveal">Частые вопросы</h2>
-          <p class="section__sub reveal" style="margin-bottom: 32px;">Ответы на ключевые вопросы о платформе.</p>
+          <div class="section__label" data-i18n="faqLabel">FAQ</div>
+          <h2 class="reveal" data-i18n="faqHeading">Частые вопросы</h2>
+          <p class="section__sub reveal" style="margin-bottom: 32px;" data-i18n="faqSub">Ответы на ключевые вопросы о платформе.</p>
           <div class="faq-list">
             <details class="faq-item reveal" open>
-              <summary>Можно ли мигрировать с Archi?</summary>
-              <div class="faq-body">Да, сценарии моделирования близки к привычным, при этом добавляется веб-коллаборация и серверное версионирование. Модели можно импортировать и продолжить работу в браузере.</div>
+              <summary data-i18n="faq1q">Можно ли мигрировать с Archi?</summary>
+              <div class="faq-body" data-i18n="faq1a">Да, сценарии моделирования близки к привычным, при этом добавляется веб-коллаборация и серверное версионирование. Модели можно импортировать и продолжить работу в браузере.</div>
             </details>
             <details class="faq-item reveal reveal-delay-1">
-              <summary>Есть ли on-premises вариант?</summary>
-              <div class="faq-body">Да, wArchi разворачивается в закрытом контуре: Docker Compose или Kubernetes. Полный контроль над данными и доступом.</div>
+              <summary data-i18n="faq2q">Есть ли on-premises вариант?</summary>
+              <div class="faq-body" data-i18n="faq2a">Да, wArchi разворачивается в закрытом контуре: Docker Compose или Kubernetes. Полный контроль над данными и доступом.</div>
             </details>
             <details class="faq-item reveal reveal-delay-2">
-              <summary>Какая лицензия?</summary>
-              <div class="faq-body">AGPL-3.0-or-later для open source. Для корпоративных сценариев без AGPL-ограничений доступна коммерческая лицензия.</div>
+              <summary data-i18n="faq3q">Какая лицензия?</summary>
+              <div class="faq-body" data-i18n="faq3a">AGPL-3.0-or-later для open source. Для корпоративных сценариев без AGPL-ограничений доступна коммерческая лицензия.</div>
             </details>
             <details class="faq-item reveal reveal-delay-3">
-              <summary>Какие нотации поддерживаются?</summary>
-              <div class="faq-body">ArchiMate 3.2, C4 Model, BPMN 2.0, UML. Кроме того, можно создавать собственные нотации с пользовательскими типами элементов.</div>
+              <summary data-i18n="faq4q">Какие нотации поддерживаются?</summary>
+              <div class="faq-body" data-i18n="faq4a">ArchiMate 3.2, C4 Model, BPMN 2.0, UML. Кроме того, можно создавать собственные нотации с пользовательскими типами элементов.</div>
             </details>
             <details class="faq-item reveal">
-              <summary>Как устроено одновременное редактирование?</summary>
-              <div class="faq-body">Состояние модели (ноды, связи) может обновляться у всех открывших модель через live sync. Редактирование последней версии одной диаграммы защищается блокировкой: второй пользователь видит, что canvas занят, и может работать в режиме просмотра или с другой диаграммой.</div>
+              <summary data-i18n="faq5q">Как устроено одновременное редактирование?</summary>
+              <div class="faq-body" data-i18n="faq5a">Состояние модели (ноды, связи) может обновляться у всех открывших модель через live sync. Редактирование последней версии одной диаграммы защищается блокировкой: второй пользователь видит, что canvas занят, и может работать в режиме просмотра или с другой диаграммой.</div>
             </details>
           </div>
         </div>
@@ -1029,14 +1062,14 @@
       <!-- Deploy -->
       <section id="deploy" class="section">
         <div class="container">
-          <div class="section__label">Self-hosted</div>
-          <h2 class="reveal">Развёртывание</h2>
-          <p class="section__sub reveal" style="margin-bottom: 32px;">Разверните wArchi в своём контуре за несколько команд.</p>
+          <div class="section__label" data-i18n="deployLabel">Self-hosted</div>
+          <h2 class="reveal" data-i18n="deployHeading">Развёртывание</h2>
+          <p class="section__sub reveal" style="margin-bottom: 32px;" data-i18n="deploySub">Разверните wArchi в своём контуре за несколько команд.</p>
           <div class="deploy-grid">
             <div class="deploy-card reveal">
-              <h3>Docker</h3>
-              <p>Быстрый старт для локальной разработки и небольших команд.</p>
-              <pre><code><span class="comment"># Клонируем репозитории</span>
+              <h3 data-i18n="dockerT">Docker</h3>
+              <p data-i18n="dockerP">Быстрый старт для локальной разработки и небольших команд.</p>
+              <pre><code id="deploy-docker-pre"><span class="comment"># Клонируем репозитории</span>
 <span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server
 <span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git
 
@@ -1055,9 +1088,9 @@
 <span class="cmd">docker run</span> -d -p 80:80 warchi</code></pre>
             </div>
             <div class="deploy-card reveal reveal-delay-1">
-              <h3>Kubernetes + Helm</h3>
-              <p>Для продакшена с TLS, автоскейлингом и управляемой БД.</p>
-              <pre><code><span class="comment"># Добавляем namespace</span>
+              <h3 data-i18n="k8sT">Kubernetes + Helm</h3>
+              <p data-i18n="k8sP">Для продакшена с TLS, автоскейлингом и управляемой БД.</p>
+              <pre><code id="deploy-k8s-pre"><span class="comment"># Добавляем namespace</span>
 <span class="cmd">kubectl create</span> namespace arch
 
 <span class="comment"># Создаём секреты</span>
@@ -1085,14 +1118,14 @@
       <section class="cta">
         <div class="container">
           <div class="cta__box reveal">
-            <h2>Готовы попробовать?</h2>
-            <p>Разверните за минуту локально или зарегистрируйтесь в облаке.</p>
+            <h2 data-i18n="ctaTitle">Готовы попробовать?</h2>
+            <p data-i18n="ctaSub">Разверните за минуту локально или зарегистрируйтесь в облаке.</p>
             <div class="cta__actions">
               <a class="btn btn--primary" href="/login">
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Начать бесплатно
+                <span data-i18n="ctaStartFree">Начать бесплатно</span>
               </a>
-              <a class="btn btn--ghost" href="/docs/overview">Читать документацию</a>
+              <a class="btn btn--ghost" href="/docs/overview" data-i18n="ctaReadDocs">Читать документацию</a>
             </div>
           </div>
         </div>
@@ -1102,19 +1135,33 @@
     <!-- Footer -->
     <footer class="footer">
       <div class="container footer__inner">
-        <span class="footer__copy">&copy; 2026 wArchi · Версия: <span id="app-version">0.4.0</span></span>
+        <span class="footer__copy">&copy; 2026 wArchi · <span data-i18n="footerVersionWord">Версия</span>: <span id="app-version">0.4.0</span></span>
         <div class="footer__links">
-          <a href="/docs/overview">Документация</a>
+          <a href="/docs/overview" data-i18n="footerDocs">Документация</a>
           <a href="/wiki">Wiki</a>
           <a href="https://gitverse.ru/ngroznykh/warchi.git" target="_blank" rel="noopener">wArchi</a>
           <a href="https://gitverse.ru/ngroznykh/arepos-server" target="_blank" rel="noopener">arepos-server</a>
-          <a href="mailto:nikolay@groznykh.ru">Связаться</a>
+          <a href="mailto:nikolay@groznykh.ru" data-i18n="footerContact">Связаться</a>
         </div>
       </div>
     </footer>
   </div>
 
+  <script src="/landing-i18n.js"></script>
   <script>
+    (function () {
+      function bootLandingI18n() {
+        if (window.initLandingI18n) {
+          window.initLandingI18n();
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootLandingI18n);
+      } else {
+        bootLandingI18n();
+      }
+    })();
+
     // Scroll reveal
     var reveals = document.querySelectorAll('.reveal');
     var observer = new IntersectionObserver(function(entries) {

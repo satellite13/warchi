@@ -1,5 +1,9 @@
 # Helm values override для warchi в Yandex Cloud
-# Замените <REGISTRY_ID> на реальный ID из terraform output registry_id
+# deploy-warchi.sh подставляет <REGISTRY_ID> и <WARCHI_INGRESS_HOST> (или задайте WARCHI_INGRESS_HOST в state.env).
+#
+# Домен в этом файле — только Ingress/TLS. Клиент (и WebSocket STOMP на /ws) использует window.location:
+# откройте приложение именно по этому host в браузере. Другой домен в DNS без правки Ingress → другой сертификат/маршрут.
+# Сборка из infra задаёт VITE_API_BASE_URL="" — API и /ws с того же origin через nginx в образе warchi.
 
 image:
   repository: cr.yandex/<REGISTRY_ID>/warchi
@@ -14,12 +18,15 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # WebSocket STOMP (/ws): длинные таймауты, иначе обрыв после ~60s даже при рабочем 101.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
-    - host: warchi.ru
+    - host: <WARCHI_INGRESS_HOST>
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: warchi-tls
       hosts:
-        - warchi.ru
+        - <WARCHI_INGRESS_HOST>

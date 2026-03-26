@@ -33,6 +33,8 @@ if [ -z "$REGISTRY_ID" ]; then
 fi
 
 IMAGE_REPO="cr.yandex/${REGISTRY_ID}/warchi"
+# Публичный host из браузера (должен совпадать с DNS A/AAAA на Ingress). Иначе правьте state.env или экспорт перед деплоем.
+WARCHI_INGRESS_HOST="${WARCHI_INGRESS_HOST:-warchi.ru}"
 
 cd "$PROJECT_ROOT"
 
@@ -74,7 +76,8 @@ fi
 echo -e "${GREEN}[INFO]${NC} Деплой через Helm..."
 VALUES_FILE="$INFRA_DIR/helm-values/warchi-yc.yaml"
 TEMP_VALUES=$(mktemp)
-sed "s/<REGISTRY_ID>/${REGISTRY_ID}/g" "$VALUES_FILE" > "$TEMP_VALUES"
+sed -e "s/<REGISTRY_ID>/${REGISTRY_ID}/g" -e "s/<WARCHI_INGRESS_HOST>/${WARCHI_INGRESS_HOST}/g" "$VALUES_FILE" > "$TEMP_VALUES"
+echo -e "${GREEN}[INFO]${NC} Ingress host: ${WARCHI_INGRESS_HOST}"
 
 helm upgrade --install warchi charts/warchi \
   -n "$NAMESPACE" \

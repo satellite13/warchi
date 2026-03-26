@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-03-26
+
+### Fixed
+- Production Docker image nginx now proxies `/ws` to the API so model live sync (STOMP) and spectator live diagram view with remote pointer work when the SPA is served from the same host as `/api`.
+
 ## [0.4.4] - 2026-03-25
 
 ### Fixed

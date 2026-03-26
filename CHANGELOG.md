@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-03-27
+
+### Added
+- French (FR) UI locale across the app; landing page language switcher (RU/EN/FR) aligned with in-app locale.
+- In-app user documentation in French (`*.fr.md`) and French changelog (`CHANGELOG.fr.md`) for docs and home release notes.
+- `scripts/build-models-fr.mjs` and generated `models.fr.generated.ts` for model editor strings.
+
+### Changed
+- Documentation markdown loader and home changelog source follow `fr` alongside `ru` / `en`.
+- Release skill documents maintaining `CHANGELOG.fr.md` with EN/RU each release.
+
+### Fixed
+- `CHANGELOG.ru.md`: restored missing `## [0.0.27]` section to match the English changelog history.
+
 ## [0.4.5] - 2026-03-26
 
 ### Fixed

@@ -4,6 +4,20 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-03-27
+
+### Ajouté
+- Locale FR pour toute l’interface ; sélecteur de langue sur la page d’accueil publique (RU/EN/FR) aligné avec la locale de l’app.
+- Documentation utilisateur in-app en français (`*.fr.md`) et journal des modifications en français (`CHANGELOG.fr.md`) pour l’aide et les notes de version sur l’accueil.
+- Script `scripts/build-models-fr.mjs` et `models.fr.generated.ts` généré pour les chaînes de l’éditeur de modèles.
+
+### Modifié
+- Chargement de l’aide markdown et source du changelog sur l’accueil : prise en charge de `fr` en plus de `ru` / `en`.
+- Skill de release : tenir `CHANGELOG.fr.md` à jour avec EN/RU à chaque version.
+
+### Corrigé
+- `CHANGELOG.ru.md` : rétablissement de la section manquante `## [0.0.27]` pour l’alignement avec l’historique anglais.
+
 ## [0.4.5] - 2026-03-26
 
 ### Corrigé

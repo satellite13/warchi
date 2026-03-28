@@ -1906,11 +1906,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     if (nodeIds.length === 1) {
       startGroupDrag(nodeIds[0]!)
       if (groupDragData) {
-        ;(
-          manager as InteractionManager & {
-            recordAdditionalDragStartPositions?: (nodeIds: string[]) => void
-          }
-        ).recordAdditionalDragStartPositions?.(groupDragData.followerIds)
+        manager.recordAdditionalDragStartPositions(groupDragData.followerIds)
       }
     } else {
       groupDragData = null

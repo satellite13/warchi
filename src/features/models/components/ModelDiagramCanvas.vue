@@ -381,6 +381,8 @@ let groupDragData: {
   leaderPapNodeId: string
   followerIds: string[]
   startPositions: Map<string, { x: number; y: number }>
+  /** Papirus edge id → control points at drag start (both endpoints inside the group) */
+  innerEditablePolylineControlPoints: Map<string, { x: number; y: number }[]>
 } | null = null
 
 const isNodeGroupingEnabled = (papNodeId: string): boolean => {
@@ -457,21 +459,57 @@ const startGroupDrag = (leaderPapNodeId: string) => {
       startPositions.set(id, { x: bounds.x, y: bounds.y })
     }
   }
+
+  const groupNodeIds = new Set<string>([leaderPapNodeId, ...followers])
+  const innerEditablePolylineControlPoints = new Map<string, { x: number; y: number }[]>()
+  if (renderer) {
+    for (const [, papEdge] of renderer.edges) {
+      if (!papEdge.hasEditableControlPoints()) continue
+      if (!groupNodeIds.has(papEdge.from.nodeId) || !groupNodeIds.has(papEdge.to.nodeId)) {
+        continue
+      }
+      const cps = papEdge.controlPoints
+      if (!cps?.length) continue
+      innerEditablePolylineControlPoints.set(
+        papEdge.id,
+        cps.map(p => ({ x: p.x, y: p.y }))
+      )
+    }
+  }
+
   groupDragData = {
     leaderPapNodeId,
     followerIds: followers,
-    startPositions
+    startPositions,
+    innerEditablePolylineControlPoints,
   }
 }
 
-const applyGroupDragDelta = (deltaX: number, deltaY: number) => {
+/**
+ * Papirus moves only the group leader; followers and inner editable-polylines must follow
+ * the leader’s total offset from drag start (not the per-frame `drag` delta).
+ */
+const syncGroupDragFromLeader = (): void => {
   if (!groupDragData || !renderer) return
+  const leader = renderer.getNode(groupDragData.leaderPapNodeId)
+  const leaderStart = groupDragData.startPositions.get(groupDragData.leaderPapNodeId)
+  if (!leader || !leaderStart) return
+
+  const dx = leader.x - leaderStart.x
+  const dy = leader.y - leaderStart.y
+
   for (const followerId of groupDragData.followerIds) {
     const papNode = renderer.getNode(followerId)
     const startPos = groupDragData.startPositions.get(followerId)
     if (!papNode || !startPos) continue
-    papNode.x = startPos.x + deltaX
-    papNode.y = startPos.y + deltaY
+    papNode.x = startPos.x + dx
+    papNode.y = startPos.y + dy
+  }
+
+  for (const [edgeId, initialPoints] of groupDragData.innerEditablePolylineControlPoints) {
+    const papEdge = renderer.getEdge(edgeId)
+    if (!papEdge || initialPoints.length === 0) continue
+    papEdge.controlPoints = initialPoints.map(p => ({ x: p.x + dx, y: p.y + dy }))
   }
 }
 
@@ -1867,18 +1905,22 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   manager.drag.on('dragstart', (nodeIds: string[]) => {
     if (nodeIds.length === 1) {
       startGroupDrag(nodeIds[0]!)
+      if (groupDragData) {
+        ;(
+          manager as InteractionManager & {
+            recordAdditionalDragStartPositions?: (nodeIds: string[]) => void
+          }
+        ).recordAdditionalDragStartPositions?.(groupDragData.followerIds)
+      }
     } else {
       groupDragData = null
     }
   })
 
-  // Drag move → apply delta to grouped nodes
-  manager.drag.on(
-    'drag',
-    (_nodeIds: string[], _currentPoint: { x: number; y: number }, delta: { x: number; y: number }) => {
-      applyGroupDragDelta(delta.x, delta.y)
-    }
-  )
+  // Drag move → keep followers and inner polyline bends aligned with the leader
+  manager.drag.on('drag', () => {
+    syncGroupDragFromLeader()
+  })
 
   // Drag end → persist position changes (include grouped nodes) + auto-link
   manager.drag.on('dragend', (_nodeIds: string[]) => {

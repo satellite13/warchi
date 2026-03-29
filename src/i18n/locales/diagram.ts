@@ -155,6 +155,15 @@ export const diagramMessages = {
       shapeTrapezoid: 'Усеченная пирамида',
       shapeSlantedRectangle: 'Параллелограмм',
       customShape: 'Кастомная форма',
+      shapeComposite: 'Композит',
+      compositeContentJson: 'Composite JSON',
+      compositeBindingsJson: 'Style bindings JSON',
+      compositeJsonHint: 'Дерево compositeContent в формате SerializedCComponent',
+      compositeBindingsHint: 'Массив stylePropertyBindings (группы/ветки/патчи)',
+      compositeJsonInvalid: 'Некорректный JSON compositeContent',
+      compositeBindingsInvalid: 'Некорректный JSON stylePropertyBindings',
+      compositeSwitchWarning:
+        'При смене формы данные композита и style bindings будут удалены. Продолжить?',
     },
   },
   en: {
@@ -309,6 +318,15 @@ export const diagramMessages = {
       shapeTrapezoid: 'Trapezoid',
       shapeSlantedRectangle: 'Parallelogram',
       customShape: 'Custom shape',
+      shapeComposite: 'Composite',
+      compositeContentJson: 'Composite JSON',
+      compositeBindingsJson: 'Style bindings JSON',
+      compositeJsonHint: 'compositeContent tree in SerializedCComponent format',
+      compositeBindingsHint: 'stylePropertyBindings array (groups/branches/patches)',
+      compositeJsonInvalid: 'Invalid compositeContent JSON',
+      compositeBindingsInvalid: 'Invalid stylePropertyBindings JSON',
+      compositeSwitchWarning:
+        'Switching shape will delete composite and style bindings data. Continue?',
     },
   },
   fr: {
@@ -464,6 +482,15 @@ export const diagramMessages = {
       shapeTrapezoid: 'Trapèze',
       shapeSlantedRectangle: 'Parallélogramme',
       customShape: 'Forme personnalisée',
+      shapeComposite: 'Composite',
+      compositeContentJson: 'JSON Composite',
+      compositeBindingsJson: 'JSON des style bindings',
+      compositeJsonHint: 'Arbre compositeContent au format SerializedCComponent',
+      compositeBindingsHint: 'Tableau stylePropertyBindings (groupes/branches/patches)',
+      compositeJsonInvalid: 'JSON compositeContent invalide',
+      compositeBindingsInvalid: 'JSON stylePropertyBindings invalide',
+      compositeSwitchWarning:
+        'Le changement de forme supprimera les données composite et style bindings. Continuer ?',
     },
   },
 }

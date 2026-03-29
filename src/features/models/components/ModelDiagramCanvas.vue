@@ -7,6 +7,8 @@ import {
   CircleNode,
   DiamondNode,
   CustomShapeNode,
+  CompositeNode,
+  deserializeCComponent,
   Node as DiagramNode,
   Edge,
   GridOverlay,
@@ -22,6 +24,7 @@ import {
   type TextLabelOptions,
   type EdgePathType,
   type EdgeStyle,
+  type CContainer,
 } from '@ngroznykh/papirus'
 import { diagramShapeFactories } from '@/utils/diagramShapes'
 import {
@@ -55,6 +58,11 @@ import {
 } from '../utils/diagramCanvasSync'
 import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
+import {
+  applyStylePropertyBindings,
+  createDefaultCompositeContent,
+  injectCompositeNameAndIcon,
+} from '../../notations/utils/compositeBindings'
 
 const props = withDefaults(
   defineProps<{
@@ -800,10 +808,14 @@ const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined =
 }
 
 const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefined => {
+  const bound = getBoundComponentStyle(instance.modelNodeId)
   if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
-    return instance.attrs.diagramStyle as DiagramStyle
+    return {
+      ...(bound ?? {}),
+      ...(instance.attrs.diagramStyle as DiagramStyle),
+    }
   }
-  return getBoundComponentStyle(instance.modelNodeId)
+  return bound
 }
 
 const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attrs?.isNote === true
@@ -859,6 +871,7 @@ type ComponentShape =
   | 'trapezoid'
   | 'slanted-rectangle'
   | 'custom'
+  | 'composite'
 
 const getInstanceArea = (instance: DiagramNodeInstance): number => {
   const { width, height } = getInstanceDimensions(instance)
@@ -928,6 +941,7 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
     case 'trapezoid':
     case 'slanted-rectangle':
     case 'custom':
+    case 'composite':
       return shape
     default:
       return 'rectangle'
@@ -1163,6 +1177,7 @@ function isFolderTabNode(node: DiagramNode): boolean {
 }
 
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
+  if (node instanceof CompositeNode) return 'composite'
   if (node instanceof DiamondNode) return 'diamond'
   if (node instanceof CircleNode) return 'circle'
   if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? 'rectangle'
@@ -1180,18 +1195,21 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     ? getNoteText(instance)
     : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
 
-  const commonOptions = {
+  const commonBase = {
     id: `instance-${instance.id}`,
     x: instance.x,
     y: instance.y,
     width: visual.width,
     height: visual.height,
-    label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
     style: visual.style,
     anchorPoints: resolveAnchorPoints(ds),
     contentInset: (ds?.contentInset ?? 0) as unknown as number,
-    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
     badges: getInteractiveBadgesForInstance(instance),
+  }
+  const commonOptions = {
+    ...commonBase,
+    label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
+    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
   }
 
   const stickyNoteFactory = diagramShapeFactories['sticky-note']
@@ -1223,6 +1241,42 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     node = new DiamondNode(commonOptions)
   } else if (shape === 'circle') {
     node = new CircleNode(commonOptions)
+  } else if (shape === 'composite') {
+    const componentProperties = getNodeComponentCustomProperties(instance.modelNodeId)
+    const nodeTypeProperties = getNodeTypeCustomProperties(instance.modelNodeId)
+    const nodeEntry = nodeById.value.get(instance.modelNodeId)
+    const nodeTypeValues = nodeEntry ? { ...nodeEntry.parsedAttrs.typeProperties } : {}
+    const componentValues = getComponentScopedPropertyValuesOnly(instance.modelNodeId, instance.id)
+
+    const baseContent = ds?.compositeContent ?? createDefaultCompositeContent(nodeName)
+    const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
+      displayName: nodeName,
+      notationIconName: ds?.iconName,
+    })
+    const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
+      componentProperties,
+      componentValues,
+      nodeTypeProperties,
+      nodeTypeValues,
+    })
+    const compositeStyle = {
+      ...visual.style,
+      ...bindingResult.outerPatch,
+      ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
+      ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
+      ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
+      ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
+    }
+    node = new CompositeNode({
+      ...commonBase,
+      style: compositeStyle,
+      shapeType: ds?.compositeShapeType ?? 'rectangle',
+      cornerRadius: visual.cornerRadius,
+      autoSize: ds?.compositeAutoSize ?? false,
+      minWidth: ds?.compositeMinWidth ?? 0,
+      minHeight: ds?.compositeMinHeight ?? 0,
+      content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
+    })
   } else if (shape === 'beveled-rectangle') {
     node = new CustomShapeNode({
       ...commonOptions,
@@ -1298,6 +1352,11 @@ function syncDiagram() {
       const needsStickyNoteRebuild = shouldUseStickyNote && !isStickyNoteNode(existing)
 
       if (expectedShape !== existingShape || needsFolderTabRebuild || needsStickyNoteRebuild) {
+        renderer.removeNode(papNodeId)
+        renderer.addNode(createInstanceNode(instance))
+        continue
+      }
+      if (expectedShape === 'composite') {
         renderer.removeNode(papNodeId)
         renderer.addNode(createInstanceNode(instance))
         continue
@@ -1906,7 +1965,10 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     if (nodeIds.length === 1) {
       startGroupDrag(nodeIds[0]!)
       if (groupDragData) {
-        manager.recordAdditionalDragStartPositions(groupDragData.followerIds)
+        const managerWithGroupDrag = manager as InteractionManager & {
+          recordAdditionalDragStartPositions?: (ids: string[]) => void
+        }
+        managerWithGroupDrag.recordAdditionalDragStartPositions?.(groupDragData.followerIds)
       }
     } else {
       groupDragData = null

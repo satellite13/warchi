@@ -5,6 +5,8 @@ import {
   CircleNode,
   DiamondNode,
   CustomShapeNode,
+  CompositeNode,
+  deserializeCComponent,
   Node as DiagramNode,
   Edge,
   AutoLayout,
@@ -17,6 +19,7 @@ import {
   TextLabel,
   type ElementState,
   type EdgeStyle as PapirusEdgeStyle,
+  type CContainer,
 } from "@ngroznykh/papirus"
 import { diagramShapeFactories } from "@/utils/diagramShapes"
 import {
@@ -41,6 +44,11 @@ import {
   buildNodeIcon,
   buildMarker,
 } from "../utils/notationElementBuilders"
+import {
+  applyStylePropertyBindings,
+  createDefaultCompositeContent,
+  injectCompositeNameAndIcon,
+} from "../utils/compositeBindings"
 
 export type EntityKind = "component" | "relation"
 
@@ -107,6 +115,7 @@ type ComponentShape =
   | "trapezoid"
   | "slanted-rectangle"
   | "custom"
+  | "composite"
 
 function disableTransformerFrame(node: DiagramNode) {
   node.resizeHandlesEnabled = false
@@ -121,6 +130,7 @@ function getComponentShape(ds?: DiagramStyle): ComponentShape {
     case "trapezoid":
     case "slanted-rectangle":
     case "custom":
+    case "composite":
       return shape
     default:
       return "rectangle"
@@ -132,6 +142,7 @@ function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
 }
 
 function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
+  if (node instanceof CompositeNode) return "composite"
   if (node instanceof DiamondNode) return "diamond"
   if (node instanceof CircleNode) return "circle"
   if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? "rectangle"
@@ -197,21 +208,24 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const visual = resolveComponentStyle(item)
     const ds = item.parsedAttrs.diagramStyle
     const shape = getComponentShape(ds)
-    const commonOptions = {
+    const commonBase = {
       id: `component-${item.id}`,
       x,
       y,
       width: visual.width,
       height: visual.height,
+      style: visual.style,
+      anchorPoints: resolveComponentAnchorPoints(ds),
+      contentInset: (ds?.contentInset ?? 0) as unknown as number,
+    }
+    const commonOptions = {
+      ...commonBase,
       label: buildNodeLabel(
         item.name,
         ds,
         item.parsedAttrs.customProperties.filter((p) => !p.system),
         typeCustomPropertiesForComponent(item),
       ),
-      style: visual.style,
-      anchorPoints: resolveComponentAnchorPoints(ds),
-      contentInset: (ds?.contentInset ?? 0) as unknown as number,
       ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
     }
     const beveledFactory = diagramShapeFactories["beveled-rectangle"]
@@ -219,7 +233,43 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const slantedFactory = diagramShapeFactories["slanted-rectangle"]
 
     let node: DiagramNode
-    if (shape === "diamond") {
+    if (shape === "composite") {
+      const componentProperties = item.parsedAttrs.customProperties.filter((p) => !p.system)
+      const nodeTypeProperties = typeCustomPropertiesForComponent(item)
+      const componentValues = Object.fromEntries(
+        componentProperties.map((p) => [p.name, p.defaultValue])
+      )
+      const nodeTypeValues = Object.fromEntries(nodeTypeProperties.map((p) => [p.name, p.defaultValue]))
+      const baseContent = ds?.compositeContent ?? createDefaultCompositeContent(item.name)
+      const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
+        displayName: item.name,
+        notationIconName: ds?.iconName,
+      })
+      const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
+        componentProperties,
+        componentValues,
+        nodeTypeProperties,
+        nodeTypeValues,
+      })
+      const compositeStyle = {
+        ...visual.style,
+        ...bindingResult.outerPatch,
+        ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
+        ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
+        ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
+        ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
+      }
+      node = new CompositeNode({
+        ...commonBase,
+        style: compositeStyle,
+        shapeType: ds?.compositeShapeType ?? "rectangle",
+        cornerRadius: visual.cornerRadius,
+        autoSize: ds?.compositeAutoSize ?? false,
+        minWidth: ds?.compositeMinWidth ?? 0,
+        minHeight: ds?.compositeMinHeight ?? 0,
+        content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
+      })
+    } else if (shape === "diamond") {
       node = new DiamondNode(commonOptions)
     } else if (shape === "circle") {
       node = new CircleNode(commonOptions)
@@ -262,6 +312,25 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     return node
   }
 
+  function createDiagramLayerNode(nodeId: string, layerNode: { x: number; y: number; width: number; height: number; attrs?: Record<string, unknown> }): DiagramNode {
+    const layerStyle = (layerNode.attrs?.style as Record<string, unknown> | undefined) ?? {}
+    return new RectangleNode({
+      id: nodeId,
+      x: layerNode.x,
+      y: layerNode.y,
+      width: layerNode.width,
+      height: layerNode.height,
+      label: typeof layerNode.attrs?.label === "string" ? layerNode.attrs.label : "",
+      style: {
+        fillColor: typeof layerStyle.fillColor === "string" ? layerStyle.fillColor : "#fff8d6",
+        strokeColor: typeof layerStyle.strokeColor === "string" ? layerStyle.strokeColor : "#d4b85f",
+        strokeWidth: typeof layerStyle.strokeWidth === "number" ? layerStyle.strokeWidth : 1,
+        lineDash: [6, 4],
+      },
+      anchorPoints: NO_ANCHORS,
+    })
+  }
+
   function syncNodes(renderer: DiagramRenderer) {
     const currentNodeIds = new Set<string>()
     const currentEdgeIds = new Set<string>()
@@ -287,6 +356,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const expectedShape = getComponentShape(ds)
         const existingShape = getNodeShapeFromNode(existing)
         if (expectedShape !== existingShape) {
+          const replacement = createComponentNode(component, existing.x, existing.y)
+          renderer.removeNode(nodeId)
+          renderer.addNode(replacement)
+          continue
+        }
+        if (expectedShape === "composite") {
           const replacement = createComponentNode(component, existing.x, existing.y)
           renderer.removeNode(nodeId)
           renderer.addNode(replacement)
@@ -324,6 +399,48 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         setNodeLabelPlacement(existing, ds?.labelPlacement)
       } else {
         componentNodes.push(createComponentNode(component, 0, 0))
+      }
+    }
+
+    // --- Notation diagram-only layer nodes/edges (stored in notation attrs) ---
+    const layerNodeIds = new Set<string>()
+    for (const layerNode of state.value.diagramLayer.nodes) {
+      const nodeId = `layer-node-${layerNode.id}`
+      layerNodeIds.add(nodeId)
+      currentNodeIds.add(nodeId)
+      const existing = renderer.getNode(nodeId)
+      if (existing) {
+        existing.x = layerNode.x
+        existing.y = layerNode.y
+        existing.width = layerNode.width
+        existing.height = layerNode.height
+      } else {
+        renderer.addNode(createDiagramLayerNode(nodeId, layerNode))
+      }
+    }
+
+    for (const layerEdge of state.value.diagramLayer.edges) {
+      const edgeId = `layer-edge-${layerEdge.id}`
+      const sourceId = `layer-node-${layerEdge.sourceNodeId}`
+      const targetId = `layer-node-${layerEdge.targetNodeId}`
+      if (!layerNodeIds.has(sourceId) || !layerNodeIds.has(targetId)) continue
+      currentEdgeIds.add(edgeId)
+      const existingEdge = renderer.getEdge(edgeId)
+      if (existingEdge) {
+        existingEdge.from = { nodeId: sourceId }
+        existingEdge.to = { nodeId: targetId }
+        existingEdge.label = typeof layerEdge.attrs?.label === "string" ? layerEdge.attrs.label : ""
+      } else {
+        renderer.addEdge(
+          new Edge({
+            id: edgeId,
+            from: { nodeId: sourceId },
+            to: { nodeId: targetId },
+            type: "polyline",
+            style: { strokeColor: "#d4b85f", strokeWidth: 1, lineDash: [6, 4] },
+            label: typeof layerEdge.attrs?.label === "string" ? layerEdge.attrs.label : "",
+          })
+        )
       }
     }
 

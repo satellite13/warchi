@@ -28,6 +28,7 @@ function createOptions() {
     components: [],
     relations: [],
     relationRules: [],
+    diagramLayer: { version: 1, nodes: [], edges: [] },
   })
   const selectedEntity = ref<SelectedEntity>(null)
   const availableTags = computed(() => [] as string[])

@@ -65,6 +65,16 @@ export const notationsMessages = {
       figureStyleTab: 'Стиль фигуры',
       defaultLinkType: 'Тип линии по умолчанию',
       documentation: 'Страница в Wiki',
+      saveErrorValidation: 'Исправьте ошибки в свойствах перед сохранением',
+      saveErrorGeneric: 'Не удалось сохранить изменения.',
+      compositeValidationRootInvalid: 'Корень compositeContent должен быть container',
+      compositeValidationNameRoleMissing: 'В composite должен быть ровно один text с role: name',
+      compositeValidationNameRoleDuplicate: 'В composite найдено больше одного text с role: name',
+      compositeValidationIconBindDuplicate:
+        'В composite допускается только один icon с bindsNotationIcon',
+      compositeValidationIconBindTargetInvalid:
+        'Флаг bindsNotationIcon допустим только для узла icon',
+      compositeValidationTargetNotFound: 'Не найден targetId в compositeContent: {targetId}',
     },
   },
   en: {
@@ -132,6 +142,17 @@ export const notationsMessages = {
       figureStyleTab: 'Figure Style',
       defaultLinkType: 'Default link type',
       documentation: 'Page in Wiki',
+      saveErrorValidation: 'Fix validation errors before saving',
+      saveErrorGeneric: 'Failed to save changes.',
+      compositeValidationRootInvalid: 'compositeContent root must be a container',
+      compositeValidationNameRoleMissing: 'Composite must contain exactly one text with role: name',
+      compositeValidationNameRoleDuplicate:
+        'Composite contains more than one text with role: name',
+      compositeValidationIconBindDuplicate:
+        'Composite allows only one icon with bindsNotationIcon',
+      compositeValidationIconBindTargetInvalid:
+        'bindsNotationIcon is allowed only on icon nodes',
+      compositeValidationTargetNotFound: 'Target id is not found in compositeContent: {targetId}',
     },
   },
   fr: {
@@ -201,6 +222,19 @@ export const notationsMessages = {
       figureStyleTab: 'Style de figure',
       defaultLinkType: 'Type de ligne par défaut',
       documentation: 'Page du Wiki',
+      saveErrorValidation: 'Corrigez les erreurs de validation avant de sauvegarder',
+      saveErrorGeneric: 'Impossible d’enregistrer les modifications.',
+      compositeValidationRootInvalid: 'La racine de compositeContent doit être un container',
+      compositeValidationNameRoleMissing:
+        'Le composite doit contenir exactement un text avec role: name',
+      compositeValidationNameRoleDuplicate:
+        'Le composite contient plus d’un text avec role: name',
+      compositeValidationIconBindDuplicate:
+        'Le composite autorise un seul icon avec bindsNotationIcon',
+      compositeValidationIconBindTargetInvalid:
+        'bindsNotationIcon est autorisé uniquement sur les nœuds icon',
+      compositeValidationTargetNotFound:
+        'targetId introuvable dans compositeContent : {targetId}',
     },
   },
 }

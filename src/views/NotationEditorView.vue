@@ -31,6 +31,11 @@ import { useNotationToolbarState } from '../features/notations/composables/useNo
 import { useNotationExport } from '../features/notations/composables/useNotationExport'
 import type { DiagramStyle } from '../features/notations/notationAttrs'
 import { createId } from '../features/notations/notationAttrs'
+import {
+  customPropertyErrors,
+  validateCompositeDiagramStyle,
+  type ValidationIssue,
+} from '../features/notations/utils/validationIssues'
 import type { NodeResponse, LinkResponse } from '../types/api'
 import type {
   EditorComponent,
@@ -60,6 +65,61 @@ const canInspectAttrsJson = computed(() => {
   const permission = notation.value?.accessPermission ?? null
   return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
 })
+
+const customPropertyValidationIssues = computed<ValidationIssue[]>(() => {
+  const issues: ValidationIssue[] = []
+  for (const component of state.value.components) {
+    if (component._isDeleted) continue
+    for (let idx = 0; idx < component.parsedAttrs.customProperties.length; idx += 1) {
+      const property = component.parsedAttrs.customProperties[idx]
+      const errors = customPropertyErrors(property, t)
+      for (const msg of errors) {
+        issues.push({
+          code: 'CUSTOM_PROPERTY_INVALID',
+          message: msg,
+          path: `components.${component.id}.customProperties[${idx}]`,
+          severity: 'error',
+        })
+      }
+    }
+  }
+  for (const relation of state.value.relations) {
+    if (relation._isDeleted) continue
+    for (let idx = 0; idx < relation.parsedAttrs.customProperties.length; idx += 1) {
+      const property = relation.parsedAttrs.customProperties[idx]
+      const errors = customPropertyErrors(property, t)
+      for (const msg of errors) {
+        issues.push({
+          code: 'CUSTOM_PROPERTY_INVALID',
+          message: msg,
+          path: `relations.${relation.id}.customProperties[${idx}]`,
+          severity: 'error',
+        })
+      }
+    }
+  }
+  return issues
+})
+
+const compositeValidationIssues = computed<ValidationIssue[]>(() => {
+  const issues: ValidationIssue[] = []
+  for (const component of state.value.components) {
+    if (component._isDeleted) continue
+    const ds = component.parsedAttrs.diagramStyle
+    const itemIssues = validateCompositeDiagramStyle(ds, t).map((issue) => ({
+      ...issue,
+      path: `components.${component.id}.${issue.path}`,
+    }))
+    issues.push(...itemIssues)
+  }
+  return issues
+})
+
+const hasAnyValidationErrors = computed(
+  () =>
+    customPropertyValidationIssues.value.some((issue) => issue.severity === 'error') ||
+    compositeValidationIssues.value.some((issue) => issue.severity === 'error')
+)
 
 // Document modal state
 const showDocModal = ref(false)
@@ -572,7 +632,7 @@ const handleToolbarAction = async (event: string) => {
   switch (event) {
     case 'save':
       if (!hasUnsavedChanges.value) break
-      await saveChanges(false)
+      await saveChanges(hasAnyValidationErrors.value)
       break
     case 'undo':
       im?.history.undo()

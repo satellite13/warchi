@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
+import type { CompositeSerializedCComponent } from "../notationAttrs";
 
 const { t } = useI18n();
 
@@ -40,10 +41,30 @@ type ListItem = {
   paletteIcon: string;
 };
 
-function getPaletteIcon(parsedAttrs: { diagramStyle?: { iconName?: string }; paletteMaterialIcon?: string }): string {
+function resolveCompositeBoundIconName(root: CompositeSerializedCComponent | undefined): string | undefined {
+  if (!root) return undefined;
+  let found: string | undefined;
+  const visit = (node: CompositeSerializedCComponent) => {
+    if (found) return;
+    if (node.type === "icon" && node.bindsNotationIcon === true && typeof node.source === "string") {
+      const match = node.source.match(/\/icons\/(.+)\.svg$/);
+      if (match?.[1]) {
+        found = match[1];
+        return;
+      }
+    }
+    if (node.content) visit(node.content);
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  visit(root);
+  return found;
+}
+
+function getPaletteIcon(parsedAttrs: { diagramStyle?: { iconName?: string; compositeContent?: CompositeSerializedCComponent }; paletteMaterialIcon?: string }): string {
   const fromStyle = parsedAttrs.diagramStyle?.iconName?.trim();
+  const fromComposite = resolveCompositeBoundIconName(parsedAttrs.diagramStyle?.compositeContent);
   const fromPalette = parsedAttrs.paletteMaterialIcon?.trim();
-  return fromStyle ?? fromPalette ?? "widgets";
+  return fromStyle ?? fromComposite ?? fromPalette ?? "widgets";
 }
 
 const allTags = computed<string[]>(() => {

@@ -2,9 +2,11 @@ import {ref, type Ref} from "vue";
 import {useI18n} from "vue-i18n";
 import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
 import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../notationAttrs";
+import { validateCompositeDiagramStyle } from "../utils/validationIssues";
 import type {NotationData} from "../../../types/entities";
 import type {
   NotationEditorState,
+  EditorDiagramLayer,
   EditorNodeType,
   EditorLinkType,
   EditorComponent,
@@ -32,6 +34,51 @@ const toStringOr = (value: unknown, fallback: string): string =>
 
 const toObjectArray = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter(isRecord) : [];
+
+const normalizeDiagramLayer = (value: unknown): EditorDiagramLayer => {
+  if (!isRecord(value)) return { version: 1, nodes: [], edges: [] };
+  const nodes: EditorDiagramLayer['nodes'] = [];
+  if (Array.isArray(value.nodes)) {
+    for (const node of value.nodes) {
+      if (!isRecord(node)) continue;
+      if (
+        typeof node.id === 'string' &&
+        typeof node.x === 'number' &&
+        typeof node.y === 'number' &&
+        typeof node.width === 'number' &&
+        typeof node.height === 'number'
+      ) {
+        nodes.push({
+          id: node.id,
+          x: node.x,
+          y: node.y,
+          width: node.width,
+          height: node.height,
+          attrs: isRecord(node.attrs) ? node.attrs : undefined,
+        });
+      }
+    }
+  }
+  const edges: EditorDiagramLayer['edges'] = [];
+  if (Array.isArray(value.edges)) {
+    for (const edge of value.edges) {
+      if (!isRecord(edge)) continue;
+      if (
+        typeof edge.id === 'string' &&
+        typeof edge.sourceNodeId === 'string' &&
+        typeof edge.targetNodeId === 'string'
+      ) {
+        edges.push({
+          id: edge.id,
+          sourceNodeId: edge.sourceNodeId,
+          targetNodeId: edge.targetNodeId,
+          attrs: isRecord(edge.attrs) ? edge.attrs : undefined,
+        });
+      }
+    }
+  }
+  return { version: 1, nodes, edges };
+};
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -244,6 +291,11 @@ export function useNotationExport(
       componentIdMap.set(importedComponentId, id);
       const parsedAttrs = parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {}));
       delete parsedAttrs.documentFileId;
+      const issues = validateCompositeDiagramStyle(parsedAttrs.diagramStyle, t);
+      const integrityError = issues.find((issue) => issue.code === "A5_TARGET_NOT_FOUND");
+      if (integrityError) {
+        throw new Error(integrityError.message);
+      }
       return {
         id,
         name: toStringOr(item.name, t("notations.newComponentTitle")),
@@ -321,6 +373,10 @@ export function useNotationExport(
       []
     );
 
+    const importedLayerRaw =
+      (isRecord(source.diagramLayer) ? source.diagramLayer : null) ??
+      (isRecord(source.editorDiagramLayer) ? source.editorDiagramLayer : null);
+
     return {
       notationId: baseNotationId,
       ownerId: baseOwnerId,
@@ -328,7 +384,8 @@ export function useNotationExport(
       linkTypes,
       components,
       relations,
-      relationRules
+      relationRules,
+      diagramLayer: normalizeDiagramLayer(importedLayerRaw),
     };
   };
 

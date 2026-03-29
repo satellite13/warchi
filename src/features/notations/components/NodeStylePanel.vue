@@ -57,9 +57,28 @@ type NodeShape =
   | "circle"
   | "trapezoid"
   | "slanted-rectangle"
-  | "custom";
+  | "custom"
+  | "composite";
 
 function emitNodeStyle() {
+  const compositeContent = (() => {
+    if (nodeShape.value !== "composite") return undefined;
+    try {
+      return compositeContentJson.value.trim()
+        ? JSON.parse(compositeContentJson.value)
+        : { type: "container", direction: "column", children: [{ type: "text", role: "name", text: label.value || "Name" }] };
+    } catch {
+      return undefined;
+    }
+  })();
+  const stylePropertyBindings = (() => {
+    if (nodeShape.value !== "composite") return undefined;
+    try {
+      return styleBindingsJson.value.trim() ? JSON.parse(styleBindingsJson.value) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
   const style: DiagramStyle = {
     nodeShape: nodeShape.value,
     ...(nodeShape.value === "custom"
@@ -79,6 +98,8 @@ function emitNodeStyle() {
     labelAlign: labelAlign.value,
     labelVerticalAlign: labelVerticalAlign.value,
     ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
+    ...(nodeShape.value === "composite" && compositeContent ? { compositeContent } : {}),
+    ...(nodeShape.value === "composite" && stylePropertyBindings ? { stylePropertyBindings } : {}),
     width: nodeWidth.value,
     height: nodeHeight.value,
     contentInset: insetToPlain(contentInset.value),
@@ -485,7 +506,8 @@ const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; labelKey: string }> 
   { value: "circle", labelKey: "nodeStyle.shapeCircle" },
   { value: "trapezoid", labelKey: "nodeStyle.shapeTrapezoid" },
   { value: "slanted-rectangle", labelKey: "nodeStyle.shapeSlantedRectangle" },
-  { value: "custom", labelKey: "nodeStyle.customShape" }
+  { value: "custom", labelKey: "nodeStyle.customShape" },
+  { value: "composite", labelKey: "nodeStyle.shapeComposite" }
 ];
 
 const panelMounted = ref(true);
@@ -544,6 +566,10 @@ const nodePortsLeft = ref(1);
 const nodePortsRight = ref(1);
 const customOutlineRef = ref<DiagramStyle["customOutline"]>(undefined);
 const customShapeIdRef = ref<string | null>(null);
+const compositeContentJson = ref("");
+const styleBindingsJson = ref("");
+const compositeJsonError = ref<string | null>(null);
+const styleBindingsJsonError = ref<string | null>(null);
 
 // --- Edge style state ---
 const edgeLabel = ref("");
@@ -616,7 +642,8 @@ function loadNodeProps() {
     rawShape === "circle" ||
     rawShape === "trapezoid" ||
     rawShape === "slanted-rectangle" ||
-    rawShape === "custom"
+    rawShape === "custom" ||
+    rawShape === "composite"
   ) {
     nodeShape.value = rawShape;
     if (rawShape === "custom") {
@@ -667,6 +694,14 @@ function loadNodeProps() {
   labelAlign.value = (labelStyle?.align as "center" | "left" | "right") ?? "center";
   labelVerticalAlign.value = ((labelStyle as any)?.verticalAlign as "top" | "middle" | "bottom") ?? "middle";
   labelTemplate.value = props.currentDiagramStyle?.labelTemplate ?? "";
+  compositeContentJson.value = props.currentDiagramStyle?.compositeContent
+    ? JSON.stringify(props.currentDiagramStyle.compositeContent, null, 2)
+    : "";
+  styleBindingsJson.value = props.currentDiagramStyle?.stylePropertyBindings
+    ? JSON.stringify(props.currentDiagramStyle.stylePropertyBindings, null, 2)
+    : "";
+  compositeJsonError.value = null;
+  styleBindingsJsonError.value = null;
 
   // Load node dimensions
   nodeWidth.value = Math.round(node.width ?? 140);
@@ -844,6 +879,14 @@ function handleIconChange(value: string) {
 function handleNodeShapeChange(value: string) {
   if (!NODE_SHAPE_OPTIONS.some((option) => option.value === value)) return;
   const next = value as NodeShape;
+  if (nodeShape.value === "composite" && next !== "composite") {
+    const hasCompositeData = compositeContentJson.value.trim().length > 0 || styleBindingsJson.value.trim().length > 0;
+    if (hasCompositeData && !window.confirm(t("nodeStyle.compositeSwitchWarning"))) {
+      return;
+    }
+    compositeContentJson.value = "";
+    styleBindingsJson.value = "";
+  }
   if (next !== "custom") {
     customOutlineRef.value = undefined;
     customShapeIdRef.value = null;
@@ -853,6 +896,45 @@ function handleNodeShapeChange(value: string) {
   nodeShape.value = next;
   resetComponentPreset();
   emitNodeStyle();
+}
+
+function handleCompositeContentInput(value: string) {
+  compositeContentJson.value = value;
+  compositeJsonError.value = null;
+}
+
+function applyCompositeContentJson() {
+  try {
+    const parsed = compositeContentJson.value.trim()
+      ? JSON.parse(compositeContentJson.value)
+      : { type: "container", direction: "column", children: [{ type: "text", role: "name", text: label.value || "Name" }] };
+    compositeContentJson.value = JSON.stringify(parsed, null, 2);
+    compositeJsonError.value = null;
+    emitNodeStyle();
+  } catch {
+    compositeJsonError.value = t("nodeStyle.compositeJsonInvalid");
+  }
+}
+
+function handleStyleBindingsInput(value: string) {
+  styleBindingsJson.value = value;
+  styleBindingsJsonError.value = null;
+}
+
+function applyStyleBindingsJson() {
+  if (!styleBindingsJson.value.trim()) {
+    styleBindingsJsonError.value = null;
+    emitNodeStyle();
+    return;
+  }
+  try {
+    const parsed = JSON.parse(styleBindingsJson.value);
+    styleBindingsJson.value = JSON.stringify(parsed, null, 2);
+    styleBindingsJsonError.value = null;
+    emitNodeStyle();
+  } catch {
+    styleBindingsJsonError.value = t("nodeStyle.compositeBindingsInvalid");
+  }
 }
 
 function handleCustomShapeSelect(shape: { id: string; name: string; outline: string | null }) {
@@ -1875,6 +1957,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <polygon v-else-if="shape.value === 'trapezoid'" points="5,3 23,3 26,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
                       <polygon v-else-if="shape.value === 'slanted-rectangle'" points="6,3 26,3 22,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
                       <rect v-else-if="shape.value === 'custom'" x="4" y="5" width="20" height="10" rx="1" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 2" fill="none"/>
+                      <g v-else-if="shape.value === 'composite'">
+                        <rect x="3" y="3" width="22" height="14" rx="2" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                        <line x1="7" y1="8" x2="21" y2="8" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="7" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="1.2"/>
+                      </g>
                     </svg>
                   </button>
                 </div>
@@ -1892,6 +1979,26 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     >{{ opt.label }}</option>
                   </select>
                 </LabeledFieldRow>
+                <LabeledFieldRow v-if="nodeShape === 'composite'" :label="t('nodeStyle.compositeContentJson')">
+                  <textarea
+                    class="sp-textarea sp-textarea--code"
+                    :value="compositeContentJson"
+                    rows="7"
+                    @input="handleCompositeContentInput(($event.target as HTMLTextAreaElement).value)"
+                    @blur="applyCompositeContentJson"
+                  />
+                </LabeledFieldRow>
+                <div v-if="nodeShape === 'composite'" class="sp-help-text">{{ compositeJsonError || t('nodeStyle.compositeJsonHint') }}</div>
+                <LabeledFieldRow v-if="nodeShape === 'composite'" :label="t('nodeStyle.compositeBindingsJson')">
+                  <textarea
+                    class="sp-textarea sp-textarea--code"
+                    :value="styleBindingsJson"
+                    rows="6"
+                    @input="handleStyleBindingsInput(($event.target as HTMLTextAreaElement).value)"
+                    @blur="applyStyleBindingsJson"
+                  />
+                </LabeledFieldRow>
+                <div v-if="nodeShape === 'composite'" class="sp-help-text">{{ styleBindingsJsonError || t('nodeStyle.compositeBindingsHint') }}</div>
                 <div class="sp-field-grid" :class="nodeShape === 'rectangle' ? 'sp-field-grid--3' : 'sp-field-grid--2'">
                   <LabeledNumberInput
                     label="W"
@@ -2653,5 +2760,28 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
 .sp-body::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong);
+}
+
+.sp-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--base-text);
+  resize: vertical;
+}
+
+.sp-textarea--code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sp-help-text {
+  margin-top: -6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

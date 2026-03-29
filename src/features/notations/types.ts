@@ -6,6 +6,28 @@ import type {
 } from '../../types/api'
 import type { CustomProperty, DiagramStyle, NodeStyle } from './notationAttrs'
 
+export interface DiagramLayerNode {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  attrs?: Record<string, unknown>
+}
+
+export interface DiagramLayerEdge {
+  id: string
+  sourceNodeId: string
+  targetNodeId: string
+  attrs?: Record<string, unknown>
+}
+
+export interface EditorDiagramLayer {
+  version: 1
+  nodes: DiagramLayerNode[]
+  edges: DiagramLayerEdge[]
+}
+
 // Parsed attrs for node/link types
 export interface TypeParsedAttrs {
   style?: NodeStyle
@@ -76,6 +98,7 @@ export interface NotationEditorState {
   components: EditorComponent[]
   relations: EditorRelation[]
   relationRules: EditorRelationRule[]
+  diagramLayer: EditorDiagramLayer
 }
 
 // Empty state factory
@@ -87,4 +110,9 @@ export const createEmptyEditorState = (): NotationEditorState => ({
   components: [],
   relations: [],
   relationRules: [],
+  diagramLayer: {
+    version: 1,
+    nodes: [],
+    edges: [],
+  },
 })

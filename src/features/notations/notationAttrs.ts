@@ -56,6 +56,42 @@ export type InsetSides = {
   left?: number
 }
 
+export type StyleBindingValueSource = 'component' | 'nodeType'
+
+export type StyleBindingWhen =
+  | { op: 'equals'; value: string | number | boolean }
+  | { op: 'contains'; value: string }
+  | { op: 'matchesRegex'; value: string }
+  | { op: 'isEmpty' }
+  | { op: 'isNotEmpty' }
+  | { op: 'is'; value: boolean }
+  | { op: 'range'; min?: number; max?: number }
+  | { op: 'lt' | 'lte' | 'gt' | 'gte'; value: number }
+
+export type StyleBindingPatch = {
+  targetId: string
+  patch: Record<string, unknown>
+}
+
+export type StyleBindingBranch = {
+  when: StyleBindingWhen
+  patches: StyleBindingPatch[]
+}
+
+export type StylePropertyBindingGroup = {
+  valueSource: StyleBindingValueSource
+  propertyName: string
+  branches: StyleBindingBranch[]
+}
+
+// Extension for notation-side serialization metadata.
+export interface CompositeSerializedCComponent
+  extends Omit<import('@ngroznykh/papirus').SerializedCComponent, 'children' | 'content'> {
+  bindsNotationIcon?: boolean
+  children?: CompositeSerializedCComponent[]
+  content?: CompositeSerializedCComponent
+}
+
 export type DiagramStyle = {
   fillColor?: string
   fillOpacity?: number
@@ -120,6 +156,13 @@ export type DiagramStyle = {
   customShapeId?: string
   // Label template for composite labels
   labelTemplate?: string
+  // Composite-only fields
+  compositeContent?: CompositeSerializedCComponent
+  compositeShapeType?: 'rectangle' | 'circle' | 'diamond' | 'custom'
+  compositeAutoSize?: boolean
+  compositeMinWidth?: number
+  compositeMinHeight?: number
+  stylePropertyBindings?: StylePropertyBindingGroup[]
 }
 
 type RawRecord = Record<string, unknown>
@@ -205,6 +248,90 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
   })
 }
 
+const cloneRecord = (value: Record<string, unknown>): Record<string, unknown> =>
+  JSON.parse(JSON.stringify(value)) as Record<string, unknown>
+
+const normalizeCompositeContent = (value: unknown): CompositeSerializedCComponent | undefined => {
+  if (!isRecord(value)) return undefined
+  if (value.type !== 'container') return undefined
+  return cloneRecord(value) as unknown as CompositeSerializedCComponent
+}
+
+const normalizeStyleBindingWhen = (value: unknown): StyleBindingWhen | undefined => {
+  if (!isRecord(value) || typeof value.op !== 'string') return undefined
+
+  switch (value.op) {
+    case 'equals':
+      if (
+        typeof value.value === 'string' ||
+        typeof value.value === 'number' ||
+        typeof value.value === 'boolean'
+      ) {
+        return { op: 'equals', value: value.value }
+      }
+      return undefined
+    case 'contains':
+    case 'matchesRegex':
+      if (typeof value.value === 'string') return { op: value.op, value: value.value }
+      return undefined
+    case 'isEmpty':
+    case 'isNotEmpty':
+      return { op: value.op }
+    case 'is':
+      if (typeof value.value === 'boolean') return { op: 'is', value: value.value }
+      return undefined
+    case 'range': {
+      const min = typeof value.min === 'number' ? value.min : undefined
+      const max = typeof value.max === 'number' ? value.max : undefined
+      if (min == null && max == null) return undefined
+      return { op: 'range', ...(min != null ? { min } : {}), ...(max != null ? { max } : {}) }
+    }
+    case 'lt':
+    case 'lte':
+    case 'gt':
+    case 'gte':
+      if (typeof value.value === 'number') return { op: value.op, value: value.value }
+      return undefined
+    default:
+      return undefined
+  }
+}
+
+const normalizeStylePropertyBindings = (value: unknown): StylePropertyBindingGroup[] | undefined => {
+  if (!Array.isArray(value)) return undefined
+
+  const groups: StylePropertyBindingGroup[] = []
+  for (const item of value) {
+    if (!isRecord(item)) continue
+    const valueSource =
+      item.valueSource === 'component' || item.valueSource === 'nodeType'
+        ? item.valueSource
+        : undefined
+    const propertyName = typeof item.propertyName === 'string' ? item.propertyName.trim() : ''
+    if (!valueSource || propertyName.length === 0) continue
+
+    const branchesRaw = Array.isArray(item.branches) ? item.branches : []
+    const branches: StyleBindingBranch[] = []
+    for (const branchRaw of branchesRaw) {
+      if (!isRecord(branchRaw)) continue
+      const when = normalizeStyleBindingWhen(branchRaw.when)
+      const patchesRaw = Array.isArray(branchRaw.patches) ? branchRaw.patches : []
+      const patches: StyleBindingPatch[] = []
+      for (const patchRaw of patchesRaw) {
+        if (!isRecord(patchRaw)) continue
+        const targetId = typeof patchRaw.targetId === 'string' ? patchRaw.targetId : ''
+        if (targetId.length === 0 || !isRecord(patchRaw.patch)) continue
+        patches.push({ targetId, patch: cloneRecord(patchRaw.patch) })
+      }
+      if (!when || patches.length === 0) continue
+      branches.push({ when, patches })
+    }
+    if (branches.length === 0) continue
+    groups.push({ valueSource, propertyName, branches })
+  }
+  return groups.length > 0 ? groups : undefined
+}
+
 const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (!isRecord(value)) {
     return undefined
@@ -279,6 +406,21 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   }
   if (typeof value.customShapeId === 'string') style.customShapeId = value.customShapeId
   if (typeof value.labelTemplate === 'string') style.labelTemplate = value.labelTemplate
+  const compositeContent = normalizeCompositeContent(value.compositeContent)
+  if (compositeContent) style.compositeContent = compositeContent
+  if (
+    value.compositeShapeType === 'rectangle' ||
+    value.compositeShapeType === 'circle' ||
+    value.compositeShapeType === 'diamond' ||
+    value.compositeShapeType === 'custom'
+  ) {
+    style.compositeShapeType = value.compositeShapeType
+  }
+  if (typeof value.compositeAutoSize === 'boolean') style.compositeAutoSize = value.compositeAutoSize
+  if (typeof value.compositeMinWidth === 'number') style.compositeMinWidth = value.compositeMinWidth
+  if (typeof value.compositeMinHeight === 'number') style.compositeMinHeight = value.compositeMinHeight
+  const styleBindings = normalizeStylePropertyBindings(value.stylePropertyBindings)
+  if (styleBindings) style.stylePropertyBindings = styleBindings
   return Object.keys(style).length ? style : undefined
 }
 

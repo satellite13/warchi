@@ -1,5 +1,6 @@
-import { ref, computed, onScopeDispose, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, onScopeDispose, type Ref, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost, apiPut, apiDelete } from '../../../composables/useApi'
 import type { NotationData, PaginatedResponse } from '../../../types/entities'
 import type {
@@ -29,9 +30,11 @@ import {
   type EditorComponent,
   type EditorRelation,
   type EditorRelationRule,
+  type EditorDiagramLayer,
   createEmptyEditorState,
 } from '../types'
 import { syncRelationRulesViaApi } from './useRelationRulesSync'
+import { parseNotationAttrs, mergeNotationAttrs } from '../utils/notationAttrsJson'
 
 export interface NotationEditorReturn {
   notation: Ref<NotationData | null>
@@ -46,6 +49,41 @@ export interface NotationEditorReturn {
   loadNotation: () => Promise<void>
   saveChanges: (hasValidationErrors: boolean) => Promise<boolean>
   handleBack: () => void
+}
+
+function normalizeDiagramLayer(value: unknown): EditorDiagramLayer {
+  const fallback: EditorDiagramLayer = { version: 1, nodes: [], edges: [] }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback
+  const record = value as Record<string, unknown>
+  const nodes = Array.isArray(record.nodes)
+    ? record.nodes.filter((n): n is EditorDiagramLayer['nodes'][number] => {
+        if (!n || typeof n !== 'object' || Array.isArray(n)) return false
+        const item = n as Record<string, unknown>
+        return (
+          typeof item.id === 'string' &&
+          typeof item.x === 'number' &&
+          typeof item.y === 'number' &&
+          typeof item.width === 'number' &&
+          typeof item.height === 'number'
+        )
+      })
+    : []
+  const edges = Array.isArray(record.edges)
+    ? record.edges.filter((e): e is EditorDiagramLayer['edges'][number] => {
+        if (!e || typeof e !== 'object' || Array.isArray(e)) return false
+        const item = e as Record<string, unknown>
+        return (
+          typeof item.id === 'string' &&
+          typeof item.sourceNodeId === 'string' &&
+          typeof item.targetNodeId === 'string'
+        )
+      })
+    : []
+  return {
+    version: 1,
+    nodes,
+    edges,
+  }
 }
 
 function toEditorNodeType(response: NodeTypeResponse): EditorNodeType {
@@ -606,6 +644,7 @@ async function syncRelationRules(
 }
 
 export function useNotationEditor(): NotationEditorReturn {
+  const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
 
@@ -654,6 +693,17 @@ export function useNotationEditor(): NotationEditorReturn {
       notationAttrsDirty.value
     )
   })
+
+  watch(
+    () => state.value.diagramLayer,
+    (layer) => {
+      if (!notation.value || isLoading.value) return
+      notation.value.attrs = mergeNotationAttrs(notation.value.attrs ?? null, {
+        editorDiagramLayer: layer,
+      })
+    },
+    { deep: true }
+  )
 
   const loadNotation = async () => {
     const notationId = route.params.id
@@ -725,6 +775,7 @@ export function useNotationEditor(): NotationEditorReturn {
           ? (relationsResult.data.content ?? []).map(toEditorRelation)
           : [],
         relationRules: toEditorRelationRules(relationRules, componentIds),
+        diagramLayer: normalizeDiagramLayer(parseNotationAttrs(notationResult.data.attrs ?? null).editorDiagramLayer),
       }
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить нотацию.'
@@ -739,7 +790,7 @@ export function useNotationEditor(): NotationEditorReturn {
     }
 
     if (hasValidationErrors) {
-      saveError.value = 'Исправьте ошибки в свойствах перед сохранением'
+      saveError.value = t('notations.saveErrorValidation')
       return false
     }
 
@@ -793,7 +844,7 @@ export function useNotationEditor(): NotationEditorReturn {
       }, 3000)
       return true
     } catch (error) {
-      saveError.value = error instanceof Error ? error.message : 'Не удалось сохранить изменения.'
+      saveError.value = error instanceof Error ? error.message : t('notations.saveErrorGeneric')
       return false
     } finally {
       isSaving.value = false

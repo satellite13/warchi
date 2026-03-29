@@ -64,6 +64,7 @@ In component style settings, you can choose a node shape:
 - **Trapezoid**
 - **Parallelogram** (slanted rectangle)
 - **Custom shape**
+- **Composite**
 
 Practical guidance:
 
@@ -76,6 +77,23 @@ Additional notes:
 
 - corner radius (`R`) applies to rectangular forms where radius is supported;
 - after changing shape, review content inset (`T/R/B/L`) and label position.
+
+### Composite UI Editor
+
+For `Composite` shape, the style panel provides:
+
+- visual tree editor for `compositeContent` (container/text/icon/divider/shape),
+- A5 form-builder for `stylePropertyBindings` with typed conditions,
+- live preview canvas,
+- JSON mode as advanced fallback.
+
+### Diagram-Only Elements In Notation Editor
+
+You can add diagram-only nodes and edges directly on notation preview canvas:
+
+- they are **not** added to component/relation trees,
+- they are stored in `editorDiagramLayer` inside notation attrs,
+- they are imported/exported with notation data.
 
 #### Short field label hints
 

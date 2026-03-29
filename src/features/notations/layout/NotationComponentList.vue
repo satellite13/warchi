@@ -18,6 +18,8 @@ const emit = defineEmits<{
   select: [kind: "component" | "relation", id: string];
   "create-component": [];
   "create-relation": [];
+  "create-diagram-node": [];
+  "create-diagram-edge": [];
   "remove-item": [kind: "component" | "relation", id: string];
   "toggle-sync-selection": [];
 }>();
@@ -185,6 +187,12 @@ watch(tagsExpanded, (value) => {
         </button>
         <button type="button" class="add-btn" title="Добавить отношение" @click="emit('create-relation')">
           <UiIcon :name="DEFAULT_ENTITY_ICONS.link" />
+        </button>
+        <button type="button" class="add-btn" :title="t('diagram.addDiagramOnlyNode')" @click="emit('create-diagram-node')">
+          <UiIcon name="post_add" />
+        </button>
+        <button type="button" class="add-btn" :title="t('diagram.addDiagramOnlyEdge')" @click="emit('create-diagram-edge')">
+          <UiIcon name="timeline" />
         </button>
       </div>
     </div>

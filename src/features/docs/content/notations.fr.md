@@ -62,6 +62,7 @@ Dans les paramètres de style du composant :
 - **Trapèze**
 - **Parallélogramme**
 - **Forme personnalisée**
+- **Composite**
 
 Conseils :
 
@@ -74,6 +75,23 @@ Notes :
 
 - le rayon de coin (`R`) s’applique aux formes rectangulaires qui le supportent ;
 - après changement de forme, revoir les marges de contenu (`T/R/B/L`) et la position du libellé.
+
+### Éditeur UI du composite
+
+Pour la forme `Composite`, le panneau de style propose :
+
+- éditeur visuel d’arbre `compositeContent` (container/text/icon/divider/shape),
+- form-builder A5 pour `stylePropertyBindings` avec conditions typées,
+- aperçu live sur canvas,
+- mode JSON en fallback avancé.
+
+### Éléments « diagram-only » dans l’éditeur de notation
+
+Vous pouvez ajouter des nœuds et liens uniquement sur le canvas de prévisualisation :
+
+- ils **n’apparaissent pas** dans les arbres composants/relations,
+- ils sont stockés dans `editorDiagramLayer` dans les attrs de la notation,
+- ils sont inclus dans l’import/export de la notation.
 
 #### Libellés de champs courts
 

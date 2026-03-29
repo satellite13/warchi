@@ -12,7 +12,12 @@ import StyleSection from "./StyleSection.vue";
 import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import ToggleSwitch from "@/components/forms/ToggleSwitch.vue";
-import type { DiagramStyle } from "../notationAttrs";
+import type {
+  DiagramStyle,
+  CustomProperty,
+  CompositeSerializedCComponent,
+  StylePropertyBindingGroup,
+} from "../notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { COMBINED_ICON_OPTIONS } from "@/config/iconOptions";
 import {
@@ -35,6 +40,10 @@ import {
   type IconPlacement,
   type InsetSides,
 } from "../utils/styleHelpers";
+import A5BindingsEditor from "./composite/A5BindingsEditor.vue";
+import CompositeTreeEditor from "./composite/CompositeTreeEditor.vue";
+import CompositeLivePreview from "./composite/CompositeLivePreview.vue";
+import { validateCompositeDiagramStyle } from "../utils/validationIssues";
 
 const props = defineProps<{
   selectedElementId: string | null;
@@ -42,6 +51,8 @@ const props = defineProps<{
   renderer: DiagramRenderer | null;
   canRestoreStyle?: boolean;
   currentDiagramStyle?: DiagramStyle;
+  componentProperties?: CustomProperty[];
+  nodeTypeProperties?: CustomProperty[];
 }>();
 
 const emit = defineEmits<{
@@ -61,24 +72,14 @@ type NodeShape =
   | "composite";
 
 function emitNodeStyle() {
-  const compositeContent = (() => {
-    if (nodeShape.value !== "composite") return undefined;
-    try {
-      return compositeContentJson.value.trim()
-        ? JSON.parse(compositeContentJson.value)
-        : { type: "container", direction: "column", children: [{ type: "text", role: "name", text: label.value || "Name" }] };
-    } catch {
-      return undefined;
-    }
-  })();
-  const stylePropertyBindings = (() => {
-    if (nodeShape.value !== "composite") return undefined;
-    try {
-      return styleBindingsJson.value.trim() ? JSON.parse(styleBindingsJson.value) : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
+  const compositeContent =
+    nodeShape.value === "composite"
+      ? compositeContentDraft.value
+      : undefined;
+  const stylePropertyBindings =
+    nodeShape.value === "composite" && styleBindingsDraft.value.length > 0
+      ? styleBindingsDraft.value
+      : undefined;
   const style: DiagramStyle = {
     nodeShape: nodeShape.value,
     ...(nodeShape.value === "custom"
@@ -570,6 +571,26 @@ const compositeContentJson = ref("");
 const styleBindingsJson = ref("");
 const compositeJsonError = ref<string | null>(null);
 const styleBindingsJsonError = ref<string | null>(null);
+const compositeEditorMode = ref<"visual" | "json">("visual");
+const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([]);
+const compositeContentDraft = ref<CompositeSerializedCComponent>({
+  type: "container",
+  direction: "column",
+  children: [{ id: "name", type: "text", role: "name", text: "Name" }],
+});
+const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([]);
+const componentPropsForA5 = computed(() => props.componentProperties ?? []);
+const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? []);
+const compositeValidationIssues = computed(() =>
+  validateCompositeDiagramStyle(
+    {
+      nodeShape: "composite",
+      compositeContent: compositeContentDraft.value,
+      stylePropertyBindings: styleBindingsDraft.value,
+    },
+    t
+  )
+);
 
 // --- Edge style state ---
 const edgeLabel = ref("");
@@ -700,6 +721,12 @@ function loadNodeProps() {
   styleBindingsJson.value = props.currentDiagramStyle?.stylePropertyBindings
     ? JSON.stringify(props.currentDiagramStyle.stylePropertyBindings, null, 2)
     : "";
+  compositeContentDraft.value = props.currentDiagramStyle?.compositeContent
+    ? JSON.parse(JSON.stringify(props.currentDiagramStyle.compositeContent))
+    : { type: "container", direction: "column", children: [{ id: "name", type: "text", role: "name", text: label.value || "Name" }] };
+  styleBindingsDraft.value = props.currentDiagramStyle?.stylePropertyBindings
+    ? JSON.parse(JSON.stringify(props.currentDiagramStyle.stylePropertyBindings))
+    : [];
   compositeJsonError.value = null;
   styleBindingsJsonError.value = null;
 
@@ -880,12 +907,18 @@ function handleNodeShapeChange(value: string) {
   if (!NODE_SHAPE_OPTIONS.some((option) => option.value === value)) return;
   const next = value as NodeShape;
   if (nodeShape.value === "composite" && next !== "composite") {
-    const hasCompositeData = compositeContentJson.value.trim().length > 0 || styleBindingsJson.value.trim().length > 0;
+    const hasCompositeData =
+      compositeContentJson.value.trim().length > 0 ||
+      styleBindingsJson.value.trim().length > 0 ||
+      (compositeContentDraft.value.children?.length ?? 0) > 0 ||
+      styleBindingsDraft.value.length > 0;
     if (hasCompositeData && !window.confirm(t("nodeStyle.compositeSwitchWarning"))) {
       return;
     }
     compositeContentJson.value = "";
     styleBindingsJson.value = "";
+    compositeContentDraft.value = { type: "container", direction: "column", children: [] };
+    styleBindingsDraft.value = [];
   }
   if (next !== "custom") {
     customOutlineRef.value = undefined;
@@ -908,6 +941,7 @@ function applyCompositeContentJson() {
     const parsed = compositeContentJson.value.trim()
       ? JSON.parse(compositeContentJson.value)
       : { type: "container", direction: "column", children: [{ type: "text", role: "name", text: label.value || "Name" }] };
+    compositeContentDraft.value = parsed as CompositeSerializedCComponent;
     compositeContentJson.value = JSON.stringify(parsed, null, 2);
     compositeJsonError.value = null;
     emitNodeStyle();
@@ -923,18 +957,34 @@ function handleStyleBindingsInput(value: string) {
 
 function applyStyleBindingsJson() {
   if (!styleBindingsJson.value.trim()) {
+    styleBindingsDraft.value = [];
     styleBindingsJsonError.value = null;
     emitNodeStyle();
     return;
   }
   try {
     const parsed = JSON.parse(styleBindingsJson.value);
+    styleBindingsDraft.value = parsed as StylePropertyBindingGroup[];
     styleBindingsJson.value = JSON.stringify(parsed, null, 2);
     styleBindingsJsonError.value = null;
     emitNodeStyle();
   } catch {
     styleBindingsJsonError.value = t("nodeStyle.compositeBindingsInvalid");
   }
+}
+
+function handleCompositeTreeUpdate(next: CompositeSerializedCComponent) {
+  compositeContentDraft.value = JSON.parse(JSON.stringify(next));
+  compositeContentJson.value = JSON.stringify(compositeContentDraft.value, null, 2);
+  compositeJsonError.value = null;
+  emitNodeStyle();
+}
+
+function handleA5BindingsUpdate(next: StylePropertyBindingGroup[]) {
+  styleBindingsDraft.value = JSON.parse(JSON.stringify(next));
+  styleBindingsJson.value = JSON.stringify(styleBindingsDraft.value, null, 2);
+  styleBindingsJsonError.value = null;
+  emitNodeStyle();
 }
 
 function handleCustomShapeSelect(shape: { id: string; name: string; outline: string | null }) {
@@ -1979,26 +2029,70 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     >{{ opt.label }}</option>
                   </select>
                 </LabeledFieldRow>
-                <LabeledFieldRow v-if="nodeShape === 'composite'" :label="t('nodeStyle.compositeContentJson')">
-                  <textarea
-                    class="sp-textarea sp-textarea--code"
-                    :value="compositeContentJson"
-                    rows="7"
-                    @input="handleCompositeContentInput(($event.target as HTMLTextAreaElement).value)"
-                    @blur="applyCompositeContentJson"
-                  />
-                </LabeledFieldRow>
-                <div v-if="nodeShape === 'composite'" class="sp-help-text">{{ compositeJsonError || t('nodeStyle.compositeJsonHint') }}</div>
-                <LabeledFieldRow v-if="nodeShape === 'composite'" :label="t('nodeStyle.compositeBindingsJson')">
-                  <textarea
-                    class="sp-textarea sp-textarea--code"
-                    :value="styleBindingsJson"
-                    rows="6"
-                    @input="handleStyleBindingsInput(($event.target as HTMLTextAreaElement).value)"
-                    @blur="applyStyleBindingsJson"
-                  />
-                </LabeledFieldRow>
-                <div v-if="nodeShape === 'composite'" class="sp-help-text">{{ styleBindingsJsonError || t('nodeStyle.compositeBindingsHint') }}</div>
+                <template v-if="nodeShape === 'composite'">
+                  <div class="sp-segmented">
+                    <button
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': compositeEditorMode === 'visual' }"
+                      @click="compositeEditorMode = 'visual'"
+                    >
+                      {{ t('nodeStyle.compositeVisualMode') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="sp-segmented__btn"
+                      :class="{ 'sp-segmented__btn--active': compositeEditorMode === 'json' }"
+                      @click="compositeEditorMode = 'json'"
+                    >
+                      {{ t('nodeStyle.compositeJsonMode') }}
+                    </button>
+                  </div>
+
+                  <template v-if="compositeEditorMode === 'visual'">
+                    <CompositeTreeEditor
+                      :model-value="compositeContentDraft"
+                      @update:model-value="handleCompositeTreeUpdate"
+                      @target-options="(targets) => { compositeTreeTargets = targets }"
+                    />
+                    <CompositeLivePreview :content="compositeContentDraft" />
+                    <A5BindingsEditor
+                      :model-value="styleBindingsDraft"
+                      :component-properties="componentPropsForA5"
+                      :node-type-properties="nodeTypePropsForA5"
+                      :target-options="compositeTreeTargets"
+                      @update:model-value="handleA5BindingsUpdate"
+                    />
+                  </template>
+
+                  <template v-else>
+                    <LabeledFieldRow :label="t('nodeStyle.compositeContentJson')">
+                      <textarea
+                        class="sp-textarea sp-textarea--code"
+                        :value="compositeContentJson"
+                        rows="7"
+                        @input="handleCompositeContentInput(($event.target as HTMLTextAreaElement).value)"
+                        @blur="applyCompositeContentJson"
+                      />
+                    </LabeledFieldRow>
+                    <div class="sp-help-text">{{ compositeJsonError || t('nodeStyle.compositeJsonHint') }}</div>
+                    <LabeledFieldRow :label="t('nodeStyle.compositeBindingsJson')">
+                      <textarea
+                        class="sp-textarea sp-textarea--code"
+                        :value="styleBindingsJson"
+                        rows="6"
+                        @input="handleStyleBindingsInput(($event.target as HTMLTextAreaElement).value)"
+                        @blur="applyStyleBindingsJson"
+                      />
+                    </LabeledFieldRow>
+                    <div class="sp-help-text">{{ styleBindingsJsonError || t('nodeStyle.compositeBindingsHint') }}</div>
+                  </template>
+                  <div v-if="compositeValidationIssues.length > 0" class="sp-validation-list">
+                    <div v-for="issue in compositeValidationIssues" :key="`${issue.code}-${issue.path}`" class="sp-validation-item">
+                      <strong>{{ issue.code }}</strong>: {{ issue.message }}
+                    </div>
+                  </div>
+                </template>
                 <div class="sp-field-grid" :class="nodeShape === 'rectangle' ? 'sp-field-grid--3' : 'sp-field-grid--2'">
                   <LabeledNumberInput
                     label="W"
@@ -2783,5 +2877,17 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   margin-bottom: 6px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.sp-validation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.sp-validation-item {
+  font-size: 12px;
+  color: var(--danger);
 }
 </style>

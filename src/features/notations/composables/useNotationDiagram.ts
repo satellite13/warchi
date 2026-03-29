@@ -863,11 +863,32 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       updateSelection(renderer)
     })
 
+    interactionManager.drag.on("dragend", (draggedNodeIds: string[]) => {
+      if (!Array.isArray(draggedNodeIds) || draggedNodeIds.length === 0) return
+      const draggedSet = new Set(draggedNodeIds)
+      let changed = false
+      state.value.diagramLayer.nodes = state.value.diagramLayer.nodes.map((node) => {
+        const papirusId = `layer-node-${node.id}`
+        if (!draggedSet.has(papirusId)) return node
+        const rendered = renderer.getNode(papirusId)
+        if (!rendered) return node
+        changed = true
+        return {
+          ...node,
+          x: rendered.x,
+          y: rendered.y,
+          width: rendered.width,
+          height: rendered.height,
+        }
+      })
+      if (changed) renderer.markDirty()
+    })
+
     syncNodes(renderer)
     updateSelection(renderer)
 
     watch(
-      () => [state.value.components, state.value.relations],
+      () => [state.value.components, state.value.relations, state.value.diagramLayer],
       () => {
         syncNodes(renderer)
         updateSelection(renderer)

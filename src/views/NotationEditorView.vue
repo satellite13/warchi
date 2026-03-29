@@ -377,6 +377,21 @@ const selectedDiagramStyle = computed(() => {
   return state.value.relations.find(r => r.id === entity.id)?.parsedAttrs.diagramStyle
 })
 
+const selectedStylePanelComponentProperties = computed(() => {
+  if (selectedEntity.value?.kind !== 'component') return []
+  const component = state.value.components.find(c => c.id === selectedEntity.value?.id)
+  if (!component) return []
+  return component.parsedAttrs.customProperties.filter(p => !p.system)
+})
+
+const selectedStylePanelNodeTypeProperties = computed(() => {
+  if (selectedEntity.value?.kind !== 'component') return []
+  const component = state.value.components.find(c => c.id === selectedEntity.value?.id)
+  if (!component) return []
+  const nodeType = state.value.nodeTypes.find(nt => nt.id === component.nodeTypeId)
+  return (nodeType?.parsedAttrs.customProperties ?? []).filter(p => !p.system)
+})
+
 const importNotationInputRef = ref<HTMLInputElement | null>(null)
 
 const {
@@ -555,6 +570,47 @@ const handleRelationRulesChanged = () => {
     if (!rule._isNew) {
       rule._isDirty = true
     }
+  })
+}
+
+const handleCreateDiagramOnlyNode = () => {
+  const idx = state.value.diagramLayer.nodes.length
+  state.value.diagramLayer.nodes.push({
+    id: createId(),
+    x: 80 + idx * 24,
+    y: 80 + idx * 24,
+    width: 140,
+    height: 60,
+    attrs: {
+      isDiagramOnly: true,
+      label: t('diagram.newNote'),
+      style: {
+        fillColor: '#fff8d6',
+        strokeColor: '#d4b85f',
+        strokeWidth: 1,
+      },
+    },
+  })
+}
+
+const handleCreateDiagramOnlyEdge = () => {
+  const nodes = state.value.diagramLayer.nodes
+  if (nodes.length < 2) {
+    handleCreateDiagramOnlyNode()
+    handleCreateDiagramOnlyNode()
+  }
+  const source = state.value.diagramLayer.nodes.at(-2)
+  const target = state.value.diagramLayer.nodes.at(-1)
+  if (!source || !target) return
+  state.value.diagramLayer.edges.push({
+    id: createId(),
+    sourceNodeId: source.id,
+    targetNodeId: target.id,
+    attrs: {
+      isDiagramOnly: true,
+      label: '',
+      style: { strokeColor: '#d4b85f', strokeWidth: 1 },
+    },
   })
 }
 
@@ -819,6 +875,8 @@ onBeforeUnmount(() => {
               @toggle-sync-selection="toggleSelectionSync"
               @create-component="openComponentModal"
               @create-relation="openRelationModal"
+              @create-diagram-node="handleCreateDiagramOnlyNode"
+              @create-diagram-edge="handleCreateDiagramOnlyEdge"
               @remove-item="handleRemoveItem"
             />
           </template>
@@ -879,6 +937,8 @@ onBeforeUnmount(() => {
                 :interaction-manager="interactionManager"
                 :renderer="diagramRenderer"
                 :current-diagram-style="selectedDiagramStyle"
+                :component-properties="selectedStylePanelComponentProperties"
+                :node-type-properties="selectedStylePanelNodeTypeProperties"
                 @style-change="handleStyleChange"
               />
             </TabPanel>

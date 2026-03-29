@@ -9,7 +9,7 @@ vi.mock('../styles/stylePresets', () => ({
   getDefaultRelationStylePresetName: () => 'default',
 }))
 
-import { useRelationManagement } from './useRelationManagement'
+import { RELATION_WITHOUT_TYPE_VALUE, useRelationManagement } from './useRelationManagement'
 
 function createOptions() {
   const state = ref<NotationEditorState>({
@@ -105,6 +105,22 @@ describe('useRelationManagement', () => {
 
       // modal should be closed
       expect(rm.showRelationModal.value).toBe(false)
+    })
+
+    it('creates relation without explicit type selection', () => {
+      const rm = useRelationManagement(options)
+      rm.relationName.value = 'NoTypeRelation'
+      rm.relationVersion.value = '1.0.0'
+      rm.relationTypeSelection.value = RELATION_WITHOUT_TYPE_VALUE
+      rm.addRelation()
+
+      expect(options.state.value.relations).toHaveLength(1)
+      const added = options.state.value.relations[0]
+      expect(added.name).toBe('NoTypeRelation')
+      expect(typeof added.linkTypeId).toBe('string')
+      expect(added.linkTypeId.length).toBeGreaterThan(0)
+      const attachedType = options.state.value.linkTypes.find((t) => t.id === added.linkTypeId)
+      expect(attachedType?.name).toBe('Diagram only')
     })
 
     it('creates a new link type when __new__ is selected with a name', () => {
@@ -271,6 +287,7 @@ describe('useRelationManagement', () => {
       expect(rm.relationTags.value).toBe('')
       expect(rm.relationVersion.value).toBe('1.0.0')
       expect(rm.relationNewTypeName.value).toBe('')
+      expect(rm.relationTypeSelection.value).toBe(RELATION_WITHOUT_TYPE_VALUE)
       expect(rm.relationFormError.value).toBeNull()
     })
   })

@@ -9,7 +9,9 @@ import {
 } from '../styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
 
-const NEW_TYPE_VALUE = '__new__'
+export const NEW_TYPE_VALUE = '__new__'
+export const COMPONENT_WITHOUT_TYPE_VALUE = '__without_type__'
+const UNTYPED_NODE_TYPE_NAME = 'Diagram only'
 
 const parseTagsInput = (value: string) =>
   value
@@ -65,7 +67,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
   const componentName = ref('')
   const componentTags = ref('')
   const componentVersion = ref('1.0.0')
-  const componentTypeSelection = ref(NEW_TYPE_VALUE)
+  const componentTypeSelection = ref(COMPONENT_WITHOUT_TYPE_VALUE)
   const componentNewTypeName = ref('')
   const componentStylePreset = ref(getDefaultComponentStylePresetName())
   const componentFormError = ref<string | null>(null)
@@ -103,6 +105,9 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     }
 
     let nodeTypeId = componentTypeSelection.value
+    if (nodeTypeId === COMPONENT_WITHOUT_TYPE_VALUE) {
+      nodeTypeId = addNodeType(state.value.nodeTypes, UNTYPED_NODE_TYPE_NAME, state.value.ownerId) || ''
+    }
     if (nodeTypeId === NEW_TYPE_VALUE) {
       nodeTypeId =
         addNodeType(state.value.nodeTypes, componentNewTypeName.value, state.value.ownerId) || ''
@@ -137,7 +142,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     componentVersion.value = '1.0.0'
     componentNewTypeName.value = ''
     componentStylePreset.value = getDefaultComponentStylePresetName()
-    componentTypeSelection.value = nodeTypeId
+    componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
     selectComponent(component.id)
     showComponentModal.value = false
   }
@@ -167,7 +172,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     componentName.value = ''
     componentTags.value = ''
     componentVersion.value = '1.0.0'
-    componentTypeSelection.value = NEW_TYPE_VALUE
+    componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
     componentNewTypeName.value = ''
     componentStylePreset.value = getDefaultComponentStylePresetName()
     showComponentModal.value = true

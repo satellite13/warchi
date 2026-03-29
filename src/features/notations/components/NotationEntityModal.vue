@@ -25,6 +25,8 @@ const props = defineProps<{
   tagsPlaceholder?: string
   typeLabel: string
   typeOptions: (EditorNodeType | EditorLinkType)[]
+  noTypeValue?: string
+  noTypeLabel?: string
   newTypeValue: string
   newTypeLabel: string
   newTypePlaceholder?: string
@@ -43,6 +45,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const typeSelectOptions = computed(() => [
+  ...(props.noTypeValue && props.noTypeLabel
+    ? [{ id: props.noTypeValue, label: props.noTypeLabel }]
+    : []),
   { id: props.newTypeValue, label: `+ ${props.newTypeLabel}` },
   ...props.typeOptions.map((type) => ({ id: type.id, label: type.name }))
 ])

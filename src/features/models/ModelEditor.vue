@@ -498,7 +498,17 @@ const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(nul
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const NOTE_NODE_PREFIX = '__diagram-note__:'
 const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
+const UNTYPED_EDGE_PREFIX = '__diagram-untyped-edge__:'
 const NOTE_PASTE_STEP = 24
+const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
+
+const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
+const isUntypedTypeName = (value: string | undefined): boolean =>
+  UNTYPED_TYPE_NAMES.has(normalizeTypeName(value))
+const isUntypedNodeTypeId = (nodeTypeId: string): boolean =>
+  isUntypedTypeName(state.value.nodeTypes.find(type => type.id === nodeTypeId)?.name)
+const isUntypedLinkTypeId = (linkTypeId: string): boolean =>
+  isUntypedTypeName(state.value.linkTypes.find(type => type.id === linkTypeId)?.name)
 
 const canUndo = computed(() => diagramCanvasRef.value?.getCanUndo() ?? false)
 const canRedo = computed(() => diagramCanvasRef.value?.getCanRedo() ?? false)
@@ -1069,7 +1079,37 @@ const {
   cancelNoteEditor,
 } = useNoteEditor(activeDiagram, isDiagramReadOnly, markDiagramDirty)
 
-const canShowTraceabilityTab = computed(() => !!selectedNode.value)
+const isSelectedNodeUntyped = computed(() => {
+  const node = selectedNode.value
+  return !!node && isUntypedNodeTypeId(node.nodeTypeId)
+})
+const isSelectedLinkUntyped = computed(() => {
+  const link = selectedLink.value
+  if (link) return isUntypedLinkTypeId(link.linkTypeId)
+
+  const modelLinkId = selectedModelLinkId.value
+  if (modelLinkId?.startsWith(UNTYPED_EDGE_PREFIX)) return true
+
+  const selectedElementId = selectedCanvasElementId.value
+  if (!selectedElementId?.startsWith('edge-')) return false
+  const edgeId = selectedElementId.slice('edge-'.length)
+  const edge = activeDiagram.value?.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+  return !!edge?.modelLinkId?.startsWith(UNTYPED_EDGE_PREFIX)
+})
+const isSelectedUntypedElement = computed(
+  () => isSelectedNodeUntyped.value || isSelectedLinkUntyped.value
+)
+const canShowPropertiesTab = computed(() => !isSelectedUntypedElement.value)
+const traceabilityNodes = computed(() =>
+  state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
+)
+const traceabilityLinks = computed(() =>
+  state.value.links.filter(link => !link._isDeleted && !isUntypedLinkTypeId(link.linkTypeId))
+)
+const treeVisibleNodes = computed(() =>
+  state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
+)
+const canShowTraceabilityTab = computed(() => !!selectedNode.value && !isSelectedNodeUntyped.value)
 const canEditSelectedElementStyle = computed(() => {
   const diagram = activeDiagram.value
   const selectedElementId = selectedCanvasElementId.value
@@ -1093,9 +1133,10 @@ const canShowStyleTab = computed(
   () => !!activeDiagram.value && !isDiagramReadOnly.value && canEditSelectedElementStyle.value
 )
 const rightPanelTabs = computed(() => {
-  const tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'properties', label: t('models.propertiesTab'), icon: 'tune' },
-  ]
+  const tabs: { id: string; label: string; icon: string }[] = []
+  if (canShowPropertiesTab.value) {
+    tabs.push({ id: 'properties', label: t('models.propertiesTab'), icon: 'tune' })
+  }
   if (canShowTraceabilityTab.value) {
     tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'account_tree' })
   }
@@ -1107,7 +1148,7 @@ const rightPanelTabs = computed(() => {
 
 watch([rightPanelTabs, activeRightTab], () => {
   if (!rightPanelTabs.value.some(tab => tab.id === activeRightTab.value)) {
-    activeRightTab.value = 'properties'
+    activeRightTab.value = rightPanelTabs.value[0]?.id ?? 'properties'
   }
 })
 
@@ -1450,7 +1491,13 @@ const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
   modelNodeId.startsWith(NOTE_NODE_PREFIX)
 
 const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
-  modelLinkId.startsWith(NOTE_EDGE_PREFIX)
+  modelLinkId.startsWith(NOTE_EDGE_PREFIX) || modelLinkId.startsWith(UNTYPED_EDGE_PREFIX)
+
+const isUntypedModelLinkId = (modelLinkId: string): boolean => {
+  const link = state.value.links.find(item => item.id === modelLinkId && !item._isDeleted)
+  if (!link) return false
+  return isUntypedLinkTypeId(link.linkTypeId)
+}
 
 const isDirectoryNoteInstanceId = (instanceId: string): boolean => {
   const diagram = activeDiagram.value
@@ -2054,6 +2101,11 @@ const removeLinkFromModel = () => {
     return
   }
 
+  if (isDiagramOnlyEdgeModelLinkId(linkId) || isUntypedModelLinkId(linkId)) {
+    cancelLinkDelete()
+    return
+  }
+
   for (const diagram of state.value.diagrams) {
     if (diagram._isDeleted) continue
     const initial = diagram.parsedAttrs.instances.edges.length
@@ -2063,16 +2115,6 @@ const removeLinkFromModel = () => {
     if (diagram.parsedAttrs.instances.edges.length !== initial) {
       markDiagramDirty(diagram.id)
     }
-  }
-
-  if (isDiagramOnlyEdgeModelLinkId(linkId)) {
-    if (selectedModelLinkId.value === linkId) {
-      selectedModelLinkId.value = null
-      selectedEdgeInstanceId.value = null
-      if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
-    }
-    cancelLinkDelete()
-    return
   }
 
   markLinkDeleted(linkId)
@@ -2624,18 +2666,47 @@ const startConnectNodes = (
     return
   }
 
-  const ruleRelationIds = state.value.relationRules
-    .filter(
-      rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
-    )
-    .map(rule => rule.relationId)
-  if (ruleRelationIds.length === 0) {
+  const sourceComponent = state.value.components.find(
+    component => component.id === sourceComponentId && component.notationId === notationId
+  )
+  const targetComponent = state.value.components.find(
+    component => component.id === targetComponentId && component.notationId === notationId
+  )
+  const sourceIsUntyped = sourceComponent
+    ? isUntypedNodeTypeId(sourceComponent.nodeTypeId)
+    : false
+  const targetIsUntyped = targetComponent
+    ? isUntypedNodeTypeId(targetComponent.nodeTypeId)
+    : false
+  const allowedUntypedRelations = state.value.relations.filter(
+    relation =>
+      relation.notationId === notationId &&
+      isUntypedLinkTypeId(relation.linkTypeId)
+  )
+  if (!sourceIsUntyped && targetIsUntyped) {
     setUiError(t('models.noAllowedRelationRules'))
     return
   }
-  const allowedRelations = state.value.relations.filter(
-    relation => relation.notationId === notationId && ruleRelationIds.includes(relation.id)
-  )
+
+  const allowedRelations = sourceIsUntyped
+    ? allowedUntypedRelations
+    : (() => {
+        const ruleRelationIds = state.value.relationRules
+          .filter(
+            rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
+          )
+          .map(rule => rule.relationId)
+        if (ruleRelationIds.length === 0) {
+          setUiError(t('models.noAllowedRelationRules'))
+          return [] as RelationResponse[]
+        }
+        return state.value.relations.filter(
+          relation =>
+            relation.notationId === notationId &&
+            ruleRelationIds.includes(relation.id) &&
+            !isUntypedLinkTypeId(relation.linkTypeId)
+        )
+      })()
   if (allowedRelations.length === 0) {
     setUiError(t('models.noAvailableRelations'))
     return
@@ -2657,6 +2728,17 @@ const startConnectNodes = (
     name: relation.name,
     linkTypeId: relation.linkTypeId,
   }))
+
+  // Для связи из untyped-компонента всегда создаём новую связь на диаграмме:
+  // reuse существующих link-объектов здесь запрещён по продуктовым правилам.
+  if (sourceIsUntyped) {
+    if (allowedRelations.length === 1) {
+      finalizeConnection(allowedRelations[0]!.id)
+      return
+    }
+    showRelationChoiceModal.value = true
+    return
+  }
 
   // Собираем все существующие связи для всех allowedRelations
   const existingLinks: EditorLink[] = []
@@ -2826,13 +2908,16 @@ const createOrReuseLink = (linkId: string | null) => {
   if (!notationId || !diagram || !connection || !relationId) return
   const relation = state.value.relations.find(item => item.id === relationId)
   if (!relation) return
+  const isUntypedRelation = isUntypedLinkTypeId(relation.linkTypeId)
 
-  const isNewLink = !linkId
-  const resolvedLinkId = linkId ?? createId()
+  const isNewLink = !linkId || isUntypedRelation
+  const resolvedLinkId = isUntypedRelation
+    ? `${UNTYPED_EDGE_PREFIX}${createId()}`
+    : (linkId ?? createId())
   const existingLink = state.value.links.find(item => item.id === resolvedLinkId) ?? null
   if (!isNewLink && !existingLink) return
   const previousParsedAttrs = existingLink ? deepClone(existingLink.parsedAttrs) : null
-  const newLink: EditorLink | null = isNewLink
+  const newLink: EditorLink | null = isNewLink && !isUntypedRelation
     ? {
         id: resolvedLinkId,
         sourceId: connection.sourceModelNodeId,
@@ -2879,6 +2964,16 @@ const createOrReuseLink = (linkId: string | null) => {
 
   executeDiagramHistoryCommand({
     execute: () => {
+      if (isUntypedRelation) {
+        const hasEdge = diagram.parsedAttrs.instances.edges.some(
+          edge => edge.id === newEdgeInstance.id
+        )
+        if (!hasEdge) {
+          diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
+        }
+        markDiagramDirty(diagram.id)
+        return
+      }
       let link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
       if (!link && newLink) {
         state.value.links.push(deepClone(newLink))
@@ -2899,6 +2994,11 @@ const createOrReuseLink = (linkId: string | null) => {
       diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
         edge => edge.id !== newEdgeInstance.id
       )
+
+      if (isUntypedRelation) {
+        markDiagramDirty(diagram.id)
+        return
+      }
 
       if (isNewLink) {
         state.value.links = state.value.links.filter(item => item.id !== resolvedLinkId)
@@ -2934,8 +3034,35 @@ const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boole
   const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
   const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
   if (!sourceComponentId || !targetComponentId) return false
-  return state.value.relationRules.some(
-    rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
+  const sourceComponent = state.value.components.find(
+    component => component.id === sourceComponentId && component.notationId === notationId
+  )
+  const targetComponent = state.value.components.find(
+    component => component.id === targetComponentId && component.notationId === notationId
+  )
+  const sourceIsUntyped = sourceComponent
+    ? isUntypedNodeTypeId(sourceComponent.nodeTypeId)
+    : false
+  const targetIsUntyped = targetComponent
+    ? isUntypedNodeTypeId(targetComponent.nodeTypeId)
+    : false
+  if (sourceIsUntyped) {
+    return state.value.relations.some(
+      relation =>
+        relation.notationId === notationId &&
+        isUntypedLinkTypeId(relation.linkTypeId)
+    )
+  }
+  if (targetIsUntyped) return false
+  const typedRuleRelationIds = state.value.relationRules
+    .filter(rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId)
+    .map(rule => rule.relationId)
+  if (typedRuleRelationIds.length === 0) return false
+  return state.value.relations.some(
+    relation =>
+      relation.notationId === notationId &&
+      typedRuleRelationIds.includes(relation.id) &&
+      !isUntypedLinkTypeId(relation.linkTypeId)
   )
 }
 
@@ -3930,7 +4057,7 @@ onBeforeUnmount(() => {
         <template #left>
           <ModelTreePalettePanel
             ref="treePanelRef"
-            :nodes="state.nodes"
+            :nodes="treeVisibleNodes"
             :diagrams="state.diagrams"
             :node-types="state.nodeTypes"
             :tree-root-node-id="treeRootNodeId"
@@ -4134,7 +4261,7 @@ onBeforeUnmount(() => {
         <template #right>
           <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
             <ModelPropertiesPanel
-              v-if="activeRightTab === 'properties'"
+              v-if="activeRightTab === 'properties' && canShowPropertiesTab"
               :active-notation-id="activeNotationId"
               :selected-node="selectedNode"
               :selected-link="selectedLink"
@@ -4162,10 +4289,10 @@ onBeforeUnmount(() => {
               :on-open-node-document="handleOpenNodeDoc"
             />
             <ModelTraceabilityPanel
-              v-if="activeRightTab === 'traceability' && selectedNode"
+              v-if="activeRightTab === 'traceability' && canShowTraceabilityTab && selectedNode"
               :selected-node="selectedNode"
-              :nodes="state.nodes.filter(node => !node._isDeleted)"
-              :links="state.links.filter(link => !link._isDeleted)"
+              :nodes="traceabilityNodes"
+              :links="traceabilityLinks"
               :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
               :link-types="state.linkTypes"
               :active-diagram="activeDiagram"
@@ -4186,22 +4313,6 @@ onBeforeUnmount(() => {
               :can-restore-style="hasDiagramStyleOverride"
               @style-change="handleDiagramElementStyleChange"
               @restore-style="restoreStyleFromNotation"
-            />
-            <ModelTraceabilityPanel
-              v-if="activeRightTab === 'traceability'"
-              :selected-node="selectedNode"
-              :nodes="state.nodes.filter((n) => !n._isDeleted)"
-              :links="state.links.filter((l) => !l._isDeleted)"
-              :diagrams="state.diagrams.filter((d) => !d._isDeleted)"
-              :link-types="state.linkTypes"
-              :active-diagram="activeDiagram"
-              :active-notation-id="activeNotationId"
-              :is-diagram-read-only="isDiagramReadOnly"
-              :relations="state.relations"
-              :can-connect="canConnect"
-              :is-diagram-only-edge-model-link-id="isDiagramOnlyEdgeModelLinkId"
-              @open-diagram="selectDiagram"
-              @focus-node="handleTraceabilityFocusNode"
             />
           </TabPanel>
         </template>
@@ -4721,7 +4832,7 @@ onBeforeUnmount(() => {
         {{ t('models.removeLinkFromDiagram') }}
       </button>
       <button
-        v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId)"
+        v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) && !isUntypedModelLinkId(pendingDeleteLinkId)"
         type="button"
         class="btn btn--danger"
         @click="removeLinkFromModel"

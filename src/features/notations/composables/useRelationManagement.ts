@@ -9,7 +9,9 @@ import {
 } from '../styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
 
-const NEW_TYPE_VALUE = '__new__'
+export const NEW_TYPE_VALUE = '__new__'
+export const RELATION_WITHOUT_TYPE_VALUE = '__without_type__'
+const UNTYPED_LINK_TYPE_NAME = 'Diagram only'
 
 const parseTagsInput = (value: string) =>
   value
@@ -65,7 +67,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
   const relationName = ref('')
   const relationTags = ref('')
   const relationVersion = ref('1.0.0')
-  const relationTypeSelection = ref(NEW_TYPE_VALUE)
+  const relationTypeSelection = ref(RELATION_WITHOUT_TYPE_VALUE)
   const relationNewTypeName = ref('')
   const relationStylePreset = ref(getDefaultRelationStylePresetName())
   const relationFormError = ref<string | null>(null)
@@ -103,6 +105,10 @@ export function useRelationManagement(options: RelationManagementOptions) {
     }
 
     let linkTypeId = relationTypeSelection.value
+    if (linkTypeId === RELATION_WITHOUT_TYPE_VALUE) {
+      linkTypeId =
+        addLinkType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
+    }
     if (linkTypeId === NEW_TYPE_VALUE) {
       linkTypeId =
         addLinkType(state.value.linkTypes, relationNewTypeName.value, state.value.ownerId) || ''
@@ -137,7 +143,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
     relationVersion.value = '1.0.0'
     relationNewTypeName.value = ''
     relationStylePreset.value = getDefaultRelationStylePresetName()
-    relationTypeSelection.value = linkTypeId
+    relationTypeSelection.value = RELATION_WITHOUT_TYPE_VALUE
     selectRelation(relation.id)
     showRelationModal.value = false
   }
@@ -167,7 +173,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
     relationName.value = ''
     relationTags.value = ''
     relationVersion.value = '1.0.0'
-    relationTypeSelection.value = NEW_TYPE_VALUE
+    relationTypeSelection.value = RELATION_WITHOUT_TYPE_VALUE
     relationNewTypeName.value = ''
     relationStylePreset.value = getDefaultRelationStylePresetName()
     showRelationModal.value = true

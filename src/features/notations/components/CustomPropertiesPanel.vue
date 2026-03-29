@@ -53,12 +53,22 @@ const sameTags = (a: string[], b: string[]) =>
   a.length === b.length && a.every((tag, idx) => tag === b[idx])
 
 const tagsDraft = ref('')
+const nameDraft = ref('')
+const nameExpanded = ref(true)
 const tagsExpanded = ref(false)
 const paletteGroupExpanded = ref(false)
 const paletteIconExpanded = ref(false)
 const labelTemplateExpanded = ref(false)
 const propertiesExpanded = ref(false)
 const documentationExpanded = ref(false)
+
+watch(
+  () => [props.selectedItem?.id, props.selectedItem?.name ?? ''],
+  () => {
+    nameDraft.value = props.selectedItem?.name ?? ''
+  },
+  { immediate: true }
+)
 
 watch(
   () => [props.selectedItem?.id, props.selectedItem?.parsedAttrs.tags.join('|') ?? ''],
@@ -70,6 +80,32 @@ watch(
 
 const handleTagsInput = (value: string) => {
   tagsDraft.value = value
+}
+
+const handleNameInput = (value: string) => {
+  nameDraft.value = value
+}
+
+const nameLabel = computed(() =>
+  isComponent.value ? t('notations.componentNameLabel') : t('notations.relationNameLabel')
+)
+
+const applyNameDraft = () => {
+  if (!props.selectedItem) return
+  const nextName = nameDraft.value.trim()
+  const currentName = props.selectedItem.name.trim()
+  if (!nextName) {
+    nameDraft.value = props.selectedItem.name
+    return
+  }
+  if (nextName === currentName) {
+    nameDraft.value = props.selectedItem.name
+    return
+  }
+  props.onMutateItem?.(props.selectedItem.id, item => {
+    item.name = nextName
+  })
+  nameDraft.value = nextName
 }
 
 const labelTemplateValue = computed(() => {
@@ -291,6 +327,22 @@ onBeforeUnmount(() => {
 
     <div v-else class="properties-panel__content">
       <CollapseSection
+        :label="nameLabel"
+        :expanded="nameExpanded"
+        @toggle="nameExpanded = !nameExpanded"
+      >
+        <input
+          id="entity-name-input"
+          class="properties-panel__name-input"
+          :value="nameDraft"
+          :placeholder="nameLabel"
+          @input="handleNameInput(($event.target as HTMLInputElement).value)"
+          @blur="applyNameDraft"
+          @keydown.enter.prevent="applyNameDraft"
+        />
+      </CollapseSection>
+
+      <CollapseSection
         v-if="selectedItem && !('linkTypeId' in selectedItem)"
         :label="t('diagram.documentation')"
         :expanded="documentationExpanded"
@@ -412,6 +464,8 @@ onBeforeUnmount(() => {
         :selected-item="selectedItem"
         :all-components="allComponents"
         :all-relations="allRelations"
+        :node-types="nodeTypes"
+        :link-types="linkTypes"
         :relation-rules="relationRules"
         :on-mutate-relation-rules="onMutateRelationRules"
       />
@@ -650,6 +704,7 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
+.properties-panel__name-input,
 .properties-panel__tags-input {
   width: 100%;
   box-sizing: border-box;
@@ -668,6 +723,7 @@ onBeforeUnmount(() => {
     background 0.15s ease;
 }
 
+.properties-panel__name-input:focus,
 .properties-panel__tags-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);

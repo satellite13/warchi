@@ -1658,11 +1658,36 @@ function handleCanvasDoubleClickOpenDirectory(event: MouseEvent) {
   emit('findInTree', entity.modelNodeId)
 }
 
+function getCompositeRoleNameText(node: CompositeNode): string | null {
+  const visit = (value: unknown): string | null => {
+    if (!value || typeof value !== 'object') return null
+    const rec = value as Record<string, unknown>
+
+    if (rec.type === 'text' && rec.role === 'name' && typeof rec.text === 'string') {
+      return rec.text
+    }
+
+    const contentMatch = visit(rec.content)
+    if (contentMatch) return contentMatch
+
+    if (Array.isArray(rec.children)) {
+      for (const child of rec.children) {
+        const nested = visit(child)
+        if (nested) return nested
+      }
+    }
+    return null
+  }
+
+  return visit(node.content)
+}
+
 // ── Detect label changes from inline editing ──
 function detectLabelChanges() {
   if (!renderer) return
   const next = cloneDiagramAttrs()
   let notesChanged = false
+  const pendingNodeNameChanges = new Map<string, string>()
   for (const [papNodeId, entity] of nodeIdToInstance) {
     const papNode = renderer.getNode(papNodeId)
     if (!papNode) continue
@@ -1679,11 +1704,27 @@ function detectLabelChanges() {
       }
       continue
     }
-
-    const modelNode = nodeById.value.get(entity.modelNodeId)
-    if (modelNode && labelText !== modelNode.name) {
-      emit('nodeLabelChange', entity.modelNodeId, labelText)
+    if (papNode instanceof CompositeNode) {
+      const compositeName = getCompositeRoleNameText(papNode)
+      const modelNode = nodeById.value.get(entity.modelNodeId)
+      if (
+        modelNode &&
+        !pendingNodeNameChanges.has(entity.modelNodeId) &&
+        typeof compositeName === 'string' &&
+        compositeName.length > 0 &&
+        compositeName !== modelNode.name
+      ) {
+        pendingNodeNameChanges.set(entity.modelNodeId, compositeName)
+      }
+      continue
     }
+    const modelNode = nodeById.value.get(entity.modelNodeId)
+    if (modelNode && !pendingNodeNameChanges.has(entity.modelNodeId) && labelText !== modelNode.name) {
+      pendingNodeNameChanges.set(entity.modelNodeId, labelText)
+    }
+  }
+  for (const [modelNodeId, name] of pendingNodeNameChanges) {
+    emit('nodeLabelChange', modelNodeId, name)
   }
   if (notesChanged) {
     emit('updateDiagram', next)

@@ -11,6 +11,8 @@ const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null
   allComponents?: EditorComponent[]
   allRelations?: EditorRelation[]
+  nodeTypes?: Array<{ id: string; name: string }>
+  linkTypes?: Array<{ id: string; name: string }>
   relationRules?: EditorRelationRule[]
   onMutateRelationRules?: (apply: (rules: EditorRelationRule[]) => void) => void
 }>()
@@ -18,9 +20,37 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const relationRulesExpanded = ref(false)
+const UNTYPED_NAMES = new Set(['diagram only'])
+
+const normalizeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
+const isUntypedTypeName = (name: string | undefined): boolean => UNTYPED_NAMES.has(normalizeName(name))
+
+const untypedNodeTypeIds = computed(
+  () =>
+    new Set(
+      (props.nodeTypes ?? [])
+        .filter(item => isUntypedTypeName(item.name))
+        .map(item => item.id)
+    )
+)
+
+const untypedLinkTypeIds = computed(
+  () =>
+    new Set(
+      (props.linkTypes ?? [])
+        .filter(item => isUntypedTypeName(item.name))
+        .map(item => item.id)
+    )
+)
+
+const isUntypedComponent = (component: EditorComponent): boolean =>
+  untypedNodeTypeIds.value.has(component.nodeTypeId)
+
+const isUntypedRelation = (relation: EditorRelation): boolean =>
+  untypedLinkTypeIds.value.has(relation.linkTypeId)
 
 const activeComponents = computed(() =>
-  (props.allComponents ?? []).filter(item => !item._isDeleted)
+  (props.allComponents ?? []).filter(item => !item._isDeleted && !isUntypedComponent(item))
 )
 
 const componentOptions = computed(() =>
@@ -42,7 +72,9 @@ const buildIconUrl = (iconName: string): string => {
   return `/icons/${iconName}.svg`
 }
 
-const activeRelations = computed(() => (props.allRelations ?? []).filter(item => !item._isDeleted))
+const activeRelations = computed(() =>
+  (props.allRelations ?? []).filter(item => !item._isDeleted && !isUntypedRelation(item))
+)
 
 const relationOptions = computed(() =>
   activeRelations.value.map(r => ({ id: r.id, label: r.name || t('common.unnamed') }))
@@ -51,6 +83,7 @@ const relationOptions = computed(() =>
 const selectedComponentRelationRules = computed(() => {
   if (!props.selectedItem || !props.relationRules) return []
   if ('linkTypeId' in props.selectedItem) return []
+  if (isUntypedComponent(props.selectedItem)) return []
   return props.relationRules.filter(
     rule => rule.fromComponentId === props.selectedItem?.id && !rule._isDeleted
   )
@@ -85,12 +118,15 @@ const setRelationRuleRelations = (rule: EditorRelationRule, relationIds: string[
 const addRelationRule = () => {
   if (!props.selectedItem || !props.relationRules) return
   if ('linkTypeId' in props.selectedItem) return
+  if (isUntypedComponent(props.selectedItem)) return
   const componentId = props.selectedItem.id
+  const defaultTargetId =
+    activeComponents.value.find(item => item.id !== componentId)?.id ?? componentId
   props.onMutateRelationRules?.(rules => {
     rules.push({
       id: createId(),
       fromComponentId: componentId,
-      toComponentId: componentId,
+      toComponentId: defaultTargetId,
       allowedRelationIds: [],
       _isNew: true,
     })
@@ -117,7 +153,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
 
 <template>
   <CollapseSection
-    v-if="selectedItem && !('linkTypeId' in selectedItem)"
+    v-if="selectedItem && !('linkTypeId' in selectedItem) && !isUntypedComponent(selectedItem)"
     :label="t('diagram.linkRules')"
     :expanded="relationRulesExpanded"
     @toggle="toggleRelationRulesCollapse"

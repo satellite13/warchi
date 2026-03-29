@@ -9,7 +9,7 @@ vi.mock('../styles/stylePresets', () => ({
   getDefaultComponentStylePresetName: () => 'default',
 }))
 
-import { useComponentManagement } from './useComponentManagement'
+import { COMPONENT_WITHOUT_TYPE_VALUE, useComponentManagement } from './useComponentManagement'
 
 function createOptions() {
   const state = ref<NotationEditorState>({
@@ -105,6 +105,22 @@ describe('useComponentManagement', () => {
 
       // modal should be closed
       expect(cm.showComponentModal.value).toBe(false)
+    })
+
+    it('creates component without explicit type selection', () => {
+      const cm = useComponentManagement(options)
+      cm.componentName.value = 'NoTypeComponent'
+      cm.componentVersion.value = '1.0.0'
+      cm.componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
+      cm.addComponent()
+
+      expect(options.state.value.components).toHaveLength(1)
+      const added = options.state.value.components[0]
+      expect(added.name).toBe('NoTypeComponent')
+      expect(typeof added.nodeTypeId).toBe('string')
+      expect(added.nodeTypeId.length).toBeGreaterThan(0)
+      const attachedType = options.state.value.nodeTypes.find((t) => t.id === added.nodeTypeId)
+      expect(attachedType?.name).toBe('Diagram only')
     })
 
     it('creates a new node type when __new__ is selected with a name', () => {
@@ -271,6 +287,7 @@ describe('useComponentManagement', () => {
       expect(cm.componentTags.value).toBe('')
       expect(cm.componentVersion.value).toBe('1.0.0')
       expect(cm.componentNewTypeName.value).toBe('')
+      expect(cm.componentTypeSelection.value).toBe(COMPONENT_WITHOUT_TYPE_VALUE)
       expect(cm.componentFormError.value).toBeNull()
     })
   })

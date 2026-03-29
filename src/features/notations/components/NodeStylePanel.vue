@@ -744,39 +744,68 @@ function loadNodeProps() {
 function loadEdgeProps() {
   const edge = getSelectedEdge();
   if (!edge) return;
+  const styleFromDiagram = props.currentDiagramStyle;
 
   edgeLabel.value = typeof edge.label === "string" ? edge.label : (edge.label?.text ?? "");
   const style = edge.style || {};
-  edgeStrokeColor.value = style.strokeColor || "#666666";
-  edgeStrokeOpacity.value = (style as any).strokeOpacity ?? 1;
-  edgeStrokeWidth.value = style.strokeWidth ?? 2;
-  edgeOpacity.value = style.opacity ?? 1;
-  edgeType.value = edge.type ?? "polyline";
+  edgeStrokeColor.value = styleFromDiagram?.strokeColor ?? style.strokeColor ?? "#666666";
+  edgeStrokeOpacity.value = styleFromDiagram?.strokeOpacity ?? (style as any).strokeOpacity ?? 1;
+  edgeStrokeWidth.value = styleFromDiagram?.strokeWidth ?? style.strokeWidth ?? 2;
+  edgeOpacity.value = styleFromDiagram?.opacity ?? style.opacity ?? 1;
+  edgeType.value = (styleFromDiagram?.edgeType ?? edge.type ?? "polyline") as
+    | "straight"
+    | "polyline"
+    | "editable-polyline"
+    | "bezier";
 
-  const lineDash = style.lineDash || [];
+  const lineDash = style.lineDash ?? styleFromDiagram?.lineDash ?? [];
   edgeLineStyle.value = lineDash.length > 0 ? "dashed" : "solid";
   edgeLineDashPattern.value = lineDash.length > 0 ? lineDash.join(",") : "8,4";
 
-  edgeEndMarker.value = edge.endMarker?.type ?? "none";
-  edgeStartMarker.value = edge.startMarker?.type ?? "none";
+  edgeEndMarker.value = (styleFromDiagram?.endMarkerType ?? edge.endMarker?.type ?? "none") as
+    | "none"
+    | "arrow"
+    | "open"
+    | "diamond"
+    | "circle";
+  edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
+    edge.startMarker?.type ??
+    "none") as
+    | "none"
+    | "arrow"
+    | "open"
+    | "diamond"
+    | "circle";
 
   const eLabelStyle = edge.label?.style;
-  edgeLabelColor.value = eLabelStyle?.color || "#333333";
-  edgeLabelOpacity.value = (eLabelStyle as any)?.opacity ?? 1;
-  edgeLabelFontSize.value = eLabelStyle?.fontSize ?? 14;
+  edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? "#333333";
+  edgeLabelOpacity.value = styleFromDiagram?.labelOpacity ?? (eLabelStyle as any)?.opacity ?? 1;
+  edgeLabelFontSize.value = styleFromDiagram?.labelFontSize ?? eLabelStyle?.fontSize ?? 14;
   const edgeLabelSpacing = getLabelSpacing(edge.label);
-  edgeLabelInset.value = toInsetSides(edgeLabelSpacing.inset, 8);
-  edgeLabelOffset.value = edge.labelOffset ?? 0;
-  edgeLabelLineGap.value = edge.labelLineGap ?? false;
-  edgeLabelBgColor.value = (edge as any).labelBackground?.color || "#ffffff";
-  edgeLabelBgOpacity.value = ((edge as any).labelBackground as any)?.opacity ?? 1;
-  edgeLabelBgBorderRadius.value = ((edge as any).labelBackground as any)?.borderRadius ?? 2;
-  edgeStartMarkerSize.value = edge.startMarker?.size ?? 12;
-  edgeStartMarkerFillColor.value = edge.startMarker?.fillColor || "#000000";
-  edgeStartMarkerFillOpacity.value = edge.startMarker?.fillOpacity ?? 1;
-  edgeEndMarkerSize.value = edge.endMarker?.size ?? 12;
-  edgeEndMarkerFillColor.value = edge.endMarker?.fillColor || "#000000";
-  edgeEndMarkerFillOpacity.value = edge.endMarker?.fillOpacity ?? 1;
+  edgeLabelInset.value = toInsetSides(
+    styleFromDiagram?.labelInset ?? edgeLabelSpacing.inset,
+    8
+  );
+  edgeLabelOffset.value = styleFromDiagram?.edgeLabelOffset ?? edge.labelOffset ?? 0;
+  edgeLabelLineGap.value = styleFromDiagram?.edgeLabelLineGap ?? edge.labelLineGap ?? false;
+  edgeLabelBgColor.value =
+    styleFromDiagram?.labelBgColor ?? (edge as any).labelBackground?.color ?? "#ffffff";
+  edgeLabelBgOpacity.value =
+    styleFromDiagram?.labelBgOpacity ?? ((edge as any).labelBackground as any)?.opacity ?? 1;
+  edgeLabelBgBorderRadius.value =
+    styleFromDiagram?.labelBgBorderRadius ??
+    ((edge as any).labelBackground as any)?.borderRadius ??
+    2;
+  edgeStartMarkerSize.value = styleFromDiagram?.startMarkerSize ?? edge.startMarker?.size ?? 12;
+  edgeStartMarkerFillColor.value =
+    styleFromDiagram?.startMarkerFillColor ?? edge.startMarker?.fillColor ?? "#000000";
+  edgeStartMarkerFillOpacity.value =
+    styleFromDiagram?.startMarkerFillOpacity ?? edge.startMarker?.fillOpacity ?? 1;
+  edgeEndMarkerSize.value = styleFromDiagram?.endMarkerSize ?? edge.endMarker?.size ?? 12;
+  edgeEndMarkerFillColor.value =
+    styleFromDiagram?.endMarkerFillColor ?? edge.endMarker?.fillColor ?? "#000000";
+  edgeEndMarkerFillOpacity.value =
+    styleFromDiagram?.endMarkerFillOpacity ?? edge.endMarker?.fillOpacity ?? 1;
 }
 
 watch(() => props.selectedElementId, () => {

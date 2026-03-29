@@ -262,6 +262,8 @@ const {
 } = useNotationEntity(state)
 
 const NEW_TYPE_VALUE = '__new__'
+const COMPONENT_WITHOUT_TYPE_VALUE = '__without_type__'
+const RELATION_WITHOUT_TYPE_VALUE = '__without_type__'
 
 const userId = computed(() => currentUser.value?.id ?? null)
 
@@ -573,47 +575,6 @@ const handleRelationRulesChanged = () => {
   })
 }
 
-const handleCreateDiagramOnlyNode = () => {
-  const idx = state.value.diagramLayer.nodes.length
-  state.value.diagramLayer.nodes.push({
-    id: createId(),
-    x: 80 + idx * 24,
-    y: 80 + idx * 24,
-    width: 140,
-    height: 60,
-    attrs: {
-      isDiagramOnly: true,
-      label: t('diagram.newNote'),
-      style: {
-        fillColor: '#fff8d6',
-        strokeColor: '#d4b85f',
-        strokeWidth: 1,
-      },
-    },
-  })
-}
-
-const handleCreateDiagramOnlyEdge = () => {
-  const nodes = state.value.diagramLayer.nodes
-  if (nodes.length < 2) {
-    handleCreateDiagramOnlyNode()
-    handleCreateDiagramOnlyNode()
-  }
-  const source = state.value.diagramLayer.nodes.at(-2)
-  const target = state.value.diagramLayer.nodes.at(-1)
-  if (!source || !target) return
-  state.value.diagramLayer.edges.push({
-    id: createId(),
-    sourceNodeId: source.id,
-    targetNodeId: target.id,
-    attrs: {
-      isDiagramOnly: true,
-      label: '',
-      style: { strokeColor: '#d4b85f', strokeWidth: 1 },
-    },
-  })
-}
-
 const handleSelect = (
   kind: 'component' | 'relation',
   id: string,
@@ -875,8 +836,6 @@ onBeforeUnmount(() => {
               @toggle-sync-selection="toggleSelectionSync"
               @create-component="openComponentModal"
               @create-relation="openRelationModal"
-              @create-diagram-node="handleCreateDiagramOnlyNode"
-              @create-diagram-edge="handleCreateDiagramOnlyEdge"
               @remove-item="handleRemoveItem"
             />
           </template>
@@ -1062,6 +1021,8 @@ onBeforeUnmount(() => {
     tags-placeholder="tag1, tag2"
     :type-label="t('notations.nodeTypeLabel')"
     :type-options="state.nodeTypes"
+    :no-type-value="COMPONENT_WITHOUT_TYPE_VALUE"
+    :no-type-label="t('notations.componentWithoutTypeLabel')"
     :new-type-value="NEW_TYPE_VALUE"
     :new-type-label="t('notations.newNodeTypeLabel')"
     :new-type-placeholder="t('notations.typeNamePlaceholder')"
@@ -1092,6 +1053,8 @@ onBeforeUnmount(() => {
     tags-placeholder="tag1, tag2"
     :type-label="t('notations.linkTypeLabel')"
     :type-options="state.linkTypes"
+    :no-type-value="RELATION_WITHOUT_TYPE_VALUE"
+    :no-type-label="t('notations.relationWithoutTypeLabel')"
     :new-type-value="NEW_TYPE_VALUE"
     :new-type-label="t('notations.newLinkTypeLabel')"
     :new-type-placeholder="t('notations.typeNamePlaceholder')"
@@ -1168,11 +1131,16 @@ onBeforeUnmount(() => {
   transform: translateX(-50%);
   z-index: 11;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
 }
 
 .notation-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
 }
+
 
 .save-toast {
   position: fixed;

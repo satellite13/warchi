@@ -170,6 +170,9 @@ function normalizeTypeName(name: string): string {
   return name.trim().toLowerCase()
 }
 
+const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
+const isUntypedTypeName = (name: string): boolean => UNTYPED_TYPE_NAMES.has(normalizeTypeName(name))
+
 const RELATION_RULES_FETCH_SIZE = 5000
 
 function buildRelationRuleKey(
@@ -515,6 +518,8 @@ async function saveRelations(
 }
 
 async function syncRelationRules(
+  nodeTypes: EditorNodeType[],
+  linkTypes: EditorLinkType[],
   components: EditorComponent[],
   relations: EditorRelation[],
   relationRules: EditorRelationRule[],
@@ -523,11 +528,26 @@ async function syncRelationRules(
   onProgress: (msg: string) => void
 ): Promise<EditorRelationRule[]> {
   onProgress('Синхронизация правил связей')
+  const untypedNodeTypeIds = new Set(
+    nodeTypes.filter(item => isUntypedTypeName(item.name)).map(item => item.id)
+  )
+  const untypedLinkTypeIds = new Set(
+    linkTypes.filter(item => isUntypedTypeName(item.name)).map(item => item.id)
+  )
+  const untypedComponentIds = new Set(
+    components
+      .filter(component => !component._isDeleted && untypedNodeTypeIds.has(component.nodeTypeId))
+      .map(component => component.id)
+  )
   const currentComponentIds = new Set(
-    components.filter(component => !component._isDeleted).map(component => component.id)
+    components
+      .filter(component => !component._isDeleted && !untypedComponentIds.has(component.id))
+      .map(component => component.id)
   )
   const activeRelationIds = new Set(
-    relations.filter(relation => !relation._isDeleted).map(relation => relation.id)
+    relations
+      .filter(relation => !relation._isDeleted && !untypedLinkTypeIds.has(relation.linkTypeId))
+      .map(relation => relation.id)
   )
   const activeRules = relationRules.filter(
     rule =>
@@ -723,8 +743,18 @@ export function useNotationEditor(): NotationEditorReturn {
         notationId,
       })
 
-      // Parallel fetch from 6 endpoints
-      const [notationResult, nodeTypesResult, linkTypesResult, componentsResult, relationsResult] =
+      // Parallel fetch from API endpoints.
+      // We load both notation-scoped and global type lists to reuse a single shared
+      // "Без типа" type instead of recreating it per notation.
+      const [
+        notationResult,
+        nodeTypesResult,
+        linkTypesResult,
+        allNodeTypesResult,
+        allLinkTypesResult,
+        componentsResult,
+        relationsResult,
+      ] =
         await Promise.all([
           apiGet<NotationData>(`/notations/${notationId}`),
           apiGet<PaginatedResponse<NodeTypeResponse>>(
@@ -733,6 +763,8 @@ export function useNotationEditor(): NotationEditorReturn {
           apiGet<PaginatedResponse<LinkTypeResponse>>(
             `/link-types?${listQueryWithNotation.toString()}`
           ),
+          apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
+          apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
           apiGet<PaginatedResponse<ComponentResponse>>(
             `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
           ),
@@ -760,16 +792,39 @@ export function useNotationEditor(): NotationEditorReturn {
       const componentIds = new Set(components.map(component => component.id))
 
       const relationRules = await fetchAllRelationRulesByNotation(notationId)
+      const notationNodeTypes = nodeTypesResult.success
+        ? (nodeTypesResult.data.content ?? []).map(toEditorNodeType)
+        : []
+      const notationLinkTypes = linkTypesResult.success
+        ? (linkTypesResult.data.content ?? []).map(toEditorLinkType)
+        : []
+      const allNodeTypes = allNodeTypesResult.success
+        ? (allNodeTypesResult.data.content ?? []).map(toEditorNodeType)
+        : []
+      const allLinkTypes = allLinkTypesResult.success
+        ? (allLinkTypesResult.data.content ?? []).map(toEditorLinkType)
+        : []
+
+      const sharedUntypedNodeType = allNodeTypes.find(item => isUntypedTypeName(item.name))
+      const sharedUntypedLinkType = allLinkTypes.find(item => isUntypedTypeName(item.name))
+      if (
+        sharedUntypedNodeType &&
+        !notationNodeTypes.some(item => item.id === sharedUntypedNodeType.id)
+      ) {
+        notationNodeTypes.push(sharedUntypedNodeType)
+      }
+      if (
+        sharedUntypedLinkType &&
+        !notationLinkTypes.some(item => item.id === sharedUntypedLinkType.id)
+      ) {
+        notationLinkTypes.push(sharedUntypedLinkType)
+      }
 
       state.value = {
         notationId,
         ownerId: notationResult.data.ownerId,
-        nodeTypes: nodeTypesResult.success
-          ? (nodeTypesResult.data.content ?? []).map(toEditorNodeType)
-          : [],
-        linkTypes: linkTypesResult.success
-          ? (linkTypesResult.data.content ?? []).map(toEditorLinkType)
-          : [],
+        nodeTypes: notationNodeTypes,
+        linkTypes: notationLinkTypes,
         components,
         relations: relationsResult.success
           ? (relationsResult.data.content ?? []).map(toEditorRelation)
@@ -828,6 +883,8 @@ export function useNotationEditor(): NotationEditorReturn {
       await saveComponents(components, relationRules, notationId, ownerId, onProgress)
       await saveRelations(relations, relationRules, notationId, ownerId, onProgress)
       state.value.relationRules = await syncRelationRules(
+        nodeTypes,
+        linkTypes,
         components, relations, relationRules, notationId, ownerId, onProgress
       )
 

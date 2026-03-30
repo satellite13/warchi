@@ -1253,6 +1253,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
       displayName: nodeName,
       notationIconName: ds?.iconName,
+      propertyValues: { ...nodeTypeValues, ...componentValues },
     })
     const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
       componentProperties,

@@ -129,6 +129,10 @@ const flatTreeNodes = computed(() => {
 
 // A5 props
 const componentPropsForA5 = computed(() => props.componentProperties ?? [])
+const stringProperties = computed(() => [
+  ...(props.componentProperties ?? []),
+  ...(props.nodeTypeProperties ?? []),
+].filter(p => p.type === 'string'))
 const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? [])
 
 // Validation
@@ -590,6 +594,7 @@ function applyStyleBindingsJson() {
       <template v-if="compositeEditorMode === 'visual'">
         <CompositeTreeEditor
           :model-value="compositeContentDraft"
+          :string-properties="stringProperties"
           @update:model-value="handleCompositeTreeUpdate"
           @update:selected-id="treeSelectedNodeId = $event"
           @target-options="

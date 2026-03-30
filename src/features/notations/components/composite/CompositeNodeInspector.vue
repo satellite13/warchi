@@ -8,10 +8,11 @@ import IconNodeProps from './props/IconNodeProps.vue'
 import ShapeNodeProps from './props/ShapeNodeProps.vue'
 import DividerNodeProps from './props/DividerNodeProps.vue'
 import CComponentStyleProps from './props/CComponentStyleProps.vue'
-import type { CompositeSerializedCComponent } from '../../notationAttrs'
+import type { CompositeSerializedCComponent, CustomProperty } from '../../notationAttrs'
 
 defineProps<{
   selectedNode: CompositeSerializedCComponent | null
+  stringProperties?: CustomProperty[]
 }>()
 
 const emit = defineEmits<{
@@ -73,6 +74,7 @@ const TYPE_COLORS: Record<string, string> = {
           <TextNodeProps
             v-else-if="selectedNode.type === 'text'"
             :model-value="selectedNode"
+            :string-properties="stringProperties"
             @update:field="(field: string, value: unknown) => emit('update:field', field, value)"
           />
           <IconNodeProps

@@ -244,6 +244,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
         displayName: item.name,
         notationIconName: ds?.iconName,
+        propertyValues: { ...nodeTypeValues, ...componentValues },
       })
       const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
         componentProperties,

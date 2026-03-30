@@ -89,11 +89,11 @@ export function validateCompositeDiagramStyle(
     return issues
   }
 
-  let roleNameCount = 0
+  let nameBindCount = 0
   let iconBindCount = 0
   traverseComposite(content, (node, path) => {
-    if (node.type === 'text' && node.role === 'name') {
-      roleNameCount += 1
+    if (node.type === 'text' && (node.bindToProperty === '__name__' || (!node.bindToProperty && node.role === 'name'))) {
+      nameBindCount += 1
     }
     if ((node as { bindsNotationIcon?: boolean }).bindsNotationIcon === true) {
       iconBindCount += 1
@@ -108,19 +108,19 @@ export function validateCompositeDiagramStyle(
     }
   })
 
-  if (roleNameCount === 0) {
+  if (nameBindCount === 0) {
     issues.push({
       code: 'COMPOSITE_NAME_ROLE_MISSING',
       message: t('notations.compositeValidationNameRoleMissing'),
       path: 'diagramStyle.compositeContent',
-      severity: 'error',
+      severity: 'warning',
     })
-  } else if (roleNameCount > 1) {
+  } else if (nameBindCount > 1) {
     issues.push({
       code: 'COMPOSITE_NAME_ROLE_DUPLICATE',
       message: t('notations.compositeValidationNameRoleDuplicate'),
       path: 'diagramStyle.compositeContent',
-      severity: 'error',
+      severity: 'warning',
     })
   }
 

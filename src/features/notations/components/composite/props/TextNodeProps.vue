@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LabeledFieldRow from '../../LabeledFieldRow.vue'
 import LabeledNumberInput from '../../LabeledNumberInput.vue'
 import SketchColorField from '../../SketchColorField.vue'
-import type { CompositeSerializedCComponent } from '../../../notationAttrs'
+import type { CompositeSerializedCComponent, CustomProperty } from '../../../notationAttrs'
 
-defineProps<{
+const props = defineProps<{
   modelValue: CompositeSerializedCComponent
+  stringProperties?: CustomProperty[]
 }>()
 
 const emit = defineEmits<{
@@ -15,6 +17,22 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900']
+const BIND_TO_NAME = '__name__'
+
+const currentBinding = computed(() => {
+  if (props.modelValue.bindToProperty) return props.modelValue.bindToProperty
+  // Backward compat: role === 'name' means bound to name
+  if (props.modelValue.role === 'name') return BIND_TO_NAME
+  return ''
+})
+
+function handleBindingChange(value: string) {
+  emit('update:field', 'bindToProperty', value || undefined)
+  // Clear legacy role when using new binding
+  if (props.modelValue.role === 'name' && value !== BIND_TO_NAME) {
+    emit('update:field', 'role', undefined)
+  }
+}
 </script>
 
 <template>
@@ -27,13 +45,20 @@ const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500'
       />
     </LabeledFieldRow>
 
-    <LabeledFieldRow :label="t('nodeStyle.compositeRole')">
-      <input
-        class="txt-props__input"
-        :value="modelValue.role ?? ''"
-        placeholder="name"
-        @input="emit('update:field', 'role', ($event.target as HTMLInputElement).value)"
-      />
+    <LabeledFieldRow :label="t('nodeStyle.compositeBindToProperty')">
+      <select
+        class="txt-props__select"
+        :value="currentBinding"
+        @change="handleBindingChange(($event.target as HTMLSelectElement).value)"
+      >
+        <option value="">{{ t('common.none') }}</option>
+        <option :value="BIND_TO_NAME">{{ t('nodeStyle.compositeBindToName') }}</option>
+        <option
+          v-for="prop in stringProperties"
+          :key="prop.id"
+          :value="prop.name"
+        >{{ prop.name }}</option>
+      </select>
     </LabeledFieldRow>
 
     <LabeledFieldRow :label="t('nodeStyle.compositeFontFamily')">

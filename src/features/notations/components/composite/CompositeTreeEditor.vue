@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CompositeSerializedCComponent } from '../../notationAttrs'
+import type { CompositeSerializedCComponent, CustomProperty } from '../../notationAttrs'
 import { createId } from '../../notationAttrs'
 import CompositeNodeInspector from './CompositeNodeInspector.vue'
 
@@ -9,6 +9,7 @@ type TreeNodeRef = { node: CompositeSerializedCComponent; parentId: string | nul
 
 const props = defineProps<{
   modelValue: CompositeSerializedCComponent
+  stringProperties?: CustomProperty[]
 }>()
 
 const emit = defineEmits<{
@@ -331,6 +332,7 @@ const TYPE_ICONS: Record<string, string> = {
       <div class="tree-editor__inspector-panel">
         <CompositeNodeInspector
           :selected-node="selectedNode"
+          :string-properties="stringProperties"
           @update:field="updateSelectedField"
         />
       </div>

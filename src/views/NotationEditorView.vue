@@ -232,6 +232,7 @@ const {
   componentVersion,
   componentTypeSelection,
   componentNewTypeName,
+  componentKind,
   componentStylePreset,
   componentFormError,
   componentTagSuggestions,
@@ -264,6 +265,13 @@ const {
 const NEW_TYPE_VALUE = '__new__'
 const COMPONENT_WITHOUT_TYPE_VALUE = '__without_type__'
 const RELATION_WITHOUT_TYPE_VALUE = '__without_type__'
+const COMPONENT_KIND_SIMPLE = 'simple'
+const COMPONENT_KIND_COMPOSITE = 'composite'
+
+const componentKindOptions = computed(() => [
+  { id: COMPONENT_KIND_SIMPLE, label: t('notations.componentKindSimple') },
+  { id: COMPONENT_KIND_COMPOSITE, label: t('notations.componentKindComposite') },
+])
 
 const userId = computed(() => currentUser.value?.id ?? null)
 
@@ -420,10 +428,35 @@ const selectionSyncEnabled = ref(true)
 
 const activeRightTab = ref('properties')
 
-const rightPanelTabs = computed(() => [
-  { id: 'properties', label: t('notations.propertiesTab'), icon: 'tune' },
-  { id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' },
-])
+const selectedComponentIsComposite = computed(
+  () =>
+    selectedEntity.value?.kind === 'component' && selectedDiagramStyle.value?.nodeShape === 'composite',
+)
+
+const rightPanelTabs = computed(() => {
+  const tabs = [
+    { id: 'properties', label: t('notations.propertiesTab'), icon: 'tune' },
+    { id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' },
+  ]
+  if (selectedComponentIsComposite.value) {
+    tabs.push({
+      id: 'composite-style',
+      label: t('notations.compositeFigureStyleTab'),
+      icon: 'account_tree',
+    })
+  }
+  return tabs
+})
+
+watch(
+  rightPanelTabs,
+  (tabs) => {
+    if (!tabs.some((tab) => tab.id === activeRightTab.value)) {
+      activeRightTab.value = tabs.some((tab) => tab.id === 'style') ? 'style' : 'properties'
+    }
+  },
+  { immediate: true },
+)
 
 const focusSelectedOnDiagram = (kind: 'component' | 'relation', id: string) => {
   if (!selectionSyncEnabled.value) return
@@ -900,6 +933,17 @@ onBeforeUnmount(() => {
                 :node-type-properties="selectedStylePanelNodeTypeProperties"
                 @style-change="handleStyleChange"
               />
+              <NodeStylePanel
+                v-if="activeRightTab === 'composite-style'"
+                :selected-element-id="selectedDiagramElementId"
+                :interaction-manager="interactionManager"
+                :renderer="diagramRenderer"
+                :current-diagram-style="selectedDiagramStyle"
+                :component-properties="selectedStylePanelComponentProperties"
+                :node-type-properties="selectedStylePanelNodeTypeProperties"
+                mode="composite-only"
+                @style-change="handleStyleChange"
+              />
             </TabPanel>
           </template>
         </NotationMainPanelLayout>
@@ -1010,6 +1054,7 @@ onBeforeUnmount(() => {
     v-model:tags="componentTags"
     v-model:type-selection="componentTypeSelection"
     v-model:new-type-name="componentNewTypeName"
+    v-model:component-kind="componentKind"
     v-model:style-preset="componentStylePreset"
     :title="t('notations.newComponentTitle')"
     form-id="component-form"
@@ -1026,6 +1071,8 @@ onBeforeUnmount(() => {
     :new-type-value="NEW_TYPE_VALUE"
     :new-type-label="t('notations.newNodeTypeLabel')"
     :new-type-placeholder="t('notations.typeNamePlaceholder')"
+    :component-kind-label="t('notations.componentKindLabel')"
+    :component-kind-options="componentKindOptions"
     :style-label="t('notations.figureStyleLabel')"
     :style-presets="componentStylePresets"
     :suggestions="componentTagSuggestions"

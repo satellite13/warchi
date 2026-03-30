@@ -12,6 +12,7 @@ const tagsModel = defineModel<string>("tags", { default: "" })
 const versionModel = defineModel<string>("version", { default: "1.0.0" })
 const typeSelectionModel = defineModel<string>("typeSelection", { default: "" })
 const newTypeNameModel = defineModel<string>("newTypeName", { default: "" })
+const componentKindModel = defineModel<string>("componentKind", { default: "simple" })
 const stylePresetModel = defineModel<string>("stylePreset", { default: "default" })
 
 const props = defineProps<{
@@ -30,6 +31,8 @@ const props = defineProps<{
   newTypeValue: string
   newTypeLabel: string
   newTypePlaceholder?: string
+  componentKindLabel?: string
+  componentKindOptions?: Array<{ id: string; label: string }>
   styleLabel?: string
   stylePresets: (ComponentStylePreset | RelationStylePreset)[]
   suggestions: string[]
@@ -103,6 +106,19 @@ const stylePresetSelectOptions = computed(() => [
           v-model="typeSelectionModel"
           :options="typeSelectOptions"
           :placeholder="t('types.selectType')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
+      </label>
+      <label
+        v-if="componentKindOptions?.length"
+        class="modal-label"
+      >
+        {{ componentKindLabel }}
+        <SearchableSelect
+          v-model="componentKindModel"
+          :options="componentKindOptions"
+          :placeholder="t('common.selectValue')"
           :search-placeholder="t('common.search')"
           :empty-text="t('common.nothingFound')"
         />

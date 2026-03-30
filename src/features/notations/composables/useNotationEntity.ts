@@ -35,6 +35,7 @@ export interface NotationEntityReturn {
   componentVersion: Ref<string>
   componentTypeSelection: Ref<string>
   componentNewTypeName: Ref<string>
+  componentKind: Ref<string>
   componentStylePreset: Ref<string>
   componentFormError: Ref<string | null>
   relationName: Ref<string>

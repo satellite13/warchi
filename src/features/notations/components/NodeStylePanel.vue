@@ -53,6 +53,7 @@ const props = defineProps<{
   currentDiagramStyle?: DiagramStyle;
   componentProperties?: CustomProperty[];
   nodeTypeProperties?: CustomProperty[];
+  mode?: 'default' | 'composite-only';
 }>();
 
 const emit = defineEmits<{
@@ -60,6 +61,7 @@ const emit = defineEmits<{
   (e: "restore-style"): void;
 }>();
 const { t } = useI18n();
+const panelMode = computed(() => props.mode ?? 'default');
 
 type NodeShape =
   | "rectangle"
@@ -510,6 +512,16 @@ const NODE_SHAPE_OPTIONS: ReadonlyArray<{ value: NodeShape; labelKey: string }> 
   { value: "custom", labelKey: "nodeStyle.customShape" },
   { value: "composite", labelKey: "nodeStyle.shapeComposite" }
 ];
+
+const visibleNodeShapeOptions = computed(() =>
+  panelMode.value === 'composite-only'
+    ? NODE_SHAPE_OPTIONS.filter((shape) => shape.value === 'composite')
+    : NODE_SHAPE_OPTIONS.filter((shape) => shape.value !== 'composite')
+);
+
+const showCompositeEditor = computed(
+  () => panelMode.value === 'composite-only' && nodeShape.value === 'composite',
+);
 
 const panelMounted = ref(true);
 onBeforeUnmount(() => {
@@ -2018,9 +2030,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             @toggle="toggleSection(nodeSection, 'shape')"
           >
                 <!-- Visual shape picker -->
-                <div class="sp-shapes">
+                <div v-if="panelMode === 'default'" class="sp-shapes">
                   <button
-                    v-for="shape in NODE_SHAPE_OPTIONS"
+                    v-for="shape in visibleNodeShapeOptions"
                     :key="shape.value"
                     type="button"
                     class="sp-shapes__item"
@@ -2044,7 +2056,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </svg>
                   </button>
                 </div>
-                <LabeledFieldRow v-if="nodeShape === 'custom'" :label="t('nodeStyle.customShape')" class="sp-field--custom-shapes">
+                <LabeledFieldRow
+                  v-if="panelMode === 'default' && nodeShape === 'custom'"
+                  :label="t('nodeStyle.customShape')"
+                  class="sp-field--custom-shapes"
+                >
                   <select
                     class="sp-select sp-select--flex"
                     :value="customShapeIdRef ?? ''"
@@ -2058,7 +2074,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     >{{ opt.label }}</option>
                   </select>
                 </LabeledFieldRow>
-                <template v-if="nodeShape === 'composite'">
+                <template v-if="showCompositeEditor">
                   <div class="sp-segmented">
                     <button
                       type="button"

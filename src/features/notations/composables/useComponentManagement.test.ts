@@ -5,11 +5,30 @@ import type { SelectedEntity } from './useNotationEntity'
 
 vi.mock('../styles/stylePresets', () => ({
   getAllComponentPresets: () => [],
-  applyComponentStylePreset: () => ({}),
+  applyComponentStylePreset: (presetName: string) => {
+    if (presetName === 'composite-preset') {
+      return {
+        nodeShape: 'composite',
+        compositeContent: {
+          type: 'container',
+          direction: 'column',
+          children: [],
+        },
+      }
+    }
+    return {
+      nodeShape: 'rectangle',
+    }
+  },
   getDefaultComponentStylePresetName: () => 'default',
 }))
 
-import { COMPONENT_WITHOUT_TYPE_VALUE, useComponentManagement } from './useComponentManagement'
+import {
+  COMPONENT_KIND_COMPOSITE,
+  COMPONENT_KIND_SIMPLE,
+  COMPONENT_WITHOUT_TYPE_VALUE,
+  useComponentManagement,
+} from './useComponentManagement'
 
 function createOptions() {
   const state = ref<NotationEditorState>({
@@ -145,12 +164,45 @@ describe('useComponentManagement', () => {
       cm.componentVersion.value = '3.0.0'
       cm.componentTags.value = 'a,b'
       cm.componentTypeSelection.value = 'type-1'
+      cm.componentKind.value = COMPONENT_KIND_COMPOSITE
       cm.addComponent()
 
       expect(cm.componentName.value).toBe('')
       expect(cm.componentTags.value).toBe('')
       expect(cm.componentVersion.value).toBe('1.0.0')
       expect(cm.componentNewTypeName.value).toBe('')
+      expect(cm.componentKind.value).toBe(COMPONENT_KIND_SIMPLE)
+    })
+
+    it('creates composite component style when composite kind is selected', () => {
+      const cm = useComponentManagement(options)
+      cm.componentName.value = 'Composite component'
+      cm.componentVersion.value = '1.0.0'
+      cm.componentTypeSelection.value = 'type-1'
+      cm.componentKind.value = COMPONENT_KIND_COMPOSITE
+      cm.addComponent()
+
+      const added = options.state.value.components[0]
+      expect(added.parsedAttrs.diagramStyle?.nodeShape).toBe('composite')
+      expect(added.parsedAttrs.diagramStyle?.compositeContent).toEqual({
+        type: 'container',
+        direction: 'column',
+        children: [],
+      })
+    })
+
+    it('normalizes simple component style when preset shape is composite', () => {
+      const cm = useComponentManagement(options)
+      cm.componentName.value = 'Simple component'
+      cm.componentVersion.value = '1.0.0'
+      cm.componentTypeSelection.value = 'type-1'
+      cm.componentKind.value = COMPONENT_KIND_SIMPLE
+      cm.componentStylePreset.value = 'composite-preset'
+      cm.addComponent()
+
+      const added = options.state.value.components[0]
+      expect(added.parsedAttrs.diagramStyle?.nodeShape).toBe('rectangle')
+      expect(added.parsedAttrs.diagramStyle?.compositeContent).toBeUndefined()
     })
   })
 
@@ -280,6 +332,7 @@ describe('useComponentManagement', () => {
       const cm = useComponentManagement(options)
       cm.componentName.value = 'leftover'
       cm.componentFormError.value = 'some error'
+      cm.componentKind.value = COMPONENT_KIND_COMPOSITE
       cm.openComponentModal()
 
       expect(cm.showComponentModal.value).toBe(true)
@@ -288,6 +341,7 @@ describe('useComponentManagement', () => {
       expect(cm.componentVersion.value).toBe('1.0.0')
       expect(cm.componentNewTypeName.value).toBe('')
       expect(cm.componentTypeSelection.value).toBe(COMPONENT_WITHOUT_TYPE_VALUE)
+      expect(cm.componentKind.value).toBe(COMPONENT_KIND_SIMPLE)
       expect(cm.componentFormError.value).toBeNull()
     })
   })

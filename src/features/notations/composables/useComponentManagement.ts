@@ -1,5 +1,5 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
-import { createId, type CustomProperty } from '../notationAttrs'
+import { createId, type CompositeSerializedCComponent, type CustomProperty } from '../notationAttrs'
 import type { EditorNodeType, EditorComponent, NotationEditorState } from '../types'
 import {
   getAllComponentPresets,
@@ -11,6 +11,8 @@ import type { SelectedEntity } from './useNotationEntity'
 
 export const NEW_TYPE_VALUE = '__new__'
 export const COMPONENT_WITHOUT_TYPE_VALUE = '__without_type__'
+export const COMPONENT_KIND_SIMPLE = 'simple'
+export const COMPONENT_KIND_COMPOSITE = 'composite'
 const UNTYPED_NODE_TYPE_NAME = 'Diagram only'
 
 const parseTagsInput = (value: string) =>
@@ -36,6 +38,12 @@ const copyTypeProperties = (source: CustomProperty[]): CustomProperty[] =>
     enumValues: p.enumValues ? [...p.enumValues] : [],
     _fromType: true,
   }))
+
+const createDefaultCompositeContent = (): CompositeSerializedCComponent => ({
+  type: 'container',
+  direction: 'column',
+  children: [],
+})
 
 const addNodeType = (list: EditorNodeType[], name: string, ownerId: string): string | null => {
   const trimmed = name.trim()
@@ -69,6 +77,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
   const componentVersion = ref('1.0.0')
   const componentTypeSelection = ref(COMPONENT_WITHOUT_TYPE_VALUE)
   const componentNewTypeName = ref('')
+  const componentKind = ref(COMPONENT_KIND_SIMPLE)
   const componentStylePreset = ref(getDefaultComponentStylePresetName())
   const componentFormError = ref<string | null>(null)
 
@@ -119,7 +128,20 @@ export function useComponentManagement(options: ComponentManagementOptions) {
 
     const nodeType = state.value.nodeTypes.find((t) => t.id === nodeTypeId)
     const typeProps = nodeType?.parsedAttrs.customProperties ?? []
-    const initialStyle = applyComponentStylePreset(componentStylePreset.value)
+    const stylePreset = applyComponentStylePreset(componentStylePreset.value)
+    const initialStyle =
+      componentKind.value === COMPONENT_KIND_COMPOSITE
+        ? {
+            ...stylePreset,
+            nodeShape: 'composite',
+            compositeContent: stylePreset.compositeContent ?? createDefaultCompositeContent(),
+          }
+        : {
+            ...stylePreset,
+            ...(stylePreset.nodeShape === 'composite'
+              ? { nodeShape: 'rectangle', compositeContent: undefined, stylePropertyBindings: undefined }
+              : {}),
+          }
 
     const component: EditorComponent = {
       id: createId(),
@@ -141,6 +163,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     componentTags.value = ''
     componentVersion.value = '1.0.0'
     componentNewTypeName.value = ''
+    componentKind.value = COMPONENT_KIND_SIMPLE
     componentStylePreset.value = getDefaultComponentStylePresetName()
     componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
     selectComponent(component.id)
@@ -174,6 +197,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     componentVersion.value = '1.0.0'
     componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
     componentNewTypeName.value = ''
+    componentKind.value = COMPONENT_KIND_SIMPLE
     componentStylePreset.value = getDefaultComponentStylePresetName()
     showComponentModal.value = true
   }
@@ -190,6 +214,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     componentVersion,
     componentTypeSelection,
     componentNewTypeName,
+    componentKind,
     componentStylePreset,
     componentFormError,
     componentTagSuggestions,

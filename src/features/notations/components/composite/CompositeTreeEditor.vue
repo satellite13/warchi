@@ -139,6 +139,10 @@ function addChild(type: CompositeSerializedCComponent['type']): void {
             : {
                 id: createId(),
                 type: 'shape',
+                borderColor: '#333333',
+                borderWidth: 1,
+                backgroundColor: '#f5f5f5',
+                padding: 4,
                 content: { id: createId(), type: 'container', children: [] },
               }
 

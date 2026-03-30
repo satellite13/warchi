@@ -54,7 +54,7 @@ const targetOptions = computed(() =>
     .filter(({ node }) => typeof node.id === 'string' && node.id.length > 0)
     .map(({ node, depth }) => ({
       id: node.id as string,
-      label: `${'  '.repeat(depth)}${node.type}${node.id ? ` (${node.id})` : ''}`,
+      label: `${'  '.repeat(depth)}${node.label || node.type}`,
     })),
 )
 
@@ -63,7 +63,7 @@ const containerTargetOptions = computed(() =>
     .filter(({ node }) => typeof node.id === 'string' && node.id.length > 0 && (node.type === 'container' || node.type === 'shape'))
     .map(({ node, depth }) => ({
       id: node.id as string,
-      label: `${'  '.repeat(depth)}${node.type}${node.id ? ` (${node.id})` : ''}`,
+      label: `${'  '.repeat(depth)}${node.label || node.type}`,
     })),
 )
 
@@ -129,21 +129,22 @@ function addChild(type: CompositeSerializedCComponent['type']): void {
   const targetId = findNearestContainer(rawTargetId) ?? next.id!
   const newNode: CompositeSerializedCComponent =
     type === 'container'
-      ? { id: shortId('container'), type: 'container', direction: 'column', children: [] }
+      ? { id: createId(), type: 'container', label: shortId('container'), direction: 'column', children: [] }
       : type === 'text'
-        ? { id: shortId('text'), type: 'text', text: 'Text' }
+        ? { id: createId(), type: 'text', label: shortId('text'), text: 'Text' }
         : type === 'icon'
-          ? { id: shortId('icon'), type: 'icon', source: '' }
+          ? { id: createId(), type: 'icon', label: shortId('icon'), source: '' }
           : type === 'divider'
-            ? { id: shortId('divider'), type: 'divider' }
+            ? { id: createId(), type: 'divider', label: shortId('divider') }
             : {
-                id: shortId('shape'),
+                id: createId(),
                 type: 'shape',
+                label: shortId('shape'),
                 borderColor: '#333333',
                 borderWidth: 1,
                 backgroundColor: '#f5f5f5',
                 padding: 4,
-                content: { id: shortId('container'), type: 'container', children: [] },
+                content: { id: createId(), type: 'container', label: shortId('container'), children: [] },
               }
 
   const updated = replaceNodeById(next, targetId, (node) => {
@@ -280,7 +281,7 @@ const TYPE_ICONS: Record<string, string> = {
                   class="tree-editor__row-icon"
                 />
               </span>
-              <span class="tree-editor__row-type">{{ entry.node.id || entry.node.type }}</span>
+              <span class="tree-editor__row-type">{{ entry.node.label || entry.node.type }}</span>
             </span>
           </button>
         </div>

@@ -55,9 +55,9 @@ const TYPE_COLORS: Record<string, string> = {
         </span>
         <input
           class="inspector__id-input"
-          :value="selectedNode.id ?? ''"
-          :placeholder="t('nodeStyle.compositeNodeId')"
-          @change="emit('update:field', 'id', ($event.target as HTMLInputElement).value)"
+          :value="selectedNode.label ?? ''"
+          :placeholder="selectedNode.type"
+          @change="emit('update:field', 'label', ($event.target as HTMLInputElement).value)"
         />
       </div>
 

@@ -192,12 +192,11 @@ function setWhenBoolean(groupIdx: number, branchIdx: number, value: boolean): vo
     <div v-if="groups.length === 0" class="a5__empty">{{ t('nodeStyle.a5Empty') }}</div>
 
     <div v-for="(group, groupIdx) in groups" :key="groupIdx" class="a5__group">
-      <div class="a5__row">
+      <div class="a5__group-head">
         <select :value="group.valueSource" @change="changeSource(groupIdx, ($event.target as HTMLSelectElement).value as 'component' | 'nodeType')">
           <option value="component">component</option>
           <option value="nodeType">nodeType</option>
         </select>
-
         <select :value="group.propertyName" @change="changeProperty(groupIdx, ($event.target as HTMLSelectElement).value)">
           <option
             v-for="prop in (group.valueSource === 'component' ? componentProperties : nodeTypeProperties)"
@@ -207,86 +206,296 @@ function setWhenBoolean(groupIdx: number, branchIdx: number, value: boolean): vo
             {{ prop.name }} ({{ prop.type }})
           </option>
         </select>
-        <button type="button" class="a5__btn a5__btn--danger" @click="removeGroup(groupIdx)">{{ t('nodeStyle.a5RemoveGroup') }}</button>
+        <button type="button" class="a5__btn a5__btn--danger a5__btn--sm" @click="removeGroup(groupIdx)">&times;</button>
       </div>
 
-      <div v-for="(branch, branchIdx) in group.branches" :key="`${groupIdx}-${branchIdx}`" class="a5__branch">
-        <div class="a5__row">
-          <select :value="branch.when.op" @change="setWhenOperator(groupIdx, branchIdx, ($event.target as HTMLSelectElement).value as StyleBindingWhen['op'])">
-            <option value="equals">equals</option>
-            <option value="contains">contains</option>
-            <option value="matchesRegex">matchesRegex</option>
-            <option value="isEmpty">isEmpty</option>
-            <option value="isNotEmpty">isNotEmpty</option>
-            <option value="is">is</option>
-            <option value="range">range</option>
-            <option value="lt">lt</option>
-            <option value="lte">lte</option>
-            <option value="gt">gt</option>
-            <option value="gte">gte</option>
-          </select>
-
-          <input
-            v-if="'value' in branch.when && branch.when.op !== 'is'"
-            :value="String(branch.when.value ?? '')"
-            @input="setWhenString(groupIdx, branchIdx, 'value', ($event.target as HTMLInputElement).value)"
-          />
-          <select
-            v-if="branch.when.op === 'is'"
-            :value="String(branch.when.value)"
-            @change="setWhenBoolean(groupIdx, branchIdx, ($event.target as HTMLSelectElement).value === 'true')"
-          >
-            <option value="false">false</option>
-            <option value="true">true</option>
-          </select>
-          <template v-if="branch.when.op === 'range'">
-            <input
-              :value="String(branch.when.min ?? '')"
-              placeholder="min"
-              @input="setWhenString(groupIdx, branchIdx, 'min', ($event.target as HTMLInputElement).value)"
-            />
-            <input
-              :value="String(branch.when.max ?? '')"
-              placeholder="max"
-              @input="setWhenString(groupIdx, branchIdx, 'max', ($event.target as HTMLInputElement).value)"
-            />
-          </template>
-          <button type="button" class="a5__btn a5__btn--danger" @click="removeBranch(groupIdx, branchIdx)">{{ t('nodeStyle.a5RemoveBranch') }}</button>
-        </div>
-
-        <div v-for="(patch, patchIdx) in branch.patches" :key="`${groupIdx}-${branchIdx}-${patchIdx}`" class="a5__patch">
-          <div class="a5__row">
-            <select v-model="patch.targetId">
-              <option :value="outerTarget.id">{{ outerTarget.label }}</option>
-              <option v-for="target in targetOptions" :key="target.id" :value="target.id">
-                {{ target.label }}
-              </option>
+      <div class="a5__group-body">
+        <div v-for="(branch, branchIdx) in group.branches" :key="`${groupIdx}-${branchIdx}`" class="a5__branch">
+          <div class="a5__branch-when">
+            <span class="a5__branch-when-label">when</span>
+            <select :value="branch.when.op" @change="setWhenOperator(groupIdx, branchIdx, ($event.target as HTMLSelectElement).value as StyleBindingWhen['op'])">
+              <option value="equals">equals</option>
+              <option value="contains">contains</option>
+              <option value="matchesRegex">regex</option>
+              <option value="isEmpty">isEmpty</option>
+              <option value="isNotEmpty">isNotEmpty</option>
+              <option value="is">is</option>
+              <option value="range">range</option>
+              <option value="lt">&lt;</option>
+              <option value="lte">&le;</option>
+              <option value="gt">&gt;</option>
+              <option value="gte">&ge;</option>
             </select>
-            <button type="button" class="a5__btn a5__btn--danger" @click="removePatch(groupIdx, branchIdx, patchIdx)">{{ t('nodeStyle.a5RemovePatch') }}</button>
+            <input
+              v-if="'value' in branch.when && branch.when.op !== 'is'"
+              type="text"
+              :value="String(branch.when.value ?? '')"
+              @input="setWhenString(groupIdx, branchIdx, 'value', ($event.target as HTMLInputElement).value)"
+            />
+            <select
+              v-if="branch.when.op === 'is'"
+              :value="String(branch.when.value)"
+              @change="setWhenBoolean(groupIdx, branchIdx, ($event.target as HTMLSelectElement).value === 'true')"
+            >
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+            <template v-if="branch.when.op === 'range'">
+              <input
+                type="number"
+                :value="String(branch.when.min ?? '')"
+                placeholder="min"
+                @input="setWhenString(groupIdx, branchIdx, 'min', ($event.target as HTMLInputElement).value)"
+              />
+              <input
+                type="number"
+                :value="String(branch.when.max ?? '')"
+                placeholder="max"
+                @input="setWhenString(groupIdx, branchIdx, 'max', ($event.target as HTMLInputElement).value)"
+              />
+            </template>
+            <button type="button" class="a5__btn a5__btn--danger a5__btn--sm" @click="removeBranch(groupIdx, branchIdx)">&times;</button>
           </div>
-          <PatchPropertyEditor
-            :patch="patch.patch"
-            :target-id="patch.targetId"
-            :tree-nodes="flatTreeNodes"
-            @update:patch="setPatchObject(groupIdx, branchIdx, patchIdx, $event)"
-          />
+
+          <div v-for="(patch, patchIdx) in branch.patches" :key="`${groupIdx}-${branchIdx}-${patchIdx}`" class="a5__patch">
+            <div class="a5__patch-head">
+              <span class="a5__patch-target-label">target</span>
+              <select v-model="patch.targetId">
+                <option :value="outerTarget.id">outer</option>
+                <option v-for="target in targetOptions" :key="target.id" :value="target.id">
+                  {{ target.label }}
+                </option>
+              </select>
+              <button type="button" class="a5__btn a5__btn--danger a5__btn--sm" @click="removePatch(groupIdx, branchIdx, patchIdx)">&times;</button>
+            </div>
+            <PatchPropertyEditor
+              :patch="patch.patch"
+              :target-id="patch.targetId"
+              :tree-nodes="flatTreeNodes"
+              @update:patch="setPatchObject(groupIdx, branchIdx, patchIdx, $event)"
+            />
+          </div>
+          <div class="a5__patch-footer">
+            <button type="button" class="a5__btn a5__btn--sm" @click="addPatch(groupIdx, branchIdx)">{{ t('nodeStyle.a5AddPatch') }}</button>
+          </div>
         </div>
-        <button type="button" class="a5__btn" @click="addPatch(groupIdx, branchIdx)">{{ t('nodeStyle.a5AddPatch') }}</button>
       </div>
-      <button type="button" class="a5__btn" @click="addBranch(groupIdx)">{{ t('nodeStyle.a5AddBranch') }}</button>
+
+      <div class="a5__group-footer">
+        <button type="button" class="a5__btn a5__btn--sm" @click="addBranch(groupIdx)">{{ t('nodeStyle.a5AddBranch') }}</button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.a5 { display: flex; flex-direction: column; gap: 8px; }
-.a5__header { display: flex; justify-content: space-between; align-items: center; }
-.a5__group, .a5__branch, .a5__patch { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
-.a5__row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
-.a5__btn { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
-.a5__btn--danger { color: var(--danger); }
-.a5 textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.a5 select, .a5 input { min-height: 30px; border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; }
-.a5__empty { color: var(--text-muted); }
+/* ── Root ──────────────────────────────────────────────────────── */
+.a5 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.a5__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.a5__header strong {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--base-text);
+}
+
+.a5__empty {
+  font-size: 11px;
+  color: var(--text-subtle);
+  padding: 8px 0;
+}
+
+/* ── Group ─────────────────────────────────────────────────────── */
+.a5__group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.a5__group-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.a5__group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.a5__group-footer {
+  padding: 4px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+/* ── Branch ────────────────────────────────────────────────────── */
+.a5__branch {
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+}
+
+.a5__branch:last-child {
+  border-bottom: none;
+}
+
+.a5__branch-when {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  flex-wrap: wrap;
+  border-left: 3px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 3%, transparent);
+}
+
+.a5__branch-when-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ── Patch ─────────────────────────────────────────────────────── */
+.a5__patch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 6px 11px;
+  border-left: 3px solid var(--border);
+}
+
+.a5__patch-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.a5__patch-target-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.a5__patch-footer {
+  padding: 4px 8px 4px 11px;
+}
+
+/* ── Shared controls ───────────────────────────────────────────── */
+.a5__row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.a5 select,
+.a5 input[type="text"],
+.a5 input[type="number"] {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-muted);
+  color: var(--base-text);
+  outline: none;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.a5 select:focus,
+.a5 input:focus {
+  border-color: var(--primary);
+}
+
+.a5 select {
+  flex: 1;
+  min-width: 60px;
+  cursor: pointer;
+}
+
+.a5 input[type="text"],
+.a5 input[type="number"] {
+  flex: 1;
+  min-width: 40px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+.a5__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.a5__btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-style: solid;
+}
+
+.a5__btn--danger {
+  color: var(--text-subtle);
+  border-style: solid;
+  padding: 0 5px;
+  flex-shrink: 0;
+}
+
+.a5__btn--danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+
+.a5__btn--sm {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+/* ── Action row ────────────────────────────────────────────────── */
+.a5__btn-row {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 </style>
 

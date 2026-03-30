@@ -103,6 +103,12 @@ function emitNodeStyle() {
     ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
     ...(nodeShape.value === "composite" && compositeContent ? { compositeContent } : {}),
     ...(nodeShape.value === "composite" && stylePropertyBindings ? { stylePropertyBindings } : {}),
+    ...(nodeShape.value === "composite" ? {
+      compositeShapeType: compositeShapeType.value,
+      compositeAutoSize: compositeAutoSize.value,
+      compositeMinWidth: compositeMinWidth.value,
+      compositeMinHeight: compositeMinHeight.value,
+    } : {}),
     width: nodeWidth.value,
     height: nodeHeight.value,
     contentInset: insetToPlain(contentInset.value),
@@ -591,6 +597,10 @@ const compositeContentDraft = ref<CompositeSerializedCComponent>({
   children: [{ id: "name", type: "text", role: "name", text: "Name" }],
 });
 const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([]);
+const compositeShapeType = ref<'rectangle' | 'circle' | 'diamond' | 'custom'>('rectangle');
+const compositeAutoSize = ref(false);
+const compositeMinWidth = ref(0);
+const compositeMinHeight = ref(0);
 const componentPropsForA5 = computed(() => props.componentProperties ?? []);
 const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? []);
 const compositeValidationIssues = computed(() =>
@@ -741,6 +751,10 @@ function loadNodeProps() {
     : [];
   compositeJsonError.value = null;
   styleBindingsJsonError.value = null;
+  compositeShapeType.value = (props.currentDiagramStyle?.compositeShapeType as typeof compositeShapeType.value) ?? 'rectangle';
+  compositeAutoSize.value = props.currentDiagramStyle?.compositeAutoSize ?? false;
+  compositeMinWidth.value = props.currentDiagramStyle?.compositeMinWidth ?? 0;
+  compositeMinHeight.value = props.currentDiagramStyle?.compositeMinHeight ?? 0;
 
   // Load node dimensions
   nodeWidth.value = Math.round(node.width ?? 140);
@@ -2075,6 +2089,44 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </select>
                 </LabeledFieldRow>
                 <template v-if="showCompositeEditor">
+                  <div class="sp-field-grid sp-field-grid--2">
+                    <LabeledFieldRow :label="t('nodeStyle.compositeShapeType')">
+                      <select
+                        class="sp-select sp-select--flex"
+                        :value="compositeShapeType"
+                        @change="compositeShapeType = ($event.target as HTMLSelectElement).value as 'rectangle' | 'circle' | 'diamond' | 'custom'; emitNodeStyle()"
+                      >
+                        <option value="rectangle">rectangle</option>
+                        <option value="circle">circle</option>
+                        <option value="diamond">diamond</option>
+                        <option value="custom">custom</option>
+                      </select>
+                    </LabeledFieldRow>
+                    <LabeledFieldRow :label="t('nodeStyle.compositeAutoSize')">
+                      <ToggleSwitch
+                        :model-value="compositeAutoSize"
+                        @update:model-value="compositeAutoSize = $event; emitNodeStyle()"
+                      />
+                    </LabeledFieldRow>
+                  </div>
+                  <div class="sp-field-grid sp-field-grid--2">
+                    <LabeledNumberInput
+                      :label="t('nodeStyle.compositeMinWidth')"
+                      :model-value="compositeMinWidth"
+                      :min="0"
+                      :max="1000"
+                      :step="10"
+                      @update:model-value="compositeMinWidth = Number($event); emitNodeStyle()"
+                    />
+                    <LabeledNumberInput
+                      :label="t('nodeStyle.compositeMinHeight')"
+                      :model-value="compositeMinHeight"
+                      :min="0"
+                      :max="1000"
+                      :step="10"
+                      @update:model-value="compositeMinHeight = Number($event); emitNodeStyle()"
+                    />
+                  </div>
                   <div class="sp-segmented">
                     <button
                       type="button"

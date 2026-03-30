@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CompositeSerializedCComponent } from '../../notationAttrs'
 import { createId } from '../../notationAttrs'
+import CompositeNodeInspector from './CompositeNodeInspector.vue'
 
 type TreeNodeRef = { node: CompositeSerializedCComponent; parentId: string | null; depth: number }
 
@@ -32,11 +33,12 @@ function traverse(
   root: CompositeSerializedCComponent,
   visitor: (node: CompositeSerializedCComponent, parentId: string | null, depth: number) => void,
   parentId: string | null = null,
-  depth = 0
+  depth = 0,
 ): void {
   visitor(root, parentId, depth)
   if (root.content) traverse(root.content, visitor, root.id ?? null, depth + 1)
-  if (Array.isArray(root.children)) root.children.forEach((child) => traverse(child, visitor, root.id ?? null, depth + 1))
+  if (Array.isArray(root.children))
+    root.children.forEach((child) => traverse(child, visitor, root.id ?? null, depth + 1))
 }
 
 const treeNodes = computed<TreeNodeRef[]>(() => {
@@ -53,19 +55,15 @@ const targetOptions = computed(() =>
     .map(({ node, depth }) => ({
       id: node.id as string,
       label: `${'  '.repeat(depth)}${node.type}${node.id ? ` (${node.id})` : ''}`,
-    }))
+    })),
 )
 
-watch(
-  targetOptions,
-  (next) => emit('target-options', next),
-  { immediate: true }
-)
+watch(targetOptions, (next) => emit('target-options', next), { immediate: true })
 
 function replaceNodeById(
   root: CompositeSerializedCComponent,
   nodeId: string,
-  updater: (node: CompositeSerializedCComponent) => void
+  updater: (node: CompositeSerializedCComponent) => void,
 ): boolean {
   if (root.id === nodeId) {
     updater(root)
@@ -82,7 +80,7 @@ function replaceNodeById(
 
 function findParentCollection(
   root: CompositeSerializedCComponent,
-  nodeId: string
+  nodeId: string,
 ): { collection: CompositeSerializedCComponent[]; index: number } | null {
   if (Array.isArray(root.children)) {
     const idx = root.children.findIndex((child) => child.id === nodeId)
@@ -109,10 +107,14 @@ function addChild(type: CompositeSerializedCComponent['type']): void {
       : type === 'text'
         ? { id: createId(), type: 'text', text: 'Text' }
         : type === 'icon'
-          ? { id: createId(), type: 'icon', source: '/icons/widgets.svg' }
+          ? { id: createId(), type: 'icon', source: '' }
           : type === 'divider'
             ? { id: createId(), type: 'divider' }
-            : { id: createId(), type: 'shape', content: { id: createId(), type: 'container', children: [] } }
+            : {
+                id: createId(),
+                type: 'shape',
+                content: { id: createId(), type: 'container', children: [] },
+              }
 
   const updated = replaceNodeById(next, targetId, (node) => {
     if (!Array.isArray(node.children)) node.children = []
@@ -159,87 +161,300 @@ function reparentSelected(newParentId: string): void {
   if (moved) emit('update:modelValue', next)
 }
 
-function updateSelectedField(field: string, value: string): void {
+function updateSelectedField(field: string, value: unknown): void {
   if (!selectedId.value) return
   const next = cloneRoot()
   const ok = replaceNodeById(next, selectedId.value, (node) => {
-    ;(node as unknown as Record<string, unknown>)[field] = value
+    const parts = field.split('.')
+    if (parts.length === 1) {
+      ;(node as unknown as Record<string, unknown>)[field] = value
+    } else {
+      let target = node as unknown as Record<string, unknown>
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!target[parts[i]] || typeof target[parts[i]] !== 'object') {
+          target[parts[i]] = {}
+        }
+        target = target[parts[i]] as Record<string, unknown>
+      }
+      target[parts[parts.length - 1]] = value
+    }
   })
   if (ok) emit('update:modelValue', next)
 }
 
-const selectedNode = computed(() => treeNodes.value.find((n) => n.node.id === selectedId.value)?.node ?? null)
+const selectedNode = computed(
+  () => treeNodes.value.find((n) => n.node.id === selectedId.value)?.node ?? null,
+)
+
+const TYPE_ICONS: Record<string, string> = {
+  container: 'view_column',
+  text: 'text_fields',
+  icon: 'image',
+  divider: 'horizontal_rule',
+  shape: 'crop_square',
+}
 </script>
 
 <template>
   <div class="tree-editor">
     <div class="tree-editor__toolbar">
-      <button type="button" @click="addChild('container')">{{ t('nodeStyle.compositeAddContainer') }}</button>
-      <button type="button" @click="addChild('text')">{{ t('nodeStyle.compositeAddText') }}</button>
-      <button type="button" @click="addChild('icon')">{{ t('nodeStyle.compositeAddIcon') }}</button>
-      <button type="button" @click="addChild('divider')">{{ t('nodeStyle.compositeAddDivider') }}</button>
-      <button type="button" @click="addChild('shape')">{{ t('nodeStyle.compositeAddShape') }}</button>
+      <button type="button" class="tree-editor__tool-btn" @click="addChild('container')">
+        <UiIcon name="view_column" />{{ t('nodeStyle.compositeAddContainer') }}
+      </button>
+      <button type="button" class="tree-editor__tool-btn" @click="addChild('text')">
+        <UiIcon name="text_fields" />{{ t('nodeStyle.compositeAddText') }}
+      </button>
+      <button type="button" class="tree-editor__tool-btn" @click="addChild('icon')">
+        <UiIcon name="image" />{{ t('nodeStyle.compositeAddIcon') }}
+      </button>
+      <button type="button" class="tree-editor__tool-btn" @click="addChild('divider')">
+        <UiIcon name="horizontal_rule" />{{ t('nodeStyle.compositeAddDivider') }}
+      </button>
+      <button type="button" class="tree-editor__tool-btn" @click="addChild('shape')">
+        <UiIcon name="crop_square" />{{ t('nodeStyle.compositeAddShape') }}
+      </button>
     </div>
 
     <div class="tree-editor__body">
-      <div class="tree-editor__tree">
-        <button
-          v-for="entry in treeNodes"
-          :key="entry.node.id ?? `${entry.depth}-${entry.node.type}`"
-          type="button"
-          class="tree-editor__row"
-          :class="{ 'tree-editor__row--active': selectedId === entry.node.id }"
-          @click="selectedId = entry.node.id ?? null"
-        >
-          <span :style="{ paddingLeft: `${entry.depth * 12}px` }">
-            {{ entry.node.type }} {{ entry.node.id ? `(${entry.node.id})` : '' }}
-          </span>
-        </button>
-      </div>
-
-      <div class="tree-editor__props" v-if="selectedNode">
-        <div class="tree-editor__actions">
-          <button type="button" @click="moveSelected(-1)">{{ t('nodeStyle.compositeMoveUp') }}</button>
-          <button type="button" @click="moveSelected(1)">{{ t('nodeStyle.compositeMoveDown') }}</button>
-          <button type="button" class="danger" @click="removeSelected">{{ t('nodeStyle.compositeRemove') }}</button>
+      <!-- Tree panel -->
+      <div class="tree-editor__tree-panel">
+        <div class="tree-editor__tree">
+          <button
+            v-for="entry in treeNodes"
+            :key="entry.node.id ?? `${entry.depth}-${entry.node.type}`"
+            type="button"
+            class="tree-editor__row"
+            :class="{ 'tree-editor__row--active': selectedId === entry.node.id }"
+            @click="selectedId = entry.node.id ?? null"
+          >
+            <span class="tree-editor__row-inner" :style="{ paddingLeft: `${entry.depth * 16}px` }">
+              <span class="tree-editor__row-icon-wrap" :class="`tree-editor__row-icon-wrap--${entry.node.type}`">
+                <UiIcon
+                  :name="TYPE_ICONS[entry.node.type] ?? 'help'"
+                  class="tree-editor__row-icon"
+                />
+              </span>
+              <span class="tree-editor__row-type">{{ entry.node.type }}</span>
+              <span v-if="entry.node.id" class="tree-editor__row-id">{{ entry.node.id.length > 12 ? entry.node.id.slice(0, 12) + '…' : entry.node.id }}</span>
+            </span>
+          </button>
         </div>
-        <label>
-          {{ t('nodeStyle.compositeReparentTo') }}
-          <select @change="reparentSelected(($event.target as HTMLSelectElement).value)">
-            <option value="">--</option>
+
+        <!-- Actions under tree -->
+        <div v-if="selectedNode" class="tree-editor__actions">
+          <button type="button" class="tree-editor__act-btn" @click="moveSelected(-1)">
+            <UiIcon name="arrow_upward" />
+          </button>
+          <button type="button" class="tree-editor__act-btn" @click="moveSelected(1)">
+            <UiIcon name="arrow_downward" />
+          </button>
+          <select
+            class="tree-editor__reparent"
+            @change="reparentSelected(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ t('nodeStyle.compositeReparentTo') }}</option>
             <option v-for="target in targetOptions" :key="`p-${target.id}`" :value="target.id">
               {{ target.label }}
             </option>
           </select>
-        </label>
-        <label v-if="selectedNode.type === 'text'">
-          {{ t('nodeStyle.compositeText') }}
-          <input :value="selectedNode.text ?? ''" @input="updateSelectedField('text', ($event.target as HTMLInputElement).value)" />
-        </label>
-        <label v-if="selectedNode.type === 'text'">
-          role
-          <input :value="selectedNode.role ?? ''" @input="updateSelectedField('role', ($event.target as HTMLInputElement).value)" />
-        </label>
-        <label v-if="selectedNode.type === 'icon'">
-          {{ t('nodeStyle.compositeIconSource') }}
-          <input :value="selectedNode.source ?? ''" @input="updateSelectedField('source', ($event.target as HTMLInputElement).value)" />
-        </label>
+          <button type="button" class="tree-editor__act-btn tree-editor__act-btn--danger" @click="removeSelected">
+            <UiIcon name="delete" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Inspector panel -->
+      <div class="tree-editor__inspector-panel">
+        <CompositeNodeInspector
+          :selected-node="selectedNode"
+          @update:field="updateSelectedField"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.tree-editor { display: flex; flex-direction: column; gap: 8px; }
-.tree-editor__toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
-.tree-editor__body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.tree-editor__tree { border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 260px; }
-.tree-editor__row { width: 100%; border: 0; background: transparent; text-align: left; padding: 6px 8px; cursor: pointer; }
-.tree-editor__row--active { background: color-mix(in srgb, var(--primary) 12%, transparent); }
-.tree-editor__props { border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
-.tree-editor__actions { display: flex; gap: 6px; }
-.tree-editor button, .tree-editor select, .tree-editor input { min-height: 30px; border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; background: var(--surface); }
-.tree-editor .danger { color: var(--danger); }
-.tree-editor label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
-</style>
+.tree-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
+.tree-editor__toolbar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tree-editor__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 11px;
+  color: var(--base-text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tree-editor__tool-btn:hover {
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+}
+
+.tree-editor__tool-btn :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
+  color: var(--text-subtle);
+}
+
+.tree-editor__body {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 6px;
+  min-height: 200px;
+}
+
+.tree-editor__tree-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tree-editor__tree {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 300px;
+  flex: 1;
+}
+
+.tree-editor__row {
+  display: flex;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.tree-editor__row:hover {
+  background: var(--surface-muted);
+}
+
+.tree-editor__row--active {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.tree-editor__row--active:hover {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.tree-editor__row-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  min-width: 0;
+}
+
+.tree-editor__row-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.tree-editor__row-icon-wrap--container { background: color-mix(in srgb, #6366f1 14%, transparent); color: #6366f1; }
+.tree-editor__row-icon-wrap--text { background: color-mix(in srgb, #0ea5e9 14%, transparent); color: #0ea5e9; }
+.tree-editor__row-icon-wrap--icon { background: color-mix(in srgb, #f59e0b 14%, transparent); color: #f59e0b; }
+.tree-editor__row-icon-wrap--divider { background: color-mix(in srgb, #94a3b8 14%, transparent); color: #94a3b8; }
+.tree-editor__row-icon-wrap--shape { background: color-mix(in srgb, #10b981 14%, transparent); color: #10b981; }
+
+.tree-editor__row-icon {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.tree-editor__row-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--base-text);
+  flex-shrink: 0;
+}
+
+.tree-editor__row-id {
+  font-size: 10px;
+  color: var(--text-subtle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-editor__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.tree-editor__act-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tree-editor__act-btn:hover {
+  background: var(--surface-muted);
+}
+
+.tree-editor__act-btn :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
+  color: var(--text-subtle);
+}
+
+.tree-editor__act-btn--danger :deep(.ui-icon) {
+  color: var(--danger);
+}
+
+.tree-editor__reparent {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+  color: var(--base-text);
+}
+
+.tree-editor__inspector-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+</style>

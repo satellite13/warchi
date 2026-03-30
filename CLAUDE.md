@@ -22,7 +22,14 @@ npm run lint:fix      # ESLint auto-fix
 npx vitest path/to/file.test.ts
 # Tests by name pattern
 npx vitest -t "pattern"
+
+# E2E tests (Playwright, requires running backend)
+npm run test:e2e          # Headless
+npm run test:e2e:headed   # With browser UI
+npm run test:e2e:ui       # Playwright UI mode
 ```
+
+**Node requirement**: `>=20.19.0 <21 || >=22.12.0` (enforced by `engines` and prebuild check).
 
 ## Stack
 
@@ -45,6 +52,8 @@ No Pinia/Vuex — state managed via composables with module-level refs.
 - **Editor state**: Internal flags `_isNew`, `_isDirty`, `_isDeleted` on editor entities. Save order: create → update → delete
 - **Custom properties**: JSON `attrs` field parsed/serialized. Internal flags stripped before API calls
 - **Auth**: JWT in localStorage, auto-refresh on 401, router guards with `meta.requiresAuth`
+- **Batch save conflicts**: `POST /models/{id}/batch-save` sends `baseUpdatedAt`; HTTP 409 returns `conflicts[]`. UI offers reload vs force-overwrite with per-entity field diff. See `docs/plans/model-batch-save-conflicts.md`
+- **Model live sync**: WebSocket/STOMP + polling hybrid for real-time diagram collaboration. Config via `VITE_MODEL_LIVE_SYNC_MODE` (ws/poll/hybrid)
 
 ## Feature Branch Workflow
 
@@ -52,4 +61,4 @@ When implementing features from `docs/` plans: create matching feature branches 
 
 ## Environment
 
-Copy `.env.example` to `.env.local`. Key var: `VITE_API_PROXY_TARGET` (default `http://localhost:8080`).
+Copy `.env.example` to `.env.local`. Key vars: `VITE_API_PROXY_TARGET` (default `http://localhost:8080`), `VITE_MODEL_LIVE_SYNC_MODE`, `VITE_MODEL_LIVE_POLL_MS`.

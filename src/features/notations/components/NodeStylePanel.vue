@@ -1555,12 +1555,27 @@ function handleEdgeLabelFontSizeChange(value: string) {
 }
 
 function handleEdgeLabelInsetChange(value: InsetSides) {
+  console.log('[EdgeLabelInset] input value:', JSON.stringify(value))
+  console.log('[EdgeLabelInset] selectedElementId:', props.selectedElementId)
+  console.log('[EdgeLabelInset] has interactionManager:', !!props.interactionManager)
   edgeLabelInset.value = value;
   resetRelationPreset();
-  if (!props.selectedElementId || !props.interactionManager) return;
+  if (!props.selectedElementId || !props.interactionManager) {
+    console.log('[EdgeLabelInset] BAIL: no selectedElementId or interactionManager')
+    return;
+  }
+  const plain = insetToPlain(edgeLabelInset.value)
+  console.log('[EdgeLabelInset] insetToPlain:', JSON.stringify(plain))
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    if (edge.label) setLabelSpacing(edge.label, { inset: insetToPlain(edgeLabelInset.value) });
+    console.log('[EdgeLabelInset] edge.label exists:', !!edge.label)
+    if (edge.label) setLabelSpacing(edge.label, { inset: plain });
   });
+  const emitted = {
+    strokeColor: edgeStrokeColor.value,
+    labelInset: plain,
+    edgeType: edgeType.value,
+  }
+  console.log('[EdgeLabelInset] emitEdgeStyle (partial):', JSON.stringify(emitted))
   emitEdgeStyle();
 }
 

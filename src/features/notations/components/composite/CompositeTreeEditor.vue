@@ -222,6 +222,21 @@ const selectedNode = computed(
   () => treeNodes.value.find((n) => n.node.id === selectedId.value)?.node ?? null,
 )
 
+/** Whether the selected node can be removed (not root, not shape's content container) */
+const canRemoveSelected = computed(() => {
+  if (!selectedId.value) return false
+  // Root node
+  if (selectedId.value === props.modelValue.id) return false
+  // Check if it's removable (has a parent collection)
+  return findParentCollection(props.modelValue, selectedId.value) !== null
+})
+
+/** Whether the selected node can be moved up/down */
+const canMoveSelected = computed(() => {
+  if (!selectedId.value) return false
+  return findParentCollection(props.modelValue, selectedId.value) !== null
+})
+
 /** Generate short human-readable id for new nodes */
 function shortId(type: string): string {
   const counters: Record<string, number> = {}
@@ -291,10 +306,10 @@ const TYPE_ICONS: Record<string, string> = {
 
         <!-- Actions under tree -->
         <div v-if="selectedNode" class="tree-editor__actions">
-          <button type="button" class="tree-editor__act-btn" @click="moveSelected(-1)">
+          <button type="button" class="tree-editor__act-btn" :disabled="!canMoveSelected" @click="moveSelected(-1)">
             <UiIcon name="arrow_upward" />
           </button>
-          <button type="button" class="tree-editor__act-btn" @click="moveSelected(1)">
+          <button type="button" class="tree-editor__act-btn" :disabled="!canMoveSelected" @click="moveSelected(1)">
             <UiIcon name="arrow_downward" />
           </button>
           <select
@@ -306,7 +321,7 @@ const TYPE_ICONS: Record<string, string> = {
               {{ target.label }}
             </option>
           </select>
-          <button type="button" class="tree-editor__act-btn tree-editor__act-btn--danger" @click="removeSelected">
+          <button type="button" class="tree-editor__act-btn tree-editor__act-btn--danger" :disabled="!canRemoveSelected" @click="removeSelected">
             <UiIcon name="delete" />
           </button>
         </div>
@@ -482,6 +497,11 @@ const TYPE_ICONS: Record<string, string> = {
   width: 14px;
   height: 14px;
   color: var(--text-subtle);
+}
+
+.tree-editor__act-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .tree-editor__act-btn--danger :deep(.ui-icon) {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LabeledFieldRow from '../../LabeledFieldRow.vue'
 import LabeledNumberInput from '../../LabeledNumberInput.vue'
@@ -8,7 +9,7 @@ import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
 import type { CompositeSerializedCComponent } from '../../../notationAttrs'
 
-defineProps<{
+const props = defineProps<{
   modelValue: CompositeSerializedCComponent
 }>()
 
@@ -16,6 +17,13 @@ const emit = defineEmits<{
   (e: 'update:field', field: string, value: unknown): void
 }>()
 const { t } = useI18n()
+
+/** Extract icon ID from path like "/icons/widgets.svg" → "widgets" */
+const sourceIconId = computed(() => {
+  const src = props.modelValue.source ?? ''
+  const match = src.match(/^\/icons\/(.+)\.svg$/)
+  return match?.[1] ?? ''
+})
 </script>
 
 <template>
@@ -23,14 +31,14 @@ const { t } = useI18n()
     <LabeledFieldRow :label="t('nodeStyle.compositeIconSource')">
       <div class="ico-props__icon-select">
         <SearchableSelect
-          :model-value="modelValue.source ?? ''"
+          :model-value="sourceIconId"
           :options="COMBINED_ICON_OPTIONS"
           allow-empty
           :empty-label="t('nodeStyle.none')"
           :placeholder="t('nodeStyle.none')"
           :search-placeholder="t('common.search')"
           :empty-text="t('common.nothingFound')"
-          @update:model-value="emit('update:field', 'source', $event)"
+          @update:model-value="emit('update:field', 'source', $event ? `/icons/${$event}.svg` : '')"
         >
           <template #option="{ option }">
             <span class="ico-props__option">
@@ -40,10 +48,10 @@ const { t } = useI18n()
           </template>
         </SearchableSelect>
         <img
-          v-if="modelValue.source"
+          v-if="sourceIconId"
           class="ico-props__preview"
-          :src="`/icons/${modelValue.source}.svg`"
-          :alt="modelValue.source"
+          :src="`/icons/${sourceIconId}.svg`"
+          :alt="sourceIconId"
         >
       </div>
     </LabeledFieldRow>

@@ -1414,13 +1414,14 @@ function applyEdgeStyle(updates: Record<string, any>) {
 function handleEdgeLabelChange(value: string) {
   edgeLabel.value = value;
   if (!props.selectedElementId || !props.interactionManager) return;
+  const resolved = value.replace(/\\n/g, '\n');
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    if (value) {
+    if (resolved) {
       if (edge.label) {
-        edge.label.text = value;
+        edge.label.text = resolved;
       } else {
         edge.label = new TextLabel({
-          text: value,
+          text: resolved,
           inset: insetToPlain(edgeLabelInset.value)
         });
       }

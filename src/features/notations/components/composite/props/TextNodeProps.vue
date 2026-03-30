@@ -94,13 +94,13 @@ const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500'
     </LabeledFieldRow>
 
     <LabeledFieldRow :label="t('nodeStyle.compositeAlign')">
-      <div class="txt-props__segmented">
+      <div class="txt-props__icon-seg">
         <button
           v-for="a in (['left', 'center', 'right'] as const)"
           :key="a"
           type="button"
-          class="txt-props__seg-btn"
-          :class="{ 'txt-props__seg-btn--active': (modelValue.align ?? 'left') === a }"
+          class="txt-props__icon-btn"
+          :class="{ 'txt-props__icon-btn--active': (modelValue.align ?? 'left') === a }"
           @click="emit('update:field', 'align', a)"
         >
           <UiIcon :name="a === 'left' ? 'format_align_left' : a === 'center' ? 'format_align_center' : 'format_align_right'" />
@@ -109,13 +109,13 @@ const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500'
     </LabeledFieldRow>
 
     <LabeledFieldRow :label="t('nodeStyle.compositeVerticalAlign')">
-      <div class="txt-props__segmented">
+      <div class="txt-props__icon-seg">
         <button
           v-for="a in (['top', 'middle', 'bottom'] as const)"
           :key="a"
           type="button"
-          class="txt-props__seg-btn"
-          :class="{ 'txt-props__seg-btn--active': (modelValue.verticalAlign ?? 'top') === a }"
+          class="txt-props__icon-btn"
+          :class="{ 'txt-props__icon-btn--active': (modelValue.verticalAlign ?? 'top') === a }"
           @click="emit('update:field', 'verticalAlign', a)"
         >
           <UiIcon :name="a === 'top' ? 'vertical_align_top' : a === 'middle' ? 'vertical_align_center' : 'vertical_align_bottom'" />
@@ -233,5 +233,39 @@ const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500'
   background: var(--primary-soft);
   color: var(--primary);
   font-weight: 600;
+}
+
+.txt-props__icon-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.txt-props__icon-btn {
+  width: 28px;
+  height: 24px;
+  border: none;
+  background: var(--surface-muted);
+  color: var(--text-subtle);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.txt-props__icon-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.txt-props__icon-btn :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
+}
+
+.txt-props__icon-btn--active {
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 </style>

@@ -104,6 +104,21 @@ function handleCustomShapeSelect(shapeId: string) {
   emitStyle()
 }
 
+// Flat tree nodes for PatchPropertyEditor (type lookup)
+function collectNodes(
+  node: CompositeSerializedCComponent,
+  out: Array<{ node: CompositeSerializedCComponent }>,
+) {
+  out.push({ node })
+  if (node.content) collectNodes(node.content, out)
+  if (Array.isArray(node.children)) node.children.forEach((c) => collectNodes(c, out))
+}
+const flatTreeNodes = computed(() => {
+  const out: Array<{ node: CompositeSerializedCComponent }> = []
+  collectNodes(compositeContentDraft.value, out)
+  return out
+})
+
 // A5 props
 const componentPropsForA5 = computed(() => props.componentProperties ?? [])
 const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? [])
@@ -628,6 +643,7 @@ function applyStyleBindingsJson() {
         :component-properties="componentPropsForA5"
         :node-type-properties="nodeTypePropsForA5"
         :target-options="compositeTreeTargets"
+        :tree-nodes="flatTreeNodes"
         @update:model-value="handleA5BindingsUpdate"
       />
     </StyleSection>

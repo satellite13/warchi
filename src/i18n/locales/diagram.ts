@@ -243,6 +243,7 @@ export const diagramMessages = {
       compositeSelectNode: 'Выберите узел в дереве',
       compositePropertiesTitle: 'Свойства',
       compositeActionsTitle: 'Действия',
+      patchAddProperty: '+ свойство',
     },
   },
   en: {
@@ -477,6 +478,7 @@ export const diagramMessages = {
       compositeSelectNode: 'Select a node in the tree',
       compositePropertiesTitle: 'Properties',
       compositeActionsTitle: 'Actions',
+      patchAddProperty: '+ property',
     },
   },
   fr: {
@@ -712,6 +714,7 @@ export const diagramMessages = {
       compositeSelectNode: "Sélectionnez un nœud dans l'arbre",
       compositePropertiesTitle: 'Propriétés',
       compositeActionsTitle: 'Actions',
+      patchAddProperty: '+ propriété',
     },
   },
 }

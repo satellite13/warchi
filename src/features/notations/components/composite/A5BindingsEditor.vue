@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PatchPropertyEditor from './PatchPropertyEditor.vue'
 import type {
+  CompositeSerializedCComponent,
   CustomProperty,
   StylePropertyBindingGroup,
   StyleBindingWhen,
@@ -12,6 +14,7 @@ const props = defineProps<{
   componentProperties: CustomProperty[]
   nodeTypeProperties: CustomProperty[]
   targetOptions: Array<{ id: string; label: string }>
+  treeNodes?: Array<{ node: CompositeSerializedCComponent }>
 }>()
 
 const emit = defineEmits<{
@@ -151,18 +154,16 @@ function setPatchObject(
   groupIdx: number,
   branchIdx: number,
   patchIdx: number,
-  value: string
+  value: Record<string, unknown>,
 ): void {
   const next = cloneGroups()
   const patch = next[groupIdx]?.branches[branchIdx]?.patches[patchIdx]
   if (!patch) return
-  try {
-    patch.patch = value.trim().length ? (JSON.parse(value) as Record<string, unknown>) : {}
-    updateGroups(next)
-  } catch {
-    // Keep invalid json in textarea until blur parse succeeds.
-  }
+  patch.patch = value
+  updateGroups(next)
 }
+
+const flatTreeNodes = computed(() => props.treeNodes ?? [])
 
 function setWhenString(groupIdx: number, branchIdx: number, key: 'value' | 'min' | 'max', value: string): void {
   const next = cloneGroups()
@@ -263,10 +264,11 @@ function setWhenBoolean(groupIdx: number, branchIdx: number, value: boolean): vo
             </select>
             <button type="button" class="a5__btn a5__btn--danger" @click="removePatch(groupIdx, branchIdx, patchIdx)">{{ t('nodeStyle.a5RemovePatch') }}</button>
           </div>
-          <textarea
-            :value="JSON.stringify(patch.patch, null, 2)"
-            rows="4"
-            @blur="setPatchObject(groupIdx, branchIdx, patchIdx, ($event.target as HTMLTextAreaElement).value)"
+          <PatchPropertyEditor
+            :patch="patch.patch"
+            :target-id="patch.targetId"
+            :tree-nodes="flatTreeNodes"
+            @update:patch="setPatchObject(groupIdx, branchIdx, patchIdx, $event)"
           />
         </div>
         <button type="button" class="a5__btn" @click="addPatch(groupIdx, branchIdx)">{{ t('nodeStyle.a5AddPatch') }}</button>

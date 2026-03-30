@@ -14,10 +14,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: CompositeSerializedCComponent): void
   (e: 'target-options', value: Array<{ id: string; label: string }>): void
+  (e: 'update:selectedId', value: string | null): void
 }>()
 const { t } = useI18n()
 
 const selectedId = ref<string | null>(null)
+
+watch(selectedId, (id) => emit('update:selectedId', id))
 
 function cloneRoot(): CompositeSerializedCComponent {
   return JSON.parse(JSON.stringify(props.modelValue)) as CompositeSerializedCComponent

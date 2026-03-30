@@ -45,6 +45,7 @@ const compositeContentDraft = ref<CompositeSerializedCComponent>({
 const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([])
 const compositeEditorMode = ref<'visual' | 'json'>('visual')
 const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([])
+const treeSelectedNodeId = ref<string | null>(null)
 const compositeContentJson = ref('')
 const styleBindingsJson = ref('')
 const compositeJsonError = ref<string | null>(null)
@@ -78,14 +79,14 @@ const portsRight = ref(0)
 
 type CompositeShape = NonNullable<DiagramStyle['compositeShapeType']>
 
-const COMPOSITE_SHAPE_OPTIONS: ReadonlyArray<{ value: CompositeShape; label: string }> = [
-  { value: 'rectangle', label: 'Rectangle' },
-  { value: 'beveled-rectangle', label: 'Beveled' },
-  { value: 'diamond', label: 'Diamond' },
-  { value: 'circle', label: 'Circle' },
-  { value: 'trapezoid', label: 'Trapezoid' },
-  { value: 'slanted-rectangle', label: 'Slanted' },
-  { value: 'custom', label: 'Custom' },
+const COMPOSITE_SHAPE_OPTIONS: ReadonlyArray<{ value: CompositeShape; labelKey: string }> = [
+  { value: 'rectangle', labelKey: 'nodeStyle.shapeRectangle' },
+  { value: 'beveled-rectangle', labelKey: 'nodeStyle.shapeBeveledRectangle' },
+  { value: 'diamond', labelKey: 'nodeStyle.shapeDiamond' },
+  { value: 'circle', labelKey: 'nodeStyle.shapeCircle' },
+  { value: 'trapezoid', labelKey: 'nodeStyle.shapeTrapezoid' },
+  { value: 'slanted-rectangle', labelKey: 'nodeStyle.shapeSlantedRectangle' },
+  { value: 'custom', labelKey: 'nodeStyle.customShape' },
 ]
 
 // Custom shape catalog
@@ -319,7 +320,7 @@ function applyStyleBindingsJson() {
           type="button"
           class="csp__shape-btn"
           :class="{ 'csp__shape-btn--active': compositeShapeType === shape.value }"
-          :title="shape.label"
+          :title="t(shape.labelKey)"
           @click="compositeShapeType = shape.value; if (shape.value === 'custom') ensureCatalogShapesLoaded(); emitStyle()"
         >
           <svg width="28" height="20" viewBox="0 0 28 20">
@@ -590,13 +591,18 @@ function applyStyleBindingsJson() {
         <CompositeTreeEditor
           :model-value="compositeContentDraft"
           @update:model-value="handleCompositeTreeUpdate"
+          @update:selected-id="treeSelectedNodeId = $event"
           @target-options="
             (targets) => {
               compositeTreeTargets = targets
             }
           "
         />
-        <CompositeLivePreview :content="compositeContentDraft" :height="120" />
+        <CompositeLivePreview
+          :content="compositeContentDraft"
+          :height="120"
+          :selected-node-id="treeSelectedNodeId"
+        />
       </template>
 
       <template v-else>

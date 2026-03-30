@@ -20,6 +20,7 @@ import NotationDiagram from '../features/notations/components/NotationDiagram.vu
 import NotationEntityModal from '../features/notations/components/NotationEntityModal.vue'
 import CustomPropertiesPanel from '../features/notations/components/CustomPropertiesPanel.vue'
 import NodeStylePanel from '../features/notations/components/NodeStylePanel.vue'
+import CompositeStylePanel from '../features/notations/components/composite/CompositeStylePanel.vue'
 import TabPanel from '../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../components/modals/DocumentEditorModal.vue'
 import { useNotationEditor } from '../features/notations/composables/useNotationEditor'
@@ -436,7 +437,6 @@ const selectedComponentIsComposite = computed(
 const rightPanelTabs = computed(() => {
   const tabs = [
     { id: 'properties', label: t('notations.propertiesTab'), icon: 'tune' },
-    { id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' },
   ]
   if (selectedComponentIsComposite.value) {
     tabs.push({
@@ -444,6 +444,8 @@ const rightPanelTabs = computed(() => {
       label: t('notations.compositeFigureStyleTab'),
       icon: 'account_tree',
     })
+  } else {
+    tabs.push({ id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' })
   }
   return tabs
 })
@@ -933,15 +935,11 @@ onBeforeUnmount(() => {
                 :node-type-properties="selectedStylePanelNodeTypeProperties"
                 @style-change="handleStyleChange"
               />
-              <NodeStylePanel
+              <CompositeStylePanel
                 v-if="activeRightTab === 'composite-style'"
-                :selected-element-id="selectedDiagramElementId"
-                :interaction-manager="interactionManager"
-                :renderer="diagramRenderer"
                 :current-diagram-style="selectedDiagramStyle"
                 :component-properties="selectedStylePanelComponentProperties"
                 :node-type-properties="selectedStylePanelNodeTypeProperties"
-                mode="composite-only"
                 @style-change="handleStyleChange"
               />
             </TabPanel>

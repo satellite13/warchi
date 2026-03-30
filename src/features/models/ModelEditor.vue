@@ -3889,6 +3889,7 @@ const hasDiagramStyleOverride = computed(() => {
     const edgeId = selectedElementId.slice('edge-'.length)
     const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
     if (edge?.attrs?.isDiagramOnly === true) return false
+    if (!edge?.modelLinkId) return false
     return Boolean(edge?.attrs?.diagramStyle)
   }
 

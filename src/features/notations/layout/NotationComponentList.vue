@@ -5,6 +5,7 @@ import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
 import type { CompositeSerializedCComponent } from "../notationAttrs";
+import { resolveCompositeBoundIconName } from "../utils/compositeBindings";
 
 const { t } = useI18n();
 
@@ -40,25 +41,6 @@ type ListItem = {
   /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
   paletteIcon: string;
 };
-
-function resolveCompositeBoundIconName(root: CompositeSerializedCComponent | undefined): string | undefined {
-  if (!root) return undefined;
-  let found: string | undefined;
-  const visit = (node: CompositeSerializedCComponent) => {
-    if (found) return;
-    if (node.type === "icon" && node.bindsNotationIcon === true && typeof node.source === "string") {
-      const match = node.source.match(/\/icons\/(.+)\.svg$/);
-      if (match?.[1]) {
-        found = match[1];
-        return;
-      }
-    }
-    if (node.content) visit(node.content);
-    if (Array.isArray(node.children)) node.children.forEach(visit);
-  };
-  visit(root);
-  return found;
-}
 
 function getPaletteIcon(parsedAttrs: { diagramStyle?: { iconName?: string; compositeContent?: CompositeSerializedCComponent }; paletteMaterialIcon?: string }): string {
   const fromStyle = parsedAttrs.diagramStyle?.iconName?.trim();

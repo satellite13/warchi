@@ -236,3 +236,32 @@ export function countCompositeNodeMatches(
   return count
 }
 
+/**
+ * Resolve the icon name from a composite tree's bindsNotationIcon icon element.
+ * Returns the icon id (e.g. "widgets") or undefined if not found.
+ */
+export function resolveCompositeBoundIconName(
+  root: CompositeSerializedCComponent | undefined,
+): string | undefined {
+  if (!root) return undefined
+  let found: string | undefined
+  const visit = (node: CompositeSerializedCComponent): void => {
+    if (found) return
+    if (
+      node.type === 'icon' &&
+      node.bindsNotationIcon === true &&
+      typeof node.source === 'string'
+    ) {
+      const match = node.source.match(/\/icons\/(.+)\.svg$/)
+      if (match?.[1]) {
+        found = match[1]
+        return
+      }
+    }
+    if (node.content) visit(node.content)
+    if (Array.isArray(node.children)) node.children.forEach(visit)
+  }
+  visit(root)
+  return found
+}
+

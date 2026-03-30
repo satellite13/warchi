@@ -62,6 +62,7 @@ import {
   applyStylePropertyBindings,
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
+  resolveCompositeBoundIconName,
 } from '../../notations/utils/compositeBindings'
 
 const props = withDefaults(
@@ -2669,13 +2670,15 @@ const paletteItems = computed(() => {
         typeof parsedAttrs.paletteGroup === 'number' && parsedAttrs.paletteGroup >= 0
           ? parsedAttrs.paletteGroup
           : 0
-      const hasSvgIcon = iconName && iconName.length > 0
+      const compositeIconName = resolveCompositeBoundIconName(parsedAttrs.diagramStyle?.compositeContent)
+      const hasSvgIcon = (iconName && iconName.length > 0) || !!compositeIconName
+      const resolvedIconName = iconName || compositeIconName
       const paletteIconId = hasSvgIcon
         ? undefined
         : (parsedAttrs.paletteMaterialIcon?.trim() || undefined)
       return {
         ...component,
-        paletteIconName: hasSvgIcon ? iconName : paletteIconId ?? 'component',
+        paletteIconName: hasSvgIcon ? resolvedIconName! : paletteIconId ?? 'component',
         paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : 'var(--accent)',
         paletteGroup,
       }

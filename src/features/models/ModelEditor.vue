@@ -3854,6 +3854,20 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
     if (edge?.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === 'object') {
       return edge.attrs.diagramStyle as DiagramStyle
     }
+    // Fallback to notation relation style
+    if (edge?.modelLinkId) {
+      const modelLink = state.value.links.find(item => item.id === edge.modelLinkId)
+      const notationId = activeNotationId.value
+      if (modelLink && notationId) {
+        const relationId = modelLink.parsedAttrs.notationRelations[notationId]?.relationId
+        const relation = relationId
+          ? state.value.relations.find(item => item.id === relationId)
+          : null
+        if (relation) {
+          return parseEntityAttrs(relation.attrs ?? null).diagramStyle
+        }
+      }
+    }
   }
 
   return undefined

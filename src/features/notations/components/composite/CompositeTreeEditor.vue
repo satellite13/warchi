@@ -58,6 +58,15 @@ const targetOptions = computed(() =>
     })),
 )
 
+const containerTargetOptions = computed(() =>
+  treeNodes.value
+    .filter(({ node }) => typeof node.id === 'string' && node.id.length > 0 && (node.type === 'container' || node.type === 'shape'))
+    .map(({ node, depth }) => ({
+      id: node.id as string,
+      label: `${'  '.repeat(depth)}${node.type}${node.id ? ` (${node.id})` : ''}`,
+    })),
+)
+
 watch(targetOptions, (next) => emit('target-options', next), { immediate: true })
 
 function replaceNodeById(
@@ -97,10 +106,27 @@ function findParentCollection(
   return null
 }
 
+/** Only containers can accept children directly. Shape delegates to its inner content container. */
+function canAcceptChildren(node: CompositeSerializedCComponent): boolean {
+  return node.type === 'container'
+}
+
+function findNearestContainer(nodeId: string): string | null {
+  const entry = treeNodes.value.find((n) => n.node.id === nodeId)
+  if (!entry) return null
+  if (canAcceptChildren(entry.node)) return nodeId
+  // For shape, target its inner content container
+  if (entry.node.type === 'shape' && entry.node.content?.id) return entry.node.content.id
+  // Walk up to parent
+  if (entry.parentId) return findNearestContainer(entry.parentId)
+  return null
+}
+
 function addChild(type: CompositeSerializedCComponent['type']): void {
   const next = cloneRoot()
   ensureId(next)
-  const targetId = selectedId.value ?? next.id!
+  const rawTargetId = selectedId.value ?? next.id!
+  const targetId = findNearestContainer(rawTargetId) ?? next.id!
   const newNode: CompositeSerializedCComponent =
     type === 'container'
       ? { id: createId(), type: 'container', direction: 'column', children: [] }
@@ -150,11 +176,13 @@ function moveSelected(direction: -1 | 1): void {
 
 function reparentSelected(newParentId: string): void {
   if (!selectedId.value || !newParentId || selectedId.value === newParentId) return
+  const resolvedParentId = findNearestContainer(newParentId)
+  if (!resolvedParentId || resolvedParentId === selectedId.value) return
   const next = cloneRoot()
   const parent = findParentCollection(next, selectedId.value)
   if (!parent) return
   const [node] = parent.collection.splice(parent.index, 1)
-  const moved = replaceNodeById(next, newParentId, (target) => {
+  const moved = replaceNodeById(next, resolvedParentId, (target) => {
     if (!Array.isArray(target.children)) target.children = []
     target.children.push(node)
   })
@@ -253,7 +281,7 @@ const TYPE_ICONS: Record<string, string> = {
             @change="reparentSelected(($event.target as HTMLSelectElement).value)"
           >
             <option value="">{{ t('nodeStyle.compositeReparentTo') }}</option>
-            <option v-for="target in targetOptions" :key="`p-${target.id}`" :value="target.id">
+            <option v-for="target in containerTargetOptions" :key="`p-${target.id}`" :value="target.id">
               {{ target.label }}
             </option>
           </select>

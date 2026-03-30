@@ -28,7 +28,4 @@ export function emitModelLiveSyncTelemetry(detail: ModelLiveSyncTelemetryDetail)
     return
   }
   window.dispatchEvent(new CustomEvent(WARCHI_MODEL_LIVE_SYNC_EVENT, { detail }))
-  if (import.meta.env.DEV) {
-    console.debug("[model-live-sync]", detail)
-  }
 }

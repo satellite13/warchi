@@ -65,6 +65,7 @@ import {
   type DiagramStyle,
 } from '../notations/notationAttrs'
 import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
+import CompositeStylePanel from '../notations/components/composite/CompositeStylePanel.vue'
 import TabPanel from '../../components/layout/TabPanel.vue'
 import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
@@ -1132,6 +1133,9 @@ const canEditSelectedElementStyle = computed(() => {
 const canShowStyleTab = computed(
   () => !!activeDiagram.value && !isDiagramReadOnly.value && canEditSelectedElementStyle.value
 )
+const selectedElementIsComposite = computed(
+  () => selectedElementDiagramStyle.value?.nodeShape === 'composite',
+)
 const rightPanelTabs = computed(() => {
   const tabs: { id: string; label: string; icon: string }[] = []
   if (canShowPropertiesTab.value) {
@@ -1141,7 +1145,11 @@ const rightPanelTabs = computed(() => {
     tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'account_tree' })
   }
   if (canShowStyleTab.value) {
-    tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
+    if (selectedElementIsComposite.value) {
+      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'account_tree' })
+    } else {
+      tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
+    }
   }
   return tabs
 })
@@ -4313,6 +4321,11 @@ onBeforeUnmount(() => {
               :can-restore-style="hasDiagramStyleOverride"
               @style-change="handleDiagramElementStyleChange"
               @restore-style="restoreStyleFromNotation"
+            />
+            <CompositeStylePanel
+              v-if="activeRightTab === 'composite-style' && canShowStyleTab"
+              :current-diagram-style="selectedElementDiagramStyle"
+              @style-change="handleDiagramElementStyleChange"
             />
           </TabPanel>
         </template>

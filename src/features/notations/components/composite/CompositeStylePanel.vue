@@ -313,11 +313,26 @@ function applyStyleBindingsJson() {
 
 <template>
   <div class="csp">
-    <div v-if="canRestoreStyle" class="csp__restore">
-      <button type="button" class="csp__restore-btn" @click="emit('restore-style')">
-        <UiIcon name="refresh" />
-        {{ t('nodeStyle.restoreFromNotation') }}
-      </button>
+    <!-- Header -->
+    <div class="csp__header">
+      <div class="csp__header-type">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="5" y1="7" x2="11" y2="7" stroke="currentColor" stroke-width="1"/>
+          <line x1="5" y1="10" x2="9" y2="10" stroke="currentColor" stroke-width="1"/>
+        </svg>
+        <span>{{ t('notations.compositeFigureStyleTab') }}</span>
+      </div>
+      <div v-if="canRestoreStyle" class="csp__header-actions">
+        <button
+          type="button"
+          class="csp__header-btn"
+          :title="t('nodeStyle.restoreFromNotation')"
+          @click="emit('restore-style')"
+        >
+          <UiIcon name="restart_alt" />
+        </button>
+      </div>
     </div>
 
     <!-- Composite-level settings -->
@@ -686,37 +701,64 @@ function applyStyleBindingsJson() {
   overflow-y: auto;
 }
 
-.csp__restore {
-  padding: 6px 8px;
+.csp__header {
+  padding: 10px 8px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.csp__restore-btn {
+.csp__header-type {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-subtle);
+  gap: 5px;
   font-size: 11px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-.csp__restore-btn:hover {
-  border-color: var(--primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px 3px 6px;
+  border-radius: 5px;
   color: var(--primary);
   background: var(--primary-soft);
 }
 
-.csp__restore-btn :deep(.ui-icon) {
+.csp__header-type svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
+}
+
+.csp__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.csp__header-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.csp__header-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.csp__header-btn :deep(.ui-icon) {
+  width: 16px;
+  height: 16px;
 }
 
 .csp__grid-2 {

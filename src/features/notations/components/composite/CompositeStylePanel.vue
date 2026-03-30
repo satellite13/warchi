@@ -17,6 +17,7 @@ import {
   insetToPlain,
   type InsetSides,
 } from '../../utils/styleHelpers'
+import type { OutlineSegment } from '../../notationAttrs'
 import type {
   DiagramStyle,
   CustomProperty,
@@ -96,11 +97,17 @@ function ensureCatalogShapesLoaded() {
   if (catalogShapes.value.length === 0) fetchNodeShapes({ size: 200 })
 }
 const customShapeId = ref<string | null>(null)
+const customOutline = ref<OutlineSegment[] | undefined>(undefined)
 
 function handleCustomShapeSelect(shapeId: string) {
   const shape = catalogShapes.value.find((s) => s.id === shapeId)
   if (!shape) return
   customShapeId.value = shapeId
+  try {
+    customOutline.value = shape.outline ? (JSON.parse(shape.outline) as OutlineSegment[]) : undefined
+  } catch {
+    customOutline.value = undefined
+  }
   emitStyle()
 }
 
@@ -177,6 +184,7 @@ function loadFromStyle() {
   portsRight.value = ds.portsRight ?? 0
 
   customShapeId.value = ds.customShapeId ?? null
+  customOutline.value = ds.customOutline ?? undefined
   if (compositeShapeType.value === 'custom') ensureCatalogShapesLoaded()
 
   compositeContentDraft.value = ds.compositeContent
@@ -210,7 +218,7 @@ function emitStyle() {
       : {}),
     compositeShapeType: compositeShapeType.value,
     ...(compositeShapeType.value === 'custom' && customShapeId.value
-      ? { customShapeId: customShapeId.value }
+      ? { customShapeId: customShapeId.value, customOutline: customOutline.value }
       : {}),
     compositeAutoSize: compositeAutoSize.value,
     compositeMinWidth: compositeMinWidth.value,

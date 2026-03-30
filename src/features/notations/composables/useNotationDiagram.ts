@@ -264,13 +264,17 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         rawCompositeShape === "beveled-rectangle" ||
         rawCompositeShape === "trapezoid" ||
         rawCompositeShape === "slanted-rectangle"
-      const compositePathFactory = compositeShapeMappedToCustom
-        ? diagramShapeFactories[rawCompositeShape]?.path
-        : undefined
+      let compositePathFactory: ((w: number, h: number) => Path2D) | undefined
+      if (compositeShapeMappedToCustom) {
+        compositePathFactory = diagramShapeFactories[rawCompositeShape]?.path
+      } else if (rawCompositeShape === "custom" && ds?.customOutline?.length) {
+        const segments = ds.customOutline
+        compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h)
+      }
       node = new CompositeNode({
         ...commonBase,
         style: compositeStyle,
-        shapeType: compositeShapeMappedToCustom ? "custom" : (rawCompositeShape as "rectangle" | "circle" | "diamond" | "custom"),
+        shapeType: compositeShapeMappedToCustom || (rawCompositeShape === "custom" && compositePathFactory) ? "custom" : (rawCompositeShape as "rectangle" | "circle" | "diamond" | "custom"),
         cornerRadius: visual.cornerRadius,
         autoSize: ds?.compositeAutoSize ?? false,
         minWidth: ds?.compositeMinWidth ?? 0,

@@ -4325,7 +4325,9 @@ onBeforeUnmount(() => {
             <CompositeStylePanel
               v-if="activeRightTab === 'composite-style' && canShowStyleTab"
               :current-diagram-style="selectedElementDiagramStyle"
+              :can-restore-style="hasDiagramStyleOverride"
               @style-change="handleDiagramElementStyleChange"
+              @restore-style="restoreStyleFromNotation"
             />
           </TabPanel>
         </template>

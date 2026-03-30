@@ -29,10 +29,12 @@ const props = defineProps<{
   currentDiagramStyle?: DiagramStyle
   componentProperties?: CustomProperty[]
   nodeTypeProperties?: CustomProperty[]
+  canRestoreStyle?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'style-change', style: DiagramStyle): void
+  (e: 'restore-style'): void
 }>()
 const { t } = useI18n()
 
@@ -311,6 +313,13 @@ function applyStyleBindingsJson() {
 
 <template>
   <div class="csp">
+    <div v-if="canRestoreStyle" class="csp__restore">
+      <button type="button" class="csp__restore-btn" @click="emit('restore-style')">
+        <UiIcon name="refresh" />
+        {{ t('nodeStyle.restoreFromNotation') }}
+      </button>
+    </div>
+
     <!-- Composite-level settings -->
     <StyleSection
       :title="t('nodeStyle.figure')"
@@ -675,6 +684,39 @@ function applyStyleBindingsJson() {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
+}
+
+.csp__restore {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.csp__restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-subtle);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.csp__restore-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.csp__restore-btn :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
 }
 
 .csp__grid-2 {

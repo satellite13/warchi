@@ -596,7 +596,7 @@ function applyStyleBindingsJson() {
             }
           "
         />
-        <CompositeLivePreview :content="compositeContentDraft" />
+        <CompositeLivePreview :content="compositeContentDraft" :height="120" />
       </template>
 
       <template v-else>

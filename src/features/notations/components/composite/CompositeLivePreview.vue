@@ -50,18 +50,18 @@ function wrapContainerRenders(
       }
     }
     // Wrap children recursively
-    const children = (container as unknown as { _children?: CComponent[] })._children
-    if (Array.isArray(children)) {
-      for (const child of children) {
+    const cont = container as CContainer & { children: readonly CComponent[] }
+    if (cont.children) {
+      for (const child of cont.children) {
         wrapContainerRenders(child, ctx)
       }
     }
   }
   // Shape has content container
   if (component.type === 'shape') {
-    const shape = component as unknown as { _content?: CComponent }
-    if (shape._content) {
-      wrapContainerRenders(shape._content, ctx)
+    const shape = component as unknown as { content?: CComponent }
+    if (shape.content) {
+      wrapContainerRenders(shape.content, ctx)
     }
   }
 }

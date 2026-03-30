@@ -1525,6 +1525,10 @@ function syncDiagram() {
           ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
           ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
         }
+        const newInset = ds?.labelInset
+        if (newInset != null) {
+          ;(newEdge.label as unknown as { inset?: unknown }).inset = newInset
+        }
       }
       renderer.addEdge(newEdge)
     }

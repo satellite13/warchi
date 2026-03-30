@@ -647,6 +647,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           startMarker,
           endMarker
         })
+        if (edge.label && ds?.labelInset != null) {
+          ;(edge.label as unknown as { inset?: unknown }).inset = ds.labelInset
+        }
         renderer.addEdge(edge)
       }
     }

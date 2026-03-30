@@ -1267,15 +1267,24 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
       ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
       ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
     }
+    const rawCompositeShape = ds?.compositeShapeType ?? 'rectangle'
+    const compositeShapeMappedToCustom =
+      rawCompositeShape === 'beveled-rectangle' ||
+      rawCompositeShape === 'trapezoid' ||
+      rawCompositeShape === 'slanted-rectangle'
+    const compositePathFactory = compositeShapeMappedToCustom
+      ? diagramShapeFactories[rawCompositeShape]?.path
+      : undefined
     node = new CompositeNode({
       ...commonBase,
       style: compositeStyle,
-      shapeType: ds?.compositeShapeType ?? 'rectangle',
+      shapeType: compositeShapeMappedToCustom ? 'custom' : (rawCompositeShape as 'rectangle' | 'circle' | 'diamond' | 'custom'),
       cornerRadius: visual.cornerRadius,
       autoSize: ds?.compositeAutoSize ?? false,
       minWidth: ds?.compositeMinWidth ?? 0,
       minHeight: ds?.compositeMinHeight ?? 0,
       content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
+      ...(compositePathFactory ? { pathFactory: compositePathFactory } : {}),
     })
   } else if (shape === 'beveled-rectangle') {
     node = new CustomShapeNode({

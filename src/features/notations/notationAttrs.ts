@@ -158,7 +158,7 @@ export type DiagramStyle = {
   labelTemplate?: string
   // Composite-only fields
   compositeContent?: CompositeSerializedCComponent
-  compositeShapeType?: 'rectangle' | 'circle' | 'diamond' | 'custom'
+  compositeShapeType?: 'rectangle' | 'beveled-rectangle' | 'diamond' | 'circle' | 'trapezoid' | 'slanted-rectangle' | 'custom'
   compositeAutoSize?: boolean
   compositeMinWidth?: number
   compositeMinHeight?: number

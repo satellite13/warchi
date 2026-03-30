@@ -10,6 +10,7 @@ import InsetSidesInput from '@/components/forms/InsetSidesInput.vue'
 import CompositeTreeEditor from './CompositeTreeEditor.vue'
 import CompositeLivePreview from './CompositeLivePreview.vue'
 import A5BindingsEditor from './A5BindingsEditor.vue'
+import { useNodeShapes } from '@/composables/useNodeShapes'
 import { validateCompositeDiagramStyle } from '../../utils/validationIssues'
 import {
   toInsetSides,
@@ -49,7 +50,7 @@ const compositeJsonError = ref<string | null>(null)
 const styleBindingsJsonError = ref<string | null>(null)
 
 // Composite-level settings
-const compositeShapeType = ref<'rectangle' | 'circle' | 'diamond' | 'custom'>('rectangle')
+const compositeShapeType = ref<CompositeShape>('rectangle')
 const compositeAutoSize = ref(false)
 const compositeMinWidth = ref(0)
 const compositeMinHeight = ref(0)
@@ -74,12 +75,34 @@ const portsBottom = ref(0)
 const portsLeft = ref(0)
 const portsRight = ref(0)
 
-const COMPOSITE_SHAPE_OPTIONS = [
-  { value: 'rectangle' as const, label: 'Rectangle' },
-  { value: 'diamond' as const, label: 'Diamond' },
-  { value: 'circle' as const, label: 'Circle' },
-  { value: 'custom' as const, label: 'Custom' },
+type CompositeShape = NonNullable<DiagramStyle['compositeShapeType']>
+
+const COMPOSITE_SHAPE_OPTIONS: ReadonlyArray<{ value: CompositeShape; label: string }> = [
+  { value: 'rectangle', label: 'Rectangle' },
+  { value: 'beveled-rectangle', label: 'Beveled' },
+  { value: 'diamond', label: 'Diamond' },
+  { value: 'circle', label: 'Circle' },
+  { value: 'trapezoid', label: 'Trapezoid' },
+  { value: 'slanted-rectangle', label: 'Slanted' },
+  { value: 'custom', label: 'Custom' },
 ]
+
+// Custom shape catalog
+const { list: catalogShapes, fetchList: fetchNodeShapes } = useNodeShapes()
+const catalogShapeOptions = computed(() =>
+  catalogShapes.value.map((s) => ({ id: s.id, label: s.name })),
+)
+function ensureCatalogShapesLoaded() {
+  if (catalogShapes.value.length === 0) fetchNodeShapes({ size: 200 })
+}
+const customShapeId = ref<string | null>(null)
+
+function handleCustomShapeSelect(shapeId: string) {
+  const shape = catalogShapes.value.find((s) => s.id === shapeId)
+  if (!shape) return
+  customShapeId.value = shapeId
+  emitStyle()
+}
 
 // A5 props
 const componentPropsForA5 = computed(() => props.componentProperties ?? [])
@@ -138,6 +161,9 @@ function loadFromStyle() {
   portsLeft.value = ds.portsLeft ?? 0
   portsRight.value = ds.portsRight ?? 0
 
+  customShapeId.value = ds.customShapeId ?? null
+  if (compositeShapeType.value === 'custom') ensureCatalogShapesLoaded()
+
   compositeContentDraft.value = ds.compositeContent
     ? JSON.parse(JSON.stringify(ds.compositeContent))
     : {
@@ -168,6 +194,9 @@ function emitStyle() {
       ? { stylePropertyBindings: styleBindingsDraft.value }
       : {}),
     compositeShapeType: compositeShapeType.value,
+    ...(compositeShapeType.value === 'custom' && customShapeId.value
+      ? { customShapeId: customShapeId.value }
+      : {}),
     compositeAutoSize: compositeAutoSize.value,
     compositeMinWidth: compositeMinWidth.value,
     compositeMinHeight: compositeMinHeight.value,
@@ -268,16 +297,33 @@ function applyStyleBindingsJson() {
           class="csp__shape-btn"
           :class="{ 'csp__shape-btn--active': compositeShapeType === shape.value }"
           :title="shape.label"
-          @click="compositeShapeType = shape.value; emitStyle()"
+          @click="compositeShapeType = shape.value; if (shape.value === 'custom') ensureCatalogShapesLoaded(); emitStyle()"
         >
           <svg width="28" height="20" viewBox="0 0 28 20">
             <rect v-if="shape.value === 'rectangle'" x="2" y="3" width="24" height="14" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <polygon v-if="shape.value === 'beveled-rectangle'" points="5,3 23,3 26,6 26,17 23,20 5,20 2,17 2,6" stroke="currentColor" stroke-width="1.2" fill="none" transform="translate(0,-1.5)"/>
             <polygon v-if="shape.value === 'diamond'" points="14,1 27,10 14,19 1,10" stroke="currentColor" stroke-width="1.2" fill="none"/>
             <circle v-if="shape.value === 'circle'" cx="14" cy="10" r="8" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <polygon v-if="shape.value === 'trapezoid'" points="5,3 23,3 26,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <polygon v-if="shape.value === 'slanted-rectangle'" points="6,3 26,3 22,17 2,17" stroke="currentColor" stroke-width="1.2" fill="none"/>
             <rect v-if="shape.value === 'custom'" x="4" y="5" width="20" height="10" rx="1" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 2" fill="none"/>
           </svg>
         </button>
       </div>
+      <LabeledFieldRow v-if="compositeShapeType === 'custom'" :label="t('nodeStyle.customShape')">
+        <select
+          class="csp__select"
+          :value="customShapeId ?? ''"
+          @change="handleCustomShapeSelect(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">{{ t('common.none') }}</option>
+          <option
+            v-for="opt in catalogShapeOptions"
+            :key="opt.id"
+            :value="opt.id"
+          >{{ opt.label }}</option>
+        </select>
+      </LabeledFieldRow>
       <LabeledFieldRow :label="t('nodeStyle.compositeAutoSize')">
         <ToggleSwitch
           :model-value="compositeAutoSize"

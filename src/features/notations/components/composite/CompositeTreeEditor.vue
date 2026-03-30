@@ -363,8 +363,6 @@ const TYPE_ICONS: Record<string, string> = {
   display: grid;
   grid-template-columns: 2fr 3fr;
   gap: 6px;
-  min-height: 180px;
-  max-height: 400px;
 }
 
 .tree-editor__tree-panel {

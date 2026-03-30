@@ -53,7 +53,12 @@ const TYPE_COLORS: Record<string, string> = {
           <UiIcon :name="TYPE_ICONS[selectedNode.type] ?? 'help'" />
           {{ selectedNode.type }}
         </span>
-        <span class="inspector__id">{{ selectedNode.id ?? '—' }}</span>
+        <input
+          class="inspector__id-input"
+          :value="selectedNode.id ?? ''"
+          :placeholder="t('nodeStyle.compositeNodeId')"
+          @change="emit('update:field', 'id', ($event.target as HTMLInputElement).value)"
+        />
       </div>
 
       <div class="inspector__scroll">
@@ -147,13 +152,29 @@ const TYPE_COLORS: Record<string, string> = {
   height: 14px;
 }
 
-.inspector__id {
+.inspector__id-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
   font-size: 11px;
-  color: var(--text-subtle);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-family: inherit;
+  color: var(--base-text);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.inspector__id-input:hover {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.inspector__id-input:focus {
+  border-color: var(--primary);
+  background: var(--surface-muted);
 }
 
 .inspector__scroll {

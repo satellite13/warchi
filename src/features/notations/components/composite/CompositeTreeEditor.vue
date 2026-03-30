@@ -129,21 +129,21 @@ function addChild(type: CompositeSerializedCComponent['type']): void {
   const targetId = findNearestContainer(rawTargetId) ?? next.id!
   const newNode: CompositeSerializedCComponent =
     type === 'container'
-      ? { id: createId(), type: 'container', direction: 'column', children: [] }
+      ? { id: shortId('container'), type: 'container', direction: 'column', children: [] }
       : type === 'text'
-        ? { id: createId(), type: 'text', text: 'Text' }
+        ? { id: shortId('text'), type: 'text', text: 'Text' }
         : type === 'icon'
-          ? { id: createId(), type: 'icon', source: '' }
+          ? { id: shortId('icon'), type: 'icon', source: '' }
           : type === 'divider'
-            ? { id: createId(), type: 'divider' }
+            ? { id: shortId('divider'), type: 'divider' }
             : {
-                id: createId(),
+                id: shortId('shape'),
                 type: 'shape',
                 borderColor: '#333333',
                 borderWidth: 1,
                 backgroundColor: '#f5f5f5',
                 padding: 4,
-                content: { id: createId(), type: 'container', children: [] },
+                content: { id: shortId('container'), type: 'container', children: [] },
               }
 
   const updated = replaceNodeById(next, targetId, (node) => {
@@ -218,6 +218,20 @@ const selectedNode = computed(
   () => treeNodes.value.find((n) => n.node.id === selectedId.value)?.node ?? null,
 )
 
+/** Generate short human-readable id for new nodes */
+function shortId(type: string): string {
+  const counters: Record<string, number> = {}
+  function count(node: CompositeSerializedCComponent) {
+    const t = node.type
+    counters[t] = (counters[t] ?? 0) + 1
+    if (node.content) count(node.content)
+    if (Array.isArray(node.children)) node.children.forEach(count)
+  }
+  count(props.modelValue)
+  const n = (counters[type] ?? 0) + 1
+  return `${type}${n}`
+}
+
 const TYPE_ICONS: Record<string, string> = {
   container: 'view_column',
   text: 'text_fields',
@@ -266,8 +280,7 @@ const TYPE_ICONS: Record<string, string> = {
                   class="tree-editor__row-icon"
                 />
               </span>
-              <span class="tree-editor__row-type">{{ entry.node.type }}</span>
-              <span v-if="entry.node.id" class="tree-editor__row-id">{{ entry.node.id.length > 12 ? entry.node.id.slice(0, 12) + '…' : entry.node.id }}</span>
+              <span class="tree-editor__row-type">{{ entry.node.id || entry.node.type }}</span>
             </span>
           </button>
         </div>
@@ -349,7 +362,8 @@ const TYPE_ICONS: Record<string, string> = {
   display: grid;
   grid-template-columns: 2fr 3fr;
   gap: 6px;
-  min-height: 200px;
+  min-height: 180px;
+  max-height: 400px;
 }
 
 .tree-editor__tree-panel {
@@ -357,14 +371,15 @@ const TYPE_ICONS: Record<string, string> = {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  min-height: 0;
 }
 
 .tree-editor__tree {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow-y: auto;
-  max-height: 300px;
   flex: 1;
+  min-height: 0;
 }
 
 .tree-editor__row {
@@ -488,5 +503,6 @@ const TYPE_ICONS: Record<string, string> = {
   border-radius: 8px;
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 </style>

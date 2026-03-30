@@ -142,14 +142,28 @@ const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500'
       @update:model-value="emit('update:field', 'lineHeight', Number($event))"
     />
 
-    <LabeledNumberInput
-      :label="t('nodeStyle.compositeRotation')"
-      :model-value="modelValue.rotation ?? 0"
-      :min="-360"
-      :max="360"
-      :step="1"
-      @update:model-value="emit('update:field', 'rotation', Number($event))"
-    />
+    <LabeledFieldRow :label="t('nodeStyle.compositeRotation')">
+      <div class="txt-props__segmented">
+        <button
+          type="button"
+          class="txt-props__seg-btn"
+          :class="{ 'txt-props__seg-btn--active': (modelValue.rotation ?? 0) === 0 }"
+          @click="emit('update:field', 'rotation', 0)"
+        >0°</button>
+        <button
+          type="button"
+          class="txt-props__seg-btn"
+          :class="{ 'txt-props__seg-btn--active': modelValue.rotation === 90 }"
+          @click="emit('update:field', 'rotation', 90)"
+        >90°</button>
+        <button
+          type="button"
+          class="txt-props__seg-btn"
+          :class="{ 'txt-props__seg-btn--active': modelValue.rotation === -90 }"
+          @click="emit('update:field', 'rotation', -90)"
+        >−90°</button>
+      </div>
+    </LabeledFieldRow>
   </div>
 </template>
 

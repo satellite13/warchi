@@ -635,6 +635,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           arrowType: "none",
           label: buildEdgeLabel(relationName, ds),
           labelOffset: ds?.edgeLabelOffset ?? 18,
+          ...(ds?.edgeLabelPosition != null ? { labelPosition: ds.edgeLabelPosition } : {}),
+          ...(ds?.edgeLabelFollowPath ? { labelFollowPath: true } : {}),
           labelLineGap: ds?.edgeLabelLineGap ?? false,
           labelBackground: buildEdgeLabelBackground(ds),
           style: {

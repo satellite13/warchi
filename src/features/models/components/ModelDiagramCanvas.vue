@@ -794,6 +794,8 @@ const resolveEdgeOptions = (
     }
   }
   if (ds.edgeLabelOffset != null) opts.labelOffset = ds.edgeLabelOffset
+  if (ds.edgeLabelPosition != null) (opts as Record<string, unknown>).labelPosition = ds.edgeLabelPosition
+  if (ds.edgeLabelFollowPath != null) (opts as Record<string, unknown>).labelFollowPath = ds.edgeLabelFollowPath
   if (ds.edgeLabelLineGap != null) opts.labelLineGap = ds.edgeLabelLineGap
   return opts
 }
@@ -1476,6 +1478,8 @@ function syncDiagram() {
           controlPoints
       }
       existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
+      if (ds?.edgeLabelPosition != null) existing.labelPosition = ds.edgeLabelPosition
+      if (ds?.edgeLabelFollowPath != null) existing.labelFollowPath = ds.edgeLabelFollowPath
       if (edgeOpts.labelLineGap !== undefined) existing.labelLineGap = edgeOpts.labelLineGap
       existing.label = edgeLabelConfig
       if (existing.label) {
@@ -1513,6 +1517,8 @@ function syncDiagram() {
         endMarker: edgeOpts.endMarker,
         ...(edgeLabelText !== undefined ? { label: edgeLabelText } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
+        ...(ds?.edgeLabelPosition != null ? { labelPosition: ds.edgeLabelPosition } : {}),
+        ...(ds?.edgeLabelFollowPath ? { labelFollowPath: true } : {}),
         ...(edgeOpts.labelLineGap !== undefined ? { labelLineGap: edgeOpts.labelLineGap } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),

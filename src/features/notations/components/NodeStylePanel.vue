@@ -149,6 +149,8 @@ function emitEdgeStyle() {
     labelFontSize: edgeLabelFontSize.value,
     labelInset: insetToPlain(edgeLabelInset.value),
     edgeLabelOffset: edgeLabelOffset.value,
+    edgeLabelPosition: edgeLabelPosition.value,
+    edgeLabelFollowPath: edgeLabelFollowPath.value,
     edgeLabelLineGap: edgeLabelLineGap.value,
     labelBgColor: edgeLabelBgColor.value,
     labelBgOpacity: edgeLabelBgOpacity.value,
@@ -630,6 +632,8 @@ const edgeLabelOpacity = ref(1);
 const edgeLabelFontSize = ref(14);
 const edgeLabelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 });
 const edgeLabelOffset = ref(0);
+const edgeLabelPosition = ref(0.5);
+const edgeLabelFollowPath = ref(false);
 const edgeLabelLineGap = ref(false);
 const edgeLabelBgColor = ref("#ffffff");
 const edgeLabelBgOpacity = ref(1);
@@ -813,6 +817,8 @@ function loadEdgeProps() {
     8
   );
   edgeLabelOffset.value = styleFromDiagram?.edgeLabelOffset ?? edge.labelOffset ?? 0;
+  edgeLabelPosition.value = styleFromDiagram?.edgeLabelPosition ?? edge.labelPosition ?? 0.5;
+  edgeLabelFollowPath.value = styleFromDiagram?.edgeLabelFollowPath ?? edge.labelFollowPath ?? false;
   edgeLabelLineGap.value = styleFromDiagram?.edgeLabelLineGap ?? edge.labelLineGap ?? false;
   edgeLabelBgColor.value =
     styleFromDiagram?.labelBgColor ?? (edge as any).labelBackground?.color ?? "#ffffff";
@@ -1577,6 +1583,30 @@ function handleEdgeLabelOffsetChange(value: string) {
   emitEdgeStyle();
 }
 
+function handleEdgeLabelPositionChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v)) return;
+  edgeLabelPosition.value = Math.max(0, Math.min(1, v));
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    edge.labelPosition = edgeLabelPosition.value;
+  });
+  props.renderer?.markDirty();
+  emitEdgeStyle();
+}
+
+function handleEdgeLabelFollowPathChange(value: boolean) {
+  edgeLabelFollowPath.value = value;
+  resetRelationPreset();
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
+    edge.labelFollowPath = value;
+  });
+  props.renderer?.markDirty();
+  emitEdgeStyle();
+}
+
 function handleEdgeLabelBgColorChange(value: string) {
   edgeLabelBgColor.value = value;
   resetRelationPreset();
@@ -1831,6 +1861,13 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 />
                 <LabeledFieldRow :label="t('nodeStyle.offset')">
                   <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.labelPosition')">
+                  <input type="range" class="sp-range" :value="edgeLabelPosition" min="0" max="1" step="0.05" @input="handleEdgeLabelPositionChange(($event.target as HTMLInputElement).value)">
+                  <input type="number" class="sp-input sp-input--tiny" :value="edgeLabelPosition" min="0" max="1" step="0.05" @input="handleEdgeLabelPositionChange(($event.target as HTMLInputElement).value)">
+                </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.labelFollowPath')">
+                  <ToggleSwitch :model-value="edgeLabelFollowPath" @update:model-value="handleEdgeLabelFollowPathChange" />
                 </LabeledFieldRow>
                 <LabeledFieldRow :label="t('nodeStyle.background')">
                   <ColorWithAlphaField

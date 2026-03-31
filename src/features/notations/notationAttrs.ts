@@ -119,6 +119,10 @@ export type DiagramStyle = {
   labelBgPadding?: number
   labelBgBorderRadius?: number
   edgeLabelOffset?: number
+  /** Position along the edge path (0 = source, 0.5 = midpoint, 1 = target) */
+  edgeLabelPosition?: number
+  /** Rotate label text to follow the edge path tangent */
+  edgeLabelFollowPath?: boolean
   /** When true, the edge line is not drawn under the label (gap at label). */
   edgeLabelLineGap?: boolean
   // Marker details
@@ -368,6 +372,8 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.labelBgBorderRadius === 'number')
     style.labelBgBorderRadius = value.labelBgBorderRadius
   if (typeof value.edgeLabelOffset === 'number') style.edgeLabelOffset = value.edgeLabelOffset
+  if (typeof value.edgeLabelPosition === 'number') style.edgeLabelPosition = value.edgeLabelPosition
+  if (typeof value.edgeLabelFollowPath === 'boolean') style.edgeLabelFollowPath = value.edgeLabelFollowPath
   if (typeof value.edgeLabelLineGap === 'boolean') style.edgeLabelLineGap = value.edgeLabelLineGap
   if (typeof value.startMarkerSize === 'number') style.startMarkerSize = value.startMarkerSize
   if (typeof value.startMarkerFillColor === 'string')

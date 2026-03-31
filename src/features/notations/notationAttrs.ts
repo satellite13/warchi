@@ -414,13 +414,20 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.labelTemplate === 'string') style.labelTemplate = value.labelTemplate
   const compositeContent = normalizeCompositeContent(value.compositeContent)
   if (compositeContent) style.compositeContent = compositeContent
+  const allowedCompositeShapes: DiagramStyle['compositeShapeType'][] = [
+    'rectangle',
+    'beveled-rectangle',
+    'diamond',
+    'circle',
+    'trapezoid',
+    'slanted-rectangle',
+    'custom',
+  ]
   if (
-    value.compositeShapeType === 'rectangle' ||
-    value.compositeShapeType === 'circle' ||
-    value.compositeShapeType === 'diamond' ||
-    value.compositeShapeType === 'custom'
+    typeof value.compositeShapeType === 'string' &&
+    (allowedCompositeShapes as string[]).includes(value.compositeShapeType)
   ) {
-    style.compositeShapeType = value.compositeShapeType
+    style.compositeShapeType = value.compositeShapeType as NonNullable<DiagramStyle['compositeShapeType']>
   }
   if (typeof value.compositeAutoSize === 'boolean') style.compositeAutoSize = value.compositeAutoSize
   if (typeof value.compositeMinWidth === 'number') style.compositeMinWidth = value.compositeMinWidth

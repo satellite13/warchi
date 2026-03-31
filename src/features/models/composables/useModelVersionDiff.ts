@@ -1,5 +1,6 @@
 import { computed, ref } from "vue"
 import { apiGet } from "@/composables/useApi"
+import { listParams } from '@/api/queryHelpers'
 import type { ModelData } from "@/types/entities"
 import type { PaginatedResponse } from "@/types/entities"
 import type {
@@ -53,7 +54,7 @@ export function useModelVersionDiff() {
 
   async function loadBaseFromApi(modelId: string): Promise<void> {
     baseData.value = null
-    const listQuery = new URLSearchParams({ size: "1000" })
+    const listQuery = listParams()
     const [nodesRes, linksRes, diagramsRes] = await Promise.all([
       apiGet<PaginatedResponse<NodeResponse>>(
         `/nodes?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
@@ -99,7 +100,7 @@ export function useModelVersionDiff() {
     compareTargetError.value = null
     compareTargetData.value = null
     try {
-      const listQuery = new URLSearchParams({ size: "1000" })
+      const listQuery = listParams()
       const [nodesRes, linksRes, diagramsRes] = await Promise.all([
         apiGet<PaginatedResponse<NodeResponse>>(
           `/nodes?modelId=${encodeURIComponent(otherModelId)}&${listQuery.toString()}`

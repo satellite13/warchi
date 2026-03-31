@@ -1,5 +1,6 @@
 import { ref, type Ref } from "vue"
 import { apiGet, apiPost, apiPut, apiDelete } from "./useApi"
+import { pagedListParams } from "../api/queryHelpers"
 import type { PaginatedResponse } from "../types/entities"
 import { paginatedTotalElements } from "../utils/paginatedResponse"
 import type {
@@ -20,9 +21,7 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
   async function fetchList(params?: { ownerId?: string; page?: number; size?: number }): Promise<boolean> {
     isLoading.value = true
     error.value = null
-    const searchParams = new URLSearchParams()
-    if (params?.page != null) searchParams.set("page", String(params.page))
-    if (params?.size != null) searchParams.set("size", String(params.size))
+    const searchParams = pagedListParams(params?.page ?? 0, params?.size ?? 50)
     if (params?.ownerId) searchParams.set("ownerId", params.ownerId)
     const query = searchParams.toString()
     const path = query ? `${nodeShapesPath}?${query}` : nodeShapesPath

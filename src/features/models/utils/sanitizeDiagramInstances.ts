@@ -1,4 +1,4 @@
-import { clonePlainDeep } from '../../../utils/clonePlainDeep'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import type { DiagramAttrs, DiagramEdgeInstance, DiagramNodeInstance } from '../modelAttrs'
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
 

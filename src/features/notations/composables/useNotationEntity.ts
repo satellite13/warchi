@@ -1,7 +1,8 @@
 import { computed, onScopeDispose, ref, watch, type Ref, type ComputedRef } from 'vue'
-import { apiGet } from '../../../composables/useApi'
-import type { PaginatedResponse } from '../../../types/entities'
-import type { ComponentResponse, RelationResponse } from '../../../types/api'
+import { apiGet } from '@/composables/useApi'
+import { listParams } from '@/api/queryHelpers'
+import type { PaginatedResponse } from '@/types/entities'
+import type { ComponentResponse, RelationResponse } from '@/types/api'
 import type {
   NotationEditorState,
   EditorNodeType,
@@ -110,10 +111,8 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
     }
 
     const query = normalizeQuery(searchQuery.value)
-    const params = new URLSearchParams({
-      notationId: state.value.notationId,
-      size: '1000',
-    })
+    const params = listParams()
+    params.set('notationId', state.value.notationId)
     if (query) params.set('name', query)
     if (selectedTags.value.length > 0) {
       params.set('tagsAll', selectedTags.value.join(','))

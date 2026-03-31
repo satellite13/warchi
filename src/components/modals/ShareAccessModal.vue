@@ -2,10 +2,9 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
-import { apiGet } from "../../composables/useApi";
 import { useAccessShares } from "../../composables/useAccessShares";
+import { useUserSearch } from "../../composables/useUserSearch";
 import type { SharePermission, ShareResourceType } from "../../types/api";
-import type { PaginatedResponse, UserInfo } from "../../types/entities";
 
 const props = defineProps<{
   title: string;
@@ -28,11 +27,17 @@ const {
   revokeShare
 } = useAccessShares();
 
-const userSearchEmail = ref("");
-const searchError = ref<string | null>(null);
-const selectedUser = ref<UserInfo | null>(null);
-const searchResults = ref<UserInfo[]>([]);
-const searchPerformed = ref(false);
+const {
+  userSearchEmail,
+  searchError,
+  selectedUser,
+  searchResults,
+  searchPerformed,
+  searchUsers: doSearchUsers,
+  selectUser,
+  resetSearch,
+} = useUserSearch();
+
 const selectedPermission = ref<SharePermission>("VIEW");
 const shareWithAllUsers = ref(false);
 
@@ -45,34 +50,8 @@ const load = async () => {
 };
 
 const searchUsers = async (): Promise<void> => {
-  if (shareWithAllUsers.value) {
-    return;
-  }
-  const email = userSearchEmail.value.trim();
-  searchError.value = null;
-  searchPerformed.value = true;
-  selectedUser.value = null;
-  searchResults.value = [];
-
-  if (!email) {
-    searchError.value = t("share.enterEmailForSearch");
-    return;
-  }
-
-  const query = new URLSearchParams({
-    page: "0",
-    size: "10",
-    sort: "email,asc",
-    email
-  });
-
-  const result = await apiGet<PaginatedResponse<UserInfo>>(`/users/public/search?${query.toString()}`);
-  if (!result.success) {
-    searchError.value = result.error.message;
-    return;
-  }
-
-  searchResults.value = Array.isArray(result.data.content) ? result.data.content : [];
+  if (shareWithAllUsers.value) return;
+  await doSearchUsers();
 };
 
 const submitShare = async () => {
@@ -87,10 +66,7 @@ const submitShare = async () => {
     permission: selectedPermission.value
   });
   if (ok) {
-    userSearchEmail.value = "";
-    selectedUser.value = null;
-    searchResults.value = [];
-    searchPerformed.value = false;
+    resetSearch();
     selectedPermission.value = "VIEW";
     shareWithAllUsers.value = false;
   }
@@ -100,24 +76,9 @@ const revoke = async (shareId: string) => {
   await revokeShare(props.resourceType, props.resourceId, shareId);
 };
 
-const selectUser = (user: UserInfo) => {
-  selectedUser.value = user;
-};
-
-watch(userSearchEmail, () => {
-  selectedUser.value = null;
-  searchError.value = null;
-  searchResults.value = [];
-  searchPerformed.value = false;
-});
-
 watch(shareWithAllUsers, (enabled) => {
   if (!enabled) return;
-  userSearchEmail.value = "";
-  selectedUser.value = null;
-  searchError.value = null;
-  searchResults.value = [];
-  searchPerformed.value = false;
+  resetSearch();
 });
 
 watch(

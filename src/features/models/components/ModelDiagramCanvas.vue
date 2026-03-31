@@ -31,7 +31,7 @@ import {
   customOutlineToPath2D,
   customOutlineToSvgPath,
 } from '@/utils/customOutlinePath'
-import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '../../../types/api'
+import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import {
   parseEntityAttrs,
   type CustomProperty,

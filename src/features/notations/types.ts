@@ -3,7 +3,7 @@ import type {
   LinkTypeResponse,
   ComponentResponse,
   RelationResponse,
-} from '../../types/api'
+} from '@/types/api'
 import type { CustomProperty, DiagramStyle, NodeStyle } from './notationAttrs'
 
 export interface DiagramLayerNode {

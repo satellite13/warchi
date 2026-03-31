@@ -1,6 +1,6 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
-import { createId, type CustomProperty } from '../notationAttrs'
-import type { EditorLinkType, EditorRelation, NotationEditorState } from '../types'
+import { createId } from '../notationAttrs'
+import type { EditorRelation, NotationEditorState } from '../types'
 import {
   getAllRelationPresets,
   applyRelationStylePreset,
@@ -8,50 +8,13 @@ import {
   type RelationStylePreset,
 } from '../styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
+import { parseTagsInput, getTagQuery, copyTypeProperties } from '../utils/tagParsers'
+import { addType } from '../utils/typeManagement'
 
 export const NEW_TYPE_VALUE = '__new__'
 export const RELATION_WITHOUT_TYPE_VALUE = '__without_type__'
 const UNTYPED_LINK_TYPE_NAME = 'Diagram only'
 
-const parseTagsInput = (value: string) =>
-  value
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-
-const getTagQuery = (value: string) => {
-  const parts = value.split(',')
-  const prefix = parts
-    .slice(0, -1)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-  const query = parts[parts.length - 1]?.trim() || ''
-  return { prefix, query }
-}
-
-const copyTypeProperties = (source: CustomProperty[]): CustomProperty[] =>
-  source.map((p) => ({
-    ...p,
-    id: createId(),
-    enumValues: p.enumValues ? [...p.enumValues] : [],
-    _fromType: true,
-  }))
-
-const addLinkType = (list: EditorLinkType[], name: string, ownerId: string): string | null => {
-  const trimmed = name.trim()
-  if (!trimmed) return null
-  const existing = list.find((item) => item.name.toLowerCase() === trimmed.toLowerCase())
-  if (existing) return existing.id
-  const newType: EditorLinkType = {
-    id: createId(),
-    name: trimmed,
-    ownerId,
-    parsedAttrs: {},
-    _isNew: true,
-  }
-  list.push(newType)
-  return newType.id
-}
 
 export interface RelationManagementOptions {
   state: Ref<NotationEditorState>
@@ -107,11 +70,11 @@ export function useRelationManagement(options: RelationManagementOptions) {
     let linkTypeId = relationTypeSelection.value
     if (linkTypeId === RELATION_WITHOUT_TYPE_VALUE) {
       linkTypeId =
-        addLinkType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
+        addType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
     }
     if (linkTypeId === NEW_TYPE_VALUE) {
       linkTypeId =
-        addLinkType(state.value.linkTypes, relationNewTypeName.value, state.value.ownerId) || ''
+        addType(state.value.linkTypes, relationNewTypeName.value, state.value.ownerId) || ''
       if (!linkTypeId) {
         relationFormError.value = 'Введите название нового типа связи'
         return

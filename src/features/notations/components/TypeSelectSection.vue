@@ -2,8 +2,8 @@
 import {computed, ref} from "vue";
 import {useI18n} from "vue-i18n";
 import CollapseSection from "./CollapseSection.vue";
-import BaseModal from "../../../components/modals/BaseModal.vue";
-import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
+import BaseModal from "@/components/modals/BaseModal.vue";
+import SearchableSelect from "@/components/forms/SearchableSelect.vue";
 import type {EditorComponent, EditorRelation} from "../types";
 
 const props = defineProps<{

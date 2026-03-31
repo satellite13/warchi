@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LinkTypeResponse, RelationResponse } from '../../../types/api'
+import type { LinkTypeResponse, RelationResponse } from '@/types/api'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import { computeTraceabilityLinkStatus, type TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
 import ModelTraceBranch from './ModelTraceBranch.vue'

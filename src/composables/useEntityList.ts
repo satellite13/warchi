@@ -4,6 +4,7 @@ import { apiGet } from "./useApi"
 import { useAuth } from "./useAuth"
 import { resolveOwnerDisplayNames } from "../utils/resolveOwnerNames"
 import { compareVersions } from "../utils/version"
+import { pagedListParams } from "@/api/queryHelpers"
 import { useEntityCreateModal } from "./useEntityCreateModal"
 import { useEntityDeleteModal } from "./useEntityDeleteModal"
 import { useEntityRenameModal } from "./useEntityRenameModal"
@@ -192,7 +193,7 @@ export function useEntityList<T extends VersionedEntity>(
     try {
       const loaded = await loadItemsGrouped()
       if (!loaded) {
-        const query = new URLSearchParams({ page: "0", size: "50" })
+        const query = pagedListParams(0)
         const result = await apiGet<PaginatedResponse<T>>(
           `/${config.endpoint}?${query.toString()}`
         )

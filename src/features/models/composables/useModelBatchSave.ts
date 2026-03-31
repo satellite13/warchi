@@ -1,6 +1,6 @@
-import { apiGet, apiPost } from '../../../composables/useApi'
-import type { ApiResult } from '../../../api/apiClient'
-import type { DiagramResponse, LinkResponse, NodeResponse } from '../../../types/api'
+import { apiGet, apiPost } from '@/composables/useApi'
+import type { ApiResult } from '@/api/apiClient'
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import { serializeNodeAttrs, serializeLinkAttrs, serializeDiagramAttrs } from '../modelAttrs'
 

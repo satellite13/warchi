@@ -1,8 +1,9 @@
 import { computed, onScopeDispose, ref, type ComputedRef, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { apiPost } from '../../../composables/useApi'
-import type { ModelData } from '../../../types/entities'
-import type { DiagramResponse } from '../../../types/api'
+import { apiPost } from '@/composables/useApi'
+import { useSaveState } from '@/composables/useSaveState'
+import type { ModelData } from '@/types/entities'
+import type { DiagramResponse } from '@/types/api'
 import {
   createEmptyModelEditorState,
   type EditorDiagram,
@@ -60,16 +61,13 @@ export const useModelEditor = (): ModelEditorReturn => {
   const state = ref<ModelEditorState>(createEmptyModelEditorState())
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const isSaving = ref(false)
-  const saveError = ref<string | null>(null)
-  const saveSuccess = ref(false)
-  const saveProgress = ref('')
+  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
   const modelDirty = ref(false)
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
-  let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
+
   const {
     ensureNotationRelationsAndRules,
     isNotationRelationsAndRulesLoading,
@@ -93,10 +91,6 @@ export const useModelEditor = (): ModelEditorReturn => {
   })
 
   onScopeDispose(() => {
-    if (saveSuccessTimer) {
-      clearTimeout(saveSuccessTimer)
-      saveSuccessTimer = null
-    }
     disposeSaveErrorTimer()
   })
 
@@ -142,10 +136,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const saveChanges = async (): Promise<boolean> => {
     if (!model.value) return false
     if (isSaving.value) return false
-    isSaving.value = true
-    saveError.value = null
-    saveSuccess.value = false
-    saveProgress.value = ''
+    startSave()
     batchSaveConflict.value = null
 
     try {
@@ -168,16 +159,10 @@ export const useModelEditor = (): ModelEditorReturn => {
         return false
       }
 
-      saveSuccess.value = true
-      if (saveSuccessTimer) clearTimeout(saveSuccessTimer)
-      saveSuccessTimer = setTimeout(() => {
-        saveSuccess.value = false
-        saveSuccessTimer = null
-      }, 2500)
+      completeSave(2500)
       return true
     } finally {
-      isSaving.value = false
-      saveProgress.value = ''
+      finishSave()
     }
   }
 

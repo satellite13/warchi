@@ -7,8 +7,8 @@ import type {
   NodeResponse,
   RelationResponse,
   RelationRuleResponse
-} from "../../types/api"
-import type { NotationData } from "../../types/entities"
+} from "@/types/api"
+import type { NotationData } from "@/types/entities"
 import type {
   DiagramAttrs,
   ModelLinkAttrs,

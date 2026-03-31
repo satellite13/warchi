@@ -1,8 +1,9 @@
 import { ref, computed, watch, type Ref } from "vue"
 import { useI18n } from "vue-i18n"
-import { apiGet, apiPost, apiPut, apiDelete } from "../../../composables/useApi"
-import { useAuth } from "../../../composables/useAuth"
-import { resolveOwnerDisplayNames } from "../../../utils/resolveOwnerNames"
+import { apiGet, apiPost, apiPut, apiDelete } from "@/composables/useApi"
+import { listParams } from '@/api/queryHelpers'
+import { useAuth } from "@/composables/useAuth"
+import { resolveOwnerDisplayNames } from "@/utils/resolveOwnerNames"
 import { parseTypeAttrs, serializeTypeAttrs, createId } from "../../notations/notationAttrs"
 import type { TypeParsedAttrs } from "../../notations/types"
 import type {
@@ -14,8 +15,8 @@ import type {
   LinkTypeUpdateRequest,
   ComponentResponse,
   RelationResponse
-} from "../../../types/api"
-import type { AccessPermission, PaginatedResponse, NotationData } from "../../../types/entities"
+} from "@/types/api"
+import type { AccessPermission, PaginatedResponse, NotationData } from "@/types/entities"
 
 export type TypeKind = "node" | "link"
 
@@ -110,7 +111,7 @@ export function useTypeEditor() {
     isLoading.value = true
     saveError.value = null
     try {
-      const query = new URLSearchParams({ size: "1000" })
+      const query = listParams()
 
       const [nodeResult, linkResult] = await Promise.all([
         apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${query.toString()}`),
@@ -381,7 +382,7 @@ export function useTypeEditor() {
 
     isLoadingUsages.value = true
     try {
-      const query = new URLSearchParams({ size: "1000" })
+      const query = listParams()
 
       const [notationsResult, elementsResult] = await Promise.all([
         apiGet<PaginatedResponse<NotationData>>(`/notations?${query.toString()}`),

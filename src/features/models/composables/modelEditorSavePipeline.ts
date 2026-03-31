@@ -1,5 +1,5 @@
-import { apiDelete, apiPost, apiPut } from "../../../composables/useApi"
-import type { ModelData } from "../../../types/entities"
+import { apiDelete, apiPost, apiPut } from "@/composables/useApi"
+import type { ModelData } from "@/types/entities"
 import type {
   DiagramRequest,
   DiagramResponse,
@@ -9,22 +9,12 @@ import type {
   ModelUpdateRequest,
   NodeRequest,
   NodeResponse,
-} from "../../../types/api"
-import { compareVersions } from "../../../utils/version"
+} from "@/types/api"
+import { formatEntitySaveError } from "@/utils/formatEntityError"
+import { compareVersions } from "@/utils/version"
 import { serializeDiagramAttrs, serializeLinkAttrs, serializeNodeAttrs } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "../types"
 
-function formatSaveEntityError(
-  action: "создания" | "обновления" | "удаления",
-  entity: string,
-  status: number,
-  message: string
-): string {
-  if (status === 401 || status === 403) {
-    return "Недостаточно прав для редактирования модели. Войдите заново или обратитесь к администратору."
-  }
-  return `Ошибка ${action} ${entity}: ${message}`
-}
 
 export async function saveModelMetadata(
   model: ModelData,
@@ -83,7 +73,7 @@ export async function saveNodes(
       const result = await apiPost<NodeResponse>("/nodes", request)
       if (!result.success) {
         throw new Error(
-          formatSaveEntityError("создания", "узла", result.error.status, result.error.message)
+          formatEntitySaveError("модели", "создания", "узла", result.error.status, result.error.message)
         )
       }
       const oldId = node.id
@@ -120,7 +110,7 @@ export async function saveNodes(
     const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatSaveEntityError("обновления", "узла", result.error.status, result.error.message)
+        formatEntitySaveError("модели", "обновления", "узла", result.error.status, result.error.message)
       )
     }
     node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
@@ -134,7 +124,7 @@ export async function saveNodes(
     const result = await apiDelete<void>(`/nodes/${node.id}`)
     if (!result.success) {
       throw new Error(
-        formatSaveEntityError("удаления", "узла", result.error.status, result.error.message)
+        formatEntitySaveError("модели", "удаления", "узла", result.error.status, result.error.message)
       )
     }
   }

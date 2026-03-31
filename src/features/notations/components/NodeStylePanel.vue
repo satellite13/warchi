@@ -9,7 +9,7 @@ import ColorWithAlphaField from "./ColorWithAlphaField.vue";
 import LabeledFieldRow from "./LabeledFieldRow.vue";
 import LabeledNumberInput from "./LabeledNumberInput.vue";
 import StyleSection from "./StyleSection.vue";
-import SearchableSelect from "../../../components/forms/SearchableSelect.vue";
+import SearchableSelect from "@/components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import ToggleSwitch from "@/components/forms/ToggleSwitch.vue";
 import type {

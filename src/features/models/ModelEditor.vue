@@ -2,11 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { apiGet, uploadDiagramSvg } from '../../composables/useApi'
-import MainLayout from '../../layouts/MainLayout.vue'
-import AppFooter from '../../components/layout/AppFooter.vue'
-import BaseModal from '../../components/modals/BaseModal.vue'
-import ShareAccessModal from '../../components/modals/ShareAccessModal.vue'
+import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
+import { pagedListParams } from '@/api/queryHelpers'
+import MainLayout from '@/layouts/MainLayout.vue'
+import AppFooter from '@/components/layout/AppFooter.vue'
+import BaseModal from '@/components/modals/BaseModal.vue'
+import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
@@ -46,12 +47,12 @@ import {
   setDiagramScopedLinkValue,
   setDiagramScopedNodeValue,
 } from './utils/diagramScopedProperties'
-import { useAuth } from '../../composables/useAuth'
-import { usePermissions } from '../../composables/usePermissions'
-import { getUserDisplayName } from '../../utils/userDisplay'
-import type { PaginatedResponse, UserInfo } from '../../types/entities'
-import { paginatedIsLastPage } from '../../utils/paginatedResponse'
-import { useCanShare } from '../../composables/useCanShare'
+import { useAuth } from '@/composables/useAuth'
+import { usePermissions } from '@/composables/usePermissions'
+import { getUserDisplayName } from '@/utils/userDisplay'
+import type { PaginatedResponse, UserInfo } from '@/types/entities'
+import { paginatedIsLastPage } from '@/utils/paginatedResponse'
+import { useCanShare } from '@/composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
@@ -66,20 +67,20 @@ import {
 } from '../notations/notationAttrs'
 import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import CompositeStylePanel from '../notations/components/composite/CompositeStylePanel.vue'
-import TabPanel from '../../components/layout/TabPanel.vue'
-import DocumentEditorModal from '../../components/modals/DocumentEditorModal.vue'
+import TabPanel from '@/components/layout/TabPanel.vue'
+import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
-import { bumpMinor, compareVersions } from '../../utils/version'
-import { appendDiagramCaption } from '../../utils/diagramSvgCaption'
+import { bumpMinor, compareVersions } from '@/utils/version'
+import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import type {
   LinkResponse,
   NotationMetaResponse,
   NotationResponse,
   RelationResponse,
-} from '../../types/api'
-import { useWikiDocuments } from '../../composables/useWikiDocuments'
+} from '@/types/api'
+import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
-import { formatDate } from '../../utils/formatDate'
+import { formatDate } from '@/utils/formatDate'
 
 const {
   model,
@@ -393,7 +394,7 @@ watch(
       let page = 0
       const pageSize = 2000
       while (true) {
-        const q = new URLSearchParams({ size: String(pageSize), page: String(page) })
+        const q = pagedListParams(page, pageSize)
         const r = await apiGet<PaginatedResponse<LinkResponse>>(
           `/links?modelId=${encodeURIComponent(mid)}&${q.toString()}`
         )

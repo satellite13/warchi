@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import {
-  computeDropdownPanelPlacement,
-  DROPDOWN_SEARCH_BLOCK_PX,
-  type DropdownPanelPlacement,
-} from '@/utils/dropdownPanelPosition'
+import { computed, ref } from 'vue'
+import { DROPDOWN_SEARCH_BLOCK_PX } from '@/utils/dropdownPanelPosition'
+import { useDropdownPanel } from '@/composables/useDropdownPanel'
 
 export type MultiSelectOption = { id: string; label: string }
 
@@ -30,25 +27,20 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string[]): void
 }>()
 
-const isOpen = ref(false)
-const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
-const rootRef = ref<HTMLElement | null>(null)
 const controlRef = ref<HTMLDivElement | null>(null)
-const panelPlacement = ref<DropdownPanelPlacement | null>(null)
 
-function multiSelectHeaderBlockPx(): number {
-  return props.options.length > 5 ? DROPDOWN_SEARCH_BLOCK_PX : 6
-}
-
-function updatePanelPosition(): void {
-  if (!controlRef.value) return
-  const rect = controlRef.value.getBoundingClientRect()
-  panelPlacement.value = computeDropdownPanelPlacement(rect, {
-    headerBlockPx: multiSelectHeaderBlockPx(),
-    preferredMaxListHeight: 160,
-  })
-}
+const {
+  isOpen,
+  searchQuery,
+  panelPlacement,
+  toggle,
+} = useDropdownPanel(controlRef, searchInputRef, {
+  panelClass: 'multi-select-panel',
+  rootClass: 'multi-select',
+  headerBlockPx: props.options.length > 5 ? DROPDOWN_SEARCH_BLOCK_PX : 6,
+  preferredMaxListHeight: 160,
+})
 
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -69,21 +61,6 @@ const displayLabel = computed(() => {
   return rest > 0 ? `${visible.join(', ')}, +${rest}` : visible.join(', ')
 })
 
-const toggle = () => {
-  if (props.disabled) return
-  if (isOpen.value) {
-    isOpen.value = false
-  } else {
-    isOpen.value = true
-    searchQuery.value = ''
-    updatePanelPosition()
-    nextTick(() => {
-      updatePanelPosition()
-      searchInputRef.value?.focus()
-    })
-  }
-}
-
 const toggleOption = (id: string) => {
   const next = new Set(props.modelValue)
   if (next.has(id)) {
@@ -93,39 +70,11 @@ const toggleOption = (id: string) => {
   }
   emit('update:modelValue', Array.from(next))
 }
-
-const handleClickOutside = (e: MouseEvent) => {
-  if (!isOpen.value) return
-  const target = e.target as HTMLElement
-  if (rootRef.value?.contains(target)) return
-  if (target.closest('.multi-select-panel')) return
-  isOpen.value = false
-}
-
-watch(isOpen, (open) => {
-  if (open) {
-    window.addEventListener('scroll', updatePanelPosition, true)
-    window.addEventListener('resize', updatePanelPosition)
-  } else {
-    window.removeEventListener('scroll', updatePanelPosition, true)
-    window.removeEventListener('resize', updatePanelPosition)
-  }
-})
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside, true)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside, true)
-  window.removeEventListener('scroll', updatePanelPosition, true)
-  window.removeEventListener('resize', updatePanelPosition)
-})
 </script>
 
 <template>
-  <div ref="rootRef" class="multi-select" :class="{ 'multi-select--disabled': disabled }">
-    <div ref="controlRef" class="multi-select__control" @click.stop="toggle">
+  <div class="multi-select" :class="{ 'multi-select--disabled': disabled }">
+    <div ref="controlRef" class="multi-select__control" @click.stop="toggle(disabled)">
       <span
         class="multi-select__value"
         :class="{ 'multi-select__value--placeholder': modelValue.length === 0 }"

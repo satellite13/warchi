@@ -1,4 +1,4 @@
-import { clonePlainDeep } from '../../../utils/clonePlainDeep'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import type { DiagramAttrs, ScopedCustomValues } from '../modelAttrs'
 
 function stableStringify(value: unknown): string {

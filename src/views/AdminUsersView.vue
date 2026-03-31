@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPut } from '../composables/useApi'
+import { pagedListParams } from '../api/queryHelpers'
 import type { PaginatedResponse, User, UserRole } from '../types/entities'
 import { formatDate } from '../utils/formatDate'
 import { normalizeUserRole } from '../utils/userRole'
@@ -62,11 +63,8 @@ const loadUsers = async (): Promise<void> => {
   errorMessage.value = null
   successMessage.value = null
 
-  const query = new URLSearchParams({
-    page: '0',
-    size: '200',
-    sort: 'email,asc',
-  })
+  const query = pagedListParams(0, 200)
+  query.set('sort', 'email,asc')
 
   if (searchEmail.value.trim()) {
     query.set('email', searchEmail.value.trim())

@@ -1,6 +1,7 @@
 import { Client } from "@stomp/stompjs"
 import { onBeforeUnmount, watch, type Ref } from "vue"
 import { buildModelSyncWsUrl } from "@/api/modelSyncWs"
+import { listParams, PAGE_SIZE_FULL } from "@/api/queryHelpers"
 import { apiGet } from "@/composables/useApi"
 import {
   AUTH_CLEARED_EVENT,
@@ -31,7 +32,10 @@ import {
 } from "../utils/modelSyncGranularCoalesce"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 
-const FETCH_SIZE = 1000
+const STOMP_RECONNECT_DELAY_MS = 5000
+const STOMP_HEARTBEAT_INCOMING_MS = 15000
+const STOMP_HEARTBEAT_OUTGOING_MS = 15000
+
 const DEFAULT_FALLBACK_POLL_MS = 15_000
 
 type ModelLiveSyncMode = "ws" | "poll" | "hybrid"
@@ -152,13 +156,13 @@ export function useModelLiveSync(options: {
     try {
       const [nodesRes, linksRes, diagramsRes, modelRes] = await Promise.all([
         apiGet<PaginatedResponse<NodeResponse>>(
-          `/nodes?modelId=${encodeURIComponent(mid)}&size=${FETCH_SIZE}`
+          `/nodes?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
         ),
         apiGet<PaginatedResponse<LinkResponse>>(
-          `/links?modelId=${encodeURIComponent(mid)}&size=${FETCH_SIZE}`
+          `/links?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
         ),
         apiGet<PaginatedResponse<DiagramResponse>>(
-          `/diagrams?modelId=${encodeURIComponent(mid)}&size=${FETCH_SIZE}`
+          `/diagrams?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
         ),
         apiGet<ModelData>(`/models/${mid}`),
       ])
@@ -240,7 +244,7 @@ export function useModelLiveSync(options: {
       }
 
       if (notationIds.length > 0) {
-        const typesQuery = new URLSearchParams({ size: String(FETCH_SIZE) })
+        const typesQuery = listParams()
         typesQuery.set("modelId", mid)
         for (const nid of notationIds) {
           typesQuery.append("notationId", nid)
@@ -286,9 +290,9 @@ export function useModelLiveSync(options: {
 
     const client = new Client({
       brokerURL: url,
-      reconnectDelay: 5000,
-      heartbeatIncoming: 15000,
-      heartbeatOutgoing: 15000,
+      reconnectDelay: STOMP_RECONNECT_DELAY_MS,
+      heartbeatIncoming: STOMP_HEARTBEAT_INCOMING_MS,
+      heartbeatOutgoing: STOMP_HEARTBEAT_OUTGOING_MS,
       onConnect: () => {
         wsConnected = true
         stopFallbackPoll()

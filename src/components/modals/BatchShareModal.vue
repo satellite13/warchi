@@ -2,9 +2,9 @@
 import { computed, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import BaseModal from "./BaseModal.vue"
-import { apiGet, apiPost } from "../../composables/useApi"
+import { apiPost } from "../../composables/useApi"
+import { useUserSearch } from "../../composables/useUserSearch"
 import type { SharePermission, ShareResourceType, AccessShareRequest, AccessShareResponse } from "../../types/api"
-import type { PaginatedResponse, UserInfo } from "../../types/entities"
 
 export interface BatchShareItem {
   id: string
@@ -23,11 +23,17 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const userSearchEmail = ref("")
-const searchError = ref<string | null>(null)
-const selectedUser = ref<UserInfo | null>(null)
-const searchResults = ref<UserInfo[]>([])
-const searchPerformed = ref(false)
+const {
+  userSearchEmail,
+  searchError,
+  selectedUser,
+  searchResults,
+  searchPerformed,
+  searchUsers: doSearchUsers,
+  selectUser,
+  resetSearch,
+} = useUserSearch()
+
 const selectedPermission = ref<SharePermission>("VIEW")
 const shareWithAllUsers = ref(false)
 
@@ -46,35 +52,7 @@ const canSubmit = computed(
 
 const searchUsers = async (): Promise<void> => {
   if (shareWithAllUsers.value) return
-  const email = userSearchEmail.value.trim()
-  searchError.value = null
-  searchPerformed.value = true
-  selectedUser.value = null
-  searchResults.value = []
-
-  if (!email) {
-    searchError.value = t("share.enterEmailForSearch")
-    return
-  }
-
-  const query = new URLSearchParams({
-    page: "0",
-    size: "10",
-    sort: "email,asc",
-    email
-  })
-
-  const result = await apiGet<PaginatedResponse<UserInfo>>(`/users/public/search?${query.toString()}`)
-  if (!result.success) {
-    searchError.value = result.error.message
-    return
-  }
-
-  searchResults.value = Array.isArray(result.data.content) ? result.data.content : []
-}
-
-const selectUser = (user: UserInfo) => {
-  selectedUser.value = user
+  await doSearchUsers()
 }
 
 const submitBatch = async () => {
@@ -119,20 +97,9 @@ const handleClose = () => {
   emit("close")
 }
 
-watch(userSearchEmail, () => {
-  selectedUser.value = null
-  searchError.value = null
-  searchResults.value = []
-  searchPerformed.value = false
-})
-
 watch(shareWithAllUsers, (enabled) => {
   if (!enabled) return
-  userSearchEmail.value = ""
-  selectedUser.value = null
-  searchError.value = null
-  searchResults.value = []
-  searchPerformed.value = false
+  resetSearch()
 })
 </script>
 

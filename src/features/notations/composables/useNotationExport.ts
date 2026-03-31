@@ -3,7 +3,7 @@ import {useI18n} from "vue-i18n";
 import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
 import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../notationAttrs";
 import { validateCompositeDiagramStyle } from "../utils/validationIssues";
-import type {NotationData} from "../../../types/entities";
+import type {NotationData} from "@/types/entities";
 import type {
   NotationEditorState,
   EditorDiagramLayer,

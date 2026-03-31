@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import type { ModelData } from "../../types/entities";
-import type { EntityListConfig } from "../../composables/useEntityList";
-import EntityCatalog from "../../components/catalog/EntityCatalog.vue";
-import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
+import type { ModelData } from "@/types/entities";
+import type { EntityListConfig } from "@/composables/useEntityList";
+import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 
 const { t } = useI18n();
 

@@ -1,22 +1,21 @@
-import { computed, ref, watch, type ComputedRef, type Ref } from "vue"
-import { apiPost } from "./useApi"
-import { bumpMinor, compareVersions, isValidVersion } from "../utils/version"
-import type { VersionedEntity, EntityGroup } from "../types/entities"
-import type { EntityListConfig, SourceVersion } from "./useEntityList"
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { apiPost } from './useApi'
+import { useModalState } from './useModalState'
+import { bumpMinor, compareVersions, isValidVersion } from '../utils/version'
+import type { VersionedEntity, EntityGroup } from '../types/entities'
+import type { EntityListConfig, SourceVersion } from './useEntityList'
 
 export function useEntityCreateModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
   items: Ref<T[]>,
   groupedItems: ComputedRef<EntityGroup<T>[]>,
   ownerEmails: Ref<Map<string, string>>,
-  selectedVersionByName: Ref<Record<string, string>>
+  selectedVersionByName: Ref<Record<string, string>>,
 ) {
-  const showCreateModal = ref(false)
-  const newItemName = ref("")
-  const newItemVersion = ref("1.0.0")
+  const modal = useModalState<T>()
+  const newItemName = ref('')
+  const newItemVersion = ref('1.0.0')
   const sourceVersionId = ref<string | null>(null)
-  const isCreating = ref(false)
-  const createError = ref<string | null>(null)
 
   const normalizeEntityName = (name: string): string => name.trim().toLowerCase()
 
@@ -25,7 +24,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     if (!normalizedName) return null
 
     const sameNameGroup = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizedName
+      (g) => normalizeEntityName(g.name) === normalizedName,
     )
     if (!sameNameGroup) return null
 
@@ -44,7 +43,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     const name = newItemName.value.trim()
     if (!name) return []
     const group = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizeEntityName(name)
+      (g) => normalizeEntityName(g.name) === normalizeEntityName(name),
     )
     if (!group) return []
     return group.versions.map((item) => ({ id: item.id, version: item.version }))
@@ -58,15 +57,15 @@ export function useEntityCreateModal<T extends VersionedEntity>(
       return `Введите версию ${config.entityName.toLowerCase()}`
     }
     if (!isValidVersion(newItemVersion.value.trim())) {
-      return "Версия должна быть в формате X.Y.Z (например, 1.0.0)"
+      return 'Версия должна быть в формате X.Y.Z (например, 1.0.0)'
     }
     const name = newItemName.value.trim()
     const version = newItemVersion.value.trim()
     const sameNameGroup = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizeEntityName(name)
+      (g) => normalizeEntityName(g.name) === normalizeEntityName(name),
     )
     const hasExactVersionConflict = sameNameGroup?.versions.some(
-      (item) => item.version.trim() === version
+      (item) => item.version.trim() === version,
     )
     if (hasExactVersionConflict) {
       return config.conflictMessage
@@ -78,23 +77,20 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     return null
   }
 
-  const createItem = async (
-    ownerId: string,
-    ownerDisplayName?: string
-  ): Promise<T | null> => {
+  const createItem = async (ownerId: string, ownerDisplayName?: string): Promise<T | null> => {
     const validationError = validateCreate()
     if (validationError) {
-      createError.value = validationError
+      modal.error.value = validationError
       return null
     }
 
     if (!ownerId) {
-      createError.value = "Пользователь не авторизован"
+      modal.error.value = 'Пользователь не авторизован'
       return null
     }
 
-    isCreating.value = true
-    createError.value = null
+    modal.isProcessing.value = true
+    modal.error.value = null
 
     try {
       const body = {
@@ -114,14 +110,14 @@ export function useEntityCreateModal<T extends VersionedEntity>(
         if (result.error.status === 404) {
           throw new Error(
             config.createNotFoundMessage ??
-              `Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../${config.endpoint} и запущен.`
+              `Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../${config.endpoint} и запущен.`,
           )
         }
         throw new Error(result.error.message)
       }
 
       const created = result.data
-      showCreateModal.value = false
+      modal.show.value = false
 
       if (created?.id) {
         const exists = items.value.some((item) => item.id === created.id)
@@ -143,58 +139,63 @@ export function useEntityCreateModal<T extends VersionedEntity>(
       }
 
       return created
-    } catch (error) {
-      createError.value =
-        error instanceof Error
-          ? error.message
+    } catch (e) {
+      modal.error.value =
+        e instanceof Error
+          ? e.message
           : `Не удалось создать ${config.entityName.toLowerCase()}`
       return null
     } finally {
-      isCreating.value = false
+      modal.isProcessing.value = false
     }
   }
 
   const openCreateModal = () => {
-    newItemName.value = ""
-    newItemVersion.value = "1.0.0"
+    newItemName.value = ''
+    newItemVersion.value = '1.0.0'
     sourceVersionId.value = null
-    createError.value = null
-    showCreateModal.value = true
+    modal.error.value = null
+    modal.show.value = true
   }
 
   const openCreateModalFromVersion = (item: T) => {
     newItemName.value = item.name.trim()
     sourceVersionId.value = item.id
     newItemVersion.value = bumpMinor(item.version) ?? item.version
-    createError.value = null
-    showCreateModal.value = true
+    modal.error.value = null
+    modal.show.value = true
   }
 
   watch(
     () =>
-      [newItemName.value.trim(), sourceVersionId.value, groupedItems.value, showCreateModal.value] as const,
+      [
+        newItemName.value.trim(),
+        sourceVersionId.value,
+        groupedItems.value,
+        modal.show.value,
+      ] as const,
     ([name, preferredSourceId]) => {
-      if (!showCreateModal.value || !name) return
+      if (!modal.show.value || !name) return
       const suggested = suggestNextVersion(name, preferredSourceId)
       if (suggested) {
         newItemVersion.value = suggested
       }
-    }
+    },
   )
 
   const closeCreateModal = () => {
-    showCreateModal.value = false
+    modal.show.value = false
     sourceVersionId.value = null
   }
 
   return {
-    showCreateModal,
+    showCreateModal: modal.show,
     newItemName,
     newItemVersion,
     sourceVersionId,
     sourceVersions,
-    isCreating,
-    createError,
+    isCreating: modal.isProcessing,
+    createError: modal.error,
     createItem,
     openCreateModal,
     openCreateModalFromVersion,

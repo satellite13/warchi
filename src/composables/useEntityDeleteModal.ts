@@ -1,41 +1,25 @@
-import { ref, type Ref } from "vue"
-import { apiDelete } from "./useApi"
-import type { VersionedEntity } from "../types/entities"
-import type { EntityListConfig } from "./useEntityList"
+import { type Ref } from 'vue'
+import { apiDelete } from './useApi'
+import { useModalState } from './useModalState'
+import type { VersionedEntity } from '../types/entities'
+import type { EntityListConfig } from './useEntityList'
 
 export function useEntityDeleteModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
-  items: Ref<T[]>
+  items: Ref<T[]>,
 ) {
-  const showDeleteModal = ref(false)
-  const itemToDelete = ref<T | null>(null) as Ref<T | null>
-  const isDeleting = ref(false)
-  const deleteError = ref<string | null>(null)
-
-  const openDeleteModal = (item: T) => {
-    itemToDelete.value = item
-    deleteError.value = null
-    showDeleteModal.value = true
-  }
-
-  const closeDeleteModal = () => {
-    showDeleteModal.value = false
-    itemToDelete.value = null
-    deleteError.value = null
-  }
+  const { show, item, isProcessing, error, open, close } = useModalState<T>()
 
   const deleteItem = async (): Promise<boolean> => {
-    if (!itemToDelete.value) {
+    if (!item.value) {
       return false
     }
 
-    isDeleting.value = true
-    deleteError.value = null
+    isProcessing.value = true
+    error.value = null
 
     try {
-      const result = await apiDelete<void>(
-        `/${config.endpoint}/${itemToDelete.value.id}`
-      )
+      const result = await apiDelete<void>(`/${config.endpoint}/${item.value.id}`)
 
       if (!result.success) {
         if (result.error.status === 404) {
@@ -44,29 +28,27 @@ export function useEntityDeleteModal<T extends VersionedEntity>(
         throw new Error(result.error.message)
       }
 
-      items.value = items.value.filter(
-        (item) => item.id !== itemToDelete.value?.id
-      )
-      closeDeleteModal()
+      items.value = items.value.filter((i) => i.id !== item.value?.id)
+      close()
       return true
-    } catch (error) {
-      deleteError.value =
-        error instanceof Error
-          ? error.message
+    } catch (e) {
+      error.value =
+        e instanceof Error
+          ? e.message
           : `Не удалось удалить ${config.entityName.toLowerCase()}`
       return false
     } finally {
-      isDeleting.value = false
+      isProcessing.value = false
     }
   }
 
   return {
-    showDeleteModal,
-    itemToDelete,
-    isDeleting,
-    deleteError,
-    openDeleteModal,
-    closeDeleteModal,
+    showDeleteModal: show,
+    itemToDelete: item,
+    isDeleting: isProcessing,
+    deleteError: error,
+    openDeleteModal: open,
+    closeDeleteModal: close,
     deleteItem,
   }
 }

@@ -1,5 +1,6 @@
-import { apiGet } from "../../../composables/useApi"
-import type { ModelData, NotationData, PaginatedResponse } from "../../../types/entities"
+import { apiGet } from "@/composables/useApi"
+import { listParams } from '@/api/queryHelpers'
+import type { ModelData, NotationData, PaginatedResponse } from "@/types/entities"
 import type {
   ComponentResponse,
   DiagramResponse,
@@ -9,7 +10,7 @@ import type {
   NodeTypeResponse,
   RelationResponse,
   RelationRuleResponse,
-} from "../../../types/api"
+} from "@/types/api"
 import type { ModelEditorState } from "../types"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllRelationRulesByNotationIds } from "./modelNotationRelationsApi"
@@ -22,7 +23,7 @@ type LoadModelEditorDataResult = {
 }
 
 export async function loadModelEditorData(modelId: string): Promise<LoadModelEditorDataResult> {
-  const listQuery = new URLSearchParams({ size: "1000" })
+  const listQuery = listParams()
 
   const [
     modelResult,
@@ -59,7 +60,7 @@ export async function loadModelEditorData(modelId: string): Promise<LoadModelEdi
   const diagrams = diagramsResult.success ? (diagramsResult.data.content ?? []).map(toEditorDiagram) : []
   const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
 
-  const typesQuery = new URLSearchParams({ size: "1000" })
+  const typesQuery = listParams()
   typesQuery.set("modelId", modelId)
   for (const notationId of notationIds) {
     typesQuery.append("notationId", notationId)

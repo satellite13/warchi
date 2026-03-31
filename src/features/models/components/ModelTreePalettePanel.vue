@@ -2,9 +2,9 @@
 import { computed, nextTick, ref, toRef } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
-import { compareVersions } from "../../../utils/version"
+import { compareVersions } from "@/utils/version"
 import { parseTypeAttrs } from "../../notations/notationAttrs"
-import type { DiagramLockStatusResponse, NodeTypeResponse } from "../../../types/api"
+import type { DiagramLockStatusResponse, NodeTypeResponse } from "@/types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 import { useTreeSearch } from "../composables"
 

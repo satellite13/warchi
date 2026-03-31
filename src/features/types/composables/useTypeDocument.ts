@@ -1,10 +1,10 @@
 import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { apiPost, apiPut, apiFetch } from '../../../composables/useApi'
-import { buildApiUrl } from '../../../api/config'
-import { getAccessToken } from '../../../composables/authStorage'
-import { fetchFileContent } from '../../../api/fileApi'
-import type { FileUploadResponse, FileVersionResponse } from '../../../types/api'
+import { apiPost, apiPut, apiFetch } from '@/composables/useApi'
+import { buildApiUrl } from '@/api/config'
+import { getAccessToken } from '@/composables/authStorage'
+import { fetchFileContent } from '@/api/fileApi'
+import type { FileUploadResponse, FileVersionResponse } from '@/types/api'
 
 export interface DocumentState {
   content: string

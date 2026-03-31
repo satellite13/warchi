@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ComponentResponse, RelationResponse } from '../../../types/api'
+import type { ComponentResponse, RelationResponse } from '@/types/api'
 import type { EditorLink, EditorNode } from '../types'
 import { parseEntityAttrs, type CustomProperty } from '../../notations/notationAttrs'
-import type { DocumentWikiItem } from '../../../composables/useWikiDocuments'
+import type { DocumentWikiItem } from '@/composables/useWikiDocuments'
 import { coercePropertyValue, regexTestProperty } from '@/utils/propertyUtils'
-import SearchableSelect from '../../../components/forms/SearchableSelect.vue'
-import ToggleSwitch from '../../../components/forms/ToggleSwitch.vue'
+import SearchableSelect from '@/components/forms/SearchableSelect.vue'
+import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 
 const props = withDefaults(
   defineProps<{

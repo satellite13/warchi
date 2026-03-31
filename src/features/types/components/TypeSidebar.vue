@@ -3,7 +3,7 @@ import { computed, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import type { TypeItem } from "../composables/useTypeEditor"
-import { toAccessLabel } from "../../../utils/accessPermission"
+import { toAccessLabel } from "@/utils/accessPermission"
 
 const props = defineProps<{
   nodeTypes: TypeItem[]

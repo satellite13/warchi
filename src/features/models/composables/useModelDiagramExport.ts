@@ -1,9 +1,9 @@
 import { ref, type Ref } from 'vue'
 import { ImageExporter, SvgExporter, type DiagramRenderer } from '@ngroznykh/papirus'
-import { uploadDiagramSvg } from '../../../composables/useApi'
-import { appendDiagramCaption } from '../../../utils/diagramSvgCaption'
+import { uploadDiagramSvg } from '@/composables/useApi'
+import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import type { EditorDiagram } from '../types'
-import type { ModelData } from '../../../types/entities'
+import type { ModelData } from '@/types/entities'
 
 function sanitizeFileName(value: string): string {
   return value

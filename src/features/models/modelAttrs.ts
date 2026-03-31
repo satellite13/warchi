@@ -1,4 +1,4 @@
-import type { ComponentResponse, RelationResponse } from '../../types/api'
+import type { ComponentResponse, RelationResponse } from '@/types/api'
 
 export type JsonObject = Record<string, unknown>
 

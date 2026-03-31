@@ -1,42 +1,35 @@
-import { ref, type Ref } from "vue"
-import { apiPut } from "./useApi"
-import type { VersionedEntity } from "../types/entities"
-import type { EntityListConfig } from "./useEntityList"
+import { ref, type Ref } from 'vue'
+import { apiPut } from './useApi'
+import { useModalState } from './useModalState'
+import type { VersionedEntity } from '../types/entities'
+import type { EntityListConfig } from './useEntityList'
 
 export function useEntityRenameModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
   items: Ref<T[]>,
-  selectedVersionByName: Ref<Record<string, string>>
+  selectedVersionByName: Ref<Record<string, string>>,
 ) {
-  const showRenameModal = ref(false)
-  const itemToRename = ref<T | null>(null) as Ref<T | null>
-  const renameName = ref("")
-  const renameError = ref<string | null>(null)
-  const isRenaming = ref(false)
+  const modal = useModalState<T>()
+  const renameName = ref('')
 
   const openRenameModal = (item: T) => {
-    itemToRename.value = item
+    modal.open(item)
     renameName.value = item.name
-    renameError.value = null
-    showRenameModal.value = true
   }
 
   const closeRenameModal = () => {
-    showRenameModal.value = false
-    itemToRename.value = null
-    renameName.value = ""
-    renameError.value = null
-    isRenaming.value = false
+    modal.close()
+    renameName.value = ''
   }
 
   const renameItem = async () => {
-    if (!itemToRename.value || !config.buildRenameRequest) return
+    if (!modal.item.value || !config.buildRenameRequest) return
     const trimmedName = renameName.value.trim()
     if (!trimmedName) {
-      renameError.value = config.enterNameMessage ?? "Введите название"
+      modal.error.value = config.enterNameMessage ?? 'Введите название'
       return
     }
-    const current = itemToRename.value
+    const current = modal.item.value
     if (trimmedName === current.name) {
       closeRenameModal()
       return
@@ -45,15 +38,15 @@ export function useEntityRenameModal<T extends VersionedEntity>(
       (item) =>
         item.id !== current.id &&
         item.version === current.version &&
-        item.name.trim().toLowerCase() === trimmedName.toLowerCase()
+        item.name.trim().toLowerCase() === trimmedName.toLowerCase(),
     )
     if (hasConflict) {
-      renameError.value = config.conflictMessage
+      modal.error.value = config.conflictMessage
       return
     }
 
-    isRenaming.value = true
-    renameError.value = null
+    modal.isProcessing.value = true
+    modal.error.value = null
     try {
       const body = config.buildRenameRequest(current, trimmedName)
       const result = await apiPut<T>(`/${config.endpoint}/${current.id}`, body)
@@ -65,9 +58,7 @@ export function useEntityRenameModal<T extends VersionedEntity>(
       }
 
       const previousName = current.name
-      items.value = items.value.map((item) =>
-        item.id === current.id ? result.data : item
-      )
+      items.value = items.value.map((item) => (item.id === current.id ? result.data : item))
       if (selectedVersionByName.value[previousName] === current.version) {
         const nextSelection = { ...selectedVersionByName.value }
         delete nextSelection[previousName]
@@ -75,22 +66,22 @@ export function useEntityRenameModal<T extends VersionedEntity>(
         selectedVersionByName.value = nextSelection
       }
       closeRenameModal()
-    } catch (error) {
-      renameError.value =
-        error instanceof Error
-          ? error.message
-          : (config.renameFailedMessage ?? "Не удалось переименовать")
+    } catch (e) {
+      modal.error.value =
+        e instanceof Error
+          ? e.message
+          : (config.renameFailedMessage ?? 'Не удалось переименовать')
     } finally {
-      isRenaming.value = false
+      modal.isProcessing.value = false
     }
   }
 
   return {
-    showRenameModal,
-    itemToRename,
+    showRenameModal: modal.show,
+    itemToRename: modal.item,
     renameName,
-    renameError,
-    isRenaming,
+    renameError: modal.error,
+    isRenaming: modal.isProcessing,
     openRenameModal,
     closeRenameModal,
     renameItem,

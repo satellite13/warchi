@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Sketch as SketchPicker } from "@ckpack/vue-color";
+import { loadJson, saveJson } from "@/utils/localStorage";
 
 const props = defineProps<{
   modelValue: string;
@@ -165,22 +166,15 @@ function normalizeColor(value: string): string | null {
 }
 
 function loadRecentColors(): string[] {
-  const raw = localStorage.getItem(RECENT_COLORS_STORAGE_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((value) => (typeof value === "string" ? normalizeColor(value) : null))
-      .filter((value): value is string => Boolean(value))
-      .slice(0, MAX_RECENT_COLORS);
-  } catch {
-    return [];
-  }
+  const raw = loadJson<string[]>(RECENT_COLORS_STORAGE_KEY) ?? [];
+  return raw
+    .map((value) => (typeof value === "string" ? normalizeColor(value) : null))
+    .filter((value): value is string => Boolean(value))
+    .slice(0, MAX_RECENT_COLORS);
 }
 
 function saveRecentColors(colors: string[]): void {
-  localStorage.setItem(RECENT_COLORS_STORAGE_KEY, JSON.stringify(colors));
+  saveJson(RECENT_COLORS_STORAGE_KEY, colors);
 }
 
 function addRecentColor(value: string): void {

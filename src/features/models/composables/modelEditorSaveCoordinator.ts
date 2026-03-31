@@ -1,5 +1,5 @@
 import type { Ref } from "vue"
-import type { ModelData } from "../../../types/entities"
+import type { ModelData } from "@/types/entities"
 import type { BatchConflictItem } from "./useModelBatchSave"
 import type { ModelEditorState } from "../types"
 import { applyDiagramGarbageSanitizeToState } from "../utils/sanitizeDiagramInstances"

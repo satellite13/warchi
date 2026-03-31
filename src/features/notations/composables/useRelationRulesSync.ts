@@ -1,4 +1,4 @@
-import { apiPut } from '../../../composables/useApi'
+import { apiPut } from '@/composables/useApi'
 import type { EditorRelationRule } from '../types'
 
 interface SyncRuleItem {

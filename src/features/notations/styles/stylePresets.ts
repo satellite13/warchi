@@ -1,4 +1,5 @@
 import type { DiagramStyle } from "../notationAttrs";
+import { loadJson, saveJson } from "@/utils/localStorage";
 import componentStylesData from "./componentStyles.json";
 import relationStylesData from "./relationStyles.json";
 
@@ -236,26 +237,23 @@ interface StoredPreset {
   style: Record<string, unknown>;
 }
 
+function isValidPreset(p: unknown): p is StoredPreset {
+  return (
+    typeof p === "object" &&
+    p !== null &&
+    typeof (p as StoredPreset).name === "string" &&
+    typeof (p as StoredPreset).label === "string" &&
+    typeof (p as StoredPreset).style === "object"
+  );
+}
+
 function readStoredPresets(key: string): StoredPreset[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (p: unknown): p is StoredPreset =>
-        typeof p === "object" && p !== null &&
-        typeof (p as StoredPreset).name === "string" &&
-        typeof (p as StoredPreset).label === "string" &&
-        typeof (p as StoredPreset).style === "object"
-    );
-  } catch {
-    return [];
-  }
+  const raw = loadJson<StoredPreset[]>(key) ?? [];
+  return raw.filter(isValidPreset);
 }
 
 function writeStoredPresets(key: string, presets: StoredPreset[]) {
-  localStorage.setItem(key, JSON.stringify(presets));
+  saveJson(key, presets);
 }
 
 function notifyStylePresetsChanged() {

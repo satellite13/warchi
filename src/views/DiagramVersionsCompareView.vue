@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import { apiGet } from "@/composables/useApi"
+import { listParams } from '@/api/queryHelpers'
 import type { PaginatedResponse } from "@/types/entities"
 import type {
   DiagramResponse,
@@ -85,7 +86,7 @@ async function loadVersionData(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const listQuery = new URLSearchParams({ size: "1000" })
+    const listQuery = listParams()
     const [nodesRes, linksRes, diagramsRes, nodeTypesRes, linkTypesRes] = await Promise.all([
       apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),
       apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`),

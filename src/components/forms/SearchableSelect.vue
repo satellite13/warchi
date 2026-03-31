@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import {
-  computeDropdownPanelPlacement,
-  DROPDOWN_SEARCH_BLOCK_PX,
-  type DropdownPanelPlacement,
-} from '@/utils/dropdownPanelPosition'
+import { computed, ref } from 'vue'
+import { DROPDOWN_SEARCH_BLOCK_PX } from '@/utils/dropdownPanelPosition'
+import { useDropdownPanel } from '@/composables/useDropdownPanel'
 
 export type SelectOption = { id: string; label: string }
 
@@ -36,20 +33,21 @@ defineSlots<{
   selected?(props: { option: SelectOption }): unknown
 }>()
 
-const isOpen = ref(false)
-const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const controlRef = ref<HTMLDivElement | null>(null)
-const panelPlacement = ref<DropdownPanelPlacement | null>(null)
 
-function updatePanelPosition(): void {
-  if (!controlRef.value) return
-  const rect = controlRef.value.getBoundingClientRect()
-  panelPlacement.value = computeDropdownPanelPlacement(rect, {
-    headerBlockPx: DROPDOWN_SEARCH_BLOCK_PX,
-    preferredMaxListHeight: 180,
-  })
-}
+const {
+  isOpen,
+  searchQuery,
+  panelPlacement,
+  toggle,
+  close,
+} = useDropdownPanel(controlRef, searchInputRef, {
+  panelClass: 'searchable-select-panel',
+  rootClass: 'searchable-select',
+  headerBlockPx: DROPDOWN_SEARCH_BLOCK_PX,
+  preferredMaxListHeight: 180,
+})
 
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -67,58 +65,15 @@ const displayLabel = computed(() => {
   return selectedOption.value?.label ?? props.placeholder
 })
 
-const toggle = () => {
-  if (props.disabled) return
-  if (isOpen.value) {
-    isOpen.value = false
-  } else {
-    isOpen.value = true
-    searchQuery.value = ''
-    updatePanelPosition()
-    nextTick(() => {
-      updatePanelPosition()
-      searchInputRef.value?.focus()
-    })
-  }
-}
-
 const selectOption = (id: string) => {
   emit('update:modelValue', id)
-  isOpen.value = false
+  close()
 }
-
-const handleClickOutside = (e: MouseEvent) => {
-  if (!isOpen.value) return
-  const target = e.target as HTMLElement
-  if (!target.closest('.searchable-select') && !target.closest('.searchable-select-panel')) {
-    isOpen.value = false
-  }
-}
-
-watch(isOpen, (open) => {
-  if (open) {
-    window.addEventListener('scroll', updatePanelPosition, true)
-    window.addEventListener('resize', updatePanelPosition)
-  } else {
-    window.removeEventListener('scroll', updatePanelPosition, true)
-    window.removeEventListener('resize', updatePanelPosition)
-  }
-})
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside)
-  window.removeEventListener('scroll', updatePanelPosition, true)
-  window.removeEventListener('resize', updatePanelPosition)
-})
 </script>
 
 <template>
   <div class="searchable-select" :class="{ 'searchable-select--disabled': disabled }">
-    <div ref="controlRef" class="searchable-select__control" @click.stop="toggle">
+    <div ref="controlRef" class="searchable-select__control" @click.stop="toggle(disabled)">
       <span class="searchable-select__value">
         <slot v-if="selectedOption" name="selected" :option="selectedOption">
           {{ displayLabel }}

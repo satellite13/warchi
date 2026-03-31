@@ -1,4 +1,5 @@
 import { apiGet } from '@/composables/useApi'
+import { listParams } from './queryHelpers'
 import type { PaginatedResponse, NotationData } from '@/types/entities'
 import type { ComponentResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 
@@ -10,7 +11,7 @@ export type CompareSharedData = {
 }
 
 export async function loadCompareSharedData(): Promise<CompareSharedData> {
-  const listQuery = new URLSearchParams({ size: '1000' })
+  const listQuery = listParams()
   const [notationsRes, componentsRes, relationsRes, relationRulesRes] = await Promise.all([
     apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
     apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),

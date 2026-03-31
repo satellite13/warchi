@@ -4,7 +4,7 @@ import { messages, type SupportedLocale } from "./messages";
 export const LOCALE_STORAGE_KEY = "warchi.locale";
 const DEFAULT_LOCALE: SupportedLocale = "ru";
 
-const isSupportedLocale = (value: string | null): value is SupportedLocale => {
+export const isSupportedLocale = (value: string | null): value is SupportedLocale => {
   return value === "ru" || value === "en" || value === "fr";
 };
 

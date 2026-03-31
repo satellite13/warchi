@@ -5,8 +5,8 @@ import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import "@/config/mdEditor"
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
-import { useLocale } from '../../../composables/useLocale'
-import type { FileVersionResponse } from '../../../types/api'
+import { useLocale } from '@/composables/useLocale'
+import type { FileVersionResponse } from '@/types/api'
 
 const props = defineProps<{
   content: string

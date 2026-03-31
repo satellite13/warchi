@@ -10,6 +10,7 @@ import AppFooter from '../components/layout/AppFooter.vue'
 import BaseModal from '../components/modals/BaseModal.vue'
 import ShareAccessModal from '../components/modals/ShareAccessModal.vue'
 import { apiGet, apiPost } from '../composables/useApi'
+import { listParams, PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
 import { useAuth } from '../composables/useAuth'
 import { useCanShare } from '../composables/useCanShare'
 import { usePermissions } from '../composables/usePermissions'
@@ -316,7 +317,7 @@ const parseJsonObject = (raw: string | null | undefined): Record<string, unknown
 }
 
 const loadModelUsage = async () => {
-  const query = new URLSearchParams({ size: '2000' })
+  const query = listParams(PAGE_SIZE_NOTATION)
   const [nodesResult, linksResult] = await Promise.all([
     apiGet<PaginatedResponse<NodeResponse>>(`/nodes?${query.toString()}`),
     apiGet<PaginatedResponse<LinkResponse>>(`/links?${query.toString()}`),

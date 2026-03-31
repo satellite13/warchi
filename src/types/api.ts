@@ -1,6 +1,58 @@
 // API response/request types
 
-// Users
+// ── Base types ──
+
+/** Common fields on all entity responses */
+export interface BaseEntityResponse {
+  id: string
+  attrs?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+/** Common request fields for versioned entities (Model, Notation) */
+export interface VersionedEntityRequest {
+  name: string
+  version: string
+  ownerId: string
+  attrs?: string | null
+}
+
+/** Common update fields for versioned entities */
+export interface VersionedEntityUpdateRequest {
+  name?: string | null
+  version?: string | null
+  ownerId?: string | null
+  attrs?: string | null
+}
+
+/** Common response fields for versioned entities */
+export interface VersionedEntityResponse extends BaseEntityResponse {
+  name: string
+  version: string
+  ownerId: string
+}
+
+/** Common fields for owned type entities (NodeType, LinkType) */
+export interface OwnedTypeRequest {
+  name: string
+  ownerId?: string | null
+  attrs?: string | null
+}
+
+export interface OwnedTypeUpdateRequest {
+  name?: string | null
+  ownerId?: string | null
+  attrs?: string | null
+}
+
+export interface OwnedTypeResponse extends BaseEntityResponse {
+  name: string
+  ownerId: string
+  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
+}
+
+// ── Users ──
 
 export interface UserRequest {
   email: string
@@ -12,35 +64,21 @@ export interface UserUpdateRequest {
   attrs?: string | null
 }
 
-// Models
+// ── Models ──
 
-export interface ModelRequest {
-  name: string
-  version: string
-  ownerId: string
-  attrs?: string | null
-}
+export interface ModelRequest extends VersionedEntityRequest {}
 
-export interface ModelUpdateRequest {
-  name?: string | null
-  version?: string | null
-  ownerId?: string | null
-  attrs?: string | null
-}
+export interface ModelUpdateRequest extends VersionedEntityUpdateRequest {}
 
-// Diagrams
+// ── Diagrams ──
 
-export interface DiagramResponse {
-  id: string
+export interface DiagramResponse extends BaseEntityResponse {
   name: string
   version: string
   ownerId: string
   modelId: string
   nodeId?: string | null
   notationId: string
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
 }
 
 export interface DiagramRequest {
@@ -74,10 +112,9 @@ export interface DiagramLockStatusResponse {
   reason?: string | null
 }
 
-// Nodes
+// ── Nodes ──
 
-export interface NodeResponse {
-  id: string
+export interface NodeResponse extends BaseEntityResponse {
   /** Сквозной id: не меняется при копировании модели, для сопоставления узлов между версиями */
   stableId?: string
   name: string
@@ -85,9 +122,6 @@ export interface NodeResponse {
   ownerId: string
   nodeTypeId: string
   parentNodeId?: string | null
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
 }
 
 export interface NodeRequest {
@@ -108,74 +142,43 @@ export interface NodeUpdateRequest {
   attrs?: string | null
 }
 
-// Relations
+// ── Relations ──
 
-export interface RelationResponse {
-  id: string
-  name: string
-  version: string
+export interface RelationResponse extends VersionedEntityResponse {
   notationId: string
-  ownerId: string
   linkTypeId: string
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
 }
 
-export interface RelationRequest {
-  name: string
-  version: string
+export interface RelationRequest extends VersionedEntityRequest {
   notationId: string
-  ownerId: string
   linkTypeId: string
-  attrs?: string | null
 }
 
-export interface RelationUpdateRequest {
-  name?: string | null
-  version?: string | null
+export interface RelationUpdateRequest extends VersionedEntityUpdateRequest {
   notationId?: string | null
-  ownerId?: string | null
   linkTypeId?: string | null
-  attrs?: string | null
 }
 
-// Components
+// ── Components ──
 
-export interface ComponentResponse {
-  id: string
-  name: string
-  version: string
+export interface ComponentResponse extends VersionedEntityResponse {
   notationId: string
-  ownerId: string
   nodeTypeId: string
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
 }
 
-export interface ComponentRequest {
-  name: string
-  version: string
+export interface ComponentRequest extends VersionedEntityRequest {
   notationId: string
-  ownerId: string
   nodeTypeId: string
-  attrs?: string | null
 }
 
-export interface ComponentUpdateRequest {
-  name?: string | null
-  version?: string | null
+export interface ComponentUpdateRequest extends VersionedEntityUpdateRequest {
   notationId?: string | null
-  ownerId?: string | null
   nodeTypeId?: string | null
-  attrs?: string | null
 }
 
-// Links
+// ── Links ──
 
-export interface LinkResponse {
-  id: string
+export interface LinkResponse extends BaseEntityResponse {
   /** Сквозной id: не меняется при копировании модели */
   stableId?: string
   sourceId: string
@@ -183,9 +186,6 @@ export interface LinkResponse {
   modelId: string
   ownerId: string
   linkTypeId: string
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
 }
 
 export interface LinkRequest {
@@ -206,31 +206,13 @@ export interface LinkUpdateRequest {
   attrs?: string | null
 }
 
-// Notations
+// ── Notations ──
 
-export interface NotationRequest {
-  name: string
-  version: string
-  ownerId: string
-  attrs?: string | null
-}
+export interface NotationRequest extends VersionedEntityRequest {}
 
-export interface NotationUpdateRequest {
-  name?: string | null
-  version?: string | null
-  ownerId?: string | null
-  attrs?: string | null
-}
+export interface NotationUpdateRequest extends VersionedEntityUpdateRequest {}
 
-export interface NotationResponse {
-  id: string
-  name: string
-  version: string
-  ownerId: string
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
-}
+export interface NotationResponse extends VersionedEntityResponse {}
 
 export interface NotationMetaResponse {
   id: string
@@ -240,65 +222,29 @@ export interface NotationMetaResponse {
   ownerEmail: string
 }
 
-// Node Types
+// ── Node Types ──
 
-export interface NodeTypeResponse {
-  id: string
-  name: string
-  ownerId: string
-  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
-}
+export interface NodeTypeResponse extends OwnedTypeResponse {}
 
-export interface NodeTypeRequest {
-  name: string
-  ownerId?: string | null
-  attrs?: string | null
-}
+export interface NodeTypeRequest extends OwnedTypeRequest {}
 
-export interface NodeTypeUpdateRequest {
-  name?: string | null
-  ownerId?: string | null
-  attrs?: string | null
-}
+export interface NodeTypeUpdateRequest extends OwnedTypeUpdateRequest {}
 
-// Link Types
+// ── Link Types ──
 
-export interface LinkTypeResponse {
-  id: string
-  name: string
-  ownerId: string
-  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
-}
+export interface LinkTypeResponse extends OwnedTypeResponse {}
 
-export interface LinkTypeRequest {
-  name: string
-  ownerId?: string | null
-  attrs?: string | null
-}
+export interface LinkTypeRequest extends OwnedTypeRequest {}
 
-export interface LinkTypeUpdateRequest {
-  name?: string | null
-  ownerId?: string | null
-  attrs?: string | null
-}
+export interface LinkTypeUpdateRequest extends OwnedTypeUpdateRequest {}
 
-// Node Shapes (custom node outline catalog)
+// ── Node Shapes (custom node outline catalog) ──
 
-export interface NodeShapeResponse {
-  id: string
+export interface NodeShapeResponse extends BaseEntityResponse {
   name: string
   ownerId: string
   outline: string | null
   contentArea?: string | null
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
   canEdit: boolean
 }
 
@@ -316,17 +262,13 @@ export interface NodeShapeUpdateRequest {
   attrs?: string | null
 }
 
-// Relation Rules
+// ── Relation Rules ──
 
-export interface RelationRuleResponse {
-  id: string
+export interface RelationRuleResponse extends BaseEntityResponse {
   relationId: string
   fromComponentId: string
   toComponentId: string
   ownerId: string
-  attrs?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
 }
 
 export interface RelationRuleRequest {
@@ -345,7 +287,7 @@ export interface RelationRuleUpdateRequest {
   attrs?: string | null
 }
 
-// Audit Log
+// ── Audit Log ──
 
 export interface AuditLogResponse {
   id: string
@@ -358,7 +300,7 @@ export interface AuditLogResponse {
   changedAt?: string | null
 }
 
-// Permissions
+// ── Permissions ──
 
 export type PermissionResourceType =
   | 'MODEL'
@@ -384,7 +326,7 @@ export interface PermissionCheckResponse {
   decisions: Record<string, boolean>
 }
 
-// Access shares
+// ── Access shares ──
 
 export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE'
 export type SharePermission = 'VIEW' | 'EDIT'
@@ -407,7 +349,7 @@ export interface AccessShareResponse {
   updatedAt?: string | null
 }
 
-// Files
+// ── Files ──
 
 export interface FileUploadResponse {
   id: string

@@ -1,7 +1,8 @@
-import { apiGet } from "../../../composables/useApi"
-import type { RelationResponse, RelationRuleResponse } from "../../../types/api"
-import type { PaginatedResponse } from "../../../types/entities"
-import { paginatedIsLastPage } from "../../../utils/paginatedResponse"
+import { apiGet } from "@/composables/useApi"
+import { pagedListParams } from "@/api/queryHelpers"
+import type { RelationResponse, RelationRuleResponse } from "@/types/api"
+import type { PaginatedResponse } from "@/types/entities"
+import { paginatedIsLastPage } from "@/utils/paginatedResponse"
 
 const RELATION_RULES_FETCH_SIZE = 5000
 const RELATIONS_FETCH_SIZE = 5000
@@ -18,12 +19,9 @@ export async function fetchAllRelationRulesByNotationIds(
   for (const notationId of notationIds) {
     let page = 0
     while (true) {
-      const query = new URLSearchParams({
-        notationId,
-        page: String(page),
-        size: String(RELATION_RULES_FETCH_SIZE),
-        includeAttrs: String(includeAttrs),
-      })
+      const query = pagedListParams(page, RELATION_RULES_FETCH_SIZE)
+      query.set('notationId', notationId)
+      query.set('includeAttrs', String(includeAttrs))
       const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
         `/relation-rules?${query.toString()}`
       )
@@ -47,11 +45,8 @@ export async function fetchAllRelationsByNotationId(
   let page = 0
 
   while (true) {
-    const query = new URLSearchParams({
-      notationId,
-      page: String(page),
-      size: String(RELATIONS_FETCH_SIZE),
-    })
+    const query = pagedListParams(page, RELATIONS_FETCH_SIZE)
+    query.set('notationId', notationId)
     const result = await apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
     if (!result.success) {
       throw new Error(`Ошибка загрузки relations: ${result.error.message}`)

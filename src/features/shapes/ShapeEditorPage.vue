@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onBeforeUnmount } from "vue"
 import { useI18n } from "vue-i18n"
-import { useNodeShapes } from "../../composables/useNodeShapes"
-import type { NodeShapeResponse } from "../../types/api"
+import { useNodeShapes } from "@/composables/useNodeShapes"
+import type { NodeShapeResponse } from "@/types/api"
 import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
 import type { OutlineSegment } from "../notations/notationAttrs"
-import BaseModal from "../../components/modals/BaseModal.vue"
-import DocumentEditorModal from "../../components/modals/DocumentEditorModal.vue"
-import ShareAccessModal from "../../components/modals/ShareAccessModal.vue"
+import BaseModal from "@/components/modals/BaseModal.vue"
+import DocumentEditorModal from "@/components/modals/DocumentEditorModal.vue"
+import ShareAccessModal from "@/components/modals/ShareAccessModal.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
-import { apiPost } from "../../composables/useApi"
-import { usePermissions } from "../../composables/usePermissions"
+import { apiPost } from "@/composables/useApi"
+import { usePermissions } from "@/composables/usePermissions"
 
 const { t } = useI18n()
 const {

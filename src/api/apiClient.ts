@@ -182,7 +182,8 @@ const resolveOutageKind = (status: number, message: string): AvailabilityOutageK
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
-  canRetryAfterRefresh = true
+  canRetryAfterRefresh = true,
+  rawText = false,
 ): Promise<ApiResult<T>> {
   const url = buildApiUrl(path)
   const headers = {
@@ -195,7 +196,7 @@ export async function apiFetch<T>(
     headers.Authorization = `Bearer ${accessToken}`
   }
 
-  if (options.body && typeof options.body === "string") {
+  if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json"
   }
 
@@ -238,7 +239,9 @@ export async function apiFetch<T>(
 
     clearOutage()
     // 204 No Content и пустое тело — не парсим JSON (контракт API)
-    const data = (text.length > 0 ? JSON.parse(text) : undefined) as T
+    const data = rawText
+      ? (text as unknown as T)
+      : ((text.length > 0 ? JSON.parse(text) : undefined) as T)
     return { success: true, data }
   } catch (error) {
     const fallbackMessage = error instanceof Error ? error.message : "Ошибка подключения"
@@ -251,6 +254,19 @@ export async function apiFetch<T>(
       ),
     }
   }
+}
+
+/** Like apiFetch but returns raw text instead of parsing JSON. */
+export function apiFetchText(
+  path: string,
+  options: RequestInit = {},
+): Promise<ApiResult<string>> {
+  return apiFetch<string>(
+    path,
+    { ...options, headers: { Accept: 'text/markdown, text/plain, */*', ...options.headers } },
+    true,
+    true,
+  )
 }
 
 export const apiGet = <T>(path: string): Promise<ApiResult<T>> =>
@@ -272,60 +288,15 @@ export const apiDelete = <T>(path: string): Promise<ApiResult<T>> =>
   apiFetch<T>(path, { method: "DELETE" })
 
 /** Upload diagram SVG for preview (raw body, no JSON). */
-export async function uploadDiagramSvg(
+export function uploadDiagramSvg(
   diagramId: string,
-  svg: string
+  svg: string,
 ): Promise<ApiResult<void>> {
-  const url = buildApiUrl(`/diagrams/${diagramId}/svg`)
-  const accessToken = getAccessToken()
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "image/svg+xml",
-  }
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`
-  }
-  try {
-    const response = await fetch(url, {
-      method: "PUT",
-      headers,
-      body: svg,
-    })
-    const text = await response.text()
-    if (!response.ok) {
-      if (response.status === 401) {
-        const refreshed = await tryRefreshAccessToken()
-        if (refreshed) {
-          return uploadDiagramSvg(diagramId, svg)
-        }
-      }
-      const rawMessage = extractErrorMessage(response.status, text)
-      const normalizedMessage = normalizeApiErrorMessage(response.status, `/diagrams/${diagramId}/svg`, rawMessage)
-      const outageKind = resolveOutageKind(response.status, normalizedMessage)
-      if (outageKind) {
-        reportAvailabilityOutage(outageKind, normalizedMessage)
-      }
-      return {
-        success: false,
-        error: createApiError(
-          response.status,
-          normalizedMessage
-        ),
-      }
-    }
-    clearOutage()
-    return { success: true, data: undefined as void }
-  } catch (error) {
-    const fallbackMessage = error instanceof Error ? error.message : "Ошибка подключения"
-    reportAvailabilityOutage("backend_unavailable", fallbackMessage)
-    return {
-      success: false,
-      error: createApiError(
-        0,
-        fallbackMessage
-      ),
-    }
-  }
+  return apiFetch<void>(`/diagrams/${diagramId}/svg`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/svg+xml' },
+    body: svg,
+  })
 }
 
 export type DiagramShareLinkPayload =

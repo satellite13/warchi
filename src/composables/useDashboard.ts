@@ -1,5 +1,6 @@
 import { ref, computed, onMounted } from "vue"
 import { apiGet } from "./useApi"
+import { pagedListParams } from "@/api/queryHelpers"
 import type { PaginatedResponse } from "../types/entities"
 import type { ModelData, NotationData } from "../types/entities"
 import type { NodeTypeResponse, LinkTypeResponse, AuditLogResponse } from "../types/api"
@@ -60,6 +61,14 @@ function isValidDashboardRecent(data: unknown): data is DashboardRecentApiRespon
   return Array.isArray(d.models) && Array.isArray(d.notations) && Array.isArray(d.activity)
 }
 
+function sortByDateDesc<T>(items: T[], getDate: (item: T) => string | null | undefined): T[] {
+  return [...items].sort((a, b) => {
+    const da = getDate(a) ? new Date(getDate(a)!).getTime() : 0
+    const db = getDate(b) ? new Date(getDate(b)!).getTime() : 0
+    return db - da
+  })
+}
+
 export function useDashboard() {
   const isLoading = ref(true)
   const models = ref<ModelData[]>([])
@@ -85,33 +94,15 @@ export function useDashboard() {
   }))
 
   const recentModels = computed(() =>
-    [...models.value]
-      .sort((a, b) => {
-        const da = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-        const db = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-        return db - da
-      })
-      .slice(0, 5)
+    sortByDateDesc(models.value, (m) => m.updatedAt).slice(0, 5)
   )
 
   const recentNotations = computed(() =>
-    [...notations.value]
-      .sort((a, b) => {
-        const da = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-        const db = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-        return db - da
-      })
-      .slice(0, 5)
+    sortByDateDesc(notations.value, (n) => n.updatedAt).slice(0, 5)
   )
 
   const recentActivity = computed(() =>
-    [...auditLogs.value]
-      .sort((a, b) => {
-        const da = a.changedAt ? new Date(a.changedAt).getTime() : 0
-        const db = b.changedAt ? new Date(b.changedAt).getTime() : 0
-        return db - da
-      })
-      .slice(0, 12)
+    sortByDateDesc(auditLogs.value, (a) => a.changedAt).slice(0, 12)
   )
 
   const loadAll = async () => {
@@ -139,10 +130,10 @@ export function useDashboard() {
     }
 
     statsOverride.value = null
-    const modelsQuery = new URLSearchParams({ page: "0", size: "50" })
-    const notationsQuery = new URLSearchParams({ page: "0", size: "50" })
-    const nodeTypesQuery = new URLSearchParams({ page: "0", size: "50" })
-    const linkTypesQuery = new URLSearchParams({ page: "0", size: "50" })
+    const modelsQuery = pagedListParams(0)
+    const notationsQuery = pagedListParams(0)
+    const nodeTypesQuery = pagedListParams(0)
+    const linkTypesQuery = pagedListParams(0)
 
     const [modelsRes, notationsRes, nodeTypesRes, linkTypesRes, auditRes] = await Promise.all([
       apiGet<PaginatedResponse<ModelData>>(`/models?${modelsQuery.toString()}`),

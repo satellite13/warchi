@@ -1,21 +1,22 @@
-import { ref, computed, watch, onScopeDispose, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { apiGet, apiPost, apiPut, apiDelete } from '../../../composables/useApi'
-import type { NotationData, PaginatedResponse } from '../../../types/entities'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/composables/useApi'
+import { listParams, pagedListParams } from '@/api/queryHelpers'
+import type { NotationData, PaginatedResponse } from '@/types/entities'
 import type {
   NodeTypeResponse,
-  NodeTypeRequest,
   LinkTypeResponse,
-  LinkTypeRequest,
   ComponentResponse,
   ComponentRequest,
   RelationResponse,
   RelationRequest,
   RelationRuleResponse,
   RelationRuleRequest,
-} from '../../../types/api'
-import { paginatedIsLastPage } from '../../../utils/paginatedResponse'
+} from '@/types/api'
+import { useSaveState } from '@/composables/useSaveState'
+import { formatEntitySaveError } from '@/utils/formatEntityError'
+import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import {
   createId,
   parseEntityAttrs,
@@ -33,6 +34,7 @@ import {
   type EditorDiagramLayer,
   createEmptyEditorState,
 } from '../types'
+import { resolveNewTypes } from '../utils/resolveNewTypes'
 import { syncRelationRulesViaApi } from './useRelationRulesSync'
 import { parseNotationAttrs, mergeNotationAttrs } from '../utils/notationAttrsJson'
 
@@ -210,12 +212,9 @@ const fetchAllRelationRulesByNotation = async (
 
   // Backend returns paginated relation-rules; load all pages to avoid hidden rules.
   while (true) {
-    const query = new URLSearchParams({
-      notationId,
-      page: String(page),
-      size: String(RELATION_RULES_FETCH_SIZE),
-      includeAttrs: 'true',
-    })
+    const query = pagedListParams(page, RELATION_RULES_FETCH_SIZE)
+    query.set('notationId', notationId)
+    query.set('includeAttrs', 'true')
     const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
       `/relation-rules?${query.toString()}`
     )
@@ -232,163 +231,7 @@ const fetchAllRelationRulesByNotation = async (
   return collected
 }
 
-function formatNotationEntityError(
-  action: 'создания' | 'обновления' | 'удаления',
-  entity: string,
-  status: number,
-  message: string
-): string {
-  if (status === 401 || status === 403) {
-    return 'Недостаточно прав для редактирования нотации. Войдите заново или обратитесь к администратору.'
-  }
-  return `Ошибка ${action} ${entity}: ${message}`
-}
 
-async function resolveNodeTypes(
-  nodeTypes: EditorNodeType[],
-  components: EditorComponent[],
-  typeOwnerId: string,
-  onProgress: (msg: string) => void
-): Promise<void> {
-  const existingNodeTypeQuery = new URLSearchParams({ size: '1000' })
-  const existingNodeTypesResult = await apiGet<PaginatedResponse<NodeTypeResponse>>(
-    `/node-types?${existingNodeTypeQuery.toString()}`
-  )
-  if (!existingNodeTypesResult.success) {
-    throw new Error(`Ошибка загрузки типов узлов: ${existingNodeTypesResult.error.message}`)
-  }
-  const existingNodeTypesByName = new Map<string, NodeTypeResponse>()
-  for (const existing of existingNodeTypesResult.data.content ?? []) {
-    const key = normalizeTypeName(existing.name)
-    if (!key || existingNodeTypesByName.has(key)) continue
-    existingNodeTypesByName.set(key, existing)
-  }
-  const resolvedNodeTypeIdByName = new Map<string, string>()
-
-  const newNodeTypes = nodeTypes.filter(t => t._isNew)
-  for (const nodeType of newNodeTypes) {
-    const oldId = nodeType.id
-    const normalizedName = normalizeTypeName(nodeType.name)
-
-    const resolvedExistingId = normalizedName
-      ? resolvedNodeTypeIdByName.get(normalizedName)
-      : undefined
-    if (resolvedExistingId) {
-      nodeType.id = resolvedExistingId
-      nodeType._isNew = false
-      components.forEach(c => {
-        if (c.nodeTypeId === oldId) c.nodeTypeId = resolvedExistingId
-      })
-      continue
-    }
-
-    const existingType = normalizedName
-      ? existingNodeTypesByName.get(normalizedName)
-      : undefined
-    if (existingType) {
-      nodeType.id = existingType.id
-      nodeType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
-      nodeType._isNew = false
-      if (normalizedName) resolvedNodeTypeIdByName.set(normalizedName, existingType.id)
-      components.forEach(c => {
-        if (c.nodeTypeId === oldId) c.nodeTypeId = existingType.id
-      })
-      continue
-    }
-
-    onProgress(`Создание типа узла: ${nodeType.name}`)
-    const request: NodeTypeRequest = {
-      name: nodeType.name,
-      ownerId: typeOwnerId,
-      attrs: serializeTypeAttrs(nodeType.parsedAttrs),
-    }
-    const result = await apiPost<NodeTypeResponse>('/node-types', request)
-    if (!result.success) {
-      throw new Error(
-        formatNotationEntityError('создания', 'типа узла', result.error.status, result.error.message)
-      )
-    }
-    nodeType.id = result.data.id
-    nodeType._isNew = false
-    if (normalizedName) resolvedNodeTypeIdByName.set(normalizedName, result.data.id)
-    components.forEach(c => {
-      if (c.nodeTypeId === oldId) c.nodeTypeId = result.data.id
-    })
-  }
-}
-
-async function resolveLinkTypes(
-  linkTypes: EditorLinkType[],
-  relations: EditorRelation[],
-  typeOwnerId: string,
-  onProgress: (msg: string) => void
-): Promise<void> {
-  const existingLinkTypeQuery = new URLSearchParams({ size: '1000' })
-  const existingLinkTypesResult = await apiGet<PaginatedResponse<LinkTypeResponse>>(
-    `/link-types?${existingLinkTypeQuery.toString()}`
-  )
-  if (!existingLinkTypesResult.success) {
-    throw new Error(`Ошибка загрузки типов связей: ${existingLinkTypesResult.error.message}`)
-  }
-  const existingLinkTypesByName = new Map<string, LinkTypeResponse>()
-  for (const existing of existingLinkTypesResult.data.content ?? []) {
-    const key = normalizeTypeName(existing.name)
-    if (!key || existingLinkTypesByName.has(key)) continue
-    existingLinkTypesByName.set(key, existing)
-  }
-  const resolvedLinkTypeIdByName = new Map<string, string>()
-
-  const newLinkTypes = linkTypes.filter(t => t._isNew)
-  for (const linkType of newLinkTypes) {
-    const oldId = linkType.id
-    const normalizedName = normalizeTypeName(linkType.name)
-
-    const resolvedExistingId = normalizedName
-      ? resolvedLinkTypeIdByName.get(normalizedName)
-      : undefined
-    if (resolvedExistingId) {
-      linkType.id = resolvedExistingId
-      linkType._isNew = false
-      relations.forEach(r => {
-        if (r.linkTypeId === oldId) r.linkTypeId = resolvedExistingId
-      })
-      continue
-    }
-
-    const existingType = normalizedName
-      ? existingLinkTypesByName.get(normalizedName)
-      : undefined
-    if (existingType) {
-      linkType.id = existingType.id
-      linkType.parsedAttrs = parseTypeAttrs(existingType.attrs ?? null)
-      linkType._isNew = false
-      if (normalizedName) resolvedLinkTypeIdByName.set(normalizedName, existingType.id)
-      relations.forEach(r => {
-        if (r.linkTypeId === oldId) r.linkTypeId = existingType.id
-      })
-      continue
-    }
-
-    onProgress(`Создание типа связи: ${linkType.name}`)
-    const request: LinkTypeRequest = {
-      name: linkType.name,
-      ownerId: typeOwnerId,
-      attrs: serializeTypeAttrs(linkType.parsedAttrs),
-    }
-    const result = await apiPost<LinkTypeResponse>('/link-types', request)
-    if (!result.success) {
-      throw new Error(
-        formatNotationEntityError('создания', 'типа связи', result.error.status, result.error.message)
-      )
-    }
-    linkType.id = result.data.id
-    linkType._isNew = false
-    if (normalizedName) resolvedLinkTypeIdByName.set(normalizedName, result.data.id)
-    relations.forEach(r => {
-      if (r.linkTypeId === oldId) r.linkTypeId = result.data.id
-    })
-  }
-}
 
 async function saveComponents(
   components: EditorComponent[],
@@ -402,7 +245,7 @@ async function saveComponents(
     const result = await apiDelete<void>(`/components/${component.id}`)
     if (!result.success) {
       throw new Error(
-        formatNotationEntityError('удаления', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError('нотации','удаления', 'компонента', result.error.status, result.error.message)
       )
     }
   }
@@ -420,7 +263,7 @@ async function saveComponents(
     const result = await apiPost<ComponentResponse>('/components', request)
     if (!result.success) {
       throw new Error(
-        formatNotationEntityError('создания', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError('нотации','создания', 'компонента', result.error.status, result.error.message)
       )
     }
     const oldComponentId = component.id
@@ -451,7 +294,7 @@ async function saveComponents(
     const result = await apiPut<ComponentResponse>(`/components/${component.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatNotationEntityError('обновления', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError('нотации','обновления', 'компонента', result.error.status, result.error.message)
       )
     }
     component._isDirty = false
@@ -674,18 +517,7 @@ export function useNotationEditor(): NotationEditorReturn {
 
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const isSaving = ref(false)
-  const saveError = ref<string | null>(null)
-  const saveSuccess = ref(false)
-  const saveProgress = ref('')
-  let saveSuccessTimer: ReturnType<typeof setTimeout> | null = null
-
-  onScopeDispose(() => {
-    if (saveSuccessTimer !== null) {
-      clearTimeout(saveSuccessTimer)
-      saveSuccessTimer = null
-    }
-  })
+  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, failSave, finishSave } = useSaveState()
 
   const notationAttrsDirty = computed(() => {
     const currentAttrs = notation.value?.attrs ?? null
@@ -737,11 +569,9 @@ export function useNotationEditor(): NotationEditorReturn {
     errorMessage.value = null
 
     try {
-      const listQuery = new URLSearchParams({ size: '1000' })
-      const listQueryWithNotation = new URLSearchParams({
-        size: '1000',
-        notationId,
-      })
+      const listQuery = listParams()
+      const listQueryWithNotation = listParams()
+      listQueryWithNotation.set('notationId', notationId)
 
       // Parallel fetch from API endpoints.
       // We load both notation-scoped and global type lists to reuse a single shared
@@ -845,14 +675,11 @@ export function useNotationEditor(): NotationEditorReturn {
     }
 
     if (hasValidationErrors) {
-      saveError.value = t('notations.saveErrorValidation')
+      failSave(t('notations.saveErrorValidation'))
       return false
     }
 
-    isSaving.value = true
-    saveError.value = null
-    saveSuccess.value = false
-    saveProgress.value = ''
+    startSave()
 
     try {
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
@@ -867,7 +694,7 @@ export function useNotationEditor(): NotationEditorReturn {
         })
         if (!updateResult.success) {
           throw new Error(
-            formatNotationEntityError(
+            formatEntitySaveError('нотации',
               'обновления',
               'нотации',
               updateResult.error.status ?? 0,
@@ -878,8 +705,34 @@ export function useNotationEditor(): NotationEditorReturn {
         notationAttrsSnapshot.value = notation.value.attrs ?? null
       }
 
-      await resolveNodeTypes(nodeTypes, components, typeOwnerId, onProgress)
-      await resolveLinkTypes(linkTypes, relations, typeOwnerId, onProgress)
+      await resolveNewTypes({
+        types: nodeTypes,
+        entities: components,
+        typeOwnerId,
+        apiEndpoint: '/node-types',
+        entityTypeName: 'типа узла',
+        getTypeId: (c) => c.nodeTypeId,
+        setTypeId: (c, id) => {
+          c.nodeTypeId = id
+        },
+        parseAttrs: parseTypeAttrs,
+        serializeAttrs: serializeTypeAttrs,
+        onProgress,
+      })
+      await resolveNewTypes({
+        types: linkTypes,
+        entities: relations,
+        typeOwnerId,
+        apiEndpoint: '/link-types',
+        entityTypeName: 'типа связи',
+        getTypeId: (r) => r.linkTypeId,
+        setTypeId: (r, id) => {
+          r.linkTypeId = id
+        },
+        parseAttrs: parseTypeAttrs,
+        serializeAttrs: serializeTypeAttrs,
+        onProgress,
+      })
       await saveComponents(components, relationRules, notationId, ownerId, onProgress)
       await saveRelations(relations, relationRules, notationId, ownerId, onProgress)
       state.value.relationRules = await syncRelationRules(
@@ -891,21 +744,13 @@ export function useNotationEditor(): NotationEditorReturn {
       state.value.components = components.filter(c => !c._isDeleted)
       state.value.relations = relations.filter(r => !r._isDeleted)
 
-      saveSuccess.value = true
-      if (saveSuccessTimer !== null) {
-        clearTimeout(saveSuccessTimer)
-      }
-      saveSuccessTimer = setTimeout(() => {
-        saveSuccess.value = false
-        saveSuccessTimer = null
-      }, 3000)
+      completeSave()
       return true
     } catch (error) {
-      saveError.value = error instanceof Error ? error.message : t('notations.saveErrorGeneric')
+      failSave(error instanceof Error ? error.message : t('notations.saveErrorGeneric'))
       return false
     } finally {
-      isSaving.value = false
-      saveProgress.value = ''
+      finishSave()
     }
   }
 

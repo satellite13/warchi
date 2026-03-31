@@ -1,6 +1,6 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
-import { createId, type CompositeSerializedCComponent, type CustomProperty } from '../notationAttrs'
-import type { EditorNodeType, EditorComponent, NotationEditorState } from '../types'
+import { createId, type CompositeSerializedCComponent } from '../notationAttrs'
+import type { EditorComponent, NotationEditorState } from '../types'
 import {
   getAllComponentPresets,
   applyComponentStylePreset,
@@ -8,6 +8,8 @@ import {
   type ComponentStylePreset,
 } from '../styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
+import { parseTagsInput, getTagQuery, copyTypeProperties } from '../utils/tagParsers'
+import { addType } from '../utils/typeManagement'
 
 export const NEW_TYPE_VALUE = '__new__'
 export const COMPONENT_WITHOUT_TYPE_VALUE = '__without_type__'
@@ -15,51 +17,12 @@ export const COMPONENT_KIND_SIMPLE = 'simple'
 export const COMPONENT_KIND_COMPOSITE = 'composite'
 const UNTYPED_NODE_TYPE_NAME = 'Diagram only'
 
-const parseTagsInput = (value: string) =>
-  value
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-
-const getTagQuery = (value: string) => {
-  const parts = value.split(',')
-  const prefix = parts
-    .slice(0, -1)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-  const query = parts[parts.length - 1]?.trim() || ''
-  return { prefix, query }
-}
-
-const copyTypeProperties = (source: CustomProperty[]): CustomProperty[] =>
-  source.map((p) => ({
-    ...p,
-    id: createId(),
-    enumValues: p.enumValues ? [...p.enumValues] : [],
-    _fromType: true,
-  }))
-
 const createDefaultCompositeContent = (): CompositeSerializedCComponent => ({
   type: 'container',
   direction: 'column',
   children: [],
 })
 
-const addNodeType = (list: EditorNodeType[], name: string, ownerId: string): string | null => {
-  const trimmed = name.trim()
-  if (!trimmed) return null
-  const existing = list.find((item) => item.name.toLowerCase() === trimmed.toLowerCase())
-  if (existing) return existing.id
-  const newType: EditorNodeType = {
-    id: createId(),
-    name: trimmed,
-    ownerId,
-    parsedAttrs: {},
-    _isNew: true,
-  }
-  list.push(newType)
-  return newType.id
-}
 
 export interface ComponentManagementOptions {
   state: Ref<NotationEditorState>
@@ -115,11 +78,11 @@ export function useComponentManagement(options: ComponentManagementOptions) {
 
     let nodeTypeId = componentTypeSelection.value
     if (nodeTypeId === COMPONENT_WITHOUT_TYPE_VALUE) {
-      nodeTypeId = addNodeType(state.value.nodeTypes, UNTYPED_NODE_TYPE_NAME, state.value.ownerId) || ''
+      nodeTypeId = addType(state.value.nodeTypes, UNTYPED_NODE_TYPE_NAME, state.value.ownerId) || ''
     }
     if (nodeTypeId === NEW_TYPE_VALUE) {
       nodeTypeId =
-        addNodeType(state.value.nodeTypes, componentNewTypeName.value, state.value.ownerId) || ''
+        addType(state.value.nodeTypes, componentNewTypeName.value, state.value.ownerId) || ''
       if (!nodeTypeId) {
         componentFormError.value = 'Введите название нового типа узла'
         return

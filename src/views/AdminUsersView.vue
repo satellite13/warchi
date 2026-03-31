@@ -6,6 +6,7 @@ import { pagedListParams } from '../api/queryHelpers'
 import type { PaginatedResponse, User, UserRole } from '../types/entities'
 import { formatDate } from '../utils/formatDate'
 import { normalizeUserRole } from '../utils/userRole'
+import { useUserProfileEdit, useUserPasswordEdit } from './composables/useUserAdminForms'
 
 type EditableUser = User & {
   role: UserRole
@@ -31,12 +32,6 @@ const isSavingId = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const searchEmail = ref('')
-const passwordEditId = ref<string | null>(null)
-const passwordDraft = ref<Record<string, string>>({})
-const profileEditId = ref<string | null>(null)
-const profileDraft = ref<
-  Record<string, { firstName: string; lastName: string; middleName: string; position: string }>
->({})
 
 const roleOptions: UserRole[] = ['USER', 'ADMIN']
 
@@ -121,93 +116,21 @@ const fullName = (user: EditableUser): string => {
   return parts.length > 0 ? parts.join(' ') : t('adminUsers.profileNotFilled')
 }
 
-const openProfileEdit = (user: EditableUser): void => {
-  profileEditId.value = user.id
-  profileDraft.value[user.id] = {
-    firstName: user.firstName?.trim() ?? '',
-    lastName: user.lastName?.trim() ?? '',
-    middleName: user.middleName?.trim() ?? '',
-    position: user.position?.trim() ?? '',
-  }
-  errorMessage.value = null
-  successMessage.value = null
-}
+const {
+  profileEditId,
+  openProfileEdit,
+  closeProfileEdit,
+  getProfileDraft,
+  submitProfileChange,
+} = useUserProfileEdit(isSavingId, errorMessage, successMessage, updateUser)
 
-const closeProfileEdit = (): void => {
-  if (!profileEditId.value) return
-  delete profileDraft.value[profileEditId.value]
-  profileEditId.value = null
-}
-
-const getProfileDraft = (userId: string) => {
-  if (!profileDraft.value[userId]) {
-    profileDraft.value[userId] = {
-      firstName: '',
-      lastName: '',
-      middleName: '',
-      position: '',
-    }
-  }
-  return profileDraft.value[userId]
-}
-
-const submitProfileChange = async (user: EditableUser): Promise<void> => {
-  const draft = profileDraft.value[user.id]
-  if (!draft) return
-
-  const firstName = draft.firstName.trim()
-  const lastName = draft.lastName.trim()
-  const middleName = draft.middleName.trim()
-  const position = draft.position.trim()
-
-  if (!firstName) {
-    errorMessage.value = t('auth.validationFirstNameRequired')
-    return
-  }
-  if (!lastName) {
-    errorMessage.value = t('auth.validationLastNameRequired')
-    return
-  }
-
-  await updateUser(user.id, {
-    firstName,
-    lastName,
-    middleName,
-    position,
-  })
-
-  if (isSavingId.value === null && !errorMessage.value) {
-    successMessage.value = t('adminUsers.profileUpdated', { email: user.email })
-    closeProfileEdit()
-  }
-}
-
-const openPasswordEdit = (userId: string): void => {
-  passwordEditId.value = userId
-  passwordDraft.value[userId] = ''
-  errorMessage.value = null
-  successMessage.value = null
-}
-
-const closePasswordEdit = (): void => {
-  if (!passwordEditId.value) return
-  delete passwordDraft.value[passwordEditId.value]
-  passwordEditId.value = null
-}
-
-const submitPasswordChange = async (user: EditableUser): Promise<void> => {
-  const nextPassword = (passwordDraft.value[user.id] ?? '').trim()
-  if (nextPassword.length < 6) {
-    errorMessage.value = t('adminUsers.passwordMinLength')
-    return
-  }
-
-  await updateUser(user.id, { password: nextPassword })
-  if (isSavingId.value === null && !errorMessage.value) {
-    successMessage.value = t('adminUsers.passwordUpdated', { email: user.email })
-    closePasswordEdit()
-  }
-}
+const {
+  passwordEditId,
+  passwordDraft,
+  openPasswordEdit,
+  closePasswordEdit,
+  submitPasswordChange,
+} = useUserPasswordEdit(isSavingId, errorMessage, successMessage, updateUser)
 
 const clearSearch = () => {
   searchEmail.value = ''

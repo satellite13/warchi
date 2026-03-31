@@ -11,6 +11,8 @@ alwaysApply: true
 
 2. **Переключиться на эту ветку** в каждом проекте (`git checkout -b feat/...` или `git checkout feat/...`).
 
-3. **В warchi переключить papirus на прямую зависимость** — в `package.json` заменить `"@ngroznykh/papirus": "^0.x.x"` на `"@ngroznykh/papirus": "file:../papirus"`, затем выполнить `npm install`. Это даёт возможность менять papirus и сразу проверять в warchi без публикации.
+3. **В warchi переключить papirus на прямую зависимость** — в `package.json` заменить `"@ngroznykh/papirus": "^0.x.x"` на `"@ngroznykh/papirus": "file:../papirus"`, затем выполнить `npm install` (или `npm install --package-lock-only`, если нужно только обновить lock).  
+   **Важно:** при таком переключении обязательно обновлять `package-lock.json`, чтобы там тоже был `file:../papirus`, иначе сборки в разных окружениях могут расходиться.
 
-Перед релизом warchi — перевести обратно на npm-версию papirus и выполнить `rm -rf node_modules package-lock.json && npm install` (см. release-warchi skill).
+Перед релизом warchi — перевести обратно на npm-версию papirus и обновить lock-файл (например, `npm install @ngroznykh/papirus@^0.x.x --package-lock-only` или `rm -rf node_modules package-lock.json && npm install`, см. release-warchi skill).  
+**Важно:** после возврата на npm-версию в `package-lock.json` не должно оставаться `../papirus`.

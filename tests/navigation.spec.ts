@@ -18,12 +18,12 @@ test.describe('Navigation', () => {
 
   test('navigate to types', async ({ page }) => {
     await page.goto('/types')
-    await expect(page.locator('body')).toContainText(/Тип|Type/i)
+    await expect(page.locator('body')).toContainText(/Type/i)
   })
 
   test('navigate to shapes', async ({ page }) => {
     await page.goto('/shapes')
-    await expect(page.locator('body')).toContainText(/Форм|Shape/i)
+    await expect(page.locator('body')).toContainText(/Shape/i)
   })
 
   test('navigate to docs', async ({ page }) => {

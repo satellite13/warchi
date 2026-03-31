@@ -94,8 +94,9 @@ async function main() {
 
     throw new Error(`Unable to prepare E2E user.\n${details}`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`[e2e-seed] ${message}`)
+    const base = error instanceof Error ? error.message : String(error)
+    const cause = error instanceof Error && error.cause instanceof Error ? `: ${error.cause.message}` : ''
+    console.error(`[e2e-seed] ${base}${cause}`)
     process.exit(1)
   }
 }

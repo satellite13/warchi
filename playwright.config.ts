@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
+  globalSetup: './tests/global-setup.ts',
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -24,13 +25,26 @@ export default defineConfig({
       },
       dependencies: ['setup'],
     },
+    // WebM recording without slowMo: slowMo breaks Page.screencast timestamps (choppy / wrong playback).
     {
-      name: 'slow',
+      name: 'record',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'tests/.auth/user.json',
+        video: {
+          mode: 'on',
+          size: { width: 1280, height: 720 },
+        },
+      },
+      dependencies: ['setup'],
+    },
+    // Step-through debugging with CDP delay — no video (slowMo + screencast do not mix well).
+    {
+      name: 'slow-debug',
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'tests/.auth/user.json',
         launchOptions: { slowMo: 800 },
-        video: 'on',
       },
       dependencies: ['setup'],
     },
@@ -39,7 +53,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',
-    reuseExistingServer: true,
-    timeout: 30000,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000,
   },
 })

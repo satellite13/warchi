@@ -10,7 +10,7 @@ test.describe('Types editor page', () => {
   })
 
   test('page loads with sidebar and section headers', async ({ page }) => {
-    // Check that "ТИПЫ УЗЛОВ" and "ТИПЫ СВЯЗЕЙ" section headers exist
+    // Section headers render as uppercase labels (e.g. NODE TYPES / LINK TYPES in EN)
     const sectionLabels = page.locator('.type-sidebar__section-label')
     await expect(sectionLabels).toHaveCount(2, { timeout: 10000 })
 

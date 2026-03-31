@@ -15,5 +15,12 @@ setup('authenticate', async ({ page }) => {
   await expect(page).toHaveURL('/home', { timeout: 10000 })
   await expect(page.locator('.hero')).toBeVisible()
 
+  // E2E runs against English UI strings (app default is Russian).
+  await page.evaluate(() => {
+    window.localStorage.setItem('warchi.locale', 'en')
+  })
+  await page.reload()
+  await expect(page.locator('.hero')).toBeVisible({ timeout: 10000 })
+
   await page.context().storageState({ path: 'tests/.auth/user.json' })
 })

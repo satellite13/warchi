@@ -63,7 +63,7 @@ export interface EntityListReturn<T extends VersionedEntity> {
   renameError: Ref<string | null>
   isRenaming: Ref<boolean>
 
-  loadItems: () => Promise<void>
+  loadItems: (options?: { silent?: boolean }) => Promise<void>
   createItem: (ownerId: string, ownerDisplayName?: string) => Promise<T | null>
   deleteItem: () => Promise<boolean>
   openCreateModal: () => void
@@ -100,6 +100,9 @@ export function useEntityList<T extends VersionedEntity>(
   const errorMessage = ref<string | null>(null)
   const searchQuery = ref("")
   const selectedVersionByName = ref<Record<string, string>>({})
+
+  /** Инкремент отбрасывает ответ устаревшего GET после локальных мутаций (создание и т.д.). */
+  let itemsLoadGeneration = 0
 
   const normalizeEntityName = (name: string): string => name.trim().toLowerCase()
 
@@ -176,44 +179,59 @@ export function useEntityList<T extends VersionedEntity>(
     )
   }
 
-  const loadItemsGrouped = async (): Promise<boolean> => {
-    if (!config.useGroupedEndpoint) return false
-    const groupedResult = await apiGet<{ groups: EntityGroup<T>[] }>(
-      `/${config.endpoint}/grouped`
+  const fetchItemsPayload = async (): Promise<T[]> => {
+    if (config.useGroupedEndpoint) {
+      const groupedResult = await apiGet<{ groups: EntityGroup<T>[] }>(
+        `/${config.endpoint}/grouped`
+      )
+      if (!groupedResult.success) {
+        throw new Error(groupedResult.error.message)
+      }
+      if (!groupedResult.data.groups) {
+        throw new Error(`Не удалось загрузить ${config.entityNamePlural}.`)
+      }
+      return groupedResult.data.groups.flatMap((g) => g.versions)
+    }
+
+    const query = pagedListParams(0)
+    const result = await apiGet<PaginatedResponse<T>>(
+      `/${config.endpoint}?${query.toString()}`
     )
-    if (!groupedResult.success || !groupedResult.data.groups) return false
-    items.value = groupedResult.data.groups.flatMap((g) => g.versions)
-    return true
+    if (!result.success) {
+      throw new Error(result.error.message)
+    }
+    return Array.isArray(result.data.content) ? result.data.content : []
   }
 
-  const loadItems = async () => {
-    isLoading.value = true
+  const loadItems = async (options?: { silent?: boolean }) => {
+    const myGen = ++itemsLoadGeneration
+    const silent = options?.silent ?? false
+    if (!silent) {
+      isLoading.value = true
+    }
     errorMessage.value = null
 
     try {
-      const loaded = await loadItemsGrouped()
-      if (!loaded) {
-        const query = pagedListParams(0)
-        const result = await apiGet<PaginatedResponse<T>>(
-          `/${config.endpoint}?${query.toString()}`
-        )
-
-        if (!result.success) {
-          throw new Error(result.error.message)
-        }
-
-        items.value = Array.isArray(result.data.content) ? result.data.content : []
+      const nextItems = await fetchItemsPayload()
+      if (myGen !== itemsLoadGeneration) {
+        return
       }
+      items.value = nextItems
 
       const ownerIds = items.value.map((item) => item.ownerId)
       await loadOwnerEmails(ownerIds, t("common.unknownUser"))
     } catch (error) {
+      if (myGen !== itemsLoadGeneration) {
+        return
+      }
       errorMessage.value =
         error instanceof Error
           ? error.message
           : `Не удалось загрузить ${config.entityNamePlural}.`
     } finally {
-      isLoading.value = false
+      if (myGen === itemsLoadGeneration && !silent) {
+        isLoading.value = false
+      }
     }
   }
 
@@ -240,9 +258,19 @@ export function useEntityList<T extends VersionedEntity>(
   }
 
   const createModal = useEntityCreateModal(config, items, groupedItems, ownerEmails, selectedVersionByName)
+  const { createItem: createItemBase, ...createModalRest } = createModal
   const deleteModal = useEntityDeleteModal(config, items)
   const renameModal = useEntityRenameModal(config, items, selectedVersionByName)
   const iconModal = useEntityIconModal(config, items)
+
+  const createItem = async (ownerId: string, ownerDisplayName?: string): Promise<T | null> => {
+    const created = await createItemBase(ownerId, ownerDisplayName)
+    if (created) {
+      itemsLoadGeneration++
+      await loadItems({ silent: true })
+    }
+    return created
+  }
 
   onMounted(() => {
     loadItems()
@@ -258,7 +286,8 @@ export function useEntityList<T extends VersionedEntity>(
     filteredItems,
     itemCount,
 
-    ...createModal,
+    ...createModalRest,
+    createItem,
     ...deleteModal,
     ...renameModal,
 

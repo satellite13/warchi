@@ -6,6 +6,7 @@ test.describe('Models CRUD lifecycle', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/models')
     await expect(page.locator('.model-grid')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('.card-skeleton')).toHaveCount(0, { timeout: 15000 })
   })
 
   test('create → rename → delete model', async ({ page }) => {

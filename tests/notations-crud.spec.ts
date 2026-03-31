@@ -6,6 +6,8 @@ test.describe('Notations CRUD lifecycle', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/notations')
     await expect(page.locator('.model-grid')).toBeVisible({ timeout: 10000 })
+    // Wait for the first catalog GET to finish; a late response can overwrite the list after create (race).
+    await expect(page.locator('.card-skeleton')).toHaveCount(0, { timeout: 15000 })
   })
 
   test('create → rename → delete notation', async ({ page }) => {

@@ -71,7 +71,7 @@ test.describe('Notation editor', () => {
     await page.locator('.back-btn').click()
 
     // Handle unsaved changes dialog if it appears
-    const leaveBtn = page.locator('.btn--danger', { hasText: /покинуть|уйти|leave/i })
+    const leaveBtn = page.locator('.btn--danger', { hasText: /Leave|Quitter/i })
     const leaveBtnVisible = await leaveBtn.isVisible({ timeout: 2000 }).catch(() => false)
     if (leaveBtnVisible) {
       await leaveBtn.click()

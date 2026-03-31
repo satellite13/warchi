@@ -48,14 +48,14 @@ test.describe('Model editor', () => {
     const addFolderBtn = page.locator('.panel__header-actions .mini-btn').nth(1)
     await addFolderBtn.click()
 
-    // A "Создать папку" (Create folder) modal appears with a name input
+    // Create folder modal with a name input
     await expect(page.locator('.modal-overlay')).toBeVisible({ timeout: 5000 })
 
     // Fill in the folder name
     const folderNameInput = page.locator('.modal-overlay .field-input')
     await folderNameInput.fill('E2E Test Folder')
 
-    // Click the "Создать" (Create) button - the primary button in the modal footer
+    // Primary action in the modal footer (Create)
     await page.locator('.modal-overlay .btn--primary').click()
     await expect(page.locator('.modal-overlay')).toBeHidden({ timeout: 10000 })
 

@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-31
+
+### Added
+- Full composite component editor in notation workflows: component kinds, per-type inspectors, full shape picker, and property-based style/binding UI instead of raw JSON patch editing.
+- Composite bindings in notation and model editors: text components can bind to node name/custom properties, and icon bindings to notation icons are resolved in the model palette.
+- Extended edge label controls in notation diagrams: label position along path, follow-path behavior, multiline labels via `\n`, and improved style binding support.
+
+### Changed
+- Notation composite panels and tree UX were redesigned for clearer visual hierarchy, human-readable component names, and improved consistency with node/style panels.
+- Model editor now shows a composite style tab for composite elements and provides restore-from-notation actions where applicable.
+
+### Fixed
+- Edge style behavior in notation/model editors: label inset application for new edges, explicit `markDirty` after inset updates, and fallback notation style for diagram-only links.
+- Composite preview/runtime fidelity: custom-shape outlines, container borders, scroll behavior, non-removable tree node actions, and tree structure constraints.
+
 ## [0.4.6] - 2026-03-27
 
 ### Added

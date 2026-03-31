@@ -4,6 +4,21 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-31
+
+### Ajouté
+- Éditeur complet de composants composite dans les workflows de notation : types de composants, inspecteurs par type, shape picker complet et UI pilotée par propriétés/bindings au lieu d’un éditeur JSON patch brut.
+- Bindings composite dans les éditeurs de notation et de modèle : les composants texte peuvent se lier au nom du nœud/aux propriétés personnalisées, et les bindings d’icônes de notation sont résolus dans la palette du modèle.
+- Contrôles étendus des libellés d’arêtes dans les diagrammes de notation : position du libellé sur le chemin, comportement follow-path, libellés multilignes via `\n`, et meilleure prise en charge des style bindings.
+
+### Modifié
+- Refonte des panneaux composite et de l’UX de l’arbre dans l’éditeur de notation : hiérarchie visuelle plus claire, noms de composants lisibles, cohérence avec les panneaux node/style.
+- L’éditeur de modèle affiche désormais un onglet de style composite pour les éléments composite et propose des actions de restauration depuis la notation lorsque c’est pertinent.
+
+### Corrigé
+- Comportement du style d’arête dans les éditeurs de notation/modèle : application correcte de `labelInset` lors de la création de nouvelles arêtes, `markDirty` explicite après modification des insets, et style de repli de notation pour les liens uniquement diagramme.
+- Fidélité preview/runtime des composites : contours custom-shape, bordures des conteneurs, comportement de scroll, actions désactivées pour les nœuds d’arbre non supprimables, et contraintes de structure de l’arbre.
+
 ## [0.4.6] - 2026-03-27
 
 ### Ajouté

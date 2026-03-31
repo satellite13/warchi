@@ -92,7 +92,7 @@ export function validateCompositeDiagramStyle(
   let nameBindCount = 0
   let iconBindCount = 0
   traverseComposite(content, (node, path) => {
-    if (node.type === 'text' && (node.bindToProperty === '__name__' || (!node.bindToProperty && node.role === 'name'))) {
+    if (node.type === 'text' && node.bindToProperty === '__name__') {
       nameBindCount += 1
     }
     if ((node as { bindsNotationIcon?: boolean }).bindsNotationIcon === true) {

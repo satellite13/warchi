@@ -60,6 +60,7 @@ import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
   applyStylePropertyBindings,
+  BIND_TO_NAME,
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
   resolveCompositeBoundIconName,
@@ -1688,7 +1689,7 @@ function getCompositeRoleNameText(node: CompositeNode): string | null {
     if (!value || typeof value !== 'object') return null
     const rec = value as Record<string, unknown>
 
-    if (rec.type === 'text' && rec.role === 'name' && typeof rec.text === 'string') {
+    if (rec.type === 'text' && typeof rec.text === 'string' && rec.bindToProperty === BIND_TO_NAME) {
       return rec.text
     }
 

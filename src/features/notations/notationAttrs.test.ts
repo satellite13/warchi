@@ -11,7 +11,7 @@ describe('notationAttrs composite schema', () => {
         nodeShape: 'composite',
         compositeContent: {
           type: 'container',
-          children: [{ type: 'text', id: 'name', role: 'name', text: 'Node' }],
+          children: [{ type: 'text', id: 'name', bindToProperty: '__name__', text: 'Node' }],
         },
         stylePropertyBindings: [
           {

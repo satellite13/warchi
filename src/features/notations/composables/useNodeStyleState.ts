@@ -15,6 +15,7 @@ import {
   type IconPlacement,
   type InsetSides,
 } from '../utils/styleHelpers'
+import { createDefaultCompositeContent } from '../utils/compositeBindings'
 
 export type NodeShape =
   | 'rectangle'
@@ -68,11 +69,7 @@ export function useNodeStyleState() {
   const styleBindingsJsonError = ref<string | null>(null)
   const compositeEditorMode = ref<'visual' | 'json'>('visual')
   const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([])
-  const compositeContentDraft = ref<CompositeSerializedCComponent>({
-    type: 'container',
-    direction: 'column',
-    children: [{ id: 'name', type: 'text', role: 'name', text: 'Name' }],
-  })
+  const compositeContentDraft = ref<CompositeSerializedCComponent>(createDefaultCompositeContent('Name'))
   const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([])
   const compositeShapeType = ref<'rectangle' | 'circle' | 'diamond' | 'custom'>('rectangle')
   const compositeAutoSize = ref(false)
@@ -174,13 +171,7 @@ export function useNodeStyleState() {
       : ''
     compositeContentDraft.value = currentDiagramStyle?.compositeContent
       ? JSON.parse(JSON.stringify(currentDiagramStyle.compositeContent))
-      : {
-          type: 'container',
-          direction: 'column',
-          children: [
-            { id: 'name', type: 'text', role: 'name', text: label.value || 'Name' },
-          ],
-        }
+      : createDefaultCompositeContent(label.value || 'Name')
     styleBindingsDraft.value = currentDiagramStyle?.stylePropertyBindings
       ? JSON.parse(JSON.stringify(currentDiagramStyle.stylePropertyBindings))
       : []

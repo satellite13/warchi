@@ -196,16 +196,11 @@ export function injectCompositeNameAndIcon(
 
   const visit = (node: CompositeSerializedCComponent): void => {
     if (node.type === 'text') {
-      // New binding: bindToProperty
       if (node.bindToProperty === BIND_TO_NAME) {
         node.text = options.displayName
       } else if (node.bindToProperty && node.bindToProperty in propValues) {
         const val = propValues[node.bindToProperty]
         node.text = val != null ? String(val) : ''
-      }
-      // Backward compat: role === 'name' without bindToProperty
-      else if (node.role === 'name' && !node.bindToProperty) {
-        node.text = options.displayName
       }
     }
     if (node.type === 'icon' && node.bindsNotationIcon === true && options.notationIconName) {
@@ -230,7 +225,7 @@ export function createDefaultCompositeContent(labelText: string): CompositeSeria
       {
         type: 'text',
         id: 'name',
-        role: 'name',
+        bindToProperty: BIND_TO_NAME,
         text: labelText,
       },
     ],

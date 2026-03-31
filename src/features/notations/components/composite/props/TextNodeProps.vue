@@ -19,19 +19,10 @@ const { t } = useI18n()
 const FONT_WEIGHT_OPTIONS = ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900']
 const BIND_TO_NAME = '__name__'
 
-const currentBinding = computed(() => {
-  if (props.modelValue.bindToProperty) return props.modelValue.bindToProperty
-  // Backward compat: role === 'name' means bound to name
-  if (props.modelValue.role === 'name') return BIND_TO_NAME
-  return ''
-})
+const currentBinding = computed(() => props.modelValue.bindToProperty ?? '')
 
 function handleBindingChange(value: string) {
   emit('update:field', 'bindToProperty', value || undefined)
-  // Clear legacy role when using new binding
-  if (props.modelValue.role === 'name' && value !== BIND_TO_NAME) {
-    emit('update:field', 'role', undefined)
-  }
 }
 </script>
 

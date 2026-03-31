@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyStylePropertyBindings, injectCompositeNameAndIcon } from './compositeBindings'
+import { applyStylePropertyBindings, injectCompositeNameAndIcon, BIND_TO_NAME } from './compositeBindings'
 import type { CompositeSerializedCComponent, DiagramStyle } from '../notationAttrs'
 
 describe('compositeBindings', () => {
@@ -8,7 +8,7 @@ describe('compositeBindings', () => {
       type: 'container',
       children: [
         { type: 'shape', id: 'statusShape', backgroundColor: '#fff' },
-        { type: 'text', id: 'nameText', role: 'name', text: 'Old' },
+        { type: 'text', id: 'nameText', text: 'Old' },
       ],
     }
     const style = {
@@ -72,7 +72,7 @@ describe('compositeBindings', () => {
     const content: CompositeSerializedCComponent = {
       type: 'container',
       children: [
-        { type: 'text', id: 'name', role: 'name', text: 'Old Name' },
+        { type: 'text', id: 'name', bindToProperty: BIND_TO_NAME, text: 'Old Name' },
         { type: 'icon', id: 'mainIcon', source: '/icons/old.svg', bindsNotationIcon: true },
       ],
     }
@@ -84,5 +84,6 @@ describe('compositeBindings', () => {
     expect(patched.children?.[0]?.text).toBe('Service A')
     expect(patched.children?.[1]?.source).toBe('/icons/component.svg')
   })
+
 })
 

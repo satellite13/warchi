@@ -12,6 +12,7 @@ import CompositeLivePreview from './CompositeLivePreview.vue'
 import A5BindingsEditor from './A5BindingsEditor.vue'
 import { useNodeShapes } from '@/composables/useNodeShapes'
 import { validateCompositeDiagramStyle } from '../../utils/validationIssues'
+import { createDefaultCompositeContent } from '../../utils/compositeBindings'
 import {
   toInsetSides,
   insetToPlain,
@@ -39,11 +40,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 // Composite content
-const compositeContentDraft = ref<CompositeSerializedCComponent>({
-  type: 'container',
-  direction: 'column',
-  children: [{ id: 'name', type: 'text', role: 'name', text: 'Name' }],
-})
+const compositeContentDraft = ref<CompositeSerializedCComponent>(createDefaultCompositeContent('Name'))
 const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([])
 const compositeEditorMode = ref<'visual' | 'json'>('visual')
 const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([])
@@ -196,11 +193,7 @@ function loadFromStyle() {
 
   compositeContentDraft.value = ds.compositeContent
     ? JSON.parse(JSON.stringify(ds.compositeContent))
-    : {
-        type: 'container',
-        direction: 'column',
-        children: [{ id: 'name', type: 'text', role: 'name', text: 'Name' }],
-      }
+    : createDefaultCompositeContent('Name')
   styleBindingsDraft.value = ds.stylePropertyBindings
     ? JSON.parse(JSON.stringify(ds.stylePropertyBindings))
     : []
@@ -282,11 +275,7 @@ function applyCompositeContentJson() {
   try {
     const parsed = compositeContentJson.value.trim()
       ? JSON.parse(compositeContentJson.value)
-      : {
-          type: 'container',
-          direction: 'column',
-          children: [{ type: 'text', role: 'name', text: 'Name' }],
-        }
+      : createDefaultCompositeContent('Name')
     compositeContentDraft.value = parsed as CompositeSerializedCComponent
     compositeContentJson.value = JSON.stringify(parsed, null, 2)
     compositeJsonError.value = null

@@ -1085,23 +1085,7 @@ const isSelectedNodeUntyped = computed(() => {
   const node = selectedNode.value
   return !!node && isUntypedNodeTypeId(node.nodeTypeId)
 })
-const isSelectedLinkUntyped = computed(() => {
-  const link = selectedLink.value
-  if (link) return isUntypedLinkTypeId(link.linkTypeId)
-
-  const modelLinkId = selectedModelLinkId.value
-  if (modelLinkId?.startsWith(UNTYPED_EDGE_PREFIX)) return true
-
-  const selectedElementId = selectedCanvasElementId.value
-  if (!selectedElementId?.startsWith('edge-')) return false
-  const edgeId = selectedElementId.slice('edge-'.length)
-  const edge = activeDiagram.value?.parsedAttrs.instances.edges.find(item => item.id === edgeId)
-  return !!edge?.modelLinkId?.startsWith(UNTYPED_EDGE_PREFIX)
-})
-const isSelectedUntypedElement = computed(
-  () => isSelectedNodeUntyped.value || isSelectedLinkUntyped.value
-)
-const canShowPropertiesTab = computed(() => !isSelectedUntypedElement.value)
+const canShowPropertiesTab = computed(() => true)
 const traceabilityNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
@@ -1120,7 +1104,7 @@ const canEditSelectedElementStyle = computed(() => {
   if (selectedElementId.startsWith('instance-')) {
     const instanceId = selectedElementId.slice('instance-'.length)
     const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
-    return !!instance && !isNoteInstance(instance)
+    return !!instance
   }
 
   if (selectedElementId.startsWith('edge-')) {
@@ -4341,6 +4325,8 @@ onBeforeUnmount(() => {
             <CompositeStylePanel
               v-if="activeRightTab === 'composite-style' && canShowStyleTab"
               :current-diagram-style="selectedElementDiagramStyle"
+              :component-properties="nodeCustomProperties"
+              :node-type-properties="nodeTypeCustomProperties"
               :can-restore-style="hasDiagramStyleOverride"
               @style-change="handleDiagramElementStyleChange"
               @restore-style="restoreStyleFromNotation"

@@ -45,6 +45,7 @@ import A5BindingsEditor from "./composite/A5BindingsEditor.vue";
 import CompositeTreeEditor from "./composite/CompositeTreeEditor.vue";
 import CompositeLivePreview from "./composite/CompositeLivePreview.vue";
 import { validateCompositeDiagramStyle } from "../utils/validationIssues";
+import { createDefaultCompositeContent } from "../utils/compositeBindings";
 
 const props = defineProps<{
   selectedElementId: string | null;
@@ -535,6 +536,10 @@ watch(() => props.currentDiagramStyle?.labelTemplate, (val) => {
 watch(
   () => props.currentDiagramStyle,
   (style) => {
+    if (elementType.value === "edge") {
+      loadEdgeProps();
+      return;
+    }
     if (!style || elementType.value !== "node") return;
     if (style.iconName) {
       iconPlacement.value = normalizeIconPlacement(style.iconPlacement, iconPlacement.value);
@@ -679,7 +684,7 @@ function applyCompositeContentJson() {
   try {
     const parsed = compositeContentJson.value.trim()
       ? JSON.parse(compositeContentJson.value)
-      : { type: "container", direction: "column", children: [{ type: "text", role: "name", text: label.value || "Name" }] };
+      : createDefaultCompositeContent(label.value || "Name");
     compositeContentDraft.value = parsed as CompositeSerializedCComponent;
     compositeContentJson.value = JSON.stringify(parsed, null, 2);
     compositeJsonError.value = null;

@@ -4,6 +4,12 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-03-31
+
+### Modifié
+- Les flux composite notation/modèle s’appuient sur un helper partagé `createDefaultCompositeContent` pour des arbres composite par défaut cohérents à l’initialisation et à la réinitialisation.
+- Les liaisons de texte composite sont alignées sur le contrat Papirus `bindToProperty` (y compris `__name__` pour le nom affiché du nœud) au lieu des métadonnées basées sur `role`.
+
 ## [0.5.1] - 2026-03-31
 
 ### Ajouté

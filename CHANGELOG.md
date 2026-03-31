@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-03-31
+
+### Changed
+- Composite notation/model flows use a shared `createDefaultCompositeContent` helper so default composite trees stay consistent when initializing or resetting content.
+- Composite text bindings align with Papirus `bindToProperty` (including `__name__` for the displayed node name) instead of legacy role-based metadata.
+
 ## [0.5.1] - 2026-03-31
 
 ### Added

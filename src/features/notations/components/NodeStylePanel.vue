@@ -35,11 +35,12 @@ import {
   toInsetSides,
   toInsetNumber,
   insetToPlain,
-  getLabelSpacing,
   setLabelSpacing,
   type IconPlacement,
   type InsetSides,
 } from "../utils/styleHelpers";
+import { useNodeStyleState, type NodeShape } from "../composables/useNodeStyleState";
+import { useEdgeStyleState } from "../composables/useEdgeStyleState";
 import A5BindingsEditor from "./composite/A5BindingsEditor.vue";
 import CompositeTreeEditor from "./composite/CompositeTreeEditor.vue";
 import CompositeLivePreview from "./composite/CompositeLivePreview.vue";
@@ -63,110 +64,14 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const panelMode = computed(() => props.mode ?? 'default');
 
-type NodeShape =
-  | "rectangle"
-  | "beveled-rectangle"
-  | "diamond"
-  | "circle"
-  | "trapezoid"
-  | "slanted-rectangle"
-  | "custom"
-  | "composite";
+// NodeShape type imported from useNodeStyleState composable
 
 function emitNodeStyle() {
-  const compositeContent =
-    nodeShape.value === "composite"
-      ? compositeContentDraft.value
-      : undefined;
-  const stylePropertyBindings =
-    nodeShape.value === "composite" && styleBindingsDraft.value.length > 0
-      ? styleBindingsDraft.value
-      : undefined;
-  const style: DiagramStyle = {
-    nodeShape: nodeShape.value,
-    ...(nodeShape.value === "custom"
-      ? { customOutline: customOutlineRef.value, customShapeId: customShapeIdRef.value ?? undefined }
-      : {}),
-    fillColor: fillColor.value,
-    fillOpacity: fillOpacity.value,
-    strokeColor: strokeColor.value,
-    strokeOpacity: strokeOpacity.value,
-    strokeWidth: strokeWidth.value,
-    cornerRadius: cornerRadius.value,
-    opacity: opacity.value,
-    labelColor: labelColor.value,
-    labelOpacity: labelOpacity.value,
-    labelFontSize: labelFontSize.value,
-    labelInset: insetToPlain(labelInset.value),
-    labelAlign: labelAlign.value,
-    labelVerticalAlign: labelVerticalAlign.value,
-    ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
-    ...(nodeShape.value === "composite" && compositeContent ? { compositeContent } : {}),
-    ...(nodeShape.value === "composite" && stylePropertyBindings ? { stylePropertyBindings } : {}),
-    ...(nodeShape.value === "composite" ? {
-      compositeShapeType: compositeShapeType.value,
-      compositeAutoSize: compositeAutoSize.value,
-      compositeMinWidth: compositeMinWidth.value,
-      compositeMinHeight: compositeMinHeight.value,
-    } : {}),
-    width: nodeWidth.value,
-    height: nodeHeight.value,
-    contentInset: insetToPlain(contentInset.value),
-    portsTop: nodePortsTop.value,
-    portsBottom: nodePortsBottom.value,
-    portsLeft: nodePortsLeft.value,
-    portsRight: nodePortsRight.value,
-    ...(iconName.value
-      ? {
-          iconName: iconName.value,
-          iconPlacement: iconPlacement.value,
-          iconWidth: iconWidth.value,
-          iconHeight: iconHeight.value,
-          iconInset: iconInset.value,
-          iconStrokeColor: iconStrokeColor.value,
-          iconFillColor: iconFillColor.value
-        }
-      : {})
-  };
-  if (lineStyle.value === "dashed") {
-    const pattern = lineDashPattern.value.trim() || "8,4";
-    style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-  }
-  emit("style-change", style);
+  emit("style-change", buildNodeStyle());
 }
 
 function emitEdgeStyle() {
-  const style: DiagramStyle = {
-    strokeColor: edgeStrokeColor.value,
-    strokeOpacity: edgeStrokeOpacity.value,
-    strokeWidth: edgeStrokeWidth.value,
-    opacity: edgeOpacity.value,
-    edgeType: edgeType.value,
-    startMarkerType: edgeStartMarker.value,
-    endMarkerType: edgeEndMarker.value,
-    labelColor: edgeLabelColor.value,
-    labelOpacity: edgeLabelOpacity.value,
-    labelFontSize: edgeLabelFontSize.value,
-    labelInset: insetToPlain(edgeLabelInset.value),
-    edgeLabelOffset: edgeLabelOffset.value,
-    edgeLabelPosition: edgeLabelPosition.value,
-    edgeLabelFollowPath: edgeLabelFollowPath.value,
-    edgeLabelLineGap: edgeLabelLineGap.value,
-    labelBgColor: edgeLabelBgColor.value,
-    labelBgOpacity: edgeLabelBgOpacity.value,
-    labelBgBorderRadius: edgeLabelBgBorderRadius.value,
-    startMarkerSize: edgeStartMarkerSize.value,
-    startMarkerFillColor: edgeStartMarkerFillColor.value,
-    startMarkerFillOpacity: edgeStartMarkerFillOpacity.value,
-    endMarkerSize: edgeEndMarkerSize.value,
-    endMarkerFillColor: edgeEndMarkerFillColor.value,
-    endMarkerFillOpacity: edgeEndMarkerFillOpacity.value
-  };
-  if (edgeLineStyle.value === "dashed") {
-    const pattern = edgeLineDashPattern.value.trim() || "8,4";
-    style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-  }
-  emit("style-change", style);
+  emit("style-change", buildEdgeStyle());
 }
 
 // Determine if the selected element is a node or edge
@@ -552,57 +457,19 @@ const EDGE_TYPE_OPTIONS = computed(() => ([
   { v: "bezier", l: t("diagram.linkTypeBezier"), icon: "line_curve" }
 ] as const));
 
-// --- Node style state ---
-const iconName = ref("");
-const iconPlacement = ref<IconPlacement>("top-left");
-const iconWidth = ref(20);
-const iconHeight = ref(20);
-const iconInset = ref(6);
-const iconStrokeColor = ref("#000000");
-const iconFillColor = ref("#000000");
-const nodeShape = ref<NodeShape>("rectangle");
-const label = ref("");
-const fillColor = ref("#ffffff");
-const fillOpacity = ref(1);
-const strokeColor = ref("#333333");
-const strokeOpacity = ref(1);
-const strokeWidth = ref(2);
-const cornerRadius = ref(0);
-const opacity = ref(1);
-const lineStyle = ref<"solid" | "dashed">("solid");
-const lineDashPattern = ref("8,4");
-const labelTemplate = ref("");
-const labelColor = ref("#333333");
-const labelOpacity = ref(1);
-const labelFontSize = ref(14);
-const labelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 });
-const labelAlign = ref<"center" | "left" | "right">("center");
-const labelVerticalAlign = ref<"top" | "middle" | "bottom">("middle");
-const nodeWidth = ref(140);
-const nodeHeight = ref(50);
-const contentInset = ref<InsetSides>({ top: 0, right: 0, bottom: 0, left: 0 });
-const nodePortsTop = ref(3);
-const nodePortsBottom = ref(3);
-const nodePortsLeft = ref(1);
-const nodePortsRight = ref(1);
-const customOutlineRef = ref<DiagramStyle["customOutline"]>(undefined);
-const customShapeIdRef = ref<string | null>(null);
-const compositeContentJson = ref("");
-const styleBindingsJson = ref("");
-const compositeJsonError = ref<string | null>(null);
-const styleBindingsJsonError = ref<string | null>(null);
-const compositeEditorMode = ref<"visual" | "json">("visual");
-const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([]);
-const compositeContentDraft = ref<CompositeSerializedCComponent>({
-  type: "container",
-  direction: "column",
-  children: [{ id: "name", type: "text", role: "name", text: "Name" }],
-});
-const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([]);
-const compositeShapeType = ref<'rectangle' | 'circle' | 'diamond' | 'custom'>('rectangle');
-const compositeAutoSize = ref(false);
-const compositeMinWidth = ref(0);
-const compositeMinHeight = ref(0);
+// --- Node style state (from composable) ---
+const {
+  iconName, iconPlacement, iconWidth, iconHeight, iconInset, iconStrokeColor, iconFillColor,
+  nodeShape, label, fillColor, fillOpacity, strokeColor, strokeOpacity, strokeWidth,
+  cornerRadius, opacity, lineStyle, lineDashPattern, labelTemplate, labelColor, labelOpacity,
+  labelFontSize, labelInset, labelAlign, labelVerticalAlign, nodeWidth, nodeHeight, contentInset,
+  nodePortsTop, nodePortsBottom, nodePortsLeft, nodePortsRight,
+  customOutlineRef, customShapeIdRef,
+  compositeContentJson, styleBindingsJson, compositeJsonError, styleBindingsJsonError,
+  compositeEditorMode, compositeTreeTargets, compositeContentDraft, styleBindingsDraft,
+  compositeShapeType, compositeAutoSize, compositeMinWidth, compositeMinHeight,
+  loadNodeProps: loadNodePropsFromComposable, buildNodeStyle,
+} = useNodeStyleState();
 const componentPropsForA5 = computed(() => props.componentProperties ?? []);
 const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? []);
 const compositeValidationIssues = computed(() =>
@@ -616,34 +483,17 @@ const compositeValidationIssues = computed(() =>
   )
 );
 
-// --- Edge style state ---
-const edgeLabel = ref("");
-const edgeStrokeColor = ref("#666666");
-const edgeStrokeOpacity = ref(1);
-const edgeStrokeWidth = ref(2);
-const edgeLineStyle = ref<"solid" | "dashed">("solid");
-const edgeLineDashPattern = ref("8,4");
-const edgeType = ref<"straight" | "polyline" | "editable-polyline" | "bezier">("polyline");
-const edgeEndMarker = ref<"none" | "arrow" | "open" | "diamond" | "circle">("open");
-const edgeStartMarker = ref<"none" | "arrow" | "open" | "diamond" | "circle">("none");
-const edgeOpacity = ref(1);
-const edgeLabelColor = ref("#333333");
-const edgeLabelOpacity = ref(1);
-const edgeLabelFontSize = ref(14);
-const edgeLabelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 });
-const edgeLabelOffset = ref(0);
-const edgeLabelPosition = ref(0.5);
-const edgeLabelFollowPath = ref(false);
-const edgeLabelLineGap = ref(false);
-const edgeLabelBgColor = ref("#ffffff");
-const edgeLabelBgOpacity = ref(1);
-const edgeLabelBgBorderRadius = ref(2);
-const edgeStartMarkerSize = ref(12);
-const edgeStartMarkerFillColor = ref("#000000");
-const edgeStartMarkerFillOpacity = ref(1);
-const edgeEndMarkerSize = ref(12);
-const edgeEndMarkerFillColor = ref("#000000");
-const edgeEndMarkerFillOpacity = ref(1);
+// --- Edge style state (from composable) ---
+const {
+  edgeLabel, edgeStrokeColor, edgeStrokeOpacity, edgeStrokeWidth,
+  edgeLineStyle, edgeLineDashPattern, edgeType, edgeEndMarker, edgeStartMarker,
+  edgeOpacity, edgeLabelColor, edgeLabelOpacity, edgeLabelFontSize, edgeLabelInset,
+  edgeLabelOffset, edgeLabelPosition, edgeLabelFollowPath, edgeLabelLineGap,
+  edgeLabelBgColor, edgeLabelBgOpacity, edgeLabelBgBorderRadius,
+  edgeStartMarkerSize, edgeStartMarkerFillColor, edgeStartMarkerFillOpacity,
+  edgeEndMarkerSize, edgeEndMarkerFillColor, edgeEndMarkerFillOpacity,
+  loadEdgeProps: loadEdgePropsFromComposable, buildEdgeStyle,
+} = useEdgeStyleState();
 
 function getSelectedNode(): Node | null {
   if (!props.selectedElementId || !props.renderer) return null;
@@ -658,186 +508,14 @@ function getSelectedEdge(): Edge | null {
 function loadNodeProps() {
   const node = getSelectedNode();
   if (!node) return;
-
-  // Load icon
-  const iconSource = (node as any).icon?.options?.source as string | undefined;
-  if (iconSource && typeof iconSource === "string") {
-    const match = iconSource.match(/\/icons\/(.+)\.svg$/);
-    iconName.value = match?.[1] ?? "";
-  } else {
-    iconName.value = "";
-  }
-  const iconOptions = (node as any).icon?.options as Record<string, unknown> | undefined;
-  iconPlacement.value = normalizeIconPlacement(
-    iconOptions?.placement,
-    normalizeIconPlacement(props.currentDiagramStyle?.iconPlacement, "top-left")
-  );
-  iconWidth.value = Math.round(Number(iconOptions?.width ?? 20));
-  iconHeight.value = Math.round(Number(iconOptions?.height ?? 20));
-  iconInset.value = toInsetNumber(
-    iconOptions?.inset ?? iconOptions?.padding ?? iconOptions?.margin ?? iconOptions?.gap,
-    6
-  );
-  iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? "#000000";
-  iconFillColor.value = (iconOptions?.fillColor as string) ?? "#000000";
-
-  const rawShape = (node as any).shapeType as NodeShape | undefined;
-  if (
-    rawShape === "rectangle" ||
-    rawShape === "beveled-rectangle" ||
-    rawShape === "diamond" ||
-    rawShape === "circle" ||
-    rawShape === "trapezoid" ||
-    rawShape === "slanted-rectangle" ||
-    rawShape === "custom" ||
-    rawShape === "composite"
-  ) {
-    nodeShape.value = rawShape;
-    if (rawShape === "custom") {
-      customOutlineRef.value = props.currentDiagramStyle?.customOutline ?? undefined;
-      customShapeIdRef.value = props.currentDiagramStyle?.customShapeId ?? null;
-      ensureCatalogShapesLoaded();
-    } else {
-      customOutlineRef.value = undefined;
-      customShapeIdRef.value = null;
-    }
-  } else {
-    const typeName = (node as any).typeName as string | undefined;
-    nodeShape.value =
-      typeName === "diamond"
-        ? "diamond"
-        : typeName === "circle"
-          ? "circle"
-          : "rectangle";
-    customOutlineRef.value = undefined;
-    customShapeIdRef.value = null;
-  }
-
-  label.value = node.label?.text ?? "";
-  const style = node.style || {};
-  fillColor.value = style.fillColor || "#ffffff";
-  fillOpacity.value = (style as any).fillOpacity ?? 1;
-  strokeColor.value = style.strokeColor || "#333333";
-  strokeOpacity.value = (style as any).strokeOpacity ?? 1;
-  strokeWidth.value = style.strokeWidth ?? 2;
-  opacity.value = style.opacity ?? 1;
-
-  const lineDash = style.lineDash || [];
-  lineStyle.value = lineDash.length > 0 ? "dashed" : "solid";
-  lineDashPattern.value = lineDash.length > 0 ? lineDash.join(",") : "8,4";
-
-  if ("cornerRadius" in node) {
-    cornerRadius.value = (node as any).cornerRadius ?? 0;
-  } else {
-    cornerRadius.value = 0;
-  }
-
-  const labelStyle = node.label?.style;
-  labelColor.value = labelStyle?.color || "#333333";
-  labelOpacity.value = (labelStyle as any)?.opacity ?? 1;
-  labelFontSize.value = labelStyle?.fontSize ?? 14;
-  const nodeLabelSpacing = getLabelSpacing(node.label);
-  labelInset.value = toInsetSides(nodeLabelSpacing.inset, 8);
-  labelAlign.value = (labelStyle?.align as "center" | "left" | "right") ?? "center";
-  labelVerticalAlign.value = ((labelStyle as any)?.verticalAlign as "top" | "middle" | "bottom") ?? "middle";
-  labelTemplate.value = props.currentDiagramStyle?.labelTemplate ?? "";
-  compositeContentJson.value = props.currentDiagramStyle?.compositeContent
-    ? JSON.stringify(props.currentDiagramStyle.compositeContent, null, 2)
-    : "";
-  styleBindingsJson.value = props.currentDiagramStyle?.stylePropertyBindings
-    ? JSON.stringify(props.currentDiagramStyle.stylePropertyBindings, null, 2)
-    : "";
-  compositeContentDraft.value = props.currentDiagramStyle?.compositeContent
-    ? JSON.parse(JSON.stringify(props.currentDiagramStyle.compositeContent))
-    : { type: "container", direction: "column", children: [{ id: "name", type: "text", role: "name", text: label.value || "Name" }] };
-  styleBindingsDraft.value = props.currentDiagramStyle?.stylePropertyBindings
-    ? JSON.parse(JSON.stringify(props.currentDiagramStyle.stylePropertyBindings))
-    : [];
-  compositeJsonError.value = null;
-  styleBindingsJsonError.value = null;
-  compositeShapeType.value = (props.currentDiagramStyle?.compositeShapeType as typeof compositeShapeType.value) ?? 'rectangle';
-  compositeAutoSize.value = props.currentDiagramStyle?.compositeAutoSize ?? false;
-  compositeMinWidth.value = props.currentDiagramStyle?.compositeMinWidth ?? 0;
-  compositeMinHeight.value = props.currentDiagramStyle?.compositeMinHeight ?? 0;
-
-  // Load node dimensions
-  nodeWidth.value = Math.round(node.width ?? 140);
-  nodeHeight.value = Math.round(node.height ?? 50);
-  contentInset.value = toInsetSides((node as any).contentInset ?? props.currentDiagramStyle?.contentInset, 0);
-  const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, unknown>;
-  nodePortsTop.value = Math.max(0, Math.round(Number(anchorPoints.top ?? 3)));
-  nodePortsBottom.value = Math.max(0, Math.round(Number(anchorPoints.bottom ?? 3)));
-  nodePortsLeft.value = Math.max(0, Math.round(Number(anchorPoints.left ?? 1)));
-  nodePortsRight.value = Math.max(0, Math.round(Number(anchorPoints.right ?? 1)));
+  const needsCatalogShapes = loadNodePropsFromComposable(node, props.currentDiagramStyle);
+  if (needsCatalogShapes) ensureCatalogShapesLoaded();
 }
 
 function loadEdgeProps() {
   const edge = getSelectedEdge();
   if (!edge) return;
-  const styleFromDiagram = props.currentDiagramStyle;
-
-  edgeLabel.value = typeof edge.label === "string" ? edge.label : (edge.label?.text ?? "");
-  const style = edge.style || {};
-  edgeStrokeColor.value = styleFromDiagram?.strokeColor ?? style.strokeColor ?? "#666666";
-  edgeStrokeOpacity.value = styleFromDiagram?.strokeOpacity ?? (style as any).strokeOpacity ?? 1;
-  edgeStrokeWidth.value = styleFromDiagram?.strokeWidth ?? style.strokeWidth ?? 2;
-  edgeOpacity.value = styleFromDiagram?.opacity ?? style.opacity ?? 1;
-  edgeType.value = (styleFromDiagram?.edgeType ?? edge.type ?? "polyline") as
-    | "straight"
-    | "polyline"
-    | "editable-polyline"
-    | "bezier";
-
-  const lineDash = style.lineDash ?? styleFromDiagram?.lineDash ?? [];
-  edgeLineStyle.value = lineDash.length > 0 ? "dashed" : "solid";
-  edgeLineDashPattern.value = lineDash.length > 0 ? lineDash.join(",") : "8,4";
-
-  edgeEndMarker.value = (styleFromDiagram?.endMarkerType ?? edge.endMarker?.type ?? "none") as
-    | "none"
-    | "arrow"
-    | "open"
-    | "diamond"
-    | "circle";
-  edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
-    edge.startMarker?.type ??
-    "none") as
-    | "none"
-    | "arrow"
-    | "open"
-    | "diamond"
-    | "circle";
-
-  const eLabelStyle = edge.label?.style;
-  edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? "#333333";
-  edgeLabelOpacity.value = styleFromDiagram?.labelOpacity ?? (eLabelStyle as any)?.opacity ?? 1;
-  edgeLabelFontSize.value = styleFromDiagram?.labelFontSize ?? eLabelStyle?.fontSize ?? 14;
-  const edgeLabelSpacing = getLabelSpacing(edge.label);
-  edgeLabelInset.value = toInsetSides(
-    styleFromDiagram?.labelInset ?? edgeLabelSpacing.inset,
-    8
-  );
-  edgeLabelOffset.value = styleFromDiagram?.edgeLabelOffset ?? edge.labelOffset ?? 0;
-  edgeLabelPosition.value = styleFromDiagram?.edgeLabelPosition ?? edge.labelPosition ?? 0.5;
-  edgeLabelFollowPath.value = styleFromDiagram?.edgeLabelFollowPath ?? edge.labelFollowPath ?? false;
-  edgeLabelLineGap.value = styleFromDiagram?.edgeLabelLineGap ?? edge.labelLineGap ?? false;
-  edgeLabelBgColor.value =
-    styleFromDiagram?.labelBgColor ?? (edge as any).labelBackground?.color ?? "#ffffff";
-  edgeLabelBgOpacity.value =
-    styleFromDiagram?.labelBgOpacity ?? ((edge as any).labelBackground as any)?.opacity ?? 1;
-  edgeLabelBgBorderRadius.value =
-    styleFromDiagram?.labelBgBorderRadius ??
-    ((edge as any).labelBackground as any)?.borderRadius ??
-    2;
-  edgeStartMarkerSize.value = styleFromDiagram?.startMarkerSize ?? edge.startMarker?.size ?? 12;
-  edgeStartMarkerFillColor.value =
-    styleFromDiagram?.startMarkerFillColor ?? edge.startMarker?.fillColor ?? "#000000";
-  edgeStartMarkerFillOpacity.value =
-    styleFromDiagram?.startMarkerFillOpacity ?? edge.startMarker?.fillOpacity ?? 1;
-  edgeEndMarkerSize.value = styleFromDiagram?.endMarkerSize ?? edge.endMarker?.size ?? 12;
-  edgeEndMarkerFillColor.value =
-    styleFromDiagram?.endMarkerFillColor ?? edge.endMarker?.fillColor ?? "#000000";
-  edgeEndMarkerFillOpacity.value =
-    styleFromDiagram?.endMarkerFillOpacity ?? edge.endMarker?.fillOpacity ?? 1;
+  loadEdgePropsFromComposable(edge, props.currentDiagramStyle);
 }
 
 watch(() => props.selectedElementId, () => {

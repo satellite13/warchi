@@ -85,6 +85,22 @@ Pour la forme `Composite`, le panneau de style propose :
 - aperçu live sur canvas,
 - mode JSON en fallback avancé.
 
+#### Configurer un composant composite
+
+1. Choisissez la forme **Composite** pour le composant.
+2. Construisez l’arbre `compositeContent` (`container` + nœuds `text`/`icon`/`shape`/etc.).
+3. Réglez les propriétés du nœud sélectionné dans l’inspecteur selon son type.
+4. Ajoutez des règles A5 au format **source de valeur** -> **condition** -> **patch** (sur un nœud cible ou le conteneur externe).
+5. Vérifiez le résultat dans l’aperçu live ; utilisez le mode JSON pour les ajustements fins.
+
+#### Ce que permettent les bindings
+
+- **Nœuds texte** : liaison au nom du nœud et aux propriétés personnalisées de type chaîne.
+- **Icônes** : liaison à l’icône du composant de notation (palette et diagramme restent cohérents).
+- **Bindings de style A5** : patches conditionnels selon les propriétés composant ou type de nœud.
+
+Opérateurs A5 supportés : `equals`, `contains`, `matchesRegex`, `isEmpty`, `isNotEmpty`, `is`, `range`, `lt`, `lte`, `gt`, `gte`.
+
 ### Éléments « diagram-only » dans l’éditeur de notation
 
 Vous pouvez ajouter des nœuds et liens uniquement sur le canvas de prévisualisation :

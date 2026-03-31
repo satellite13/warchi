@@ -87,6 +87,22 @@ For `Composite` shape, the style panel provides:
 - live preview canvas,
 - JSON mode as advanced fallback.
 
+#### How to configure a composite component
+
+1. Select **Composite** as the component shape.
+2. Build the tree in `compositeContent` (`container` + nested `text`/`icon`/`shape`/etc.).
+3. Configure properties of the selected node in the type-specific inspector.
+4. Add A5 rules in the form **value source** -> **condition** -> **patch** (to a target node or the outer wrapper).
+5. Validate behavior in live preview; use JSON mode for precise low-level edits.
+
+#### What bindings can do
+
+- **Text nodes**: bind to the node name and string custom properties.
+- **Icons**: bind to the notation component icon (keeps palette and diagram visuals aligned).
+- **A5 style bindings**: apply conditional style patches based on component or node-type properties.
+
+Supported A5 operators: `equals`, `contains`, `matchesRegex`, `isEmpty`, `isNotEmpty`, `is`, `range`, `lt`, `lte`, `gt`, `gte`.
+
 ### Diagram-Only Elements In Notation Editor
 
 You can add diagram-only nodes and edges directly on notation preview canvas:

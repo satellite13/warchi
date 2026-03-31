@@ -93,6 +93,16 @@ When you select an element in the tree or on the diagram, the properties panel o
 
 - **Style** tab — appearance of the **instance** on the diagram (color, shape, size), with the option to restore styles from the notation.
 
+#### Composite elements in the model editor
+
+For nodes created from notation components with the **Composite** shape, the **Style** tab includes composite-instance controls:
+
+- edit instance-level applied style values;
+- restore style from notation (where available);
+- preview the result with bindings and current node property values applied.
+
+Recommended workflow: evolve the base composite structure in the notation editor first, then use model-level style overrides only for local diagram-scoped variations.
+
 #### Custom properties for a node (Properties tab)
 
 For a **node** in the model, two separate blocks of fields are shown (when defined in the type catalog and in the notation):

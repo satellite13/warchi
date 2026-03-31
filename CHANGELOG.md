@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-03-31
+
+### Added
+- Square (`square`) as a start/end edge marker option in the notation style panel (RU/EN/FR), aligned with Papirus `ArrowMarkerType`.
+
 ## [0.5.2] - 2026-03-31
 
 ### Changed

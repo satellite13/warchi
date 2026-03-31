@@ -18,8 +18,8 @@ export function useEdgeStyleState() {
   const edgeLineStyle = ref<'solid' | 'dashed'>('solid')
   const edgeLineDashPattern = ref('8,4')
   const edgeType = ref<'straight' | 'polyline' | 'editable-polyline' | 'bezier'>('polyline')
-  const edgeEndMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle'>('open')
-  const edgeStartMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle'>('none')
+  const edgeEndMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'>('open')
+  const edgeStartMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'>('none')
   const edgeOpacity = ref(1)
   const edgeLabelColor = ref('#333333')
   const edgeLabelOpacity = ref(1)
@@ -65,6 +65,7 @@ export function useEdgeStyleState() {
       | 'open'
       | 'diamond'
       | 'circle'
+      | 'square'
     edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
       edge.startMarker?.type ??
       'none') as
@@ -73,6 +74,7 @@ export function useEdgeStyleState() {
       | 'open'
       | 'diamond'
       | 'circle'
+      | 'square'
 
     const eLabelStyle = edge.label?.style
     edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? '#333333'

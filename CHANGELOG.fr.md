@@ -4,6 +4,11 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-03-31
+
+### Ajouté
+- Marqueur d’extrémité de lien « carré » (`square`) au début et à la fin dans le panneau de style de notation (RU/EN/FR), aligné sur `ArrowMarkerType` dans Papirus.
+
 ## [0.5.2] - 2026-03-31
 
 ### Modifié

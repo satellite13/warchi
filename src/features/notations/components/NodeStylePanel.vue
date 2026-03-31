@@ -3,7 +3,13 @@
 import { ref, reactive, computed, watch, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { TextLabel } from "@ngroznykh/papirus";
-import type {InteractionManager, DiagramRenderer, Node, Edge} from "@ngroznykh/papirus";
+import type {
+  ArrowMarkerConfig,
+  InteractionManager,
+  DiagramRenderer,
+  Node,
+  Edge,
+} from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
 import ColorWithAlphaField from "./ColorWithAlphaField.vue";
 import LabeledFieldRow from "./LabeledFieldRow.vue";
@@ -1183,7 +1189,7 @@ function handleEdgeTypeChange(value: string) {
 }
 
 function handleEdgeEndMarkerChange(value: string) {
-  const v = value as "none" | "arrow" | "open" | "diamond" | "circle";
+  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square";
   edgeEndMarker.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1194,7 +1200,7 @@ function handleEdgeEndMarkerChange(value: string) {
 }
 
 function handleEdgeStartMarkerChange(value: string) {
-  const v = value as "none" | "arrow" | "open" | "diamond" | "circle";
+  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square";
   edgeStartMarker.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1335,11 +1341,11 @@ function handleEdgeLabelLineGapChange(checked: boolean) {
 }
 
 function buildMarkerConfig(
-  type: "none" | "arrow" | "open" | "diamond" | "circle",
+  type: "none" | "arrow" | "open" | "diamond" | "circle" | "square",
   size: number,
   fillColor: string,
   fillOpacity: number
-) {
+): ArrowMarkerConfig | undefined {
   if (type === "none") return undefined;
   return {type, size, fillColor, fillOpacity};
 }
@@ -1651,6 +1657,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
+                      <option value="square">{{ t("nodeStyle.markerSquare") }}</option>
                     </select>
                   </LabeledFieldRow>
                   <template v-if="edgeStartMarker !== 'none'">
@@ -1676,6 +1683,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
+                      <option value="square">{{ t("nodeStyle.markerSquare") }}</option>
                     </select>
                   </LabeledFieldRow>
                   <template v-if="edgeEndMarker !== 'none'">

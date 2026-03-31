@@ -159,7 +159,11 @@ export function buildMarker(
   prefix: 'start' | 'end',
 ) {
   const markerType =
-    typeStr === 'arrow' || typeStr === 'open' || typeStr === 'diamond' || typeStr === 'circle'
+    typeStr === 'arrow' ||
+    typeStr === 'open' ||
+    typeStr === 'diamond' ||
+    typeStr === 'circle' ||
+    typeStr === 'square'
       ? (typeStr as ArrowMarkerType)
       : undefined
   if (!markerType) return undefined

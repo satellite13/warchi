@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-31
+
+### Added
+- Expanded in-app help and `docs/composite-components.md` for configuring composite components in model and notation editors (EN/RU/FR).
+
+### Changed
+- Notation `attrs`: stricter parsing and normalization of `compositeShapeType` against allowed composite diagram shapes.
+
 ## [0.5.0] - 2026-03-31
 
 ### Added

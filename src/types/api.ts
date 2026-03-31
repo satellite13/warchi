@@ -66,9 +66,9 @@ export interface UserUpdateRequest {
 
 // ── Models ──
 
-export interface ModelRequest extends VersionedEntityRequest {}
+export type ModelRequest = VersionedEntityRequest
 
-export interface ModelUpdateRequest extends VersionedEntityUpdateRequest {}
+export type ModelUpdateRequest = VersionedEntityUpdateRequest
 
 // ── Diagrams ──
 
@@ -208,11 +208,11 @@ export interface LinkUpdateRequest {
 
 // ── Notations ──
 
-export interface NotationRequest extends VersionedEntityRequest {}
+export type NotationRequest = VersionedEntityRequest
 
-export interface NotationUpdateRequest extends VersionedEntityUpdateRequest {}
+export type NotationUpdateRequest = VersionedEntityUpdateRequest
 
-export interface NotationResponse extends VersionedEntityResponse {}
+export type NotationResponse = VersionedEntityResponse
 
 export interface NotationMetaResponse {
   id: string
@@ -224,19 +224,19 @@ export interface NotationMetaResponse {
 
 // ── Node Types ──
 
-export interface NodeTypeResponse extends OwnedTypeResponse {}
+export type NodeTypeResponse = OwnedTypeResponse
 
-export interface NodeTypeRequest extends OwnedTypeRequest {}
+export type NodeTypeRequest = OwnedTypeRequest
 
-export interface NodeTypeUpdateRequest extends OwnedTypeUpdateRequest {}
+export type NodeTypeUpdateRequest = OwnedTypeUpdateRequest
 
 // ── Link Types ──
 
-export interface LinkTypeResponse extends OwnedTypeResponse {}
+export type LinkTypeResponse = OwnedTypeResponse
 
-export interface LinkTypeRequest extends OwnedTypeRequest {}
+export type LinkTypeRequest = OwnedTypeRequest
 
-export interface LinkTypeUpdateRequest extends OwnedTypeUpdateRequest {}
+export type LinkTypeUpdateRequest = OwnedTypeUpdateRequest
 
 // ── Node Shapes (custom node outline catalog) ──
 

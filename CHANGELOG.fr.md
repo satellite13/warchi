@@ -4,6 +4,14 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-31
+
+### Ajouté
+- Aide in-app étendue et `docs/composite-components.md` pour la configuration des composants composite dans les éditeurs de modèle et de notation (EN/RU/FR).
+
+### Modifié
+- Attributs de notation : analyse et normalisation plus strictes de `compositeShapeType` par rapport aux formes composite autorisées.
+
 ## [0.5.0] - 2026-03-31
 
 ### Ajouté

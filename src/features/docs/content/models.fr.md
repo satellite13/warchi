@@ -91,6 +91,16 @@ Types d’éléments définis par la notation du modèle. Glissez depuis la pale
 
 - Onglet **Style** — apparence de l’**instance** sur le diagramme (couleur, forme, taille), avec restauration depuis la notation.
 
+#### Éléments composite dans l’éditeur de modèle
+
+Pour les nœuds issus de composants de notation en forme **Composite**, l’onglet **Style** fournit des contrôles dédiés à l’instance composite :
+
+- édition des valeurs de style appliquées à l’instance ;
+- restauration du style depuis la notation (si disponible) ;
+- aperçu du résultat avec les bindings et les valeurs de propriétés du nœud.
+
+Bonnes pratiques : faites évoluer la structure composite de base dans l’éditeur de notation, puis utilisez les overrides de style côté modèle uniquement pour des variations locales au diagramme.
+
 #### Propriétés personnalisées d’un nœud (onglet Propriétés)
 
 Pour un **nœud**, deux blocs distincts (selon les schémas du catalogue de types et de la notation) :

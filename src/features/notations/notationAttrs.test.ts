@@ -34,6 +34,31 @@ describe('notationAttrs composite schema', () => {
     expect(parsed.diagramStyle?.stylePropertyBindings?.[0]?.propertyName).toBe('status')
   })
 
+  it('preserves all compositeShapeType variants on parse', () => {
+    for (const compositeShapeType of [
+      'rectangle',
+      'beveled-rectangle',
+      'diamond',
+      'circle',
+      'trapezoid',
+      'slanted-rectangle',
+      'custom',
+    ] as const) {
+      const parsed = parseEntityAttrs(
+        JSON.stringify({
+          tags: [],
+          customProperties: [],
+          diagramStyle: {
+            nodeShape: 'composite',
+            compositeShapeType,
+            compositeContent: { type: 'container', children: [] },
+          },
+        })
+      )
+      expect(parsed.diagramStyle?.compositeShapeType).toBe(compositeShapeType)
+    }
+  })
+
   it('validates missing name role and broken A5 target', () => {
     const issues = validateCompositeDiagramStyle(
       {

@@ -4,6 +4,11 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-04-07
+
+### Corrigé
+- L’export SVG du diagramme conserve désormais correctement la direction des libellés d’arête (`labelFollowPath`) et la coupure de ligne sous le libellé (`labelLineGap`), comme sur le rendu canvas.
+
 ## [0.5.3] - 2026-03-31
 
 ### Ajouté

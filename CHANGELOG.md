@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-04-07
+
+### Fixed
+- Diagram SVG export now preserves edge label direction (`labelFollowPath`) and line gap under labels (`labelLineGap`) in line with canvas rendering.
+
 ## [0.5.3] - 2026-03-31
 
 ### Added

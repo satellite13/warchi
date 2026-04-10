@@ -137,6 +137,7 @@ export const typesMessages = {
       zoomReset: 'Масштаб 1:1',
       errorSave: 'Ошибка сохранения',
       errorDelete: 'Ошибка удаления',
+      docLinkRegisterFailed: 'Не удалось привязать документ к форме: {message}',
       outlineHint: 'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
       convertToBezier: 'В кривую Безье',
       convertToLine: 'В линию',
@@ -279,6 +280,7 @@ export const typesMessages = {
       zoomReset: 'Reset zoom 1:1',
       errorSave: 'Save failed',
       errorDelete: 'Delete failed',
+      docLinkRegisterFailed: 'Could not link the document to the shape: {message}',
       outlineHint: 'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
       convertToBezier: 'Convert to Bezier',
       convertToLine: 'Convert to line',
@@ -425,6 +427,7 @@ export const typesMessages = {
       zoomReset: 'Zoom 1:1',
       errorSave: 'Échec de l’enregistrement',
       errorDelete: 'Échec de la suppression',
+      docLinkRegisterFailed: 'Impossible de lier le document à la forme : {message}',
       outlineHint:
         'Glisser un point pour déplacer. Double-clic sur un bord pour ajouter un point. Double-clic sur un point pour supprimer (min. 3 points). Clic droit sur un bord — Bézier / ligne.',
       convertToBezier: 'Convertir en Bézier',

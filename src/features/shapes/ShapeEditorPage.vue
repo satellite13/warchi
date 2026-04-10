@@ -178,10 +178,13 @@ async function handleDocSaved(fileId: string) {
     attrs: selectedDetail.value.attrs ?? undefined
   })
   if (updated) selectedDetail.value = updated
-  await apiPost<{ fileId: string; label: string }>('/documents', {
+  const linkRes = await apiPost<{ fileId: string; label: string }>('/documents', {
     fileId,
     nodeShapeId: selectedDetail.value.id
   })
+  if (!linkRes.success) {
+    saveError.value = t('shapes.docLinkRegisterFailed', { message: linkRes.error.message })
+  }
 }
 
 function handleDocModalClose() {

@@ -28,6 +28,8 @@ const props = defineProps<{
   onMutateItem?: (id: string, apply: (item: EditorComponent | EditorRelation) => void) => void
   onMutateRelationRules?: (apply: (rules: EditorRelationRule[]) => void) => void
   onOpenDocument?: (item: EditorComponent | EditorRelation) => void
+  /** false при шаре VIEW: блок документации только если уже есть файл (создание скрыто; просмотр — да) */
+  canEditNotationWiki?: boolean
 }>()
 
 const selectedItemComputed = computed(() => props.selectedItem)
@@ -342,23 +344,51 @@ onBeforeUnmount(() => {
         />
       </CollapseSection>
 
+      <!-- Документация компонента: при шаре VIEW — только если файл уже есть (просмотр) -->
       <CollapseSection
-        v-if="selectedItem && !('linkTypeId' in selectedItem)"
+        v-if="
+          selectedItem &&
+          !('linkTypeId' in selectedItem) &&
+          ((props.canEditNotationWiki ?? true) || !!selectedItem.parsedAttrs.documentFileId)
+        "
         :label="t('diagram.documentation')"
         :expanded="documentationExpanded"
         @toggle="documentationExpanded = !documentationExpanded"
       >
-      <button
-        type="button"
-        class="properties-panel__doc-btn"
-        @click="onOpenDocument?.(selectedItem)"
+        <button
+          type="button"
+          class="properties-panel__doc-btn"
+          @click="onOpenDocument?.(selectedItem)"
+        >
+          <UiIcon name="description" />
+          {{ t('notations.documentation') }}
+          <span v-if="selectedItem.parsedAttrs.documentFileId" class="properties-panel__doc-badge">
+            <UiIcon name="check_circle" />
+          </span>
+        </button>
+      </CollapseSection>
+      <!-- То же для связи (relation): просмотр при VIEW, если есть documentFileId -->
+      <CollapseSection
+        v-if="
+          selectedItem &&
+          'linkTypeId' in selectedItem &&
+          ((props.canEditNotationWiki ?? true) || !!selectedItem.parsedAttrs.documentFileId)
+        "
+        :label="t('diagram.documentation')"
+        :expanded="documentationExpanded"
+        @toggle="documentationExpanded = !documentationExpanded"
       >
-        <UiIcon name="description" />
-        {{ t('notations.documentation') }}
-        <span v-if="selectedItem.parsedAttrs.documentFileId" class="properties-panel__doc-badge">
-          <UiIcon name="check_circle" />
-        </span>
-      </button>
+        <button
+          type="button"
+          class="properties-panel__doc-btn"
+          @click="onOpenDocument?.(selectedItem)"
+        >
+          <UiIcon name="description" />
+          {{ t('notations.documentation') }}
+          <span v-if="selectedItem.parsedAttrs.documentFileId" class="properties-panel__doc-badge">
+            <UiIcon name="check_circle" />
+          </span>
+        </button>
       </CollapseSection>
     <TypeSelectSection
         :selected-item="selectedItem"

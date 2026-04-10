@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-04-10
+
+### Fixed
+- Wiki documentation now follows share permissions: users with VIEW can open and read linked markdown in the document modal (read-only); creating or editing content requires EDIT or higher. Toolbar and panel entry points stay hidden for VIEW when no document file is linked yet (model, diagram, notation, types, and shapes).
+- Notation editor: documentation block and modal for relations (same rules as components); notation header wiki button visibility matches the model editor pattern.
+
+### Added
+- Model editor: user-visible message when registering a document link via `POST /documents` fails (RU/EN/FR).
+
 ## [0.5.5] - 2026-04-10
 
 ### Changed

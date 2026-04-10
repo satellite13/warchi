@@ -267,9 +267,13 @@ const nodeEditorBlocks = computed(
         </span>
       </div>
 
-      <!-- Documentation button (node only) -->
+      <!-- Documentation button (node only); при read-only без привязанного файла не предлагаем «создать» -->
       <button
-        v-if="currentMode === 'node' && selectedNode"
+        v-if="
+          currentMode === 'node' &&
+          selectedNode &&
+          (!readOnly || !!selectedNode.parsedAttrs.documentFileId)
+        "
         type="button"
         class="mp-doc-btn"
         @click="onOpenNodeDocument?.(selectedNode)"

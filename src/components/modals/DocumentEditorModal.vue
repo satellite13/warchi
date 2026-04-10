@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import '@/config/mdEditor'
 import { MdEditor, MdPreview } from 'md-editor-v3'
@@ -8,12 +8,17 @@ import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import { useLocale } from "../../composables/useLocale"
 import { useTypeDocument } from "../../features/types/composables/useTypeDocument"
 
-const props = defineProps<{
-  /** Display title (entity name) */
-  title: string
-  /** Existing document file ID, or null/undefined if no document yet */
-  fileId: string | null | undefined
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** Display title (entity name) */
+    title: string
+    /** Existing document file ID, or null/undefined if no document yet */
+    fileId: string | null | undefined
+    /** Только просмотр: без сохранения и правки (достаточно права VIEW на сущность — контент по-прежнему грузится и показывается) */
+    readOnly?: boolean
+  }>(),
+  { readOnly: false }
+)
 
 const emit = defineEmits<{
   close: []
@@ -54,28 +59,45 @@ const viewingOldVersion = ref(false)
 const viewingVersionNumber = ref<number | null>(null)
 
 const canSave = computed(
-  () => isDocDirty.value && !isDocSaving.value && !isDocLoading.value && !viewingOldVersion.value
+  () =>
+    !props.readOnly &&
+    isDocDirty.value &&
+    !isDocSaving.value &&
+    !isDocLoading.value &&
+    !viewingOldVersion.value
 )
 
-onMounted(() => {
-  loadDocument(props.fileId ?? null)
-  if (!props.fileId) {
-    isEditing.value = true
+watch(
+  () => props.readOnly,
+  ro => {
+    if (ro) isEditing.value = false
   }
-})
+)
+
+watch(
+  () => [props.fileId, props.readOnly] as const,
+  ([fid, ro]) => {
+    loadDocument(fid ?? null)
+    if (!fid && !ro) isEditing.value = true
+    else isEditing.value = false
+    viewingOldVersion.value = false
+    viewingVersionNumber.value = null
+    showVersions.value = false
+  }
+)
 
 function togglePreview() {
-  if (viewingOldVersion.value) return
+  if (viewingOldVersion.value || props.readOnly) return
   isEditing.value = !isEditing.value
 }
 
 function handleContentChange(value: string) {
-  if (viewingOldVersion.value) return
+  if (viewingOldVersion.value || props.readOnly) return
   setDocumentContent(value)
 }
 
 async function handleSave() {
-  if (viewingOldVersion.value) return
+  if (viewingOldVersion.value || props.readOnly) return
   const fileId = await saveDocument()
   if (fileId) {
     emit('saved', fileId)
@@ -100,6 +122,7 @@ function handleLoadVersion(versionNumber: number) {
 }
 
 function handleCreateNew() {
+  if (props.readOnly) return
   clearBrokenRef()
   isEditing.value = true
 }
@@ -125,6 +148,10 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 onMounted(() => {
+  loadDocument(props.fileId ?? null)
+  if (!props.fileId && !props.readOnly) {
+    isEditing.value = true
+  }
   document.addEventListener('keydown', handleKeydown)
 })
 
@@ -176,25 +203,27 @@ function formatSize(bytes: number): string {
               </button>
             </template>
             <template v-else>
-              <button
-                type="button"
-                class="doc-modal-btn doc-modal-btn--ghost"
-                @click="togglePreview"
-              >
-                <UiIcon :name="isEditing ? 'visibility' : 'edit'" />
-                {{ isEditing ? t('types.docPreview') : t('common.edit') }}
-              </button>
+              <template v-if="!readOnly">
+                <button
+                  type="button"
+                  class="doc-modal-btn doc-modal-btn--ghost"
+                  @click="togglePreview"
+                >
+                  <UiIcon :name="isEditing ? 'visibility' : 'edit'" />
+                  {{ isEditing ? t('types.docPreview') : t('common.edit') }}
+                </button>
 
-              <button
-                v-if="isDocDirty"
-                type="button"
-                class="doc-modal-btn doc-modal-btn--primary"
-                :disabled="!canSave"
-                @click="handleSave"
-              >
-                <UiIcon name="save" />
-                {{ isDocSaving ? t('common.saving') : t('common.save') }}
-              </button>
+                <button
+                  v-if="isDocDirty"
+                  type="button"
+                  class="doc-modal-btn doc-modal-btn--primary"
+                  :disabled="!canSave"
+                  @click="handleSave"
+                >
+                  <UiIcon name="save" />
+                  {{ isDocSaving ? t('common.saving') : t('common.save') }}
+                </button>
+              </template>
             </template>
 
             <button
@@ -251,6 +280,7 @@ function formatSize(bytes: number): string {
             <UiIcon name="link_off" class="doc-modal__broken-ref-icon" />
             <p class="doc-modal__broken-ref-text">{{ t('types.docBrokenRef') }}</p>
             <button
+              v-if="!readOnly"
               type="button"
               class="doc-modal-btn doc-modal-btn--primary"
               @click="handleCreateNew"
@@ -267,7 +297,7 @@ function formatSize(bytes: number): string {
           </div>
 
           <!-- Editor (disabled when viewing old version) -->
-          <div v-else-if="isEditing && !viewingOldVersion" class="doc-modal__editor">
+          <div v-else-if="isEditing && !viewingOldVersion && !readOnly" class="doc-modal__editor">
             <MdEditor
               :model-value="documentContent"
               :language="editorLanguage"

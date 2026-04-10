@@ -40,7 +40,7 @@ const { t } = useI18n()
           {{ name || t("shapes.title") }}
         </h2>
         <button
-          v-if="canEdit"
+          v-if="canEdit || hasDoc"
           type="button"
           class="shape-form__doc-btn"
           :title="t('notations.documentation')"

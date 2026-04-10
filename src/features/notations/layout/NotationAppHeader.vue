@@ -22,6 +22,8 @@ const props = withDefaults(
     canvasMode?: boolean
     hideToolbar?: boolean
     isAdmin?: boolean
+    /** Wiki нотации в шапке: скрыть при доступе VIEW, если страницы ещё нет */
+    showWikiButton?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -38,6 +40,7 @@ const props = withDefaults(
     canvasMode: false,
     hideToolbar: false,
     isAdmin: false,
+    showWikiButton: true,
   }
 )
 
@@ -141,6 +144,7 @@ const emit = defineEmits<{
         <UiIcon name="share" />
       </button>
       <button
+        v-if="showWikiButton"
         type="button"
         class="share-btn"
         :title="t('notations.documentation')"

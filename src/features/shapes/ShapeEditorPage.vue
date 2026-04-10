@@ -284,6 +284,7 @@ onBeforeUnmount(() => {
       v-if="showDocModal && selectedDetail"
       :title="selectedDetail.name"
       :file-id="docModalFileId"
+      :read-only="!canEditSelected"
       @close="handleDocModalClose"
       @saved="handleDocSaved"
     />

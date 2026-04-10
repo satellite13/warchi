@@ -124,10 +124,29 @@ function formatBatchCrossLinkDiagramNames(names: readonly string[]): string {
   return names.map(n => `«${n}»`).join(', ')
 }
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
+/** Правка содержимого модели (диаграмма, узлы, документы), не только просмотр по шаре VIEW */
 const canInspectDiagramJson = computed(() => {
   const permission = model.value?.accessPermission ?? null
   return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
 })
+
+/** Документация на уровне модели (attrs.documentFileId), для кнопки wiki в шапке при доступе VIEW */
+const modelRootDocumentFileId = computed((): string | null => {
+  const raw = model.value?.attrs
+  if (!raw) return null
+  try {
+    const p = JSON.parse(raw) as { documentFileId?: unknown }
+    return typeof p.documentFileId === 'string' && p.documentFileId.trim().length > 0
+      ? p.documentFileId.trim()
+      : null
+  } catch {
+    return null
+  }
+})
+
+const showModelWikiHeaderButton = computed(
+  () => canInspectDiagramJson.value || !!modelRootDocumentFileId.value
+)
 
 const selectedNodeId = ref<string | null>(null)
 const selectedDiagramId = ref<string | null>(null)
@@ -522,6 +541,17 @@ const activeDiagram = computed(() =>
     : null
 )
 
+/** Wiki-страница активной диаграммы (parsedAttrs.documentFileId) — пункт тулбара канвы */
+const activeDiagramDocumentFileId = computed((): string | null => {
+  const d = activeDiagram.value
+  const raw = d?.parsedAttrs?.documentFileId
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null
+})
+
+const showDiagramWikiToolbarButton = computed(
+  () => canInspectDiagramJson.value || !!activeDiagramDocumentFileId.value
+)
+
 const {
   gridVisible,
   miniMapVisible,
@@ -589,7 +619,10 @@ const diagramEditLock = useDiagramEditLock({
 })
 
 const isDiagramReadOnly = computed(
-  () => isDiagramReadOnlyBaseline.value || diagramEditLock.isBlockedByOther.value
+  () =>
+    !canInspectDiagramJson.value ||
+    isDiagramReadOnlyBaseline.value ||
+    diagramEditLock.isBlockedByOther.value
 )
 
 watch(
@@ -1165,6 +1198,7 @@ const {
 )
 
 const handleRenameModel = (nextName: string) => {
+  if (!canInspectDiagramJson.value) return
   const error = renameModel(nextName)
   if (error) setUiError(error)
 }
@@ -3649,12 +3683,22 @@ const handleToolbarAction = async (event: string) => {
         openDiagramJson()
       }
       break
-    case 'open-model-doc':
+    case 'open-model-doc': {
+      const hasModelDoc = !!modelRootDocumentFileId.value
+      if (!canInspectDiagramJson.value && !hasModelDoc) break
       handleOpenModelDoc()
       break
-    case 'open-diagram-doc':
+    }
+    case 'open-diagram-doc': {
+      const d = activeDiagram.value
+      if (!d) break
+      const hasDiagramDoc =
+        typeof d.parsedAttrs?.documentFileId === 'string' &&
+        d.parsedAttrs.documentFileId.trim().length > 0
+      if (!canInspectDiagramJson.value && !hasDiagramDoc) break
       handleOpenDiagramDoc()
       break
+    }
   }
 }
 
@@ -3751,6 +3795,8 @@ const {
   setNodeScopedValue,
   setNodeTypePropertyValue,
   t,
+  onDocLinkFailed: (message: string) =>
+    setUiError(t('models.docLinkRegisterFailed', { message })),
 })
 
 const handleCanvasContextChange = (ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }) => {
@@ -4035,6 +4081,8 @@ onBeforeUnmount(() => {
         hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :can-save="!isSaving && !isDiagramReadOnly"
+        :can-edit-model="canInspectDiagramJson"
+        :show-model-wiki-button="showModelWikiHeaderButton"
         :model-name="model?.name"
         :model-version="model?.version"
         :has-active-diagram="!!activeDiagram"
@@ -4177,6 +4225,9 @@ onBeforeUnmount(() => {
               canvas-mode
               :has-unsaved-changes="hasUnsavedChanges"
               :can-save="!isSaving && !isDiagramReadOnly"
+              :can-edit-model="canInspectDiagramJson"
+              :show-model-wiki-button="showModelWikiHeaderButton"
+              :show-diagram-wiki-button="showDiagramWikiToolbarButton"
               :model-name="model?.name"
               :model-version="model?.version"
               :has-active-diagram="!!activeDiagram"
@@ -4922,6 +4973,7 @@ onBeforeUnmount(() => {
     v-if="showDocModal"
     :title="docModalTitle"
     :file-id="docModalFileId"
+    :read-only="!canInspectDiagramJson"
     @saved="handleDocSaved"
     @close="handleDocModalClose"
   />

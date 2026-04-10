@@ -4,6 +4,15 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-04-10
+
+### Corrigé
+- La documentation wiki respecte les droits de partage : en VIEW, ouverture et lecture du markdown lié dans la modale document (lecture seule) ; création ou modification du contenu réservée à EDIT ou plus. Les entrées de barre d’outils et de panneau restent masquées en VIEW tant qu’aucun fichier n’est lié (modèle, diagramme, notation, types, formes).
+- Éditeur de notation : bloc et modale de documentation pour les relations (mêmes règles que pour les composants) ; visibilité du bouton wiki d’en-tête alignée sur l’éditeur de modèle.
+
+### Ajouté
+- Éditeur de modèle : message utilisateur en cas d’échec de liaison du document via `POST /documents` (RU/EN/FR).
+
 ## [0.5.5] - 2026-04-10
 
 ### Modifié

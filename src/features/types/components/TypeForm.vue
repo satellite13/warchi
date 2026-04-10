@@ -9,16 +9,21 @@ import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import PropertyRow from "./PropertyRow.vue"
 
-const props = defineProps<{
-  selectedType: TypeItem
-  ownerDisplayName: string
-  isDirty: boolean
-  isSaving: boolean
-  isTypeInUse: boolean
-  canShare: boolean
-  hasDoc?: boolean
-  onMutateProperty?: (propertyId: string, apply: (p: CustomProperty) => void) => void
-}>()
+const props = withDefaults(
+  defineProps<{
+    selectedType: TypeItem
+    ownerDisplayName: string
+    isDirty: boolean
+    isSaving: boolean
+    isTypeInUse: boolean
+    canShare: boolean
+    hasDoc?: boolean
+    /** false при шаре VIEW без страницы: скрыть кнопку wiki */
+    showDocButton?: boolean
+    onMutateProperty?: (propertyId: string, apply: (p: CustomProperty) => void) => void
+  }>(),
+  { showDocButton: true }
+)
 
 const emit = defineEmits<{
   save: []
@@ -76,6 +81,7 @@ watch(
           {{ selectedType.kind === 'node' ? t('types.nodeType') : t('types.linkType') }}
         </h2>
         <button
+          v-if="showDocButton"
           type="button"
           class="type-form__doc-btn"
           :title="t('types.documentation')"

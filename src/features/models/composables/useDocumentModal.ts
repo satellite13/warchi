@@ -25,6 +25,8 @@ export interface DocumentModalDeps {
   setNodeScopedValue: (key: string, value: unknown) => void
   setNodeTypePropertyValue: (key: string, value: unknown) => void
   t: (key: string) => string
+  /** Сообщить об ошибке POST /documents (привязка файла к сущности) */
+  onDocLinkFailed?: (message: string) => void
 }
 
 export function useDocumentModal(deps: DocumentModalDeps) {
@@ -116,7 +118,6 @@ export function useDocumentModal(deps: DocumentModalDeps) {
       const componentId = deps.nodeBindingComponentId.value
 
       if (ctx.scope === 'nodeType') {
-        deps.setNodeTypePropertyValue(ctx.propertyKey, fileId)
         if (modelId && nodeId && nodeTypeId) {
           const res = await apiPost<{ fileId: string; label: string }>('/documents', {
             fileId,
@@ -124,16 +125,15 @@ export function useDocumentModal(deps: DocumentModalDeps) {
             nodeId,
             nodeTypeId,
           })
-          if (res.success) {
-            const existing = deps.documentsFromApi.value.find(
-              (d) => d.fileId === res.data.fileId,
-            )
-            if (!existing)
-              deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
+          if (!res.success) {
+            deps.onDocLinkFailed?.(res.error.message)
+            return
           }
+          const existing = deps.documentsFromApi.value.find((d) => d.fileId === res.data.fileId)
+          if (!existing) deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
         }
+        deps.setNodeTypePropertyValue(ctx.propertyKey, fileId)
       } else {
-        deps.setNodeScopedValue(ctx.propertyKey, fileId)
         if (modelId && (nodeId ?? notationId ?? componentId)) {
           const res = await apiPost<{ fileId: string; label: string }>('/documents', {
             fileId,
@@ -142,14 +142,14 @@ export function useDocumentModal(deps: DocumentModalDeps) {
             notationId: notationId ?? undefined,
             componentId: componentId ?? undefined,
           })
-          if (res.success) {
-            const existing = deps.documentsFromApi.value.find(
-              (d) => d.fileId === res.data.fileId,
-            )
-            if (!existing)
-              deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
+          if (!res.success) {
+            deps.onDocLinkFailed?.(res.error.message)
+            return
           }
+          const existing = deps.documentsFromApi.value.find((d) => d.fileId === res.data.fileId)
+          if (!existing) deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
         }
+        deps.setNodeScopedValue(ctx.propertyKey, fileId)
       }
       docModalContext.value = null
       showDocModal.value = false
@@ -161,35 +161,50 @@ export function useDocumentModal(deps: DocumentModalDeps) {
     const modelId = deps.state.value.modelId ?? undefined
 
     if (target.kind === 'model') {
-      setModelDocFileId(fileId)
       if (modelId) {
-        await apiPost<{ fileId: string; label: string }>('/documents', { fileId, modelId })
+        const res = await apiPost<{ fileId: string; label: string }>('/documents', {
+          fileId,
+          modelId,
+        })
+        if (!res.success) {
+          deps.onDocLinkFailed?.(res.error.message)
+          return
+        }
       }
+      setModelDocFileId(fileId)
     } else if (target.kind === 'node') {
+      if (modelId) {
+        const res = await apiPost<{ fileId: string; label: string }>('/documents', {
+          fileId,
+          modelId,
+          nodeId: target.id,
+        })
+        if (!res.success) {
+          deps.onDocLinkFailed?.(res.error.message)
+          return
+        }
+      }
       const node = deps.state.value.nodes.find((n) => n.id === target.id)
       if (node && !node.parsedAttrs.documentFileId) {
         node.parsedAttrs.documentFileId = fileId
         deps.markNodeDirty(target.id)
       }
-      if (modelId) {
-        await apiPost<{ fileId: string; label: string }>('/documents', {
-          fileId,
-          modelId,
-          nodeId: target.id,
-        })
-      }
     } else if (target.kind === 'diagram') {
-      const diagram = deps.state.value.diagrams.find((d) => d.id === target.id)
-      if (diagram && !diagram.parsedAttrs.documentFileId) {
-        diagram.parsedAttrs.documentFileId = fileId
-        deps.markDiagramDirty(target.id)
-      }
       if (modelId) {
-        await apiPost<{ fileId: string; label: string }>('/documents', {
+        const res = await apiPost<{ fileId: string; label: string }>('/documents', {
           fileId,
           modelId,
           diagramId: target.id,
         })
+        if (!res.success) {
+          deps.onDocLinkFailed?.(res.error.message)
+          return
+        }
+      }
+      const diagram = deps.state.value.diagrams.find((d) => d.id === target.id)
+      if (diagram && !diagram.parsedAttrs.documentFileId) {
+        diagram.parsedAttrs.documentFileId = fileId
+        deps.markDiagramDirty(target.id)
       }
     }
   }

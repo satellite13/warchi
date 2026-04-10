@@ -71,6 +71,7 @@ export const modelsMessagesFr = {
     diagramConflictMessage: 'Un diagramme avec ce nom et cette version existe déjà dans le modèle.',
     diagramVersion: 'Version du diagramme',
     viewOnly: 'Lecture seule',
+    docLinkRegisterFailed: 'Impossible de lier le document au modèle : {message}',
     createBaseline: 'Créer une version de base',
     baselineCreateError: 'Échec de la création de la ligne de base du diagramme.',
     existingLinksFoundTitle: 'Liens existants trouvés',

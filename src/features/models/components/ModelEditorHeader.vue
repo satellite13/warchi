@@ -35,6 +35,12 @@ const props = withDefaults(
     baselineError?: string | null
     isAdmin?: boolean
     showCompareButton?: boolean
+    /** Редактирование модели (имя и т.д.); false при доступе только VIEW по шаре */
+    canEditModel?: boolean
+    /** Кнопка wiki-документации модели в шапке: скрыть при VIEW, если у модели ещё нет привязанного файла */
+    showModelWikiButton?: boolean
+    /** Пункт тулбара «wiki страница диаграммы»: скрыть при VIEW, если у активной диаграммы нет documentFileId */
+    showDiagramWikiButton?: boolean
     /** id текущей версии модели (для перехода к сравнению версий диаграммы). */
     modelId?: string | null
     /** Диаграмма занята другим пользователем (эксклюзивный lock) */
@@ -72,6 +78,9 @@ const props = withDefaults(
     baselineError: null,
     isAdmin: false,
     showCompareButton: false,
+    canEditModel: true,
+    showModelWikiButton: true,
+    showDiagramWikiButton: true,
     modelId: null,
     diagramLockBlockedByOther: false,
     diagramLockHolderDisplay: '',
@@ -152,13 +161,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     icon: 'undo',
     event: 'undo',
     title: t('toolbar.undo'),
-    disabled: !props.canUndo || !props.hasActiveDiagram,
+    disabled: !props.canUndo || !props.hasActiveDiagram || props.isDiagramReadOnly,
   },
   {
     icon: 'redo',
     event: 'redo',
     title: t('toolbar.redo'),
-    disabled: !props.canRedo || !props.hasActiveDiagram,
+    disabled: !props.canRedo || !props.hasActiveDiagram || props.isDiagramReadOnly,
   },
   { icon: 'separator', event: 'sep0', separator: true },
   {
@@ -227,12 +236,16 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
         },
       ]
     : []),
-  {
-    icon: 'article',
-    event: 'open-diagram-doc',
-    title: t('models.diagramDocumentation'),
-    disabled: !props.hasActiveDiagram,
-  },
+  ...(props.showDiagramWikiButton
+    ? [
+        {
+          icon: 'article',
+          event: 'open-diagram-doc',
+          title: t('models.diagramDocumentation'),
+          disabled: !props.hasActiveDiagram,
+        },
+      ]
+    : []),
   { icon: 'separator', event: 'sep5', separator: true },
   {
     icon: 'close',
@@ -353,11 +366,12 @@ function spectatorInitials(name: string): string {
           v-else
           type="button"
           class="model-header__title-btn"
-          :title="t('toolbar.renameModel')"
-          @click="startModelRename"
+          :title="canEditModel ? t('toolbar.renameModel') : t('models.viewOnly')"
+          :disabled="!canEditModel"
+          @click="canEditModel && startModelRename()"
         >
           <span class="model-header__title">{{ modelName || t('toolbar.modelEditor') }}</span>
-          <UiIcon name="edit" class="model-header__title-edit-icon" />
+          <UiIcon v-if="canEditModel" name="edit" class="model-header__title-edit-icon" />
         </button>
       </div>
       <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
@@ -381,6 +395,7 @@ function spectatorInitials(name: string): string {
         <UiIcon name="share" />
       </button>
       <button
+        v-if="showModelWikiButton"
         type="button"
         class="share-btn"
         :title="t('models.documentation')"
@@ -730,6 +745,15 @@ function spectatorInitials(name: string): string {
 
 .model-header__title-btn:hover .model-header__title-edit-icon {
   color: var(--primary);
+}
+
+.model-header__title-btn:disabled {
+  cursor: default;
+  opacity: 0.92;
+}
+.model-header__title-btn:disabled:hover .model-header__title,
+.model-header__title-btn:disabled:hover .model-header__title-edit-icon {
+  color: inherit;
 }
 
 .model-header__title-input {

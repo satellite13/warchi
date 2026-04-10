@@ -68,6 +68,11 @@ const canInspectAttrsJson = computed(() => {
   return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
 })
 
+/** Кнопка wiki нотации в шапке: при VIEW показывать только если страница уже привязана */
+const showNotationWikiHeaderButton = computed(
+  () => canInspectAttrsJson.value || !!getNotationDocFileId()
+)
+
 const customPropertyValidationIssues = computed<ValidationIssue[]>(() => {
   const issues: ValidationIssue[] = []
   for (const component of state.value.components) {
@@ -774,9 +779,12 @@ const handleToolbarAction = async (event: string) => {
     case 'import-notation':
       triggerNotationImport()
       break
-    case 'open-notation-doc':
+    case 'open-notation-doc': {
+      const hasNotationDoc = !!getNotationDocFileId()
+      if (!canInspectAttrsJson.value && !hasNotationDoc) break
       handleOpenNotationDoc()
       break
+    }
   }
 }
 
@@ -855,6 +863,7 @@ onBeforeUnmount(() => {
         :can-redo="canRedo"
         :can-share="canShareNotation"
         :is-admin="canInspectAttrsJson"
+        :show-wiki-button="showNotationWikiHeaderButton"
         @action="handleToolbarAction"
         @share="showShareModal = true"
       />
@@ -892,6 +901,7 @@ onBeforeUnmount(() => {
                   :can-redo="canRedo"
                   :can-share="canShareNotation"
                   :is-admin="canInspectAttrsJson"
+                  :show-wiki-button="showNotationWikiHeaderButton"
                   @action="handleToolbarAction"
                   @share="showShareModal = true"
                 />
@@ -925,6 +935,7 @@ onBeforeUnmount(() => {
                 :on-mutate-item="handleMutateItem"
                 :on-mutate-relation-rules="handleMutateRelationRules"
                 :on-open-document="handleOpenEntityDoc"
+                :can-edit-notation-wiki="canInspectAttrsJson"
               />
               <NodeStylePanel
                 v-if="activeRightTab === 'style'"
@@ -1125,6 +1136,7 @@ onBeforeUnmount(() => {
     v-if="showDocModal"
     :title="docModalTitle"
     :file-id="docModalFileId"
+    :read-only="!canInspectAttrsJson"
     @saved="handleDocSaved"
     @close="handleDocModalClose"
   />

@@ -43,6 +43,20 @@ const { documentFileId, loadDocument, resetDocument } = useTypeDocument()
 
 const { t } = useI18n()
 
+const isSelectedTypeWikiReadOnly = computed(() => {
+  const item = selectedType.value
+  if (!item || item._isNew) return false
+  return item.accessPermission === 'VIEW'
+})
+
+const showTypeWikiToolbarButton = computed(() => {
+  const item = selectedType.value
+  if (!item) return false
+  if (item._isNew) return true
+  const hasDoc = !!(documentFileId.value ?? item.parsedAttrs.documentFileId)
+  return item.accessPermission !== 'VIEW' || hasDoc
+})
+
 onMounted(() => {
   loadAll()
 })
@@ -86,7 +100,7 @@ function openDocModal() {
 }
 
 async function handleDocumentSavedFromModal(fileId: string) {
-  if (!selectedType.value) return
+  if (!selectedType.value || isSelectedTypeWikiReadOnly.value) return
   if (selectedType.value.parsedAttrs.documentFileId !== fileId) {
     selectedType.value.parsedAttrs.documentFileId = fileId
     await saveType(selectedType.value)
@@ -322,6 +336,7 @@ function handleBatchShareDone() {
               :is-type-in-use="isTypeInUse"
               :can-share="canShareSelectedType"
               :has-doc="!!documentFileId"
+              :show-doc-button="showTypeWikiToolbarButton"
               @save="handleSave"
               @delete="handleDelete"
               @open-doc="openDocModal"
@@ -392,6 +407,7 @@ function handleBatchShareDone() {
       v-if="showDocModal && selectedType"
       :title="selectedType.name"
       :file-id="documentFileId ?? selectedType.parsedAttrs.documentFileId ?? null"
+      :read-only="isSelectedTypeWikiReadOnly"
       @close="showDocModal = false"
       @saved="handleDocumentSavedFromModal"
     />

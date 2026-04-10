@@ -614,7 +614,6 @@ export function useNotationEditor(): NotationEditorReturn {
       }
 
       notation.value = notationResult.data
-      notationAttrsSnapshot.value = notationResult.data.attrs ?? null
 
       const components = componentsResult.success
         ? (componentsResult.data.content ?? []).map(toEditorComponent)
@@ -650,6 +649,9 @@ export function useNotationEditor(): NotationEditorReturn {
         notationLinkTypes.push(sharedUntypedLinkType)
       }
 
+      const diagramLayer = normalizeDiagramLayer(
+        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer,
+      )
       state.value = {
         notationId,
         ownerId: notationResult.data.ownerId,
@@ -660,8 +662,16 @@ export function useNotationEditor(): NotationEditorReturn {
           ? (relationsResult.data.content ?? []).map(toEditorRelation)
           : [],
         relationRules: toEditorRelationRules(relationRules, componentIds),
-        diagramLayer: normalizeDiagramLayer(parseNotationAttrs(notationResult.data.attrs ?? null).editorDiagramLayer),
+        diagramLayer,
       }
+
+      // Baseline must match what the diagramLayer watcher writes (mergeNotationAttrs + JSON.stringify),
+      // otherwise attrs string !== snapshot and the UI shows unsaved changes immediately after load.
+      const mergedAttrs = mergeNotationAttrs(notation.value.attrs ?? null, {
+        editorDiagramLayer: diagramLayer,
+      })
+      notation.value.attrs = mergedAttrs
+      notationAttrsSnapshot.value = mergedAttrs
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить нотацию.'
     } finally {

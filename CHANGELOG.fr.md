@@ -4,6 +4,11 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-04-10
+
+### Corrigé
+- Éditeur de notation : l’ouverture d’une notation n’affiche plus immédiatement des modifications non enregistrées lorsque les `attrs` du serveur diffèrent du JSON canonique écrit par l’éditeur pour le calque du diagramme (notations partagées ou plus anciennes).
+
 ## [0.5.8] - 2026-04-10
 
 ### Corrigé

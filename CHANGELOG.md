@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-04-10
+
+### Fixed
+- Notation editor: opening a notation no longer shows unsaved changes immediately when server `attrs` differ from the canonical JSON the editor writes for the diagram layer (e.g. shared or older notations).
+
 ## [0.5.8] - 2026-04-10
 
 ### Fixed

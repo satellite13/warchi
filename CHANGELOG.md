@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-04-10
+
+### Fixed
+- Node shapes editor: if saving wiki content succeeds but `POST /documents` fails (e.g. insufficient rights), the user now sees an error toast instead of failing silently (RU/EN/FR).
+
 ## [0.5.6] - 2026-04-10
 
 ### Fixed

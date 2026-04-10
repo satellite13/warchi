@@ -4,6 +4,11 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-04-10
+
+### Corrigé
+- Éditeur des formes de nœuds : si l’enregistrement du wiki réussit mais que `POST /documents` échoue (droits insuffisants, etc.), un message d’erreur s’affiche au lieu d’un échec silencieux (RU/EN/FR).
+
 ## [0.5.6] - 2026-04-10
 
 ### Corrigé

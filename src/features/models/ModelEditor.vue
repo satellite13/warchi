@@ -804,7 +804,12 @@ watch(
     if (hasNotationInState) return
 
     fallbackNotationMetaLoading.value = true
-    const result = await apiGet<NotationMetaResponse>(`/notations/${notationId}/meta`)
+    const mid = state.value.modelId
+    const metaPath =
+      mid.length > 0
+        ? `/notations/${notationId}/meta?modelId=${encodeURIComponent(mid)}`
+        : `/notations/${notationId}/meta`
+    const result = await apiGet<NotationMetaResponse>(metaPath)
     if (activeDiagram.value?.notationId !== notationId) return
     fallbackNotationMetaLoading.value = false
     if (!result.success) {

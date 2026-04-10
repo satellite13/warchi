@@ -47,9 +47,10 @@ export function useNotationRelationsAndRulesLoader(state: Ref<ModelEditorState>)
 
     incrementRelationRuleLoading(notationId)
     const loadPromise = (async () => {
+      const mid = state.value.modelId
       const [relations, rules] = await Promise.all([
-        fetchAllRelationsByNotationId(notationId),
-        fetchAllRelationRulesByNotationIds([notationId], { includeAttrs: false }),
+        fetchAllRelationsByNotationId(notationId, { modelId: mid }),
+        fetchAllRelationRulesByNotationIds([notationId], { includeAttrs: false, modelId: mid }),
       ])
 
       const previousRelationIds = new Set(

@@ -4,6 +4,12 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-04-10
+
+### Modifié
+- L’éditeur de modèle charge les données liées à la notation avec le contexte du modèle : composants et relations par notation avec `modelId` et `notationId`, règles de relation avec `modelId`, aligné sur les règles d’accès côté API pour les modèles partagés.
+- Le chargement de secours des métadonnées de notation pour le diagramme actif inclut `modelId` dans `/notations/{id}/meta`.
+
 ## [0.5.4] - 2026-04-07
 
 ### Corrigé

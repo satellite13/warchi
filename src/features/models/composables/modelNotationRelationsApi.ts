@@ -9,10 +9,11 @@ const RELATIONS_FETCH_SIZE = 5000
 
 export async function fetchAllRelationRulesByNotationIds(
   notationIds: string[],
-  options?: { includeAttrs?: boolean }
+  options?: { includeAttrs?: boolean; modelId?: string }
 ): Promise<RelationRuleResponse[]> {
   if (notationIds.length === 0) return []
   const includeAttrs = options?.includeAttrs ?? true
+  const modelId = options?.modelId
 
   const collected: RelationRuleResponse[] = []
 
@@ -22,6 +23,9 @@ export async function fetchAllRelationRulesByNotationIds(
       const query = pagedListParams(page, RELATION_RULES_FETCH_SIZE)
       query.set('notationId', notationId)
       query.set('includeAttrs', String(includeAttrs))
+      if (modelId) {
+        query.set('modelId', modelId)
+      }
       const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
         `/relation-rules?${query.toString()}`
       )
@@ -39,14 +43,19 @@ export async function fetchAllRelationRulesByNotationIds(
 }
 
 export async function fetchAllRelationsByNotationId(
-  notationId: string
+  notationId: string,
+  options?: { modelId?: string }
 ): Promise<RelationResponse[]> {
   const collected: RelationResponse[] = []
   let page = 0
+  const modelId = options?.modelId
 
   while (true) {
     const query = pagedListParams(page, RELATIONS_FETCH_SIZE)
     query.set('notationId', notationId)
+    if (modelId) {
+      query.set('modelId', modelId)
+    }
     const result = await apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
     if (!result.success) {
       throw new Error(`Ошибка загрузки relations: ${result.error.message}`)

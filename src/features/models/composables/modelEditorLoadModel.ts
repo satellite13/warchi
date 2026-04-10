@@ -1,4 +1,4 @@
-import { apiGet } from "@/composables/useApi"
+import { apiGet, type ApiResult } from "@/composables/useApi"
 import { listParams } from '@/api/queryHelpers'
 import type { ModelData, NotationData, PaginatedResponse } from "@/types/entities"
 import type {
@@ -22,30 +22,34 @@ type LoadModelEditorDataResult = {
   loadedNotationIds: string[]
 }
 
+async function mergePagedById<T extends { id: string }>(
+  fetches: Array<Promise<ApiResult<PaginatedResponse<T>>>>
+): Promise<T[]> {
+  const byId = new Map<string, T>()
+  const results = await Promise.all(fetches)
+  for (const r of results) {
+    if (!r.success || !r.data?.content) continue
+    for (const item of r.data.content) {
+      byId.set(item.id, item)
+    }
+  }
+  return [...byId.values()]
+}
+
 export async function loadModelEditorData(modelId: string): Promise<LoadModelEditorDataResult> {
   const listQuery = listParams()
 
-  const [
-    modelResult,
-    modelsResult,
-    nodesResult,
-    linksResult,
-    diagramsResult,
-    notationsResult,
-    componentsResult,
-    relationsResult,
-  ] = await Promise.all([
-    apiGet<ModelData>(`/models/${modelId}`),
-    apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
-    apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(modelId)}&size=1000`),
-    apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(modelId)}&size=1000`),
-    apiGet<PaginatedResponse<DiagramResponse>>(
-      `/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`
-    ),
-    apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-    apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`),
-    apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`),
-  ])
+  const [modelResult, modelsResult, nodesResult, linksResult, diagramsResult, notationsResult] =
+    await Promise.all([
+      apiGet<ModelData>(`/models/${modelId}`),
+      apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
+      apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(modelId)}&size=1000`),
+      apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(modelId)}&size=1000`),
+      apiGet<PaginatedResponse<DiagramResponse>>(
+        `/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`
+      ),
+      apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
+    ])
 
   if (!modelResult.success) {
     if (modelResult.error.status === 404) {
@@ -66,10 +70,32 @@ export async function loadModelEditorData(modelId: string): Promise<LoadModelEdi
     typesQuery.append("notationId", notationId)
   }
 
-  const [nodeTypesResult, linkTypesResult, relationRules] = await Promise.all([
+  const componentFetches =
+    notationIds.length > 0
+      ? notationIds.map(nid => {
+          const q = listParams()
+          q.set("modelId", modelId)
+          q.set("notationId", nid)
+          return apiGet<PaginatedResponse<ComponentResponse>>(`/components?${q.toString()}`)
+        })
+      : [apiGet<PaginatedResponse<ComponentResponse>>(`/components?${listQuery.toString()}`)]
+
+  const relationFetches =
+    notationIds.length > 0
+      ? notationIds.map(nid => {
+          const q = listParams()
+          q.set("modelId", modelId)
+          q.set("notationId", nid)
+          return apiGet<PaginatedResponse<RelationResponse>>(`/relations?${q.toString()}`)
+        })
+      : [apiGet<PaginatedResponse<RelationResponse>>(`/relations?${listQuery.toString()}`)]
+
+  const [components, relations, nodeTypesResult, linkTypesResult, relationRules] = await Promise.all([
+    mergePagedById(componentFetches),
+    mergePagedById(relationFetches),
     apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
     apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${typesQuery.toString()}`),
-    fetchAllRelationRulesByNotationIds(notationIds, { includeAttrs: false }),
+    fetchAllRelationRulesByNotationIds(notationIds, { includeAttrs: false, modelId }),
   ])
 
   const state: ModelEditorState = {
@@ -81,8 +107,8 @@ export async function loadModelEditorData(modelId: string): Promise<LoadModelEdi
     notations: notationsResult.success ? (notationsResult.data.content ?? []) : [],
     nodeTypes: nodeTypesResult.success ? (nodeTypesResult.data.content ?? []) : [],
     linkTypes: linkTypesResult.success ? (linkTypesResult.data.content ?? []) : [],
-    components: componentsResult.success ? (componentsResult.data.content ?? []) : [],
-    relations: relationsResult.success ? (relationsResult.data.content ?? []) : [],
+    components,
+    relations,
     relationRules: relationRules as RelationRuleResponse[],
   }
 

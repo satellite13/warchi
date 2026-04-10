@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-04-10
+
+### Changed
+- Model editor loads notation-related data with model context: components and relations are requested per notation with `modelId` and `notationId`, and relation rules loading includes `modelId`, matching server-side access rules for shared models.
+- Fallback notation meta fetch for the active diagram includes `modelId` when calling `/notations/{id}/meta`.
+
 ## [0.5.4] - 2026-04-07
 
 ### Fixed

@@ -4,6 +4,11 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-04-10
+
+### Corrigé
+- Éditeur de modèle : glisser un nœud de l’arbre vers le diagramme lorsque plusieurs composants de notation conviennent au type de nœud crée bien l’instance sur le canevas juste après le choix dans la boîte de dialogue ; le premier glisser-déposer ne lie plus le type sans afficher la forme (fermer la modale sans choix annule l’action en attente).
+
 ## [0.5.7] - 2026-04-10
 
 ### Corrigé

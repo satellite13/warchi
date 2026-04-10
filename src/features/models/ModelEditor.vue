@@ -1251,6 +1251,8 @@ watch([normalizedNewDiagramName, () => newDiagramNotationId.value], () => {
 const showComponentChoiceModal = ref(false)
 const componentChoiceOptions = ref<{ id: string; name: string }[]>([])
 const componentChoiceNodeId = ref<string | null>(null)
+/** Drop узла с дерева на диаграмму, отложенный пока открыта модалка выбора компонента нотации */
+const pendingTreeNodeDiagramDrop = ref<{ modelNodeId: string; x: number; y: number } | null>(null)
 
 const showRelationChoiceModal = ref(false)
 const relationChoiceOptions = ref<{ id: string; name: string; linkTypeId: string }[]>([])
@@ -1618,6 +1620,30 @@ const syncDefaultsOnLoad = () => {
         if (JSON.stringify(target) !== before) markLinkDirty(link.id)
       }
     }
+  }
+}
+
+function handleComponentChoiceModalClose() {
+  showComponentChoiceModal.value = false
+  pendingTreeNodeDiagramDrop.value = null
+  componentChoiceNodeId.value = null
+  componentChoiceOptions.value = []
+}
+
+function finalizeComponentChoiceForDiagram(componentId: string) {
+  const nodeId = componentChoiceNodeId.value
+  const pending = pendingTreeNodeDiagramDrop.value
+  const node =
+    nodeId != null
+      ? state.value.nodes.find(n => n.id === nodeId && !n._isDeleted)
+      : undefined
+  if (node) bindNodeComponent(node, componentId)
+  showComponentChoiceModal.value = false
+  componentChoiceNodeId.value = null
+  componentChoiceOptions.value = []
+  pendingTreeNodeDiagramDrop.value = null
+  if (pending && pending.modelNodeId === nodeId && node) {
+    addExistingNodeToDiagram(pending.modelNodeId, pending.x, pending.y)
   }
 }
 
@@ -2411,8 +2437,25 @@ const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => 
     })
     return
   }
+  const notationIdForChoice = activeNotationId.value
+  let willOpenComponentChoiceModal = false
+  if (notationIdForChoice) {
+    const existingComp = node.parsedAttrs.notationComponents[notationIdForChoice]?.componentId
+    if (!existingComp) {
+      const compOptions = resolveComponentByNodeType(
+        state.value.components,
+        notationIdForChoice,
+        node.nodeTypeId
+      )
+      willOpenComponentChoiceModal = compOptions.length > 1
+    }
+  }
+
   const hasBinding = ensureNodeBindingByNodeType(node)
   if (!hasBinding) {
+    if (willOpenComponentChoiceModal) {
+      pendingTreeNodeDiagramDrop.value = { modelNodeId, x, y }
+    }
     return
   }
 
@@ -4694,7 +4737,7 @@ onBeforeUnmount(() => {
     v-if="showComponentChoiceModal"
     :title="t('diagram.selectComponent')"
     max-width="420px"
-    @close="showComponentChoiceModal = false"
+    @close="handleComponentChoiceModalClose"
   >
     <div class="choice-list">
       <button
@@ -4702,15 +4745,7 @@ onBeforeUnmount(() => {
         :key="option.id"
         type="button"
         class="choice-item"
-        @click="
-          () => {
-            if (componentChoiceNodeId) {
-              const node = state.nodes.find(n => n.id === componentChoiceNodeId)
-              if (node) bindNodeComponent(node, option.id)
-            }
-            showComponentChoiceModal = false
-          }
-        "
+        @click="finalizeComponentChoiceForDiagram(option.id)"
       >
         {{ option.name }}
       </button>

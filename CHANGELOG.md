@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-04-10
+
+### Fixed
+- Model editor: dragging a tree node onto the diagram when multiple notation components match the node type now adds the canvas instance right after you pick a component in the dialog; the first drop no longer binds the type silently without placing the shape (closing the modal without a choice clears the pending drop).
+
 ## [0.5.7] - 2026-04-10
 
 ### Fixed

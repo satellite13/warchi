@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-17
+
+### Added
+- Model relation matrix view with filters by folders/nodes/relations, aggregated intersections grid, and a details panel for selected cells.
+- CSV and PNG export actions for the relation matrix to share analysis results from the model editor.
+
 ## [0.5.9] - 2026-04-10
 
 ### Fixed

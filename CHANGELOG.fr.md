@@ -4,6 +4,12 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-17
+
+### Ajouté
+- Vue matrice des relations du modèle avec filtres (dossiers/nœuds/types de relations), grille d'intersections agrégées et panneau de détails pour la cellule sélectionnée.
+- Exports CSV et PNG de la matrice des relations pour partager les résultats d'analyse depuis l'éditeur de modèle.
+
 ## [0.5.9] - 2026-04-10
 
 ### Corrigé

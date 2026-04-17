@@ -99,6 +99,7 @@ const emit = defineEmits<{
   selectDiagramVersion: [diagramId: string]
   createBaseline: []
   compare: []
+  openRelationMatrix: []
   diagramLockReload: []
 }>()
 
@@ -383,6 +384,15 @@ function spectatorInitials(name: string): string {
         @click="emit('compare')"
       >
         <UiIcon name="compare_arrows" />
+      </button>
+      <button
+        v-if="modelId"
+        type="button"
+        class="share-btn"
+        :title="t('models.relationMatrixOpen')"
+        @click="emit('openRelationMatrix')"
+      >
+        <UiIcon name="grid_view" />
       </button>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button

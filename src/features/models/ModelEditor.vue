@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { onBeforeRouteLeave, useRouter, type RouteLocationNormalized } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import { pagedListParams } from '@/api/queryHelpers'
@@ -212,6 +212,12 @@ async function handleOpenCompareModal() {
     versionDiff.fetchRelatedVersions(modelId),
     versionDiff.loadBaseFromApi(modelId),
   ])
+}
+
+function handleOpenRelationMatrix(): void {
+  const modelId = state.value.modelId
+  if (!modelId) return
+  router.push({ name: 'model-relation-matrix', params: { id: modelId } })
 }
 
 function handleCompareModalClose() {
@@ -4052,6 +4058,14 @@ const copyDiagramJson = () => {
 }
 
 const router = useRouter()
+const route = useRoute()
+const applyRouteDiagramSelection = () => {
+  const routeDiagramId = typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
+  if (!routeDiagramId) return
+  const target = state.value.diagrams.find(diagram => diagram.id === routeDiagramId && !diagram._isDeleted)
+  if (!target) return
+  applyDiagramSelection(target.id)
+}
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationNormalized | null = null
@@ -4103,6 +4117,7 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(async () => {
   await loadModel()
   syncDefaultsOnLoad()
+  applyRouteDiagramSelection()
   void fetchWikiDocuments()
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('keydown', onDeleteKeydown)
@@ -4151,6 +4166,7 @@ onBeforeUnmount(() => {
         @rename-model="handleRenameModel"
         @share="showShareModal = true"
         @compare="handleOpenCompareModal"
+        @open-relation-matrix="handleOpenRelationMatrix"
         @open-notation="handleOpenNotationEditor"
         @select-diagram-version="selectedDiagramId = $event"
         @create-baseline="handleCreateBaseline"

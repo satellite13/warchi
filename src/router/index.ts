@@ -63,6 +63,11 @@ const router = createRouter({
       component: () => import("../views/DiagramVersionsCompareView.vue")
     },
     {
+      path: "/models/:id/relation-matrix",
+      name: "model-relation-matrix",
+      component: () => import("../views/ModelRelationMatrixView.vue")
+    },
+    {
       path: "/notations",
       name: "notations",
       component: () => import("../views/NotationsView.vue")

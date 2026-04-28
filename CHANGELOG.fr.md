@@ -4,6 +4,11 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-04-28
+
+### Modifié
+- Le bloc « Démarrage rapide » de la landing page a été aligné sur le flux local réel : lancer `arepos-server` via `./gradlew bootRun`, lancer `warchi` via `npm install && npm run dev`, et garder le `curl` API comme vérification smoke optionnelle.
+
 ## [0.6.1] - 2026-04-28
 
 ### Modifié

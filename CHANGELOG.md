@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-04-28
+
+### Changed
+- Landing page quick start now reflects the actual local development workflow: run `arepos-server` with `./gradlew bootRun`, run `warchi` with `npm install && npm run dev`, and use API `curl` as an optional smoke check.
+
 ## [0.6.1] - 2026-04-28
 
 ### Changed

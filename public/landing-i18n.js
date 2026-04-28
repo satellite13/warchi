@@ -102,9 +102,11 @@
       deployHeading: 'Развёртывание',
       deploySub: 'Разверните wArchi в своём контуре за несколько команд.',
       dockerT: 'Docker',
-      dockerP: 'Быстрый старт для локальной разработки и небольших команд.',
+      dockerP:
+        'Быстрый старт для локальной разработки и небольших команд. Требуется доступный PostgreSQL на host.docker.internal:5432.',
       k8sT: 'Kubernetes + Helm',
-      k8sP: 'Для продакшена с TLS, автоскейлингом и управляемой БД.',
+      k8sP:
+        'Для продакшена с TLS, автоскейлингом и управляемой БД. Возможны 2 пути: через deploy.sh в репозиториях или через infra-скрипты (для Yandex Cloud).',
       ctaTitle: 'Готовы попробовать?',
       ctaSub: 'Разверните за минуту локально или зарегистрируйтесь в облаке.',
       ctaStartFree: 'Начать бесплатно',
@@ -112,9 +114,9 @@
       footerDocs: 'Документация',
       footerContact: 'Связаться',
       dockerPreHtml:
-        '<span class="comment"># Клонируем репозитории</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Собираем и запускаем бэкенд</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">docker build</span> -t arepos-server .\n<span class="cmd">docker run</span> -d -p 8080:8080 \\\n  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host:5432/arepos \\\n  -e JWT_SECRET=your-secret \\\n  arepos-server\n\n<span class="comment"># Собираем и запускаем фронтенд</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
+        '<span class="comment"># Клонируем репозитории</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Собираем и запускаем бэкенд (arepos-server)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local\n<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \\\n  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \\\n  -e DB_USERNAME=arepos \\\n  -e DB_PASSWORD=arepos \\\n  -e FILE_STORAGE=disabled \\\n  arepos-server:local\n\n<span class="comment"># Собираем и запускаем фронтенд</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
       k8sPreHtml:
-        '<span class="comment"># Добавляем namespace</span>\n<span class="cmd">kubectl create</span> namespace arch\n\n<span class="comment"># Создаём секреты</span>\n<span class="cmd">kubectl create</span> secret generic arepos-db-secret \\\n  -n arch \\\n  --from-literal=spring.datasource.url=jdbc:postgresql://... \\\n  --from-literal=spring.datasource.username=arepos \\\n  --from-literal=spring.datasource.password=***\n\n<span class="comment"># Деплоим бэкенд</span>\n<span class="cmd">helm install</span> arepos-server ./charts/arepos-server \\\n  -n arch \\\n  -f helm-values/arepos-server.yaml\n\n<span class="comment"># Деплоим фронтенд</span>\n<span class="cmd">helm install</span> warchi ./charts/warchi \\\n  -n arch \\\n  -f helm-values/warchi.yaml',
+        '<span class="comment"># Вариант 1: деплой из репозиториев (Helm внутри deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./deploy.sh</span>\n\n<span class="comment"># Вариант 2: деплой через infra (Yandex Cloud)</span>\n<span class="comment"># предварительно: cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
     },
     en: {
       pageTitle: 'wArchi — architecture repository',
@@ -214,9 +216,11 @@
       deployHeading: 'Deployment',
       deploySub: 'Bring up wArchi in your environment in a few commands.',
       dockerT: 'Docker',
-      dockerP: 'Fast start for local development and small teams.',
+      dockerP:
+        'Fast start for local development and small teams. Requires reachable PostgreSQL at host.docker.internal:5432.',
       k8sT: 'Kubernetes + Helm',
-      k8sP: 'Production with TLS, autoscaling, and managed databases.',
+      k8sP:
+        'Production with TLS, autoscaling, and managed databases. Two options are available: deploy.sh in repositories or infra scripts (for Yandex Cloud).',
       ctaTitle: 'Ready to try?',
       ctaSub: 'Spin it up locally in minutes or sign up in the cloud.',
       ctaStartFree: 'Start for free',
@@ -224,9 +228,9 @@
       footerDocs: 'Documentation',
       footerContact: 'Contact',
       dockerPreHtml:
-        '<span class="comment"># Clone repositories</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Build and run backend</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">docker build</span> -t arepos-server .\n<span class="cmd">docker run</span> -d -p 8080:8080 \\\n  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host:5432/arepos \\\n  -e JWT_SECRET=your-secret \\\n  arepos-server\n\n<span class="comment"># Build and run frontend</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
+        '<span class="comment"># Clone repositories</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Build and run backend (arepos-server)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local\n<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \\\n  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \\\n  -e DB_USERNAME=arepos \\\n  -e DB_PASSWORD=arepos \\\n  -e FILE_STORAGE=disabled \\\n  arepos-server:local\n\n<span class="comment"># Build and run frontend</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
       k8sPreHtml:
-        '<span class="comment"># Create namespace</span>\n<span class="cmd">kubectl create</span> namespace arch\n\n<span class="comment"># Create secrets</span>\n<span class="cmd">kubectl create</span> secret generic arepos-db-secret \\\n  -n arch \\\n  --from-literal=spring.datasource.url=jdbc:postgresql://... \\\n  --from-literal=spring.datasource.username=arepos \\\n  --from-literal=spring.datasource.password=***\n\n<span class="comment"># Deploy backend</span>\n<span class="cmd">helm install</span> arepos-server ./charts/arepos-server \\\n  -n arch \\\n  -f helm-values/arepos-server.yaml\n\n<span class="comment"># Deploy frontend</span>\n<span class="cmd">helm install</span> warchi ./charts/warchi \\\n  -n arch \\\n  -f helm-values/warchi.yaml',
+        '<span class="comment"># Option 1: deploy from repositories (Helm inside deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./deploy.sh</span>\n\n<span class="comment"># Option 2: deploy via infra (Yandex Cloud)</span>\n<span class="comment"># first run: cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
     },
     fr: {
       pageTitle: 'wArchi — dépôt d’architecture',
@@ -328,9 +332,11 @@
       deployHeading: 'Déploiement',
       deploySub: 'Lancez wArchi chez vous en quelques commandes.',
       dockerT: 'Docker',
-      dockerP: 'Démarrage rapide pour le développement local et les petites équipes.',
+      dockerP:
+        'Démarrage rapide pour le développement local et les petites équipes. PostgreSQL doit être accessible sur host.docker.internal:5432.',
       k8sT: 'Kubernetes + Helm',
-      k8sP: 'Production avec TLS, autoscaling et bases gérées.',
+      k8sP:
+        'Production avec TLS, autoscaling et bases gérées. Deux options sont possibles : deploy.sh dans les dépôts ou scripts infra (pour Yandex Cloud).',
       ctaTitle: 'Prêt à essayer ?',
       ctaSub: 'Lancez en local en quelques minutes ou inscrivez-vous dans le cloud.',
       ctaStartFree: 'Commencer gratuitement',
@@ -338,9 +344,9 @@
       footerDocs: 'Documentation',
       footerContact: 'Contact',
       dockerPreHtml:
-        '<span class="comment"># Cloner les dépôts</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Construire et lancer le backend</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">docker build</span> -t arepos-server .\n<span class="cmd">docker run</span> -d -p 8080:8080 \\\n  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host:5432/arepos \\\n  -e JWT_SECRET=your-secret \\\n  arepos-server\n\n<span class="comment"># Construire et lancer le frontend</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
+        '<span class="comment"># Cloner les dépôts</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Construire et lancer le backend (arepos-server)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local\n<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \\\n  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \\\n  -e DB_USERNAME=arepos \\\n  -e DB_PASSWORD=arepos \\\n  -e FILE_STORAGE=disabled \\\n  arepos-server:local\n\n<span class="comment"># Construire et lancer le frontend</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
       k8sPreHtml:
-        '<span class="comment"># Créer le namespace</span>\n<span class="cmd">kubectl create</span> namespace arch\n\n<span class="comment"># Créer les secrets</span>\n<span class="cmd">kubectl create</span> secret generic arepos-db-secret \\\n  -n arch \\\n  --from-literal=spring.datasource.url=jdbc:postgresql://... \\\n  --from-literal=spring.datasource.username=arepos \\\n  --from-literal=spring.datasource.password=***\n\n<span class="comment"># Déployer le backend</span>\n<span class="cmd">helm install</span> arepos-server ./charts/arepos-server \\\n  -n arch \\\n  -f helm-values/arepos-server.yaml\n\n<span class="comment"># Déployer le frontend</span>\n<span class="cmd">helm install</span> warchi ./charts/warchi \\\n  -n arch \\\n  -f helm-values/warchi.yaml',
+        '<span class="comment"># Option 1 : déploiement depuis les dépôts (Helm dans deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./deploy.sh</span>\n\n<span class="comment"># Option 2 : déploiement via infra (Yandex Cloud)</span>\n<span class="comment"># d’abord : cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
     },
   };
 

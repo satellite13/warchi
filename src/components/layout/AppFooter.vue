@@ -8,7 +8,7 @@ const appVersion = import.meta.env.APP_VERSION ?? "dev"
 <template>
   <footer class="app-footer">
     <div class="app-footer__left">
-      2026 - Nikolay Groznykh
+      2026 - wArchi
     </div>
     <div class="app-footer__center">
     </div>

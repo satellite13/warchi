@@ -1070,16 +1070,18 @@
               <h3 data-i18n="dockerT">Docker</h3>
               <p data-i18n="dockerP">Быстрый старт для локальной разработки и небольших команд.</p>
               <pre><code id="deploy-docker-pre"><span class="comment"># Клонируем репозитории</span>
-<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server
+<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git
 <span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git
 
-<span class="comment"># Собираем и запускаем бэкенд</span>
+<span class="comment"># Собираем и запускаем бэкенд (arepos-server)</span>
 <span class="cmd">cd</span> arepos-server
-<span class="cmd">docker build</span> -t arepos-server .
-<span class="cmd">docker run</span> -d -p 8080:8080 \
-  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host:5432/arepos \
-  -e JWT_SECRET=your-secret \
-  arepos-server
+<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local
+<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \
+  -e DB_USERNAME=arepos \
+  -e DB_PASSWORD=arepos \
+  -e FILE_STORAGE=disabled \
+  arepos-server:local
 
 <span class="comment"># Собираем и запускаем фронтенд</span>
 <span class="cmd">cd</span> ../warchi
@@ -1089,26 +1091,18 @@
             </div>
             <div class="deploy-card reveal reveal-delay-1">
               <h3 data-i18n="k8sT">Kubernetes + Helm</h3>
-              <p data-i18n="k8sP">Для продакшена с TLS, автоскейлингом и управляемой БД.</p>
-              <pre><code id="deploy-k8s-pre"><span class="comment"># Добавляем namespace</span>
-<span class="cmd">kubectl create</span> namespace arch
+              <p data-i18n="k8sP">Для продакшена с TLS, автоскейлингом и управляемой БД. Возможны 2 пути: через deploy.sh в репозиториях или через infra-скрипты (для Yandex Cloud).</p>
+              <pre><code id="deploy-k8s-pre"><span class="comment"># Вариант 1: деплой из репозиториев (Helm внутри deploy.sh)</span>
+<span class="cmd">cd</span> arepos-server
+<span class="cmd">./deploy.sh</span>
+<span class="cmd">cd</span> ../warchi
+<span class="cmd">./deploy.sh</span>
 
-<span class="comment"># Создаём секреты</span>
-<span class="cmd">kubectl create</span> secret generic arepos-db-secret \
-  -n arch \
-  --from-literal=spring.datasource.url=jdbc:postgresql://... \
-  --from-literal=spring.datasource.username=arepos \
-  --from-literal=spring.datasource.password=***
-
-<span class="comment"># Деплоим бэкенд</span>
-<span class="cmd">helm install</span> arepos-server ./charts/arepos-server \
-  -n arch \
-  -f helm-values/arepos-server.yaml
-
-<span class="comment"># Деплоим фронтенд</span>
-<span class="cmd">helm install</span> warchi ./charts/warchi \
-  -n arch \
-  -f helm-values/warchi.yaml</code></pre>
+<span class="comment"># Вариант 2: деплой через infra (Yandex Cloud)</span>
+<span class="comment"># предварительно: cd infra/scripts && ./create-infra.sh</span>
+<span class="cmd">cd</span> infra/scripts
+<span class="cmd">./deploy-arepos-server.sh</span>
+<span class="cmd">./deploy-warchi.sh</span></code></pre>
             </div>
           </div>
         </div>

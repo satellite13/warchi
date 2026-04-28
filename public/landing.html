@@ -990,10 +990,10 @@
               <h3 data-i18n="quickstartT">Быстрый старт</h3>
               <p data-i18n="quickstartP">Три команды &mdash; и репозиторий готов к работе.</p>
               <div class="terminal">
-                <div><span class="prompt">$</span> docker compose up <span class="flag">-d</span> <span class="comment" id="term-comment-1"># PostgreSQL + MinIO + сервер</span></div>
-                <div><span class="prompt">$</span> open <span class="flag">http://localhost:5173</span> <span class="comment" id="term-comment-2"># открыть wArchi</span></div>
-                <div><span class="prompt">$</span> curl <span class="flag">-s</span> localhost:8080/api/v1/models | jq <span class="comment" id="term-comment-3"># REST API</span></div>
-                <div><span class="comment" id="term-comment-4"># Опционально: VITE_MODEL_LIVE_SYNC_MODE=hybrid в .env.local клиента</span></div>
+                <div><span class="prompt">$</span> cd ../arepos-server &amp;&amp; ./gradlew bootRun <span class="comment" id="term-comment-1"># backend на :8080 (нужен PostgreSQL)</span></div>
+                <div><span class="prompt">$</span> cd ../warchi &amp;&amp; npm install &amp;&amp; npm run dev <span class="comment" id="term-comment-2"># frontend на :5173</span></div>
+                <div><span class="prompt">$</span> open <span class="flag">http://localhost:5173</span> <span class="comment" id="term-comment-3"># открыть wArchi</span></div>
+                <div><span class="comment" id="term-comment-4"># Опционально: curl -s localhost:8080/api/v1/models | jq</span></div>
               </div>
             </div>
           </div>

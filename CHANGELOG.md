@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-04-28
+
+### Changed
+- Landing page deployment guidance was updated to match the current setup flows: Docker run for `arepos-server` via `bootBuildImage`, and Kubernetes deployment options via repository `deploy.sh` scripts or infra scripts for Yandex Cloud.
+- Footer branding text now displays `wArchi` instead of the author name.
+
 ## [0.6.0] - 2026-04-17
 
 ### Added

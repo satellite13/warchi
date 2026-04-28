@@ -4,6 +4,12 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-04-28
+
+### Modifié
+- Les instructions de déploiement de la landing page ont été alignées sur les flux actuels : exécution Docker de `arepos-server` via `bootBuildImage`, et options de déploiement Kubernetes via les scripts `deploy.sh` des dépôts ou via les scripts infra pour Yandex Cloud.
+- Le texte du pied de page affiche désormais `wArchi` à la place du nom de l’auteur.
+
 ## [0.6.0] - 2026-04-17
 
 ### Ajouté

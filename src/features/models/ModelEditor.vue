@@ -59,12 +59,16 @@ import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
+import ModelImportWizard from './components/ModelImportWizard.vue'
 import {
   parseEntityAttrs,
   parseTypeAttrs,
   type CustomProperty,
   type DiagramStyle,
 } from '../notations/notationAttrs'
+import type { ImportMappingState } from './utils/oef/mappingState'
+import type { ImportDraft } from './utils/oef/types'
+import { buildOefBatchSaveRequest } from './utils/oef/oefToBatchSave'
 import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
 import CompositeStylePanel from '../notations/components/composite/CompositeStylePanel.vue'
 import TabPanel from '@/components/layout/TabPanel.vue'
@@ -81,6 +85,7 @@ import type {
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
 import { formatDate } from '@/utils/formatDate'
+import { batchSave, hasBatchChanges } from './composables/useModelBatchSave'
 
 const {
   model,
@@ -198,6 +203,36 @@ watch(
 )
 const showShareModal = ref(false)
 const showCompareModal = ref(false)
+const showImportWizard = ref(false)
+const isImportingOef = ref(false)
+const oefImportReport = ref<{
+  nodes: number
+  links: number
+  diagrams: number
+  diagramNodeInstances: number
+  diagramConnectionInstances: number
+  warningsCount: number
+  warningGroups: Array<{ code: string; count: number }>
+} | null>(null)
+
+function oefWarningLabel(code: string): string {
+  switch (code) {
+    case 'nodeTypeNotMapped':
+      return t('models.oefImportWarningNodeTypeNotMapped')
+    case 'linkTypeNotMapped':
+      return t('models.oefImportWarningLinkTypeNotMapped')
+    case 'linkMissingNode':
+      return t('models.oefImportWarningLinkMissingNode')
+    case 'diagramNodeMissingModelNode':
+      return t('models.oefImportWarningDiagramNodeMissingModelNode')
+    case 'diagramConnectionMissingModelLink':
+      return t('models.oefImportWarningDiagramConnectionMissingModelLink')
+    case 'diagramConnectionMissingNodeInstance':
+      return t('models.oefImportWarningDiagramConnectionMissingNodeInstance')
+    default:
+      return code
+  }
+}
 
 const versionDiff = useModelVersionDiff()
 
@@ -3592,6 +3627,47 @@ const confirmDiagramDelete = () => {
   cancelDiagramDelete()
 }
 
+const handleOefImportSubmit = async (payload: {
+  draft: ImportDraft
+  notationId: string
+  mapping: ImportMappingState
+}) => {
+  const modelId = state.value.modelId
+  if (!modelId) return
+  const built = buildOefBatchSaveRequest({
+    draft: payload.draft,
+    notationId: payload.notationId,
+    mapping: payload.mapping,
+    parentNodeId: treeRootNodeId.value ?? null,
+  })
+  if (!hasBatchChanges(built.request)) {
+    setUiError(t('models.oefImportNoChanges'))
+    return
+  }
+
+  isImportingOef.value = true
+  const result = await batchSave(modelId, built.request)
+  isImportingOef.value = false
+  if (!result.success) {
+    setUiError(t('models.oefImportFailed', { message: result.error.message }))
+    return
+  }
+  await loadModel()
+  const warningCounts = new Map<string, number>()
+  for (const warning of built.warnings) {
+    warningCounts.set(warning.code, (warningCounts.get(warning.code) ?? 0) + 1)
+  }
+  const warningGroups = [...warningCounts.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count)
+  showImportWizard.value = false
+  oefImportReport.value = {
+    ...built.createdCounts,
+    warningsCount: built.warnings.length,
+    warningGroups,
+  }
+}
+
 
 const handleToolbarAction = async (event: string) => {
   switch (event) {
@@ -3706,6 +3782,11 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'share-diagram-image':
       showDiagramImageShareModal.value = true
+      break
+    case 'import-oef':
+      if (canInspectDiagramJson.value) {
+        showImportWizard.value = true
+      }
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -5020,6 +5101,55 @@ onBeforeUnmount(() => {
     @close="showDiagramImageShareModal = false"
   />
 
+  <ModelImportWizard
+    v-if="showImportWizard"
+    :visible="showImportWizard"
+    :notations="state.notations"
+    :node-types="state.nodeTypes"
+    :link-types="state.linkTypes"
+    :components="state.components"
+    :relations="state.relations"
+    :import-busy="isImportingOef"
+    @close="showImportWizard = false"
+    @submit="handleOefImportSubmit"
+  />
+
+  <BaseModal
+    v-if="oefImportReport"
+    :title="t('models.oefImportReportTitle')"
+    max-width="520px"
+    @close="oefImportReport = null"
+  >
+    <p class="leave-text">{{ t('models.oefImportReportSummary') }}</p>
+    <ul class="model-import-report">
+      <li>{{ t('models.oefImportStatNodes', { count: oefImportReport.nodes }) }}</li>
+      <li>{{ t('models.oefImportStatLinks', { count: oefImportReport.links }) }}</li>
+      <li>{{ t('models.oefImportStatDiagrams', { count: oefImportReport.diagrams }) }}</li>
+      <li>
+        {{ t('models.oefImportReportDiagramNodeInstances', { count: oefImportReport.diagramNodeInstances }) }}
+      </li>
+      <li>
+        {{ t('models.oefImportReportDiagramEdgeInstances', { count: oefImportReport.diagramConnectionInstances }) }}
+      </li>
+    </ul>
+    <p v-if="oefImportReport.warningsCount > 0" class="leave-text leave-text--warning">
+      {{ t('models.oefImportCompletedWithWarnings', { count: oefImportReport.warningsCount }) }}
+    </p>
+    <div v-if="oefImportReport.warningGroups.length > 0" class="model-import-report__warnings">
+      <p class="leave-text">{{ t('models.oefImportReportWarningsByReason') }}</p>
+      <ul class="model-import-report model-import-report--warnings">
+        <li v-for="item in oefImportReport.warningGroups" :key="item.code">
+          {{ oefWarningLabel(item.code) }}: {{ item.count }}
+        </li>
+      </ul>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="oefImportReport = null">
+        {{ t('common.close') }}
+      </button>
+    </template>
+  </BaseModal>
+
   <DocumentEditorModal
     v-if="showDocModal"
     :title="docModalTitle"
@@ -5204,6 +5334,25 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.leave-text--warning {
+  color: var(--warning);
+}
+
+.model-import-report {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.model-import-report__warnings {
+  margin-top: 10px;
+}
+
+.model-import-report--warnings {
+  margin-top: 6px;
 }
 
 .json-viewer {

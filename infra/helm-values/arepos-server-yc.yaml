@@ -37,7 +37,7 @@ env:
         name: arepos-s3-secret
         key: secret-key
   - name: MINIO_BUCKET
-    value: "arepos-files"
+    value: "<S3_BUCKET_NAME>"
   - name: JWT_SECRET
     valueFrom:
       secretKeyRef:

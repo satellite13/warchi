@@ -12,23 +12,52 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-STATE_FILE="$SCRIPT_DIR/../state.env"
-ENV_FILE="$SCRIPT_DIR/../env.local"
 NAMESPACE="${NAMESPACE:-arch}"
 STRICT_MODE=false
+PROFILE_NAME=""
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --strict)
       STRICT_MODE=true
+      shift
+      ;;
+    -p|--profile)
+      if [ -z "${2:-}" ]; then
+        echo -e "${RED}[ERROR]${NC} Для --profile требуется имя профиля"
+        echo "Использование: $0 [--strict] [--profile <name>]"
+        exit 1
+      fi
+      PROFILE_NAME="$2"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Использование: $0 [--strict] [--profile <name>]"
+      exit 0
       ;;
     *)
-      echo -e "${RED}[ERROR]${NC} Неизвестный аргумент: $arg"
-      echo "Использование: $0 [--strict]"
+      echo -e "${RED}[ERROR]${NC} Неизвестный аргумент: $1"
+      echo "Использование: $0 [--strict] [--profile <name>]"
       exit 1
       ;;
   esac
 done
+
+if [ -z "${ENV_FILE:-}" ]; then
+  if [ -n "$PROFILE_NAME" ]; then
+    ENV_FILE="$SCRIPT_DIR/../env.${PROFILE_NAME}.local"
+  else
+    ENV_FILE="$SCRIPT_DIR/../env.local"
+  fi
+fi
+
+if [ -z "${STATE_FILE:-}" ]; then
+  if [ -n "$PROFILE_NAME" ]; then
+    STATE_FILE="$SCRIPT_DIR/../state.${PROFILE_NAME}.env"
+  else
+    STATE_FILE="$SCRIPT_DIR/../state.env"
+  fi
+fi
 
 if [ -f "$STATE_FILE" ]; then
   source "$STATE_FILE"
@@ -36,6 +65,9 @@ fi
 if [ -f "$ENV_FILE" ]; then
   source "$ENV_FILE"
 fi
+
+echo -e "${GREEN}[INFO]${NC} Используется env файл: $ENV_FILE"
+echo -e "${GREEN}[INFO]${NC} Используется state файл: $STATE_FILE"
 
 if [ -z "$PG_HOST" ]; then
   echo -e "${RED}[ERROR]${NC} PG_HOST не задан"

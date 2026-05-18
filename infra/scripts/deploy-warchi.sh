@@ -16,16 +16,63 @@ assert_not_orbstack
 
 INFRA_DIR="$SCRIPT_DIR/.."
 PROJECT_ROOT="$INFRA_DIR/.."
-STATE_FILE="$INFRA_DIR/state.env"
+PROFILE_NAME=""
+VERSION=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p|--profile)
+      if [ -z "${2:-}" ]; then
+        echo -e "${RED}[ERROR]${NC} Для --profile требуется имя профиля"
+        echo "Использование: $0 [--profile <name>] [version]"
+        exit 1
+      fi
+      PROFILE_NAME="$2"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Использование: $0 [--profile <name>] [version]"
+      exit 0
+      ;;
+    *)
+      if [ -z "$VERSION" ]; then
+        VERSION="$1"
+        shift
+      else
+        echo -e "${RED}[ERROR]${NC} Неожиданный аргумент: $1"
+        echo "Использование: $0 [--profile <name>] [version]"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [ -z "${STATE_FILE:-}" ]; then
+  if [ -n "$PROFILE_NAME" ]; then
+    STATE_FILE="$INFRA_DIR/state.${PROFILE_NAME}.env"
+  else
+    STATE_FILE="$INFRA_DIR/state.env"
+  fi
+fi
 
 if [ -f "$STATE_FILE" ]; then
   source "$STATE_FILE"
 fi
 
+if [ -n "$PROFILE_NAME" ] && [ -z "${ENV_FILE:-}" ]; then
+  ENV_FILE="$INFRA_DIR/env.${PROFILE_NAME}.local"
+fi
+if [ -n "${ENV_FILE:-}" ] && [ -f "$ENV_FILE" ]; then
+  source "$ENV_FILE"
+fi
+
+echo -e "${GREEN}[INFO]${NC} Используется state файл: $STATE_FILE"
+if [ -n "${ENV_FILE:-}" ]; then
+  echo -e "${GREEN}[INFO]${NC} Используется env файл: $ENV_FILE"
+fi
+
 NAMESPACE="${NAMESPACE:-arch}"
 confirm_kubectl_deploy_target
-
-VERSION="${1:-}"
 
 if [ -z "$REGISTRY_ID" ]; then
   echo -e "${RED}[ERROR]${NC} REGISTRY_ID не задан. Сначала выполните create-infra.sh"

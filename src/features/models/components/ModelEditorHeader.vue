@@ -226,6 +226,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: t('toolbar.shareDiagramImage'),
     disabled: !props.hasActiveDiagram,
   },
+  {
+    icon: 'upload_file',
+    event: 'import-oef',
+    title: t('models.oefImportTitle'),
+    disabled: !props.canEditModel,
+  },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin
     ? [

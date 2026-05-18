@@ -39,6 +39,6 @@ test-results/
 coverage/
 
 # Infrastructure state (contains cloud resource IDs)
-infra/state.env
-infra/env.local
-.env
+infra/env.*.local
+infra/state.*.env
+.env.local

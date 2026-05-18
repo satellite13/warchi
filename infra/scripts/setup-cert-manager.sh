@@ -30,7 +30,11 @@ fi
 
 echo -e "${GREEN}[INFO]${NC} Установка/обновление cert-manager..."
 helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
-helm repo update >/dev/null
+if ! helm repo update jetstack >/dev/null; then
+  echo -e "${RED}[ERROR]${NC} Не удалось обновить Helm repo jetstack (https://charts.jetstack.io)"
+  echo -e "${YELLOW}[WARN]${NC} Проверьте сетевой доступ/прокси и повторите команду"
+  exit 1
+fi
 
 kubectl create namespace cert-manager --dry-run=client -o yaml | kubectl apply -f -
 

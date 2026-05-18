@@ -2,7 +2,9 @@
 set -e
 
 # Создание всей инфраструктуры в Yandex Cloud через yc CLI
-# Использование: cp ../env.example ../env.local && vim ../env.local && ./create-infra.sh
+# Использование:
+#   cp ../env.example ../env.local && vim ../env.local && ./create-infra.sh
+#   cp ../env.example ../env.lemana.local && vim ../env.lemana.local && ./create-infra.sh --profile lemana
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,24 +14,91 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=guard-no-orbstack.sh
 source "$SCRIPT_DIR/guard-no-orbstack.sh"
-ENV_FILE="$SCRIPT_DIR/../env.local"
+
+print_usage() {
+  cat <<EOF
+Usage:
+  $(basename "$0") [--profile <name>]
+  $(basename "$0") [<profile-name>]
+
+Env resolution:
+  1) If ENV_FILE is set, use it directly
+  2) If profile is passed, use infra/env.<profile>.local
+  3) Otherwise, use infra/env.local
+EOF
+}
+
+PROFILE_NAME=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p|--profile)
+      if [ -z "${2:-}" ]; then
+        echo -e "${RED}[ERROR]${NC} Для --profile требуется имя профиля"
+        print_usage
+        exit 1
+      fi
+      PROFILE_NAME="$2"
+      shift 2
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      if [ -z "$PROFILE_NAME" ]; then
+        PROFILE_NAME="$1"
+        shift
+      else
+        echo -e "${RED}[ERROR]${NC} Неизвестный аргумент: $1"
+        print_usage
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [ -n "${ENV_FILE:-}" ] && [ -n "$PROFILE_NAME" ]; then
+  echo -e "${YELLOW}[WARN]${NC} ENV_FILE уже задан, профиль '$PROFILE_NAME' будет проигнорирован"
+fi
+
+if [ -z "${ENV_FILE:-}" ]; then
+  if [ -n "$PROFILE_NAME" ]; then
+    ENV_FILE="$SCRIPT_DIR/../env.${PROFILE_NAME}.local"
+  else
+    ENV_FILE="$SCRIPT_DIR/../env.local"
+  fi
+fi
 
 if [ ! -f "$ENV_FILE" ]; then
   echo -e "${RED}[ERROR]${NC} Файл $ENV_FILE не найден"
-  echo "Скопируйте env.example в env.local и заполните значения:"
-  echo "  cp infra/env.example infra/env.local"
+  if [ -n "$PROFILE_NAME" ]; then
+    echo "Скопируйте env.example в env.${PROFILE_NAME}.local и заполните значения:"
+    echo "  cp infra/env.example infra/env.${PROFILE_NAME}.local"
+  else
+    echo "Скопируйте env.example в env.local и заполните значения:"
+    echo "  cp infra/env.example infra/env.local"
+  fi
   exit 1
 fi
 
 source "$ENV_FILE"
 
 # Файл для сохранения ID созданных ресурсов
-STATE_FILE="$SCRIPT_DIR/../state.env"
+if [ -z "${STATE_FILE:-}" ]; then
+  if [ -n "$PROFILE_NAME" ]; then
+    STATE_FILE="$SCRIPT_DIR/../state.${PROFILE_NAME}.env"
+  else
+    STATE_FILE="$SCRIPT_DIR/../state.env"
+  fi
+fi
 touch "$STATE_FILE"
 
 log_info()  { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+
+log_info "Используется env файл: $ENV_FILE"
+log_info "Используется state файл: $STATE_FILE"
 
 save_state() {
   local key="$1" value="$2"

@@ -10,14 +10,46 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-STATE_FILE="$SCRIPT_DIR/../state.env"
+PROFILE_NAME=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p|--profile)
+      if [ -z "${2:-}" ]; then
+        echo -e "${RED}[ERROR]${NC} Для --profile требуется имя профиля"
+        echo "Использование: $0 [--profile <name>]"
+        exit 1
+      fi
+      PROFILE_NAME="$2"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Использование: $0 [--profile <name>]"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}[ERROR]${NC} Неизвестный аргумент: $1"
+      echo "Использование: $0 [--profile <name>]"
+      exit 1
+      ;;
+  esac
+done
+
+if [ -z "${STATE_FILE:-}" ]; then
+  if [ -n "$PROFILE_NAME" ]; then
+    STATE_FILE="$SCRIPT_DIR/../state.${PROFILE_NAME}.env"
+  else
+    STATE_FILE="$SCRIPT_DIR/../state.env"
+  fi
+fi
 
 if [ ! -f "$STATE_FILE" ]; then
-  echo -e "${RED}[ERROR]${NC} Файл state.env не найден"
+  echo -e "${RED}[ERROR]${NC} Файл state не найден: $STATE_FILE"
   exit 1
 fi
 
 source "$STATE_FILE"
+echo -e "${GREEN}[INFO]${NC} Используется state файл: $STATE_FILE"
 
 echo -e "${RED}========================================${NC}"
 echo -e "${RED} УДАЛЕНИЕ ИНФРАСТРУКТУРЫ               ${NC}"

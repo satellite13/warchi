@@ -58,6 +58,11 @@ export const modelsMessages = {
       oefImportReportDiagramNodeInstances: 'Инстансов нод на диаграммах: {count}',
       oefImportReportDiagramEdgeInstances: 'Инстансов связей на диаграммах: {count}',
       oefImportReportWarningsByReason: 'Предупреждения по причинам:',
+      oefImportReportMissingRequiredTitle:
+        'Обязательные свойства без значений после импорта: {count}',
+      oefImportReportMissingRequiredNodeType: 'Свойства типов нод: {count}',
+      oefImportReportMissingRequiredComponent: 'Свойства компонентов: {count}',
+      oefImportReportMissingRequiredRelation: 'Свойства relations: {count}',
       oefImportWarningNodeTypeNotMapped: 'Не смэпплен тип элемента',
       oefImportWarningLinkTypeNotMapped: 'Не смэпплен тип связи',
       oefImportWarningLinkMissingNode: 'Связь пропущена: не найдены ноды',
@@ -404,6 +409,11 @@ export const modelsMessages = {
       oefImportReportDiagramNodeInstances: 'Diagram node instances: {count}',
       oefImportReportDiagramEdgeInstances: 'Diagram edge instances: {count}',
       oefImportReportWarningsByReason: 'Warnings by reason:',
+      oefImportReportMissingRequiredTitle:
+        'Required properties without values after import: {count}',
+      oefImportReportMissingRequiredNodeType: 'Node type properties: {count}',
+      oefImportReportMissingRequiredComponent: 'Component properties: {count}',
+      oefImportReportMissingRequiredRelation: 'Relation properties: {count}',
       oefImportWarningNodeTypeNotMapped: 'Element type is not mapped',
       oefImportWarningLinkTypeNotMapped: 'Relationship type is not mapped',
       oefImportWarningLinkMissingNode: 'Link skipped: source/target node is missing',

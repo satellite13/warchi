@@ -47,9 +47,9 @@ const emit = defineEmits<{
   createNode: [parentNodeId: string | null]
   createFolder: [parentNodeId: string | null]
   deleteNode: [nodeId: string]
-  createDiagram: [nodeId: string]
+  createDiagram: [nodeId: string | null]
   deleteDiagram: [diagramId: string]
-  moveDiagram: [diagramId: string, newNodeId: string]
+  moveDiagram: [diagramId: string, newNodeId: string | null]
   moveNode: [nodeId: string, targetNodeId: string | null, position: "above" | "below" | "inside"]
   renameNode: [nodeId: string, name: string]
   renameDiagram: [diagramId: string, name: string]
@@ -85,6 +85,7 @@ const isDirectory = (node: EditorNode): boolean =>
 const {
   expandedNodes,
   treeSearchQuery,
+  rootNodes,
   totalNodesCount,
   filteredRootNodes,
   filteredChildNodes,
@@ -109,6 +110,61 @@ const nodeDiagrams = (nodeId: string): EditorDiagram[] => {
     }
   }
   return [...byName.values()]
+}
+
+const isRootDiagram = (d: EditorDiagram): boolean => {
+  if (d._isDeleted) return false
+  if (d.nodeId === null) return true
+  return !!props.treeRootNodeId && d.nodeId === props.treeRootNodeId
+}
+
+const rootDiagrams = computed<EditorDiagram[]>(() => {
+  const list = props.diagrams.filter(isRootDiagram)
+  const byName = new Map<string, EditorDiagram>()
+  for (const d of list) {
+    const key = d.name.trim()
+    const existing = byName.get(key)
+    if (!existing || compareVersions(d.version, existing.version) > 0) {
+      byName.set(key, d)
+    }
+  }
+  return [...byName.values()]
+})
+
+const normalizedTreeQuery = computed(() => treeSearchQuery.value.trim().toLowerCase())
+
+const diagramMatchesSearch = (diagram: EditorDiagram, query: string): boolean =>
+  diagram.name.toLowerCase().includes(query)
+
+const nodeMatchesSearchWithDiagrams = (node: EditorNode, query: string): boolean => {
+  if (node.name.toLowerCase().includes(query)) return true
+  if (nodeDiagrams(node.id).some(diagram => diagramMatchesSearch(diagram, query))) return true
+  return childNodes(node.id).some(child => nodeMatchesSearchWithDiagrams(child, query))
+}
+
+const visibleRootNodes = computed<EditorNode[]>(() => {
+  const query = normalizedTreeQuery.value
+  if (!query) return filteredRootNodes.value
+  return rootNodes.value.filter(node => nodeMatchesSearchWithDiagrams(node, query))
+})
+
+const visibleChildNodes = (nodeId: string): EditorNode[] => {
+  const query = normalizedTreeQuery.value
+  if (!query) return filteredChildNodes(nodeId)
+  return childNodes(nodeId).filter(child => nodeMatchesSearchWithDiagrams(child, query))
+}
+
+const visibleRootDiagrams = computed<EditorDiagram[]>(() => {
+  const query = normalizedTreeQuery.value
+  if (!query) return rootDiagrams.value
+  return rootDiagrams.value.filter(diagram => diagramMatchesSearch(diagram, query))
+})
+
+const visibleNodeDiagrams = (nodeId: string): EditorDiagram[] => {
+  const query = normalizedTreeQuery.value
+  const diagrams = nodeDiagrams(nodeId)
+  if (!query) return diagrams
+  return diagrams.filter(diagram => diagramMatchesSearch(diagram, query))
 }
 
 // Track which nodes are used in any diagram instance
@@ -224,7 +280,10 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   if (!draggedNodeId && !draggedDiagramId) return
 
   if (draggedDiagramId) {
-    if (!targetNodeId) return
+    if (!targetNodeId) {
+      emit("moveDiagram", draggedDiagramId, null)
+      return
+    }
     const targetNode = props.nodes.find((n) => n.id === targetNodeId)
     if (!targetNode || !isDirectory(targetNode)) return
     emit("moveDiagram", draggedDiagramId, targetNodeId)
@@ -320,7 +379,7 @@ type TreeNodeRow = {
 
 type TreeDiagramRow = {
   kind: "diagram"
-  nodeId: string
+  nodeId: string | null
   diagram: EditorDiagram
   depth: number
 }
@@ -330,18 +389,22 @@ type TreeRow = TreeNodeRow | TreeDiagramRow
 const treeRows = computed<TreeRow[]>(() => {
   const rows: TreeRow[] = []
 
+  for (const diagram of visibleRootDiagrams.value) {
+    rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
+  }
+
   const pushNode = (node: EditorNode, depth: number) => {
     rows.push({ kind: "node", node, depth })
     if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return
-    for (const diagram of nodeDiagrams(node.id)) {
+    for (const diagram of visibleNodeDiagrams(node.id)) {
       rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })
     }
-    for (const child of filteredChildNodes(node.id)) {
+    for (const child of visibleChildNodes(node.id)) {
       pushNode(child, depth + 1)
     }
   }
 
-  for (const rootNode of filteredRootNodes.value) {
+  for (const rootNode of visibleRootNodes.value) {
     pushNode(rootNode, 0)
   }
   return rows
@@ -372,6 +435,9 @@ defineExpose({ expandToNode, focusNode })
         </button>
         <button type="button" class="mini-btn" :title="t('models.addRootNode')" @click="emit('createNode', null)">
           <UiIcon name="add_box" />
+        </button>
+        <button type="button" class="mini-btn" :title="t('models.createDiagramTitle')" @click="emit('createDiagram', null)">
+          <UiIcon name="add_chart" />
         </button>
       </div>
     </div>

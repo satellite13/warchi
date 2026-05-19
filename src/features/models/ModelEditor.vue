@@ -213,6 +213,12 @@ const oefImportReport = ref<{
   diagramConnectionInstances: number
   warningsCount: number
   warningGroups: Array<{ code: string; count: number }>
+  missingRequired: {
+    nodeType: number
+    component: number
+    relation: number
+    total: number
+  }
 } | null>(null)
 
 function oefWarningLabel(code: string): string {
@@ -1474,6 +1480,7 @@ const treeRootNodeId = computed<string | null>(() => {
 const resolveTreeParentId = (parentNodeId: string | null): string | null =>
   parentNodeId ?? treeRootNodeId.value ?? null
 
+
 const canCreateNodeFromModal = computed(() => {
   if (!newNodeName.value.trim()) return false
   if (createNodeModal.value.kind === 'folder') return !!directoryNodeType.value
@@ -1788,8 +1795,8 @@ const createNode = () => {
   showCreateNodeModal.value = false
 }
 
-const openCreateDiagram = (nodeId: string) => {
-  createDiagramNodeId.value = nodeId
+const openCreateDiagram = (nodeId: string | null) => {
+  createDiagramNodeId.value = nodeId ?? treeRootNodeId.value ?? null
   newDiagramName.value = ''
   newDiagramVersion.value = '1.0.0'
   newDiagramNotationId.value = state.value.notations[0]?.id ?? ''
@@ -1798,8 +1805,7 @@ const openCreateDiagram = (nodeId: string) => {
 }
 
 const createDiagram = () => {
-  if (!createDiagramNodeId.value || !newDiagramName.value.trim() || !newDiagramNotationId.value)
-    return
+  if (!newDiagramName.value.trim() || !newDiagramNotationId.value) return
   if (hasDiagramNameVersionConflict.value) {
     setUiError(t('models.diagramConflictMessage'))
     return
@@ -1812,7 +1818,7 @@ const createDiagram = () => {
     version: newDiagramVersion.value || '1.0.0',
     ownerId: state.value.ownerId,
     modelId: state.value.modelId,
-    nodeId: createDiagramNodeId.value,
+    nodeId: createDiagramNodeId.value ?? treeRootNodeId.value ?? null,
     notationId: newDiagramNotationId.value,
     createdAt: null,
     updatedAt: null,
@@ -3413,11 +3419,12 @@ const handleMoveNode = (
   }
 }
 
-const handleMoveDiagram = (diagramId: string, newNodeId: string) => {
+const handleMoveDiagram = (diagramId: string, newNodeId: string | null) => {
   const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
   if (!diagram) return
-  if (diagram.nodeId === newNodeId) return
-  diagram.nodeId = newNodeId
+  const resolvedNodeId = newNodeId ?? treeRootNodeId.value ?? null
+  if (diagram.nodeId === resolvedNodeId) return
+  diagram.nodeId = resolvedNodeId
   markDiagramDirty(diagram.id)
 }
 
@@ -3627,6 +3634,84 @@ const confirmDiagramDelete = () => {
   cancelDiagramDelete()
 }
 
+const collectDefaultCustomPropertyValues = (
+  customProperties: { name: string; defaultValue?: string | number | boolean; system?: boolean }[]
+): Record<string, unknown> => {
+  const defaults: Record<string, unknown> = {}
+  for (const property of customProperties) {
+    if (property.system) continue
+    if (!property.name) continue
+    if (property.defaultValue !== undefined) {
+      defaults[property.name] = property.defaultValue
+    }
+  }
+  return defaults
+}
+
+const collectOefMissingRequiredReport = (request: ReturnType<typeof buildOefBatchSaveRequest>['request']) => {
+  const componentById = new Map(state.value.components.map(component => [component.id, component]))
+  const relationById = new Map(state.value.relations.map(relation => [relation.id, relation]))
+  const nodeTypeById = new Map(state.value.nodeTypes.map(nodeType => [nodeType.id, nodeType]))
+
+  let nodeType = 0
+  let component = 0
+  let relation = 0
+
+  for (const node of request.nodes.create) {
+    const nodeAttrs = parseNodeAttrs(node.attrs)
+    const nodeTypeEntity = nodeTypeById.get(node.nodeTypeId)
+    if (nodeTypeEntity) {
+      const requiredTypeProps = (parseTypeAttrs(nodeTypeEntity.attrs ?? null).customProperties ?? []).filter(
+        property => property.required && !property.system
+      )
+      for (const property of requiredTypeProps) {
+        const value = nodeAttrs.typeProperties[property.name]
+        if (!isRequiredPropertyFilled(value, property.type)) {
+          nodeType += 1
+        }
+      }
+    }
+
+    for (const [notationId, binding] of Object.entries(nodeAttrs.notationComponents)) {
+      const componentEntity = componentById.get(binding.componentId)
+      if (!componentEntity || componentEntity.notationId !== notationId) continue
+
+      const requiredProps = parseEntityAttrs(componentEntity.attrs ?? null).customProperties.filter(
+        property => property.required && !property.system
+      )
+      const scopedValues = nodeAttrs.componentProperties?.[notationId]?.[binding.componentId] ?? {}
+      for (const property of requiredProps) {
+        const value = scopedValues[property.name]
+        if (!isRequiredPropertyFilled(value, property.type)) {
+          component += 1
+        }
+      }
+    }
+  }
+
+  for (const link of request.links.create) {
+    const linkAttrs = parseLinkAttrs(link.attrs)
+    for (const [notationId, binding] of Object.entries(linkAttrs.notationRelations)) {
+      const relationEntity = relationById.get(binding.relationId)
+      if (!relationEntity || relationEntity.notationId !== notationId) continue
+
+      const requiredProps = parseEntityAttrs(relationEntity.attrs ?? null).customProperties.filter(
+        property => property.required && !property.system
+      )
+      const scopedValues = linkAttrs.relationProperties?.[notationId]?.[binding.relationId] ?? {}
+      for (const property of requiredProps) {
+        const value = scopedValues[property.name]
+        if (!isRequiredPropertyFilled(value, property.type)) {
+          relation += 1
+        }
+      }
+    }
+  }
+
+  const total = nodeType + component + relation
+  return { nodeType, component, relation, total }
+}
+
 const handleOefImportSubmit = async (payload: {
   draft: ImportDraft
   notationId: string
@@ -3634,11 +3719,32 @@ const handleOefImportSubmit = async (payload: {
 }) => {
   const modelId = state.value.modelId
   if (!modelId) return
+  const nodeTypePropertyDefaultsById = Object.fromEntries(
+    state.value.nodeTypes.map(nodeType => [
+      nodeType.id,
+      collectDefaultCustomPropertyValues(parseTypeAttrs(nodeType.attrs ?? null).customProperties ?? []),
+    ])
+  )
+  const componentPropertyDefaultsById = Object.fromEntries(
+    state.value.components.map(component => [
+      component.id,
+      collectDefaultCustomPropertyValues(parseEntityAttrs(component.attrs ?? null).customProperties),
+    ])
+  )
+  const relationPropertyDefaultsById = Object.fromEntries(
+    state.value.relations.map(relation => [
+      relation.id,
+      collectDefaultCustomPropertyValues(parseEntityAttrs(relation.attrs ?? null).customProperties),
+    ])
+  )
   const built = buildOefBatchSaveRequest({
     draft: payload.draft,
     notationId: payload.notationId,
     mapping: payload.mapping,
     parentNodeId: treeRootNodeId.value ?? null,
+    nodeTypePropertyDefaultsById,
+    componentPropertyDefaultsById,
+    relationPropertyDefaultsById,
   })
   if (!hasBatchChanges(built.request)) {
     setUiError(t('models.oefImportNoChanges'))
@@ -3660,11 +3766,13 @@ const handleOefImportSubmit = async (payload: {
   const warningGroups = [...warningCounts.entries()]
     .map(([code, count]) => ({ code, count }))
     .sort((a, b) => b.count - a.count)
+  const missingRequired = collectOefMissingRequiredReport(built.request)
   showImportWizard.value = false
   oefImportReport.value = {
     ...built.createdCounts,
     warningsCount: built.warnings.length,
     warningGroups,
+    missingRequired,
   }
 }
 
@@ -5140,6 +5248,22 @@ onBeforeUnmount(() => {
       <ul class="model-import-report model-import-report--warnings">
         <li v-for="item in oefImportReport.warningGroups" :key="item.code">
           {{ oefWarningLabel(item.code) }}: {{ item.count }}
+        </li>
+      </ul>
+    </div>
+    <div v-if="oefImportReport.missingRequired.total > 0" class="model-import-report__warnings">
+      <p class="leave-text leave-text--warning">
+        {{ t('models.oefImportReportMissingRequiredTitle', { count: oefImportReport.missingRequired.total }) }}
+      </p>
+      <ul class="model-import-report model-import-report--warnings">
+        <li>
+          {{ t('models.oefImportReportMissingRequiredNodeType', { count: oefImportReport.missingRequired.nodeType }) }}
+        </li>
+        <li>
+          {{ t('models.oefImportReportMissingRequiredComponent', { count: oefImportReport.missingRequired.component }) }}
+        </li>
+        <li>
+          {{ t('models.oefImportReportMissingRequiredRelation', { count: oefImportReport.missingRequired.relation }) }}
         </li>
       </ul>
     </div>

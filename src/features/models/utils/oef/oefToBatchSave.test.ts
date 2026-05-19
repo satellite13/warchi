@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseDiagramAttrs } from '@/features/models/modelAttrs'
+import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '@/features/models/modelAttrs'
 import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
 import { buildOefBatchSaveRequest } from './oefToBatchSave'
@@ -30,6 +30,15 @@ describe('oefToBatchSave', () => {
       notationId: 'notation-1',
       parentNodeId: 'root-node-id',
       diagramVersion: '1.0.0',
+      nodeTypePropertyDefaultsById: {
+        'nt-business-service': { owner: 'Team A' },
+      },
+      componentPropertyDefaultsById: {
+        'cmp-business-service': { status: 'draft' },
+      },
+      relationPropertyDefaultsById: {
+        'rel-serving': { confidence: 'high' },
+      },
     })
 
     expect(result.request.nodes.update).toHaveLength(0)
@@ -48,6 +57,7 @@ describe('oefToBatchSave', () => {
     }
 
     const diagram = result.request.diagrams.create[0]!
+    expect(diagram.nodeId).toBe('root-node-id')
     const attrs = parseDiagramAttrs(diagram.attrs)
     expect(attrs.instances.nodes).toHaveLength(6)
     expect(attrs.instances.edges).toHaveLength(5)
@@ -57,6 +67,17 @@ describe('oefToBatchSave', () => {
     for (const edge of attrs.instances.edges) {
       expect(linkIds.has(edge.modelLinkId)).toBe(true)
     }
+
+    const serviceNode = result.request.nodes.create.find(item => item.nodeTypeId === 'nt-business-service')
+    expect(serviceNode).toBeTruthy()
+    const serviceNodeAttrs = parseNodeAttrs(serviceNode!.attrs)
+    expect(serviceNodeAttrs.typeProperties.owner).toBe('Team A')
+    expect(serviceNodeAttrs.componentProperties['notation-1']?.['cmp-business-service']?.status).toBe('draft')
+
+    const servingLink = result.request.links.create.find(item => item.linkTypeId === 'lt-serving')
+    expect(servingLink).toBeTruthy()
+    const servingLinkAttrs = parseLinkAttrs(servingLink!.attrs)
+    expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe('high')
   })
 
   it('skips unmapped entities and reports warnings', () => {

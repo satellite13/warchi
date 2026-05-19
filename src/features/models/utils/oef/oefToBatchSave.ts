@@ -44,6 +44,9 @@ export type BuildOefBatchSaveParams = {
   parentNodeId?: string | null
   diagramVersion?: string
   force?: boolean
+  nodeTypePropertyDefaultsById?: Record<string, Record<string, unknown>>
+  componentPropertyDefaultsById?: Record<string, Record<string, unknown>>
+  relationPropertyDefaultsById?: Record<string, Record<string, unknown>>
 }
 
 function makeStableTempId(prefix: string, sourceId: string, used: Set<string>): string {
@@ -58,23 +61,47 @@ function makeStableTempId(prefix: string, sourceId: string, used: Set<string>): 
   return candidate
 }
 
-function makeNodeAttrs(notationId: string, componentId: string, treeOrder: number): ModelNodeAttrs {
+function makeNodeAttrs(
+  notationId: string,
+  componentId: string,
+  treeOrder: number,
+  typeProperties: Record<string, unknown>,
+  componentDefaults: Record<string, unknown>
+): ModelNodeAttrs {
   return {
     treeOrder,
     notationComponents: {
       [notationId]: { componentId },
     },
-    componentProperties: {},
-    typeProperties: {},
+    componentProperties:
+      Object.keys(componentDefaults).length > 0
+        ? {
+            [notationId]: {
+              [componentId]: componentDefaults,
+            },
+          }
+        : {},
+    typeProperties,
   }
 }
 
-function makeLinkAttrs(notationId: string, relationId: string): ModelLinkAttrs {
+function makeLinkAttrs(
+  notationId: string,
+  relationId: string,
+  relationDefaults: Record<string, unknown>
+): ModelLinkAttrs {
   return {
     notationRelations: {
       [notationId]: { relationId },
     },
-    relationProperties: {},
+    relationProperties:
+      Object.keys(relationDefaults).length > 0
+        ? {
+            [notationId]: {
+              [relationId]: relationDefaults,
+            },
+          }
+        : {},
   }
 }
 
@@ -108,12 +135,16 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     }
     const tempId = makeStableTempId('oef-node', node.sourceElementId, usedIds)
     treeOrder += 1
+    const typeDefaults = params.nodeTypePropertyDefaultsById?.[mapped.nodeTypeId] ?? {}
+    const componentDefaults = params.componentPropertyDefaultsById?.[mapped.componentId] ?? {}
     request.nodes.create.push({
       tempId,
       name: node.name,
       nodeTypeId: mapped.nodeTypeId,
       parentNodeId,
-      attrs: serializeNodeAttrs(makeNodeAttrs(params.notationId, mapped.componentId, treeOrder)),
+      attrs: serializeNodeAttrs(
+        makeNodeAttrs(params.notationId, mapped.componentId, treeOrder, typeDefaults, componentDefaults)
+      ),
     })
     nodeTempBySourceElementId.set(node.sourceElementId, tempId)
   }
@@ -140,12 +171,13 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       continue
     }
     const tempId = makeStableTempId('oef-link', link.sourceRelationshipId, usedIds)
+    const relationDefaults = params.relationPropertyDefaultsById?.[mapped.relationId] ?? {}
     request.links.create.push({
       tempId,
       sourceId,
       targetId,
       linkTypeId: mapped.linkTypeId,
-      attrs: serializeLinkAttrs(makeLinkAttrs(params.notationId, mapped.relationId)),
+      attrs: serializeLinkAttrs(makeLinkAttrs(params.notationId, mapped.relationId, relationDefaults)),
     })
     linkTempBySourceRelationshipId.set(link.sourceRelationshipId, tempId)
   }
@@ -226,7 +258,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       name: diagram.name,
       version: diagramVersion,
       notationId: params.notationId,
-      nodeId: null,
+      nodeId: parentNodeId,
       attrs: serializeDiagramAttrs(diagramAttrs),
     })
   }

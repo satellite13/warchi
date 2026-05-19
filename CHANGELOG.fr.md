@@ -4,6 +4,20 @@ Tous les changements notables de ce projet sont documentés dans ce fichier.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-05-19
+
+### Ajouté
+- Flux d'import Open Exchange (OEF XML) dans l'éditeur de modèle : analyse du fichier source, mapping des types/relations, aperçu d'import, et génération d'un payload batch-save create-only pour les nœuds, liens et diagrammes.
+- Le rapport d'import inclut désormais un récapitulatif dédié des propriétés obligatoires restant non renseignées après import et préremplissage par défaut.
+
+### Modifié
+- L'import OEF préremplit maintenant, à la création, les propriétés personnalisées des types de nœuds, des composants de notation et des relations de notation à partir des `defaultValue` configurées.
+- La recherche dans l'arbre du panneau gauche du modèle prend désormais en compte les noms de diagrammes en plus des noms de nœuds, y compris les diagrammes racine et les diagrammes dans les dossiers.
+
+### Corrigé
+- Les résultats de recherche n'affichent plus des diagrammes non pertinents dans un dossier trouvé : quand une requête est active, seuls les diagrammes correspondants sont affichés.
+- La gestion des diagrammes racine est alignée avec la racine d'arbre masquée : créer/déplacer un diagramme à la racine se résout vers `treeRootNodeId`, tout en conservant la visibilité des données legacy avec `nodeId = null`.
+
 ## [0.6.2] - 2026-04-28
 
 ### Modifié

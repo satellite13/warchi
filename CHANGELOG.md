@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-05-19
+
+### Added
+- Open Exchange (OEF XML) import flow in the model editor: source analysis, type/relation mapping, import preview, and create-only batch-save payload generation for nodes, links, and diagrams.
+- Import report now includes a dedicated summary of required properties that remain unfilled after import/default-value prefill.
+
+### Changed
+- OEF import now pre-fills node-type, notation component, and notation relation custom properties from configured `defaultValue` values during entity creation.
+- Tree search in the model left panel now matches diagram names in addition to node names, including root-level diagrams and diagrams nested in folders.
+
+### Fixed
+- Tree search results no longer keep unrelated diagrams visible inside matched folders; when a search query is active, only matching diagrams are shown.
+- Root diagram handling was aligned with hidden tree root semantics: creating/moving diagrams to the root resolves to `treeRootNodeId`, while legacy `nodeId = null` remains visible in the tree.
+
 ## [0.6.2] - 2026-04-28
 
 ### Changed

@@ -64,6 +64,8 @@ The system uses a combination of roles and policy/ACL permissions:
 
 Cards and lists display the actual access level for each resource.
 
+Model access does not replace notation sharing: in the model editor, notation data is available only for the version already linked to a diagram in that model. See [Models → Notation access through a model](/docs/models).
+
 ## Getting Started
 
 1. Log in through the login page

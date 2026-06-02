@@ -28,6 +28,16 @@ The model owner can grant access to other users via the **Share** button:
 
 The model card displays the current access level.
 
+### Notation access through a model
+
+Model access and notation access are **separate** permissions. If you have **EDIT** on a shared model but no direct share on the notation:
+
+- the model editor loads notation metadata, components, relations, and types **only for the notation version already used by an active diagram in that model**;
+- you **cannot** attach an arbitrary foreign notation by ID with model permissions alone — the API enforces this;
+- to browse or edit the notation in the **Notations** catalog, the owner must still grant a separate notation share.
+
+The client passes `modelId` when loading notation data from the model editor context.
+
 ### Versioning
 
 Models support semantic versioning (SemVer):

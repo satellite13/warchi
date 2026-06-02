@@ -810,7 +810,6 @@
           <div class="lang-switch" id="landing-lang-switch" role="group" aria-label="Язык интерфейса">
             <button type="button" class="lang-switch__btn lang-switch__btn--active" data-landing-lang="ru" aria-pressed="true">RU</button>
             <button type="button" class="lang-switch__btn" data-landing-lang="en" aria-pressed="false">EN</button>
-            <button type="button" class="lang-switch__btn" data-landing-lang="fr" aria-pressed="false">FR</button>
           </div>
           <a class="btn btn--ghost btn--sm" href="/docs/overview" data-i18n="navDocs">Документация</a>
           <a class="btn btn--primary btn--sm" href="/login" data-i18n="navLogin">Войти</a>
@@ -1094,7 +1093,7 @@
               <p data-i18n="k8sP">Для продакшена с TLS, автоскейлингом и управляемой БД. Возможны 2 пути: через deploy.sh в репозиториях или через infra-скрипты (для Yandex Cloud).</p>
               <pre><code id="deploy-k8s-pre"><span class="comment"># Вариант 1: деплой из репозиториев (Helm внутри deploy.sh)</span>
 <span class="cmd">cd</span> arepos-server
-<span class="cmd">./deploy.sh</span>
+<span class="cmd">./scripts/deploy.sh</span>
 <span class="cmd">cd</span> ../warchi
 <span class="cmd">./scripts/deploy.sh</span>
 

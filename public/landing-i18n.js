@@ -1,7 +1,7 @@
 /* global window, document, localStorage */
 (function () {
   var STORAGE_KEY = 'warchi.locale';
-  var SUPPORTED = ['ru', 'en', 'fr'];
+  var SUPPORTED = ['ru', 'en'];
 
   var STRINGS = {
     ru: {
@@ -116,7 +116,7 @@
       dockerPreHtml:
         '<span class="comment"># Клонируем репозитории</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Собираем и запускаем бэкенд (arepos-server)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local\n<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \\\n  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \\\n  -e DB_USERNAME=arepos \\\n  -e DB_PASSWORD=arepos \\\n  -e FILE_STORAGE=disabled \\\n  arepos-server:local\n\n<span class="comment"># Собираем и запускаем фронтенд</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
       k8sPreHtml:
-        '<span class="comment"># Вариант 1: деплой из репозиториев (Helm внутри deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./scripts/deploy.sh</span>\n\n<span class="comment"># Вариант 2: деплой через infra (Yandex Cloud)</span>\n<span class="comment"># предварительно: cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
+        '<span class="comment"># Вариант 1: деплой из репозиториев (Helm внутри deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./scripts/deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./scripts/deploy.sh</span>\n\n<span class="comment"># Вариант 2: деплой через infra (Yandex Cloud)</span>\n<span class="comment"># предварительно: cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
     },
     en: {
       pageTitle: 'wArchi — architecture repository',
@@ -230,123 +230,7 @@
       dockerPreHtml:
         '<span class="comment"># Clone repositories</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Build and run backend (arepos-server)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local\n<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \\\n  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \\\n  -e DB_USERNAME=arepos \\\n  -e DB_PASSWORD=arepos \\\n  -e FILE_STORAGE=disabled \\\n  arepos-server:local\n\n<span class="comment"># Build and run frontend</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
       k8sPreHtml:
-        '<span class="comment"># Option 1: deploy from repositories (Helm inside deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./scripts/deploy.sh</span>\n\n<span class="comment"># Option 2: deploy via infra (Yandex Cloud)</span>\n<span class="comment"># first run: cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
-    },
-    fr: {
-      pageTitle: 'wArchi — dépôt d’architecture',
-      langSwitcherAria: 'Langue de l’interface',
-      navFeatures: 'Fonctionnalités',
-      navPlatform: 'Plateforme',
-      navAudience: 'Pour qui',
-      navFaq: 'FAQ',
-      navDocs: 'Documentation',
-      navLogin: 'Connexion',
-      heroTagSuffix: ' — open source, auto-hébergé',
-      heroTitleHtml:
-        'Architecture<br />\n          <span class="accent-word">référentiel</span><br />\n          nouvelle génération',
-      heroSub:
-        'Méta-modèle unifié et notations ArchiMate / C4 / BPMN / UML, SemVer côté serveur, synchronisation du modèle en temps réel, verrou d’édition des diagrammes, traçabilité des liens et résolution des conflits à l’enregistrement — le tout dans le navigateur, sans échange de fichiers.',
-      ctaTryFree: 'Essayer gratuitement',
-      ctaReadDocs: 'Lire la documentation',
-      visualTitle: 'wArchi — éditeur de diagrammes',
-      imgAlt: 'Interface wArchi',
-      statNotations: 'Notations',
-      statVersioning: 'Versionnement',
-      statLiveSync: 'Sync du modèle',
-      statLicense: 'Licence',
-      featuresLabel: 'Fonctionnalités',
-      featuresHeadingHtml: 'Tout pour l’architecture<br>d’entreprise',
-      featuresSub:
-        'De la modélisation à la collaboration : mises à jour live de l’arbre et des liens, verrous canvas soignés et parcours clairs en cas de conflit d’enregistrement.',
-      f1t: 'Méta-modèle unifié',
-      f1p:
-        'Reliez métier, applications et technologie sans doublons. Chaque élément n’existe qu’une fois dans le modèle.',
-      f2t: 'Collaboration',
-      f2p:
-        'Plusieurs personnes sur un même modèle : les nœuds et liens se mettent à jour sans recharger la page. L’édition de la dernière version d’un diagramme est protégée par un verrou.',
-      f3t: 'Versionnement',
-      f3p:
-        'Comparez les versions de modèles et de diagrammes, historique serveur en SemVer. En cas d’écart — diff par champs : récupérer depuis le serveur ou écraser.',
-      f4t: 'Éditeur canvas',
-      f4p:
-        'Diagrammes dans le navigateur liés aux types de notation. Le panneau de traçabilité montre les liens déjà sur le diagramme ouvert ; les liens autorisés se glissent sur le canevas.',
-      f5t: 'On-premises',
-      f5p:
-        'Contrôle total : déployez en périmètre fermé. Docker, Kubernetes et chart Helm prêts à l’emploi.',
-      f6t: 'REST et événements',
-      f6p:
-        'REST et OpenAPI pour l’intégration, authentification JWT. Pour le temps réel — abonnement aux mises à jour du modèle via WebSocket/STOMP (mode client configurable).',
-      platformLabel: 'Plateforme',
-      platformHeading: 'Comment ça marche',
-      platformSub: 'Une stack familière pour les ingénieurs — outils standards, socle ouvert.',
-      bentoNotationsT: 'Notations',
-      bentoNotationsP:
-        'Frameworks courants pris en charge. Créez vos propres notations et types d’éléments.',
-      bentoVersionT: 'Historique des versions',
-      bentoVersionP:
-        'Chaque changement est enregistré. Comparez les versions, résolvez les conflits d’enregistrement lot par champ, revenez en arrière si besoin.',
-      vtree1: 'Couche motivation ajoutée',
-      vtree1time: '2 min',
-      vtree2: 'Processus métier mis à jour',
-      vtree2time: '1 h',
-      vtree3: 'Structure initiale',
-      vtree3time: 'hier',
-      quickstartT: 'Démarrage rapide',
-      quickstartP: 'Trois commandes — et le dépôt est prêt.',
-      termC1: '# backend sur :8080 (PostgreSQL requis)',
-      termC2: '# frontend sur :5173',
-      termC3: '# ouvrir wArchi',
-      termC4: '# Option : curl -s localhost:8080/api/v1/models | jq',
-      audienceLabel: 'Public',
-      audienceHeadingHtml: 'Conçu pour les équipes<br>qui pilotent l’architecture',
-      audienceSub: 'Architectes d’entreprise, analystes et ingénieurs plateforme.',
-      aud1role: 'Architect',
-      aud1t: 'Architectes',
-      aud1p:
-        'Cible et courant dans un seul modèle. Traces et versions pour voir dépendances et évolution.',
-      aud2role: 'Analyst',
-      aud2t: 'Analystes',
-      aud2p: 'Reliez processus et exigences aux éléments d’architecture. Visualisez sur les diagrammes.',
-      aud3role: 'Platform',
-      aud3t: 'CTO et équipes plateforme',
-      aud3p: 'Déployez on-premises, intégrez via l’API REST, gouvernez les standards de notation.',
-      faqLabel: 'FAQ',
-      faqHeading: 'Questions fréquentes',
-      faqSub: 'Réponses aux questions clés sur la plateforme.',
-      faq1q: 'Peut-on migrer depuis Archi ?',
-      faq1a:
-        'Oui — la modélisation reste familière, avec collaboration web et versionnement serveur. Importez et poursuivez dans le navigateur.',
-      faq2q: 'Existe-t-il une option on-premises ?',
-      faq2a:
-        'Oui. wArchi se déploie en périmètre privé : Docker Compose ou Kubernetes. Contrôle total des données et des accès.',
-      faq3q: 'Quelle licence ?',
-      faq3a:
-        'AGPL-3.0-or-later en open source. Une licence commerciale est disponible pour un usage corporate sans contraintes AGPL.',
-      faq4q: 'Quelles notations sont prises en charge ?',
-      faq4a:
-        'ArchiMate 3.2, C4 Model, BPMN 2.0, UML. Vous pouvez aussi définir des notations personnalisées avec vos types d’éléments.',
-      faq5q: 'Comment fonctionne l’édition simultanée ?',
-      faq5a:
-        'L’état du modèle (nœuds, liens) peut se mettre à jour pour tous via la sync live. L’édition de la dernière version d’un diagramme est protégée par un verrou : un autre utilisateur voit le canvas occupé et peut consulter ou changer de diagramme.',
-      deployLabel: 'Self-hosted',
-      deployHeading: 'Déploiement',
-      deploySub: 'Lancez wArchi chez vous en quelques commandes.',
-      dockerT: 'Docker',
-      dockerP:
-        'Démarrage rapide pour le développement local et les petites équipes. PostgreSQL doit être accessible sur host.docker.internal:5432.',
-      k8sT: 'Kubernetes + Helm',
-      k8sP:
-        'Production avec TLS, autoscaling et bases gérées. Deux options sont possibles : deploy.sh dans les dépôts ou scripts infra (pour Yandex Cloud).',
-      ctaTitle: 'Prêt à essayer ?',
-      ctaSub: 'Lancez en local en quelques minutes ou inscrivez-vous dans le cloud.',
-      ctaStartFree: 'Commencer gratuitement',
-      footerVersionWord: 'Version',
-      footerDocs: 'Documentation',
-      footerContact: 'Contact',
-      dockerPreHtml:
-        '<span class="comment"># Cloner les dépôts</span>\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/arepos-server.git\n<span class="cmd">git clone</span> https://gitverse.ru/ngroznykh/warchi.git\n\n<span class="comment"># Construire et lancer le backend (arepos-server)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./gradlew</span> bootBuildImage --imageName=arepos-server:local\n<span class="cmd">docker run</span> -d --name arepos-server -p 8080:8080 \\\n  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/arepos \\\n  -e DB_USERNAME=arepos \\\n  -e DB_PASSWORD=arepos \\\n  -e FILE_STORAGE=disabled \\\n  arepos-server:local\n\n<span class="comment"># Construire et lancer le frontend</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">docker build</span> -t warchi \\\n  --build-arg VITE_API_BASE_URL=http://localhost:8080 .\n<span class="cmd">docker run</span> -d -p 80:80 warchi',
-      k8sPreHtml:
-        '<span class="comment"># Option 1 : déploiement depuis les dépôts (Helm dans deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./scripts/deploy.sh</span>\n\n<span class="comment"># Option 2 : déploiement via infra (Yandex Cloud)</span>\n<span class="comment"># d’abord : cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
+        '<span class="comment"># Option 1: deploy from repositories (Helm inside deploy.sh)</span>\n<span class="cmd">cd</span> arepos-server\n<span class="cmd">./scripts/deploy.sh</span>\n<span class="cmd">cd</span> ../warchi\n<span class="cmd">./scripts/deploy.sh</span>\n\n<span class="comment"># Option 2: deploy via infra (Yandex Cloud)</span>\n<span class="comment"># first run: cd infra/scripts && ./create-infra.sh</span>\n<span class="cmd">cd</span> infra/scripts\n<span class="cmd">./deploy-arepos-server.sh</span>\n<span class="cmd">./deploy-warchi.sh</span>',
     },
   };
 
@@ -413,7 +297,7 @@
   }
 
   function setHtmlLang(lang) {
-    document.documentElement.lang = lang === 'en' ? 'en' : lang === 'fr' ? 'fr' : 'ru';
+    document.documentElement.lang = lang === 'en' ? 'en' : 'ru';
   }
 
   function updateSwitcher(active) {

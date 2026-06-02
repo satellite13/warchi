@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- Residual French (FR) locale on the landing page, unused `fr` message blocks in i18n locale files, and release docs references to `CHANGELOG.fr.md`.
+
 ## [0.6.3] - 2026-05-19
 
 ### Added

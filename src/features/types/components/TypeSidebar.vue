@@ -27,8 +27,9 @@ const typeSearchQuery = ref("")
 const { t, locale } = useI18n()
 
 function sortTypes(types: TypeItem[]): TypeItem[] {
+  const localeTag = locale.value === "ru" ? "ru" : "en"
   return [...types].sort((a, b) =>
-    (a.name || "~~~").localeCompare((b.name || "~~~"), locale.value === "ru" ? "ru" : locale.value === "fr" ? "fr" : "en", {
+    (a.name || "~~~").localeCompare((b.name || "~~~"), localeTag, {
       sensitivity: "base",
       numeric: true
     })

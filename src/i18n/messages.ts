@@ -27,7 +27,7 @@ function deepMerge(...objects: DeepRecord[]): DeepRecord {
   return result
 }
 
-export const messages = deepMerge(
+const mergedMessages = deepMerge(
   commonMessages,
   authMessages,
   modelsMessages,
@@ -44,5 +44,15 @@ export const messages = deepMerge(
   typeof diagramMessages &
   typeof homeMessages &
   typeof docsMessages
+
+type SupportedMessages = {
+  ru: (typeof mergedMessages)['ru']
+  en: (typeof mergedMessages)['en']
+}
+
+export const messages: SupportedMessages = {
+  ru: mergedMessages.ru,
+  en: mergedMessages.en,
+}
 
 export type SupportedLocale = keyof typeof messages

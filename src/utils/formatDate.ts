@@ -3,7 +3,7 @@ export function formatDate(dateStr?: string | null, locale?: string, includeTime
   const d = new Date(dateStr)
   if (Number.isNaN(d.getTime())) return "—"
   const dateLocale =
-    locale === "en" ? "en-US" : locale === "fr" ? "fr-FR" : "ru-RU"
+    locale === "en" ? "en-US" : "ru-RU"
   const options: Intl.DateTimeFormatOptions = includeTime
     ? { dateStyle: "medium", timeStyle: "short" }
     : { dateStyle: "medium" }

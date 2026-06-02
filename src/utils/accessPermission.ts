@@ -1,20 +1,6 @@
 import type { AccessPermission } from "@/types/entities"
 
 export function toAccessLabel(permission?: AccessPermission | null, locale?: string): string {
-  if (locale === "fr") {
-    switch (permission) {
-      case "OWNER":
-        return "À moi"
-      case "EDIT":
-        return "Partagé : édition"
-      case "VIEW":
-        return "Partagé : lecture"
-      case "ADMIN":
-        return "Accès administrateur"
-      default:
-        return ""
-    }
-  }
   if (locale === "en") {
     switch (permission) {
       case "OWNER":

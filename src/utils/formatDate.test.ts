@@ -82,8 +82,8 @@ describe('formatDate', () => {
       expect(result).not.toBe('—')
     })
 
-    it('uses ru-RU when locale is not "en"', () => {
-      const result = formatDate('2024-06-15T10:30:00Z', 'fr')
+    it('uses ru-RU when locale is unknown', () => {
+      const result = formatDate('2024-06-15T10:30:00Z', 'de')
       expect(result).not.toBe('—')
     })
   })

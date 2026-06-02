@@ -3,7 +3,7 @@ import { useRoute } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { DocSection } from "../types"
 const contentModules: Record<
-  "ru" | "en" | "fr",
+  "ru" | "en",
   Record<string, () => Promise<{ default: string }>>
 > = {
   ru: {
@@ -40,23 +40,6 @@ const contentModules: Record<
     changelog: () => import("../../../../CHANGELOG.md?raw"),
     faq: () => import("../content/faq.en.md?raw"),
   },
-  fr: {
-    overview: () => import("../content/overview.fr.md?raw"),
-    dashboard: () => import("../content/dashboard.fr.md?raw"),
-    auth: () => import("../content/auth.fr.md?raw"),
-    profile: () => import("../content/profile.fr.md?raw"),
-    models: () => import("../content/models.fr.md?raw"),
-    versionTree: () => import("../content/version-tree.fr.md?raw"),
-    notations: () => import("../content/notations.fr.md?raw"),
-    diagrams: () => import("../content/diagrams.fr.md?raw"),
-    types: () => import("../content/types.fr.md?raw"),
-    shapes: () => import("../content/shapes.fr.md?raw"),
-    wiki: () => import("../content/wiki.fr.md?raw"),
-    admin: () => import("../content/admin.fr.md?raw"),
-    hotkeys: () => import("../content/hotkeys.fr.md?raw"),
-    changelog: () => import("../../../../CHANGELOG.fr.md?raw"),
-    faq: () => import("../content/faq.fr.md?raw"),
-  },
 }
 
 export const sections: DocSection[] = [
@@ -88,9 +71,8 @@ export function useDocsNavigation() {
     return section || "overview"
   })
 
-  const effectiveDocsLocale = computed((): "ru" | "en" | "fr" => {
+  const effectiveDocsLocale = computed((): "ru" | "en" => {
     if (locale.value === "ru") return "ru"
-    if (locale.value === "fr") return "fr"
     return "en"
   })
 

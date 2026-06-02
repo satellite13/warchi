@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { LOCALE_STORAGE_KEY, isSupportedLocale } from '../i18n'
 import type { SupportedLocale } from '../i18n/messages'
 
-const SUPPORTED_LOCALES: SupportedLocale[] = ['ru', 'en', 'fr']
+const SUPPORTED_LOCALES: SupportedLocale[] = ['ru', 'en']
 
 export const useLocale = () => {
   const { locale } = useI18n({ useScope: 'global' })

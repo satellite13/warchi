@@ -266,11 +266,14 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         rawCompositeShape === "trapezoid" ||
         rawCompositeShape === "slanted-rectangle"
       let compositePathFactory: ((w: number, h: number) => Path2D) | undefined
+      let compositeSvgPathFactory: ((w: number, h: number) => string) | undefined
       if (compositeShapeMappedToCustom) {
         compositePathFactory = diagramShapeFactories[rawCompositeShape]?.path
+        compositeSvgPathFactory = diagramShapeFactories[rawCompositeShape]?.svgPath
       } else if (rawCompositeShape === "custom" && ds?.customOutline?.length) {
         const segments = ds.customOutline
         compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h)
+        compositeSvgPathFactory = (w, h) => customOutlineToSvgPath(segments, w, h)
       }
       node = new CompositeNode({
         ...commonBase,
@@ -282,6 +285,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         minHeight: ds?.compositeMinHeight ?? 0,
         content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
         ...(compositePathFactory ? { pathFactory: compositePathFactory } : {}),
+        ...(compositeSvgPathFactory ? { svgPath: compositeSvgPathFactory } : {}),
       })
     } else if (shape === "diamond") {
       node = new DiamondNode(commonOptions)

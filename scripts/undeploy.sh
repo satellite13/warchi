@@ -1,6 +1,19 @@
 #!/bin/bash
+#
+# undeploy.sh — удаление Helm-релиза фронтенда wArchi из Kubernetes.
+# Снимает только warchi release, не трогает namespace и другие сервисы
+# (например arepos-server).
+#
+# Использование:
+#   ./scripts/undeploy.sh
+#   NAMESPACE=arch RELEASE_NAME=warchi ./scripts/undeploy.sh
+#
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -42,5 +55,3 @@ else
 fi
 
 log_info "Удаление фронтенда завершено"
-
-

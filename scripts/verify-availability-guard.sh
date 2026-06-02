@@ -1,6 +1,20 @@
 #!/bin/bash
+#
+# verify-availability-guard.sh — проверка «сторожа доступности» (outage guard).
+# Убеждается, что apiClient, App.vue и i18n правильно подключены к блокировке UI
+# при недоступности бэкенда или authz; затем выполняет npm run build.
+# Используется в CI и локально перед релизом.
+#
+# Использование:
+#   ./scripts/verify-availability-guard.sh
+#   npm run verify:availability
+#
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'

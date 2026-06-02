@@ -1,6 +1,21 @@
 #!/bin/bash
+#
+# deploy.sh — развёртывание фронтенда wArchi в Kubernetes через Helm.
+# Проверяет kubectl/helm/docker, опционально собирает образ, устанавливает
+# или обновляет Helm-релиз; поддерживает обычный и blue/green режим.
+#
+# Использование:
+#   ./scripts/deploy.sh
+#   BUILD_IMAGE=false ./scripts/deploy.sh
+#   BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./scripts/deploy.sh
+#   SKIP_CONFIRM=true NAMESPACE=arch ./scripts/deploy.sh
+#
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -89,8 +104,8 @@ fi
 # Сборка Docker-образа фронтенда
 if [ "$BUILD_IMAGE" = "true" ]; then
     log_info "Сборка Docker-образа фронтенда..."
-    if [ -x "./buildImage.sh" ]; then
-        ./buildImage.sh
+    if [ -x "$SCRIPT_DIR/buildImage.sh" ]; then
+        "$SCRIPT_DIR/buildImage.sh"
     else
         log_error "Скрипт buildImage.sh не найден или не является исполняемым"
         exit 1
@@ -226,5 +241,3 @@ log_info "Деплой фронтенда завершён!"
 echo "Namespace:  $NAMESPACE"
 echo "Release:    $RELEASE_NAME"
 echo "Helm chart: $CHART_PATH"
-
-

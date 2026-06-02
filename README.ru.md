@@ -54,7 +54,7 @@ npm run dev
 
 ## Деплой (`deploy.sh`)
 
-Скрипт `./deploy.sh` поддерживает два режима:
+Скрипт `./scripts/deploy.sh` поддерживает два режима:
 
 - **Обычный (legacy)** — пересоздаёт release
 - **Blue/Green** — выкатывает неактивный цвет, проверяет готовность, опционально переключает трафик
@@ -78,10 +78,10 @@ npm run dev
 Примеры:
 
 ```bash
-./deploy.sh
-BUILD_IMAGE=false ./deploy.sh
-BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./deploy.sh
-BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./deploy.sh
+./scripts/deploy.sh
+BUILD_IMAGE=false ./scripts/deploy.sh
+BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./scripts/deploy.sh
+BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./scripts/deploy.sh
 ```
 
 ## Переменные окружения

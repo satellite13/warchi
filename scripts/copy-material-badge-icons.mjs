@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
- * Copies all Material Design Icons (outlined) SVG files into public/icons/
- * for interactive property badges. Run after: npm install @material-design-icons/svg
+ * copy-material-badge-icons.mjs — копирование SVG-иконок Material Design в public/icons/.
+ * Нужен для интерактивного выбора иконок в бейджах пользовательских свойств;
+ * после обновления пакета @material-design-icons/svg перегенерирует статические файлы.
  *
- * Usage: node scripts/copy-material-badge-icons.mjs
- * Or:    npm run copy:badge-icons
+ * Использование:
+ *   node scripts/copy-material-badge-icons.mjs
+ *   npm run copy:badge-icons
+ *
+ * Требует: npm install -D @material-design-icons/svg
  */
 import fs from 'node:fs';
 import path from 'node:path';

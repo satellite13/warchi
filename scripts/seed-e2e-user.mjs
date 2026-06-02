@@ -1,3 +1,17 @@
+/**
+ * seed-e2e-user.mjs — подготовка тестового пользователя для E2E (Playwright).
+ * Регистрирует или проверяет существование пользователя через API arepos-server,
+ * чтобы e2e-тесты могли логиниться без ручной настройки БД.
+ *
+ * Использование:
+ *   node scripts/seed-e2e-user.mjs
+ *   npm run test:e2e:seed-user
+ *
+ * Переменные окружения:
+ *   E2E_API_BASE_URL — URL API (по умолчанию http://localhost:8080/api/v1)
+ *   E2E_EMAIL, E2E_PASSWORD — учётные данные тестового пользователя
+ *   E2E_SEED_SKIP=true — пропустить seed без ошибки
+ */
 const API_BASE_URL = process.env.E2E_API_BASE_URL || process.env.E2E_API_URL || 'http://localhost:8080/api/v1'
 const E2E_EMAIL = process.env.E2E_EMAIL || 'e2e-test@warchi.dev'
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'e2eTest123!'

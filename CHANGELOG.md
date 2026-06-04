@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-06-04
+
+### Added
+- OEF import now supports ArchiMate diagram notes (`Label`/`Note` view nodes) and annotation lines (`Line` connections without a relationship reference), mapping them to diagram-only note instances on import.
+
 ### Removed
 - Residual French (FR) locale on the landing page, unused `fr` message blocks in i18n locale files, and release docs references to `CHANGELOG.fr.md`.
 

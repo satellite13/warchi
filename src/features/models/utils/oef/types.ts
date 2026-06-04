@@ -24,6 +24,8 @@ export type OefViewNode = {
   y: number
   width?: number
   height?: number
+  /** Text of ArchiMate diagram Label (sticky note). */
+  labelText?: string
 }
 
 export type OefViewConnection = {
@@ -69,6 +71,8 @@ export type ImportDraftDiagramNodeInstance = {
   y: number
   width?: number
   height?: number
+  isNote?: boolean
+  noteText?: string
 }
 
 export type ImportDraftDiagramConnectionInstance = {
@@ -76,6 +80,7 @@ export type ImportDraftDiagramConnectionInstance = {
   sourceRelationshipId: string
   sourceNodeId: string
   targetNodeId: string
+  isNoteLink?: boolean
 }
 
 export type ImportDraftDiagram = {

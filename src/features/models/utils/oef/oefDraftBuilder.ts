@@ -1,4 +1,12 @@
-import type { ImportDraft, ImportDraftDiagram, OefParsedModel } from './types'
+import type { ImportDraft, ImportDraftDiagram, OefParsedModel, OefViewConnection, OefViewNode } from './types'
+
+function isOefDiagramNoteNode(node: OefViewNode): boolean {
+  return node.type === 'Label' || node.type === 'Note'
+}
+
+function isOefDiagramNoteConnection(connection: OefViewConnection): boolean {
+  return connection.type === 'Line' && !connection.relationshipId
+}
 
 function toUniqueSorted(values: string[]): string[] {
   return [...new Set(values.map(value => value.trim()).filter(Boolean))].sort((a, b) =>
@@ -11,19 +19,29 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
     sourceViewId: view.id,
     sourceType: view.type,
     name: view.name || `View ${view.id}`,
-    nodeInstances: view.nodes.map(node => ({
-      sourceNodeId: node.id,
-      sourceElementId: node.elementId,
-      x: node.x,
-      y: node.y,
-      width: node.width,
-      height: node.height,
-    })),
+    nodeInstances: view.nodes.map(node => {
+      const isNote = isOefDiagramNoteNode(node)
+      return {
+        sourceNodeId: node.id,
+        sourceElementId: node.elementId,
+        x: node.x,
+        y: node.y,
+        width: node.width,
+        height: node.height,
+        ...(isNote
+          ? {
+              isNote: true,
+              noteText: node.labelText?.trim() || 'Заметка',
+            }
+          : {}),
+      }
+    }),
     connectionInstances: view.connections.map(connection => ({
       sourceConnectionId: connection.id,
       sourceRelationshipId: connection.relationshipId,
       sourceNodeId: connection.sourceNodeId,
       targetNodeId: connection.targetNodeId,
+      ...(isOefDiagramNoteConnection(connection) ? { isNoteLink: true } : {}),
     })),
   }))
 

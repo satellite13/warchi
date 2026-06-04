@@ -77,15 +77,20 @@ function parseRelationships(model: Element): OefRelationship[] {
     .filter((item): item is OefRelationship => item !== null)
 }
 
+function isOefDiagramNoteNode(nodeType: string): boolean {
+  return nodeType === 'Label' || nodeType === 'Note'
+}
+
 function parseViewNodes(view: Element): OefViewNode[] {
   return getDescendantsByLocalName(view, 'node')
     .map(el => {
       const id = (el.getAttribute('identifier') ?? '').trim()
       if (!id) return null
+      const nodeType = typeOf(el)
       const parsed: OefViewNode = {
         id,
         elementId: (el.getAttribute('elementRef') ?? '').trim(),
-        type: typeOf(el),
+        type: nodeType,
         x: parseNumber(el.getAttribute('x')) ?? 0,
         y: parseNumber(el.getAttribute('y')) ?? 0,
       }
@@ -93,6 +98,9 @@ function parseViewNodes(view: Element): OefViewNode[] {
       const height = parseNumber(el.getAttribute('h'))
       if (typeof width === 'number') parsed.width = width
       if (typeof height === 'number') parsed.height = height
+      if (isOefDiagramNoteNode(nodeType)) {
+        parsed.labelText = textOfFirstDirectChild(el, 'label')
+      }
       return parsed
     })
     .filter((item): item is OefViewNode => item !== null)

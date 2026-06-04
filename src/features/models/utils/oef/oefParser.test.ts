@@ -12,8 +12,8 @@ describe('oefParser', () => {
     expect(parsed.elements).toHaveLength(6)
     expect(parsed.relationships).toHaveLength(5)
     expect(parsed.views).toHaveLength(1)
-    expect(parsed.views[0]?.nodes).toHaveLength(6)
-    expect(parsed.views[0]?.connections).toHaveLength(5)
+    expect(parsed.views[0]?.nodes).toHaveLength(7)
+    expect(parsed.views[0]?.connections).toHaveLength(6)
     expect(parsed.elements.map(item => item.type)).toEqual(
       expect.arrayContaining(['BusinessService', 'BusinessProcess', 'BusinessEvent'])
     )

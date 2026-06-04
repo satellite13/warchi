@@ -1,4 +1,12 @@
-import type { ImportIssue, ImportValidationResult, OefParsedModel, OefView } from './types'
+import type { ImportIssue, ImportValidationResult, OefParsedModel, OefView, OefViewConnection, OefViewNode } from './types'
+
+function isOefDiagramNoteNode(node: OefViewNode): boolean {
+  return node.type === 'Label' || node.type === 'Note'
+}
+
+function isOefDiagramNoteConnection(connection: OefViewConnection): boolean {
+  return connection.type === 'Line' && !connection.relationshipId
+}
 
 function validateDuplicates(
   ids: string[],
@@ -25,7 +33,7 @@ function validateView(view: OefView, relationshipIds: Set<string>): ImportIssue[
   const nodeIds = new Set(view.nodes.map(node => node.id))
 
   for (const node of view.nodes) {
-    if (!node.elementId) {
+    if (!isOefDiagramNoteNode(node) && !node.elementId) {
       issues.push({
         code: 'viewNodeMissingElementRef',
         level: 'error',
@@ -46,7 +54,10 @@ function validateView(view: OefView, relationshipIds: Set<string>): ImportIssue[
   }
 
   for (const connection of view.connections) {
-    if (!connection.relationshipId || !relationshipIds.has(connection.relationshipId)) {
+    if (
+      !isOefDiagramNoteConnection(connection) &&
+      (!connection.relationshipId || !relationshipIds.has(connection.relationshipId))
+    ) {
       issues.push({
         code: 'viewConnectionMissingRelationshipRef',
         level: 'error',
@@ -160,6 +171,7 @@ export function validateParsedOefModel(parsed: OefParsedModel): ImportValidation
       ).map(issue => ({ ...issue, viewId: view.id }))
     )
     for (const node of view.nodes) {
+      if (isOefDiagramNoteNode(node)) continue
       if (!node.elementId || !elementIds.has(node.elementId)) {
         issues.push({
           code: 'viewNodeMissingElementRef',

@@ -1,5 +1,5 @@
 import type { BatchSaveRequest } from '@/features/models/composables/useModelBatchSave'
-import type { DiagramAttrs, ModelLinkAttrs, ModelNodeAttrs } from '@/features/models/modelAttrs'
+import type { DiagramAttrs, DiagramEdgeInstance, DiagramNodeInstance, ModelLinkAttrs, ModelNodeAttrs } from '@/features/models/modelAttrs'
 import {
   parseDiagramAttrs,
   serializeDiagramAttrs,
@@ -8,6 +8,28 @@ import {
 } from '@/features/models/modelAttrs'
 import type { ImportDraft } from './types'
 import type { ImportMappingState } from './mappingState'
+
+const NOTE_NODE_PREFIX = '__diagram-note__:'
+const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
+
+const DEFAULT_NOTE_DIAGRAM_STYLE = {
+  nodeShape: 'rectangle',
+  fillColor: '#fff9c4',
+  strokeColor: '#e6c85b',
+  strokeWidth: 1.5,
+  labelColor: '#5a4600',
+  labelFontSize: 13,
+  labelAlign: 'left',
+  labelInset: 10,
+  labelPlacement: 'center',
+} as const
+
+const DEFAULT_NOTE_LINK_DIAGRAM_STYLE = {
+  edgeType: 'straight',
+  startMarkerType: 'none',
+  endMarkerType: 'none',
+  lineDash: [4, 4],
+} as const
 
 export type OefImportBuildWarningCode =
   | 'nodeTypeNotMapped'
@@ -189,6 +211,30 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     const diagramEdges: DiagramAttrs['instances']['edges'] = []
 
     for (const instance of diagram.nodeInstances) {
+      if (instance.isNote) {
+        const instanceId = makeStableTempId(
+          'oef-inst-note',
+          `${diagram.sourceViewId}-${instance.sourceNodeId}`,
+          usedIds
+        )
+        nodeInstanceIdBySourceNodeId.set(instance.sourceNodeId, instanceId)
+        const noteInstance: DiagramNodeInstance = {
+          id: instanceId,
+          modelNodeId: `${NOTE_NODE_PREFIX}${instanceId}`,
+          x: instance.x,
+          y: instance.y,
+          width: typeof instance.width === 'number' ? instance.width : 220,
+          height: typeof instance.height === 'number' ? instance.height : 120,
+          attrs: {
+            isNote: true,
+            noteText: instance.noteText?.trim() || 'Заметка',
+            diagramStyle: { ...DEFAULT_NOTE_DIAGRAM_STYLE },
+          },
+        }
+        diagramNodes.push(noteInstance)
+        continue
+      }
+
       const modelNodeId = nodeTempBySourceElementId.get(instance.sourceElementId)
       if (!modelNodeId) {
         warnings.push({
@@ -212,6 +258,37 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     }
 
     for (const connection of diagram.connectionInstances) {
+      if (connection.isNoteLink) {
+        const sourceInstanceId = nodeInstanceIdBySourceNodeId.get(connection.sourceNodeId)
+        const targetInstanceId = nodeInstanceIdBySourceNodeId.get(connection.targetNodeId)
+        if (!sourceInstanceId || !targetInstanceId) {
+          warnings.push({
+            code: 'diagramConnectionMissingNodeInstance',
+            sourceId: connection.sourceConnectionId,
+            diagramId: diagram.sourceViewId,
+            message: `Diagram note link "${connection.sourceConnectionId}" skipped because source/target node instance is unavailable`,
+          })
+          continue
+        }
+        const edgeInstanceId = makeStableTempId(
+          'oef-inst-note-edge',
+          `${diagram.sourceViewId}-${connection.sourceConnectionId}`,
+          usedIds
+        )
+        const noteEdge: DiagramEdgeInstance = {
+          id: edgeInstanceId,
+          modelLinkId: `${NOTE_EDGE_PREFIX}${edgeInstanceId}`,
+          sourceInstanceId,
+          targetInstanceId,
+          attrs: {
+            isDiagramOnly: true,
+            diagramStyle: { ...DEFAULT_NOTE_LINK_DIAGRAM_STYLE },
+          },
+        }
+        diagramEdges.push(noteEdge)
+        continue
+      }
+
       const modelLinkId = linkTempBySourceRelationshipId.get(connection.sourceRelationshipId)
       if (!modelLinkId) {
         warnings.push({

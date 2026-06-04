@@ -59,13 +59,24 @@ describe('oefToBatchSave', () => {
     const diagram = result.request.diagrams.create[0]!
     expect(diagram.nodeId).toBe('root-node-id')
     const attrs = parseDiagramAttrs(diagram.attrs)
-    expect(attrs.instances.nodes).toHaveLength(6)
-    expect(attrs.instances.edges).toHaveLength(5)
+    expect(attrs.instances.nodes).toHaveLength(7)
+    expect(attrs.instances.edges).toHaveLength(6)
     for (const instance of attrs.instances.nodes) {
-      expect(nodeIds.has(instance.modelNodeId)).toBe(true)
+      if (instance.attrs?.isNote === true) {
+        expect(instance.modelNodeId.startsWith('__diagram-note__:')).toBe(true)
+        expect(instance.attrs.noteText).toBe('Test note')
+        expect(instance.width).toBe(185)
+        expect(instance.height).toBe(80)
+      } else {
+        expect(nodeIds.has(instance.modelNodeId)).toBe(true)
+      }
     }
     for (const edge of attrs.instances.edges) {
-      expect(linkIds.has(edge.modelLinkId)).toBe(true)
+      if (edge.attrs?.isDiagramOnly === true) {
+        expect(edge.modelLinkId.startsWith('__diagram-note-edge__:')).toBe(true)
+      } else {
+        expect(linkIds.has(edge.modelLinkId)).toBe(true)
+      }
     }
 
     const serviceNode = result.request.nodes.create.find(item => item.nodeTypeId === 'nt-business-service')

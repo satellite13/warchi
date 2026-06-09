@@ -111,13 +111,13 @@ if [ "$BUILD_IMAGE" = "true" ]; then
         exit 1
     fi
     log_info "Docker-образ успешно собран"
-    # Подставить тег только что собранного образа, чтобы Helm использовал его
-    if [ -z "$IMAGE_TAG" ] && [ -f "package.json" ]; then
-        IMAGE_TAG=$(node -p "require('./package.json').version")
-        log_info "Используется тег только что собранного образа: $IMAGE_TAG"
-    fi
 else
     log_warn "Сборка Docker-образа пропущена (BUILD_IMAGE=false)"
+fi
+
+if [ -z "$IMAGE_TAG" ] && [ -f "package.json" ]; then
+    IMAGE_TAG=$(node -p "require('./package.json').version")
+    log_info "Используется тег образа из package.json: $IMAGE_TAG"
 fi
 
 if [ "$BLUE_GREEN" = "true" ]; then

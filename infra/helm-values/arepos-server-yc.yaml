@@ -78,3 +78,17 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
+
+# Сетевая изоляция: ingress только от warchi; egress — Cerbos in-cluster + managed PG/S3.
+networkPolicy:
+  enabled: true
+  egress:
+    allowPostgresql: false
+    allowMinio: false
+    allowCerbos: true
+    allowDns: true
+    externalTcp:
+      - cidr: 0.0.0.0/0
+        ports: [443]
+      - cidr: 0.0.0.0/0
+        ports: [5432, 6432]

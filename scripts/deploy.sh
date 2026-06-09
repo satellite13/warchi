@@ -227,8 +227,8 @@ kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=warchi
 SERVICE_URL="http://warchi.$NAMESPACE.svc.cluster.local"
 INGRESS_URL="http://$INGRESS_HOST"
 
-log_info "Проверка доступности по ClusterIP сервису: $SERVICE_URL"
-if curl -sSf "$SERVICE_URL" >/dev/null 2>&1; then
+log_info "Проверка health по ClusterIP сервису: $SERVICE_URL/health"
+if curl -sSf "$SERVICE_URL/health" >/dev/null 2>&1; then
     log_info "Фронтенд доступен по ClusterIP сервису"
 else
     log_warn "Не удалось обратиться к ClusterIP сервису (возможно, нужен порт-форвардинг или ingress)"

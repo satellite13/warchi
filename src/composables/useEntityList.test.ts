@@ -13,6 +13,7 @@ vi.mock('./useAuth', () => ({
 
 vi.mock('../utils/resolveOwnerNames', () => ({
   resolveOwnerDisplayNames: vi.fn(async () => new Map()),
+  normalizeOwnerId: (id: string | null | undefined) => (id ?? '').trim().toLowerCase(),
 }))
 
 const mockApiGet = vi.fn()
@@ -179,6 +180,7 @@ describe('useEntityList', () => {
 
       const result = await list.createItem('user-1', 'Test User')
 
+      expect(list.createError.value).toBeNull()
       expect(mockApiPost).toHaveBeenCalledWith('/models', {
         name: 'Gamma',
         version: '1.0.0',

@@ -11,6 +11,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
+node scripts/sync-chart-version.mjs
 VERSION=$(node -p "require('./package.json').version")
 docker build \
   --build-arg APP_VERSION="${VERSION}" \

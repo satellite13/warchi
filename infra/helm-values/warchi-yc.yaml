@@ -30,3 +30,9 @@ ingress:
     - secretName: warchi-tls
       hosts:
         - <WARCHI_INGRESS_HOST>
+
+networkPolicy:
+  enabled: true
+
+podDisruptionBudget:
+  enabled: true

@@ -15,6 +15,7 @@ import ColorWithAlphaField from "./ColorWithAlphaField.vue";
 import LabeledFieldRow from "./LabeledFieldRow.vue";
 import LabeledNumberInput from "./LabeledNumberInput.vue";
 import StyleSection from "./StyleSection.vue";
+import LazyIconImg from "@/components/forms/LazyIconImg.vue";
 import SearchableSelect from "@/components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import ToggleSwitch from "@/components/forms/ToggleSwitch.vue";
@@ -25,7 +26,10 @@ import type {
   StylePropertyBindingGroup,
 } from "../notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
-import { COMBINED_ICON_OPTIONS } from "@/config/iconOptions";
+import {
+  COMBINED_ICON_OPTIONS,
+  ICON_SELECT_MIN_SEARCH_LENGTH,
+} from "@/config/iconOptions";
 import {
   getAllComponentPresets,
   getAllRelationPresets,
@@ -2058,16 +2062,28 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       :placeholder="t('nodeStyle.none')"
                       :search-placeholder="t('common.search')"
                       :empty-text="t('common.nothingFound')"
+                      :min-search-length="ICON_SELECT_MIN_SEARCH_LENGTH"
+                      :min-search-hint="t('common.typeToSearch')"
                       @update:model-value="handleIconChange"
                     >
                       <template #option="{ option }">
                         <span class="sp-icon-option">
-                          <img class="sp-icon-option__preview" :src="`/icons/${option.id}.svg`" :alt="option.label">
+                          <LazyIconImg
+                            :icon-id="option.id"
+                            :alt="option.label"
+                            img-class="sp-icon-option__preview"
+                          />
                           {{ option.label }}
                         </span>
                       </template>
                     </SearchableSelect>
-                    <img v-if="iconName" class="sp-icon-select__preview" :src="`/icons/${iconName}.svg`" :alt="iconName">
+                    <LazyIconImg
+                      v-if="iconName"
+                      :icon-id="iconName"
+                      :alt="iconName"
+                      img-class="sp-icon-select__preview"
+                      eager
+                    />
                   </div>
                 </LabeledFieldRow>
                 <template v-if="iconName">

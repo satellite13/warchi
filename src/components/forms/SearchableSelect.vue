@@ -15,12 +15,17 @@ const props = withDefaults(
     disabled?: boolean
     allowEmpty?: boolean
     emptyLabel?: string
+    /** When > 0, list stays empty until search has at least this many characters. */
+    minSearchLength?: number
+    minSearchHint?: string
   }>(),
   {
     placeholder: '',
     searchPlaceholder: '',
     emptyText: '',
     emptyLabel: '',
+    minSearchLength: 0,
+    minSearchHint: '',
   }
 )
 
@@ -49,7 +54,12 @@ const {
   preferredMaxListHeight: 180,
 })
 
+const searchBlocked = computed(
+  () => props.minSearchLength > 0 && searchQuery.value.trim().length < props.minSearchLength
+)
+
 const filteredOptions = computed(() => {
+  if (searchBlocked.value) return []
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return props.options
   return props.options.filter(o => o.label.toLowerCase().includes(query))
@@ -127,7 +137,10 @@ const selectOption = (id: string) => {
               {{ option.label }}
             </slot>
           </button>
-          <div v-if="filteredOptions.length === 0" class="searchable-select__empty">
+          <div v-if="searchBlocked" class="searchable-select__empty">
+            {{ minSearchHint || emptyText || '—' }}
+          </div>
+          <div v-else-if="filteredOptions.length === 0" class="searchable-select__empty">
             {{ emptyText || '—' }}
           </div>
         </div>

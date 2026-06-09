@@ -7,6 +7,14 @@ import { INTERACTIVE_BADGE_ICONS } from './interactiveBadgeIcons'
 
 export type IconOption = { id: string; label: string }
 
+/** Lists larger than this require min-length search before showing options. */
+export const ICON_SELECT_LARGE_LIST_THRESHOLD = 100
+export const ICON_SELECT_MIN_SEARCH_LENGTH = 2
+
+export function iconSelectRequiresMinSearch(optionCount: number): boolean {
+  return optionCount > ICON_SELECT_LARGE_LIST_THRESHOLD
+}
+
 export function sanitizeIconOptions(options: IconOption[]): IconOption[] {
   const seen = new Set<string>()
   return options.flatMap((option) => {

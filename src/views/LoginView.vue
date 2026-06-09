@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
 import LanguageSwitcher from "../components/layout/LanguageSwitcher.vue";
+import UiIcon from "@/components/ui/UiIcon.vue";
 import {
   evaluatePasswordRules,
   isPasswordPolicySatisfied,
@@ -303,9 +304,10 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
               :disabled="isLoading"
               @click="showPassword = !showPassword"
             >
-              <span class="material-symbols-outlined" aria-hidden="true">
-                {{ showPassword ? 'visibility_off' : 'visibility' }}
-              </span>
+              <UiIcon
+                :name="showPassword ? 'visibility_off' : 'visibility'"
+                class="field__toggle-icon"
+              />
             </button>
           </div>
           <Transition name="fade">
@@ -323,9 +325,10 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
                   class="password-hints__rule"
                   :class="{ 'password-hints__rule--passed': rule.passed }"
                 >
-                  <span class="material-symbols-outlined password-hints__icon" aria-hidden="true">
-                    {{ rule.passed ? 'check_circle' : 'radio_button_unchecked' }}
-                  </span>
+                  <UiIcon
+                    :name="rule.passed ? 'check_circle' : 'radio_button_unchecked'"
+                    class="password-hints__icon"
+                  />
                   {{ passwordRuleLabel(rule.id) }}
                 </li>
               </ul>
@@ -355,9 +358,10 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
                 :disabled="isLoading"
                 @click="showAdminSecret = !showAdminSecret"
               >
-                <span class="material-symbols-outlined" aria-hidden="true">
-                  {{ showAdminSecret ? 'visibility_off' : 'visibility' }}
-                </span>
+                <UiIcon
+                  :name="showAdminSecret ? 'visibility_off' : 'visibility'"
+                  class="field__toggle-icon"
+                />
               </button>
             </div>
           </div>
@@ -690,8 +694,9 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   cursor: not-allowed;
 }
 
-.field__toggle .material-symbols-outlined {
-  font-size: 20px;
+.field__toggle-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .password-hints {
@@ -745,7 +750,8 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
 }
 
 .password-hints__icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 /* ─── Messages ────────────────────────────────── */

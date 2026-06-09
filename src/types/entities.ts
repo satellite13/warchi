@@ -3,6 +3,10 @@ export interface VersionedEntity {
   name: string;
   version: string;
   ownerId: string;
+  /** Email владельца из API списка (доступен даже когда public profile скрыт). */
+  ownerEmail?: string | null;
+  /** Имя владельца из API списка (firstName + lastName, иначе email). */
+  ownerDisplayName?: string | null;
   accessPermission?: AccessPermission | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -44,6 +48,8 @@ export interface SpringPagedModelPage {
 
 export interface PaginatedResponse<T> {
   content?: T[];
+  /** arepos ListResponse (`/models`, `/users`, …) */
+  items?: T[];
   /** Spring Data VIA_DTO: поля пагинации внутри `page`. */
   page?: SpringPagedModelPage;
   totalElements?: number;

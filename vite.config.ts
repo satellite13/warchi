@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
               return "papirus";
             }
             if (id.includes("md-editor-v3")) {
-              return "md-editor";
+              return "md-editor-lib";
             }
             if (id.includes("@ckpack/vue-color")) {
               return "color-picker";

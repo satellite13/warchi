@@ -704,6 +704,7 @@ const isDiagramLockHolder = computed(
     !!latestDiagramVersion.value &&
     activeDiagram.value.id === latestDiagramVersion.value.id &&
     isSelectedDiagramPersistedOnServer.value &&
+    diagramEditLock.isLockHeld.value &&
     !diagramEditLock.isBlockedByOther.value
 )
 
@@ -820,7 +821,7 @@ const activeDiagramNotationOwnerLabel = computed(() => {
   const notationId = activeDiagram.value?.notationId
   if (!notationId) return ''
   if (fallbackNotationMeta.value?.id !== notationId) return ''
-  return fallbackNotationOwnerDisplayName.value || fallbackNotationMeta.value.ownerEmail
+  return fallbackNotationOwnerDisplayName.value || fallbackNotationMeta.value.ownerDisplayName || fallbackNotationMeta.value.ownerEmail
 })
 const canOpenActiveDiagramNotation = computed(() => {
   const notationId = activeDiagram.value?.notationId
@@ -902,8 +903,8 @@ watch(
       return
     }
     fallbackNotationMeta.value = result.data
-    // Resolve owner display name
-    fallbackNotationOwnerDisplayName.value = ''
+    fallbackNotationOwnerDisplayName.value = result.data.ownerDisplayName?.trim() || ''
+    if (fallbackNotationOwnerDisplayName.value) return
     const ownerResult = await apiGet<UserInfo>(`/users/${result.data.ownerId}/public`)
     if (ownerResult.success) {
       fallbackNotationOwnerDisplayName.value = getUserDisplayName(

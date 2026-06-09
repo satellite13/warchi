@@ -26,7 +26,7 @@ const {
   isLoading,
   isSaving,
   saveError,
-  ownerDisplayNames,
+  selectedTypeOwnerName,
   loadAll,
   selectType,
   addType,
@@ -201,11 +201,6 @@ const shareResourceType = computed<ShareResourceType>(() =>
   selectedType.value?.kind === 'link' ? 'LINK_TYPE' : 'NODE_TYPE'
 )
 const showShareModal = ref(false)
-const selectedTypeOwnerName = computed(() => {
-  const type = selectedType.value
-  if (!type) return t('common.unknownUser')
-  return ownerDisplayNames.value.get(type.ownerId) ?? t('common.unknownUser')
-})
 
 const toastError = ref<string | null>(null)
 const isToastVisible = ref(false)

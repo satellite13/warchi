@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest"
-import { paginatedIsLastPage, paginatedTotalElements, paginatedTotalPages } from "./paginatedResponse"
+import {
+  paginatedContent,
+  paginatedIsLastPage,
+  paginatedTotalElements,
+  paginatedTotalPages,
+} from "./paginatedResponse"
 
 describe("paginatedResponse", () => {
+  it("reads list items from content or items", () => {
+    expect(paginatedContent({ content: [{ id: "1" }] })).toEqual([{ id: "1" }])
+    expect(paginatedContent({ items: [{ id: "2" }] })).toEqual([{ id: "2" }])
+    expect(paginatedContent([{ id: "3" }])).toEqual([{ id: "3" }])
+    expect(paginatedContent({})).toEqual([])
+  })
+
   it("reads totals from nested Spring PagedModel page", () => {
     const data = {
       page: { size: 20, number: 0, totalElements: 42, totalPages: 3 },

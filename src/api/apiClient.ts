@@ -62,7 +62,7 @@ const isMutatingMethod = (method: string): boolean => {
   return normalized === "POST" || normalized === "PUT" || normalized === "PATCH" || normalized === "DELETE"
 }
 
-const tryRefreshAccessToken = async (): Promise<boolean> => {
+export const refreshAccessToken = async (): Promise<boolean> => {
   if (refreshInFlight) {
     return refreshInFlight
   }
@@ -211,7 +211,7 @@ export async function apiFetch<T>(
         canRetryAfterRefresh &&
         !isPublicAuthPath(path)
       ) {
-        const refreshed = await tryRefreshAccessToken()
+        const refreshed = await refreshAccessToken()
         if (refreshed) {
           return apiFetch<T>(path, options, false)
         }

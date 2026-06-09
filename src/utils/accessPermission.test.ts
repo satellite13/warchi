@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { toAccessLabel } from '@/utils/accessPermission'
+import { canEditByAccessPermission, toAccessLabel } from '@/utils/accessPermission'
+
+describe('canEditByAccessPermission', () => {
+  it('allows OWNER, EDIT and ADMIN', () => {
+    expect(canEditByAccessPermission('OWNER')).toBe(true)
+    expect(canEditByAccessPermission('EDIT')).toBe(true)
+    expect(canEditByAccessPermission('ADMIN')).toBe(true)
+  })
+
+  it('denies VIEW and missing permission', () => {
+    expect(canEditByAccessPermission('VIEW')).toBe(false)
+    expect(canEditByAccessPermission(null)).toBe(false)
+    expect(canEditByAccessPermission(undefined)).toBe(false)
+  })
+})
 
 describe('toAccessLabel', () => {
   describe('Russian locale (default)', () => {

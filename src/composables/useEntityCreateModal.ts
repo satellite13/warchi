@@ -4,6 +4,7 @@ import { useModalState } from './useModalState'
 import { bumpMinor, compareVersions, isValidVersion } from '../utils/version'
 import type { VersionedEntity, EntityGroup } from '../types/entities'
 import type { EntityListConfig, SourceVersion } from './useEntityList'
+import { normalizeOwnerId } from '@/utils/resolveOwnerNames'
 
 export function useEntityCreateModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
@@ -128,7 +129,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
 
       if (created?.ownerId && ownerDisplayName) {
         ownerEmails.value = new Map(ownerEmails.value)
-        ownerEmails.value.set(created.ownerId, ownerDisplayName)
+        ownerEmails.value.set(normalizeOwnerId(created.ownerId), ownerDisplayName)
       }
 
       if (created?.name && created?.version) {

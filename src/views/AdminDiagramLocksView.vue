@@ -3,8 +3,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost } from '@/composables/useApi'
 import type { DiagramLockStatusResponse, DiagramResponse } from '@/types/api'
-import type { ModelData } from '@/types/entities'
+import type { ModelData, PaginatedResponse } from '@/types/entities'
 import { formatDate } from '@/utils/formatDate'
+import { paginatedContent } from '@/utils/paginatedResponse'
 
 const { t, locale } = useI18n()
 
@@ -58,12 +59,13 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 async function loadLocks(): Promise<void> {
   loading.value = true
   errorMessage.value = null
-  const res = await apiGet<DiagramLockStatusResponse[]>('/diagram-locks')
+  const res = await apiGet<PaginatedResponse<DiagramLockStatusResponse>>('/diagram-locks')
   loading.value = false
-  if (res.success && Array.isArray(res.data)) {
-    locks.value = res.data
+  if (res.success) {
+    const items = paginatedContent(res.data)
+    locks.value = items
     lastRefreshed.value = new Date()
-    void resolvePaths(res.data.map((l) => l.diagramId))
+    void resolvePaths(items.map((l) => l.diagramId))
   } else {
     locks.value = []
     if (!res.success) {

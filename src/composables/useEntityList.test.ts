@@ -75,6 +75,20 @@ describe('useEntityList', () => {
       expect(list.errorMessage.value).toBeNull()
     })
 
+    it('reads arepos ListResponse items field', async () => {
+      const items = [makeItem('1', 'Alpha', '1.0.0')]
+      mockApiGet.mockResolvedValue({
+        success: true,
+        data: { items, total: 1, page: 0, size: 50 },
+      })
+
+      const list = useEntityList(makeConfig())
+      await list.loadItems()
+
+      expect(list.items.value).toHaveLength(1)
+      expect(list.items.value[0]?.name).toBe('Alpha')
+    })
+
     it('sets error on failure', async () => {
       mockApiGet.mockResolvedValue({ success: false, error: { message: 'Server error' } })
 

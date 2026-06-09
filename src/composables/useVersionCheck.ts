@@ -32,7 +32,8 @@ export function useVersionCheck(): {
 
     try {
       const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "") || "";
-      const url = `${base}/version.json?t=${Date.now()}`;
+      const prefix = base ? `${base}/` : "/";
+      const url = `${prefix}version.json?t=${Date.now()}`;
       const res = await fetch(url);
       if (!res.ok) return;
 

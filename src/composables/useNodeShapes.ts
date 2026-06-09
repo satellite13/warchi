@@ -2,7 +2,7 @@ import { ref, type Ref } from "vue"
 import { apiGet, apiPost, apiPut, apiDelete } from "./useApi"
 import { pagedListParams } from "../api/queryHelpers"
 import type { PaginatedResponse } from "../types/entities"
-import { paginatedTotalElements } from "../utils/paginatedResponse"
+import { paginatedContent, paginatedTotalElements } from "../utils/paginatedResponse"
 import type {
   NodeShapeResponse,
   NodeShapeRequest,
@@ -32,7 +32,7 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
       error.value = result.error.message
       return false
     }
-    list.value = result.data.content ?? []
+    list.value = paginatedContent(result.data)
     totalElements.value = paginatedTotalElements(result.data)
     return true
   }

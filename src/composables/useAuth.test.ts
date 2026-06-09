@@ -13,8 +13,6 @@ vi.mock('@/composables/useApi', () => ({
 vi.mock('@/composables/authStorage', () => ({
   loadStoredUser: vi.fn(() => null),
   saveStoredUser: vi.fn(),
-  setAccessToken: vi.fn(),
-  setRefreshToken: vi.fn(),
   clearAuthStorage: vi.fn(),
   emitAuthUpdated: vi.fn(),
   emitAuthCleared: vi.fn(),
@@ -32,8 +30,6 @@ import {
   emitAuthCleared,
   emitAuthUpdated,
   saveStoredUser,
-  setAccessToken,
-  setRefreshToken,
 } from '@/composables/authStorage'
 
 const fakeUser = {
@@ -51,11 +47,11 @@ const fakeAuthResponse = {
 }
 
 describe('useAuth', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
-    // Reset currentUser state by calling logout
+    mockApiPost.mockResolvedValue({ success: true, data: undefined })
     const { logout } = useAuth()
-    logout()
+    await logout()
     vi.clearAllMocks()
   })
 
@@ -81,14 +77,12 @@ describe('useAuth', () => {
       expect(result).toEqual({ success: true })
     })
 
-    it('stores tokens and user on successful login', async () => {
+    it('stores user on successful login', async () => {
       mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
 
       const { login } = useAuth()
       await login('test@example.com', 'password123')
 
-      expect(setAccessToken).toHaveBeenCalledWith('acc-token')
-      expect(setRefreshToken).toHaveBeenCalledWith('ref-token')
       expect(saveStoredUser).toHaveBeenCalledWith(fakeUser)
       expect(emitAuthUpdated).toHaveBeenCalledWith(fakeUser)
     })
@@ -158,15 +152,16 @@ describe('useAuth', () => {
   })
 
   describe('logout', () => {
-    it('clears tokens, user, and emits cleared event', async () => {
-      // Login first to set user
+    it('calls logout API and clears user', async () => {
       mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
       const { login, logout, currentUser } = useAuth()
       await login('test@example.com', 'pass')
       vi.clearAllMocks()
+      mockApiPost.mockResolvedValue({ success: true, data: undefined })
 
-      logout()
+      await logout()
 
+      expect(mockApiPost).toHaveBeenCalledWith('/auth/logout', {})
       expect(clearAuthStorage).toHaveBeenCalled()
       expect(emitAuthCleared).toHaveBeenCalled()
       expect(currentUser.value).toBeNull()

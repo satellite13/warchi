@@ -18,5 +18,7 @@ LABEL org.opencontainers.image.authors="Nikolay Groznykh <nikolay@groznykh.ru>"
 RUN apk upgrade --no-cache
 COPY --from=build-stage /app/dist /usr/share/nginx/html
 COPY config/default.conf /etc/nginx/conf.d/default.conf
+RUN chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /var/run /etc/nginx/conf.d
+USER 101
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

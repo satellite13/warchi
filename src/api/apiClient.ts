@@ -5,12 +5,9 @@ import {
   clearAuthStorage,
   emitAuthCleared,
   emitAuthUpdated,
-  getAccessToken,
-  getRefreshToken,
   saveStoredUser,
-  setAccessToken,
-  setRefreshToken,
 } from "../composables/authStorage"
+import { getCsrfTokenFromCookie, CSRF_HEADER_NAME } from "../utils/csrfCookie"
 import {
   clearOutage,
   reportAvailabilityOutage,
@@ -43,13 +40,10 @@ type AuthResponse = {
 let refreshInFlight: Promise<boolean> | null = null
 
 const applyRefreshedAuth = (payload: AuthResponse): boolean => {
-  if (!payload.accessToken || !payload.refreshToken || !payload.user) {
+  if (!payload.user) {
     return false
   }
   const normalizedUser = normalizeUser(payload.user)
-
-  setAccessToken(payload.accessToken)
-  setRefreshToken(payload.refreshToken)
   saveStoredUser(normalizedUser)
   emitAuthUpdated(normalizedUser)
   return true
@@ -63,26 +57,26 @@ const clearSession = (): void => {
 const isPublicAuthPath = (path: string): boolean =>
   ["/auth/login", "/auth/register", "/auth/register-admin", "/auth/refresh"].includes(path)
 
+const isMutatingMethod = (method: string): boolean => {
+  const normalized = method.toUpperCase()
+  return normalized === "POST" || normalized === "PUT" || normalized === "PATCH" || normalized === "DELETE"
+}
+
 const tryRefreshAccessToken = async (): Promise<boolean> => {
   if (refreshInFlight) {
     return refreshInFlight
   }
 
   refreshInFlight = (async () => {
-    const refreshToken = getRefreshToken()
-    if (!refreshToken) {
-      clearSession()
-      return false
-    }
-
     try {
       const refreshResponse = await fetch(buildApiUrl("/auth/refresh"), {
         method: "POST",
+        credentials: "include",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ refreshToken }),
+        body: "{}",
       })
 
       const refreshText = await refreshResponse.text()
@@ -186,14 +180,17 @@ export async function apiFetch<T>(
   rawText = false,
 ): Promise<ApiResult<T>> {
   const url = buildApiUrl(path)
+  const method = options.method ?? "GET"
   const headers = {
     Accept: "application/json",
     ...options.headers,
   } as Record<string, string>
 
-  const accessToken = getAccessToken()
-  if (accessToken && !headers.Authorization) {
-    headers.Authorization = `Bearer ${accessToken}`
+  if (isMutatingMethod(method) && !isPublicAuthPath(path)) {
+    const csrfToken = getCsrfTokenFromCookie()
+    if (csrfToken && !headers[CSRF_HEADER_NAME]) {
+      headers[CSRF_HEADER_NAME] = csrfToken
+    }
   }
 
   if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
@@ -201,7 +198,11 @@ export async function apiFetch<T>(
   }
 
   try {
-    const response = await fetch(url, { ...options, headers })
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+    })
     const text = await response.text()
 
     if (!response.ok) {

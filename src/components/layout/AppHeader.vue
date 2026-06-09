@@ -14,8 +14,8 @@ const { t } = useI18n();
 const {currentUser, logout} = useAuth();
 const userDisplayName = computed(() => getUserDisplayName(currentUser.value, t("common.user")));
 
-const handleLogout = () => {
-  logout();
+const handleLogout = async () => {
+  await logout();
   router.push({name: "login"});
 };
 </script>

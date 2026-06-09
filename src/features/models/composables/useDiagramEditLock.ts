@@ -1,6 +1,6 @@
 import { onBeforeUnmount, ref, watch, type Ref } from "vue"
 import { buildApiUrl } from "@/api/config"
-import { getAccessToken } from "@/composables/authStorage"
+import { getCsrfTokenFromCookie, CSRF_HEADER_NAME } from "@/utils/csrfCookie"
 import { apiGet, apiPost } from "@/composables/useApi"
 import type { DiagramLockStatusResponse } from "@/types/api"
 
@@ -276,14 +276,15 @@ export function useDiagramEditLock(options: {
     const id = heldDiagramId
     if (!id) return
     const headers: Record<string, string> = { "Content-Type": "application/json" }
-    const token = getAccessToken()
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
+    const csrfToken = getCsrfTokenFromCookie()
+    if (csrfToken) {
+      headers[CSRF_HEADER_NAME] = csrfToken
     }
     void fetch(buildApiUrl(`/diagram-locks/${id}/release`), {
       method: "POST",
       headers,
       body: "{}",
+      credentials: "include",
       keepalive: true,
     })
   }

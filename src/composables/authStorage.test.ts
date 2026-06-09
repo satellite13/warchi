@@ -84,68 +84,14 @@ describe('authStorage', () => {
     })
   })
 
-  describe('getAccessToken / setAccessToken', () => {
-    it('stores and retrieves access token', async () => {
-      const { getAccessToken, setAccessToken } = await loadModule()
-
-      setAccessToken('abc123')
-      expect(getAccessToken()).toBe('abc123')
-    })
-
-    it('returns null when no token stored', async () => {
-      const { getAccessToken } = await loadModule()
-      expect(getAccessToken()).toBeNull()
-    })
-
-    it('removes token when setting null', async () => {
-      const { getAccessToken, setAccessToken } = await loadModule()
-
-      setAccessToken('token')
-      expect(getAccessToken()).toBe('token')
-
-      setAccessToken(null)
-      expect(getAccessToken()).toBeNull()
-    })
-  })
-
-  describe('getRefreshToken / setRefreshToken', () => {
-    it('stores and retrieves refresh token', async () => {
-      const { getRefreshToken, setRefreshToken } = await loadModule()
-
-      setRefreshToken('refresh-abc')
-      expect(getRefreshToken()).toBe('refresh-abc')
-    })
-
-    it('returns null when no token stored', async () => {
-      const { getRefreshToken } = await loadModule()
-      expect(getRefreshToken()).toBeNull()
-    })
-
-    it('removes token when setting null', async () => {
-      const { getRefreshToken, setRefreshToken } = await loadModule()
-
-      setRefreshToken('refresh')
-      expect(getRefreshToken()).toBe('refresh')
-
-      setRefreshToken(null)
-      expect(getRefreshToken()).toBeNull()
-    })
-  })
-
   describe('clearAuthStorage', () => {
-    it('clears all auth data', async () => {
-      const { clearAuthStorage, saveStoredUser, setAccessToken, setRefreshToken, getAccessToken, getRefreshToken, loadStoredUser } =
-        await loadModule()
+    it('clears stored user', async () => {
+      const { clearAuthStorage, saveStoredUser, loadStoredUser } = await loadModule()
 
       saveStoredUser({ id: 'u1', email: 'a@b.com' })
-      setAccessToken('at')
-      setRefreshToken('rt')
-
       clearAuthStorage()
 
       expect(loadStoredUser()).toBeNull()
-      expect(getAccessToken()).toBeNull()
-      expect(getRefreshToken()).toBeNull()
     })
   })
 

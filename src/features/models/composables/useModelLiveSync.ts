@@ -6,7 +6,7 @@ import { apiGet } from "@/composables/useApi"
 import {
   AUTH_CLEARED_EVENT,
   AUTH_UPDATED_EVENT,
-  getAccessToken,
+  loadStoredUser,
 } from "@/composables/authStorage"
 import type {
   DiagramResponse,
@@ -282,10 +282,9 @@ export function useModelLiveSync(options: {
     if (!options.enabled.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
-    const token = getAccessToken()
-    if (!token) return
+    if (!loadStoredUser()) return
 
-    const url = buildModelSyncWsUrl(token)
+    const url = buildModelSyncWsUrl()
     if (!url) return
 
     const client = new Client({

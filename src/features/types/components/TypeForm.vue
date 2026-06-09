@@ -22,7 +22,7 @@ const props = withDefaults(
     showDocButton?: boolean
     onMutateProperty?: (propertyId: string, apply: (p: CustomProperty) => void) => void
   }>(),
-  { showDocButton: true }
+  { showDocButton: true, onMutateProperty: undefined }
 )
 
 const emit = defineEmits<{

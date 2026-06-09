@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { ComposerTranslation } from 'vue-i18n'
 import { parseEntityAttrs, serializeEntityAttrs } from './notationAttrs'
 import { validateCompositeDiagramStyle } from './utils/validationIssues'
 
@@ -80,7 +81,7 @@ describe('notationAttrs composite schema', () => {
           },
         ],
       },
-      ((key: string) => key) as any
+      ((key: string) => key) as ComposerTranslation
     )
 
     expect(issues.some((i) => i.code === 'COMPOSITE_NAME_ROLE_MISSING')).toBe(true)

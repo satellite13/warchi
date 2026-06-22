@@ -4,14 +4,6 @@
 properties([
         buildDiscarder (logRotator (artifactDaysToKeepStr: '', artifactNumToKeepStr: '7', daysToKeepStr: '', numToKeepStr: '7')),
         disableConcurrentBuilds (),
-        parametersProperty([
-                $class: 'ParametersDefinitionProperty',
-                parameterDefinitions: [
-                        [$class: 'StringParameterDefinition', name: 'BRANCH_NAME', defaultValue: 'develop', description: 'Branch to build (master→preprod, develop→dev/stage). Leave empty if deploying by TAG.'],
-                        [$class: 'StringParameterDefinition', name: 'TAG_NAME', defaultValue: '', description: 'Git tag for prod release (e.g. 7.10.1). Leave empty to use BRANCH_NAME.'],
-                        [$class: 'ChoiceParameterDefinition', name: 'ENV', choices: ['dev', 'stage'], description: 'Env to deploy (develop branch only, master→preprod, tag→prod)'],
-                ]
-        ] as Object[])
     ])
 
 // Kubernetes credentials
@@ -40,6 +32,20 @@ pipeline {
     }
 
 
+
+    parameters {
+        string(
+                name: 'BRANCH_NAME',
+                defaultValue: 'develop',
+                description: 'Branch to build (master→preprod, develop→dev/stage). Leave empty if deploying by TAG.'
+        )
+        string(
+                name: 'TAG_NAME',
+                defaultValue: '',
+                description: 'Git tag for prod release (e.g. 7.10.1). Leave empty to use BRANCH_NAME.'
+        )
+        choice(name: 'ENV', choices: ['dev', 'stage'], description: "Env to deploy (develop branch only, master→preprod, tag→prod)")
+    }
 
     stages {
         stage('Checkout') {

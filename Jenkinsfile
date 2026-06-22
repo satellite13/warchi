@@ -136,7 +136,6 @@ pipeline {
         }
 
         stage('Lint') {
-            description 'ESLint + Prettier check'
             steps {
                 script {
                     run_lint()
@@ -145,7 +144,6 @@ pipeline {
         }
 
         stage('Type-check') {
-            description 'TypeScript type checking (vue-tsc)'
             steps {
                 script {
                     run_typecheck()
@@ -154,7 +152,6 @@ pipeline {
         }
 
         stage('Unit-test') {
-            description 'Vitest unit tests'
             steps {
                 script {
                     run_unit_tests()
@@ -163,7 +160,6 @@ pipeline {
         }
 
         stage('Build') {
-            description 'npm run build'
             steps {
                 script {
                     run_build()
@@ -172,7 +168,6 @@ pipeline {
         }
 
         stage('E2E-test') {
-            description 'Playwright E2E tests'
             steps {
                 script {
                     run_e2e_tests()
@@ -181,7 +176,6 @@ pipeline {
         }
 
         stage('Scan') {
-            description 'npm audit / Snyk security scan'
             steps {
                 script {
                     run_audit_scan()
@@ -190,7 +184,6 @@ pipeline {
         }
 
         stage('Docker') {
-            description 'Build Docker image'
             steps {
                 script {
                     def is_prod = (env.deployment_environment == 'prod') || (env.image_days_retention == '180')

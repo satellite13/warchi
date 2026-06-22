@@ -183,14 +183,14 @@ pipeline {
         //         }
         //     }
         // }
-//
+
 //        stage('Scan') {
 //            steps {
 //                script {
 //                    run_audit_scan()
 //                }
 //            }
-//        }
+        }
 
         stage('Docker') {
             steps {

@@ -19,8 +19,11 @@ RUN npm run build
 # Production stage
 FROM nginx:1.29-alpine3.22 AS production-stage
 LABEL org.opencontainers.image.authors="Nikolay Groznych <nikolay@groznykh.ru>"
+ARG AREPOS_UPSTREAM=arepos-server.arch.svc.cluster.local
+ENV AREPOS_UPSTREAM=${AREPOS_UPSTREAM:-arepos-server.arch.svc.cluster.local}
 RUN apk upgrade --no-cache
 COPY --from=build-stage /app/dist /usr/share/nginx/html
-COPY config/default.conf /etc/nginx/conf.d/default.conf
+COPY config/default.conf /tmp/default.conf
+RUN sed -i "s|http://arepos-server.arch.svc.cluster.local:8080|http://${AREPOS_UPSTREAM}:8080|" /tmp/default.conf && cp /tmp/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

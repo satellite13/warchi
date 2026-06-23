@@ -196,6 +196,30 @@ pipeline {
             }
         }
 
+        stage('SonarQube') {
+            steps {
+                script {
+                    def scanner = docker.image('docker.art.lmru.tech/sonarsource/sonar-scanner-cli:latest')
+                    scanner.pull()
+                    scanner.inside('-w ${WORKSPACE}') {
+                        withSonarQubeEnv(credentialsId: 'sonarqube_token', installationName: 'SonarQube') {
+                            sh "sonar-scanner -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate()
+                    }
+                }
+            }
+        }
+
         stage('Scan') {
             steps {
                 script {
@@ -317,14 +341,47 @@ def run_build() {
 }
 
 def run_e2e_tests() {
+    // Start PostgreSQL for arepos-server
+    sh "docker rm -f e2e-postgres || true"
+    sh "docker run -d --name e2e-postgres --network host \\
+        -e POSTGRES_DB=arepos \\
+        -e POSTGRES_USER=arepos \\
+        -e POSTGRES_PASSWORD=arepos \\
+        postgres:16-alpine"
+
+    // Wait for PostgreSQL
+    retry(10) {
+        sh "docker exec e2e-postgres pg_isready -U arepos -h 127.0.0.1 || exit 1"
+    }
+
+    // Pull and start arepos-server backend
+    sh "docker rm -f e2e-arepos || true"
+    def areposImage = docker.image('docker-warchi.art.lmru.tech/arepos-server/arepos--backend:latest')
+    areposImage.pull()
+    sh "docker run -d --name e2e-arepos --network host \\
+        -e DB_URL=jdbc:postgresql://127.0.0.1:5432/arepos \\
+        -e DB_USERNAME=arepos \\
+        -e DB_PASSWORD=arepos \\
+        -e JWT_SECRET=e2e-test-secret-min-256-bits-long-for-local-testing-only-changeme!! \\
+        -e FILE_STORAGE=disabled \\
+        -e WEBSOCKET_ALLOWED_ORIGIN_PATTERNS='*' \\
+        ${areposImage.id()}"
+
+    // Wait for arepos-server (up to 90s)
+    retry(30) {
+        sh "curl -sf http://127.0.0.1:8080/api/v1/system/version || exit 1"
+    }
+
     def dockerInDocker = docker.image('docker.art.lmru.tech/node:22-bookworm')
-    dockerInDocker.inside('-u root -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket -e HOME=${HOME} -w ${WORKSPACE}') {
+    dockerInDocker.inside('-u root -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket -e HOME=${HOME} -w ${WORKSPACE} --network host') {
         withCredentials([usernamePassword(credentialsId: ARTIFACTORY_CREDS, usernameVariable: 'ART_USERNAME', passwordVariable: 'ART_PASSWORD')]) {
             sh "npx playwright install --with-deps"
             sh "CI=true npx playwright test"
-//              sh "echo  comming soon"
         }
     }
+
+    // Cleanup
+    sh "docker rm -f e2e-arepos e2e-postgres || true"
 }
 
 def run_audit_scan() {

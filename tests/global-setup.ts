@@ -16,16 +16,22 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   }
 
   // On CI, seed directly against the backend (localhost:8080).
-  // Clear E2E_API_URL from Jenkins env because it contains a K8s service name
-  // (e.g. "backend") that doesn't resolve inside the Docker e2e container.
+  // Do NOT inherit E2E_API_URL — it contains a K8s hostname like "backend"
+  // that doesn't resolve inside the Docker-in-Docker test container.
+  // Only inherit the explicit E2E_API_BASE_URL if provided, otherwise default
+  // to the backend bound to the Jenkins host (reachable via --network host).
   if (process.env.CI) {
     const script = path.resolve(__dirname, "../scripts/seed-e2e-user.mjs")
-    const env = { ...process.env, E2E_API_URL: "", E2E_API_BASE_URL: "http://localhost:8080/api/v1" }
-    try {
-      execFileSync(process.execPath, [script], { env, stdio: "inherit" })
-    } catch {
-      console.warn("[e2e] globalSetup: seed failed on CI (backend not reachable), continuing")
+    const apiBase = process.env.E2E_API_BASE_URL || "http://localhost:8080/api/v1"
+    const ciEnv = {
+      ...process.env,
+      E2E_API_URL: "",               // clear Jenkins K8s hostname
+      E2E_API_BASE_URL: apiBase,     // explicit URL
     }
+    execFileSync(process.execPath, [script], {
+      env: ciEnv,
+      stdio: "inherit",
+    })
     return
   }
 

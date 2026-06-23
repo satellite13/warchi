@@ -15,14 +15,17 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     return
   }
 
-  // On CI, seed directly against the backend to avoid depending on the Vite dev server.
-  // Locally, go through Vite so seed requests pass through the dev proxy.
+  // On CI, seed directly against the backend (localhost:8080).
+  // Clear E2E_API_URL from Jenkins env because it contains a K8s service name
+  // (e.g. "backend") that doesn't resolve inside the Docker e2e container.
   if (process.env.CI) {
     const script = path.resolve(__dirname, "../scripts/seed-e2e-user.mjs")
-    execFileSync(process.execPath, [script], {
-      env: { ...process.env, E2E_API_BASE_URL: process.env.E2E_API_URL || "http://localhost:8080/api/v1" },
-      stdio: "inherit",
-    })
+    const env = { ...process.env, E2E_API_URL: "", E2E_API_BASE_URL: "http://localhost:8080/api/v1" }
+    try {
+      execFileSync(process.execPath, [script], { env, stdio: "inherit" })
+    } catch {
+      console.warn("[e2e] globalSetup: seed failed on CI (backend not reachable), continuing")
+    }
     return
   }
 

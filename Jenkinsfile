@@ -343,11 +343,11 @@ def run_build() {
 def run_e2e_tests() {
     // Start PostgreSQL for arepos-server
     sh "docker rm -f e2e-postgres || true"
-    sh "docker run -d --name e2e-postgres --network host \\
-        -e POSTGRES_DB=arepos \\
-        -e POSTGRES_USER=arepos \\
-        -e POSTGRES_PASSWORD=arepos \\
-        postgres:16-alpine"
+    sh """docker run -d --name e2e-postgres --network host \
+        -e POSTGRES_DB=arepos \
+        -e POSTGRES_USER=arepos \
+        -e POSTGRES_PASSWORD=arepos \
+        postgres:16-alpine"""
 
     // Wait for PostgreSQL
     retry(10) {
@@ -358,14 +358,14 @@ def run_e2e_tests() {
     sh "docker rm -f e2e-arepos || true"
     def areposImage = docker.image('docker-warchi.art.lmru.tech/arepos-server/arepos--backend:latest')
     areposImage.pull()
-    sh "docker run -d --name e2e-arepos --network host \\
-        -e DB_URL=jdbc:postgresql://127.0.0.1:5432/arepos \\
-        -e DB_USERNAME=arepos \\
-        -e DB_PASSWORD=arepos \\
-        -e JWT_SECRET=e2e-test-secret-min-256-bits-long-for-local-testing-only-changeme!! \\
-        -e FILE_STORAGE=disabled \\
-        -e WEBSOCKET_ALLOWED_ORIGIN_PATTERNS='*' \\
-        ${areposImage.id()}"
+    sh """docker run -d --name e2e-arepos --network host \
+        -e DB_URL=jdbc:postgresql://127.0.0.1:5432/arepos \
+        -e DB_USERNAME=arepos \
+        -e DB_PASSWORD=arepos \
+        -e JWT_SECRET=e2e-test-secret-min-256-bits-long-for-local-testing-only-changeme!! \
+        -e FILE_STORAGE=disabled \
+        -e WEBSOCKET_ALLOWED_ORIGIN_PATTERNS='*' \
+        ${areposImage.id()}"""
 
     // Wait for arepos-server (up to 90s)
     retry(30) {

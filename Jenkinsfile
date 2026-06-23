@@ -321,7 +321,7 @@ def run_e2e_tests() {
     dockerInDocker.inside('-u root -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket -e HOME=${HOME} -w ${WORKSPACE}') {
         withCredentials([usernamePassword(credentialsId: ARTIFACTORY_CREDS, usernameVariable: 'ART_USERNAME', passwordVariable: 'ART_PASSWORD')]) {
             sh "npx playwright install --with-deps"
-            sh "npx playwright test"
+            sh "E2E_API_URL=http://backend:8080/api/v1 npx playwright test"
 //              sh "echo  comming soon"
         }
     }

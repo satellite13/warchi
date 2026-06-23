@@ -15,6 +15,17 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     return
   }
 
+  // On CI, seed directly against the backend to avoid depending on the Vite dev server.
+  // Locally, go through Vite so seed requests pass through the dev proxy.
+  if (process.env.CI) {
+    const script = path.resolve(__dirname, "../scripts/seed-e2e-user.mjs")
+    execFileSync(process.execPath, [script], {
+      env: { ...process.env, E2E_API_BASE_URL: process.env.E2E_API_URL || "http://localhost:8080/api/v1" },
+      stdio: "inherit",
+    })
+    return
+  }
+
   const baseFromConfig = typeof config.use?.baseURL === "string" ? config.use.baseURL.replace(/\/$/, "") : ""
   const baseURL = baseFromConfig || "http://localhost:5173"
   const apiBase = process.env.E2E_API_BASE_URL || `${baseURL}/api/v1`

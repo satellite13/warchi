@@ -84,6 +84,7 @@ pipeline {
                         env.VAULT_PATH = 'prod'
                         env.vault_approle = 'approle-prod-ro'
                         env.AREPOS_UPSTREAM = 'arepos-server.warchi-prod.svc.cluster.local'
+                        env.skip_docker_deploy = 'false'
                     } else if (branch == 'master') {
                         echo "=== MASTER BRANCH BUILD → warchi-preprod ==="
                         checkout([
@@ -103,8 +104,9 @@ pipeline {
                         env.VAULT_PATH = 'preprod'
                         env.vault_approle = 'approle-preprod-ro'
                         env.AREPOS_UPSTREAM = 'arepos-server.warchi-preprod.svc.cluster.local'
-                    } else {
-                        echo "=== BRANCH BUILD: ${branch} ==="
+                        env.skip_docker_deploy = 'false'
+                    } else if (branch == 'develop') {
+                        echo "=== DEVELOP BRANCH BUILD → ${params.ENV} ==="
                         checkout([
                                 $class: 'GitSCM',
                                 branches: [[name: "${branch}"]],
@@ -112,7 +114,6 @@ pipeline {
                                 extensions: scm.extensions,
                                 gitTool: scm.gitTool
                         ])
-                        // develop/etc → dev or stage
                         def BRANCH = branch.toLowerCase().replace('origin/', '').replaceAll('/','-')
                         def version_suffix = "-${BRANCH}"
                         env.DOCKER_IMAGE = "warchi--frontend${version_suffix}"
@@ -124,6 +125,17 @@ pipeline {
                         env.VAULT_PATH = 'test'
                         env.vault_approle = 'approle-test-ro'
                         env.AREPOS_UPSTREAM = "arepos-server.warchi-${params.ENV}.svc.cluster.local"
+                        env.skip_docker_deploy = 'false'
+                    } else {
+                        echo "=== BRANCH BUILD: ${branch} (no docker push, no deploy) ==="
+                        checkout([
+                                $class: 'GitSCM',
+                                branches: [[name: "${branch}"]],
+                                userRemoteConfigs: scm.userRemoteConfigs,
+                                extensions: scm.extensions,
+                                gitTool: scm.gitTool
+                        ])
+                        env.skip_docker_deploy = 'true'
                     }
 
                     echo "Image: ${env.DOCKER_REGISTRY}/${env.DOCKER_APP_PATH}/${env.DOCKER_IMAGE}:${env.DOCKER_IMAGE_TAG}"
@@ -203,7 +215,7 @@ pipeline {
                     scanner.pull()
                     scanner.inside('-w ${WORKSPACE}') {
                         withSonarQubeEnv(credentialsId: 'sonarqube_token', installationName: 'SonarQube') {
-                            sh "sonar-scanner -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'}"
+                            sh "sonar-scanner -Dsonar.projectKey=warchi-frontend -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'} -Dsonar.sources=src -Dsonar.tests=test -Dsonar.test.inclusion='**/*.spec.ts,**/*.test.ts' -Dsonar.ts.lcov.reportPaths=coverage/lcov.info"
                         }
                     }
                 }
@@ -230,6 +242,9 @@ pipeline {
         }
 
         stage('Docker') {
+            when {
+                expression { env.skip_docker_deploy != 'true' }
+            }
             steps {
                 script {
                     def is_prod = (env.deployment_environment == 'prod') || (env.image_days_retention == '180')
@@ -240,6 +255,9 @@ pipeline {
         }
 
         stage('Deploy') {
+            when {
+                expression { env.skip_docker_deploy != 'true' }
+            }
             steps {
                 script {
                     def is_tag_build = (env.is_tag_build == 'true')

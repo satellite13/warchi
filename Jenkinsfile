@@ -217,7 +217,7 @@ pipeline {
                 script {
                     def scanner = docker.image('docker.art.lmru.tech/sonarsource/sonar-scanner-cli:latest')
                     scanner.pull()
-                    scanner.inside('-v ${WORKSPACE}:${WORKSPACE} -w ${WORKSPACE}') {
+                    scanner.inside('-u root -e HOME=${HOME}') {
                         withSonarQubeEnv(credentialsId: 'sonarqube_token', installationName: 'SonarQube') {
                             sh "sonar-scanner -Dsonar.projectKey=warchi-frontend -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'} -Dsonar.sources=src -Dsonar.ts.lcov.reportPaths=coverage/lcov.info"
                         }

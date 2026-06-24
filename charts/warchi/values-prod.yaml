@@ -21,7 +21,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: warchi.lmru.tech
+    - host: ${INGRESS_HOST:-warchi.lmru.tech}
       paths:
         - path: /
           pathType: Prefix

@@ -84,6 +84,7 @@ pipeline {
                         env.VAULT_PATH = 'prod'
                         env.vault_approle = 'approle-prod-ro'
                         env.AREPOS_UPSTREAM = 'arepos-server.warchi-prod.svc.cluster.local'
+                        env.INGRESS_HOST = 'warchi.lmru.tech'
                         env.skip_docker_deploy = 'false'
                     } else if (branch == 'master') {
                         echo "=== MASTER BRANCH BUILD → warchi-preprod ==="
@@ -104,6 +105,7 @@ pipeline {
                         env.VAULT_PATH = 'preprod'
                         env.vault_approle = 'approle-preprod-ro'
                         env.AREPOS_UPSTREAM = 'arepos-server.warchi-preprod.svc.cluster.local'
+                        env.INGRESS_HOST = "warchi-preprod-${env.CLUSTER}.apps.lmru.tech"
                         env.skip_docker_deploy = 'false'
                     } else if (branch == 'develop') {
                         echo "=== DEVELOP BRANCH BUILD → ${params.ENV} ==="
@@ -125,6 +127,7 @@ pipeline {
                         env.VAULT_PATH = 'test'
                         env.vault_approle = 'approle-test-ro'
                         env.AREPOS_UPSTREAM = "arepos-server.warchi-${params.ENV}.svc.cluster.local"
+                        env.INGRESS_HOST = "warchi-${params.ENV}-${env.CLUSTER}.apps.lmru.tech"
                         env.skip_docker_deploy = 'false'
                     } else {
                         echo "=== BRANCH BUILD: ${branch} (no docker push, no deploy) ==="
@@ -446,14 +449,15 @@ def get_variables_and_deploy(deployment_environment, deployment_namespace, docke
     def deployer = docker.image('docker-devops.art.lmru.tech/img-k8s-deployer:latest')
     deployer.pull()
 
-    // Передаем в контейнер переменные из Vault для envsubst и helm
-    def envVars = "-e CLUSTER=${env.CLUSTER} -e USERNAME=${env.login} -e PASSWORD=${env.password} " +
-            "-e VAULT_PATH=${env.VAULT_PATH} -e VAULT_NAMESPACE=${env.VAULT_NAMESPACE} " +
-            "-e WORKSPACE=${WORKSPACE} " +
-            "-e DEPLOYMENT_ENV=${deployment_environment} " +
-            "-e DEPLOYMENT_NAMESPACE=${deployment_namespace} " +
-            "-e IMAGE_REPO=${env.DOCKER_REGISTRY}/${env.DOCKER_APP_PATH}/${docker_image_name} " +
-            "-e IMAGE_TAG=${docker_image_tag}"
+        // Передаем в контейнер переменные из Vault для envsubst и helm
+        def envVars = "-e CLUSTER=${env.CLUSTER} -e USERNAME=${env.login} -e PASSWORD=${env.password} " +
+                "-e VAULT_PATH=${env.VAULT_PATH} -e VAULT_NAMESPACE=${env.VAULT_NAMESPACE} " +
+                "-e WORKSPACE=${WORKSPACE} " +
+                "-e DEPLOYMENT_ENV=${deployment_environment} " +
+                "-e DEPLOYMENT_NAMESPACE=${deployment_namespace} " +
+                "-e IMAGE_REPO=${env.DOCKER_REGISTRY}/${env.DOCKER_APP_PATH}/${docker_image_name} " +
+                "-e IMAGE_TAG=${docker_image_tag} " +
+                "-e INGRESS_HOST=${env.INGRESS_HOST}"
 
     deployer.inside("-u root ${envVars}".trim()) {
         try {

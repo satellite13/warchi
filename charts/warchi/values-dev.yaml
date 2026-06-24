@@ -1,5 +1,5 @@
-# Production values
-replicaCount: 2
+# Dev values
+replicaCount: 1
 
 image:
   repository: art.lmru.tech/arch/warchi
@@ -26,6 +26,6 @@ ingress:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: warchi-tls
+    - secretName: warchi-$DEPLOYMENT_ENV-tls
       hosts:
         - $INGRESS_HOST

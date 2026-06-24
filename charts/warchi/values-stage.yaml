@@ -1,5 +1,5 @@
-# Production values
-replicaCount: 2
+# Dev/Stage values
+replicaCount: 1
 
 image:
   repository: art.lmru.tech/arch/warchi
@@ -9,9 +9,7 @@ blueGreen:
   enabled: true
   activeColor: "blue"
 
-imagePullSecrets:
-  # Uncomment if needed:
-  # - name: art-lmru-tech
+imagePullSecrets: []
 
 ingress:
   enabled: true

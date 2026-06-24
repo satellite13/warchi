@@ -44,14 +44,14 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
   hosts:
-    - host: ${INGRESS_HOST:-warchi.lmru.tech}
+    - host: $INGRESS_HOST
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: warchi-tls
       hosts:
-        - ${INGRESS_HOST:-warchi.lmru.tech}
+        - $INGRESS_HOST
 
 resources:
   limits:

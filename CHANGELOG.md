@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-07-06
+
+### Fixed
+- Model editor save no longer crashes when verifying diagram edit lock: `/diagram-locks` list responses use the `{ items }` envelope instead of a bare array.
+
 ## [0.6.4] - 2026-06-04
 
 ### Added

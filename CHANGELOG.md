@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-06
+
+### Added
+- HttpOnly cookie authentication with CSRF protection on API writes (replaces access tokens in localStorage/WebSocket URLs).
+- Password policy UI for registration and admin user forms.
+- Helm infrastructure phase 2: optional network policies, pod disruption budget, `/health` endpoint, and local CI/version-sync scripts.
+
+### Changed
+- Catalog list responses show owner display names and emails from the list API (`ownerDisplayName` / `ownerEmail`).
+- Shape editor shows form owner labels consistently with type editors.
+- Icon pickers lazy-load SVG previews to avoid loading every icon on mount.
+- nginx SPA routing: no cache for `index.html`/app routes, long-lived cache for hashed assets; register rate limit aligned with nginx limits.
+
+### Fixed
+- Catalog pages (models, notations, types) correctly read arepos `ListResponse` `{ items }` envelopes instead of only Spring `content`, so entities render again.
+- Diagram lock verify-before-save no longer crashes on the same list envelope.
+
 ## [0.6.5] - 2026-07-06
 
 ### Fixed

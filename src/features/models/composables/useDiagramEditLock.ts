@@ -3,6 +3,8 @@ import { buildApiUrl } from "@/api/config"
 import { getAccessToken } from "@/composables/authStorage"
 import { apiGet, apiPost } from "@/composables/useApi"
 import type { DiagramLockStatusResponse } from "@/types/api"
+import type { PaginatedResponse } from "@/types/entities"
+import { paginatedContent } from "@/utils/paginatedResponse"
 
 const HEARTBEAT_MS = 60_000
 const POLL_MS = 12_000
@@ -110,12 +112,13 @@ export function useDiagramEditLock(options: {
       locksList.value = []
       return
     }
-    const res = await apiGet<DiagramLockStatusResponse[]>(
+    const res = await apiGet<PaginatedResponse<DiagramLockStatusResponse>>(
       `/diagram-locks?modelId=${encodeURIComponent(mid)}`
     )
-    if (res.success && Array.isArray(res.data)) {
-      locksList.value = res.data
-      checkHeldLockRevoked(res.data)
+    if (res.success) {
+      const locks = paginatedContent(res.data)
+      locksList.value = locks
+      checkHeldLockRevoked(locks)
       syncRemoteUpdatedAtFromLocksList()
     }
   }
@@ -327,11 +330,11 @@ export function useDiagramEditLock(options: {
     if (!heldDiagramId) return true // нет лока — сохранение модели без canvas-правок
     const mid = options.modelId.value
     if (!mid) return true
-    const res = await apiGet<DiagramLockStatusResponse[]>(
+    const res = await apiGet<PaginatedResponse<DiagramLockStatusResponse>>(
       `/diagram-locks?modelId=${encodeURIComponent(mid)}`
     )
     if (!res.success) return false
-    const entry = res.data.find((l) => l.diagramId === heldDiagramId)
+    const entry = paginatedContent(res.data).find((l) => l.diagramId === heldDiagramId)
     const stillOurs =
       entry != null &&
       entry.isLocked &&

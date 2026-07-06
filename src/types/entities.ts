@@ -44,6 +44,8 @@ export interface SpringPagedModelPage {
 
 export interface PaginatedResponse<T> {
   content?: T[];
+  /** arepos ListResponse (`/models`, `/users`, `/diagram-locks`, …) */
+  items?: T[];
   /** Spring Data VIA_DTO: поля пагинации внутри `page`. */
   page?: SpringPagedModelPage;
   totalElements?: number;

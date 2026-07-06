@@ -4,6 +4,13 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
 import LanguageSwitcher from "../components/layout/LanguageSwitcher.vue";
+import UiIcon from "@/components/ui/UiIcon.vue";
+import {
+  evaluatePasswordRules,
+  isPasswordPolicySatisfied,
+  passwordStrength,
+  type PasswordRuleId
+} from "@/utils/passwordPolicy";
 
 const router = useRouter();
 const route = useRoute();
@@ -21,6 +28,31 @@ const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
 const mode = ref<"login" | "register" | "register-admin">("login");
+const showPassword = ref(false);
+const showAdminSecret = ref(false);
+
+const passwordRules = computed(() => evaluatePasswordRules(password.value));
+const passwordStrengthLevel = computed(() => passwordStrength(password.value));
+const showPasswordHints = computed(
+  () => mode.value !== "login" && password.value.length > 0
+);
+
+const passwordRuleLabel = (id: PasswordRuleId): string => {
+  const keys: Record<PasswordRuleId, string> = {
+    minLength: "auth.passwordRuleMinLength",
+    uppercase: "auth.passwordRuleUppercase",
+    lowercase: "auth.passwordRuleLowercase",
+    digit: "auth.passwordRuleDigit"
+  };
+  return t(keys[id]);
+};
+
+const passwordStrengthLabel = computed(() => {
+  const level = passwordStrengthLevel.value;
+  if (level === "weak") return t("auth.passwordStrengthWeak");
+  if (level === "medium") return t("auth.passwordStrengthMedium");
+  return t("auth.passwordStrengthStrong");
+});
 
 const modeTitle = computed(() => {
   if (mode.value === "register") return t("auth.modeRegisterTitle");
@@ -38,8 +70,10 @@ const submitLabel = computed(() => {
 const validateForm = (): string | null => {
   if (!email.value.trim()) return t("auth.validationEmailRequired");
   if (!password.value.trim()) return t("auth.validationPasswordRequired");
-  if (password.value.trim().length < 6) return t("auth.validationPasswordMin");
   if (mode.value !== "login") {
+    if (!isPasswordPolicySatisfied(password.value.trim())) {
+      return t("auth.validationPasswordPolicy");
+    }
     if (!firstName.value.trim()) return t("auth.validationFirstNameRequired");
     if (!lastName.value.trim()) return t("auth.validationLastNameRequired");
   }
@@ -249,7 +283,7 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
 
         <div class="field">
           <label class="field__label" for="password">{{ t("auth.labelPassword") }}</label>
-          <div class="field__wrap">
+          <div class="field__wrap field__wrap--password">
             <svg class="field__icon" viewBox="0 0 20 20" fill="none">
               <rect x="4" y="9" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/>
               <path d="M7 9V6a3 3 0 0 1 6 0v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -257,30 +291,78 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
             <input
               id="password"
               v-model="password"
-              class="field__input"
-              type="password"
+              class="field__input field__input--password"
+              :type="showPassword ? 'text' : 'password'"
               :placeholder="t('auth.placeholderPassword')"
-              autocomplete="current-password"
+              :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
               :disabled="isLoading"
             >
+            <button
+              type="button"
+              class="field__toggle"
+              :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+              :disabled="isLoading"
+              @click="showPassword = !showPassword"
+            >
+              <UiIcon
+                :name="showPassword ? 'visibility_off' : 'visibility'"
+                class="field__toggle-icon"
+              />
+            </button>
           </div>
+          <Transition name="fade">
+            <div v-if="showPasswordHints" class="password-hints">
+              <div
+                class="password-hints__strength"
+                :class="`password-hints__strength--${passwordStrengthLevel}`"
+              >
+                {{ passwordStrengthLabel }}
+              </div>
+              <ul class="password-hints__rules">
+                <li
+                  v-for="rule in passwordRules"
+                  :key="rule.id"
+                  class="password-hints__rule"
+                  :class="{ 'password-hints__rule--passed': rule.passed }"
+                >
+                  <UiIcon
+                    :name="rule.passed ? 'check_circle' : 'radio_button_unchecked'"
+                    class="password-hints__icon"
+                  />
+                  {{ passwordRuleLabel(rule.id) }}
+                </li>
+              </ul>
+            </div>
+          </Transition>
         </div>
 
         <Transition name="slide">
           <div v-if="mode === 'register-admin'" class="field">
             <label class="field__label" for="admin-secret">{{ t("auth.labelAdminSecret") }}</label>
-            <div class="field__wrap">
+            <div class="field__wrap field__wrap--password">
               <svg class="field__icon" viewBox="0 0 20 20" fill="none">
                 <path d="M10 2l1.5 4.5H16l-3.7 2.7 1.4 4.3L10 11l-3.7 2.5 1.4-4.3L4 6.5h4.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
               </svg>
               <input
                 id="admin-secret"
                 v-model="adminSecret"
-                class="field__input"
-                type="password"
+                class="field__input field__input--password"
+                :type="showAdminSecret ? 'text' : 'password'"
                 :placeholder="t('auth.placeholderAdminSecret')"
                 :disabled="isLoading"
               >
+              <button
+                type="button"
+                class="field__toggle"
+                :aria-label="showAdminSecret ? t('auth.hidePassword') : t('auth.showPassword')"
+                :disabled="isLoading"
+                @click="showAdminSecret = !showAdminSecret"
+              >
+                <UiIcon
+                  :name="showAdminSecret ? 'visibility_off' : 'visibility'"
+                  class="field__toggle-icon"
+                />
+              </button>
             </div>
           </div>
         </Transition>
@@ -577,6 +659,99 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
 .field__input:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.field__wrap--password .field__input--password {
+  padding-right: 44px;
+}
+
+.field__toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.field__toggle:hover:not(:disabled) {
+  color: var(--primary);
+  background: rgba(124, 92, 252, 0.08);
+}
+
+.field__toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.field__toggle-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.password-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.password-hints__strength {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.password-hints__strength--weak {
+  color: var(--danger);
+}
+
+.password-hints__strength--medium {
+  color: var(--warning);
+}
+
+.password-hints__strength--strong {
+  color: var(--success);
+}
+
+.password-hints__rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.password-hints__rule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+.password-hints__rule--passed {
+  color: var(--success);
+}
+
+.password-hints__icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ─── Messages ────────────────────────────────── */

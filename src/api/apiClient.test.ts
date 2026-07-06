@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/composables/authStorage', () => ({
-  getAccessToken: vi.fn(() => 'test-access-token'),
-  getRefreshToken: vi.fn(() => 'test-refresh-token'),
-  setAccessToken: vi.fn(),
-  setRefreshToken: vi.fn(),
   saveStoredUser: vi.fn(),
   clearAuthStorage: vi.fn(),
   emitAuthUpdated: vi.fn(),
@@ -19,8 +15,13 @@ vi.mock('@/utils/userRole', () => ({
   normalizeUser: vi.fn((user: unknown) => user),
 }))
 
+vi.mock('@/utils/csrfCookie', () => ({
+  getCsrfTokenFromCookie: vi.fn(() => 'csrf-test-token'),
+  CSRF_HEADER_NAME: 'X-CSRF-Token',
+}))
+
 import { apiGet, apiPost, apiPut, apiDelete } from './apiClient'
-import { getAccessToken, getRefreshToken, clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
+import { clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
 
 function mockFetchResponse(body: unknown, status = 200) {
   const text = body === undefined ? '' : JSON.stringify(body)
@@ -37,8 +38,6 @@ describe('apiClient', () => {
   beforeEach(() => {
     originalFetch = globalThis.fetch
     vi.clearAllMocks()
-    vi.mocked(getAccessToken).mockReturnValue('test-access-token')
-    vi.mocked(getRefreshToken).mockReturnValue('test-refresh-token')
   })
 
   afterEach(() => {
@@ -46,7 +45,7 @@ describe('apiClient', () => {
   })
 
   describe('apiGet', () => {
-    it('makes GET request with correct URL and auth header', async () => {
+    it('makes GET request with credentials include', async () => {
       const fetchMock = mockFetchResponse({ id: 1 })
       vi.stubGlobal('fetch', fetchMock)
 
@@ -56,9 +55,9 @@ describe('apiClient', () => {
         'http://test-api/api/v1/models',
         expect.objectContaining({
           method: 'GET',
+          credentials: 'include',
           headers: expect.objectContaining({
             Accept: 'application/json',
-            Authorization: 'Bearer test-access-token',
           }),
         }),
       )
@@ -76,9 +75,11 @@ describe('apiClient', () => {
         'http://test-api/api/v1/models',
         expect.objectContaining({
           method: 'POST',
+          credentials: 'include',
           body: JSON.stringify({ name: 'test' }),
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
+            'X-CSRF-Token': 'csrf-test-token',
           }),
         }),
       )
@@ -96,6 +97,7 @@ describe('apiClient', () => {
         'http://test-api/api/v1/models/1',
         expect.objectContaining({
           method: 'PUT',
+          credentials: 'include',
           body: JSON.stringify({ name: 'updated' }),
         }),
       )
@@ -113,6 +115,7 @@ describe('apiClient', () => {
         'http://test-api/api/v1/models/1',
         expect.objectContaining({
           method: 'DELETE',
+          credentials: 'include',
         }),
       )
     })
@@ -150,8 +153,7 @@ describe('apiClient', () => {
         text: () => Promise.resolve(JSON.stringify({ message: 'Not found' })),
       })
       vi.stubGlobal('fetch', fetchMock)
-      // Prevent 401 refresh path for this test — use a public auth path to skip refresh
-      // Actually 404 won't trigger refresh, so any path works
+
       const result = await apiGet('/models/1')
 
       expect(result).toEqual({
@@ -186,15 +188,12 @@ describe('apiClient', () => {
   describe('401 token refresh', () => {
     it('triggers token refresh on 401 for non-public paths', async () => {
       const refreshResponse = {
-        accessToken: 'new-access',
-        refreshToken: 'new-refresh',
         user: { id: '1', email: 'test@test.com', role: 'USER' },
       }
 
       let callCount = 0
       const fetchMock = vi.fn().mockImplementation((url: string) => {
         callCount++
-        // First call: original request returns 401
         if (callCount === 1) {
           return Promise.resolve({
             ok: false,
@@ -202,7 +201,6 @@ describe('apiClient', () => {
             text: () => Promise.resolve(JSON.stringify({ message: 'Unauthorized' })),
           })
         }
-        // Second call: refresh request succeeds
         if (callCount === 2) {
           expect(url).toBe('http://test-api/api/v1/auth/refresh')
           return Promise.resolve({
@@ -211,7 +209,6 @@ describe('apiClient', () => {
             text: () => Promise.resolve(JSON.stringify(refreshResponse)),
           })
         }
-        // Third call: retry original request succeeds
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -237,26 +234,10 @@ describe('apiClient', () => {
       const result = await apiPost('/auth/login', { email: 'a', password: 'b' })
 
       expect(result.success).toBe(false)
-      // Should only have made 1 fetch call — no refresh attempt
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
-    it('skips refresh for public auth paths (/auth/register)', async () => {
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: () => Promise.resolve(JSON.stringify({ message: 'Error' })),
-      })
-      vi.stubGlobal('fetch', fetchMock)
-
-      const result = await apiPost('/auth/register', {})
-
-      expect(result.success).toBe(false)
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-    })
-
-    it('failed refresh returns error without retrying', async () => {
-      // Refresh endpoint returns an error
+    it('failed refresh clears session', async () => {
       let callCount = 0
       const fetchMock = vi.fn().mockImplementation((url: string) => {
         callCount++
@@ -267,7 +248,6 @@ describe('apiClient', () => {
             text: () => Promise.resolve(''),
           })
         }
-        // Original request always returns 401
         return Promise.resolve({
           ok: false,
           status: 401,
@@ -279,23 +259,7 @@ describe('apiClient', () => {
       const result = await apiGet('/models')
 
       expect(result.success).toBe(false)
-      // 2 calls: original request + refresh attempt (no retry since refresh failed)
       expect(callCount).toBe(2)
-    })
-
-    it('clears session when refresh token is missing', async () => {
-      vi.mocked(getRefreshToken).mockReturnValue(null)
-
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: () => Promise.resolve(''),
-      })
-      vi.stubGlobal('fetch', fetchMock)
-
-      const result = await apiGet('/models')
-
-      expect(result.success).toBe(false)
       expect(clearAuthStorage).toHaveBeenCalled()
       expect(emitAuthCleared).toHaveBeenCalled()
     })

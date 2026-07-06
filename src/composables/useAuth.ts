@@ -8,8 +8,6 @@ import {
   emitAuthUpdated,
   loadStoredUser,
   saveStoredUser,
-  setAccessToken,
-  setRefreshToken
 } from "./authStorage";
 import type { User, UserProfileForm } from "../types/entities";
 import { normalizeUser } from "../utils/userRole";
@@ -17,8 +15,8 @@ import { normalizeUser } from "../utils/userRole";
 export type { User };
 
 type AuthResponse = {
-  accessToken: string;
-  refreshToken: string;
+  accessToken?: string;
+  refreshToken?: string;
   user: User;
 };
 
@@ -34,8 +32,6 @@ const applyAuth = (response: AuthResponse): void => {
   const normalizedUser = normalizeUser(response.user);
   currentUser.value = normalizedUser;
   saveStoredUser(normalizedUser);
-  setAccessToken(response.accessToken);
-  setRefreshToken(response.refreshToken);
   emitAuthUpdated(normalizedUser);
 };
 
@@ -134,7 +130,8 @@ export function useAuth() {
     return { success: true };
   }
 
-  function logout(): void {
+  async function logout(): Promise<void> {
+    await apiPost<void>("/auth/logout", {});
     clearAuthStorage();
     emitAuthCleared();
     currentUser.value = null;

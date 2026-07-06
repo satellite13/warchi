@@ -64,6 +64,10 @@ template:
           - name: NOTATION_URL
             value: {{ $ctx.Values.api.notationUrl | quote }}
         {{- end }}
+        {{- with $ctx.Values.startupProbe }}
+        startupProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- with $ctx.Values.livenessProbe }}
         livenessProbe:
           {{- toYaml . | nindent 10 }}

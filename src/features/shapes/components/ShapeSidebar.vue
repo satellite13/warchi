@@ -2,6 +2,7 @@
 import { computed, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import type { NodeShapeResponse } from "@/types/api"
+import { canEditByAccessPermission } from "@/utils/accessPermission"
 
 const props = defineProps<{
   shapes: NodeShapeResponse[]
@@ -104,7 +105,7 @@ const totalCount = computed(() => props.shapes.length)
               <span class="shape-sidebar__item-name">{{ shape.name || t("common.unnamed") }}</span>
             </div>
             <span
-              v-if="!shape.canEdit"
+              v-if="!canEditByAccessPermission(shape.accessPermission)"
               class="shape-sidebar__item-lock"
               :title="t('shapes.noEditRights')"
             >

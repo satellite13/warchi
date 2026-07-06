@@ -1,6 +1,7 @@
 import { ref, computed, onMounted } from "vue"
 import { apiGet } from "./useApi"
 import { pagedListParams } from "@/api/queryHelpers"
+import { paginatedContent } from "@/utils/paginatedResponse"
 import type { PaginatedResponse } from "../types/entities"
 import type { ModelData, NotationData } from "../types/entities"
 import type { NodeTypeResponse, LinkTypeResponse, AuditLogResponse } from "../types/api"
@@ -143,11 +144,11 @@ export function useDashboard() {
       apiGet<PaginatedResponse<AuditLogResponse>>("/audit-log?page=0&size=20")
     ])
 
-    if (modelsRes.success) models.value = modelsRes.data.content ?? []
-    if (notationsRes.success) notations.value = notationsRes.data.content ?? []
-    if (nodeTypesRes.success) nodeTypes.value = nodeTypesRes.data.content ?? []
-    if (linkTypesRes.success) linkTypes.value = linkTypesRes.data.content ?? []
-    if (auditRes.success) auditLogs.value = auditRes.data.content ?? []
+    if (modelsRes.success) models.value = paginatedContent(modelsRes.data)
+    if (notationsRes.success) notations.value = paginatedContent(notationsRes.data)
+    if (nodeTypesRes.success) nodeTypes.value = paginatedContent(nodeTypesRes.data)
+    if (linkTypesRes.success) linkTypes.value = paginatedContent(linkTypesRes.data)
+    if (auditRes.success) auditLogs.value = paginatedContent(auditRes.data)
 
     isLoading.value = false
   }

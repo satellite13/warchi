@@ -9,6 +9,7 @@ defineProps<{
   selectedShape: NodeShapeResponse | null
   name: string
   outline: OutlineSegment[]
+  ownerDisplayName: string
   canEdit: boolean
   canShare?: boolean
   isDirty: boolean
@@ -99,8 +100,9 @@ const { t } = useI18n()
       </p>
 
       <div class="form-section">
-        <h3 class="form-section__title">{{ t("shapes.nameLabel") }}</h3>
+        <h3 class="form-section__title">{{ t("types.main") }}</h3>
         <div class="form-row">
+          <label class="form-label">{{ t("common.name") }}</label>
           <input
             :value="name"
             class="form-input"
@@ -108,6 +110,10 @@ const { t } = useI18n()
             :disabled="!canEdit"
             @input="emit('update:name', ($event.target as HTMLInputElement).value)"
           />
+        </div>
+        <div class="form-row">
+          <label class="form-label">{{ t("common.author") }}</label>
+          <div class="form-input form-input--readonly">{{ ownerDisplayName }}</div>
         </div>
       </div>
 

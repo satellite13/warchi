@@ -5,6 +5,7 @@ import { apiGet, apiPut } from '../composables/useApi'
 import { pagedListParams } from '../api/queryHelpers'
 import type { PaginatedResponse, User, UserRole } from '../types/entities'
 import { formatDate } from '../utils/formatDate'
+import { paginatedContent } from '../utils/paginatedResponse'
 import { normalizeUserRole } from '../utils/userRole'
 import { useUserProfileEdit, useUserPasswordEdit } from './composables/useUserAdminForms'
 
@@ -75,8 +76,7 @@ const loadUsers = async (): Promise<void> => {
     return
   }
 
-  const rawUsers = Array.isArray(result.data.content) ? result.data.content : []
-  users.value = rawUsers.map(normalizeUser)
+  users.value = paginatedContent(result.data).map(normalizeUser)
 }
 
 const updateUser = async (userId: string, patch: UserUpdatePayload): Promise<void> => {

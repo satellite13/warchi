@@ -3,7 +3,11 @@ import { useI18n } from "vue-i18n"
 import { apiGet, apiPost, apiPut, apiDelete } from "@/composables/useApi"
 import { listParams } from '@/api/queryHelpers'
 import { useAuth } from "@/composables/useAuth"
-import { resolveOwnerDisplayNames } from "@/utils/resolveOwnerNames"
+import {
+  normalizeOwnerId,
+  resolveOwnerDisplayNames,
+  resolveOwnerLabel,
+} from "@/utils/resolveOwnerNames"
 import { parseTypeAttrs, serializeTypeAttrs, createId } from "../../notations/notationAttrs"
 import type { TypeParsedAttrs } from "../../notations/types"
 import type {
@@ -17,6 +21,7 @@ import type {
   RelationResponse
 } from "@/types/api"
 import type { AccessPermission, PaginatedResponse, NotationData } from "@/types/entities"
+import { paginatedContent } from "@/utils/paginatedResponse"
 
 export type TypeKind = "node" | "link"
 
@@ -24,6 +29,8 @@ export interface TypeItem {
   id: string
   name: string
   ownerId: string
+  ownerEmail?: string | null
+  ownerDisplayName?: string | null
   accessPermission?: AccessPermission | null
   kind: TypeKind
   parsedAttrs: TypeParsedAttrs
@@ -35,6 +42,8 @@ function toTypeItem(resp: NodeTypeResponse | LinkTypeResponse, kind: TypeKind): 
     id: resp.id,
     name: resp.name,
     ownerId: resp.ownerId,
+    ownerEmail: resp.ownerEmail ?? null,
+    ownerDisplayName: resp.ownerDisplayName ?? null,
     accessPermission: resp.accessPermission ?? null,
     kind,
     parsedAttrs: parseTypeAttrs(resp.attrs ?? null)
@@ -107,6 +116,38 @@ export function useTypeEditor() {
     return takeSnapshot(item) !== savedSnapshot.value
   })
 
+  function collectOwnerIds(extraOwnerId?: string | null): string[] {
+    const ids = [...nodeTypes.value, ...linkTypes.value].map((item) => item.ownerId)
+    if (extraOwnerId) ids.push(extraOwnerId)
+    return ids
+  }
+
+  watch(
+    () => selectedType.value?.ownerId,
+    async (ownerId) => {
+      if (!ownerId) return
+      const fallback = t("common.unknownUser")
+      const key = normalizeOwnerId(ownerId)
+      const cached = ownerDisplayNames.value.get(key)
+      if (cached && cached !== fallback) return
+      await loadOwnerDisplayNames([ownerId])
+    }
+  )
+
+  watch(
+    () => [
+      currentUser.value?.id,
+      currentUser.value?.email,
+      currentUser.value?.firstName,
+      currentUser.value?.lastName,
+    ],
+    async () => {
+      const ids = collectOwnerIds(selectedType.value?.ownerId)
+      if (ids.length === 0) return
+      await loadOwnerDisplayNames(ids)
+    }
+  )
+
   async function loadAll() {
     isLoading.value = true
     saveError.value = null
@@ -119,10 +160,10 @@ export function useTypeEditor() {
       ])
 
       if (nodeResult.success) {
-        nodeTypes.value = (nodeResult.data.content ?? []).map((r) => toTypeItem(r, "node"))
+        nodeTypes.value = paginatedContent(nodeResult.data).map((r) => toTypeItem(r, "node"))
       }
       if (linkResult.success) {
-        linkTypes.value = (linkResult.data.content ?? []).map((r) => toTypeItem(r, "link"))
+        linkTypes.value = paginatedContent(linkResult.data).map((r) => toTypeItem(r, "link"))
       }
 
       const allTypes = [...nodeTypes.value, ...linkTypes.value]
@@ -140,6 +181,20 @@ export function useTypeEditor() {
       t("common.unknownUser")
     )
   }
+
+  const selectedTypeOwnerName = computed(() => {
+    const type = selectedType.value
+    const fallback = t("common.unknownUser")
+    if (!type?.ownerId) return fallback
+    return resolveOwnerLabel(
+      ownerDisplayNames.value,
+      type.ownerId,
+      currentUser.value,
+      fallback,
+      type.ownerEmail,
+      type.ownerDisplayName
+    )
+  })
 
   function selectType(id: string | null) {
     selectedTypeId.value = id
@@ -461,6 +516,7 @@ watch(selectedTypeId, () => {
     isSaving,
     saveError,
     ownerDisplayNames,
+    selectedTypeOwnerName,
     loadAll,
     selectType,
     refreshSnapshot,

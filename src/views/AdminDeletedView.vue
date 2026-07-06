@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { apiDelete, apiGet } from '@/composables/useApi'
 import type { ModelData, NotationData, PaginatedResponse } from '@/types/entities'
 import { formatDate } from '@/utils/formatDate'
+import { paginatedContent } from '@/utils/paginatedResponse'
 
 const { t, locale } = useI18n()
 
@@ -25,11 +26,7 @@ const loadDeletedModels = async (): Promise<void> => {
     `/models/deleted?page=0&size=${PAGE_SIZE}&sort=updatedAt,desc`,
   )
   loadingModels.value = false
-  if (result.success && Array.isArray(result.data.content)) {
-    deletedModels.value = result.data.content
-  } else {
-    deletedModels.value = []
-  }
+  deletedModels.value = result.success ? paginatedContent(result.data) : []
 }
 
 const loadDeletedNotations = async (): Promise<void> => {
@@ -38,11 +35,7 @@ const loadDeletedNotations = async (): Promise<void> => {
     `/notations/deleted?page=0&size=${PAGE_SIZE}&sort=updatedAt,desc`,
   )
   loadingNotations.value = false
-  if (result.success && Array.isArray(result.data.content)) {
-    deletedNotations.value = result.data.content
-  } else {
-    deletedNotations.value = []
-  }
+  deletedNotations.value = result.success ? paginatedContent(result.data) : []
 }
 
 const loadAll = (): void => {

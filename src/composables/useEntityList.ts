@@ -5,6 +5,7 @@ import { useAuth } from "./useAuth"
 import { resolveOwnerDisplayNames } from "../utils/resolveOwnerNames"
 import { compareVersions } from "../utils/version"
 import { pagedListParams } from "@/api/queryHelpers"
+import { paginatedContent } from "@/utils/paginatedResponse"
 import { useEntityCreateModal } from "./useEntityCreateModal"
 import { useEntityDeleteModal } from "./useEntityDeleteModal"
 import { useEntityRenameModal } from "./useEntityRenameModal"
@@ -170,6 +171,22 @@ export function useEntityList<T extends VersionedEntity>(
 
   const itemCount = computed(() => filteredItems.value.length)
 
+  watch(
+    () => [
+      currentUser.value?.id,
+      currentUser.value?.email,
+      currentUser.value?.firstName,
+      currentUser.value?.lastName,
+    ],
+    async () => {
+      if (items.value.length === 0) return
+      await loadOwnerEmails(
+        items.value.map((item) => item.ownerId),
+        t("common.unknownUser")
+      )
+    }
+  )
+
   const loadOwnerEmails = async (ownerIds: string[], fallback: string) => {
     ownerEmails.value = await resolveOwnerDisplayNames(
       ownerIds,
@@ -200,7 +217,7 @@ export function useEntityList<T extends VersionedEntity>(
     if (!result.success) {
       throw new Error(result.error.message)
     }
-    return Array.isArray(result.data.content) ? result.data.content : []
+    return paginatedContent(result.data)
   }
 
   const loadItems = async (options?: { silent?: boolean }) => {

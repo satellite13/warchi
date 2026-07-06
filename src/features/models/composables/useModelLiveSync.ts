@@ -1,12 +1,13 @@
 import { Client } from "@stomp/stompjs"
 import { onBeforeUnmount, watch, type Ref } from "vue"
+import { refreshAccessToken } from "@/api/apiClient"
 import { buildModelSyncWsUrl } from "@/api/modelSyncWs"
 import { listParams, PAGE_SIZE_FULL } from "@/api/queryHelpers"
 import { apiGet } from "@/composables/useApi"
 import {
   AUTH_CLEARED_EVENT,
   AUTH_UPDATED_EVENT,
-  getAccessToken,
+  loadStoredUser,
 } from "@/composables/authStorage"
 import type {
   DiagramResponse,
@@ -97,6 +98,16 @@ export function useModelLiveSync(options: {
   let wsConnected = false
   const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
   let stompPullCoalesceScheduled = false
+  let wsAuthRefreshInFlight: Promise<boolean> | null = null
+
+  const ensureWsAuthCookieFresh = async (): Promise<boolean> => {
+    if (!wsAuthRefreshInFlight) {
+      wsAuthRefreshInFlight = refreshAccessToken().finally(() => {
+        wsAuthRefreshInFlight = null
+      })
+    }
+    return wsAuthRefreshInFlight
+  }
 
   const isWsEnabled = MODEL_LIVE_SYNC_MODE === "ws" || MODEL_LIVE_SYNC_MODE === "hybrid"
   const isPollEnabled = MODEL_LIVE_SYNC_MODE === "poll" || MODEL_LIVE_SYNC_MODE === "hybrid"
@@ -282,10 +293,9 @@ export function useModelLiveSync(options: {
     if (!options.enabled.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
-    const token = getAccessToken()
-    if (!token) return
+    if (!loadStoredUser()) return
 
-    const url = buildModelSyncWsUrl(token)
+    const url = buildModelSyncWsUrl()
     if (!url) return
 
     const client = new Client({
@@ -293,6 +303,12 @@ export function useModelLiveSync(options: {
       reconnectDelay: STOMP_RECONNECT_DELAY_MS,
       heartbeatIncoming: STOMP_HEARTBEAT_INCOMING_MS,
       heartbeatOutgoing: STOMP_HEARTBEAT_OUTGOING_MS,
+      beforeConnect: async () => {
+        const refreshed = await ensureWsAuthCookieFresh()
+        if (!refreshed) {
+          client.deactivate()
+        }
+      },
       onConnect: () => {
         wsConnected = true
         stopFallbackPoll()
@@ -345,6 +361,7 @@ export function useModelLiveSync(options: {
       },
       onWebSocketClose: () => {
         wsConnected = false
+        void ensureWsAuthCookieFresh()
         if (options.enabled.value) {
           startFallbackPoll()
         }

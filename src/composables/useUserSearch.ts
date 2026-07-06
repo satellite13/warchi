@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { apiGet } from './useApi'
 import { pagedListParams, PAGE_SIZE_SEARCH } from '../api/queryHelpers'
 import type { PaginatedResponse, UserInfo } from '../types/entities'
+import { paginatedContent } from '../utils/paginatedResponse'
 
 export function useUserSearch() {
   const { t } = useI18n()
@@ -37,7 +38,7 @@ export function useUserSearch() {
       return
     }
 
-    searchResults.value = Array.isArray(result.data.content) ? result.data.content : []
+    searchResults.value = paginatedContent(result.data)
   }
 
   const selectUser = (user: UserInfo) => {

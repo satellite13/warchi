@@ -15,7 +15,12 @@ vi.mock('@/utils/userDisplay', () => ({
   ),
 }))
 
-import { resolveOwnerDisplayNames } from '@/utils/resolveOwnerNames'
+import {
+  getOwnerDisplayNameFromMap,
+  normalizeOwnerId,
+  resolveOwnerDisplayNames,
+  resolveOwnerLabel,
+} from '@/utils/resolveOwnerNames'
 import { apiGet, apiPost } from '@/api/apiClient'
 
 const mockedApiGet = vi.mocked(apiGet)
@@ -61,7 +66,24 @@ describe('resolveOwnerDisplayNames', () => {
     const currentUser = { id: 'u1', firstName: 'Ivan', lastName: null, email: 'ivan@test.com' }
     const result = await resolveOwnerDisplayNames(['u1'], new Map(), currentUser, '?')
     expect(mockedApiGet).not.toHaveBeenCalled()
+    expect(mockedApiPost).not.toHaveBeenCalled()
     expect(result.has('u1')).toBe(true)
+  })
+
+  it('fetches profile when session user has no display fields', async () => {
+    const currentUser = { id: 'u1', firstName: null, lastName: null, email: null }
+    mockedApiPost.mockResolvedValueOnce({
+      success: true,
+      data: {
+        items: [{ id: 'u1', firstName: 'Ivan', lastName: 'Petrov', email: 'ivan@test.com' }],
+        total: 1,
+        page: 0,
+        size: 1,
+      },
+    })
+    const result = await resolveOwnerDisplayNames(['u1'], new Map(), currentUser, 'Unknown')
+    expect(mockedApiPost).toHaveBeenCalledWith('/users/public/batch', { ids: ['u1'] })
+    expect(result.get('u1')).toBe('Ivan Petrov')
   })
 
   it('uses fallback on API failure', async () => {
@@ -93,11 +115,85 @@ describe('resolveOwnerDisplayNames', () => {
   it('uses batch endpoint when available', async () => {
     mockedApiPost.mockResolvedValueOnce({
       success: true,
-      data: { u2: { id: 'u2', firstName: 'Jane', lastName: 'Doe', email: 'jane@test.com' } },
+      data: {
+        items: [{ id: 'u2', firstName: 'Jane', lastName: 'Doe', email: 'jane@test.com' }],
+        total: 1,
+        page: 0,
+        size: 1,
+      },
     })
     const result = await resolveOwnerDisplayNames(['u2'], new Map(), null, '?')
     expect(mockedApiPost).toHaveBeenCalledWith('/users/public/batch', { ids: ['u2'] })
     expect(mockedApiGet).not.toHaveBeenCalled()
+    expect(result.get('u2')).toBe('Jane Doe')
+  })
+
+  it('normalizes owner id casing in map keys', async () => {
+    mockedApiPost.mockResolvedValueOnce({
+      success: true,
+      data: {
+        items: [
+          {
+            id: 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            email: 'jane@test.com',
+          },
+        ],
+        total: 1,
+        page: 0,
+        size: 1,
+      },
+    })
+    const result = await resolveOwnerDisplayNames(
+      ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],
+      new Map(),
+      null,
+      '?'
+    )
+    expect(result.get('a1b2c3d4-e5f6-7890-abcd-ef1234567890')).toBe('Jane Doe')
+    expect(
+      getOwnerDisplayNameFromMap(
+        result,
+        'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+        '?'
+      )
+    ).toBe('Jane Doe')
+    expect(normalizeOwnerId('  ABC  ')).toBe('abc')
+  })
+
+  it('uses ownerDisplayName when public profile is unavailable', () => {
+    const result = resolveOwnerLabel(
+      new Map(),
+      'u1',
+      null,
+      'Unknown',
+      'admin@admin.ru',
+      'Иван Петров'
+    )
+    expect(result).toBe('Иван Петров')
+  })
+
+  it('uses ownerEmail when display name is unavailable', () => {
+    const result = resolveOwnerLabel(new Map(), 'u1', null, 'Unknown', 'admin@admin.ru')
+    expect(result).toBe('admin@admin.ru')
+  })
+
+  it('retries owners previously cached as fallback', async () => {
+    const existing = new Map([['u2', 'Unknown']])
+    mockedApiPost.mockResolvedValueOnce({
+      success: true,
+      data: {
+        items: [{ id: 'u2', firstName: 'Jane', lastName: 'Doe', email: 'jane@test.com' }],
+        total: 1,
+        page: 0,
+        size: 1,
+      },
+    })
+
+    const result = await resolveOwnerDisplayNames(['u2'], existing, null, 'Unknown')
+
+    expect(mockedApiPost).toHaveBeenCalledWith('/users/public/batch', { ids: ['u2'] })
     expect(result.get('u2')).toBe('Jane Doe')
   })
 

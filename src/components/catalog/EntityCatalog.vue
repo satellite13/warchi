@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
 import { useEntityList, type EntityListConfig } from "../../composables/useEntityList";
 import { getUserDisplayName } from "../../utils/userDisplay";
+import { resolveOwnerLabel } from "../../utils/resolveOwnerNames";
 import { toAccessLabel } from "../../utils/accessPermission";
 import type { VersionedEntity } from "../../types/entities";
 import type { ShareResourceType } from "../../types/api";
@@ -181,10 +182,24 @@ function handleRename(group: {
   openRenameModal(selected);
 }
 
+function ownerLabelFor(
+  ownerId: string | null | undefined,
+  ownerEmail?: string | null,
+  ownerDisplayName?: string | null
+): string {
+  return resolveOwnerLabel(
+    ownerEmails.value,
+    ownerId,
+    currentUser.value,
+    t("common.unknownUser"),
+    ownerEmail,
+    ownerDisplayName
+  );
+}
+
 function formatDeleteEntityName(item: VersionedEntity | null): string {
   if (!item) return "";
-  const ownerLabel = ownerEmails.value.get(item.ownerId) ?? t("common.unknownUser");
-  return `${item.name} v${item.version} — ${ownerLabel}`;
+  return `${item.name} v${item.version} — ${ownerLabelFor(item.ownerId, item.ownerEmail, item.ownerDisplayName)}`;
 }
 </script>
 
@@ -221,7 +236,7 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
         :name="group.name"
         :version="getSelectedItem(group)?.version || ''"
         :versions="group.versions.map((item) => item.version)"
-        :owner-email="ownerEmails.get(getSelectedItem(group)?.ownerId || '')"
+        :owner-email="ownerLabelFor(getSelectedItem(group)?.ownerId, getSelectedItem(group)?.ownerEmail, getSelectedItem(group)?.ownerDisplayName)"
         :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission, locale)"
         :can-share="canShareSelected(group)"
         :can-delete="canEditSelected(group)"

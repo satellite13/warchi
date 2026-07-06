@@ -13,6 +13,7 @@ vi.mock('./useAuth', () => ({
 
 vi.mock('../utils/resolveOwnerNames', () => ({
   resolveOwnerDisplayNames: vi.fn(async () => new Map()),
+  normalizeOwnerId: (id: string | null | undefined) => (id ?? '').trim().toLowerCase(),
 }))
 
 const mockApiGet = vi.fn()
@@ -73,6 +74,20 @@ describe('useEntityList', () => {
       expect(list.items.value).toHaveLength(2)
       expect(list.isLoading.value).toBe(false)
       expect(list.errorMessage.value).toBeNull()
+    })
+
+    it('reads arepos ListResponse items field', async () => {
+      const items = [makeItem('1', 'Alpha', '1.0.0')]
+      mockApiGet.mockResolvedValue({
+        success: true,
+        data: { items, total: 1, page: 0, size: 50 },
+      })
+
+      const list = useEntityList(makeConfig())
+      await list.loadItems()
+
+      expect(list.items.value).toHaveLength(1)
+      expect(list.items.value[0]?.name).toBe('Alpha')
     })
 
     it('sets error on failure', async () => {
@@ -165,6 +180,7 @@ describe('useEntityList', () => {
 
       const result = await list.createItem('user-1', 'Test User')
 
+      expect(list.createError.value).toBeNull()
       expect(mockApiPost).toHaveBeenCalledWith('/models', {
         name: 'Gamma',
         version: '1.0.0',

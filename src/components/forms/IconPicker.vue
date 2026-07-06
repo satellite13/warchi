@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import LazyIconImg from './LazyIconImg.vue'
 import SearchableSelect from './SearchableSelect.vue'
-import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
+import {
+  COMBINED_ICON_OPTIONS,
+  ICON_SELECT_MIN_SEARCH_LENGTH,
+  iconSelectRequiresMinSearch,
+} from '@/config/iconOptions'
 import type { IconOption } from '@/config/iconOptions'
 
 const props = withDefaults(
@@ -29,8 +34,6 @@ const { t } = useI18n()
 const effectiveEmptyLabel = computed(() => props.emptyLabel ?? t('types.iconClear'))
 
 const invalidImageIds = ref<Set<string>>(new Set())
-const checkedImageIds = ref<Set<string>>(new Set())
-const validatingImageIds = new Set<string>()
 
 function hasPreview(id: string): boolean {
   return Boolean(id) && !invalidImageIds.value.has(id)
@@ -39,24 +42,6 @@ function hasPreview(id: string): boolean {
 function onPreviewError(id: string): void {
   if (!id || invalidImageIds.value.has(id)) return
   invalidImageIds.value = new Set([...invalidImageIds.value, id])
-  checkedImageIds.value = new Set([...checkedImageIds.value, id])
-}
-
-function validateIcon(id: string): void {
-  if (!id || checkedImageIds.value.has(id) || validatingImageIds.has(id)) return
-  validatingImageIds.add(id)
-
-  const image = new Image()
-  image.onload = () => {
-    checkedImageIds.value = new Set([...checkedImageIds.value, id])
-    validatingImageIds.delete(id)
-  }
-  image.onerror = () => {
-    invalidImageIds.value = new Set([...invalidImageIds.value, id])
-    checkedImageIds.value = new Set([...checkedImageIds.value, id])
-    validatingImageIds.delete(id)
-  }
-  image.src = `/icons/${id}.svg`
 }
 
 const sanitizedOptions = computed(() => {
@@ -69,13 +54,7 @@ const sanitizedOptions = computed(() => {
   })
 })
 
-watch(
-  () => props.options,
-  (options) => {
-    for (const option of options ?? []) validateIcon(option.id?.trim() ?? '')
-  },
-  { immediate: true }
-)
+const requiresSearch = computed(() => iconSelectRequiresMinSearch(sanitizedOptions.value.length))
 </script>
 
 <template>
@@ -88,29 +67,32 @@ watch(
       :placeholder="placeholder || effectiveEmptyLabel"
       :search-placeholder="t('common.search')"
       :empty-text="t('common.nothingFound')"
+      :min-search-length="requiresSearch ? ICON_SELECT_MIN_SEARCH_LENGTH : 0"
+      :min-search-hint="requiresSearch ? t('common.typeToSearch') : ''"
       @update:model-value="emit('update:modelValue', $event)"
     >
       <template #option="{ option }">
         <span class="icon-picker__option">
-          <img
+          <LazyIconImg
             v-if="hasPreview(option.id)"
-            class="icon-picker__preview"
-            :src="`/icons/${option.id}.svg`"
+            :icon-id="option.id"
             :alt="option.label"
-            @error="onPreviewError(option.id)"
-          >
+            img-class="icon-picker__preview"
+            @error="onPreviewError"
+          />
           {{ option.label }}
         </span>
       </template>
       <template #selected="{ option }">
         <span v-if="option" class="icon-picker__selected">
-          <img
+          <LazyIconImg
             v-if="hasPreview(option.id)"
-            class="icon-picker__preview"
-            :src="`/icons/${option.id}.svg`"
+            :icon-id="option.id"
             :alt="option.label"
-            @error="onPreviewError(option.id)"
-          >
+            img-class="icon-picker__preview"
+            eager
+            @error="onPreviewError"
+          />
           {{ option.label }}
         </span>
       </template>

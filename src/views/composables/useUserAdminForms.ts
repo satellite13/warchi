@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { isPasswordPolicySatisfied } from '@/utils/passwordPolicy'
 
 type ProfileFields = {
   firstName: string
@@ -128,7 +129,7 @@ export function useUserPasswordEdit(
 
   const submitPasswordChange = async (user: { id: string; email?: string }): Promise<void> => {
     const nextPassword = (passwordDraft.value[user.id] ?? '').trim()
-    if (nextPassword.length < 6) {
+    if (!isPasswordPolicySatisfied(nextPassword)) {
       errorMessage.value = t('adminUsers.passwordMinLength')
       return
     }

@@ -5,7 +5,7 @@ import type { ImportMappingSuggestions } from './mappingSuggestions'
 
 describe('mappingState', () => {
   beforeEach(() => {
-    window.localStorage.clear()
+    localStorage.clear()
   })
 
   it('auto-selects high-confidence suggestions', () => {

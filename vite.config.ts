@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   return {
+    base: "/",
     plugins: [vue(), versionPlugin()],
     resolve: {
       alias: {
@@ -27,7 +28,7 @@ export default defineConfig(({ mode }) => {
               return "papirus";
             }
             if (id.includes("md-editor-v3")) {
-              return "md-editor";
+              return "md-editor-lib";
             }
             if (id.includes("@ckpack/vue-color")) {
               return "color-picker";

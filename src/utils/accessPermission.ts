@@ -1,5 +1,9 @@
 import type { AccessPermission } from "@/types/entities"
 
+export function canEditByAccessPermission(permission?: AccessPermission | null): boolean {
+  return permission === "OWNER" || permission === "EDIT" || permission === "ADMIN"
+}
+
 export function toAccessLabel(permission?: AccessPermission | null, locale?: string): string {
   if (locale === "en") {
     switch (permission) {

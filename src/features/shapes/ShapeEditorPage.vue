@@ -12,6 +12,12 @@ import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
 import { apiPost } from "@/composables/useApi"
 import { usePermissions } from "@/composables/usePermissions"
+import { useAuth } from "@/composables/useAuth"
+import { canEditByAccessPermission } from "@/utils/accessPermission"
+import {
+  resolveOwnerDisplayNames,
+  resolveOwnerLabel,
+} from "@/utils/resolveOwnerNames"
 
 const { t } = useI18n()
 const {
@@ -34,6 +40,7 @@ const localOutline = ref<OutlineSegment[]>([])
 const showDeleteConfirm = ref(false)
 const showShareModal = ref(false)
 const { checkPermission } = usePermissions()
+const { currentUser } = useAuth()
 
 function parseOutlineJson(json: string | null): OutlineSegment[] {
   if (!json) return []
@@ -45,8 +52,36 @@ function parseOutlineJson(json: string | null): OutlineSegment[] {
   }
 }
 
-const canEditSelected = computed(() => selectedDetail.value?.canEdit ?? false)
+const canEditSelected = computed(() => {
+  const detail = selectedDetail.value
+  if (!detail) return false
+  if (canEditByAccessPermission(detail.accessPermission)) return true
+  const userId = currentUser.value?.id
+  return !!userId && detail.ownerId === userId
+})
 const canShareSelected = ref(false)
+const ownerDisplayNames = ref(new Map<string, string>())
+
+async function loadOwnerDisplayNames(ownerIds: string[]): Promise<void> {
+  ownerDisplayNames.value = await resolveOwnerDisplayNames(
+    ownerIds,
+    ownerDisplayNames.value,
+    currentUser.value,
+    t("common.unknownUser")
+  )
+}
+
+const selectedShapeOwnerName = computed(() => {
+  const detail = selectedDetail.value
+  const fallback = t("common.unknownUser")
+  if (!detail?.ownerId) return fallback
+  return resolveOwnerLabel(
+    ownerDisplayNames.value,
+    detail.ownerId,
+    currentUser.value,
+    fallback
+  )
+})
 
 /** Есть несохранённые изменения относительно данных с сервера */
 const isDirty = computed(() => {
@@ -59,8 +94,12 @@ const isDirty = computed(() => {
 })
 
 onMounted(() => {
-  fetchList({ size: 200 }).then((ok) => {
-    if (!ok) saveError.value = t("shapes.errorLoad")
+  fetchList({ size: 200 }).then(async (ok) => {
+    if (!ok) {
+      saveError.value = t("shapes.errorLoad")
+      return
+    }
+    await loadOwnerDisplayNames(list.value.map((shape) => shape.ownerId))
   })
 })
 
@@ -77,6 +116,7 @@ watch(selectedShapeId, async (id) => {
     localOutline.value = parseOutlineJson(detail.outline).length
       ? parseOutlineJson(detail.outline)
       : [...DEFAULT_RECTANGLE_OUTLINE]
+    await loadOwnerDisplayNames([detail.ownerId])
     canShareSelected.value = await checkPermission({
       resourceType: 'NODE_SHAPE',
       resourceId: detail.id,
@@ -100,6 +140,7 @@ async function handleAdd() {
   })
   if (created) {
     await fetchList({ size: 200 })
+    await loadOwnerDisplayNames(list.value.map((shape) => shape.ownerId))
     selectedShapeId.value = created.id
     selectedDetail.value = created
     localName.value = created.name
@@ -265,6 +306,7 @@ onBeforeUnmount(() => {
               :selected-shape="selectedDetail"
               :name="localName"
               :outline="localOutline"
+              :owner-display-name="selectedShapeOwnerName"
               :can-edit="canEditSelected"
               :can-share="canShareSelected"
               :is-dirty="isDirty"

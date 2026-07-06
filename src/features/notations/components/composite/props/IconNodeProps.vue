@@ -4,9 +4,10 @@ import { useI18n } from 'vue-i18n'
 import LabeledFieldRow from '../../LabeledFieldRow.vue'
 import LabeledNumberInput from '../../LabeledNumberInput.vue'
 import SketchColorField from '../../SketchColorField.vue'
+import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
-import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
+import { COMBINED_ICON_OPTIONS, ICON_SELECT_MIN_SEARCH_LENGTH } from '@/config/iconOptions'
 import type { CompositeSerializedCComponent } from '../../../notationAttrs'
 
 const props = defineProps<{
@@ -38,21 +39,28 @@ const sourceIconId = computed(() => {
           :placeholder="t('nodeStyle.none')"
           :search-placeholder="t('common.search')"
           :empty-text="t('common.nothingFound')"
+          :min-search-length="ICON_SELECT_MIN_SEARCH_LENGTH"
+          :min-search-hint="t('common.typeToSearch')"
           @update:model-value="emit('update:field', 'source', $event ? `/icons/${$event}.svg` : '')"
         >
           <template #option="{ option }">
             <span class="ico-props__option">
-              <img class="ico-props__option-preview" :src="`/icons/${option.id}.svg`" :alt="option.label">
+              <LazyIconImg
+                :icon-id="option.id"
+                :alt="option.label"
+                img-class="ico-props__option-preview"
+              />
               {{ option.label }}
             </span>
           </template>
         </SearchableSelect>
-        <img
+        <LazyIconImg
           v-if="sourceIconId"
-          class="ico-props__preview"
-          :src="`/icons/${sourceIconId}.svg`"
+          :icon-id="sourceIconId"
           :alt="sourceIconId"
-        >
+          img-class="ico-props__preview"
+          eager
+        />
       </div>
     </LabeledFieldRow>
 

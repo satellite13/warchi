@@ -74,7 +74,7 @@ type PullSnapshotOptions = {
  * - hybrid (default): STOMP primary + polling fallback при потере WS
  * Дополнительно: разовый pull при старте сессии (вкладка видима), после STOMP connect/reconnect,
  * при `model_changed`, при возврате на вкладку (догон после фона).
- * См. docs/plans/model-live-sync.md
+ * См. in-app help: /docs/diagrams и /docs/models.
  */
 export function useModelLiveSync(options: {
   modelId: Ref<string | null | undefined>

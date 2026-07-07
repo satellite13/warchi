@@ -32,8 +32,6 @@ const createApiError = (status: number, message: string, details?: unknown): Api
 })
 
 type AuthResponse = {
-  accessToken?: string
-  refreshToken?: string
   user?: User
 }
 
@@ -91,8 +89,9 @@ export const refreshAccessToken = async (): Promise<boolean> => {
         clearSession()
       }
       return applied
-    } catch {
-      clearSession()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ошибка подключения"
+      reportAvailabilityOutage("backend_unavailable", message)
       return false
     } finally {
       refreshInFlight = null
@@ -188,6 +187,12 @@ export async function apiFetch<T>(
 
   if (isMutatingMethod(method) && !isPublicAuthPath(path)) {
     const csrfToken = getCsrfTokenFromCookie()
+    if (!csrfToken) {
+      return {
+        success: false,
+        error: createApiError(419, "CSRF token is missing."),
+      }
+    }
     if (csrfToken && !headers[CSRF_HEADER_NAME]) {
       headers[CSRF_HEADER_NAME] = csrfToken
     }
@@ -238,7 +243,10 @@ export async function apiFetch<T>(
       }
     }
 
-    clearOutage()
+    clearOutage("backend_unavailable")
+    if (path === "/permissions/check") {
+      clearOutage("authz_unavailable")
+    }
     // 204 No Content и пустое тело — не парсим JSON (контракт API)
     const data = rawText
       ? (text as unknown as T)

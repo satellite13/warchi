@@ -11,6 +11,7 @@ import {
   passwordStrength,
   type PasswordRuleId
 } from "@/utils/passwordPolicy";
+import { isSafeInternalRedirectPath } from "@/utils/safeRedirect";
 
 const router = useRouter();
 const route = useRoute();
@@ -118,7 +119,7 @@ const handleSubmit = async () => {
       mode.value === "login" ? t("auth.successLogin") : t("auth.successRegister");
     if (mode.value === "login") {
       const redirectTarget =
-        typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
+        typeof route.query.redirect === "string" && isSafeInternalRedirectPath(route.query.redirect)
           ? route.query.redirect
           : null;
       await router.push(redirectTarget ?? { name: "home" });

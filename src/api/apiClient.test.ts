@@ -22,6 +22,7 @@ vi.mock('@/utils/csrfCookie', () => ({
 
 import { apiGet, apiPost, apiPut, apiDelete } from './apiClient'
 import { clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
+import { getCsrfTokenFromCookie } from '@/utils/csrfCookie'
 
 function mockFetchResponse(body: unknown, status = 200) {
   const text = body === undefined ? '' : JSON.stringify(body)
@@ -262,6 +263,53 @@ describe('apiClient', () => {
       expect(callCount).toBe(2)
       expect(clearAuthStorage).toHaveBeenCalled()
       expect(emitAuthCleared).toHaveBeenCalled()
+    })
+
+    it('does not clear session when refresh fails because of a network error', async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/auth/refresh')) {
+          return Promise.reject(new Error('Network failure'))
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          text: () => Promise.resolve(JSON.stringify({ message: 'Unauthorized' })),
+        })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/models')
+
+      expect(result.success).toBe(false)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(clearAuthStorage).not.toHaveBeenCalled()
+      expect(emitAuthCleared).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('CSRF protection', () => {
+    it('fails mutating protected requests before fetch when CSRF cookie is missing', async () => {
+      vi.mocked(getCsrfTokenFromCookie).mockReturnValueOnce(null)
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiPost('/models', { name: 'test' })
+
+      expect(result).toEqual({
+        success: false,
+        error: { status: 419, message: 'CSRF token is missing.' },
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('does not require CSRF for public auth requests', async () => {
+      vi.mocked(getCsrfTokenFromCookie).mockReturnValueOnce(null)
+      const fetchMock = mockFetchResponse({ user: { id: 'u1' } })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await apiPost('/auth/login', { email: 'a', password: 'b' })
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
     })
   })
 })

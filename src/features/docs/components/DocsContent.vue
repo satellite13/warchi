@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { marked } from "marked"
+import { sanitizeMarkdownHtml } from "@/utils/sanitizeMarkdownHtml"
 
 const props = defineProps<{
   content: string
@@ -9,53 +10,10 @@ const props = defineProps<{
 }>()
 const { t } = useI18n()
 
-const BLOCKED_TAGS = new Set([
-  "script",
-  "style",
-  "iframe",
-  "object",
-  "embed",
-  "form",
-  "input",
-  "button",
-  "textarea",
-  "select",
-  "link",
-  "meta"
-])
-
-const sanitizeHtml = (unsafeHtml: string): string => {
-  const template = document.createElement("template")
-  template.innerHTML = unsafeHtml
-
-  template.content.querySelectorAll("*").forEach((el) => {
-    if (BLOCKED_TAGS.has(el.tagName.toLowerCase())) {
-      el.remove()
-      return
-    }
-
-    for (const attr of Array.from(el.attributes)) {
-      const attrName = attr.name.toLowerCase()
-      const attrValue = attr.value.trim().toLowerCase()
-
-      if (attrName.startsWith("on")) {
-        el.removeAttribute(attr.name)
-        continue
-      }
-
-      if ((attrName === "href" || attrName === "src") && (attrValue.startsWith("javascript:") || attrValue.startsWith("data:"))) {
-        el.removeAttribute(attr.name)
-      }
-    }
-  })
-
-  return template.innerHTML
-}
-
 const html = computed(() => {
   if (!props.content) return ""
   const parsed = marked.parse(props.content, { async: false }) as string
-  return sanitizeHtml(parsed)
+  return sanitizeMarkdownHtml(parsed)
 })
 </script>
 

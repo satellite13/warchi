@@ -53,7 +53,7 @@ def configure_environment(def scm, def overrideBranch, def overrideTag, def over
         env.INGRESS_HOST = "warchi-preprod-${env.CLUSTER}.apps.lmru.tech"
         env.skip_docker_deploy = 'false'
     } else if (branch == 'develop') {
-        echo "=== DEVELOP BRANCH BUILD → stage ==="
+        echo "=== DEVELOP BRANCH BUILD → dev ==="
         checkout([
                 $class: 'GitSCM',
                 branches: [[name: "${branch}"]],
@@ -65,14 +65,14 @@ def configure_environment(def scm, def overrideBranch, def overrideTag, def over
         def version_suffix = "-${BRANCH}"
         env.DOCKER_IMAGE = "warchi--frontend${version_suffix}"
         env.DOCKER_IMAGE_TAG = UUID.randomUUID().toString()
-        env.deployment_environment = 'stage'
-        env.deployment_namespace = 'warchi-stage'
+        env.deployment_environment = 'dev'
+        env.deployment_namespace = 'warchi-dev'
         env.CLUSTER = 'os1c-polaris-stage-01'
         env.image_days_retention = '7'
         env.VAULT_PATH = 'test'
         env.vault_approle = 'approle-test-ro'
-        env.AREPOS_UPSTREAM = 'arepos-server.warchi-stage.svc.cluster.local'
-        env.INGRESS_HOST = "warchi-stage-${env.CLUSTER}.apps.lmru.tech"
+        env.AREPOS_UPSTREAM = 'arepos-server.warchi-dev.svc.cluster.local'
+        env.INGRESS_HOST = "warchi-dev-${env.CLUSTER}.apps.lmru.tech"
         env.skip_docker_deploy = 'false'
     } else {
         echo "=== BRANCH BUILD: ${branch} (test only, no deploy) ==="

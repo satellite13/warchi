@@ -35,12 +35,15 @@ pipeline {
     triggers {
         gitlab(
                 triggerOnPush: true,
-                triggerOnPushIntegTests: false,
-                triggerOnMergeRequestEvent: false,
-                triggerOnNoteRequest: false,
                 branchFilterType: "All",
                 secretToken: ''
         )
+    }
+
+    parameters {
+        string(name: 'OVERRIDE_BRANCH', defaultValue: '', description: 'Override branch (leave empty for auto-detect)')
+        string(name: 'OVERRIDE_TAG', defaultValue: '', description: 'Override tag for prod release (e.g. 7.10.1)')
+        string(name: 'OVERRIDE_ENV', defaultValue: '', description: 'Override deploy env: stage, preprod, prod (leave empty for auto)')
     }
     stages {
         stage('Checkout') {
@@ -48,7 +51,12 @@ pipeline {
                 script {
                     def checkout = load '.jenkinsjobs/checkout.groovy'
                     deleteDir()
-                    checkout.configure_environment(scm)
+                    checkout.configure_environment(
+                            scm,
+                            params.OVERRIDE_BRANCH,
+                            params.OVERRIDE_TAG,
+                            params.OVERRIDE_ENV
+                    )
                 }
             }
         }

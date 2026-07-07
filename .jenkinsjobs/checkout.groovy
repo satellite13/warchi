@@ -1,7 +1,7 @@
-def configure_environment(def scm) {
-    // Auto-detect branch and tag from GitLab webhook environment variables
-    def tag = env.gitlabTag ?: env.TAG ?: ''
-    def branch = env.gitlabBranch ?: env.BRANCH_NAME ?: ''
+def configure_environment(def scm, def overrideBranch, def overrideTag, def overrideEnv) {
+    // Manual override takes precedence; else auto-detect from GitLab webhook
+    def tag = overrideTag ?: env.gitlabTag ?: env.TAG ?: ''
+    def branch = overrideBranch ?: env.gitlabBranch ?: env.BRANCH_NAME ?: ''
     def is_tag_build = (tag != '')
     env.is_tag_build = String.valueOf(is_tag_build)
 
@@ -84,6 +84,29 @@ def configure_environment(def scm) {
                 gitTool: scm.gitTool
         ])
         env.skip_docker_deploy = 'true'
+    }
+
+    // Manual env override (for testing arbitrary branches)
+    if (overrideEnv && !is_tag_build) {
+        echo "=== OVERRIDING deploy env: ${env.deployment_environment} → ${overrideEnv} ==="
+        def envName = overrideEnv.toLowerCase()
+        env.deployment_environment = envName
+        env.deployment_namespace = "warchi-${envName}"
+        env.AREPOS_UPSTREAM = "arepos-server.warchi-${envName}.svc.cluster.local"
+        env.INGRESS_HOST = "warchi-${envName}-${env.CLUSTER}.apps.lmru.tech"
+        env.skip_docker_deploy = 'false'
+
+        if (envName == 'prod') {
+            env.CLUSTER = 'os1c-polaris-prod-01'
+            env.VAULT_PATH = 'prod'
+            env.vault_approle = 'approle-prod-ro'
+        } else if (envName == 'preprod') {
+            env.VAULT_PATH = 'preprod'
+            env.vault_approle = 'approle-preprod-ro'
+        } else {
+            env.VAULT_PATH = 'test'
+            env.vault_approle = 'approle-test-ro'
+        }
     }
 
     echo "Image: ${env.DOCKER_REGISTRY}/${env.DOCKER_APP_PATH}/${env.DOCKER_IMAGE}:${env.DOCKER_IMAGE_TAG}"

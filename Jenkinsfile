@@ -32,7 +32,16 @@ pipeline {
         }
     }
 
-    // NOTE: GitLab webhook configured in Jenkins job UI (Build Triggers → GitLab webhook)
+    triggers {
+        gitlab(
+                triggerOnPush: true,
+                triggerOnPushIntegTests: false,
+                triggerOnMergeRequestEvent: false,
+                triggerOnNoteRequest: false,
+                branchFilterType: "All",
+                secretToken: ''
+        )
+    }
     stages {
         stage('Checkout') {
             steps {
@@ -190,4 +199,3 @@ pipeline {
         }
     }
 }
-

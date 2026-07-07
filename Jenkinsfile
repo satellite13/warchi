@@ -43,7 +43,7 @@ pipeline {
     parameters {
         string(name: 'OVERRIDE_BRANCH', defaultValue: '', description: 'Override branch (leave empty for auto-detect)')
         string(name: 'OVERRIDE_TAG', defaultValue: '', description: 'Override tag for prod release (e.g. 7.10.1)')
-        string(name: 'OVERRIDE_ENV', defaultValue: '', description: 'Override deploy env: stage, preprod, prod (leave empty for auto)')
+        choice(name: 'OVERRIDE_ENV', choices: ['', 'dev', 'preprod', 'prod'], description: 'Override deploy env (leave empty for auto)')
     }
     stages {
         stage('Checkout') {
@@ -196,7 +196,7 @@ pipeline {
                     if (is_tag_build) {
                         echo "=== TAG RELEASE: deploy ${env.deployment_namespace} (${env.vault_approle}) ==="
                         deploy.get_variables_and_deploy('prod', env.deployment_namespace, env.DOCKER_IMAGE, env.DOCKER_IMAGE_TAG)
-                    } else if (env.deployment_environment == 'stage' || env.deployment_environment == 'preprod') {
+                    } else if (['preprod', 'dev'].contains(env.deployment_environment)) {
                         echo "Deploy to ${env.deployment_namespace} (${env.deployment_environment}, ${env.vault_approle})"
                         deploy.get_variables_and_deploy(env.deployment_environment, env.deployment_namespace, env.DOCKER_IMAGE, env.DOCKER_IMAGE_TAG)
                     } else {

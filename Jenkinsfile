@@ -45,6 +45,19 @@ pipeline {
         string(name: 'OVERRIDE_TAG', defaultValue: '', description: 'Override tag for prod release (e.g. 7.10.1)')
         choice(name: 'OVERRIDE_ENV', choices: ['', 'dev', 'preprod', 'prod'], description: 'Override deploy env (leave empty for auto)')
     }
+    post {
+        always {
+            script {
+                def cx = load '.jenkinsjobs/checkmarx.groovy'
+                try {
+                    cx.deleteCxProject()
+                } catch (e) {
+                    echo "CX cleanup failed (non-critical): ${e.message}"
+                }
+            }
+        }
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -72,6 +85,22 @@ pipeline {
             }
         }
 
+        stage('CX_scan') {
+            steps {
+                script {
+                    def cx = load '.jenkinsjobs/checkmarx.groovy'
+                    timeout(time: 15, unit: 'MINUTES') {
+                        try {
+                            cx.runCheckmarxScan()
+                            cx.sendCxReportToSonar('warchi-frontend')
+                        } catch (e) {
+                            echo "Checkmarx scan failed (non-blocking): ${e.message}"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Lint') {
             steps {
                 script {
@@ -89,11 +118,7 @@ pipeline {
             steps {
                 script {
                     def typecheck = load '.jenkinsjobs/typecheck.groovy'
-                    try {
-                        typecheck.run_typecheck(SERVICE_ACCOUNT)
-                    } catch (e) {
-                        echo "Type-check failed (non-blocking): ${e.message}"
-                    }
+                    typecheck.run_typecheck(SERVICE_ACCOUNT)
                 }
             }
         }
@@ -102,11 +127,7 @@ pipeline {
             steps {
                 script {
                     def tests = load '.jenkinsjobs/unit_tests.groovy'
-                    try {
-                        tests.run_unit_tests(SERVICE_ACCOUNT)
-                    } catch (e) {
-                        echo "Unit-test failed (non-blocking): ${e.message}"
-                    }
+                    tests.run_unit_tests(SERVICE_ACCOUNT)
                 }
             }
         }
@@ -164,8 +185,8 @@ pipeline {
         stage('Scan') {
             steps {
                 script {
-                    // TODO: run_audit_scan()
-                    echo "Scan passed — all good"
+                    def scan = load '.jenkinsjobs/audit_scan.groovy'
+                    scan.run_audit_scan(SERVICE_ACCOUNT)
                 }
             }
         }

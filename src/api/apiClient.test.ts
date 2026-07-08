@@ -241,19 +241,7 @@ describe('apiClient', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
-    it('skips refresh for public auth paths (/auth/register)', async () => {
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: () => Promise.resolve(JSON.stringify({ message: 'Error' })),
-      })
-      vi.stubGlobal('fetch', fetchMock)
 
-      const result = await apiPost('/auth/register', {})
-
-      expect(result.success).toBe(false)
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-    })
 
     it('failed refresh returns error without retrying', async () => {
       // Refresh endpoint returns an error

@@ -31,7 +31,7 @@ const isLoading = ref(false)
 const isSavingId = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
-const searchEmail = ref('')
+const searchText = ref('')
 
 const roleOptions: UserRole[] = ['USER', 'ADMIN']
 
@@ -61,8 +61,8 @@ const loadUsers = async (): Promise<void> => {
   const query = pagedListParams(0, 200)
   query.set('sort', 'email,asc')
 
-  if (searchEmail.value.trim()) {
-    query.set('email', searchEmail.value.trim())
+  if (searchText.value.trim()) {
+    query.set('search', searchText.value.trim())
   }
 
   const result = await apiGet<PaginatedResponse<User>>(`/users?${query.toString()}`)
@@ -133,7 +133,7 @@ const {
 } = useUserPasswordEdit(isSavingId, errorMessage, successMessage, updateUser)
 
 const clearSearch = () => {
-  searchEmail.value = ''
+   searchText.value = ''
   loadUsers()
 }
 
@@ -163,13 +163,13 @@ onMounted(() => {
             />
           </svg>
           <input
-            v-model="searchEmail"
+            v-model="searchText"
             class="au-search__input"
             type="text"
             :placeholder="t('adminUsers.searchByEmail')"
             :disabled="isLoading"
           />
-          <button v-if="searchEmail" type="button" class="au-search__clear" @click="clearSearch">
+          <button v-if="searchText" type="button" class="au-search__clear" @click="clearSearch">
             <svg viewBox="0 0 16 16" fill="none">
               <path
                 d="M4 4l8 8M12 4l-8 8"
@@ -288,6 +288,9 @@ onMounted(() => {
                 </div>
                 <div class="au-user__meta">
                   <span class="au-user__email">{{ user.email }}</span>
+                  <span v-if="user.oidcSub" class="au-user__oidc">
+                    LDAP: {{ user.oidcSub }}
+                  </span>
                   <span class="au-user__id">{{ user.id }}</span>
                 </div>
               </div>
@@ -795,6 +798,14 @@ onMounted(() => {
   font-size: 11px;
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-user__oidc {
+  font-size: 11px;
+  color: var(--primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

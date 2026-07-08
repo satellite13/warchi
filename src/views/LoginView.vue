@@ -3,35 +3,25 @@ import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
+import { useOidcAuth } from "../composables/useOidcAuth";
 import LanguageSwitcher from "../components/layout/LanguageSwitcher.vue";
 
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
-const { login, register, registerAdmin } = useAuth();
+const { login } = useAuth();
+const { ssoLogin } = useOidcAuth();
 
 const email = ref("");
 const password = ref("");
-const adminSecret = ref("");
-const firstName = ref("");
-const lastName = ref("");
-const middleName = ref("");
-const position = ref("");
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
-const mode = ref<"login" | "register" | "register-admin">("login");
-
-const modeTitle = computed(() => {
-  if (mode.value === "register") return t("auth.modeRegisterTitle");
-  if (mode.value === "register-admin") return t("auth.modeRegisterAdminTitle");
-  return t("auth.modeLoginTitle");
-});
+const isSsoLoading = ref(false);
+const ssoError = ref<string | null>(null);
 
 const submitLabel = computed(() => {
   if (isLoading.value) return t("auth.submitLoading");
-  if (mode.value === "register") return t("auth.submitRegister");
-  if (mode.value === "register-admin") return t("auth.submitRegisterAdmin");
   return t("auth.submitLogin");
 });
 
@@ -39,13 +29,6 @@ const validateForm = (): string | null => {
   if (!email.value.trim()) return t("auth.validationEmailRequired");
   if (!password.value.trim()) return t("auth.validationPasswordRequired");
   if (password.value.trim().length < 6) return t("auth.validationPasswordMin");
-  if (mode.value !== "login") {
-    if (!firstName.value.trim()) return t("auth.validationFirstNameRequired");
-    if (!lastName.value.trim()) return t("auth.validationLastNameRequired");
-  }
-  if (mode.value === "register-admin" && !adminSecret.value.trim()) {
-    return t("auth.validationAdminSecretRequired");
-  }
   return null;
 };
 
@@ -60,56 +43,31 @@ const handleSubmit = async () => {
   errorMessage.value = null;
   successMessage.value = null;
 
-  const emailValue = email.value.trim();
-  const passwordValue = password.value.trim();
-  const adminSecretValue = adminSecret.value.trim();
-  const profileValue = {
-    firstName: firstName.value.trim(),
-    lastName: lastName.value.trim(),
-    middleName: middleName.value.trim() || undefined,
-    position: position.value.trim() || undefined
-  };
-
-  const result =
-    mode.value === "register"
-      ? await register(emailValue, passwordValue, profileValue)
-      : mode.value === "register-admin"
-        ? await registerAdmin(emailValue, passwordValue, adminSecretValue, profileValue)
-        : await login(emailValue, passwordValue);
+  const result = await login(email.value.trim(), password.value.trim());
 
   isLoading.value = false;
 
   if (result.success) {
-    successMessage.value =
-      mode.value === "login" ? t("auth.successLogin") : t("auth.successRegister");
-    if (mode.value === "login") {
-      const redirectTarget =
-        typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
-          ? route.query.redirect
-          : null;
-      await router.push(redirectTarget ?? { name: "home" });
-    } else {
-      await router.push({ name: "home" });
-    }
+    successMessage.value = t("auth.successLogin");
+    const redirectTarget =
+      typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
+        ? route.query.redirect
+        : null;
+    await router.push(redirectTarget ?? { name: "home" });
   } else {
     errorMessage.value = result.error || t("auth.defaultError");
   }
 };
 
-const tabs = computed(
-  () =>
-    [
-      { key: "login", label: t("auth.tabLogin") },
-      { key: "register", label: t("auth.tabRegister") },
-      { key: "register-admin", label: t("auth.tabAdmin") }
-    ] as const
-);
-
-const setMode = (newMode: "login" | "register" | "register-admin") => {
-  if (isLoading.value) return;
-  mode.value = newMode;
-  errorMessage.value = null;
-  successMessage.value = null;
+const handleSsoLogin = async () => {
+  isSsoLoading.value = true;
+  ssoError.value = null;
+  try {
+    await ssoLogin();
+  } catch {
+    ssoError.value = t("auth.ssoError");
+    isSsoLoading.value = false;
+  }
 };
 </script>
 
@@ -134,99 +92,28 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
         <LanguageSwitcher class="card-header__language" />
       </div>
 
-      <div class="tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          type="button"
-          class="tab"
-          :class="{ 'tab--active': mode === tab.key }"
-          @click="setMode(tab.key)"
-        >
-          {{ tab.label }}
-          <span v-if="mode === tab.key" class="tab__indicator"></span>
-        </button>
+      <!-- SSO Login Button -->
+      <button
+        type="button"
+        class="sso-btn"
+        :disabled="isSsoLoading"
+        @click="handleSsoLogin"
+      >
+        <svg v-if="!isSsoLoading" class="sso-btn__icon" viewBox="0 0 20 20" fill="none">
+          <path d="M10 2L13.5 6H17L14 9.5L15.5 14L10 11L4.5 14L6 9.5L3 6H6.5L10 2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
+        {{ t("auth.submitSso") }}
+      </button>
+
+      <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
+
+      <div class="divider">
+        <span>{{ t("auth.orDivider") }}</span>
       </div>
 
       <form class="form" @submit.prevent="handleSubmit">
-        <h2 class="form__title">{{ modeTitle }}</h2>
-
-        <Transition name="slide">
-          <section v-if="mode !== 'login'" class="profile-fields">
-            <div class="field">
-              <label class="field__label" for="last-name">{{ t("auth.labelLastName") }}</label>
-              <div class="field__wrap">
-                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M4 16c1.2-2.3 3.2-3.5 6-3.5s4.8 1.2 6 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                <input
-                  id="last-name"
-                  v-model="lastName"
-                  class="field__input"
-                  type="text"
-                  :placeholder="t('auth.placeholderLastName')"
-                  autocomplete="family-name"
-                  :disabled="isLoading"
-                >
-              </div>
-            </div>
-            <div class="field">
-              <label class="field__label" for="first-name">{{ t("auth.labelFirstName") }}</label>
-              <div class="field__wrap">
-                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M4 16c1.2-2.3 3.2-3.5 6-3.5s4.8 1.2 6 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                <input
-                  id="first-name"
-                  v-model="firstName"
-                  class="field__input"
-                  type="text"
-                  :placeholder="t('auth.placeholderFirstName')"
-                  autocomplete="given-name"
-                  :disabled="isLoading"
-                >
-              </div>
-            </div>
-            <div class="field">
-              <label class="field__label" for="middle-name">{{ t("auth.labelMiddleName") }}</label>
-              <div class="field__wrap">
-                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M4 16c1.2-2.3 3.2-3.5 6-3.5s4.8 1.2 6 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                <input
-                  id="middle-name"
-                  v-model="middleName"
-                  class="field__input"
-                  type="text"
-                  :placeholder="t('auth.placeholderMiddleName')"
-                  autocomplete="additional-name"
-                  :disabled="isLoading"
-                >
-              </div>
-            </div>
-            <div class="field">
-              <label class="field__label" for="position">{{ t("auth.labelPosition") }}</label>
-              <div class="field__wrap">
-                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
-                  <rect x="3" y="5" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M7 5.5V4.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 13 4.5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                <input
-                  id="position"
-                  v-model="position"
-                  class="field__input"
-                  type="text"
-                  :placeholder="t('auth.placeholderPosition')"
-                  autocomplete="organization-title"
-                  :disabled="isLoading"
-                >
-              </div>
-            </div>
-          </section>
-        </Transition>
+        <h2 class="form__title">{{ t("auth.modeLoginTitle") }}</h2>
 
         <div class="field">
           <label class="field__label" for="email">{{ t("auth.labelEmail") }}</label>
@@ -265,25 +152,6 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
             >
           </div>
         </div>
-
-        <Transition name="slide">
-          <div v-if="mode === 'register-admin'" class="field">
-            <label class="field__label" for="admin-secret">{{ t("auth.labelAdminSecret") }}</label>
-            <div class="field__wrap">
-              <svg class="field__icon" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2l1.5 4.5H16l-3.7 2.7 1.4 4.3L10 11l-3.7 2.5 1.4-4.3L4 6.5h4.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-              </svg>
-              <input
-                id="admin-secret"
-                v-model="adminSecret"
-                class="field__input"
-                type="password"
-                :placeholder="t('auth.placeholderAdminSecret')"
-                :disabled="isLoading"
-              >
-            </div>
-          </div>
-        </Transition>
 
         <Transition name="fade">
           <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
@@ -416,7 +284,7 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .card-header__language {
@@ -434,7 +302,7 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   font-size: 26px;
   font-weight: 700;
   color: var(--base-text);
-  letter-spacing: -0.04em;
+  letterSpacing: -0.04em;
   line-height: 1.1;
 }
 
@@ -445,55 +313,73 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   letter-spacing: 0.01em;
 }
 
-/* ─── Tabs ────────────────────────────────────── */
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 28px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  padding-bottom: 0;
-}
-
-.tab {
+/* ─── SSO Button ──────────────────────────────── */
+.sso-btn {
   position: relative;
-  flex: 1;
-  padding: 10px 8px 12px;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 15px;
   font-weight: 600;
   font-family: inherit;
+  color: #fff;
+  background: #2a9d8f;
   border: none;
-  background: transparent;
-  color: var(--text-subtle);
+  border-radius: 12px;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
 }
 
-.tab:hover:not(.tab--active) {
-  color: var(--text-muted);
+.sso-btn:hover:not(:disabled) {
+  background: #238b7e;
+  box-shadow: 0 6px 24px rgba(42, 157, 143, 0.28);
+  transform: translateY(-1px);
 }
 
-.tab--active {
-  color: var(--primary);
+.sso-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
-.tab__indicator {
-  position: absolute;
-  bottom: -1px;
-  left: 12%;
-  right: 12%;
-  height: 2px;
-  background: var(--primary);
-  border-radius: 2px 2px 0 0;
-  animation: indicatorIn 0.25s ease-out;
+.sso-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-@keyframes indicatorIn {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
+.sso-btn__icon {
+  width: 20px;
+  height: 20px;
+}
+
+.sso-btn__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ─── Divider ─────────────────────────────────── */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--text-subtle);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* ─── Form ────────────────────────────────────── */
@@ -558,10 +444,6 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   color: var(--base-text);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   box-sizing: border-box;
-}
-
-.field__input--plain {
-  padding-left: 14px;
 }
 
 .field__input:focus {
@@ -648,36 +530,6 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
 }
 
 /* ─── Transitions ─────────────────────────────── */
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  max-height: 0;
-  margin-top: -20px;
-}
-
-.slide-enter-to,
-.slide-leave-from {
-  opacity: 1;
-  max-height: 420px;
-  margin-top: 0;
-}
-
-.profile-fields {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px 12px;
-  padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.48);
-}
-
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;

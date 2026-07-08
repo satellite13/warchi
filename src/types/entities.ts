@@ -60,6 +60,7 @@ export interface PaginatedResponse<T> {
 export interface User {
   id: string;
   email: string;
+  oidcSub?: string | null;
   role?: UserRole;
   isActive?: boolean;
   firstName?: string | null;

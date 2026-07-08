@@ -61,7 +61,7 @@ const clearSession = (): void => {
 }
 
 const isPublicAuthPath = (path: string): boolean =>
-  ["/auth/login", "/auth/register", "/auth/register-admin", "/auth/refresh"].includes(path)
+  ["/auth/login", "/auth/refresh", "/auth/sso/callback", "/auth/sso/link/callback"].includes(path)
 
 const tryRefreshAccessToken = async (): Promise<boolean> => {
   if (refreshInFlight) {

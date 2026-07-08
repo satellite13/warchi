@@ -12,6 +12,7 @@ import {
   setRefreshToken
 } from "./authStorage";
 import type { User, UserProfileForm } from "../types/entities";
+// register and registerAdmin removed — auth now via Keycloak SSO
 import { normalizeUser } from "../utils/userRole";
 
 export type { User };
@@ -76,42 +77,6 @@ export function useAuth() {
     return { success: true };
   }
 
-  async function register(
-    email: string,
-    password: string,
-    profile: UserProfileForm
-  ): Promise<AuthResult> {
-    const result = await apiPost<AuthResponse>("/auth/register", { email, password, ...profile });
-
-    if (!result.success) {
-      return { success: false, error: result.error.message };
-    }
-
-    applyAuth(result.data);
-    return { success: true };
-  }
-
-  async function registerAdmin(
-    email: string,
-    password: string,
-    adminSecret: string,
-    profile: UserProfileForm
-  ): Promise<AuthResult> {
-    const result = await apiPost<AuthResponse>("/auth/register-admin", {
-      email,
-      password,
-      ...profile,
-      adminSecret
-    });
-
-    if (!result.success) {
-      return { success: false, error: result.error.message };
-    }
-
-    applyAuth(result.data);
-    return { success: true };
-  }
-
   async function loadCurrentUser(): Promise<void> {
     const result = await apiGet<User>("/auth/me");
     if (!result.success) return;
@@ -145,8 +110,6 @@ export function useAuth() {
     isAuthenticated,
     isAdmin,
     login,
-    register,
-    registerAdmin,
     loadCurrentUser,
     updateMyProfile,
     logout

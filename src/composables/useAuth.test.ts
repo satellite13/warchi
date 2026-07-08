@@ -106,56 +106,7 @@ describe('useAuth', () => {
     })
   })
 
-  describe('register', () => {
-    it('calls apiPost with /auth/register and profile data', async () => {
-      mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
-
-      const { register } = useAuth()
-      await register('test@example.com', 'pass', {
-        firstName: 'John',
-        lastName: 'Doe',
-      })
-
-      expect(mockApiPost).toHaveBeenCalledWith('/auth/register', {
-        email: 'test@example.com',
-        password: 'pass',
-        firstName: 'John',
-        lastName: 'Doe',
-      })
-    })
-
-    it('returns { success: true } on successful registration', async () => {
-      mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
-
-      const { register } = useAuth()
-      const result = await register('test@example.com', 'pass', {
-        firstName: 'John',
-        lastName: 'Doe',
-      })
-
-      expect(result).toEqual({ success: true })
-    })
-  })
-
-  describe('registerAdmin', () => {
-    it('includes adminSecret in the request body', async () => {
-      mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
-
-      const { registerAdmin } = useAuth()
-      await registerAdmin('admin@example.com', 'pass', 'secret123', {
-        firstName: 'Admin',
-        lastName: 'User',
-      })
-
-      expect(mockApiPost).toHaveBeenCalledWith('/auth/register-admin', {
-        email: 'admin@example.com',
-        password: 'pass',
-        firstName: 'Admin',
-        lastName: 'User',
-        adminSecret: 'secret123',
-      })
-    })
-  })
+  // Register and registerAdmin removed — auth now via Keycloak SSO
 
   describe('logout', () => {
     it('clears tokens, user, and emits cleared event', async () => {

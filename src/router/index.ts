@@ -13,6 +13,18 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: "/auth/oidc/callback",
+      name: "oidc-callback",
+      component: () => import("../views/OidcCallbackView.vue"),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: "/auth/oidc/link-callback",
+      name: "oidc-link-callback",
+      component: () => import("../views/OidcLinkCallbackView.vue"),
+      meta: { requiresAuth: false }
+    },
+    {
       path: "/admin",
       component: () => import("../layouts/AdminLayout.vue"),
       children: [
@@ -98,13 +110,11 @@ const router = createRouter({
     },
     {
       path: "/",
-      name: "landing",
-      component: () => import("../views/LandingView.vue"),
-      meta: { requiresAuth: false }
+      redirect: "/login"
     },
     {
       path: "/landing",
-      redirect: "/"
+      redirect: "/login"
     },
     {
       path: "/wiki",

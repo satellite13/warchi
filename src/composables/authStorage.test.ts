@@ -95,6 +95,26 @@ describe('authStorage', () => {
     })
   })
 
+  describe('cookie-session storage contract', () => {
+    it('persists only the UI user profile key, never JWT token fields', async () => {
+      const { saveStoredUser, loadStoredUser } = await loadModule()
+      const user = { id: 'u1', email: 'test@test.com', role: 'USER' as const }
+
+      saveStoredUser(user)
+
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+        'warchi_user',
+        expect.not.stringMatching(/accessToken|refreshToken/)
+      )
+      expect(store.has('warchi_access_token')).toBe(false)
+      expect(store.has('warchi_refresh_token')).toBe(false)
+      expect(loadStoredUser()).toEqual(user)
+      const stored = JSON.parse(store.get('warchi_user')!) as Record<string, unknown>
+      expect(stored).not.toHaveProperty('accessToken')
+      expect(stored).not.toHaveProperty('refreshToken')
+    })
+  })
+
   describe('emitAuthUpdated', () => {
     it('dispatches custom event with user detail', async () => {
       const { emitAuthUpdated, AUTH_UPDATED_EVENT } = await loadModule()

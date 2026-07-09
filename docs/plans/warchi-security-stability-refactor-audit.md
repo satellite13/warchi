@@ -428,10 +428,10 @@ Rollout:
 
 ### Phase 3: Cleanup And Documentation
 
-- Remove dead auth token fields.
-- Update in-app auth docs.
-- Align missing docs references.
-- Add catch-all 404 route if product wants explicit unknown-route UX.
+- Remove dead auth token fields. ✅ (frontend `AuthResponse` is `{ user }` only; tokens stay httpOnly cookies)
+- Update in-app auth docs. ✅
+- Align missing docs references. ✅ (obsolete `docs/plans/security-phase-1.md` removed; live plan is this audit)
+- Add catch-all 404 route if product wants explicit unknown-route UX. ✅ (redirect to home)
 
 ## Verification Matrix
 

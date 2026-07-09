@@ -231,9 +231,11 @@ Internal flags (like `_fromType`) are stripped before serialization.
 ### Authentication & Security
 
 - JWT tokens are held in httpOnly cookies; frontend localStorage stores only the user profile for UI state
+  (profile in localStorage is not a security boundary; see in-app docs `/docs/auth`)
 - Automatic cookie-session refresh on 401 responses
 - Custom events for auth state changes (`warchi-auth-updated`, `warchi-auth-cleared`)
 - Router guards check `isAuthenticated` and `requiresAdminPanel` via permission API for admin routes
+- Mutating API calls require CSRF (`X-CSRF-Token` from cookie); missing token fails closed (419)
 
 ## Testing Guidelines
 

@@ -7,8 +7,9 @@ import {
   buildBatchSaveRequest,
   hasBatchChanges,
   parseBatchSaveConflictDetails,
+  refreshBatchSavedEntityTimestamps,
 } from './useModelBatchSave'
-import { apiPost } from '@/composables/useApi'
+import { apiGet, apiPost } from '@/composables/useApi'
 
 vi.mock('@/composables/useApi', () => ({
   apiGet: vi.fn(),
@@ -207,5 +208,42 @@ describe('useModelBatchSave', () => {
     })
     expect(diagrams[0]?.parsedAttrs.instances.nodes[0]?.modelNodeId).toBe('node-real')
     expect(diagrams[0]?.parsedAttrs.instances.edges[0]?.modelLinkId).toBe('link-real')
+  })
+
+  it('refreshes updatedAt after batch save so the next save does not false-409', async () => {
+    const nodes = [createNode({ id: 'node-1', updatedAt: '2026-01-01T00:00:00.000Z', _isDirty: true })]
+    const links = [
+      createLink({ id: 'link-1', updatedAt: '2026-01-02T00:00:00.000Z', _isDirty: true }),
+    ]
+    const diagrams = [
+      createDiagram({ id: 'diagram-1', updatedAt: '2026-01-03T00:00:00.000Z', _isDirty: true }),
+    ]
+    const request = buildBatchSaveRequest(nodes, links, diagrams)
+    vi.mocked(apiGet)
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...nodes[0]!, updatedAt: '2026-01-01T01:00:00.000Z', attrs: null },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...links[0]!, updatedAt: '2026-01-02T01:00:00.000Z', attrs: null },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...diagrams[0]!, updatedAt: '2026-01-03T01:00:00.000Z', attrs: null },
+      })
+
+    await refreshBatchSavedEntityTimestamps(
+      { nodes, links, diagrams },
+      request,
+      { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} }
+    )
+
+    expect(apiGet).toHaveBeenCalledWith('/nodes/node-1')
+    expect(apiGet).toHaveBeenCalledWith('/links/link-1')
+    expect(apiGet).toHaveBeenCalledWith('/diagrams/diagram-1')
+    expect(nodes[0]?.updatedAt).toBe('2026-01-01T01:00:00.000Z')
+    expect(links[0]?.updatedAt).toBe('2026-01-02T01:00:00.000Z')
+    expect(diagrams[0]?.updatedAt).toBe('2026-01-03T01:00:00.000Z')
   })
 })

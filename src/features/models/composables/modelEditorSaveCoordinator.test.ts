@@ -160,8 +160,12 @@ describe("executeModelEditorSave", () => {
     expect(mocks.buildBatchSaveRequest).not.toHaveBeenCalled()
   })
 
-  it("runs fallback save pipeline and removes deleted entities", async () => {
+  it("skips legacy entity pipeline when there are no batch changes", async () => {
     const state = ref(createState())
+    // Local-only soft deletes (new+deleted) and clean rows — nothing for entity pipelines.
+    state.value.nodes = state.value.nodes.filter(n => !n._isDeleted)
+    state.value.links = state.value.links.filter(l => !l._isDeleted)
+    state.value.diagrams = state.value.diagrams.filter(d => !d._isDeleted)
     const pendingForceBatch = ref(true)
     const onProgress = vi.fn()
 
@@ -187,14 +191,123 @@ describe("executeModelEditorSave", () => {
     expect(result).toBe(true)
     expect(mocks.applyDiagramGarbageSanitizeToState).toHaveBeenCalled()
     expect(mocks.buildBatchSaveRequest).toHaveBeenCalled()
-    expect(mocks.saveNodes).toHaveBeenCalled()
-    expect(mocks.remapNodeIds).toHaveBeenCalled()
-    expect(mocks.saveLinks).toHaveBeenCalled()
-    expect(mocks.saveDiagrams).toHaveBeenCalled()
+    expect(mocks.batchSave).not.toHaveBeenCalled()
+    expect(mocks.saveNodes).not.toHaveBeenCalled()
+    expect(mocks.remapNodeIds).not.toHaveBeenCalled()
+    expect(mocks.saveLinks).not.toHaveBeenCalled()
+    expect(mocks.saveDiagrams).not.toHaveBeenCalled()
     expect(pendingForceBatch.value).toBe(false)
     expect(state.value.nodes.map(n => n.id)).toEqual(["n-1"])
     expect(state.value.links.map(l => l.id)).toEqual(["l-1"])
     expect(state.value.diagrams.map(d => d.id)).toEqual(["d-1"])
+  })
+
+  it("uses batch path for entity create/update/delete and refreshes timestamps", async () => {
+    const batchRequest = {
+      nodes: { create: [{ tempId: "tmp" }], update: [], delete: [] },
+      links: { create: [], update: [], delete: [] },
+      diagrams: { create: [], update: [], delete: [] },
+    }
+    const batchResponse = {
+      nodeIdMap: { tmp: "n-real" },
+      linkIdMap: {},
+      diagramIdMap: {},
+    }
+    mocks.hasBatchChanges.mockReturnValue(true)
+    mocks.buildBatchSaveRequest.mockReturnValue(batchRequest)
+    mocks.batchSave.mockResolvedValue({ success: true, data: batchResponse })
+
+    const state = ref(createState())
+    const nodesBefore = state.value.nodes
+    const linksBefore = state.value.links
+    const diagramsBefore = state.value.diagrams
+    const result = await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref<ModelData[]>([]),
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError: ref<string | null>(null),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear: vi.fn(),
+    })
+
+    expect(result).toBe(true)
+    expect(mocks.batchSave).toHaveBeenCalledWith("model-1", batchRequest)
+    expect(mocks.applyBatchRemapping).toHaveBeenCalledWith(
+      batchResponse,
+      nodesBefore,
+      linksBefore,
+      diagramsBefore,
+      batchRequest
+    )
+    expect(mocks.refreshBatchSavedEntityTimestamps).toHaveBeenCalledWith(
+      {
+        nodes: nodesBefore,
+        links: linksBefore,
+        diagrams: diagramsBefore,
+      },
+      batchRequest,
+      batchResponse
+    )
+    expect(mocks.saveNodes).not.toHaveBeenCalled()
+    expect(mocks.saveLinks).not.toHaveBeenCalled()
+    expect(mocks.saveDiagrams).not.toHaveBeenCalled()
+    expect(state.value.nodes.map(n => n.id)).toEqual(["n-1"])
+  })
+
+  it("saves model metadata without calling entity pipelines when only the model is dirty", async () => {
+    const model = ref<ModelData | null>({
+      id: "model-1",
+      name: "Renamed",
+      version: "1.0.0",
+      ownerId: "owner-1",
+      attrs: null,
+    })
+    const modelDirty = ref(true)
+    const modelInitialName = ref("Model")
+    const modelCatalog = ref<ModelData[]>([])
+    const saved = {
+      id: "model-1",
+      name: "Renamed",
+      version: "1.0.0",
+      ownerId: "owner-1",
+      attrs: null,
+    }
+    mocks.saveModelMetadata.mockResolvedValue({ data: saved })
+    const state = ref(createState())
+    state.value.nodes = state.value.nodes.filter(n => !n._isDeleted)
+    state.value.links = state.value.links.filter(l => !l._isDeleted)
+    state.value.diagrams = state.value.diagrams.filter(d => !d._isDeleted)
+
+    const result = await executeModelEditorSave({
+      model,
+      modelDirty,
+      modelInitialName,
+      modelCatalog,
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError: ref<string | null>(null),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear: vi.fn(),
+    })
+
+    expect(result).toBe(true)
+    expect(mocks.saveModelMetadata).toHaveBeenCalled()
+    expect(model.value).toEqual(saved)
+    expect(modelDirty.value).toBe(false)
+    expect(modelInitialName.value).toBe("Renamed")
+    expect(mocks.batchSave).not.toHaveBeenCalled()
+    expect(mocks.saveNodes).not.toHaveBeenCalled()
   })
 
   it("stores conflict list on batch 409", async () => {
@@ -237,5 +350,43 @@ describe("executeModelEditorSave", () => {
     expect(batchSaveConflict.value).toEqual(conflicts)
     expect(scheduleSaveErrorClear).not.toHaveBeenCalled()
     expect(mocks.saveNodes).not.toHaveBeenCalled()
+  })
+
+  it("falls back to legacy entity pipeline only when dirty state is missing from the batch request", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    mocks.hasBatchChanges.mockReturnValue(false)
+    const state = ref(createState())
+    const dirtyNode = state.value.nodes[0]
+    if (!dirtyNode) throw new Error("expected node")
+    dirtyNode._isDirty = true
+
+    const result = await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref<ModelData[]>([]),
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError: ref<string | null>(null),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear: vi.fn(),
+    })
+
+    expect(result).toBe(true)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("falling back to legacy save pipeline")
+    )
+    expect(mocks.saveNodes).toHaveBeenCalled()
+    expect(mocks.remapNodeIds).toHaveBeenCalled()
+    expect(mocks.saveLinks).toHaveBeenCalled()
+    expect(mocks.saveDiagrams).toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 })

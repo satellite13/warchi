@@ -1,7 +1,7 @@
 import type { Ref } from "vue"
 import type { ModelData } from "@/types/entities"
 import type { BatchConflictItem } from "./useModelBatchSave"
-import type { ModelEditorState } from "../types"
+import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from "../types"
 import { applyDiagramGarbageSanitizeToState } from "../utils/sanitizeDiagramInstances"
 import {
   applyBatchRemapping,
@@ -28,6 +28,18 @@ type ExecuteModelEditorSaveOptions = {
   scheduleSaveErrorClear: () => void
 }
 
+/** Same dirty filters as batch/legacy pipelines — used only for guarded fallback detection. */
+export function hasLegacyEntitySaveWork(
+  nodes: EditorNode[],
+  links: EditorLink[],
+  diagrams: EditorDiagram[]
+): boolean {
+  const entityNeedsSave = (row: { _isNew?: boolean; _isDirty?: boolean; _isDeleted?: boolean }): boolean =>
+    Boolean((row._isNew && !row._isDeleted) || (row._isDirty && !row._isDeleted && !row._isNew) || (row._isDeleted && !row._isNew))
+
+  return nodes.some(entityNeedsSave) || links.some(entityNeedsSave) || diagrams.some(entityNeedsSave)
+}
+
 export async function executeModelEditorSave(options: ExecuteModelEditorSaveOptions): Promise<boolean> {
   const modelValue = options.model.value
   if (!modelValue) return false
@@ -43,12 +55,14 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
       options.modelDirty.value = false
     }
 
-    let usedBatch = false
     const forceBatch = options.pendingForceBatch.value
     options.pendingForceBatch.value = false
 
     applyDiagramGarbageSanitizeToState(options.state.value)
 
+    // Batch is the primary path for node/link/diagram create/update/delete.
+    // Legacy per-entity pipeline remains only as a guarded fallback for unexpected
+    // dirty state that somehow was not captured by buildBatchSaveRequest.
     const batchRequest = buildBatchSaveRequest(nodes, links, diagrams, { force: forceBatch })
     if (hasBatchChanges(batchRequest)) {
       const batchResult = await batchSave(modelId, batchRequest)
@@ -64,7 +78,6 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
           batchRequest,
           batchResult.data
         )
-        usedBatch = true
       } else if (batchResult.error.status === 409) {
         const conflicts = parseBatchSaveConflictDetails(batchResult.error.details)
         if (conflicts && conflicts.length > 0) {
@@ -80,9 +93,10 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
         options.scheduleSaveErrorClear()
         return false
       }
-    }
-
-    if (!usedBatch) {
+    } else if (hasLegacyEntitySaveWork(nodes, links, diagrams)) {
+      console.warn(
+        "[ModelEditorSave] Unexpected dirty entity state without batch changes; falling back to legacy save pipeline"
+      )
       const newNodeIdMap = await saveNodes(nodes, modelId, ownerId, options.onProgress)
       remapNodeIds(newNodeIdMap, links, diagrams)
       await saveLinks(links, diagrams, modelId, ownerId, options.onProgress)

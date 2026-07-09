@@ -88,7 +88,7 @@ export function sanitizeDiagramInstancesForModel(
 
 /**
  * Перед сохранением: чистит все диаграммы в state. При изменениях помечает диаграмму `_isDirty`,
- * чтобы batch/legacy save отправили исправленный JSON на сервер.
+ * чтобы batch save (primary) отправил исправленный JSON на сервер.
  */
 export function applyDiagramGarbageSanitizeToState(state: ModelEditorState): void {
   for (const d of state.diagrams) {

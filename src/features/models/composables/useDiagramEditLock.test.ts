@@ -141,6 +141,40 @@ describe('useDiagramEditLock', () => {
     expect(lock.remoteDiagramUpdatedAt.value).toBe('2026-01-02T00:00:00.000Z')
   })
 
+  it('infers blocked state from locks list when acquire returns bare 409', async () => {
+    vi.mocked(apiPost).mockResolvedValue({
+      success: false,
+      error: { status: 409, message: 'Diagram lock is held by another user' },
+    })
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            diagramId: 'diagram-1',
+            isLocked: true,
+            lockedByUserId: 'user-2',
+            lockedByDisplay: 'Other User',
+            diagramUpdatedAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        size: 20,
+        number: 0,
+      },
+    })
+    const { lock, selectedDiagramId } = mountLock()
+
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    expect(lock.isLockHeld.value).toBe(false)
+    expect(lock.isBlockedByOther.value).toBe(true)
+    expect(lock.lockHolderDisplay.value).toBe('Other User')
+    expect(lock.remoteDiagramUpdatedAt.value).toBe('2026-01-02T00:00:00.000Z')
+  })
+
   it('revokes local lock state when verify before save no longer finds our lock', async () => {
     const { lock, selectedDiagramId } = mountLock()
 

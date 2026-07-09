@@ -460,6 +460,9 @@ Structure/stability:
 - Builder parity tests for notation/model canvas label and style behavior.
 - Composable-level live sync/lock/collab tests.
 - Two-context Playwright scenario for lock/spectator/live update after the sync facade exists.
+  (`tests/diagram-lock-spectator.spec.ts`; requires reachable API via `VITE_API_PROXY_TARGET`).
+  Frontend also tolerates bare 409 acquire by inferring blocked state from locks list;
+  arepos acquire conflict returns 200 + `reason=LOCKED_BY_OTHER`.
 
 Repo gates after implementation phases:
 

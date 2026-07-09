@@ -8,9 +8,12 @@ import type { DiagramStyle, CustomProperty } from '../notationAttrs'
 
 const DEFAULT_COMPONENT_ANCHORS = { top: 3, right: 1, bottom: 3, left: 1 }
 
-export function resolveComponentAnchorPoints(
-  ds?: DiagramStyle,
-): { top: number; right: number; bottom: number; left: number } {
+export function resolveComponentAnchorPoints(ds?: DiagramStyle): {
+  top: number
+  right: number
+  bottom: number
+  left: number
+} {
   const normalize = (value: unknown, fallback: number): number => {
     const parsed = Math.round(Number(value))
     if (!Number.isFinite(parsed) || parsed < 0) return fallback
@@ -35,18 +38,18 @@ export function resolveLabelTemplate(
   template: string,
   name: string,
   customProperties: CustomProperty[],
-  typeProperties: CustomProperty[] = [],
+  typeProperties: CustomProperty[] = []
 ): string {
   let out = template
   out = out.replace(/#\{(\w+)\}/g, (_m, key: string) => {
-    const prop = typeProperties.find((p) => p.name === key)
+    const prop = typeProperties.find(p => p.name === key)
     if (!prop) return ''
     const val = prop.defaultValue
     return val != null ? String(val) : ''
   })
   out = out.replace(/\$\{(\w+)\}/g, (_m, key: string) => {
     if (key === 'name') return name
-    const prop = customProperties.find((p) => p.name === key)
+    const prop = customProperties.find(p => p.name === key)
     if (!prop) return ''
     const val = prop.defaultValue
     return val != null ? String(val) : ''
@@ -58,16 +61,11 @@ export function buildNodeLabel(
   name: string,
   ds?: DiagramStyle,
   customProperties?: CustomProperty[],
-  typeProperties?: CustomProperty[],
+  typeProperties?: CustomProperty[]
 ): string | TextLabelOptions {
   const hasTemplate = !!ds?.labelTemplate
   const displayText = hasTemplate
-    ? resolveLabelTemplate(
-        ds!.labelTemplate!,
-        name,
-        customProperties ?? [],
-        typeProperties ?? [],
-      )
+    ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [], typeProperties ?? [])
     : name
 
   const labelInset = ds?.labelInset
@@ -156,7 +154,7 @@ export function buildNodeIcon(ds?: DiagramStyle) {
 export function buildMarker(
   typeStr: string | undefined,
   ds: DiagramStyle | undefined,
-  prefix: 'start' | 'end',
+  prefix: 'start' | 'end'
 ) {
   const markerType =
     typeStr === 'arrow' ||

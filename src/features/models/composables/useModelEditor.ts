@@ -4,11 +4,7 @@ import { apiPost } from '@/composables/useApi'
 import { useSaveState } from '@/composables/useSaveState'
 import type { ModelData } from '@/types/entities'
 import type { DiagramResponse } from '@/types/api'
-import {
-  createEmptyModelEditorState,
-  type EditorDiagram,
-  type ModelEditorState,
-} from '../types'
+import { createEmptyModelEditorState, type EditorDiagram, type ModelEditorState } from '../types'
 import type { BatchConflictItem } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
 import { loadModelEditorData } from './modelEditorLoadModel'
@@ -61,7 +57,8 @@ export const useModelEditor = (): ModelEditorReturn => {
   const state = ref<ModelEditorState>(createEmptyModelEditorState())
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
+  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } =
+    useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
   const modelDirty = ref(false)

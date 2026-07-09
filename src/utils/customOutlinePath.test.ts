@@ -20,10 +20,34 @@ describe('customOutlineToSvgPath', () => {
 
   it('generates SVG path for normalized line segments (0-1)', () => {
     const segments: OutlineSegment[] = [
-      { type: 'line', points: [[0, 0], [1, 0]] },
-      { type: 'line', points: [[1, 0], [1, 1]] },
-      { type: 'line', points: [[1, 1], [0, 1]] },
-      { type: 'line', points: [[0, 1], [0, 0]] },
+      {
+        type: 'line',
+        points: [
+          [0, 0],
+          [1, 0],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 0],
+          [1, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 1],
+          [0, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [0, 1],
+          [0, 0],
+        ],
+      },
     ]
     const path = customOutlineToSvgPath(segments, 200, 100)
     expect(path).toContain('M 0 0')
@@ -35,10 +59,34 @@ describe('customOutlineToSvgPath', () => {
 
   it('generates SVG path for design-space segments (0-180, 0-80)', () => {
     const segments: OutlineSegment[] = [
-      { type: 'line', points: [[0, 0], [180, 0]] },
-      { type: 'line', points: [[180, 0], [180, 80]] },
-      { type: 'line', points: [[180, 80], [0, 80]] },
-      { type: 'line', points: [[0, 80], [0, 0]] },
+      {
+        type: 'line',
+        points: [
+          [0, 0],
+          [180, 0],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [180, 0],
+          [180, 80],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [180, 80],
+          [0, 80],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [0, 80],
+          [0, 0],
+        ],
+      },
     ]
     const path = customOutlineToSvgPath(segments, 200, 100)
     expect(path).toContain('M 0 0')
@@ -51,11 +99,34 @@ describe('customOutlineToSvgPath', () => {
     const segments: OutlineSegment[] = [
       {
         type: 'bezier',
-        points: [[0, 0], [0.25, 0], [0.75, 0], [1, 0]],
+        points: [
+          [0, 0],
+          [0.25, 0],
+          [0.75, 0],
+          [1, 0],
+        ],
       },
-      { type: 'line', points: [[1, 0], [1, 1]] },
-      { type: 'line', points: [[1, 1], [0, 1]] },
-      { type: 'line', points: [[0, 1], [0, 0]] },
+      {
+        type: 'line',
+        points: [
+          [1, 0],
+          [1, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 1],
+          [0, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [0, 1],
+          [0, 0],
+        ],
+      },
     ]
     const path = customOutlineToSvgPath(segments, 100, 50)
     expect(path).toContain('C ')
@@ -64,8 +135,20 @@ describe('customOutlineToSvgPath', () => {
 
   it('uses width/height minimum of 1', () => {
     const segments: OutlineSegment[] = [
-      { type: 'line', points: [[0, 0], [1, 0]] },
-      { type: 'line', points: [[1, 0], [1, 1]] },
+      {
+        type: 'line',
+        points: [
+          [0, 0],
+          [1, 0],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 0],
+          [1, 1],
+        ],
+      },
     ]
     const path = customOutlineToSvgPath(segments, 0, 0)
     // Should not produce NaN or Infinity
@@ -82,10 +165,34 @@ describe('customOutlineToPath2D', () => {
 
   it('returns Path2D for line segments', () => {
     const segments: OutlineSegment[] = [
-      { type: 'line', points: [[0, 0], [1, 0]] },
-      { type: 'line', points: [[1, 0], [1, 1]] },
-      { type: 'line', points: [[1, 1], [0, 1]] },
-      { type: 'line', points: [[0, 1], [0, 0]] },
+      {
+        type: 'line',
+        points: [
+          [0, 0],
+          [1, 0],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 0],
+          [1, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 1],
+          [0, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [0, 1],
+          [0, 0],
+        ],
+      },
     ]
     const path = customOutlineToPath2D(segments, 200, 100)
     expect(path).toBeInstanceOf(Path2D)
@@ -95,11 +202,34 @@ describe('customOutlineToPath2D', () => {
     const segments: OutlineSegment[] = [
       {
         type: 'bezier',
-        points: [[0, 0], [0.25, 0.1], [0.75, 0.1], [1, 0]],
+        points: [
+          [0, 0],
+          [0.25, 0.1],
+          [0.75, 0.1],
+          [1, 0],
+        ],
       },
-      { type: 'line', points: [[1, 0], [1, 1]] },
-      { type: 'line', points: [[1, 1], [0, 1]] },
-      { type: 'line', points: [[0, 1], [0, 0]] },
+      {
+        type: 'line',
+        points: [
+          [1, 0],
+          [1, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [1, 1],
+          [0, 1],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [0, 1],
+          [0, 0],
+        ],
+      },
     ]
     const path = customOutlineToPath2D(segments, 100, 50)
     expect(path).toBeInstanceOf(Path2D)
@@ -107,8 +237,20 @@ describe('customOutlineToPath2D', () => {
 
   it('returns Path2D for design-space segments', () => {
     const segments: OutlineSegment[] = [
-      { type: 'line', points: [[0, 0], [180, 0]] },
-      { type: 'line', points: [[180, 0], [180, 80]] },
+      {
+        type: 'line',
+        points: [
+          [0, 0],
+          [180, 0],
+        ],
+      },
+      {
+        type: 'line',
+        points: [
+          [180, 0],
+          [180, 80],
+        ],
+      },
     ]
     const path = customOutlineToPath2D(segments, 200, 100)
     expect(path).toBeInstanceOf(Path2D)

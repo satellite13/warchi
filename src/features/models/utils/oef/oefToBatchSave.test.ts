@@ -68,16 +68,22 @@ describe('oefToBatchSave', () => {
       expect(linkIds.has(edge.modelLinkId)).toBe(true)
     }
 
-    const serviceNode = result.request.nodes.create.find(item => item.nodeTypeId === 'nt-business-service')
+    const serviceNode = result.request.nodes.create.find(
+      item => item.nodeTypeId === 'nt-business-service'
+    )
     expect(serviceNode).toBeTruthy()
     const serviceNodeAttrs = parseNodeAttrs(serviceNode!.attrs)
     expect(serviceNodeAttrs.typeProperties.owner).toBe('Team A')
-    expect(serviceNodeAttrs.componentProperties['notation-1']?.['cmp-business-service']?.status).toBe('draft')
+    expect(
+      serviceNodeAttrs.componentProperties['notation-1']?.['cmp-business-service']?.status
+    ).toBe('draft')
 
     const servingLink = result.request.links.create.find(item => item.linkTypeId === 'lt-serving')
     expect(servingLink).toBeTruthy()
     const servingLinkAttrs = parseLinkAttrs(servingLink!.attrs)
-    expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe('high')
+    expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe(
+      'high'
+    )
   })
 
   it('skips unmapped entities and reports warnings', () => {

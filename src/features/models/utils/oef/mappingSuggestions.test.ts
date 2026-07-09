@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse } from '@/types/api'
+import type {
+  ComponentResponse,
+  LinkTypeResponse,
+  NodeTypeResponse,
+  RelationResponse,
+} from '@/types/api'
 import { buildImportMappingSuggestions } from './mappingSuggestions'
 
 function makeNodeType(id: string, name: string): NodeTypeResponse {
@@ -11,7 +16,12 @@ function makeLinkType(id: string, name: string): LinkTypeResponse {
   return { id, name, ownerId: 'owner-1', attrs: null }
 }
 
-function makeComponent(id: string, notationId: string, nodeTypeId: string, name: string): ComponentResponse {
+function makeComponent(
+  id: string,
+  notationId: string,
+  nodeTypeId: string,
+  name: string
+): ComponentResponse {
   return {
     id,
     name,
@@ -23,7 +33,12 @@ function makeComponent(id: string, notationId: string, nodeTypeId: string, name:
   }
 }
 
-function makeRelation(id: string, notationId: string, linkTypeId: string, name: string): RelationResponse {
+function makeRelation(
+  id: string,
+  notationId: string,
+  linkTypeId: string,
+  name: string
+): RelationResponse {
   return {
     id,
     name,

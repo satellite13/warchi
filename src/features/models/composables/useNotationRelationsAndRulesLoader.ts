@@ -1,9 +1,9 @@
-import { ref, type Ref } from "vue"
-import type { ModelEditorState } from "../types"
+import { ref, type Ref } from 'vue'
+import type { ModelEditorState } from '../types'
 import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
-} from "./modelNotationRelationsApi"
+} from './modelNotationRelationsApi'
 
 export function useNotationRelationsAndRulesLoader(state: Ref<ModelEditorState>) {
   const loadedRelationRuleNotationIds = new Set<string>()
@@ -54,7 +54,9 @@ export function useNotationRelationsAndRulesLoader(state: Ref<ModelEditorState>)
       ])
 
       const previousRelationIds = new Set(
-        state.value.relations.filter(relation => relation.notationId === notationId).map(relation => relation.id)
+        state.value.relations
+          .filter(relation => relation.notationId === notationId)
+          .map(relation => relation.id)
       )
       for (const relation of relations) {
         previousRelationIds.add(relation.id)

@@ -30,7 +30,7 @@ export function useUserSearch() {
     query.set('email', email)
 
     const result = await apiGet<PaginatedResponse<UserInfo>>(
-      `/users/public/search?${query.toString()}`,
+      `/users/public/search?${query.toString()}`
     )
     if (!result.success) {
       searchError.value = result.error.message

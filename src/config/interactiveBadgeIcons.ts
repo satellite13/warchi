@@ -10,10 +10,10 @@ function iconLabel(name: string): string {
 }
 
 export const INTERACTIVE_BADGE_ICONS: { id: string; label: string }[] =
-  MATERIAL_SYMBOLS_OUTLINED_NAMES.map((id) => ({ id, label: iconLabel(id) }))
+  MATERIAL_SYMBOLS_OUTLINED_NAMES.map(id => ({ id, label: iconLabel(id) }))
 
 export const DEFAULT_INTERACTIVE_BADGE_ICON = 'link'
 
 export function getInteractiveBadgeIconIds(): string[] {
-  return INTERACTIVE_BADGE_ICONS.map((item) => item.id)
+  return INTERACTIVE_BADGE_ICONS.map(item => item.id)
 }

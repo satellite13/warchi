@@ -1,8 +1,8 @@
-import type { Ref } from "vue"
-import type { ModelData } from "@/types/entities"
-import type { BatchConflictItem } from "./useModelBatchSave"
-import type { ModelEditorState } from "../types"
-import { applyDiagramGarbageSanitizeToState } from "../utils/sanitizeDiagramInstances"
+import type { Ref } from 'vue'
+import type { ModelData } from '@/types/entities'
+import type { BatchConflictItem } from './useModelBatchSave'
+import type { ModelEditorState } from '../types'
+import { applyDiagramGarbageSanitizeToState } from '../utils/sanitizeDiagramInstances'
 import {
   applyBatchRemapping,
   batchSave,
@@ -11,9 +11,15 @@ import {
   isValidBatchResponse,
   parseBatchSaveConflictDetails,
   refreshBatchSavedEntityTimestamps,
-} from "./useModelBatchSave"
-import { withoutDeleted } from "./modelEditorMappers"
-import { remapNodeIds, saveDiagrams, saveLinks, saveModelMetadata, saveNodes } from "./modelEditorSavePipeline"
+} from './useModelBatchSave'
+import { withoutDeleted } from './modelEditorMappers'
+import {
+  remapNodeIds,
+  saveDiagrams,
+  saveLinks,
+  saveModelMetadata,
+  saveNodes,
+} from './modelEditorSavePipeline'
 
 type ExecuteModelEditorSaveOptions = {
   model: Ref<ModelData | null>
@@ -28,7 +34,9 @@ type ExecuteModelEditorSaveOptions = {
   scheduleSaveErrorClear: () => void
 }
 
-export async function executeModelEditorSave(options: ExecuteModelEditorSaveOptions): Promise<boolean> {
+export async function executeModelEditorSave(
+  options: ExecuteModelEditorSaveOptions
+): Promise<boolean> {
   const modelValue = options.model.value
   if (!modelValue) return false
 
@@ -54,7 +62,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
       const batchResult = await batchSave(modelId, batchRequest)
       if (batchResult.success) {
         if (!isValidBatchResponse(batchResult.data)) {
-          options.saveError.value = "Некорректный ответ сервера при пакетном сохранении."
+          options.saveError.value = 'Некорректный ответ сервера при пакетном сохранении.'
           options.scheduleSaveErrorClear()
           return false
         }
@@ -72,7 +80,8 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
           return false
         }
         options.saveError.value =
-          batchResult.error.message || "Конфликт версий при сохранении (данные изменены на сервере)."
+          batchResult.error.message ||
+          'Конфликт версий при сохранении (данные изменены на сервере).'
         options.scheduleSaveErrorClear()
         return false
       } else {
@@ -94,7 +103,8 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     options.state.value.diagrams = withoutDeleted(options.state.value.diagrams)
     return true
   } catch (error) {
-    options.saveError.value = error instanceof Error ? error.message : "Не удалось сохранить изменения."
+    options.saveError.value =
+      error instanceof Error ? error.message : 'Не удалось сохранить изменения.'
     options.scheduleSaveErrorClear()
     return false
   }

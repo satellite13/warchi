@@ -9,8 +9,8 @@ import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
 import { getUserDisplayName } from "../utils/userDisplay"
-import { getGradient } from "../utils/gradientColors"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
+import EntitySection from "../components/dashboard/EntitySection.vue"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
 import changelogFr from "../../CHANGELOG.fr.md?raw"
@@ -154,74 +154,32 @@ const releaseNotes = computed(() => {
           <!-- Left: recent items -->
           <div class="main-grid__left">
             <!-- Recent Models -->
-            <section class="section">
-              <div class="section__header">
-                <UiIcon name="schema" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
-                <button type="button" class="section__link" @click="goTo('models')">
-                  {{ t("home.sectionAllModels") }}
-                  <UiIcon name="arrow_forward" />
-                </button>
-              </div>
-              <div v-if="isLoading" class="skeleton-list">
-                <div v-for="i in 3" :key="i" class="skeleton-item" />
-              </div>
-              <div v-else-if="recentModels.length === 0" class="section__empty">
-                <UiIcon name="folder_off" />
-                <span>{{ t("home.sectionNoModels") }}</span>
-              </div>
-              <div v-else class="entity-list">
-                <button
-                  v-for="item in recentModels"
-                  :key="item.id"
-                  type="button"
-                  class="entity-row"
-                  @click="router.push({ name: 'model-editor', params: { id: item.id } })"
-                >
-                  <div class="entity-row__gradient" :style="{ background: getGradient(item.id) }" />
-                  <div class="entity-row__body">
-                    <span class="entity-row__name">{{ item.name }}</span>
-                    <span class="entity-row__version">v{{ item.version }}</span>
-                  </div>
-                  <span class="entity-row__date">{{ formatRelativeDate(item.updatedAt) }}</span>
-                </button>
-              </div>
-            </section>
+            <EntitySection
+              icon="schema"
+              :title="t('home.sectionRecentModels')"
+              :link-label="t('home.sectionAllModels')"
+              :items="recentModels"
+              :is-loading="isLoading"
+              empty-icon="folder_off"
+              :empty-text="t('home.sectionNoModels')"
+              route-name="model-editor"
+              :format-relative-date="formatRelativeDate"
+              @link-click="goTo('models')"
+            />
 
             <!-- Recent Notations -->
-            <section class="section">
-              <div class="section__header">
-                <UiIcon name="account_tree" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
-                <button type="button" class="section__link" @click="goTo('notations')">
-                  {{ t("home.sectionAllNotations") }}
-                  <UiIcon name="arrow_forward" />
-                </button>
-              </div>
-              <div v-if="isLoading" class="skeleton-list">
-                <div v-for="i in 3" :key="i" class="skeleton-item" />
-              </div>
-              <div v-else-if="recentNotations.length === 0" class="section__empty">
-                <UiIcon name="folder_off" />
-                <span>{{ t("home.sectionNoNotations") }}</span>
-              </div>
-              <div v-else class="entity-list">
-                <button
-                  v-for="item in recentNotations"
-                  :key="item.id"
-                  type="button"
-                  class="entity-row"
-                  @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
-                >
-                  <div class="entity-row__gradient" :style="{ background: getGradient(item.id) }" />
-                  <div class="entity-row__body">
-                    <span class="entity-row__name">{{ item.name }}</span>
-                    <span class="entity-row__version">v{{ item.version }}</span>
-                  </div>
-                  <span class="entity-row__date">{{ formatRelativeDate(item.updatedAt) }}</span>
-                </button>
-              </div>
-            </section>
+            <EntitySection
+              icon="account_tree"
+              :title="t('home.sectionRecentNotations')"
+              :link-label="t('home.sectionAllNotations')"
+              :items="recentNotations"
+              :is-loading="isLoading"
+              empty-icon="folder_off"
+              :empty-text="t('home.sectionNoNotations')"
+              route-name="notation-editor"
+              :format-relative-date="formatRelativeDate"
+              @link-click="goTo('notations')"
+            />
 
             <section class="section release-notes">
               <div class="section__header">
@@ -491,12 +449,13 @@ const releaseNotes = computed(() => {
 }
 
 /* ── Main Grid ── */
-.main-grid {
+ .main-grid {
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 20px;
   align-items: start;
   min-height: 0;
+  animation: slideUp 0.5s ease 0.16s both;
 }
 
 .main-grid__left {
@@ -618,77 +577,7 @@ const releaseNotes = computed(() => {
   line-height: 1.4;
 }
 
-/* ── Entity List ── */
-.entity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 
-.entity-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: var(--surface-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.entity-row:hover {
-  background: var(--surface-strong);
-  border-color: var(--border);
-  transform: translateX(2px);
-}
-
-.entity-row__gradient {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.entity-row__gradient::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.12) 100%);
-}
-
-.entity-row__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.entity-row__name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--base-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entity-row__version {
-  font-size: 11px;
-  color: var(--text-subtle);
-  font-variant-numeric: tabular-nums;
-}
-
-.entity-row__date {
-  font-size: 11px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
 
 /* ── Quick Actions ── */
 .actions-grid {
@@ -796,41 +685,14 @@ const releaseNotes = computed(() => {
   flex-shrink: 0;
 }
 
-/* ── Skeletons ── */
-.skeleton-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.skeleton-item {
-  height: 56px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--surface-strong) 25%, var(--surface-muted) 50%, var(--surface-strong) 75%);
-  background-size: 400% 100%;
-  animation: shimmer 1.8s ease infinite;
-}
-
-.skeleton-item--sm {
-  height: 40px;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
 
 /* ── Entry animations ── */
-.hero {
+.dashboard .hero {
   animation: slideUp 0.5s ease both;
 }
 
-.stats-row {
+.dashboard .stats-row {
   animation: slideUp 0.5s ease 0.08s both;
-}
-
-.main-grid {
-  animation: slideUp 0.5s ease 0.16s both;
 }
 
 @keyframes slideUp {

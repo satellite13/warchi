@@ -14,7 +14,7 @@ export const useLocale = () => {
     },
     set(newLocale) {
       locale.value = newLocale
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, newLocale)
+      globalThis.localStorage.setItem(LOCALE_STORAGE_KEY, newLocale)
       document.documentElement.lang = newLocale
     },
   })

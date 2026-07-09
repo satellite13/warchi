@@ -30,13 +30,15 @@ describe('authStorage', () => {
     vi.stubGlobal('window', {
       localStorage: mockLocalStorage,
       dispatchEvent: vi.fn(),
-      CustomEvent: globalThis.CustomEvent ?? class CustomEvent extends Event {
-        detail: unknown
-        constructor(type: string, init?: { detail?: unknown }) {
-          super(type)
-          this.detail = init?.detail
-        }
-      },
+      CustomEvent:
+        globalThis.CustomEvent ??
+        class CustomEvent extends Event {
+          detail: unknown
+          constructor(type: string, init?: { detail?: unknown }) {
+            super(type)
+            this.detail = init?.detail
+          }
+        },
       Event: globalThis.Event,
     })
   })
@@ -134,8 +136,15 @@ describe('authStorage', () => {
 
   describe('clearAuthStorage', () => {
     it('clears all auth data', async () => {
-      const { clearAuthStorage, saveStoredUser, setAccessToken, setRefreshToken, getAccessToken, getRefreshToken, loadStoredUser } =
-        await loadModule()
+      const {
+        clearAuthStorage,
+        saveStoredUser,
+        setAccessToken,
+        setRefreshToken,
+        getAccessToken,
+        getRefreshToken,
+        loadStoredUser,
+      } = await loadModule()
 
       saveStoredUser({ id: 'u1', email: 'a@b.com' })
       setAccessToken('at')

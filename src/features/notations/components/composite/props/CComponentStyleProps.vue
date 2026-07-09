@@ -6,6 +6,7 @@ import LabeledNumberInput from '../../LabeledNumberInput.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import InsetSidesInput from '@/components/forms/InsetSidesInput.vue'
 import type { CompositeSerializedCComponent } from '../../../notationAttrs'
+import { toInsetSides } from '@/features/notations/utils/styleHelpers'
 
 const props = defineProps<{
   modelValue: CompositeSerializedCComponent
@@ -17,13 +18,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const style = computed(() => props.modelValue.style ?? {})
-
-function getMarginSides() {
-  const m = style.value.margin
-  if (m === undefined || m === null) return { top: 0, right: 0, bottom: 0, left: 0 }
-  if (typeof m === 'number') return { top: m, right: m, bottom: m, left: m }
-  return { top: m.top ?? 0, right: m.right ?? 0, bottom: m.bottom ?? 0, left: m.left ?? 0 }
-}
 </script>
 
 <template>
@@ -88,7 +82,7 @@ function getMarginSides() {
 
     <LabeledFieldRow :label="t('nodeStyle.compositeMargin')">
       <InsetSidesInput
-        :model-value="getMarginSides()"
+        :model-value="toInsetSides(style.margin)"
         :min="0"
         :max="100"
         :step="1"

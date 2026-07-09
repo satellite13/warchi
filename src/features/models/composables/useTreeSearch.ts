@@ -23,43 +23,41 @@ export function useTreeSearch(deps: TreeSearchDeps) {
     const topParentId = deps.treeRootNodeId.value ?? null
     return sortNodesByTreeOrder(
       deps.nodes.value.filter(
-        (node) =>
+        node =>
           !node._isDeleted &&
           node.id !== deps.treeRootNodeId.value &&
-          (node.parentNodeId ?? null) === topParentId,
-      ),
+          (node.parentNodeId ?? null) === topParentId
+      )
     )
   })
 
-  const totalNodesCount = computed(() =>
-    deps.nodes.value.filter((n) => !n._isDeleted && n.id !== deps.treeRootNodeId.value).length,
+  const totalNodesCount = computed(
+    () => deps.nodes.value.filter(n => !n._isDeleted && n.id !== deps.treeRootNodeId.value).length
   )
 
   const childNodes = (nodeId: string): EditorNode[] =>
     sortNodesByTreeOrder(
       deps.nodes.value.filter(
-        (node) =>
-          node.parentNodeId === nodeId &&
-          !node._isDeleted &&
-          node.id !== deps.treeRootNodeId.value,
-      ),
+        node =>
+          node.parentNodeId === nodeId && !node._isDeleted && node.id !== deps.treeRootNodeId.value
+      )
     )
 
   const nodeMatchesSearch = (node: EditorNode, query: string): boolean => {
     if (node.name.toLowerCase().includes(query)) return true
-    return childNodes(node.id).some((child) => nodeMatchesSearch(child, query))
+    return childNodes(node.id).some(child => nodeMatchesSearch(child, query))
   }
 
   const filteredRootNodes = computed(() => {
     const query = treeSearchQuery.value.trim().toLowerCase()
     if (!query) return rootNodes.value
-    return rootNodes.value.filter((node) => nodeMatchesSearch(node, query))
+    return rootNodes.value.filter(node => nodeMatchesSearch(node, query))
   })
 
   const filteredChildNodes = (nodeId: string): EditorNode[] => {
     const query = treeSearchQuery.value.trim().toLowerCase()
     if (!query) return childNodes(nodeId)
-    return childNodes(nodeId).filter((child) => nodeMatchesSearch(child, query))
+    return childNodes(nodeId).filter(child => nodeMatchesSearch(child, query))
   }
 
   const toggleNode = (nodeId: string) => {

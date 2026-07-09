@@ -231,8 +231,6 @@ const fetchAllRelationRulesByNotation = async (
   return collected
 }
 
-
-
 async function saveComponents(
   components: EditorComponent[],
   relationRules: EditorRelationRule[],
@@ -245,7 +243,13 @@ async function saveComponents(
     const result = await apiDelete<void>(`/components/${component.id}`)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError('нотации','удаления', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError(
+          'нотации',
+          'удаления',
+          'компонента',
+          result.error.status,
+          result.error.message
+        )
       )
     }
   }
@@ -263,7 +267,13 @@ async function saveComponents(
     const result = await apiPost<ComponentResponse>('/components', request)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError('нотации','создания', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError(
+          'нотации',
+          'создания',
+          'компонента',
+          result.error.status,
+          result.error.message
+        )
       )
     }
     const oldComponentId = component.id
@@ -294,7 +304,13 @@ async function saveComponents(
     const result = await apiPut<ComponentResponse>(`/components/${component.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError('нотации','обновления', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError(
+          'нотации',
+          'обновления',
+          'компонента',
+          result.error.status,
+          result.error.message
+        )
       )
     }
     component._isDirty = false
@@ -419,8 +435,7 @@ async function syncRelationRules(
   const REQUEST_CONCURRENCY = 8
   const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
     rule =>
-      currentComponentIds.has(rule.fromComponentId) &&
-      currentComponentIds.has(rule.toComponentId)
+      currentComponentIds.has(rule.fromComponentId) && currentComponentIds.has(rule.toComponentId)
   )
   const desiredKeys = new Set<string>()
   const existingRuleIdsByKey = new Map<string, string[]>()
@@ -517,7 +532,16 @@ export function useNotationEditor(): NotationEditorReturn {
 
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, failSave, finishSave } = useSaveState()
+  const {
+    isSaving,
+    saveError,
+    saveSuccess,
+    saveProgress,
+    startSave,
+    completeSave,
+    failSave,
+    finishSave,
+  } = useSaveState()
 
   const notationAttrsDirty = computed(() => {
     const currentAttrs = notation.value?.attrs ?? null
@@ -548,7 +572,7 @@ export function useNotationEditor(): NotationEditorReturn {
 
   watch(
     () => state.value.diagramLayer,
-    (layer) => {
+    layer => {
       if (!notation.value || isLoading.value) return
       notation.value.attrs = mergeNotationAttrs(notation.value.attrs ?? null, {
         editorDiagramLayer: layer,
@@ -584,24 +608,23 @@ export function useNotationEditor(): NotationEditorReturn {
         allLinkTypesResult,
         componentsResult,
         relationsResult,
-      ] =
-        await Promise.all([
-          apiGet<NotationData>(`/notations/${notationId}`),
-          apiGet<PaginatedResponse<NodeTypeResponse>>(
-            `/node-types?${listQueryWithNotation.toString()}`
-          ),
-          apiGet<PaginatedResponse<LinkTypeResponse>>(
-            `/link-types?${listQueryWithNotation.toString()}`
-          ),
-          apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
-          apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
-          apiGet<PaginatedResponse<ComponentResponse>>(
-            `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-          ),
-          apiGet<PaginatedResponse<RelationResponse>>(
-            `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-          ),
-        ])
+      ] = await Promise.all([
+        apiGet<NotationData>(`/notations/${notationId}`),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(
+          `/node-types?${listQueryWithNotation.toString()}`
+        ),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(
+          `/link-types?${listQueryWithNotation.toString()}`
+        ),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<ComponentResponse>>(
+          `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
+        ),
+        apiGet<PaginatedResponse<RelationResponse>>(
+          `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
+        ),
+      ])
 
       if (!notationResult.success) {
         if (notationResult.error.status === 404) {
@@ -650,7 +673,7 @@ export function useNotationEditor(): NotationEditorReturn {
       }
 
       const diagramLayer = normalizeDiagramLayer(
-        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer,
+        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer
       )
       state.value = {
         notationId,
@@ -695,7 +718,9 @@ export function useNotationEditor(): NotationEditorReturn {
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
       const typeOwnerId = ownerId
-      const onProgress = (msg: string) => { saveProgress.value = msg }
+      const onProgress = (msg: string) => {
+        saveProgress.value = msg
+      }
 
       if (notationAttrsDirty.value && notation.value) {
         onProgress('Обновление атрибутов нотации')
@@ -704,7 +729,8 @@ export function useNotationEditor(): NotationEditorReturn {
         })
         if (!updateResult.success) {
           throw new Error(
-            formatEntitySaveError('нотации',
+            formatEntitySaveError(
+              'нотации',
               'обновления',
               'нотации',
               updateResult.error.status ?? 0,
@@ -721,7 +747,7 @@ export function useNotationEditor(): NotationEditorReturn {
         typeOwnerId,
         apiEndpoint: '/node-types',
         entityTypeName: 'типа узла',
-        getTypeId: (c) => c.nodeTypeId,
+        getTypeId: c => c.nodeTypeId,
         setTypeId: (c, id) => {
           c.nodeTypeId = id
         },
@@ -735,7 +761,7 @@ export function useNotationEditor(): NotationEditorReturn {
         typeOwnerId,
         apiEndpoint: '/link-types',
         entityTypeName: 'типа связи',
-        getTypeId: (r) => r.linkTypeId,
+        getTypeId: r => r.linkTypeId,
         setTypeId: (r, id) => {
           r.linkTypeId = id
         },
@@ -748,7 +774,12 @@ export function useNotationEditor(): NotationEditorReturn {
       state.value.relationRules = await syncRelationRules(
         nodeTypes,
         linkTypes,
-        components, relations, relationRules, notationId, ownerId, onProgress
+        components,
+        relations,
+        relationRules,
+        notationId,
+        ownerId,
+        onProgress
       )
 
       state.value.components = components.filter(c => !c._isDeleted)

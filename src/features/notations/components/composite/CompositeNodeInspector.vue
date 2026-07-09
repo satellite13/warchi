@@ -9,6 +9,7 @@ import ShapeNodeProps from './props/ShapeNodeProps.vue'
 import DividerNodeProps from './props/DividerNodeProps.vue'
 import CComponentStyleProps from './props/CComponentStyleProps.vue'
 import type { CompositeSerializedCComponent, CustomProperty } from '../../notationAttrs'
+import { COMPOSITE_TYPE_ICONS } from '../../utils/styleHelpers'
 
 defineProps<{
   selectedNode: CompositeSerializedCComponent | null
@@ -21,14 +22,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const styleOpen = ref(false)
-
-const TYPE_ICONS: Record<string, string> = {
-  container: 'view_column',
-  text: 'text_fields',
-  icon: 'image',
-  divider: 'horizontal_rule',
-  shape: 'crop_square',
-}
 
 const TYPE_COLORS: Record<string, string> = {
   container: '#6366f1',
@@ -51,7 +44,7 @@ const TYPE_COLORS: Record<string, string> = {
           class="inspector__type-badge"
           :style="{ background: TYPE_COLORS[selectedNode.type] ?? '#888' }"
         >
-          <UiIcon :name="TYPE_ICONS[selectedNode.type] ?? 'help'" />
+          <UiIcon :name="COMPOSITE_TYPE_ICONS[selectedNode.type] ?? 'help'" />
           {{ selectedNode.type }}
         </span>
         <input

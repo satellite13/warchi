@@ -48,10 +48,7 @@ function writeStoredDiagramViewports(viewports: Record<string, DiagramViewportSt
   saveJson(DIAGRAM_VIEWPORT_STORAGE_KEY, Object.fromEntries(entries))
 }
 
-export function persistDiagramViewport(
-  diagramId: string,
-  currentRenderer: DiagramRenderer,
-): void {
+export function persistDiagramViewport(diagramId: string, currentRenderer: DiagramRenderer): void {
   const viewports = readStoredDiagramViewports()
   const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentRenderer.zoom))
   viewports[diagramId] = {
@@ -65,7 +62,7 @@ export function persistDiagramViewport(
 
 export function restoreDiagramViewport(
   diagramId: string,
-  currentRenderer: DiagramRenderer,
+  currentRenderer: DiagramRenderer
 ): boolean {
   const viewports = readStoredDiagramViewports()
   const saved = viewports[diagramId]

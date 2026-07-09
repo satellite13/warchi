@@ -61,14 +61,14 @@ describe('buildVersionTree', () => {
     expect(roots).toHaveLength(1)
     expect(roots[0].item.id).toBe('1')
     expect(roots[0].children).toHaveLength(2)
-    const childIds = roots[0].children.map((c) => c.item.id).sort()
+    const childIds = roots[0].children.map(c => c.item.id).sort()
     expect(childIds).toEqual(['2', '3'])
   })
 
   it('treats orphan sourceId (referencing unknown id) as root', () => {
     const roots = buildVersionTree([item('a', 'nonexistent'), item('b')])
     expect(roots).toHaveLength(2)
-    const rootIds = roots.map((r) => r.item.id).sort()
+    const rootIds = roots.map(r => r.item.id).sort()
     expect(rootIds).toEqual(['a', 'b'])
   })
 
@@ -77,8 +77,8 @@ describe('buildVersionTree', () => {
     const roots = buildVersionTree(items)
     expect(roots).toHaveLength(2)
 
-    const r1 = roots.find((r) => r.item.id === 'r1')!
-    const r2 = roots.find((r) => r.item.id === 'r2')!
+    const r1 = roots.find(r => r.item.id === 'r1')!
+    const r2 = roots.find(r => r.item.id === 'r2')!
     expect(r1.children).toHaveLength(1)
     expect(r1.children[0].item.id).toBe('c1')
     expect(r1.children[0].children).toHaveLength(1)
@@ -88,13 +88,7 @@ describe('buildVersionTree', () => {
   })
 
   it('preserves all items in the tree (no data loss)', () => {
-    const items = [
-      item('a'),
-      item('b', 'a'),
-      item('c', 'a'),
-      item('d', 'b'),
-      item('e', 'unknown'),
-    ]
+    const items = [item('a'), item('b', 'a'), item('c', 'a'), item('d', 'b'), item('e', 'unknown')]
     const roots = buildVersionTree(items)
     const allIds = collectIds(roots).sort()
     expect(allIds).toEqual(['a', 'b', 'c', 'd', 'e'])

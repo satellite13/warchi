@@ -1,7 +1,7 @@
-import { computed, ref } from "vue"
-import { buildApiUrl } from "@/api/config"
+import { computed, ref } from 'vue'
+import { buildApiUrl } from '@/api/config'
 
-export type AvailabilityOutageKind = "backend_unavailable" | "authz_unavailable"
+export type AvailabilityOutageKind = 'backend_unavailable' | 'authz_unavailable'
 
 type AvailabilityOutageState = {
   kind: AvailabilityOutageKind
@@ -24,9 +24,9 @@ function clearRetryTimer() {
 
 async function pingBackend(): Promise<boolean> {
   try {
-    const response = await fetch(buildApiUrl("/system/version"), {
-      method: "GET",
-      headers: { Accept: "application/json" },
+    const response = await fetch(buildApiUrl('/system/version'), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
     })
     return response.ok
   } catch {
@@ -35,7 +35,7 @@ async function pingBackend(): Promise<boolean> {
 }
 
 function scheduleNextRetry() {
-  if (typeof window === "undefined" || retryTimer !== null) return
+  if (typeof window === 'undefined' || retryTimer !== null) return
   retryTimer = window.setTimeout(async () => {
     retryTimer = null
     isRetrying.value = true
@@ -61,7 +61,7 @@ export function reportAvailabilityOutage(kind: AvailabilityOutageKind, message: 
   }
   const current = outage.value
   // authz outage is more specific than generic backend outage.
-  if (current?.kind === "authz_unavailable" && kind === "backend_unavailable") {
+  if (current?.kind === 'authz_unavailable' && kind === 'backend_unavailable') {
     startAutoRetry()
     return
   }

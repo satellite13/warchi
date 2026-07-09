@@ -1,6 +1,6 @@
-import type { DiagramResponse, LinkResponse, NodeResponse } from "@/types/api"
-import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
-import type { EditorDiagram, EditorLink, EditorNode } from "../types"
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
+import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
+import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 
 export const toEditorNode = (row: NodeResponse): EditorNode => ({
   ...row,

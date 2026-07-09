@@ -32,7 +32,7 @@ function makeNode(overrides: Partial<NodeResponse> & { name: string }): NodeResp
 }
 
 function makeLink(
-  overrides: Partial<LinkResponse> & { sourceId: string; targetId: string },
+  overrides: Partial<LinkResponse> & { sourceId: string; targetId: string }
 ): LinkResponse {
   return {
     id: uid(),
@@ -172,7 +172,7 @@ describe('compareNodes', () => {
     const targetMatched = makeNode({ name: 'B', stableId })
     const targetSameName = makeNode({ name: 'A' })
     const diff = compareNodes([base], [targetMatched, targetSameName])
-    const modified = diff.filter((d) => d.kind === 'modified')
+    const modified = diff.filter(d => d.kind === 'modified')
     expect(modified).toHaveLength(1)
     if (modified[0].kind === 'modified') {
       expect(modified[0].target.id).toBe(targetMatched.id)
@@ -359,10 +359,10 @@ describe('computeModelDiff', () => {
     }
     const diff = computeModelDiff(base, target)
 
-    expect(diff.nodes.some((n) => n.kind === 'removed')).toBe(true)
-    expect(diff.nodes.some((n) => n.kind === 'added')).toBe(true)
-    expect(diff.links.some((l) => l.kind === 'removed')).toBe(true)
-    expect(diff.diagrams.some((d) => d.kind === 'modified')).toBe(true)
+    expect(diff.nodes.some(n => n.kind === 'removed')).toBe(true)
+    expect(diff.nodes.some(n => n.kind === 'added')).toBe(true)
+    expect(diff.links.some(l => l.kind === 'removed')).toBe(true)
+    expect(diff.diagrams.some(d => d.kind === 'modified')).toBe(true)
   })
 
   it('picks latest diagram by version when duplicates exist', () => {
@@ -483,8 +483,12 @@ describe('buildDiagramDiffStateMaps edge instance matching', () => {
           linkIdToStableId: new Map([['link-1', 'link-1']]),
         },
         otherSideEdgeInstanceIds: new Set(['edge-inst-1']),
-        currentEdgeInstanceSignatures: new Map([['edge-inst-1', 'link-1|src-a|dst-a|left|right||']]),
-        otherSideEdgeInstanceSignatures: new Map([['edge-inst-1', 'link-1|src-b|dst-b|left|right||']]),
+        currentEdgeInstanceSignatures: new Map([
+          ['edge-inst-1', 'link-1|src-a|dst-a|left|right||'],
+        ]),
+        otherSideEdgeInstanceSignatures: new Map([
+          ['edge-inst-1', 'link-1|src-b|dst-b|left|right||'],
+        ]),
         useEdgeInstanceIdMatching: true,
       }
     )
@@ -525,7 +529,7 @@ describe('computeModelDiff — golden contract tests', () => {
 
     const diff = computeModelDiff(
       { nodes: [baseRoot, baseModule, baseComponent], links: [], diagrams: [] },
-      { nodes: [targetRoot, targetModule, targetNewChild], links: [], diagrams: [] },
+      { nodes: [targetRoot, targetModule, targetNewChild], links: [], diagrams: [] }
     )
 
     expect(diff).toEqual({
@@ -567,7 +571,7 @@ describe('computeModelDiff — golden contract tests', () => {
 
     const diff = computeModelDiff(
       { nodes: baseNodes, links: [baseL1, baseL2, baseL3], diagrams: [] },
-      { nodes: targetNodes, links: [targetL4, targetL5, targetL6], diagrams: [] },
+      { nodes: targetNodes, links: [targetL4, targetL5, targetL6], diagrams: [] }
     )
 
     expect(diff).toEqual({
@@ -622,7 +626,7 @@ describe('computeModelDiff — golden contract tests', () => {
         nodes: [makeNode({ id: 'n1', name: 'Root' })],
         links: [],
         diagrams: [targetOverview, targetDetail],
-      },
+      }
     )
 
     expect(diff).toEqual({
@@ -657,31 +661,113 @@ describe('computeModelDiff — golden contract tests', () => {
     const diff = computeModelDiff(
       {
         nodes: [
-          { id: 'n1', name: 'Root', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', stableId: 'stable-n1' },
-          { id: 'n2', name: 'Alpha', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1', stableId: 'stable-n2' },
-          { id: 'n3', name: 'Beta', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1', stableId: 'stable-n3' },
+          {
+            id: 'n1',
+            name: 'Root',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            stableId: 'stable-n1',
+          },
+          {
+            id: 'n2',
+            name: 'Alpha',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+            stableId: 'stable-n2',
+          },
+          {
+            id: 'n3',
+            name: 'Beta',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+            stableId: 'stable-n3',
+          },
         ],
         links: [
-          { id: 'l1', sourceId: 'n2', targetId: 'n3', modelId: 'm1', ownerId: 'o1', linkTypeId: 'lt1', stableId: 'stable-l1' },
+          {
+            id: 'l1',
+            sourceId: 'n2',
+            targetId: 'n3',
+            modelId: 'm1',
+            ownerId: 'o1',
+            linkTypeId: 'lt1',
+            stableId: 'stable-l1',
+          },
         ],
         diagrams: [
-          { id: 'd1', name: 'Main', version: '1.0.0', modelId: 'm1', ownerId: 'o1', notationId: 'not1' },
+          {
+            id: 'd1',
+            name: 'Main',
+            version: '1.0.0',
+            modelId: 'm1',
+            ownerId: 'o1',
+            notationId: 'not1',
+          },
         ],
       },
       {
         nodes: [
-          { id: 'n1', name: 'Root', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', stableId: 'stable-n1' },
-          { id: 'n2', name: 'Alpha', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1', stableId: 'stable-n2', attrs: '{"color":"red"}' },
-          { id: 'n4', name: 'Gamma', modelId: 'm1', ownerId: 'o1', nodeTypeId: 'nt1', parentNodeId: 'n1' },
+          {
+            id: 'n1',
+            name: 'Root',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            stableId: 'stable-n1',
+          },
+          {
+            id: 'n2',
+            name: 'Alpha',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+            stableId: 'stable-n2',
+            attrs: '{"color":"red"}',
+          },
+          {
+            id: 'n4',
+            name: 'Gamma',
+            modelId: 'm1',
+            ownerId: 'o1',
+            nodeTypeId: 'nt1',
+            parentNodeId: 'n1',
+          },
         ],
         links: [
-          { id: 'l2', sourceId: 'n2', targetId: 'n4', modelId: 'm1', ownerId: 'o1', linkTypeId: 'lt1' },
+          {
+            id: 'l2',
+            sourceId: 'n2',
+            targetId: 'n4',
+            modelId: 'm1',
+            ownerId: 'o1',
+            linkTypeId: 'lt1',
+          },
         ],
         diagrams: [
-          { id: 'd2', name: 'Main', version: '1.1.0', modelId: 'm1', ownerId: 'o1', notationId: 'not1' },
-          { id: 'd3', name: 'Extra', version: '1.0.0', modelId: 'm1', ownerId: 'o1', notationId: 'not1' },
+          {
+            id: 'd2',
+            name: 'Main',
+            version: '1.1.0',
+            modelId: 'm1',
+            ownerId: 'o1',
+            notationId: 'not1',
+          },
+          {
+            id: 'd3',
+            name: 'Extra',
+            version: '1.0.0',
+            modelId: 'm1',
+            ownerId: 'o1',
+            notationId: 'not1',
+          },
         ],
-      },
+      }
     )
 
     expect(diff).toEqual({
@@ -913,11 +999,29 @@ describe('buildDiagramDiffStateMaps — golden contract tests', () => {
       [],
       ['n-rem', 'n-mod-b', 'n-untouched'],
       [
-        { edgeInstanceId: 'ei1', modelLinkId: 'l-rem', sourceId: 'a', targetId: 'b', linkTypeId: 'lt1' },
-        { edgeInstanceId: 'ei2', modelLinkId: 'l-mod-b', sourceId: 'e', targetId: 'f', linkTypeId: 'lt1' },
-        { edgeInstanceId: 'ei3', modelLinkId: 'l-clean', sourceId: 'x', targetId: 'y', linkTypeId: 'lt1' },
+        {
+          edgeInstanceId: 'ei1',
+          modelLinkId: 'l-rem',
+          sourceId: 'a',
+          targetId: 'b',
+          linkTypeId: 'lt1',
+        },
+        {
+          edgeInstanceId: 'ei2',
+          modelLinkId: 'l-mod-b',
+          sourceId: 'e',
+          targetId: 'f',
+          linkTypeId: 'lt1',
+        },
+        {
+          edgeInstanceId: 'ei3',
+          modelLinkId: 'l-clean',
+          sourceId: 'x',
+          targetId: 'y',
+          linkTypeId: 'lt1',
+        },
       ],
-      'base',
+      'base'
     )
 
     expect(state).toEqual({
@@ -945,11 +1049,29 @@ describe('buildDiagramDiffStateMaps — golden contract tests', () => {
       [],
       ['n-add', 'n-mod-t', 'n-untouched'],
       [
-        { edgeInstanceId: 'ei4', modelLinkId: 'l-add', sourceId: 'c', targetId: 'd', linkTypeId: 'lt1' },
-        { edgeInstanceId: 'ei5', modelLinkId: 'l-mod-t', sourceId: 'e', targetId: 'f', linkTypeId: 'lt1' },
-        { edgeInstanceId: 'ei6', modelLinkId: 'l-clean', sourceId: 'x', targetId: 'y', linkTypeId: 'lt1' },
+        {
+          edgeInstanceId: 'ei4',
+          modelLinkId: 'l-add',
+          sourceId: 'c',
+          targetId: 'd',
+          linkTypeId: 'lt1',
+        },
+        {
+          edgeInstanceId: 'ei5',
+          modelLinkId: 'l-mod-t',
+          sourceId: 'e',
+          targetId: 'f',
+          linkTypeId: 'lt1',
+        },
+        {
+          edgeInstanceId: 'ei6',
+          modelLinkId: 'l-clean',
+          sourceId: 'x',
+          targetId: 'y',
+          linkTypeId: 'lt1',
+        },
       ],
-      'target',
+      'target'
     )
 
     expect(state).toEqual({

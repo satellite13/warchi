@@ -1,21 +1,9 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type {
-  DiagramResponse,
-  LinkResponse,
-  NodeResponse,
-} from '@/types/api'
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
 import type { CompareSharedData } from '@/api/loadCompareSharedData'
-import {
-  buildDiagramDiffStateMaps,
-  buildNodePathMap,
-  computeModelDiff,
-} from '@/utils/modelDiff'
-import {
-  parseDiagramAttrs,
-  parseLinkAttrs,
-  parseNodeAttrs,
-} from '@/features/models/modelAttrs'
+import { buildDiagramDiffStateMaps, buildNodePathMap, computeModelDiff } from '@/utils/modelDiff'
+import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '@/features/models/modelAttrs'
 import type { EditorDiagram, EditorLink, EditorNode } from '@/features/models/types'
 import {
   getDiagramScopedLinkMap,
@@ -67,15 +55,8 @@ export function toEditorDiagram(r: DiagramResponse): EditorDiagram {
 }
 
 export function useComparisonDiff(options: ComparisonDiffOptions) {
-  const {
-    leftData,
-    rightData,
-    leftDiagram,
-    rightDiagram,
-    sharedData,
-    baseSide,
-    selectedElement,
-  } = options
+  const { leftData, rightData, leftDiagram, rightDiagram, sharedData, baseSide, selectedElement } =
+    options
 
   const { t } = useI18n()
 
@@ -104,10 +85,10 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   // ── Path maps ──
 
   const leftPathMap = computed(() =>
-    leftData.value ? buildNodePathMap(leftData.value.nodes) : new Map<string, string>(),
+    leftData.value ? buildNodePathMap(leftData.value.nodes) : new Map<string, string>()
   )
   const rightPathMap = computed(() =>
-    rightData.value ? buildNodePathMap(rightData.value.nodes) : new Map<string, string>(),
+    rightData.value ? buildNodePathMap(rightData.value.nodes) : new Map<string, string>()
   )
 
   // ── Stable IDs ──
@@ -115,18 +96,17 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   function computeDiagramStableIds(
     diagram: EditorDiagram | null,
     editorNodes: EditorNode[],
-    editorLinks: EditorLink[],
+    editorLinks: EditorLink[]
   ) {
     const instances = diagram?.parsedAttrs?.instances
-    if (!instances)
-      return { nodeStableIds: new Set<string>(), linkStableIds: new Set<string>() }
-    const nodeById = new Map(editorNodes.map((n) => [n.id, n]))
+    if (!instances) return { nodeStableIds: new Set<string>(), linkStableIds: new Set<string>() }
+    const nodeById = new Map(editorNodes.map(n => [n.id, n]))
     const nodeStableIds = new Set<string>()
     for (const inst of instances.nodes) {
       const node = nodeById.get(inst.modelNodeId)
       nodeStableIds.add(node?.stableId ?? inst.modelNodeId)
     }
-    const linkById = new Map(editorLinks.map((l) => [l.id, l]))
+    const linkById = new Map(editorLinks.map(l => [l.id, l]))
     const linkStableIds = new Set<string>()
     for (const e of instances.edges) {
       const link = linkById.get(e.modelLinkId)
@@ -136,11 +116,11 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   }
 
   const leftDiagramStableIds = computed(() =>
-    computeDiagramStableIds(leftDiagram.value, leftEditorNodes.value, leftEditorLinks.value),
+    computeDiagramStableIds(leftDiagram.value, leftEditorNodes.value, leftEditorLinks.value)
   )
 
   const rightDiagramStableIds = computed(() =>
-    computeDiagramStableIds(rightDiagram.value, rightEditorNodes.value, rightEditorLinks.value),
+    computeDiagramStableIds(rightDiagram.value, rightEditorNodes.value, rightEditorLinks.value)
   )
 
   function computeCurrentStableIds(editorNodes: EditorNode[], editorLinks: EditorLink[]) {
@@ -152,23 +132,23 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   }
 
   const leftCurrentStableIds = computed(() =>
-    computeCurrentStableIds(leftEditorNodes.value, leftEditorLinks.value),
+    computeCurrentStableIds(leftEditorNodes.value, leftEditorLinks.value)
   )
 
   const rightCurrentStableIds = computed(() =>
-    computeCurrentStableIds(rightEditorNodes.value, rightEditorLinks.value),
+    computeCurrentStableIds(rightEditorNodes.value, rightEditorLinks.value)
   )
 
   // ── Edge instance IDs and signatures ──
 
   const leftDiagramEdgeInstanceIds = computed(() => {
     const instances = leftDiagram.value?.parsedAttrs?.instances
-    return new Set((instances?.edges ?? []).map((e) => e.id))
+    return new Set((instances?.edges ?? []).map(e => e.id))
   })
 
   const rightDiagramEdgeInstanceIds = computed(() => {
     const instances = rightDiagram.value?.parsedAttrs?.instances
-    return new Set((instances?.edges ?? []).map((e) => e.id))
+    return new Set((instances?.edges ?? []).map(e => e.id))
   })
 
   function computeEdgeInstanceSignatures(diagram: EditorDiagram | null) {
@@ -178,23 +158,22 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
       const attrs = (e.attrs ?? {}) as Record<string, unknown>
       const fromPort = typeof attrs.fromPortId === 'string' ? attrs.fromPortId : ''
       const toPort = typeof attrs.toPortId === 'string' ? attrs.toPortId : ''
-      const fromOutline =
-        typeof attrs.fromOutlineParam === 'number' ? attrs.fromOutlineParam : ''
+      const fromOutline = typeof attrs.fromOutlineParam === 'number' ? attrs.fromOutlineParam : ''
       const toOutline = typeof attrs.toOutlineParam === 'number' ? attrs.toOutlineParam : ''
       byId.set(
         e.id,
-        `${e.modelLinkId}|${e.sourceInstanceId}|${e.targetInstanceId}|${fromPort}|${toPort}|${fromOutline}|${toOutline}`,
+        `${e.modelLinkId}|${e.sourceInstanceId}|${e.targetInstanceId}|${fromPort}|${toPort}|${fromOutline}|${toOutline}`
       )
     }
     return byId
   }
 
   const leftEdgeInstanceSignatures = computed(() =>
-    computeEdgeInstanceSignatures(leftDiagram.value),
+    computeEdgeInstanceSignatures(leftDiagram.value)
   )
 
   const rightEdgeInstanceSignatures = computed(() =>
-    computeEdgeInstanceSignatures(rightDiagram.value),
+    computeEdgeInstanceSignatures(rightDiagram.value)
   )
 
   const useEdgeInstanceIdMatching = computed(() => {
@@ -214,15 +193,15 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
     if (!left || !right) return null
     return computeModelDiff(
       { nodes: left.nodes, links: left.links, diagrams: left.diagrams },
-      { nodes: right.nodes, links: right.links, diagrams: right.diagrams },
+      { nodes: right.nodes, links: right.links, diagrams: right.diagrams }
     )
   })
 
   function buildEdges(links: LinkResponse[]) {
-    const linkById = new Map(links.map((l) => [l.id, l]))
+    const linkById = new Map(links.map(l => [l.id, l]))
     return (edgeRefs: Array<{ id: string; modelLinkId: string }>) =>
       edgeRefs
-        .map((e) => {
+        .map(e => {
           const link = linkById.get(e.modelLinkId)
           return link
             ? {
@@ -263,16 +242,26 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
         diffStateByModelLinkId: {},
         diffStateByEdgeInstanceId: {},
       }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
+    const nodeIds = instances.nodes.map(n => n.modelNodeId)
     const edges = buildEdges(left.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, leftPathMap.value, rightPathMap.value, left.links, right.links, nodeIds, edges, 'base', {
-      otherSideStableIds: rightDiagramStableIds.value,
-      currentStableIds: leftCurrentStableIds.value,
-      otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
-      otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
-      currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
-    })
+    return buildDiagramDiffStateMaps(
+      d,
+      leftPathMap.value,
+      rightPathMap.value,
+      left.links,
+      right.links,
+      nodeIds,
+      edges,
+      'base',
+      {
+        otherSideStableIds: rightDiagramStableIds.value,
+        currentStableIds: leftCurrentStableIds.value,
+        otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
+        otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+        currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+        useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
+      }
+    )
   })
 
   const rightDiffState = computed(() => {
@@ -293,16 +282,26 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
         diffStateByModelLinkId: {},
         diffStateByEdgeInstanceId: {},
       }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
+    const nodeIds = instances.nodes.map(n => n.modelNodeId)
     const edges = buildEdges(right.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, leftPathMap.value, rightPathMap.value, left.links, right.links, nodeIds, edges, 'target', {
-      otherSideStableIds: leftDiagramStableIds.value,
-      currentStableIds: rightCurrentStableIds.value,
-      otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
-      otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
-      currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
-    })
+    return buildDiagramDiffStateMaps(
+      d,
+      leftPathMap.value,
+      rightPathMap.value,
+      left.links,
+      right.links,
+      nodeIds,
+      edges,
+      'target',
+      {
+        otherSideStableIds: leftDiagramStableIds.value,
+        currentStableIds: rightCurrentStableIds.value,
+        otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
+        otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+        currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+        useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
+      }
+    )
   })
 
   // ── Diff when right is base (reversed) ──
@@ -313,7 +312,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
     if (!left || !right) return null
     return computeModelDiff(
       { nodes: right.nodes, links: right.links, diagrams: right.diagrams },
-      { nodes: left.nodes, links: left.links, diagrams: left.diagrams },
+      { nodes: left.nodes, links: left.links, diagrams: left.diagrams }
     )
   })
 
@@ -335,16 +334,26 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
         diffStateByModelLinkId: {},
         diffStateByEdgeInstanceId: {},
       }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
+    const nodeIds = instances.nodes.map(n => n.modelNodeId)
     const edges = buildEdges(left.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, rightPathMap.value, leftPathMap.value, right.links, left.links, nodeIds, edges, 'target', {
-      otherSideStableIds: rightDiagramStableIds.value,
-      currentStableIds: leftCurrentStableIds.value,
-      otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
-      otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
-      currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
-    })
+    return buildDiagramDiffStateMaps(
+      d,
+      rightPathMap.value,
+      leftPathMap.value,
+      right.links,
+      left.links,
+      nodeIds,
+      edges,
+      'target',
+      {
+        otherSideStableIds: rightDiagramStableIds.value,
+        currentStableIds: leftCurrentStableIds.value,
+        otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
+        otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+        currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+        useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
+      }
+    )
   })
 
   const rightDiffStateWhenRightIsBase = computed(() => {
@@ -365,25 +374,35 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
         diffStateByModelLinkId: {},
         diffStateByEdgeInstanceId: {},
       }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
+    const nodeIds = instances.nodes.map(n => n.modelNodeId)
     const edges = buildEdges(right.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, rightPathMap.value, leftPathMap.value, right.links, left.links, nodeIds, edges, 'base', {
-      otherSideStableIds: leftDiagramStableIds.value,
-      currentStableIds: rightCurrentStableIds.value,
-      otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
-      otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
-      currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
-    })
+    return buildDiagramDiffStateMaps(
+      d,
+      rightPathMap.value,
+      leftPathMap.value,
+      right.links,
+      left.links,
+      nodeIds,
+      edges,
+      'base',
+      {
+        otherSideStableIds: leftDiagramStableIds.value,
+        currentStableIds: rightCurrentStableIds.value,
+        otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
+        otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
+        currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
+        useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
+      }
+    )
   })
 
   // ── Combined diff state based on baseSide ──
 
   const leftCanvasDiffState = computed(() =>
-    baseSide.value === 'left' ? leftDiffState.value : leftDiffStateWhenRightIsBase.value,
+    baseSide.value === 'left' ? leftDiffState.value : leftDiffStateWhenRightIsBase.value
   )
   const rightCanvasDiffState = computed(() =>
-    baseSide.value === 'left' ? rightDiffState.value : rightDiffStateWhenRightIsBase.value,
+    baseSide.value === 'left' ? rightDiffState.value : rightDiffStateWhenRightIsBase.value
   )
 
   // ── Toggle base side ──
@@ -402,7 +421,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
 
   function handleLeftSelectLink(linkId: string | null): void {
     if (!linkId) return
-    const link = leftData.value?.links.find((l) => l.id === linkId)
+    const link = leftData.value?.links.find(l => l.id === linkId)
     if (!link || !leftPathMap.value) return
     const sp = leftPathMap.value.get(link.sourceId)
     const tp = leftPathMap.value.get(link.targetId)
@@ -423,13 +442,11 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
     if (!diagram || !data) return
     const instances = diagram.parsedAttrs?.instances
     if (!instances) return
-    const edgeInst = instances.edges.find((e) => e.id === edgeInstanceId)
+    const edgeInst = instances.edges.find(e => e.id === edgeInstanceId)
     if (!edgeInst) return
-    const link = data.links.find((l) => l.id === edgeInst.modelLinkId)
+    const link = data.links.find(l => l.id === edgeInst.modelLinkId)
     if (!link || !leftPathMap.value) return
-    const nodeInstanceToModelNodeId = new Map(
-      instances.nodes.map((n) => [n.id, n.modelNodeId]),
-    )
+    const nodeInstanceToModelNodeId = new Map(instances.nodes.map(n => [n.id, n.modelNodeId]))
     const sourceModelNodeId =
       nodeInstanceToModelNodeId.get(edgeInst.sourceInstanceId) ?? link.sourceId
     const targetModelNodeId =
@@ -456,7 +473,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
 
   function handleRightSelectLink(linkId: string | null): void {
     if (!linkId) return
-    const link = rightData.value?.links.find((l) => l.id === linkId)
+    const link = rightData.value?.links.find(l => l.id === linkId)
     if (!link || !rightPathMap.value) return
     const sp = rightPathMap.value.get(link.sourceId)
     const tp = rightPathMap.value.get(link.targetId)
@@ -477,13 +494,11 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
     if (!diagram || !data) return
     const instances = diagram.parsedAttrs?.instances
     if (!instances) return
-    const edgeInst = instances.edges.find((e) => e.id === edgeInstanceId)
+    const edgeInst = instances.edges.find(e => e.id === edgeInstanceId)
     if (!edgeInst) return
-    const link = data.links.find((l) => l.id === edgeInst.modelLinkId)
+    const link = data.links.find(l => l.id === edgeInst.modelLinkId)
     if (!link || !rightPathMap.value) return
-    const nodeInstanceToModelNodeId = new Map(
-      instances.nodes.map((n) => [n.id, n.modelNodeId]),
-    )
+    const nodeInstanceToModelNodeId = new Map(instances.nodes.map(n => [n.id, n.modelNodeId]))
     const sourceModelNodeId =
       nodeInstanceToModelNodeId.get(edgeInst.sourceInstanceId) ?? link.sourceId
     const targetModelNodeId =
@@ -554,7 +569,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
 
   function resolveLinkSideSnapshot(
     side: 'left' | 'right',
-    edgeInstanceId: string | undefined,
+    edgeInstanceId: string | undefined
   ): { link: LinkResponse | null; sourcePath: string | null; targetPath: string | null } {
     const diagram = side === 'left' ? leftDiagram.value : rightDiagram.value
     const data = side === 'left' ? leftData.value : rightData.value
@@ -568,19 +583,17 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
       return { link: null, sourcePath: null, targetPath: null }
     }
 
-    const edgeInst = instances.edges.find((e) => e.id === edgeInstanceId)
+    const edgeInst = instances.edges.find(e => e.id === edgeInstanceId)
     if (!edgeInst) {
       return { link: null, sourcePath: null, targetPath: null }
     }
 
-    const link = data.links.find((l) => l.id === edgeInst.modelLinkId) ?? null
+    const link = data.links.find(l => l.id === edgeInst.modelLinkId) ?? null
     if (!link) {
       return { link: null, sourcePath: null, targetPath: null }
     }
 
-    const nodeInstanceToModelNodeId = new Map(
-      instances.nodes.map((n) => [n.id, n.modelNodeId]),
-    )
+    const nodeInstanceToModelNodeId = new Map(instances.nodes.map(n => [n.id, n.modelNodeId]))
     const sourceModelNodeId =
       nodeInstanceToModelNodeId.get(edgeInst.sourceInstanceId) ?? link.sourceId
     const targetModelNodeId =
@@ -634,7 +647,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
     notationId: string,
     entityId: string,
     propKey: string,
-    kind: 'component' | 'relation',
+    kind: 'component' | 'relation'
   ): string {
     const notationName = notationNameById.value.get(notationId) ?? notationId
     const entityName =
@@ -645,7 +658,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   }
 
   function flattenComponentProperties(
-    componentProperties: Record<string, Record<string, Record<string, unknown>>>,
+    componentProperties: Record<string, Record<string, Record<string, unknown>>>
   ): Array<{ key: string; value: unknown }> {
     const out: Array<{ key: string; value: unknown }> = []
     for (const [notationId, byComponent] of Object.entries(componentProperties)) {
@@ -662,7 +675,7 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   }
 
   function flattenRelationProperties(
-    relationProperties: Record<string, Record<string, Record<string, unknown>>>,
+    relationProperties: Record<string, Record<string, Record<string, unknown>>>
   ): Array<{ key: string; value: unknown }> {
     const out: Array<{ key: string; value: unknown }> = []
     for (const [notationId, byRelation] of Object.entries(relationProperties)) {
@@ -680,11 +693,11 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
 
   function getNodePropertiesForSide(
     side: 'left' | 'right',
-    modelNodeId: string,
+    modelNodeId: string
   ): Record<string, Record<string, Record<string, unknown>>> {
     const diagram = side === 'left' ? leftDiagram.value : rightDiagram.value
     const data = side === 'left' ? leftData.value : rightData.value
-    const node = data?.nodes.find((item) => item.id === modelNodeId)
+    const node = data?.nodes.find(item => item.id === modelNodeId)
     return getDiagramScopedNodeMap({
       diagram: diagram?.parsedAttrs,
       modelNodeId,
@@ -695,11 +708,11 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   function getLinkPropertiesForSide(
     side: 'left' | 'right',
     modelLinkId: string,
-    edgeInstanceId?: string,
+    edgeInstanceId?: string
   ): Record<string, Record<string, Record<string, unknown>>> {
     const diagram = side === 'left' ? leftDiagram.value : rightDiagram.value
     const data = side === 'left' ? leftData.value : rightData.value
-    const link = data?.links.find((item) => item.id === modelLinkId)
+    const link = data?.links.find(item => item.id === modelLinkId)
     return getDiagramScopedLinkMap({
       diagram: diagram?.parsedAttrs,
       modelLinkId,
@@ -766,14 +779,13 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
             : leftNode
               ? leftNode.name
               : '\u2014',
-        changed:
-          leftAbsent || rightAbsent || (leftNode?.name ?? '') !== (rightNode?.name ?? ''),
+        changed: leftAbsent || rightAbsent || (leftNode?.name ?? '') !== (rightNode?.name ?? ''),
       })
       const leftFlat = flattenComponentProperties(leftScopedMap)
       const rightFlat = flattenComponentProperties(rightScopedMap)
-      const allKeys = new Set([...leftFlat.map((x) => x.key), ...rightFlat.map((x) => x.key)])
-      const leftByKey = new Map(leftFlat.map((x) => [x.key, x.value]))
-      const rightByKey = new Map(rightFlat.map((x) => [x.key, x.value]))
+      const allKeys = new Set([...leftFlat.map(x => x.key), ...rightFlat.map(x => x.key)])
+      const leftByKey = new Map(leftFlat.map(x => [x.key, x.value]))
+      const rightByKey = new Map(rightFlat.map(x => [x.key, x.value]))
       for (const key of Array.from(allKeys).sort()) {
         const leftVal = leftAbsent ? undefined : leftByKey.get(key)
         const rightVal = rightAbsent ? undefined : rightByKey.get(key)
@@ -824,9 +836,9 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
         : {}
       const leftFlat = flattenRelationProperties(leftScopedMap)
       const rightFlat = flattenRelationProperties(rightScopedMap)
-      const allKeys = new Set([...leftFlat.map((x) => x.key), ...rightFlat.map((x) => x.key)])
-      const leftByKey = new Map(leftFlat.map((x) => [x.key, x.value]))
-      const rightByKey = new Map(rightFlat.map((x) => [x.key, x.value]))
+      const allKeys = new Set([...leftFlat.map(x => x.key), ...rightFlat.map(x => x.key)])
+      const leftByKey = new Map(leftFlat.map(x => [x.key, x.value]))
+      const rightByKey = new Map(rightFlat.map(x => [x.key, x.value]))
       const rows: PropertyRow[] = [
         {
           key: t('models.compareLinkRoute'),
@@ -882,13 +894,11 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
   })
 
   const comparePropWasLabel = computed(() =>
-    baseSide.value === 'left' ? t('models.comparePropWas') : t('models.comparePropWasRight'),
+    baseSide.value === 'left' ? t('models.comparePropWas') : t('models.comparePropWasRight')
   )
 
   const comparePropBecameLabel = computed(() =>
-    baseSide.value === 'left'
-      ? t('models.comparePropBecame')
-      : t('models.comparePropBecameLeft'),
+    baseSide.value === 'left' ? t('models.comparePropBecame') : t('models.comparePropBecameLeft')
   )
 
   const isLeftBaseForProps = computed(() => baseSide.value === 'left')

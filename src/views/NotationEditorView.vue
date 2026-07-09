@@ -75,36 +75,24 @@ const showNotationWikiHeaderButton = computed(
 
 const customPropertyValidationIssues = computed<ValidationIssue[]>(() => {
   const issues: ValidationIssue[] = []
-  for (const component of state.value.components) {
-    if (component._isDeleted) continue
-    for (let idx = 0; idx < component.parsedAttrs.customProperties.length; idx += 1) {
-      const property = component.parsedAttrs.customProperties[idx]
-      const errors = customPropertyErrors(property, t)
-      for (const msg of errors) {
-        issues.push({
-          code: 'CUSTOM_PROPERTY_INVALID',
-          message: msg,
-          path: `components.${component.id}.customProperties[${idx}]`,
-          severity: 'error',
-        })
+  const collectIssues = (items: (EditorComponent | EditorRelation)[], prefix: string) => {
+    for (const item of items) {
+      if (item._isDeleted) continue
+      for (let idx = 0; idx < item.parsedAttrs.customProperties.length; idx += 1) {
+        const errors = customPropertyErrors(item.parsedAttrs.customProperties[idx], t)
+        for (const msg of errors) {
+          issues.push({
+            code: 'CUSTOM_PROPERTY_INVALID',
+            message: msg,
+            path: `${prefix}.${item.id}.customProperties[${idx}]`,
+            severity: 'error',
+          })
+        }
       }
     }
   }
-  for (const relation of state.value.relations) {
-    if (relation._isDeleted) continue
-    for (let idx = 0; idx < relation.parsedAttrs.customProperties.length; idx += 1) {
-      const property = relation.parsedAttrs.customProperties[idx]
-      const errors = customPropertyErrors(property, t)
-      for (const msg of errors) {
-        issues.push({
-          code: 'CUSTOM_PROPERTY_INVALID',
-          message: msg,
-          path: `relations.${relation.id}.customProperties[${idx}]`,
-          severity: 'error',
-        })
-      }
-    }
-  }
+  collectIssues(state.value.components, 'components')
+  collectIssues(state.value.relations, 'relations')
   return issues
 })
 

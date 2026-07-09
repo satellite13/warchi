@@ -1,9 +1,9 @@
-import { ref, watch, computed, type Ref } from "vue"
-import { useI18n } from "vue-i18n"
-import { loadJson, saveJson } from "@/utils/localStorage"
-import type { ToolbarButton } from "@/features/notations/layout/IconToolbar.vue"
+import { ref, watch, computed, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { loadJson, saveJson } from '@/utils/localStorage'
+import type { ToolbarButton } from '@/features/notations/layout/IconToolbar.vue'
 
-export type EdgePathType = "straight" | "polyline" | "editable-polyline" | "bezier"
+export type EdgePathType = 'straight' | 'polyline' | 'editable-polyline' | 'bezier'
 
 export type ModelToolbarState = {
   gridVisible: boolean
@@ -19,17 +19,14 @@ export type ModelToolbarState = {
   autoLinkInGroups: boolean
 }
 
-const STORAGE_PREFIX = "warchi:model-editor:toolbar-state"
-const VALID_EDGE_TYPES: EdgePathType[] = ["straight", "polyline", "editable-polyline", "bezier"]
+const STORAGE_PREFIX = 'warchi:model-editor:toolbar-state'
+const VALID_EDGE_TYPES: EdgePathType[] = ['straight', 'polyline', 'editable-polyline', 'bezier']
 
 function getStorageKey(userId: string | null): string {
   return userId ? `${STORAGE_PREFIX}:${userId}` : `${STORAGE_PREFIX}:anonymous`
 }
 
-export function useModelToolbarState(
-  userId: Ref<string | null>,
-  hasActiveDiagram: Ref<boolean>
-) {
+export function useModelToolbarState(userId: Ref<string | null>, hasActiveDiagram: Ref<boolean>) {
   const { t } = useI18n()
 
   const gridVisible = ref(true)
@@ -44,30 +41,29 @@ export function useModelToolbarState(
   const paletteVisible = ref(true)
   const autoLinkInGroups = ref(true)
   const diagramNavigationOnlyMode = ref(false)
-  const defaultEdgeType = ref<EdgePathType>("bezier")
+  const defaultEdgeType = ref<EdgePathType>('bezier')
 
   function applyState(saved: Partial<ModelToolbarState> | null) {
     if (!saved) return
-    if (typeof saved.gridVisible === "boolean") gridVisible.value = saved.gridVisible
-    if (typeof saved.miniMapVisible === "boolean") miniMapVisible.value = saved.miniMapVisible
-    if (typeof saved.snapEnabled === "boolean") snapEnabled.value = saved.snapEnabled
-    if (typeof saved.alignEnabled === "boolean") alignEnabled.value = saved.alignEnabled
-    if (typeof saved.rulersEnabled === "boolean") rulersEnabled.value = saved.rulersEnabled
-    if (typeof saved.lockAnchorsEnabled === "boolean")
+    if (typeof saved.gridVisible === 'boolean') gridVisible.value = saved.gridVisible
+    if (typeof saved.miniMapVisible === 'boolean') miniMapVisible.value = saved.miniMapVisible
+    if (typeof saved.snapEnabled === 'boolean') snapEnabled.value = saved.snapEnabled
+    if (typeof saved.alignEnabled === 'boolean') alignEnabled.value = saved.alignEnabled
+    if (typeof saved.rulersEnabled === 'boolean') rulersEnabled.value = saved.rulersEnabled
+    if (typeof saved.lockAnchorsEnabled === 'boolean')
       lockAnchorsEnabled.value = saved.lockAnchorsEnabled
-    if (typeof saved.attachToOutlineEnabled === "boolean")
+    if (typeof saved.attachToOutlineEnabled === 'boolean')
       attachToOutlineEnabled.value = saved.attachToOutlineEnabled
-    if (typeof saved.canvasSettingsVisible === "boolean")
+    if (typeof saved.canvasSettingsVisible === 'boolean')
       canvasSettingsVisible.value = saved.canvasSettingsVisible
-    if (typeof saved.paletteVisible === "boolean") paletteVisible.value = saved.paletteVisible
+    if (typeof saved.paletteVisible === 'boolean') paletteVisible.value = saved.paletteVisible
     if (
-      typeof saved.defaultEdgeType === "string" &&
+      typeof saved.defaultEdgeType === 'string' &&
       VALID_EDGE_TYPES.includes(saved.defaultEdgeType as EdgePathType)
     ) {
       defaultEdgeType.value = saved.defaultEdgeType as EdgePathType
     }
-    if (typeof saved.autoLinkInGroups === "boolean")
-      autoLinkInGroups.value = saved.autoLinkInGroups
+    if (typeof saved.autoLinkInGroups === 'boolean') autoLinkInGroups.value = saved.autoLinkInGroups
   }
 
   function persistState(userIdValue: string | null) {
@@ -113,75 +109,75 @@ export function useModelToolbarState(
 
   const canvasToggleButtons = computed<ToolbarButton[]>(() => [
     {
-      icon: "grid_on",
-      event: "toggle-grid",
-      title: t("toolbar.grid"),
+      icon: 'grid_on',
+      event: 'toggle-grid',
+      title: t('toolbar.grid'),
       active: gridVisible.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "map",
-      event: "toggle-minimap",
-      title: t("toolbar.minimap"),
+      icon: 'map',
+      event: 'toggle-minimap',
+      title: t('toolbar.minimap'),
       active: miniMapVisible.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "my_location",
-      event: "toggle-snap",
-      title: t("toolbar.snapToGrid"),
+      icon: 'my_location',
+      event: 'toggle-snap',
+      title: t('toolbar.snapToGrid'),
       active: snapEnabled.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "align_horizontal_left",
-      event: "toggle-align",
-      title: t("toolbar.smartAlign"),
+      icon: 'align_horizontal_left',
+      event: 'toggle-align',
+      title: t('toolbar.smartAlign'),
       active: alignEnabled.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "straighten",
-      event: "toggle-rulers",
-      title: t("toolbar.rulers"),
+      icon: 'straighten',
+      event: 'toggle-rulers',
+      title: t('toolbar.rulers'),
       active: rulersEnabled.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "commit",
-      event: "toggle-lock-anchors",
-      title: t("toolbar.lockLinkAnchors"),
+      icon: 'commit',
+      event: 'toggle-lock-anchors',
+      title: t('toolbar.lockLinkAnchors'),
       active: lockAnchorsEnabled.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "route",
-      event: "toggle-outline",
-      title: t("toolbar.outline"),
+      icon: 'route',
+      event: 'toggle-outline',
+      title: t('toolbar.outline'),
       active: attachToOutlineEnabled.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: "account_tree",
-      event: "toggle-auto-link-in-groups",
-      title: t("models.autoLinkInGroups"),
+      icon: 'account_tree',
+      event: 'toggle-auto-link-in-groups',
+      title: t('models.autoLinkInGroups'),
       active: autoLinkInGroups.value,
       disabled: !hasActiveDiagram.value,
     },
   ])
 
-  const defaultLinkTypeOptions = computed<
-    { value: EdgePathType; label: string; icon: string }[]
-  >(() => [
-    { value: "straight", label: t("diagram.linkTypeStraight"), icon: "remove" },
-    { value: "polyline", label: t("diagram.linkTypePolyline"), icon: "timeline" },
-    {
-      value: "editable-polyline",
-      label: t("diagram.linkTypeEditablePolyline"),
-      icon: "polyline",
-    },
-    { value: "bezier", label: t("diagram.linkTypeBezier"), icon: "line_curve" },
-  ])
+  const defaultLinkTypeOptions = computed<{ value: EdgePathType; label: string; icon: string }[]>(
+    () => [
+      { value: 'straight', label: t('diagram.linkTypeStraight'), icon: 'remove' },
+      { value: 'polyline', label: t('diagram.linkTypePolyline'), icon: 'timeline' },
+      {
+        value: 'editable-polyline',
+        label: t('diagram.linkTypeEditablePolyline'),
+        icon: 'polyline',
+      },
+      { value: 'bezier', label: t('diagram.linkTypeBezier'), icon: 'line_curve' },
+    ]
+  )
 
   return {
     gridVisible,

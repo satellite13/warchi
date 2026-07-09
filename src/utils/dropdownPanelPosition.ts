@@ -36,8 +36,8 @@ export function computeDropdownPanelPlacement(
   const headerBlockPx = options?.headerBlockPx ?? DROPDOWN_SEARCH_BLOCK_PX
   const preferredMaxList = options?.preferredMaxListHeight ?? 180
 
-  const vw = window.innerWidth
-  const vh = window.innerHeight
+  const vw = globalThis.innerWidth
+  const vh = globalThis.innerHeight
 
   const anchorMidY = anchorRect.top + anchorRect.height / 2
   const openUpward = anchorMidY > vh / 2

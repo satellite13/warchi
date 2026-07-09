@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveDiagramNodeLabelTemplate } from './nodeLabelTemplate'
 import type { CustomProperty } from '@/features/notations/notationAttrs'
 
-function prop(
-  overrides: Partial<CustomProperty> & { id: string; name: string }
-): CustomProperty {
+function prop(overrides: Partial<CustomProperty> & { id: string; name: string }): CustomProperty {
   return {
     type: 'string',
     required: false,

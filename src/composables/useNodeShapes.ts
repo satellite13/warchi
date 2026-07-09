@@ -1,15 +1,11 @@
-import { ref, type Ref } from "vue"
-import { apiGet, apiPost, apiPut, apiDelete } from "./useApi"
-import { pagedListParams } from "../api/queryHelpers"
-import type { PaginatedResponse } from "../types/entities"
-import { paginatedTotalElements } from "../utils/paginatedResponse"
-import type {
-  NodeShapeResponse,
-  NodeShapeRequest,
-  NodeShapeUpdateRequest
-} from "../types/api"
+import { ref, type Ref } from 'vue'
+import { apiGet, apiPost, apiPut, apiDelete } from './useApi'
+import { pagedListParams } from '../api/queryHelpers'
+import type { PaginatedResponse } from '../types/entities'
+import { paginatedTotalElements } from '../utils/paginatedResponse'
+import type { NodeShapeResponse, NodeShapeRequest, NodeShapeUpdateRequest } from '../types/api'
 
-const nodeShapesPath = "/node-shapes"
+const nodeShapesPath = '/node-shapes'
 
 export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
   const list: Ref<NodeShapeResponse[]> = ref([])
@@ -18,11 +14,15 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
   const error = ref<string | null>(null)
   const beforeUpdate = options?.beforeUpdate
 
-  async function fetchList(params?: { ownerId?: string; page?: number; size?: number }): Promise<boolean> {
+  async function fetchList(params?: {
+    ownerId?: string
+    page?: number
+    size?: number
+  }): Promise<boolean> {
     isLoading.value = true
     error.value = null
     const searchParams = pagedListParams(params?.page ?? 0, params?.size ?? 50)
-    if (params?.ownerId) searchParams.set("ownerId", params.ownerId)
+    if (params?.ownerId) searchParams.set('ownerId', params.ownerId)
     const query = searchParams.toString()
     const path = query ? `${nodeShapesPath}?${query}` : nodeShapesPath
     const result = await apiGet<PaginatedResponse<NodeShapeResponse>>(path)
@@ -57,7 +57,10 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
     return result.data
   }
 
-  async function update(id: string, request: NodeShapeUpdateRequest): Promise<NodeShapeResponse | null> {
+  async function update(
+    id: string,
+    request: NodeShapeUpdateRequest
+  ): Promise<NodeShapeResponse | null> {
     error.value = null
     const result = await apiPut<NodeShapeResponse>(`${nodeShapesPath}/${id}`, request)
     if (!result.success) {
@@ -86,6 +89,6 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
     fetchById,
     create,
     update,
-    remove
+    remove,
   }
 }

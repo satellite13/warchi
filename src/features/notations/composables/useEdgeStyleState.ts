@@ -2,12 +2,7 @@
 import { ref } from 'vue'
 import type { Edge } from '@ngroznykh/papirus'
 import type { DiagramStyle } from '../notationAttrs'
-import {
-  toInsetSides,
-  insetToPlain,
-  getLabelSpacing,
-  type InsetSides,
-} from '../utils/styleHelpers'
+import { toInsetSides, insetToPlain, getLabelSpacing, type InsetSides } from '../utils/styleHelpers'
 
 export function useEdgeStyleState() {
   // --- Edge style refs ---
@@ -68,23 +63,14 @@ export function useEdgeStyleState() {
       | 'square'
     edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
       edge.startMarker?.type ??
-      'none') as
-      | 'none'
-      | 'arrow'
-      | 'open'
-      | 'diamond'
-      | 'circle'
-      | 'square'
+      'none') as 'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'
 
     const eLabelStyle = edge.label?.style
     edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? '#333333'
     edgeLabelOpacity.value = styleFromDiagram?.labelOpacity ?? (eLabelStyle as any)?.opacity ?? 1
     edgeLabelFontSize.value = styleFromDiagram?.labelFontSize ?? eLabelStyle?.fontSize ?? 14
     const edgeLabelSpacing = getLabelSpacing(edge.label)
-    edgeLabelInset.value = toInsetSides(
-      styleFromDiagram?.labelInset ?? edgeLabelSpacing.inset,
-      8,
-    )
+    edgeLabelInset.value = toInsetSides(styleFromDiagram?.labelInset ?? edgeLabelSpacing.inset, 8)
     edgeLabelOffset.value = styleFromDiagram?.edgeLabelOffset ?? edge.labelOffset ?? 0
     edgeLabelPosition.value = styleFromDiagram?.edgeLabelPosition ?? edge.labelPosition ?? 0.5
     edgeLabelFollowPath.value =
@@ -142,8 +128,8 @@ export function useEdgeStyleState() {
       const pattern = edgeLineDashPattern.value.trim() || '8,4'
       style.lineDash = pattern
         .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !isNaN(n))
+        .map(s => parseFloat(s.trim()))
+        .filter(n => !isNaN(n))
     }
     return style
   }

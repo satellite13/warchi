@@ -26,14 +26,14 @@
 }
 
 .btn--primary {
-  color: #fff;
-  background: var(--primary);
+  color: #000;
+  background: #FDC300;
   border: none;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-  box-shadow: 0 4px 16px var(--primary-soft);
+  background: #E79F26;
+  box-shadow: 0 4px 16px rgba(253, 195, 0, 0.2);
 }
 
 .btn--primary:active:not(:disabled) {
@@ -53,12 +53,12 @@
 
 .btn--danger {
   color: #fff;
-  background: var(--danger);
+  background: #b91c1c;
   border: none;
 }
 
 .btn--danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: #991b1b;
 }
 
 /* ─── Size modifiers ─────────────────────────── */

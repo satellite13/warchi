@@ -29,10 +29,10 @@ describe('i18n completeness', () => {
     const enKeys = collectKeys(messages.en as unknown as Record<string, unknown>)
     const frKeys = collectKeys(messages.fr as unknown as Record<string, unknown>)
 
-    const missingInEn = ruKeys.filter((k) => !enKeys.includes(k))
-    const missingInRu = enKeys.filter((k) => !ruKeys.includes(k))
-    const missingInFr = ruKeys.filter((k) => !frKeys.includes(k))
-    const extraInFr = frKeys.filter((k) => !ruKeys.includes(k))
+    const missingInEn = ruKeys.filter(k => !enKeys.includes(k))
+    const missingInRu = enKeys.filter(k => !ruKeys.includes(k))
+    const missingInFr = ruKeys.filter(k => !frKeys.includes(k))
+    const extraInFr = frKeys.filter(k => !ruKeys.includes(k))
 
     if (missingInEn.length > 0) {
       console.warn('Keys missing in EN:', missingInEn)
@@ -42,13 +42,13 @@ describe('i18n completeness', () => {
     }
 
     expect(missingInEn, `Keys present in RU but missing in EN:\n${missingInEn.join('\n')}`).toEqual(
-      [],
+      []
     )
     expect(missingInRu, `Keys present in EN but missing in RU:\n${missingInRu.join('\n')}`).toEqual(
-      [],
+      []
     )
     expect(missingInFr, `Keys present in RU but missing in FR:\n${missingInFr.join('\n')}`).toEqual(
-      [],
+      []
     )
     expect(extraInFr, `Keys present in FR but missing in RU:\n${extraInFr.join('\n')}`).toEqual([])
   })

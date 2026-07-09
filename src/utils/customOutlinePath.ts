@@ -9,7 +9,12 @@ const DESIGN_WIDTH = 180
 const DESIGN_HEIGHT = 80
 
 /** Bounding box of all points in segments */
-function getOutlineBounds(segments: OutlineSegment[]): { minX: number; maxX: number; minY: number; maxY: number } {
+function getOutlineBounds(segments: OutlineSegment[]): {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+} {
   let minX = Infinity
   let maxX = -Infinity
   let minY = Infinity
@@ -67,16 +72,51 @@ export function customOutlineToPath2D(
   const w = Math.max(1, width)
   const h = Math.max(1, height)
   const first = segments[0]!
-  const [x0, y0] = scalePoint(first.points[0][0], first.points[0][1], w, h, normalizeFromDesign, bounds)
+  const [x0, y0] = scalePoint(
+    first.points[0][0],
+    first.points[0][1],
+    w,
+    h,
+    normalizeFromDesign,
+    bounds
+  )
   path.moveTo(x0, y0)
   for (const seg of segments) {
-    if (seg.type === "line") {
-      const [x, y] = scalePoint(seg.points[1][0], seg.points[1][1], w, h, normalizeFromDesign, bounds)
+    if (seg.type === 'line') {
+      const [x, y] = scalePoint(
+        seg.points[1][0],
+        seg.points[1][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
       path.lineTo(x, y)
     } else {
-      const [x1, y1] = scalePoint(seg.points[1][0], seg.points[1][1], w, h, normalizeFromDesign, bounds)
-      const [x2, y2] = scalePoint(seg.points[2][0], seg.points[2][1], w, h, normalizeFromDesign, bounds)
-      const [x3, y3] = scalePoint(seg.points[3][0], seg.points[3][1], w, h, normalizeFromDesign, bounds)
+      const [x1, y1] = scalePoint(
+        seg.points[1][0],
+        seg.points[1][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
+      const [x2, y2] = scalePoint(
+        seg.points[2][0],
+        seg.points[2][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
+      const [x3, y3] = scalePoint(
+        seg.points[3][0],
+        seg.points[3][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
       path.bezierCurveTo(x1, y1, x2, y2, x3, y3)
     }
   }
@@ -89,26 +129,61 @@ export function customOutlineToSvgPath(
   width: number,
   height: number
 ): string {
-  if (segments.length === 0) return ""
+  if (segments.length === 0) return ''
   const normalizeFromDesign = useDesignSpaceNormalize(segments)
   const bounds = getOutlineBounds(segments)
   const w = Math.max(1, width)
   const h = Math.max(1, height)
   const parts: string[] = []
   const first = segments[0]!
-  const [x0, y0] = scalePoint(first.points[0][0], first.points[0][1], w, h, normalizeFromDesign, bounds)
+  const [x0, y0] = scalePoint(
+    first.points[0][0],
+    first.points[0][1],
+    w,
+    h,
+    normalizeFromDesign,
+    bounds
+  )
   parts.push(`M ${x0} ${y0}`)
   for (const seg of segments) {
-    if (seg.type === "line") {
-      const [x, y] = scalePoint(seg.points[1][0], seg.points[1][1], w, h, normalizeFromDesign, bounds)
+    if (seg.type === 'line') {
+      const [x, y] = scalePoint(
+        seg.points[1][0],
+        seg.points[1][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
       parts.push(`L ${x} ${y}`)
     } else {
-      const [x1, y1] = scalePoint(seg.points[1][0], seg.points[1][1], w, h, normalizeFromDesign, bounds)
-      const [x2, y2] = scalePoint(seg.points[2][0], seg.points[2][1], w, h, normalizeFromDesign, bounds)
-      const [x3, y3] = scalePoint(seg.points[3][0], seg.points[3][1], w, h, normalizeFromDesign, bounds)
+      const [x1, y1] = scalePoint(
+        seg.points[1][0],
+        seg.points[1][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
+      const [x2, y2] = scalePoint(
+        seg.points[2][0],
+        seg.points[2][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
+      const [x3, y3] = scalePoint(
+        seg.points[3][0],
+        seg.points[3][1],
+        w,
+        h,
+        normalizeFromDesign,
+        bounds
+      )
       parts.push(`C ${x1} ${y1} ${x2} ${y2} ${x3} ${y3}`)
     }
   }
-  parts.push("Z")
-  return parts.join(" ")
+  parts.push('Z')
+  return parts.join(' ')
 }

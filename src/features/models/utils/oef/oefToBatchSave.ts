@@ -143,7 +143,13 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       nodeTypeId: mapped.nodeTypeId,
       parentNodeId,
       attrs: serializeNodeAttrs(
-        makeNodeAttrs(params.notationId, mapped.componentId, treeOrder, typeDefaults, componentDefaults)
+        makeNodeAttrs(
+          params.notationId,
+          mapped.componentId,
+          treeOrder,
+          typeDefaults,
+          componentDefaults
+        )
       ),
     })
     nodeTempBySourceElementId.set(node.sourceElementId, tempId)
@@ -177,7 +183,9 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       sourceId,
       targetId,
       linkTypeId: mapped.linkTypeId,
-      attrs: serializeLinkAttrs(makeLinkAttrs(params.notationId, mapped.relationId, relationDefaults)),
+      attrs: serializeLinkAttrs(
+        makeLinkAttrs(params.notationId, mapped.relationId, relationDefaults)
+      ),
     })
     linkTempBySourceRelationshipId.set(link.sourceRelationshipId, tempId)
   }
@@ -199,7 +207,11 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         })
         continue
       }
-      const instanceId = makeStableTempId('oef-inst-node', `${diagram.sourceViewId}-${instance.sourceNodeId}`, usedIds)
+      const instanceId = makeStableTempId(
+        'oef-inst-node',
+        `${diagram.sourceViewId}-${instance.sourceNodeId}`,
+        usedIds
+      )
       nodeInstanceIdBySourceNodeId.set(instance.sourceNodeId, instanceId)
       diagramNodes.push({
         id: instanceId,

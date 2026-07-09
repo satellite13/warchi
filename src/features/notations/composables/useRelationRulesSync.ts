@@ -17,9 +17,7 @@ function isValidSyncResponse(data: unknown): data is SyncResponse {
   if (!data || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
   return (
-    typeof d.created === 'number' &&
-    typeof d.deleted === 'number' &&
-    typeof d.total === 'number'
+    typeof d.created === 'number' && typeof d.deleted === 'number' && typeof d.total === 'number'
   )
 }
 

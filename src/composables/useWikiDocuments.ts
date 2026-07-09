@@ -1,6 +1,6 @@
-import { ref, type Ref } from "vue"
-import { apiGet } from "./useApi"
-import { fetchFileContent } from "../api/fileApi"
+import { ref, type Ref } from 'vue'
+import { apiGet } from './useApi'
+import { fetchFileContent } from '../api/fileApi'
 
 export interface DocumentWikiItem {
   fileId: string

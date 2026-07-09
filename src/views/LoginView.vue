@@ -25,6 +25,11 @@ const submitLabel = computed(() => {
   return t("auth.submitLogin");
 });
 
+const ssoLabel = computed(() => {
+  if (isSsoLoading.value) return t("auth.submitSsoLoading");
+  return t("auth.submitSso");
+});
+
 const validateForm = (): string | null => {
   if (!email.value.trim()) return t("auth.validationEmailRequired");
   if (!password.value.trim()) return t("auth.validationPasswordRequired");
@@ -62,9 +67,18 @@ const handleSubmit = async () => {
 const handleSsoLogin = async () => {
   isSsoLoading.value = true;
   ssoError.value = null;
+
+  const timeoutMs = 30000;
+  const timeoutHandle = setTimeout(() => {
+    ssoError.value = t("auth.ssoTimeout");
+    isSsoLoading.value = false;
+  }, timeoutMs);
+
   try {
     await ssoLogin();
+    clearTimeout(timeoutHandle);
   } catch {
+    clearTimeout(timeoutHandle);
     ssoError.value = t("auth.ssoError");
     isSsoLoading.value = false;
   }
@@ -99,11 +113,8 @@ const handleSsoLogin = async () => {
         :disabled="isSsoLoading"
         @click="handleSsoLogin"
       >
-        <svg v-if="!isSsoLoading" class="sso-btn__icon" viewBox="0 0 20 20" fill="none">
-          <path d="M10 2L13.5 6H17L14 9.5L15.5 14L10 11L4.5 14L6 9.5L3 6H6.5L10 2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-        </svg>
         <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
-        {{ t("auth.submitSso") }}
+        {{ ssoLabel }}
       </button>
 
       <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
@@ -319,14 +330,14 @@ const handleSsoLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 0;
   width: 100%;
   padding: 14px 24px;
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
-  color: #fff;
-  background: #2a9d8f;
+  color: #000;
+  background: #FDC300;
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -334,8 +345,8 @@ const handleSsoLogin = async () => {
 }
 
 .sso-btn:hover:not(:disabled) {
-  background: #238b7e;
-  box-shadow: 0 6px 24px rgba(42, 157, 143, 0.28);
+  background: #E79F26;
+  box-shadow: 0 6px 24px rgba(253, 195, 0, 0.35);
   transform: translateY(-1px);
 }
 
@@ -348,16 +359,11 @@ const handleSsoLogin = async () => {
   cursor: not-allowed;
 }
 
-.sso-btn__icon {
-  width: 20px;
-  height: 20px;
-}
-
 .sso-btn__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #000;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -493,8 +499,8 @@ const handleSsoLogin = async () => {
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
-  color: #fff;
-  background: var(--primary);
+  color: #000;
+  background: #FDC300;
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -502,8 +508,8 @@ const handleSsoLogin = async () => {
 }
 
 .submit:hover:not(:disabled) {
-  background: var(--primary-hover);
-  box-shadow: 0 6px 24px rgba(124, 92, 252, 0.28);
+  background: #E79F26;
+  box-shadow: 0 6px 24px rgba(253, 195, 0, 0.28);
   transform: translateY(-1px);
 }
 
@@ -519,8 +525,8 @@ const handleSsoLogin = async () => {
 .submit__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: #000;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }

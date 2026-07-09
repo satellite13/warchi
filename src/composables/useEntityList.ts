@@ -1,19 +1,15 @@
-import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from "vue"
-import { useI18n } from "vue-i18n"
-import { apiGet } from "./useApi"
-import { useAuth } from "./useAuth"
-import { resolveOwnerDisplayNames } from "../utils/resolveOwnerNames"
-import { compareVersions } from "../utils/version"
-import { pagedListParams } from "@/api/queryHelpers"
-import { useEntityCreateModal } from "./useEntityCreateModal"
-import { useEntityDeleteModal } from "./useEntityDeleteModal"
-import { useEntityRenameModal } from "./useEntityRenameModal"
-import { useEntityIconModal } from "./useEntityIconModal"
-import type {
-  VersionedEntity,
-  EntityGroup,
-  PaginatedResponse,
-} from "../types/entities"
+import { computed, onMounted, ref, watch, type Ref, type ComputedRef } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { apiGet } from './useApi'
+import { useAuth } from './useAuth'
+import { resolveOwnerDisplayNames } from '../utils/resolveOwnerNames'
+import { compareVersions } from '../utils/version'
+import { pagedListParams } from '@/api/queryHelpers'
+import { useEntityCreateModal } from './useEntityCreateModal'
+import { useEntityDeleteModal } from './useEntityDeleteModal'
+import { useEntityRenameModal } from './useEntityRenameModal'
+import { useEntityIconModal } from './useEntityIconModal'
+import type { VersionedEntity, EntityGroup, PaginatedResponse } from '../types/entities'
 
 export interface EntityListConfig<T extends VersionedEntity = VersionedEntity> {
   endpoint: string
@@ -98,7 +94,7 @@ export function useEntityList<T extends VersionedEntity>(
   const ownerEmails = ref<Map<string, string>>(new Map())
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const searchQuery = ref("")
+  const searchQuery = ref('')
   const selectedVersionByName = ref<Record<string, string>>({})
 
   /** Инкремент отбрасывает ответ устаревшего GET после локальных мутаций (создание и т.д.). */
@@ -108,14 +104,14 @@ export function useEntityList<T extends VersionedEntity>(
 
   const activeItems = computed(() =>
     items.value.filter(
-      (item) =>
-        !(item && "deleted" in item && (item as VersionedEntity & { deleted?: boolean }).deleted)
+      item =>
+        !(item && 'deleted' in item && (item as VersionedEntity & { deleted?: boolean }).deleted)
     )
   )
 
   const groupedItems = computed(() => {
     const groups = new Map<string, { displayName: string; versions: T[] }>()
-    activeItems.value.forEach((item) => {
+    activeItems.value.forEach(item => {
       const normalizedName = normalizeEntityName(item.name)
       const trimmedName = item.name.trim()
       if (!groups.has(normalizedName)) {
@@ -127,10 +123,8 @@ export function useEntityList<T extends VersionedEntity>(
       groups.get(normalizedName)?.versions.push(item)
     })
 
-    return Array.from(groups.values()).map((group) => {
-      const sorted = [...group.versions].sort((a, b) =>
-        compareVersions(b.version, a.version)
-      )
+    return Array.from(groups.values()).map(group => {
+      const sorted = [...group.versions].sort((a, b) => compareVersions(b.version, a.version))
       return {
         name: sorted[0]?.name?.trim() || group.displayName,
         versions: sorted,
@@ -140,13 +134,13 @@ export function useEntityList<T extends VersionedEntity>(
 
   watch(
     groupedItems,
-    (groups) => {
+    groups => {
       const updates: Record<string, string> = {}
       let hasUpdates = false
       for (const group of groups) {
         const currentSelection = selectedVersionByName.value[group.name]
-        const latest = group.versions[0]?.version || ""
-        const exists = group.versions.some((item) => item.version === currentSelection)
+        const latest = group.versions[0]?.version || ''
+        const exists = group.versions.some(item => item.version === currentSelection)
         if (!currentSelection || !exists) {
           updates[group.name] = latest
           hasUpdates = true
@@ -165,7 +159,7 @@ export function useEntityList<T extends VersionedEntity>(
   const filteredItems = computed(() => {
     const query = searchQuery.value.toLowerCase().trim()
     if (!query) return groupedItems.value
-    return groupedItems.value.filter((group) => group.name.toLowerCase().includes(query))
+    return groupedItems.value.filter(group => group.name.toLowerCase().includes(query))
   })
 
   const itemCount = computed(() => filteredItems.value.length)
@@ -190,13 +184,11 @@ export function useEntityList<T extends VersionedEntity>(
       if (!groupedResult.data.groups) {
         throw new Error(`Не удалось загрузить ${config.entityNamePlural}.`)
       }
-      return groupedResult.data.groups.flatMap((g) => g.versions)
+      return groupedResult.data.groups.flatMap(g => g.versions)
     }
 
     const query = pagedListParams(0)
-    const result = await apiGet<PaginatedResponse<T>>(
-      `/${config.endpoint}?${query.toString()}`
-    )
+    const result = await apiGet<PaginatedResponse<T>>(`/${config.endpoint}?${query.toString()}`)
     if (!result.success) {
       throw new Error(result.error.message)
     }
@@ -218,16 +210,14 @@ export function useEntityList<T extends VersionedEntity>(
       }
       items.value = nextItems
 
-      const ownerIds = items.value.map((item) => item.ownerId)
-      await loadOwnerEmails(ownerIds, t("common.unknownUser"))
+      const ownerIds = items.value.map(item => item.ownerId)
+      await loadOwnerEmails(ownerIds, t('common.unknownUser'))
     } catch (error) {
       if (myGen !== itemsLoadGeneration) {
         return
       }
       errorMessage.value =
-        error instanceof Error
-          ? error.message
-          : `Не удалось загрузить ${config.entityNamePlural}.`
+        error instanceof Error ? error.message : `Не удалось загрузить ${config.entityNamePlural}.`
     } finally {
       if (myGen === itemsLoadGeneration && !silent) {
         isLoading.value = false
@@ -238,9 +228,7 @@ export function useEntityList<T extends VersionedEntity>(
   const getSelectedItem = (group: EntityGroup<T>): T | null => {
     const selectedVersion = selectedVersionByName.value[group.name]
     const selected =
-      group.versions.find((item) => item.version === selectedVersion) ||
-      group.versions[0] ||
-      null
+      group.versions.find(item => item.version === selectedVersion) || group.versions[0] || null
     if (selected && selectedVersion !== selected.version) {
       selectedVersionByName.value = {
         ...selectedVersionByName.value,
@@ -257,7 +245,13 @@ export function useEntityList<T extends VersionedEntity>(
     }
   }
 
-  const createModal = useEntityCreateModal(config, items, groupedItems, ownerEmails, selectedVersionByName)
+  const createModal = useEntityCreateModal(
+    config,
+    items,
+    groupedItems,
+    ownerEmails,
+    selectedVersionByName
+  )
   const { createItem: createItemBase, ...createModalRest } = createModal
   const deleteModal = useEntityDeleteModal(config, items)
   const renameModal = useEntityRenameModal(config, items, selectedVersionByName)

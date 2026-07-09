@@ -20,10 +20,7 @@ interface TypeResponseLike {
   attrs?: string | null
 }
 
-export interface ResolveNewTypesOptions<
-  TType extends TypeLike,
-  TEntity,
-> {
+export interface ResolveNewTypesOptions<TType extends TypeLike, TEntity> {
   types: TType[]
   entities: TEntity[]
   typeOwnerId: string
@@ -36,10 +33,9 @@ export interface ResolveNewTypesOptions<
   onProgress: (msg: string) => void
 }
 
-export async function resolveNewTypes<
-  TType extends TypeLike,
-  TEntity,
->(options: ResolveNewTypesOptions<TType, TEntity>): Promise<void> {
+export async function resolveNewTypes<TType extends TypeLike, TEntity>(
+  options: ResolveNewTypesOptions<TType, TEntity>
+): Promise<void> {
   const {
     types,
     entities,
@@ -55,7 +51,7 @@ export async function resolveNewTypes<
 
   const query = listParams()
   const existingResult = await apiGet<PaginatedResponse<TypeResponseLike>>(
-    `${apiEndpoint}?${query.toString()}`,
+    `${apiEndpoint}?${query.toString()}`
   )
   if (!existingResult.success) {
     throw new Error(`Ошибка загрузки ${entityTypeName}: ${existingResult.error.message}`)
@@ -70,18 +66,16 @@ export async function resolveNewTypes<
 
   const resolvedIdByName = new Map<string, string>()
 
-  const newTypes = types.filter((t) => t._isNew)
+  const newTypes = types.filter(t => t._isNew)
   for (const type of newTypes) {
     const oldId = type.id
     const normalizedName = normalizeTypeName(type.name)
 
-    const resolvedExistingId = normalizedName
-      ? resolvedIdByName.get(normalizedName)
-      : undefined
+    const resolvedExistingId = normalizedName ? resolvedIdByName.get(normalizedName) : undefined
     if (resolvedExistingId) {
       type.id = resolvedExistingId
       type._isNew = false
-      entities.forEach((e) => {
+      entities.forEach(e => {
         if (getTypeId(e) === oldId) setTypeId(e, resolvedExistingId)
       })
       continue
@@ -93,7 +87,7 @@ export async function resolveNewTypes<
       type.parsedAttrs = parseAttrs(existingType.attrs ?? null) as TType['parsedAttrs']
       type._isNew = false
       if (normalizedName) resolvedIdByName.set(normalizedName, existingType.id)
-      entities.forEach((e) => {
+      entities.forEach(e => {
         if (getTypeId(e) === oldId) setTypeId(e, existingType.id)
       })
       continue
@@ -113,14 +107,14 @@ export async function resolveNewTypes<
           'создания',
           entityTypeName,
           result.error.status,
-          result.error.message,
-        ),
+          result.error.message
+        )
       )
     }
     type.id = result.data.id
     type._isNew = false
     if (normalizedName) resolvedIdByName.set(normalizedName, result.data.id)
-    entities.forEach((e) => {
+    entities.forEach(e => {
       if (getTypeId(e) === oldId) setTypeId(e, result.data.id)
     })
   }

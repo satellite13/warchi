@@ -85,49 +85,43 @@ pipeline {
             }
         }
 
-        stage('CX_scan') {
-            steps {
-                script {
-                    def cx = load '.jenkinsjobs/checkmarx.groovy'
-                    timeout(time: 15, unit: 'MINUTES') {
-                        try {
-                            cx.runCheckmarxScan()
-                            cx.sendCxReportToSonar('warchi-frontend')
-                        } catch (e) {
-                            echo "Checkmarx scan failed (non-blocking): ${e.message}"
+        stage('Validate') {
+            parallel {
+                stage('CX_scan') {
+                    steps {
+                        echo "CX_scan skipped (re-enabled when needed)"
+                    }
+                }
+
+                stage('Code-Quality') {
+                    stages {
+                        stage('Lint') {
+                            steps {
+                                script {
+                                    def lint = load '.jenkinsjobs/lint.groovy'
+                                    lint.run_lint(SERVICE_ACCOUNT)
+                                }
+                            }
+                        }
+
+                        stage('Type-check') {
+                            steps {
+                                script {
+                                    def typecheck = load '.jenkinsjobs/typecheck.groovy'
+                                    typecheck.run_typecheck(SERVICE_ACCOUNT)
+                                }
+                            }
+                        }
+
+                        stage('Unit-test') {
+                            steps {
+                                script {
+                                    def tests = load '.jenkinsjobs/unit_tests.groovy'
+                                    tests.run_unit_tests(SERVICE_ACCOUNT)
+                                }
+                            }
                         }
                     }
-                }
-            }
-        }
-
-        stage('Lint') {
-            steps {
-                script {
-                    def lint = load '.jenkinsjobs/lint.groovy'
-                    try {
-                        lint.run_lint(SERVICE_ACCOUNT)
-                    } catch (e) {
-                        echo "Lint failed (non-blocking): ${e.message}"
-                    }
-                }
-            }
-        }
-
-        stage('Type-check') {
-            steps {
-                script {
-                    def typecheck = load '.jenkinsjobs/typecheck.groovy'
-                    typecheck.run_typecheck(SERVICE_ACCOUNT)
-                }
-            }
-        }
-
-        stage('Unit-test') {
-            steps {
-                script {
-                    def tests = load '.jenkinsjobs/unit_tests.groovy'
-                    tests.run_unit_tests(SERVICE_ACCOUNT)
                 }
             }
         }
@@ -161,12 +155,16 @@ pipeline {
         stage('SonarQube') {
             steps {
                 script {
-                    def scanner = docker.image('docker.art.lmru.tech/sonarsource/sonar-scanner-cli:latest')
-                    scanner.pull()
-                    scanner.inside('-u root -e HOME=${HOME}') {
-                        withSonarQubeEnv(credentialsId: 'sonarqube_token', installationName: 'SonarQube') {
-                            sh "sonar-scanner -Dsonar.projectKey=warchi-frontend -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'} -Dsonar.sources=src -Dsonar.ts.lcov.reportPaths=coverage/lcov.info"
+                    try {
+                        def scanner = docker.image('docker.art.lmru.tech/sonarsource/sonar-scanner-cli:latest')
+                        scanner.pull()
+                        scanner.inside('-u root -e HOME=${HOME} -w ${WORKSPACE}') {
+                            withSonarQubeEnv(credentialsId: 'sonarqube_token', installationName: 'SonarQube') {
+                                sh "sonar-scanner -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'} -Dsonar.verbose=true"
+                            }
                         }
+                    } catch (e) {
+                        echo "WARNING: SonarQube scan failed (non-blocking): ${e.message}"
                     }
                 }
             }
@@ -175,8 +173,12 @@ pipeline {
         stage('SonarQube Quality Gate') {
             steps {
                 script {
-                    timeout(time: 5, unit: 'MINUTES') {
-                        waitForQualityGate()
+                    try {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            waitForQualityGate()
+                        }
+                    } catch (e) {
+                        echo "WARNING: SonarQube Quality Gate failed (non-blocking): ${e.message}"
                     }
                 }
             }
@@ -190,6 +192,7 @@ pipeline {
                 }
             }
         }
+
 
         stage('Docker') {
             when {

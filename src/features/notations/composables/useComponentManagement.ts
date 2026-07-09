@@ -23,7 +23,6 @@ const createDefaultCompositeContent = (): CompositeSerializedCComponent => ({
   children: [],
 })
 
-
 export interface ComponentManagementOptions {
   state: Ref<NotationEditorState>
   selectedEntity: Ref<SelectedEntity>
@@ -48,8 +47,8 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     const { prefix, query } = getTagQuery(componentTags.value)
     const lowerQuery = query.toLowerCase()
     return availableTags.value
-      .filter((tag) => !prefix.includes(tag))
-      .filter((tag) => (lowerQuery ? tag.toLowerCase().includes(lowerQuery) : true))
+      .filter(tag => !prefix.includes(tag))
+      .filter(tag => (lowerQuery ? tag.toLowerCase().includes(lowerQuery) : true))
       .slice(0, 6)
   })
 
@@ -89,7 +88,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
       }
     }
 
-    const nodeType = state.value.nodeTypes.find((t) => t.id === nodeTypeId)
+    const nodeType = state.value.nodeTypes.find(t => t.id === nodeTypeId)
     const typeProps = nodeType?.parsedAttrs.customProperties ?? []
     const stylePreset = applyComponentStylePreset(componentStylePreset.value)
     const initialStyle =
@@ -102,7 +101,11 @@ export function useComponentManagement(options: ComponentManagementOptions) {
         : {
             ...stylePreset,
             ...(stylePreset.nodeShape === 'composite'
-              ? { nodeShape: 'rectangle', compositeContent: undefined, stylePropertyBindings: undefined }
+              ? {
+                  nodeShape: 'rectangle',
+                  compositeContent: undefined,
+                  stylePropertyBindings: undefined,
+                }
               : {}),
           }
 
@@ -134,10 +137,10 @@ export function useComponentManagement(options: ComponentManagementOptions) {
   }
 
   const removeComponent = (id: string) => {
-    const component = state.value.components.find((c) => c.id === id)
+    const component = state.value.components.find(c => c.id === id)
     if (!component) return
     if (component._isNew) {
-      state.value.components = state.value.components.filter((c) => c.id !== id)
+      state.value.components = state.value.components.filter(c => c.id !== id)
     } else {
       component._isDeleted = true
     }
@@ -147,7 +150,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
   }
 
   const markComponentDirty = (id: string) => {
-    const component = state.value.components.find((c) => c.id === id)
+    const component = state.value.components.find(c => c.id === id)
     if (component && !component._isNew) {
       component._isDirty = true
     }

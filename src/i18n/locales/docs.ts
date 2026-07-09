@@ -114,7 +114,8 @@ export const docsMessages = {
     },
     wiki: {
       title: 'Wiki documentaire',
-      empty: 'Aucun document. Ajoutez de la documentation à un modèle, une notation, un type ou une forme.',
+      empty:
+        'Aucun document. Ajoutez de la documentation à un modèle, une notation, un type ou une forme.',
       selectDocument: 'Sélectionnez un document dans la liste',
       documentation: 'Page du Wiki',
       entityType: {

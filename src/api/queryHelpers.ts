@@ -11,9 +11,6 @@ export function listParams(size: number = PAGE_SIZE_FULL): URLSearchParams {
 }
 
 /** URLSearchParams with `{ page, size }` for paginated lists */
-export function pagedListParams(
-  page: number = 0,
-  size: number = PAGE_SIZE_LIST,
-): URLSearchParams {
+export function pagedListParams(page: number = 0, size: number = PAGE_SIZE_LIST): URLSearchParams {
   return new URLSearchParams({ page: String(page), size: String(size) })
 }

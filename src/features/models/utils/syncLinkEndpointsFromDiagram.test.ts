@@ -31,7 +31,14 @@ function createDiagramAttrs(): DiagramAttrs {
         { id: 'inst-b', modelNodeId: 'node-b', x: 0, y: 0 },
         { id: 'inst-c', modelNodeId: 'node-c', x: 0, y: 0 },
       ],
-      edges: [{ id: 'edge-1', modelLinkId: 'link-1', sourceInstanceId: 'inst-a', targetInstanceId: 'inst-b' }],
+      edges: [
+        {
+          id: 'edge-1',
+          modelLinkId: 'link-1',
+          sourceInstanceId: 'inst-a',
+          targetInstanceId: 'inst-b',
+        },
+      ],
     },
   }
 }

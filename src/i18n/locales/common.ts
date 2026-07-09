@@ -43,7 +43,8 @@ export const commonMessages = {
       deleteIrreversible: 'Это действие нельзя отменить.',
       newVersionAvailable: 'Новая версия v{version} доступна. Обновление...',
       outageTitle: 'Сервис временно недоступен',
-      outageAuthzMessage: 'Сервис авторизации недоступен. Работа с приложением временно невозможна.',
+      outageAuthzMessage:
+        'Сервис авторизации недоступен. Работа с приложением временно невозможна.',
       outageBackendMessage: 'Backend недоступен. Работа с приложением временно невозможна.',
       outageRetry: 'Повторить',
       outageChecking: 'Проверка...',
@@ -152,7 +153,8 @@ export const commonMessages = {
       deleteIrreversible: 'This action cannot be undone.',
       newVersionAvailable: 'New version v{version} available. Updating...',
       outageTitle: 'Service is temporarily unavailable',
-      outageAuthzMessage: 'Authorization service is unavailable. The application cannot be used right now.',
+      outageAuthzMessage:
+        'Authorization service is unavailable. The application cannot be used right now.',
       outageBackendMessage: 'Backend is unavailable. The application cannot be used right now.',
       outageRetry: 'Retry',
       outageChecking: 'Checking...',
@@ -263,7 +265,8 @@ export const commonMessages = {
       outageTitle: 'Service temporairement indisponible',
       outageAuthzMessage:
         "Le service d'autorisation est indisponible. L'application ne peut pas être utilisée pour le moment.",
-      outageBackendMessage: 'Le serveur est indisponible. L’application ne peut pas être utilisée pour le moment.',
+      outageBackendMessage:
+        'Le serveur est indisponible. L’application ne peut pas être utilisée pour le moment.',
       outageRetry: 'Réessayer',
       outageChecking: 'Vérification...',
     },

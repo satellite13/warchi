@@ -65,7 +65,7 @@ function traverseComposite(
 
 function findById(root: CompositeSerializedCComponent, id: string): boolean {
   let found = false
-  traverseComposite(root, (node) => {
+  traverseComposite(root, node => {
     if (node.id === id) found = true
   })
   return found
@@ -151,4 +151,3 @@ export function validateCompositeDiagramStyle(
 
   return issues
 }
-

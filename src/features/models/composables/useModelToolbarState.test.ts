@@ -142,7 +142,7 @@ describe('useModelToolbarState', () => {
       const options = state.defaultLinkTypeOptions.value
 
       expect(options).toHaveLength(4)
-      const values = options.map((o) => o.value)
+      const values = options.map(o => o.value)
       expect(values).toContain('straight')
       expect(values).toContain('polyline')
       expect(values).toContain('editable-polyline')

@@ -61,7 +61,7 @@ export type ArchimateIcon = (typeof ARCHIMATE_ICONS)[number]
 
 export type IconOption = { id: string; label: string }
 
-export const ARCHIMATE_ICON_OPTIONS: IconOption[] = ARCHIMATE_ICONS.map((name) => ({
+export const ARCHIMATE_ICON_OPTIONS: IconOption[] = ARCHIMATE_ICONS.map(name => ({
   id: name,
   label: name,
 }))

@@ -15,7 +15,6 @@ export const NEW_TYPE_VALUE = '__new__'
 export const RELATION_WITHOUT_TYPE_VALUE = '__without_type__'
 const UNTYPED_LINK_TYPE_NAME = 'Diagram only'
 
-
 export interface RelationManagementOptions {
   state: Ref<NotationEditorState>
   selectedEntity: Ref<SelectedEntity>
@@ -39,8 +38,8 @@ export function useRelationManagement(options: RelationManagementOptions) {
     const { prefix, query } = getTagQuery(relationTags.value)
     const lowerQuery = query.toLowerCase()
     return availableTags.value
-      .filter((tag) => !prefix.includes(tag))
-      .filter((tag) => (lowerQuery ? tag.toLowerCase().includes(lowerQuery) : true))
+      .filter(tag => !prefix.includes(tag))
+      .filter(tag => (lowerQuery ? tag.toLowerCase().includes(lowerQuery) : true))
       .slice(0, 6)
   })
 
@@ -69,8 +68,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
 
     let linkTypeId = relationTypeSelection.value
     if (linkTypeId === RELATION_WITHOUT_TYPE_VALUE) {
-      linkTypeId =
-        addType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
+      linkTypeId = addType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
     }
     if (linkTypeId === NEW_TYPE_VALUE) {
       linkTypeId =
@@ -81,7 +79,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
       }
     }
 
-    const linkType = state.value.linkTypes.find((t) => t.id === linkTypeId)
+    const linkType = state.value.linkTypes.find(t => t.id === linkTypeId)
     const typeProps = linkType?.parsedAttrs.customProperties ?? []
     const initialStyle = applyRelationStylePreset(relationStylePreset.value)
 
@@ -112,10 +110,10 @@ export function useRelationManagement(options: RelationManagementOptions) {
   }
 
   const removeRelation = (id: string) => {
-    const relation = state.value.relations.find((r) => r.id === id)
+    const relation = state.value.relations.find(r => r.id === id)
     if (!relation) return
     if (relation._isNew) {
-      state.value.relations = state.value.relations.filter((r) => r.id !== id)
+      state.value.relations = state.value.relations.filter(r => r.id !== id)
     } else {
       relation._isDeleted = true
     }
@@ -125,7 +123,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
   }
 
   const markRelationDirty = (id: string) => {
-    const relation = state.value.relations.find((r) => r.id === id)
+    const relation = state.value.relations.find(r => r.id === id)
     if (relation && !relation._isNew) {
       relation._isDirty = true
     }

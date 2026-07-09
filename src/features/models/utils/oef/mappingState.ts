@@ -38,9 +38,14 @@ function sanitizeElementMap(
   if (!source) return out
   for (const [sourceType, mapping] of Object.entries(source)) {
     out[sourceType] = {
-      nodeTypeId: typeof mapping.nodeTypeId === 'string' && mapping.nodeTypeId ? mapping.nodeTypeId : null,
-      componentId: typeof mapping.componentId === 'string' && mapping.componentId ? mapping.componentId : null,
-      score: typeof mapping.score === 'number' && Number.isFinite(mapping.score) ? mapping.score : undefined,
+      nodeTypeId:
+        typeof mapping.nodeTypeId === 'string' && mapping.nodeTypeId ? mapping.nodeTypeId : null,
+      componentId:
+        typeof mapping.componentId === 'string' && mapping.componentId ? mapping.componentId : null,
+      score:
+        typeof mapping.score === 'number' && Number.isFinite(mapping.score)
+          ? mapping.score
+          : undefined,
     }
   }
   return out
@@ -53,9 +58,14 @@ function sanitizeRelationshipMap(
   if (!source) return out
   for (const [sourceType, mapping] of Object.entries(source)) {
     out[sourceType] = {
-      linkTypeId: typeof mapping.linkTypeId === 'string' && mapping.linkTypeId ? mapping.linkTypeId : null,
-      relationId: typeof mapping.relationId === 'string' && mapping.relationId ? mapping.relationId : null,
-      score: typeof mapping.score === 'number' && Number.isFinite(mapping.score) ? mapping.score : undefined,
+      linkTypeId:
+        typeof mapping.linkTypeId === 'string' && mapping.linkTypeId ? mapping.linkTypeId : null,
+      relationId:
+        typeof mapping.relationId === 'string' && mapping.relationId ? mapping.relationId : null,
+      score:
+        typeof mapping.score === 'number' && Number.isFinite(mapping.score)
+          ? mapping.score
+          : undefined,
     }
   }
   return out
@@ -134,7 +144,8 @@ export function mergeImportMappingState(
   const relationshipTypeMap: Record<string, RelationshipTypeMapping> = {}
 
   for (const sourceType of Object.keys(initial.elementTypeMap)) {
-    elementTypeMap[sourceType] = cached.elementTypeMap[sourceType] ?? initial.elementTypeMap[sourceType]!
+    elementTypeMap[sourceType] =
+      cached.elementTypeMap[sourceType] ?? initial.elementTypeMap[sourceType]!
   }
   for (const sourceType of Object.keys(initial.relationshipTypeMap)) {
     relationshipTypeMap[sourceType] =

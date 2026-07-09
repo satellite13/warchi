@@ -1,4 +1,11 @@
-import type { OefElement, OefParsedModel, OefRelationship, OefView, OefViewConnection, OefViewNode } from './types'
+import type {
+  OefElement,
+  OefParsedModel,
+  OefRelationship,
+  OefView,
+  OefViewConnection,
+  OefViewNode,
+} from './types'
 
 const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance'
 

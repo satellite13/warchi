@@ -63,11 +63,10 @@ describe('diagramCanvasSync', () => {
     }
 
     const edgeRefs = new Map([['edge-edge-inst-1', { edgeId: 'edge-inst-1' }]])
-    const changed = applyEditablePolylineControlPointChangesToDiagram(
-      diagram,
-      edgeRefs,
-      () => ({ type: 'editable-polyline', controlPoints: [] })
-    )
+    const changed = applyEditablePolylineControlPointChangesToDiagram(diagram, edgeRefs, () => ({
+      type: 'editable-polyline',
+      controlPoints: [],
+    }))
 
     expect(changed).toBe(true)
     expect(diagram.instances.edges[0]?.attrs).toBeUndefined()

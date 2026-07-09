@@ -1,16 +1,16 @@
-import type { ComponentResponse, LinkTypeResponse, RelationResponse } from "@/types/api"
-import type { NotationData } from "@/types/entities"
-import type { EditorLink, EditorNode } from "@/features/models/types"
+import type { ComponentResponse, LinkTypeResponse, RelationResponse } from '@/types/api'
+import type { NotationData } from '@/types/entities'
+import type { EditorLink, EditorNode } from '@/features/models/types'
 
-export const UNMAPPED_ENTITY_ID = "__unmapped__"
+export const UNMAPPED_ENTITY_ID = '__unmapped__'
 
-export type RelationMatrixMode = "types" | "notation"
-export type RelationMatrixCsvFormat = "long" | "wide"
+export type RelationMatrixMode = 'types' | 'notation'
+export type RelationMatrixCsvFormat = 'long' | 'wide'
 
 export type RelationMatrixEntityOption = {
   id: string
   name: string
-  kind: "row" | "column" | "relation"
+  kind: 'row' | 'column' | 'relation'
   isUnmapped?: boolean
 }
 

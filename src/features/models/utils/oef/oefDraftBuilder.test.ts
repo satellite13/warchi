@@ -16,7 +16,11 @@ describe('oefDraftBuilder', () => {
     expect(draft.diagrams).toHaveLength(1)
     expect(draft.diagrams[0]?.nodeInstances).toHaveLength(6)
     expect(draft.diagrams[0]?.connectionInstances).toHaveLength(5)
-    expect(draft.sourceElementTypes).toEqual(['BusinessEvent', 'BusinessProcess', 'BusinessService'])
+    expect(draft.sourceElementTypes).toEqual([
+      'BusinessEvent',
+      'BusinessProcess',
+      'BusinessService',
+    ])
     expect(draft.sourceRelationshipTypes).toEqual(['Serving', 'Triggering'])
   })
 })

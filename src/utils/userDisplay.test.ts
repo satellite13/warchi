@@ -32,20 +32,20 @@ describe('getUserDisplayName', () => {
 
   it('falls back to email when names are empty strings', () => {
     expect(getUserDisplayName({ firstName: '', lastName: '', email: 'john@example.com' })).toBe(
-      'john@example.com',
+      'john@example.com'
     )
   })
 
   it('falls back to email when names are whitespace only', () => {
-    expect(getUserDisplayName({ firstName: '   ', lastName: '   ', email: 'john@example.com' })).toBe(
-      'john@example.com',
-    )
+    expect(
+      getUserDisplayName({ firstName: '   ', lastName: '   ', email: 'john@example.com' })
+    ).toBe('john@example.com')
   })
 
   it('falls back to email when names are null', () => {
-    expect(
-      getUserDisplayName({ firstName: null, lastName: null, email: 'john@example.com' }),
-    ).toBe('john@example.com')
+    expect(getUserDisplayName({ firstName: null, lastName: null, email: 'john@example.com' })).toBe(
+      'john@example.com'
+    )
   })
 
   it('returns fallback when all fields are null', () => {
@@ -62,7 +62,7 @@ describe('getUserDisplayName', () => {
 
   it('prefers full name over email', () => {
     expect(
-      getUserDisplayName({ firstName: 'John', lastName: 'Doe', email: 'john@example.com' }),
+      getUserDisplayName({ firstName: 'John', lastName: 'Doe', email: 'john@example.com' })
     ).toBe('John Doe')
   })
 })

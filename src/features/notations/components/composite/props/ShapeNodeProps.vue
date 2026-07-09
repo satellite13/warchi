@@ -5,6 +5,7 @@ import LabeledNumberInput from '../../LabeledNumberInput.vue'
 import SketchColorField from '../../SketchColorField.vue'
 import InsetSidesInput from '@/components/forms/InsetSidesInput.vue'
 import type { CompositeSerializedCComponent } from '../../../notationAttrs'
+import { toInsetSides } from '@/features/notations/utils/styleHelpers'
 
 const props = defineProps<{
   modelValue: CompositeSerializedCComponent
@@ -14,13 +15,6 @@ const emit = defineEmits<{
   (e: 'update:field', field: string, value: unknown): void
 }>()
 const { t } = useI18n()
-
-function getPaddingSides() {
-  const p = props.modelValue.padding
-  if (p === undefined || p === null) return { top: 0, right: 0, bottom: 0, left: 0 }
-  if (typeof p === 'number') return { top: p, right: p, bottom: p, left: p }
-  return { top: p.top ?? 0, right: p.right ?? 0, bottom: p.bottom ?? 0, left: p.left ?? 0 }
-}
 </script>
 
 <template>
@@ -59,7 +53,7 @@ function getPaddingSides() {
 
     <LabeledFieldRow :label="t('nodeStyle.compositePadding')">
       <InsetSidesInput
-        :model-value="getPaddingSides()"
+        :model-value="toInsetSides(props.modelValue.padding)"
         :min="0"
         :max="100"
         :step="1"

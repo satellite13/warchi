@@ -1,17 +1,10 @@
-import { computed, ref } from "vue"
-import { apiGet } from "@/composables/useApi"
+import { computed, ref } from 'vue'
+import { apiGet } from '@/composables/useApi'
 import { listParams } from '@/api/queryHelpers'
-import type { ModelData } from "@/types/entities"
-import type { PaginatedResponse } from "@/types/entities"
-import type {
-  DiagramResponse,
-  LinkResponse,
-  NodeResponse,
-} from "@/types/api"
-import {
-  computeModelDiff,
-  type ModelVersionDiff,
-} from "@/utils/modelDiff"
+import type { ModelData } from '@/types/entities'
+import type { PaginatedResponse } from '@/types/entities'
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
+import { computeModelDiff, type ModelVersionDiff } from '@/utils/modelDiff'
 
 export type ModelVersionDiffState = {
   relatedVersions: ModelData[]
@@ -66,9 +59,9 @@ export function useModelVersionDiff() {
         `/diagrams?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
       ),
     ])
-    const nodes = nodesRes.success ? nodesRes.data.content ?? [] : []
-    const links = linksRes.success ? linksRes.data.content ?? [] : []
-    const diagrams = diagramsRes.success ? diagramsRes.data.content ?? [] : []
+    const nodes = nodesRes.success ? (nodesRes.data.content ?? []) : []
+    const links = linksRes.success ? (linksRes.data.content ?? []) : []
+    const diagrams = diagramsRes.success ? (diagramsRes.data.content ?? []) : []
     baseData.value = { nodes, links, diagrams }
   }
 
@@ -76,9 +69,7 @@ export function useModelVersionDiff() {
     relatedVersionsLoading.value = true
     relatedVersionsError.value = null
     try {
-      const result = await apiGet<ModelData[]>(
-        `/models/${modelId}/related-versions`
-      )
+      const result = await apiGet<ModelData[]>(`/models/${modelId}/related-versions`)
       if (result.success) {
         relatedVersions.value = result.data
       } else {
@@ -87,8 +78,7 @@ export function useModelVersionDiff() {
       }
     } catch (e) {
       relatedVersions.value = []
-      relatedVersionsError.value =
-        e instanceof Error ? e.message : "Не удалось загрузить версии"
+      relatedVersionsError.value = e instanceof Error ? e.message : 'Не удалось загрузить версии'
     } finally {
       relatedVersionsLoading.value = false
     }
@@ -112,14 +102,14 @@ export function useModelVersionDiff() {
           `/diagrams?modelId=${encodeURIComponent(otherModelId)}&${listQuery.toString()}`
         ),
       ])
-      const nodes = nodesRes.success ? nodesRes.data.content ?? [] : []
-      const links = linksRes.success ? linksRes.data.content ?? [] : []
-      const diagrams = diagramsRes.success ? diagramsRes.data.content ?? [] : []
+      const nodes = nodesRes.success ? (nodesRes.data.content ?? []) : []
+      const links = linksRes.success ? (linksRes.data.content ?? []) : []
+      const diagrams = diagramsRes.success ? (diagramsRes.data.content ?? []) : []
       compareTargetData.value = { nodes, links, diagrams }
       return true
     } catch (e) {
       compareTargetError.value =
-        e instanceof Error ? e.message : "Не удалось загрузить данные версии"
+        e instanceof Error ? e.message : 'Не удалось загрузить данные версии'
       return false
     } finally {
       compareTargetLoading.value = false

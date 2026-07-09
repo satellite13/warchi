@@ -74,7 +74,7 @@ export const appendTagValue = (current: string, tag: string): string => {
   const parts = current.split(',')
   const prefix = parts
     .slice(0, -1)
-    .map((t) => t.trim())
+    .map(t => t.trim())
     .filter(Boolean)
   const unique = new Set(prefix)
   unique.add(tag)
@@ -82,7 +82,7 @@ export const appendTagValue = (current: string, tag: string): string => {
 }
 
 const typeNameById = (items: (EditorNodeType | EditorLinkType)[], id: string | null) =>
-  items.find((item) => item.id === id)?.name || 'Без типа'
+  items.find(item => item.id === id)?.name || 'Без типа'
 
 export function useNotationEntity(state: Ref<NotationEditorState>): NotationEntityReturn {
   const searchQuery = ref('')
@@ -96,11 +96,11 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
 
   const hasLocalEntityChanges = computed(
     () =>
-      state.value.components.some((item) => item._isNew || item._isDirty || item._isDeleted) ||
-      state.value.relations.some((item) => item._isNew || item._isDirty || item._isDeleted),
+      state.value.components.some(item => item._isNew || item._isDirty || item._isDeleted) ||
+      state.value.relations.some(item => item._isNew || item._isDirty || item._isDeleted)
   )
   const hasActiveSearchFilters = computed(
-    () => normalizeQuery(searchQuery.value).length > 0 || selectedTags.value.length > 0,
+    () => normalizeQuery(searchQuery.value).length > 0 || selectedTags.value.length > 0
   )
 
   const refreshServerFilters = async () => {
@@ -124,10 +124,10 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
     ])
 
     serverFilteredComponentIds.value = componentsResult.success
-      ? new Set((componentsResult.data.content ?? []).map((item) => item.id))
+      ? new Set((componentsResult.data.content ?? []).map(item => item.id))
       : null
     serverFilteredRelationIds.value = relationsResult.success
-      ? new Set((relationsResult.data.content ?? []).map((item) => item.id))
+      ? new Set((relationsResult.data.content ?? []).map(item => item.id))
       : null
   }
 
@@ -139,16 +139,16 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
         void refreshServerFilters()
       }, 180)
     },
-    { immediate: true },
+    { immediate: true }
   )
 
   const availableTags = computed(() => {
     const tags = new Set<string>()
-    state.value.components.forEach((component) =>
-      component.parsedAttrs.tags.forEach((tag) => tags.add(tag)),
+    state.value.components.forEach(component =>
+      component.parsedAttrs.tags.forEach(tag => tags.add(tag))
     )
-    state.value.relations.forEach((relation) =>
-      relation.parsedAttrs.tags.forEach((tag) => tags.add(tag)),
+    state.value.relations.forEach(relation =>
+      relation.parsedAttrs.tags.forEach(tag => tags.add(tag))
     )
     return Array.from(tags.values()).sort()
   })
@@ -181,7 +181,7 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
 
   const toggleTag = (tag: string) => {
     if (selectedTags.value.includes(tag)) {
-      selectedTags.value = selectedTags.value.filter((item) => item !== tag)
+      selectedTags.value = selectedTags.value.filter(item => item !== tag)
     } else {
       selectedTags.value = [...selectedTags.value, tag]
     }
@@ -195,7 +195,7 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
     if (selectedTags.value.length === 0) {
       return true
     }
-    return selectedTags.value.every((tag) => tags.includes(tag))
+    return selectedTags.value.every(tag => tags.includes(tag))
   }
 
   const selectedItem = computed<EditorComponent | EditorRelation | null>(() => {
@@ -203,13 +203,13 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
     if (selectedEntity.value.kind === 'component') {
       return (
         state.value.components.find(
-          (item) => item.id === selectedEntity.value?.id && !item._isDeleted,
+          item => item.id === selectedEntity.value?.id && !item._isDeleted
         ) || null
       )
     }
     return (
       state.value.relations.find(
-        (item) => item.id === selectedEntity.value?.id && !item._isDeleted,
+        item => item.id === selectedEntity.value?.id && !item._isDeleted
       ) || null
     )
   })
@@ -220,8 +220,8 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
     const useServerFilters = hasActiveSearchFilters.value && !hasLocalEntityChanges.value
 
     const components = state.value.components
-      .filter((c) => !c._isDeleted)
-      .filter((component) => {
+      .filter(c => !c._isDeleted)
+      .filter(component => {
         if (!useServerFilters || !componentFilterSet) {
           return matchesFilters(component.name, component.parsedAttrs.tags)
         }
@@ -230,7 +230,7 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
         }
         return componentFilterSet.has(component.id)
       })
-      .map((component) => ({
+      .map(component => ({
         id: component.id,
         kind: 'component' as const,
         name: component.name,
@@ -239,8 +239,8 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
       }))
 
     const relations = state.value.relations
-      .filter((r) => !r._isDeleted)
-      .filter((relation) => {
+      .filter(r => !r._isDeleted)
+      .filter(relation => {
         if (!useServerFilters || !relationFilterSet) {
           return matchesFilters(relation.name, relation.parsedAttrs.tags)
         }
@@ -249,7 +249,7 @@ export function useNotationEntity(state: Ref<NotationEditorState>): NotationEnti
         }
         return relationFilterSet.has(relation.id)
       })
-      .map((relation) => ({
+      .map(relation => ({
         id: relation.id,
         kind: 'relation' as const,
         name: relation.name,

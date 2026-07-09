@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { createInitialImportMappingState, loadCachedImportMappingState, mergeImportMappingState, saveCachedImportMappingState } from './mappingState'
+import {
+  createInitialImportMappingState,
+  loadCachedImportMappingState,
+  mergeImportMappingState,
+  saveCachedImportMappingState,
+} from './mappingState'
 import type { ImportMappingSuggestions } from './mappingSuggestions'
 
 describe('mappingState', () => {

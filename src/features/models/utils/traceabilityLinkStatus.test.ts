@@ -185,4 +185,3 @@ describe('computeTraceabilityLinkStatus', () => {
     expect(result.onDiagram).toBe(false)
   })
 })
-

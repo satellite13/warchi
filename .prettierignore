@@ -1,0 +1,6 @@
+dist/
+node_modules/
+
+# Vue SFC files are formatted by eslint-plugin-vue, not prettier
+# (prettier 3.x breaks multi-line @click handlers in templates)
+**/*.vue

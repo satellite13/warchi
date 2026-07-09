@@ -100,7 +100,8 @@ export const typesMessages = {
       docSaveTypeFirst: 'Сохраните тип, чтобы создать документацию.',
       docEmpty: 'Документация пока не создана.',
       docLoadError: 'Не удалось загрузить документ.',
-      docBrokenRef: 'Документ не найден — возможно, ссылка устарела. Вы можете создать новый документ.',
+      docBrokenRef:
+        'Документ не найден — возможно, ссылка устарела. Вы можете создать новый документ.',
       docCreateNew: 'Создать новый документ',
       docSaveError: 'Ошибка сохранения документа: {message}',
       docLoadVersionError: 'Не удалось загрузить версию документа.',
@@ -138,7 +139,8 @@ export const typesMessages = {
       errorSave: 'Ошибка сохранения',
       errorDelete: 'Ошибка удаления',
       docLinkRegisterFailed: 'Не удалось привязать документ к форме: {message}',
-      outlineHint: 'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
+      outlineHint:
+        'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
       convertToBezier: 'В кривую Безье',
       convertToLine: 'В линию',
     },
@@ -243,7 +245,8 @@ export const typesMessages = {
       docSaveTypeFirst: 'Save the type to create documentation.',
       docEmpty: 'No documentation created yet.',
       docLoadError: 'Failed to load document.',
-      docBrokenRef: 'Document not found — the reference may be outdated. You can create a new document.',
+      docBrokenRef:
+        'Document not found — the reference may be outdated. You can create a new document.',
       docCreateNew: 'Create new document',
       docSaveError: 'Failed to save document: {message}',
       docLoadVersionError: 'Failed to load document version.',
@@ -281,7 +284,8 @@ export const typesMessages = {
       errorSave: 'Save failed',
       errorDelete: 'Delete failed',
       docLinkRegisterFailed: 'Could not link the document to the shape: {message}',
-      outlineHint: 'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
+      outlineHint:
+        'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
       convertToBezier: 'Convert to Bezier',
       convertToLine: 'Convert to line',
     },

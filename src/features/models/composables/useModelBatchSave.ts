@@ -192,10 +192,7 @@ export async function batchSave(
   modelId: string,
   request: BatchSaveRequest
 ): Promise<ApiResult<BatchSaveResponse>> {
-  return apiPost<BatchSaveResponse>(
-    `/models/${encodeURIComponent(modelId)}/batch-save`,
-    request
-  )
+  return apiPost<BatchSaveResponse>(`/models/${encodeURIComponent(modelId)}/batch-save`, request)
 }
 
 export function hasBatchChanges(request: BatchSaveRequest): boolean {
@@ -256,7 +253,10 @@ export async function refreshBatchSavedEntityTimestamps(
   request: BatchSaveRequest,
   response: BatchSaveResponse
 ): Promise<void> {
-  const { nodeIds, linkIds, diagramIds } = collectEntityIdsForBatchTimestampRefresh(request, response)
+  const { nodeIds, linkIds, diagramIds } = collectEntityIdsForBatchTimestampRefresh(
+    request,
+    response
+  )
 
   const tasks: Promise<void>[] = []
 
@@ -315,22 +315,22 @@ export function applyBatchRemapping(
   // so we only clear dirty/new flags for those entities (not ones edited concurrently).
   const batchNodeIds = request
     ? new Set([
-        ...request.nodes.create.map((n) => n.tempId),
-        ...request.nodes.update.map((n) => n.id),
+        ...request.nodes.create.map(n => n.tempId),
+        ...request.nodes.update.map(n => n.id),
         ...request.nodes.delete,
       ])
     : null
   const batchLinkIds = request
     ? new Set([
-        ...request.links.create.map((l) => l.tempId),
-        ...request.links.update.map((l) => l.id),
+        ...request.links.create.map(l => l.tempId),
+        ...request.links.update.map(l => l.id),
         ...request.links.delete,
       ])
     : null
   const batchDiagramIds = request
     ? new Set([
-        ...request.diagrams.create.map((d) => d.tempId),
-        ...request.diagrams.update.map((d) => d.id),
+        ...request.diagrams.create.map(d => d.tempId),
+        ...request.diagrams.update.map(d => d.id),
         ...request.diagrams.delete,
       ])
     : null

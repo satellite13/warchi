@@ -1,7 +1,7 @@
-import { ref } from "vue"
-import type { ModelData } from "@/types/entities"
-import type { ModelEditorState } from "@/features/models/types"
-import { loadModelEditorData } from "@/features/models/composables/modelEditorLoadModel"
+import { ref } from 'vue'
+import type { ModelData } from '@/types/entities'
+import type { ModelEditorState } from '@/features/models/types'
+import { loadModelEditorData } from '@/features/models/composables/modelEditorLoadModel'
 
 export function useRelationMatrixData() {
   const loading = ref(false)
@@ -20,7 +20,7 @@ export function useRelationMatrixData() {
     } catch (err) {
       model.value = null
       state.value = null
-      error.value = err instanceof Error ? err.message : "Ошибка загрузки матрицы"
+      error.value = err instanceof Error ? err.message : 'Ошибка загрузки матрицы'
     } finally {
       loading.value = false
     }
@@ -34,4 +34,3 @@ export function useRelationMatrixData() {
     load,
   }
 }
-

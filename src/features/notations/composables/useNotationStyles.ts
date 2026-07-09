@@ -82,7 +82,7 @@ export function useNotationStyles(state: Ref<NotationEditorState>) {
   }
 
   function resolveComponentStyle(item: EditorComponent) {
-    const typeItem = state.value.nodeTypes.find((type) => type.id === item.nodeTypeId)
+    const typeItem = state.value.nodeTypes.find(type => type.id === item.nodeTypeId)
     const base = resolveComponentTypeStyle(typeItem)
     const ds = item.parsedAttrs.diagramStyle
     if (!ds) return base
@@ -103,7 +103,7 @@ export function useNotationStyles(state: Ref<NotationEditorState>) {
   }
 
   function resolveRelationStyle(item: EditorRelation) {
-    const typeItem = state.value.linkTypes.find((type) => type.id === item.linkTypeId)
+    const typeItem = state.value.linkTypes.find(type => type.id === item.linkTypeId)
     const base = resolveRelationEdgeStyle(typeItem)
     const ds = item.parsedAttrs.diagramStyle
     if (!ds) return base

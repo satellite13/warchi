@@ -1,5 +1,5 @@
-import { apiDelete, apiPost, apiPut } from "@/composables/useApi"
-import type { ModelData } from "@/types/entities"
+import { apiDelete, apiPost, apiPut } from '@/composables/useApi'
+import type { ModelData } from '@/types/entities'
 import type {
   DiagramRequest,
   DiagramResponse,
@@ -9,12 +9,11 @@ import type {
   ModelUpdateRequest,
   NodeRequest,
   NodeResponse,
-} from "@/types/api"
-import { formatEntitySaveError } from "@/utils/formatEntityError"
-import { compareVersions } from "@/utils/version"
-import { serializeDiagramAttrs, serializeLinkAttrs, serializeNodeAttrs } from "../modelAttrs"
-import type { EditorDiagram, EditorLink, EditorNode } from "../types"
-
+} from '@/types/api'
+import { formatEntitySaveError } from '@/utils/formatEntityError'
+import { compareVersions } from '@/utils/version'
+import { serializeDiagramAttrs, serializeLinkAttrs, serializeNodeAttrs } from '../modelAttrs'
+import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 
 export async function saveModelMetadata(
   model: ModelData,
@@ -29,7 +28,7 @@ export async function saveModelMetadata(
   const result = await apiPut<ModelData>(`/models/${model.id}`, request)
   if (!result.success) {
     if (result.error.status === 409) {
-      throw new Error("Модель с таким именем и версией уже существует.")
+      throw new Error('Модель с таким именем и версией уже существует.')
     }
     throw new Error(`Ошибка обновления модели: ${result.error.message}`)
   }
@@ -70,10 +69,16 @@ export async function saveNodes(
         parentNodeId: resolvedParentId,
         attrs: serializeNodeAttrs(node.parsedAttrs),
       }
-      const result = await apiPost<NodeResponse>("/nodes", request)
+      const result = await apiPost<NodeResponse>('/nodes', request)
       if (!result.success) {
         throw new Error(
-          formatEntitySaveError("модели", "создания", "узла", result.error.status, result.error.message)
+          formatEntitySaveError(
+            'модели',
+            'создания',
+            'узла',
+            result.error.status,
+            result.error.message
+          )
         )
       }
       const oldId = node.id
@@ -82,7 +87,7 @@ export async function saveNodes(
       node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
       node._isNew = false
       const createdU = result.data.updatedAt
-      if (typeof createdU === "string" && createdU.length > 0) node.updatedAt = createdU
+      if (typeof createdU === 'string' && createdU.length > 0) node.updatedAt = createdU
       pendingNewNodes.splice(i, 1)
       pendingNewNodeIds.delete(oldId)
       i -= 1
@@ -90,7 +95,7 @@ export async function saveNodes(
     }
 
     if (!progress) {
-      throw new Error("Не удалось сохранить новые узлы: проверьте иерархию дерева.")
+      throw new Error('Не удалось сохранить новые узлы: проверьте иерархию дерева.')
     }
   }
 
@@ -110,13 +115,19 @@ export async function saveNodes(
     const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError("модели", "обновления", "узла", result.error.status, result.error.message)
+        formatEntitySaveError(
+          'модели',
+          'обновления',
+          'узла',
+          result.error.status,
+          result.error.message
+        )
       )
     }
     node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
     node._isDirty = false
     const nodeU = result.data.updatedAt
-    if (typeof nodeU === "string" && nodeU.length > 0) node.updatedAt = nodeU
+    if (typeof nodeU === 'string' && nodeU.length > 0) node.updatedAt = nodeU
   }
 
   for (const node of nodes.filter(row => row._isDeleted && !row._isNew)) {
@@ -124,7 +135,13 @@ export async function saveNodes(
     const result = await apiDelete<void>(`/nodes/${node.id}`)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError("модели", "удаления", "узла", result.error.status, result.error.message)
+        formatEntitySaveError(
+          'модели',
+          'удаления',
+          'узла',
+          result.error.status,
+          result.error.message
+        )
       )
     }
   }
@@ -162,13 +179,13 @@ export async function saveLinks(
   onProgress: (msg: string) => void
 ): Promise<void> {
   for (const link of links.filter(row => row._isDeleted && !row._isNew)) {
-    onProgress("Удаление связи")
+    onProgress('Удаление связи')
     const result = await apiDelete<void>(`/links/${link.id}`)
     if (!result.success) throw new Error(`Ошибка удаления связи: ${result.error.message}`)
   }
 
   for (const link of links.filter(row => row._isNew && !row._isDeleted)) {
-    onProgress("Создание связи")
+    onProgress('Создание связи')
     const request: LinkRequest = {
       sourceId: link.sourceId,
       targetId: link.targetId,
@@ -177,13 +194,13 @@ export async function saveLinks(
       linkTypeId: link.linkTypeId,
       attrs: serializeLinkAttrs(link.parsedAttrs),
     }
-    const result = await apiPost<LinkResponse>("/links", request)
+    const result = await apiPost<LinkResponse>('/links', request)
     if (!result.success) throw new Error(`Ошибка создания связи: ${result.error.message}`)
     const oldId = link.id
     link.id = result.data.id
     link._isNew = false
     const linkCreatedU = result.data.updatedAt
-    if (typeof linkCreatedU === "string" && linkCreatedU.length > 0) link.updatedAt = linkCreatedU
+    if (typeof linkCreatedU === 'string' && linkCreatedU.length > 0) link.updatedAt = linkCreatedU
     for (const diagram of diagrams) {
       for (const edge of diagram.parsedAttrs.instances.edges) {
         if (edge.modelLinkId === oldId) edge.modelLinkId = result.data.id
@@ -192,7 +209,7 @@ export async function saveLinks(
   }
 
   for (const link of links.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
-    onProgress("Обновление связи")
+    onProgress('Обновление связи')
     const request: LinkRequest = {
       sourceId: link.sourceId,
       targetId: link.targetId,
@@ -205,7 +222,7 @@ export async function saveLinks(
     if (!result.success) throw new Error(`Ошибка обновления связи: ${result.error.message}`)
     link._isDirty = false
     const linkU = result.data.updatedAt
-    if (typeof linkU === "string" && linkU.length > 0) link.updatedAt = linkU
+    if (typeof linkU === 'string' && linkU.length > 0) link.updatedAt = linkU
   }
 }
 
@@ -232,12 +249,12 @@ export async function saveDiagrams(
       notationId: diagram.notationId,
       attrs: serializeDiagramAttrs(diagram.parsedAttrs),
     }
-    const result = await apiPost<DiagramResponse>("/diagrams", request)
+    const result = await apiPost<DiagramResponse>('/diagrams', request)
     if (!result.success) throw new Error(`Ошибка создания диаграммы: ${result.error.message}`)
     diagram.id = result.data.id
     diagram._isNew = false
     const dCreatedU = result.data.updatedAt
-    if (typeof dCreatedU === "string" && dCreatedU.length > 0) diagram.updatedAt = dCreatedU
+    if (typeof dCreatedU === 'string' && dCreatedU.length > 0) diagram.updatedAt = dCreatedU
   }
 
   const dirtyDiagrams = diagrams
@@ -258,6 +275,6 @@ export async function saveDiagrams(
     if (!result.success) throw new Error(`Ошибка обновления диаграммы: ${result.error.message}`)
     diagram._isDirty = false
     const dU = result.data.updatedAt
-    if (typeof dU === "string" && dU.length > 0) diagram.updatedAt = dU
+    if (typeof dU === 'string' && dU.length > 0) diagram.updatedAt = dU
   }
 }

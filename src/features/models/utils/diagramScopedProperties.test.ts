@@ -84,9 +84,9 @@ describe('diagramScopedProperties', () => {
 
     expect(changed).toBe(true)
     expect(nodeAttrs.componentProperties.n1?.c1?.name).toBe('legacy-value')
-    expect(
-      diagram.instances.nodes[0]?.attrs?.componentProperties?.n1?.c1?.name
-    ).toBe('diagram-only')
+    expect(diagram.instances.nodes[0]?.attrs?.componentProperties?.n1?.c1?.name).toBe(
+      'diagram-only'
+    )
   })
 
   it('merges link snapshot over legacy values for compare reads', () => {
@@ -125,4 +125,3 @@ describe('diagramScopedProperties', () => {
     expect(merged.n1?.r1?.untouched).toBe('keep')
   })
 })
-

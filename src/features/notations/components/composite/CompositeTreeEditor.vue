@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CompositeSerializedCComponent, CustomProperty } from '../../notationAttrs'
 import { createId } from '../../notationAttrs'
+import { COMPOSITE_TYPE_ICONS } from '../../utils/styleHelpers'
 import CompositeNodeInspector from './CompositeNodeInspector.vue'
 
 type TreeNodeRef = { node: CompositeSerializedCComponent; parentId: string | null; depth: number }
@@ -251,14 +252,6 @@ function shortId(type: string): string {
   const n = (counters[type] ?? 0) + 1
   return `${type}${n}`
 }
-
-const TYPE_ICONS: Record<string, string> = {
-  container: 'view_column',
-  text: 'text_fields',
-  icon: 'image',
-  divider: 'horizontal_rule',
-  shape: 'crop_square',
-}
 </script>
 
 <template>
@@ -296,7 +289,7 @@ const TYPE_ICONS: Record<string, string> = {
             <span class="tree-editor__row-inner" :style="{ paddingLeft: `${entry.depth * 16}px` }">
               <span class="tree-editor__row-icon-wrap" :class="`tree-editor__row-icon-wrap--${entry.node.type}`">
                 <UiIcon
-                  :name="TYPE_ICONS[entry.node.type] ?? 'help'"
+                  :name="COMPOSITE_TYPE_ICONS[entry.node.type] ?? 'help'"
                   class="tree-editor__row-icon"
                 />
               </span>

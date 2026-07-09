@@ -2,8 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect } from 'vitest'
 import CreateCard from './CreateCard.vue'
 
-const mountCard = (props: { title: string; description?: string }) =>
-  mount(CreateCard, { props })
+const mountCard = (props: { title: string; description?: string }) => mount(CreateCard, { props })
 
 describe('CreateCard', () => {
   it('renders title', () => {

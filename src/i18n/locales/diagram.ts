@@ -58,7 +58,18 @@ export const diagramMessages = {
       selectDiagramInTree: 'Выберите диаграмму в дереве слева',
       tagsPlaceholder: 'tag1, tag2',
       compositeLabelPlaceholder:
-        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' · #' +
+        _i18nL +
+        'code' +
+        _i18nR +
+        ' · $' +
+        _i18nL +
+        'status' +
+        _i18nR,
       compositeLabelSyntax:
         '$' +
         _i18nL +
@@ -256,7 +267,8 @@ export const diagramMessages = {
       selectElementToEditProperties: 'Select an element on the diagram',
       selectElement: 'Select an element',
       selectElementHint: 'Click a node or link on the diagram',
-      newerNotationVersionsBanner: 'A newer notation version is available ({name} {version}). You can migrate.',
+      newerNotationVersionsBanner:
+        'A newer notation version is available ({name} {version}). You can migrate.',
       link: 'Link',
       node: 'Node',
       notationComponent: 'Notation component',
@@ -306,7 +318,18 @@ export const diagramMessages = {
       selectDiagramInTree: 'Select a diagram in the tree on the left',
       tagsPlaceholder: 'tag1, tag2',
       compositeLabelPlaceholder:
-        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' · #' +
+        _i18nL +
+        'code' +
+        _i18nR +
+        ' · $' +
+        _i18nL +
+        'status' +
+        _i18nR,
       compositeLabelSyntax:
         '$' +
         _i18nL +
@@ -547,7 +570,18 @@ export const diagramMessages = {
       selectDiagramInTree: "Sélectionnez un diagramme dans l'arbre à gauche",
       tagsPlaceholder: 'tag1, tag2',
       compositeLabelPlaceholder:
-        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' · #' +
+        _i18nL +
+        'code' +
+        _i18nR +
+        ' · $' +
+        _i18nL +
+        'status' +
+        _i18nR,
       compositeLabelSyntax:
         '$' +
         _i18nL +
@@ -681,7 +715,7 @@ export const diagramMessages = {
       compositeText: 'Texte',
       compositeIconSource: "Source de l'icône",
       compositeRole: 'Rôle',
-      compositeNodeId: "ID du nœud",
+      compositeNodeId: 'ID du nœud',
       compositeNodeType: 'Type',
       compositeDirection: 'Direction',
       compositeDirectionRow: 'Ligne',
@@ -727,7 +761,7 @@ export const diagramMessages = {
       compositeSelectNode: "Sélectionnez un nœud dans l'arbre",
       compositePropertiesTitle: 'Propriétés',
       compositeActionsTitle: 'Actions',
-      compositeBindToProperty: "Lier à la propriété",
+      compositeBindToProperty: 'Lier à la propriété',
       compositeBindToName: "Nom de l'élément",
       patchAddProperty: '+ propriété',
     },

@@ -43,6 +43,8 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
     })),
     diagrams,
     sourceElementTypes: toUniqueSorted(parsed.elements.map(element => element.type)),
-    sourceRelationshipTypes: toUniqueSorted(parsed.relationships.map(relationship => relationship.type)),
+    sourceRelationshipTypes: toUniqueSorted(
+      parsed.relationships.map(relationship => relationship.type)
+    ),
   }
 }

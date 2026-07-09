@@ -30,7 +30,7 @@ export function segmentStart(seg: OutlineSegment): [number, number] {
 }
 
 export function cloneSegments(segments: OutlineSegment[]): OutlineSegment[] {
-  return segments.map((seg) => {
+  return segments.map(seg => {
     if (seg.type === 'line') {
       return {
         type: 'line' as const,
@@ -42,7 +42,7 @@ export function cloneSegments(segments: OutlineSegment[]): OutlineSegment[] {
     }
     return {
       type: 'bezier' as const,
-      points: seg.points.map((p) => p.slice() as [number, number]) as OutlineSegmentBezier['points'],
+      points: seg.points.map(p => p.slice() as [number, number]) as OutlineSegmentBezier['points'],
     }
   })
 }
@@ -55,7 +55,7 @@ export function distanceToSegment(
   ax: number,
   ay: number,
   bx: number,
-  by: number,
+  by: number
 ): number {
   const dx = bx - ax
   const dy = by - ay
@@ -71,7 +71,7 @@ export function bezierPoint(
   p1: [number, number],
   p2: [number, number],
   p3: [number, number],
-  t: number,
+  t: number
 ): [number, number] {
   const u = 1 - t
   const u2 = u * u
@@ -105,7 +105,7 @@ export function projectOnSegment(
   ax: number,
   ay: number,
   bx: number,
-  by: number,
+  by: number
 ): [number, number] {
   const dx = bx - ax
   const dy = by - ay
@@ -147,9 +147,12 @@ export function hitTest(segments: OutlineSegment[], coord: [number, number]): Hi
     const seg = segments[i]!
     if (seg.type === 'line') {
       const d = distanceToSegment(
-        x, y,
-        seg.points[0][0], seg.points[0][1],
-        seg.points[1][0], seg.points[1][1],
+        x,
+        y,
+        seg.points[0][0],
+        seg.points[0][1],
+        seg.points[1][0],
+        seg.points[1][1]
       )
       if (d < bestD) {
         bestD = d
@@ -173,7 +176,7 @@ export function snapCoord(
   segments: OutlineSegment[],
   coord: [number, number],
   excludeSegmentIndex: number | null,
-  excludeCp: 1 | 2 | null,
+  excludeCp: 1 | 2 | null
 ): [number, number] {
   let x = coord[0]
   let y = coord[1]
@@ -246,9 +249,6 @@ export function segmentLineToBezier(seg: OutlineSegmentLine): OutlineSegmentBezi
 export function segmentBezierToLine(seg: OutlineSegmentBezier): OutlineSegmentLine {
   return {
     type: 'line',
-    points: [
-      seg.points[0].slice() as [number, number],
-      seg.points[3].slice() as [number, number],
-    ],
+    points: [seg.points[0].slice() as [number, number], seg.points[3].slice() as [number, number]],
   }
 }

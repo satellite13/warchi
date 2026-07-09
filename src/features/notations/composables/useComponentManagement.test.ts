@@ -138,7 +138,7 @@ describe('useComponentManagement', () => {
       expect(added.name).toBe('NoTypeComponent')
       expect(typeof added.nodeTypeId).toBe('string')
       expect(added.nodeTypeId.length).toBeGreaterThan(0)
-      const attachedType = options.state.value.nodeTypes.find((t) => t.id === added.nodeTypeId)
+      const attachedType = options.state.value.nodeTypes.find(t => t.id === added.nodeTypeId)
       expect(attachedType?.name).toBe('Diagram only')
     })
 

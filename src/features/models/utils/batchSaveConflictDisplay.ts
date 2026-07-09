@@ -28,10 +28,7 @@ export type ConflictFieldRow = {
 }
 
 /** Перевод строк сравнения (ключи `models.*`). */
-export type ConflictTranslateFn = (
-  key: string,
-  params?: Record<string, string | number>
-) => string
+export type ConflictTranslateFn = (key: string, params?: Record<string, string | number>) => string
 
 export function batchConflictCompareKey(c: BatchConflictItem): string {
   return `${c.kind}:${c.id}`
@@ -139,18 +136,11 @@ function nodeRows(
       field: 'parentNodeId',
       local: n.parentNodeId ?? 'null',
       server: sParent,
-      differs:
-        serverPending ||
-        (n.parentNodeId ?? null) !== (server?.parentNodeId ?? null),
+      differs: serverPending || (n.parentNodeId ?? null) !== (server?.parentNodeId ?? null),
     }
   )
   rows.push(
-    ...attrsFieldRows(
-      serializeNodeAttrs(n.parsedAttrs),
-      server?.attrs,
-      'attrs',
-      serverPending
-    )
+    ...attrsFieldRows(serializeNodeAttrs(n.parsedAttrs), server?.attrs, 'attrs', serverPending)
   )
   return rows
 }
@@ -231,9 +221,7 @@ function nodeDisplayNameForConflict(
 
   if (!n) {
     const id = formatEntityIdShort(modelNodeId)
-    return translate
-      ? translate('models.batchSaveConflictUnknownNode', { id })
-      : `? ${id}`
+    return translate ? translate('models.batchSaveConflictUnknownNode', { id }) : `? ${id}`
   }
 
   const typeLabel = nodeTypeLabelForConflict(st, n.nodeTypeId)
@@ -259,9 +247,7 @@ function linkDisplayLineForConflict(
     st.links.find(x => x.id === modelLinkId)
   if (!l) {
     const id = formatEntityIdShort(modelLinkId)
-    return translate
-      ? translate('models.batchSaveConflictUnknownLink', { id })
-      : id
+    return translate ? translate('models.batchSaveConflictUnknownLink', { id }) : id
   }
   const src = nodeDisplayNameForConflict(st, l.sourceId, translate)
   const tgt = nodeDisplayNameForConflict(st, l.targetId, translate)
@@ -330,7 +316,9 @@ function canvasEdgeDisplayLine(
   const base =
     topo ||
     (translate
-      ? translate('models.batchSaveConflictDiagramEdgeLinkId', { id: formatEntityIdShort(modelLinkId) })
+      ? translate('models.batchSaveConflictDiagramEdgeLinkId', {
+          id: formatEntityIdShort(modelLinkId),
+        })
       : formatEntityIdShort(modelLinkId))
   const hint = translate
     ? translate('models.batchSaveConflictDiagramEdgeLinkMissingHint')
@@ -458,9 +446,7 @@ function summarizeComponentPropsReadable(
       const label = comp?.name?.trim() || `${entityId.slice(0, 8)}…`
       const keys = Object.keys(props ?? {})
       const kPreview =
-        keys.length === 0
-          ? ''
-          : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
+        keys.length === 0 ? '' : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
       parts.push(`${label}${kPreview}`)
     }
   }
@@ -479,9 +465,7 @@ function summarizeRelationPropsReadable(
       const label = rel?.name?.trim() || `${entityId.slice(0, 8)}…`
       const keys = Object.keys(props ?? {})
       const kPreview =
-        keys.length === 0
-          ? ''
-          : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
+        keys.length === 0 ? '' : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
       parts.push(`${label}${kPreview}`)
     }
   }
@@ -609,7 +593,9 @@ function diagramAttrsSemanticDiffRows(
     if (loc && !srv) {
       rows.push({
         field: `diagram.canvas.edge.${lid}.onlyLocal`,
-        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyLocal', { link: lineFor(loc, localA) }),
+        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyLocal', {
+          link: lineFor(loc, localA),
+        }),
         local: t('models.batchSaveConflictDiagramOnCanvas'),
         server: '—',
         differs: true,
@@ -619,7 +605,9 @@ function diagramAttrsSemanticDiffRows(
     if (!loc && srv) {
       rows.push({
         field: `diagram.canvas.edge.${lid}.onlyServer`,
-        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyServer', { link: lineFor(srv, serverA) }),
+        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyServer', {
+          link: lineFor(srv, serverA),
+        }),
         local: '—',
         server: t('models.batchSaveConflictDiagramOnCanvas'),
         differs: true,
@@ -749,7 +737,13 @@ function diagramRows(
     : canonicalDiagramAttrsForConflictCompare(parseDiagramAttrs(server?.attrs ?? null))
   const localAttrsCanonical = canonicalDiagramAttrsForConflictCompare(d.parsedAttrs)
   rows.push(
-    ...diagramAttrsSemanticDiffRows(st, localAttrsCanonical, serverAttrsParsed, serverPending, translate)
+    ...diagramAttrsSemanticDiffRows(
+      st,
+      localAttrsCanonical,
+      serverAttrsParsed,
+      serverPending,
+      translate
+    )
   )
   return rows
 }
@@ -784,9 +778,7 @@ export type ServerConflictEntity = NodeResponse | LinkResponse | DiagramResponse
 export async function fetchServerConflictEntity(
   c: BatchConflictItem,
   apiGet: ApiGetFn
-): Promise<
-  { ok: true; data: ServerConflictEntity } | { ok: false; error: string }
-> {
+): Promise<{ ok: true; data: ServerConflictEntity } | { ok: false; error: string }> {
   const enc = encodeURIComponent(c.id)
   if (c.kind === 'node') {
     const r = await apiGet<NodeResponse>(`/nodes/${enc}`)

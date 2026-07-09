@@ -9,8 +9,8 @@ export function useResizablePropsPanel(storageKey: string) {
   const propsPanelHeight = ref(
     Math.max(
       PROPS_PANEL_MIN_HEIGHT,
-      Math.min(PROPS_PANEL_MAX_HEIGHT, loadNumber(storageKey, PROPS_PANEL_DEFAULT_HEIGHT)),
-    ),
+      Math.min(PROPS_PANEL_MAX_HEIGHT, loadNumber(storageKey, PROPS_PANEL_DEFAULT_HEIGHT))
+    )
   )
   let propsPanelResizing = false
   let propsPanelStartY = 0
@@ -21,7 +21,7 @@ export function useResizablePropsPanel(storageKey: string) {
     const deltaY = propsPanelStartY - e.clientY
     propsPanelHeight.value = Math.max(
       PROPS_PANEL_MIN_HEIGHT,
-      Math.min(PROPS_PANEL_MAX_HEIGHT, propsPanelStartHeight + deltaY),
+      Math.min(PROPS_PANEL_MAX_HEIGHT, propsPanelStartHeight + deltaY)
     )
   }
 
@@ -30,8 +30,8 @@ export function useResizablePropsPanel(storageKey: string) {
     propsPanelResizing = false
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    window.removeEventListener('mousemove', onPropsPanelResizeMove)
-    window.removeEventListener('mouseup', stopPropsPanelResize)
+    globalThis.removeEventListener('mousemove', onPropsPanelResizeMove)
+    globalThis.removeEventListener('mouseup', stopPropsPanelResize)
     saveNumber(storageKey, propsPanelHeight.value)
   }
 
@@ -42,8 +42,8 @@ export function useResizablePropsPanel(storageKey: string) {
     propsPanelStartHeight = propsPanelHeight.value
     document.body.style.cursor = 'row-resize'
     document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', onPropsPanelResizeMove)
-    window.addEventListener('mouseup', stopPropsPanelResize)
+    globalThis.addEventListener('mousemove', onPropsPanelResizeMove)
+    globalThis.addEventListener('mouseup', stopPropsPanelResize)
   }
 
   onBeforeUnmount(() => {

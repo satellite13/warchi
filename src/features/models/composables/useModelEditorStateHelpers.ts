@@ -1,6 +1,6 @@
-import type { Ref } from "vue"
-import type { ModelData } from "@/types/entities"
-import type { ModelEditorState } from "../types"
+import type { Ref } from 'vue'
+import type { ModelData } from '@/types/entities'
+import type { ModelEditorState } from '../types'
 
 type UseModelEditorStateHelpersOptions = {
   state: Ref<ModelEditorState>
@@ -55,11 +55,11 @@ export function useModelEditorStateHelpers(options: UseModelEditorStateHelpersOp
   }
 
   const renameModel = (nextName: string): string | null => {
-    if (!options.model.value) return "Модель не загружена."
+    if (!options.model.value) return 'Модель не загружена.'
     const trimmed = nextName.trim()
-    if (!trimmed) return "Название модели не может быть пустым."
+    if (!trimmed) return 'Название модели не может быть пустым.'
     if (hasModelNameVersionConflict(trimmed, options.model.value.version)) {
-      return "Модель с таким именем и версией уже существует."
+      return 'Модель с таким именем и версией уже существует.'
     }
     if (trimmed === options.model.value.name) return null
     options.model.value.name = trimmed

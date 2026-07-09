@@ -1,12 +1,12 @@
-import { apiGet, apiPost } from "../api/apiClient";
-import { getUserDisplayName } from "./userDisplay";
-import type { UserInfo } from "../types/entities";
+import { apiGet, apiPost } from '../api/apiClient'
+import { getUserDisplayName } from './userDisplay'
+import type { UserInfo } from '../types/entities'
 
 interface CurrentUserLike {
-  id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
+  id: string
+  firstName?: string | null
+  lastName?: string | null
+  email?: string | null
 }
 
 export async function resolveOwnerDisplayNames(
@@ -15,39 +15,38 @@ export async function resolveOwnerDisplayNames(
   currentUser: CurrentUserLike | null | undefined,
   fallback: string
 ): Promise<Map<string, string>> {
-  const result = new Map(existing);
+  const result = new Map(existing)
 
   if (currentUser?.id) {
-    result.set(currentUser.id, getUserDisplayName(currentUser, fallback));
+    result.set(currentUser.id, getUserDisplayName(currentUser, fallback))
   }
 
-  const toLoad = [...new Set(ownerIds)].filter((id) => id && !result.has(id));
-  if (toLoad.length === 0) return result;
+  const toLoad = [...new Set(ownerIds)].filter(id => id && !result.has(id))
+  if (toLoad.length === 0) return result
 
-  const batchResult = await apiPost<Record<string, UserInfo>>(
-    "/users/public/batch",
-    { ids: toLoad }
-  );
+  const batchResult = await apiPost<Record<string, UserInfo>>('/users/public/batch', {
+    ids: toLoad,
+  })
   if (batchResult.success) {
     for (const [id, user] of Object.entries(batchResult.data)) {
-      result.set(id, getUserDisplayName(user, user.email ?? fallback));
+      result.set(id, getUserDisplayName(user, user.email ?? fallback))
     }
     for (const id of toLoad) {
-      if (!result.has(id)) result.set(id, fallback);
+      if (!result.has(id)) result.set(id, fallback)
     }
-    return result;
+    return result
   }
 
   await Promise.all(
-    toLoad.map(async (id) => {
-      const res = await apiGet<UserInfo>(`/users/${id}/public`);
+    toLoad.map(async id => {
+      const res = await apiGet<UserInfo>(`/users/${id}/public`)
       if (res.success) {
-        result.set(id, getUserDisplayName(res.data, res.data.email ?? fallback));
+        result.set(id, getUserDisplayName(res.data, res.data.email ?? fallback))
       } else {
-        result.set(id, fallback);
+        result.set(id, fallback)
       }
     })
-  );
+  )
 
-  return result;
+  return result
 }

@@ -12,7 +12,7 @@ vi.mock('vue-i18n', () => ({
 
 let capturedOnMounted: (() => void) | null = null
 
-vi.mock('vue', async (importOriginal) => {
+vi.mock('vue', async importOriginal => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -46,13 +46,15 @@ function makeAuditLog(id: string, changedAt?: string): AuditLogResponse {
   return { id, tableName: 'models', operation: 'UPDATE', rowId: id, changedAt }
 }
 
-function mockAllSuccess(overrides: {
-  models?: ModelData[]
-  notations?: NotationData[]
-  nodeTypes?: NodeTypeResponse[]
-  linkTypes?: LinkTypeResponse[]
-  auditLogs?: AuditLogResponse[]
-} = {}) {
+function mockAllSuccess(
+  overrides: {
+    models?: ModelData[]
+    notations?: NotationData[]
+    nodeTypes?: NodeTypeResponse[]
+    linkTypes?: LinkTypeResponse[]
+    auditLogs?: AuditLogResponse[]
+  } = {}
+) {
   mockApiGet.mockImplementation((url: string) => {
     if (url.startsWith('/models'))
       return Promise.resolve({ success: true, data: { content: overrides.models ?? [] } })
@@ -84,11 +86,7 @@ describe('useDashboard', () => {
   describe('stats computation', () => {
     it('counts unique names for models and notations', async () => {
       mockAllSuccess({
-        models: [
-          makeModel('1', 'Alpha'),
-          makeModel('2', 'Alpha'),
-          makeModel('3', 'Beta'),
-        ],
+        models: [makeModel('1', 'Alpha'), makeModel('2', 'Alpha'), makeModel('3', 'Beta')],
         notations: [
           makeNotation('1', 'N-One'),
           makeNotation('2', 'N-One'),
@@ -114,15 +112,8 @@ describe('useDashboard', () => {
   describe('totalVersions', () => {
     it('returns raw length counts for models and notations', async () => {
       mockAllSuccess({
-        models: [
-          makeModel('1', 'Alpha'),
-          makeModel('2', 'Alpha'),
-          makeModel('3', 'Beta'),
-        ],
-        notations: [
-          makeNotation('1', 'N-One'),
-          makeNotation('2', 'N-One'),
-        ],
+        models: [makeModel('1', 'Alpha'), makeModel('2', 'Alpha'), makeModel('3', 'Beta')],
+        notations: [makeNotation('1', 'N-One'), makeNotation('2', 'N-One')],
       })
 
       const { totalVersions } = useDashboard()
@@ -152,7 +143,7 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(recentModels.value).toHaveLength(5)
-      expect(recentModels.value.map((m) => m.id)).toEqual(['4', '6', '2', '5', '3'])
+      expect(recentModels.value.map(m => m.id)).toEqual(['4', '6', '2', '5', '3'])
     })
 
     it('treats missing updatedAt as oldest', async () => {
@@ -166,7 +157,7 @@ describe('useDashboard', () => {
       const { recentModels } = useDashboard()
       await callLoadAll()
 
-      expect(recentModels.value.map((m) => m.id)).toEqual(['2', '3', '1'])
+      expect(recentModels.value.map(m => m.id)).toEqual(['2', '3', '1'])
     })
   })
 
@@ -187,7 +178,7 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(recentNotations.value).toHaveLength(5)
-      expect(recentNotations.value.map((n) => n.id)).toEqual(['4', '6', '2', '5', '3'])
+      expect(recentNotations.value.map(n => n.id)).toEqual(['4', '6', '2', '5', '3'])
     })
   })
 
@@ -204,7 +195,7 @@ describe('useDashboard', () => {
 
       expect(recentActivity.value).toHaveLength(12)
 
-      const ids = recentActivity.value.map((a) => a.id)
+      const ids = recentActivity.value.map(a => a.id)
       expect(ids[0]).toBe('log-15')
       expect(ids[1]).toBe('log-14')
       expect(ids[11]).toBe('log-4')

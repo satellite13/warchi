@@ -21,7 +21,8 @@ export const notationsMessages = {
       accessTitle: 'Доступ к нотации',
       versionTreeTitle: 'Дерево версий: {name}',
       versionTreeEmpty: 'Нет данных о происхождении версий.',
-      versionTreeMultipleRoots: 'Несколько независимых веток (созданы с нуля или источник вне списка).',
+      versionTreeMultipleRoots:
+        'Несколько независимых веток (созданы с нуля или источник вне списка).',
       resizePropertiesPanelHeight: 'Потяните, чтобы изменить высоту панели свойств',
       resizeElementsPanelWidth: 'Потяните, чтобы изменить ширину панели элементов',
       resizeStylesPanelWidth: 'Потяните, чтобы изменить ширину панели стилей',
@@ -105,7 +106,8 @@ export const notationsMessages = {
       accessTitle: 'Notation access',
       versionTreeTitle: 'Version tree: {name}',
       versionTreeEmpty: 'No version lineage data.',
-      versionTreeMultipleRoots: 'Multiple independent branches (created from scratch or source not in list).',
+      versionTreeMultipleRoots:
+        'Multiple independent branches (created from scratch or source not in list).',
       resizePropertiesPanelHeight: 'Drag to resize properties panel height',
       resizeElementsPanelWidth: 'Drag to resize elements panel width',
       resizeStylesPanelWidth: 'Drag to resize styles panel width',
@@ -158,12 +160,9 @@ export const notationsMessages = {
       saveErrorGeneric: 'Failed to save changes.',
       compositeValidationRootInvalid: 'compositeContent root must be a container',
       compositeValidationNameRoleMissing: 'Composite must contain exactly one text with role: name',
-      compositeValidationNameRoleDuplicate:
-        'Composite contains more than one text with role: name',
-      compositeValidationIconBindDuplicate:
-        'Composite allows only one icon with bindsNotationIcon',
-      compositeValidationIconBindTargetInvalid:
-        'bindsNotationIcon is allowed only on icon nodes',
+      compositeValidationNameRoleDuplicate: 'Composite contains more than one text with role: name',
+      compositeValidationIconBindDuplicate: 'Composite allows only one icon with bindsNotationIcon',
+      compositeValidationIconBindTargetInvalid: 'bindsNotationIcon is allowed only on icon nodes',
       compositeValidationTargetNotFound: 'Target id is not found in compositeContent: {targetId}',
     },
   },
@@ -245,14 +244,12 @@ export const notationsMessages = {
       compositeValidationRootInvalid: 'La racine de compositeContent doit être un container',
       compositeValidationNameRoleMissing:
         'Le composite doit contenir exactement un text avec role: name',
-      compositeValidationNameRoleDuplicate:
-        'Le composite contient plus d’un text avec role: name',
+      compositeValidationNameRoleDuplicate: 'Le composite contient plus d’un text avec role: name',
       compositeValidationIconBindDuplicate:
         'Le composite autorise un seul icon avec bindsNotationIcon',
       compositeValidationIconBindTargetInvalid:
         'bindsNotationIcon est autorisé uniquement sur les nœuds icon',
-      compositeValidationTargetNotFound:
-        'targetId introuvable dans compositeContent : {targetId}',
+      compositeValidationTargetNotFound: 'targetId introuvable dans compositeContent : {targetId}',
     },
   },
 }

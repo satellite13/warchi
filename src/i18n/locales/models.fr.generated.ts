@@ -11,7 +11,7 @@ export const modelsMessagesFr = {
     enterName: 'Nom du modèle',
     searchPlaceholder: 'Rechercher par nom...',
     createTitle: 'Créer un modèle',
-    createDescription: 'Nouveau modèle d\'architecture',
+    createDescription: "Nouveau modèle d'architecture",
     emptySourceVersion: 'Modèle vide',
     notFoundTitle: 'Aucun modèle',
     notFoundDescription: 'Modifiez la recherche',
@@ -21,7 +21,8 @@ export const modelsMessagesFr = {
     accessTitle: 'Accès au modèle',
     versionTreeTitle: 'Arbre des versions : {name}',
     versionTreeEmpty: 'Aucune filiation de versions.',
-    versionTreeMultipleRoots: 'Plusieurs branches indépendantes (créées depuis zéro ou source hors liste).',
+    versionTreeMultipleRoots:
+      'Plusieurs branches indépendantes (créées depuis zéro ou source hors liste).',
     documentation: 'Page du Wiki',
     diagramDocumentation: 'Page diagramme dans le Wiki',
     oefImportTitle: 'Importer Open Exchange (XML)',
@@ -85,11 +86,12 @@ export const modelsMessagesFr = {
     openDiagramDoubleClick: 'Ouvrir le diagramme (double-clic)',
     diagramOpened: 'Ouvert',
     diagramLockHeldBy: 'Diagramme verrouillé par {name}',
-    diagramLockRetryEdit: 'Réessayer d\'éditer',
+    diagramLockRetryEdit: "Réessayer d'éditer",
     diagramLockReload: 'Recharger depuis le serveur',
     diagramLockBadgeYou: 'Vous détenez le verrou d’édition',
     diagramLockBadgeOther: 'Édité par {name}',
-    diagramLockForceRevoked: 'Verrou libéré par un administrateur. L’édition du diagramme n’est plus disponible.',
+    diagramLockForceRevoked:
+      'Verrou libéré par un administrateur. L’édition du diagramme n’est plus disponible.',
     resizeLeftPanelWidth: 'Glisser pour redimensionner le panneau gauche',
     resizeRightPanelWidth: 'Glisser pour redimensionner le panneau droit',
     showLeftPanel: 'Afficher le panneau gauche',
@@ -105,7 +107,8 @@ export const modelsMessagesFr = {
     notationComponentProperties: 'Propriétés du composant de notation',
     propertySourceBadgeType: 'Type de nœud',
     propertySourceBadgeComponent: 'Composant',
-    propertyDiagramLabelTokenHint: 'Modèle d\'étiquette sur la figure : # et clé = propriété du type de nœud ; $ et clé = propriété du composant de notation. Le nom du nœud utilise un espace réservé séparé : dollar et le mot name.',
+    propertyDiagramLabelTokenHint:
+      "Modèle d'étiquette sur la figure : # et clé = propriété du type de nœud ; $ et clé = propriété du composant de notation. Le nom du nœud utilise un espace réservé séparé : dollar et le mot name.",
     selectType: 'Choisir un type',
     typeSearchPlaceholder: 'Rechercher un type...',
     directoryTypeHint: 'Le type Directory sera utilisé.',
@@ -127,8 +130,10 @@ export const modelsMessagesFr = {
     reuseLinkNoCustomProperties: 'Aucune propriété personnalisée',
     createNewLink: 'Créer un nouveau lien',
     unsavedChangesTitle: 'Modifications non enregistrées',
-    saveBeforeCloseDiagram: 'Des modifications ne sont pas enregistrées. Les enregistrer avant de fermer le diagramme ?',
-    saveBeforeSwitchDiagram: 'Des modifications ne sont pas enregistrées. Les enregistrer avant de changer de diagramme ?',
+    saveBeforeCloseDiagram:
+      'Des modifications ne sont pas enregistrées. Les enregistrer avant de fermer le diagramme ?',
+    saveBeforeSwitchDiagram:
+      'Des modifications ne sont pas enregistrées. Les enregistrer avant de changer de diagramme ?',
     dontSave: 'Ne pas enregistrer',
     saveAndClose: 'Enregistrer et fermer',
     saveAndSwitch: 'Enregistrer et changer',
@@ -143,30 +148,40 @@ export const modelsMessagesFr = {
     deleteLinkQuestion: 'Que faire avec le lien sélectionné ?',
     removeLinkFromDiagram: 'Retirer du diagramme',
     removeLinkFromModel: 'Retirer du modèle',
-    leaveUnsavedText: 'Vous avez des modifications non enregistrées. Si vous quittez la page, elles seront perdues.',
+    leaveUnsavedText:
+      'Vous avez des modifications non enregistrées. Si vous quittez la page, elles seront perdues.',
     batchSaveConflictTitle: 'Conflit à l’enregistrement',
-    batchSaveConflictIntro: '{count} objet(s) ont changé sur le serveur depuis le début de votre édition. L’enregistrement a été annulé — choisissez une action.',
-    batchSaveConflictNotOnlyListedHint: 'Seuls les objets en décalage de version sont affichés. Après rechargement, vérifiez l’arbre et les diagrammes.',
-    batchSaveConflictCrossDeletedLinksTitle: 'Arêtes pointant vers des liens supprimés côté serveur',
+    batchSaveConflictIntro:
+      '{count} objet(s) ont changé sur le serveur depuis le début de votre édition. L’enregistrement a été annulé — choisissez une action.',
+    batchSaveConflictNotOnlyListedHint:
+      'Seuls les objets en décalage de version sont affichés. Après rechargement, vérifiez l’arbre et les diagrammes.',
+    batchSaveConflictCrossDeletedLinksTitle:
+      'Arêtes pointant vers des liens supprimés côté serveur',
     batchSaveConflictCrossDeletedLinksLoading: 'Vérification des liens…',
     batchSaveConflictChoicesAria: 'Options de résolution du conflit',
     batchSaveConflictChoiceReloadTitle: 'Recharger depuis le serveur',
-    batchSaveConflictChoiceReloadDesc: 'Charger les données actuelles du serveur en conservant votre canevas. Puis enregistrez à nouveau.',
+    batchSaveConflictChoiceReloadDesc:
+      'Charger les données actuelles du serveur en conservant votre canevas. Puis enregistrez à nouveau.',
     batchSaveConflictChoiceOverwriteTitle: 'Écraser le serveur',
-    batchSaveConflictChoiceOverwriteDesc: 'Forcer l’enregistrement de vos données. Les modifications des autres seront perdues.',
+    batchSaveConflictChoiceOverwriteDesc:
+      'Forcer l’enregistrement de vos données. Les modifications des autres seront perdues.',
     batchSaveConflictReload: 'Recharger depuis le serveur',
     batchSaveConflictOverwrite: 'Écraser',
     batchSaveConflictCompareToggle: 'Comparer',
-    batchSaveConflictCompareTimestampOnly: 'Aucune différence de champs — seul l’horodatage diffère. Le rechargement synchronisera.',
-    batchSaveConflictCompareTimestampSinceDiagramOpen: 'Le contenu correspond au serveur ; seul l’horodatage diffère.',
+    batchSaveConflictCompareTimestampOnly:
+      'Aucune différence de champs — seul l’horodatage diffère. Le rechargement synchronisera.',
+    batchSaveConflictCompareTimestampSinceDiagramOpen:
+      'Le contenu correspond au serveur ; seul l’horodatage diffère.',
     batchSaveConflictDiagramCanvasPending: 'Canevas (instances sur le diagramme)',
     batchSaveConflictDiagramCanvasCounts: '{nodes} nœuds, {edges} arêtes sur le canevas',
     batchSaveConflictDiagramDocFile: 'Documentation (fichier lié)',
     batchSaveConflictDiagramNodeOnlyLocal: 'Sur le canevas : « {name} » — chez vous seulement',
     batchSaveConflictDiagramNodeOnlyServer: 'Sur le canevas : « {name} » — serveur seulement',
     batchSaveConflictDiagramNodeGeom: 'Sur le canevas : « {name} » — position et taille',
-    batchSaveConflictDiagramNodeComponentProps: 'Sur le canevas : « {name} » — propriétés des composants',
-    batchSaveConflictDiagramNodeOtherAttrs: 'Sur le canevas : « {name} » — autres attributs d’instance',
+    batchSaveConflictDiagramNodeComponentProps:
+      'Sur le canevas : « {name} » — propriétés des composants',
+    batchSaveConflictDiagramNodeOtherAttrs:
+      'Sur le canevas : « {name} » — autres attributs d’instance',
     batchSaveConflictDiagramEdgeOnlyLocal: 'Sur le canevas : {link} — chez vous seulement',
     batchSaveConflictDiagramEdgeOnlyServer: 'Sur le canevas : {link} — serveur seulement',
     batchSaveConflictDiagramEdgeRelationProps: 'Sur le canevas : {link} — propriétés de relation',
@@ -177,10 +192,13 @@ export const modelsMessagesFr = {
     batchSaveConflictDiagramEdgeLinkId: 'lien {id}',
     batchSaveConflictUnknownNode: 'nœud absent de l’arbre du modèle ({id})',
     batchSaveConflictUnknownLink: 'lien absent de la liste de l’éditeur ({id})',
-    batchSaveConflictDiagramEdgeLinkMissingHint: 'absent du modèle chargé dans l’éditeur (souvent après suppression du lien par un autre utilisateur)',
+    batchSaveConflictDiagramEdgeLinkMissingHint:
+      'absent du modèle chargé dans l’éditeur (souvent après suppression du lien par un autre utilisateur)',
     batchSaveConflictDiagramEdgeOrphanTitle: 'Arête sans lien modèle dans l’éditeur : {link}',
-    batchSaveConflictDiagramOrphanLocalCol: 'l’instance existe dans les données du diagramme ; le lien manque dans la liste chargée',
-    batchSaveConflictDiagramOrphanServerAlsoInJson: 'le JSON serveur contient encore cette arête (le lien modèle est déjà supprimé)',
+    batchSaveConflictDiagramOrphanLocalCol:
+      'l’instance existe dans les données du diagramme ; le lien manque dans la liste chargée',
+    batchSaveConflictDiagramOrphanServerAlsoInJson:
+      'le JSON serveur contient encore cette arête (le lien modèle est déjà supprimé)',
     batchSaveConflictDiagramOrphanServerNotInJson: 'le JSON serveur ne contient plus cette arête',
     batchSaveConflictCompareLocal: 'Dans l’éditeur (charge utile batch-save)',
     batchSaveConflictCompareServer: 'Sur le serveur (GET par id)',
@@ -243,7 +261,8 @@ export const modelsMessagesFr = {
     relationMatrixLinkDiagramsTitle: 'Utilisé dans les diagrammes',
     relationMatrixNoDiagramsForLink: 'Le lien n’est placé sur aucun diagramme',
     relationMatrixValueEmpty: '(vide)',
-    relationMatrixDetailsEmpty: 'Sélectionnez une cellule de la matrice pour inspecter les cartes de relations.',
+    relationMatrixDetailsEmpty:
+      'Sélectionnez une cellule de la matrice pour inspecter les cartes de relations.',
     relationMatrixUnknownRelation: 'Type de relation inconnu',
     relationMatrixNotationFallbackPrefix: 'Notation',
     figureStyleTab: 'Style de figure',
@@ -260,9 +279,12 @@ export const modelsMessagesFr = {
     traceabilityDragDisabledNoActiveDiagram: 'Ouvrez un diagramme pour glisser ce lien',
     traceabilityDragDisabledReadOnly: 'Le diagramme actif est en lecture seule',
     traceabilityDragDisabledAlreadyOnDiagram: 'Ce lien est déjà sur le diagramme',
-    traceabilityDragDisabledMissingEndpointInstances: 'Les deux extrémités du lien doivent être sur le diagramme pour le glisser',
-    traceabilityDragDisabledMissingRelation: 'Aucune relation pour ce type de lien dans la notation active',
-    traceabilityDragDisabledConnectNotAllowed: 'Les règles de notation interdisent de relier ces nœuds',
+    traceabilityDragDisabledMissingEndpointInstances:
+      'Les deux extrémités du lien doivent être sur le diagramme pour le glisser',
+    traceabilityDragDisabledMissingRelation:
+      'Aucune relation pour ce type de lien dans la notation active',
+    traceabilityDragDisabledConnectNotAllowed:
+      'Les règles de notation interdisent de relier ces nœuds',
     defaultLinkType: 'Type de ligne par défaut',
     autoLinkInGroups: 'Liens automatiques dans les groupes',
     compareWithVersion: 'Comparer avec une version',
@@ -299,32 +321,45 @@ export const modelsMessagesFr = {
     comparePropBecame: 'Devenu (droite)',
     comparePropBecameLeft: 'Devenu (gauche)',
     relationRulesLoading: 'Chargement des règles de relation pour la notation actuelle…',
-    relationRulesLoadingConnectBlocked: 'Les règles de relation se chargent encore. Réessayez dans quelques secondes.',
+    relationRulesLoadingConnectBlocked:
+      'Les règles de relation se chargent encore. Réessayez dans quelques secondes.',
     notationLoading: 'Chargement de la notation…',
     notationUnavailable: 'Notation indisponible',
     notationAccessDenied: 'Pas d’accès à la notation',
     notationLoadFailed: 'Échec du chargement de la notation',
-    notationMetaUnavailable: 'Métadonnées de notation indisponibles. Fonctionnalités du diagramme limitées.',
-    notationRelationRulesLoadFailed: 'Échec du chargement des règles de relation pour la notation active.',
-    notationRelationRulesRefreshFailed: 'Échec de l’actualisation des relations et règles pour le diagramme.',
+    notationMetaUnavailable:
+      'Métadonnées de notation indisponibles. Fonctionnalités du diagramme limitées.',
+    notationRelationRulesLoadFailed:
+      'Échec du chargement des règles de relation pour la notation active.',
+    notationRelationRulesRefreshFailed:
+      'Échec de l’actualisation des relations et règles pour le diagramme.',
     directoryTypeNotFound: 'Type Directory introuvable. Impossible de créer le dossier.',
     noAvailableNodeTypes: 'Aucun type de nœud disponible hormis Directory.',
-    diagramSwitchFailed: 'Impossible d’ouvrir le diagramme sélectionné après actualisation des données.',
+    diagramSwitchFailed:
+      'Impossible d’ouvrir le diagramme sélectionné après actualisation des données.',
     noDiagramSelected: 'Aucun diagramme sélectionné',
     noteName: 'Note',
     unknownLinkType: 'Type inconnu',
     batchSaveInvalidResponse: 'Réponse serveur incorrecte pour l’enregistrement groupé.',
-    batchSaveVersionConflict: 'Conflit de version à l’enregistrement (données modifiées sur le serveur).',
-    validationNodeTypePropRequired: 'Le nœud « {node} » n’a pas la propriété de type obligatoire « {prop} ».',
-    validationNodeComponentPropRequired: 'Le nœud « {node} » n’a pas la propriété de composant obligatoire « {prop} » sur le diagramme « {diagram} ».',
+    batchSaveVersionConflict:
+      'Conflit de version à l’enregistrement (données modifiées sur le serveur).',
+    validationNodeTypePropRequired:
+      'Le nœud « {node} » n’a pas la propriété de type obligatoire « {prop} ».',
+    validationNodeComponentPropRequired:
+      'Le nœud « {node} » n’a pas la propriété de composant obligatoire « {prop} » sur le diagramme « {diagram} ».',
     validationLinkPropRequired: 'Le lien « {link} » n’a pas la propriété obligatoire « {prop} ».',
     noMatchingComponent: 'Aucun composant de notation correspondant à ce type de nœud.',
-    cannotCreateNodeWithoutDirectory: 'Impossible de créer un nœud sans répertoire de diagramme actif.',
-    directoryTypeRequiredForAutoPath: 'Le type de nœud Directory est requis pour la création automatique du chemin.',
+    cannotCreateNodeWithoutDirectory:
+      'Impossible de créer un nœud sans répertoire de diagramme actif.',
+    directoryTypeRequiredForAutoPath:
+      'Le type de nœud Directory est requis pour la création automatique du chemin.',
     newNoteText: 'Nouvelle note',
-    noComponentsForLink: 'Sélectionnez les composants de notation pour les deux nœuds avant de créer un lien.',
-    noAllowedRelationRules: 'Aucune relation autorisée pour cette paire de composants selon la notation.',
-    noAvailableRelations: 'Aucune relation disponible pour cette paire de composants selon la notation.',
+    noComponentsForLink:
+      'Sélectionnez les composants de notation pour les deux nœuds avant de créer un lien.',
+    noAllowedRelationRules:
+      'Aucune relation autorisée pour cette paire de composants selon la notation.',
+    noAvailableRelations:
+      'Aucune relation disponible pour cette paire de composants selon la notation.',
     figureComponentNotFound: 'Composant de notation introuvable pour la figure sélectionnée.',
     edgeRelationNotFound: 'Relation de notation introuvable pour l’arête sélectionnée.',
   },

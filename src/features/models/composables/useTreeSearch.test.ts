@@ -33,7 +33,7 @@ function setup(nodeList: EditorNode[], treeRootNodeId: string | null = null) {
   return useTreeSearch({
     nodes,
     treeRootNodeId: rootId,
-    isDirectory: (node) => node.nodeTypeId === 'dir',
+    isDirectory: node => node.nodeTypeId === 'dir',
     nodeIndexById,
   })
 }
@@ -45,7 +45,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'a', name: 'A' }),
         makeNode({ id: 'b', name: 'B', parentNodeId: 'a' }),
       ])
-      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a'])
+      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['a'])
     })
 
     it('excludes deleted nodes', () => {
@@ -53,7 +53,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'a', name: 'A', _isDeleted: true }),
         makeNode({ id: 'b', name: 'B' }),
       ])
-      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['b'])
+      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['b'])
     })
 
     it('excludes the tree root node itself', () => {
@@ -62,9 +62,9 @@ describe('useTreeSearch', () => {
           makeNode({ id: 'root', name: 'Root' }),
           makeNode({ id: 'a', name: 'A', parentNodeId: 'root' }),
         ],
-        'root',
+        'root'
       )
-      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a'])
+      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['a'])
     })
 
     it('sorts by treeOrder then by index', () => {
@@ -100,7 +100,7 @@ describe('useTreeSearch', () => {
           },
         }),
       ])
-      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a', 'b', 'c'])
+      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['a', 'b', 'c'])
     })
   })
 
@@ -113,7 +113,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'd', name: 'D', parentNodeId: 'b' }),
       ])
       const children = tree.childNodes('a')
-      expect(children.map((n) => n.id)).toEqual(['b', 'c'])
+      expect(children.map(n => n.id)).toEqual(['b', 'c'])
     })
 
     it('excludes deleted children', () => {
@@ -122,7 +122,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'b', name: 'B', parentNodeId: 'a', _isDeleted: true }),
         makeNode({ id: 'c', name: 'C', parentNodeId: 'a' }),
       ])
-      expect(tree.childNodes('a').map((n) => n.id)).toEqual(['c'])
+      expect(tree.childNodes('a').map(n => n.id)).toEqual(['c'])
     })
   })
 
@@ -135,7 +135,7 @@ describe('useTreeSearch', () => {
           makeNode({ id: 'b', name: 'B', parentNodeId: 'root', _isDeleted: true }),
           makeNode({ id: 'c', name: 'C', parentNodeId: 'a' }),
         ],
-        'root',
+        'root'
       )
       // a and c are counted (root is excluded, b is deleted)
       expect(tree.totalNodesCount.value).toBe(2)
@@ -173,7 +173,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'b', name: 'Beta' }),
       ])
       tree.treeSearchQuery.value = 'alph'
-      expect(tree.filteredRootNodes.value.map((n) => n.id)).toEqual(['a'])
+      expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a'])
     })
 
     it('filteredRootNodes includes parent when child matches', () => {
@@ -182,7 +182,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'b', name: 'SpecialChild', parentNodeId: 'a' }),
       ])
       tree.treeSearchQuery.value = 'special'
-      expect(tree.filteredRootNodes.value.map((n) => n.id)).toEqual(['a'])
+      expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a'])
     })
 
     it('filteredChildNodes filters children by query', () => {
@@ -193,7 +193,7 @@ describe('useTreeSearch', () => {
       ])
       tree.treeSearchQuery.value = 'beta'
       const filtered = tree.filteredChildNodes('a')
-      expect(filtered.map((n) => n.id)).toEqual(['c'])
+      expect(filtered.map(n => n.id)).toEqual(['c'])
     })
 
     it('filteredChildNodes returns all children when query empty', () => {

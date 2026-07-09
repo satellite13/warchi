@@ -27,7 +27,7 @@ function bezier(
   p0: [number, number],
   p1: [number, number],
   p2: [number, number],
-  p3: [number, number],
+  p3: [number, number]
 ): OutlineSegmentBezier {
   return { type: 'bezier', points: [p0, p1, p2, p3] }
 }
@@ -178,11 +178,7 @@ describe('projectOnSegment', () => {
 // ── hitTest ───────────────────────────────────────────────
 
 describe('hitTest', () => {
-  const triangle = [
-    line([0, 0], [1, 0]),
-    line([1, 0], [0.5, 1]),
-    line([0.5, 1], [0, 0]),
-  ]
+  const triangle = [line([0, 0], [1, 0]), line([1, 0], [0.5, 1]), line([0.5, 1], [0, 0])]
 
   it('hits a vertex when coordinate is within HIT_RADIUS', () => {
     const offset = HIT_RADIUS * 0.5

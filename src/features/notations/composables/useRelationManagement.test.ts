@@ -119,7 +119,7 @@ describe('useRelationManagement', () => {
       expect(added.name).toBe('NoTypeRelation')
       expect(typeof added.linkTypeId).toBe('string')
       expect(added.linkTypeId.length).toBeGreaterThan(0)
-      const attachedType = options.state.value.linkTypes.find((t) => t.id === added.linkTypeId)
+      const attachedType = options.state.value.linkTypes.find(t => t.id === added.linkTypeId)
       expect(attachedType?.name).toBe('Diagram only')
     })
 

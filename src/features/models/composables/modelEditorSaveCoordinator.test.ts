@@ -1,9 +1,9 @@
-import { ref } from "vue"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
-import type { ModelData } from "../../../types/entities"
-import type { ModelEditorState } from "../types"
-import { executeModelEditorSave } from "./modelEditorSaveCoordinator"
+import { ref } from 'vue'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
+import type { ModelData } from '../../../types/entities'
+import type { ModelEditorState } from '../types'
+import { executeModelEditorSave } from './modelEditorSaveCoordinator'
 
 const mocks = vi.hoisted(() => ({
   applyDiagramGarbageSanitizeToState: vi.fn(),
@@ -21,11 +21,11 @@ const mocks = vi.hoisted(() => ({
   saveNodes: vi.fn(),
 }))
 
-vi.mock("../utils/sanitizeDiagramInstances", () => ({
+vi.mock('../utils/sanitizeDiagramInstances', () => ({
   applyDiagramGarbageSanitizeToState: mocks.applyDiagramGarbageSanitizeToState,
 }))
 
-vi.mock("./useModelBatchSave", () => ({
+vi.mock('./useModelBatchSave', () => ({
   applyBatchRemapping: mocks.applyBatchRemapping,
   batchSave: mocks.batchSave,
   buildBatchSaveRequest: mocks.buildBatchSaveRequest,
@@ -35,7 +35,7 @@ vi.mock("./useModelBatchSave", () => ({
   refreshBatchSavedEntityTimestamps: mocks.refreshBatchSavedEntityTimestamps,
 }))
 
-vi.mock("./modelEditorSavePipeline", () => ({
+vi.mock('./modelEditorSavePipeline', () => ({
   remapNodeIds: mocks.remapNodeIds,
   saveDiagrams: mocks.saveDiagrams,
   saveLinks: mocks.saveLinks,
@@ -45,24 +45,24 @@ vi.mock("./modelEditorSavePipeline", () => ({
 
 function createState(): ModelEditorState {
   return {
-    modelId: "model-1",
-    ownerId: "owner-1",
+    modelId: 'model-1',
+    ownerId: 'owner-1',
     nodes: [
       {
-        id: "n-1",
-        name: "Node",
-        modelId: "model-1",
-        ownerId: "owner-1",
-        nodeTypeId: "type-1",
+        id: 'n-1',
+        name: 'Node',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
         parentNodeId: null,
         parsedAttrs: parseNodeAttrs(null),
       },
       {
-        id: "n-del",
-        name: "Deleted Node",
-        modelId: "model-1",
-        ownerId: "owner-1",
-        nodeTypeId: "type-1",
+        id: 'n-del',
+        name: 'Deleted Node',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
         parentNodeId: null,
         parsedAttrs: parseNodeAttrs(null),
         _isDeleted: true,
@@ -70,43 +70,43 @@ function createState(): ModelEditorState {
     ],
     links: [
       {
-        id: "l-1",
-        sourceId: "a",
-        targetId: "b",
-        modelId: "model-1",
-        ownerId: "owner-1",
-        linkTypeId: "lt-1",
+        id: 'l-1',
+        sourceId: 'a',
+        targetId: 'b',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        linkTypeId: 'lt-1',
         parsedAttrs: parseLinkAttrs(null),
       },
       {
-        id: "l-del",
-        sourceId: "a",
-        targetId: "b",
-        modelId: "model-1",
-        ownerId: "owner-1",
-        linkTypeId: "lt-1",
+        id: 'l-del',
+        sourceId: 'a',
+        targetId: 'b',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        linkTypeId: 'lt-1',
         parsedAttrs: parseLinkAttrs(null),
         _isDeleted: true,
       },
     ],
     diagrams: [
       {
-        id: "d-1",
-        name: "Diagram",
-        version: "1.0.0",
-        notationId: "notation-1",
-        modelId: "model-1",
-        ownerId: "owner-1",
+        id: 'd-1',
+        name: 'Diagram',
+        version: '1.0.0',
+        notationId: 'notation-1',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
         nodeId: null,
         parsedAttrs: parseDiagramAttrs(null),
       },
       {
-        id: "d-del",
-        name: "Deleted Diagram",
-        version: "1.0.0",
-        notationId: "notation-1",
-        modelId: "model-1",
-        ownerId: "owner-1",
+        id: 'd-del',
+        name: 'Deleted Diagram',
+        version: '1.0.0',
+        notationId: 'notation-1',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
         nodeId: null,
         parsedAttrs: parseDiagramAttrs(null),
         _isDeleted: true,
@@ -121,7 +121,7 @@ function createState(): ModelEditorState {
   }
 }
 
-describe("executeModelEditorSave", () => {
+describe('executeModelEditorSave', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.buildBatchSaveRequest.mockReturnValue({
@@ -134,19 +134,22 @@ describe("executeModelEditorSave", () => {
     mocks.saveLinks.mockResolvedValue(undefined)
     mocks.saveDiagrams.mockResolvedValue(undefined)
     mocks.saveModelMetadata.mockResolvedValue({
-      data: { id: "model-1", name: "Model", version: "1.0.0", ownerId: "owner-1", attrs: null },
+      data: { id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1', attrs: null },
     })
     mocks.refreshBatchSavedEntityTimestamps.mockResolvedValue(undefined)
-    mocks.batchSave.mockResolvedValue({ success: true, data: { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} } })
+    mocks.batchSave.mockResolvedValue({
+      success: true,
+      data: { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} },
+    })
     mocks.isValidBatchResponse.mockReturnValue(true)
     mocks.parseBatchSaveConflictDetails.mockReturnValue(null)
   })
 
-  it("returns false when model is not loaded", async () => {
+  it('returns false when model is not loaded', async () => {
     const result = await executeModelEditorSave({
       model: ref<ModelData | null>(null),
       modelDirty: ref(false),
-      modelInitialName: ref(""),
+      modelInitialName: ref(''),
       modelCatalog: ref<ModelData[]>([]),
       state: ref(createState()),
       pendingForceBatch: ref(false),
@@ -160,21 +163,21 @@ describe("executeModelEditorSave", () => {
     expect(mocks.buildBatchSaveRequest).not.toHaveBeenCalled()
   })
 
-  it("runs fallback save pipeline and removes deleted entities", async () => {
+  it('runs fallback save pipeline and removes deleted entities', async () => {
     const state = ref(createState())
     const pendingForceBatch = ref(true)
     const onProgress = vi.fn()
 
     const result = await executeModelEditorSave({
       model: ref<ModelData | null>({
-        id: "model-1",
-        name: "Model",
-        version: "1.0.0",
-        ownerId: "owner-1",
+        id: 'model-1',
+        name: 'Model',
+        version: '1.0.0',
+        ownerId: 'owner-1',
         attrs: null,
       }),
       modelDirty: ref(false),
-      modelInitialName: ref("Model"),
+      modelInitialName: ref('Model'),
       modelCatalog: ref<ModelData[]>([]),
       state,
       pendingForceBatch,
@@ -192,38 +195,43 @@ describe("executeModelEditorSave", () => {
     expect(mocks.saveLinks).toHaveBeenCalled()
     expect(mocks.saveDiagrams).toHaveBeenCalled()
     expect(pendingForceBatch.value).toBe(false)
-    expect(state.value.nodes.map(n => n.id)).toEqual(["n-1"])
-    expect(state.value.links.map(l => l.id)).toEqual(["l-1"])
-    expect(state.value.diagrams.map(d => d.id)).toEqual(["d-1"])
+    expect(state.value.nodes.map(n => n.id)).toEqual(['n-1'])
+    expect(state.value.links.map(l => l.id)).toEqual(['l-1'])
+    expect(state.value.diagrams.map(d => d.id)).toEqual(['d-1'])
   })
 
-  it("stores conflict list on batch 409", async () => {
-    const conflicts = [{ kind: "node", id: "n-1", serverUpdatedAt: null, clientBaseUpdatedAt: null }]
+  it('stores conflict list on batch 409', async () => {
+    const conflicts = [
+      { kind: 'node', id: 'n-1', serverUpdatedAt: null, clientBaseUpdatedAt: null },
+    ]
     mocks.hasBatchChanges.mockReturnValue(true)
     mocks.batchSave.mockResolvedValue({
       success: false,
-      error: { status: 409, message: "Conflict", details: { any: "payload" } },
+      error: { status: 409, message: 'Conflict', details: { any: 'payload' } },
     })
     mocks.parseBatchSaveConflictDetails.mockReturnValue(conflicts)
 
-    const batchSaveConflict = ref<{
-      kind: string
-      id: string
-      serverUpdatedAt: string | null
-      clientBaseUpdatedAt: string | null
-    }[] | null>(null)
+    const batchSaveConflict = ref<
+      | {
+          kind: string
+          id: string
+          serverUpdatedAt: string | null
+          clientBaseUpdatedAt: string | null
+        }[]
+      | null
+    >(null)
     const scheduleSaveErrorClear = vi.fn()
 
     const result = await executeModelEditorSave({
       model: ref<ModelData | null>({
-        id: "model-1",
-        name: "Model",
-        version: "1.0.0",
-        ownerId: "owner-1",
+        id: 'model-1',
+        name: 'Model',
+        version: '1.0.0',
+        ownerId: 'owner-1',
         attrs: null,
       }),
       modelDirty: ref(false),
-      modelInitialName: ref("Model"),
+      modelInitialName: ref('Model'),
       modelCatalog: ref<ModelData[]>([]),
       state: ref(createState()),
       pendingForceBatch: ref(false),

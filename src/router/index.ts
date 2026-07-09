@@ -1,167 +1,167 @@
-import { createRouter, createWebHistory } from "vue-router";
-import { useAuth } from "../composables/useAuth";
-import { usePermissions } from "../composables/usePermissions";
-import "./types";
+import { createRouter, createWebHistory } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
+import { usePermissions } from '../composables/usePermissions'
+import './types'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
-      path: "/login",
-      name: "login",
-      component: () => import("../views/LoginView.vue"),
-      meta: { requiresAuth: false }
+      path: '/login',
+      name: 'login',
+      component: () => import('../views/LoginView.vue'),
+      meta: { requiresAuth: false },
     },
     {
-      path: "/auth/oidc/callback",
-      name: "oidc-callback",
-      component: () => import("../views/OidcCallbackView.vue"),
-      meta: { requiresAuth: false }
+      path: '/auth/oidc/callback',
+      name: 'oidc-callback',
+      component: () => import('../views/OidcCallbackView.vue'),
+      meta: { requiresAuth: false },
     },
     {
-      path: "/auth/oidc/link-callback",
-      name: "oidc-link-callback",
-      component: () => import("../views/OidcLinkCallbackView.vue"),
-      meta: { requiresAuth: false }
+      path: '/auth/oidc/link-callback',
+      name: 'oidc-link-callback',
+      component: () => import('../views/OidcLinkCallbackView.vue'),
+      meta: { requiresAuth: false },
     },
     {
-      path: "/admin",
-      component: () => import("../layouts/AdminLayout.vue"),
+      path: '/admin',
+      component: () => import('../layouts/AdminLayout.vue'),
       children: [
         {
-          path: "",
-          redirect: { name: "admin-users" }
+          path: '',
+          redirect: { name: 'admin-users' },
         },
         {
-          path: "users",
-          name: "admin-users",
-          component: () => import("../views/AdminUsersView.vue")
+          path: 'users',
+          name: 'admin-users',
+          component: () => import('../views/AdminUsersView.vue'),
         },
         {
-          path: "deleted",
-          name: "admin-deleted",
-          component: () => import("../views/AdminDeletedView.vue")
+          path: 'deleted',
+          name: 'admin-deleted',
+          component: () => import('../views/AdminDeletedView.vue'),
         },
         {
-          path: "diagram-locks",
-          name: "admin-diagram-locks",
-          component: () => import("../views/AdminDiagramLocksView.vue")
-        }
-      ]
+          path: 'diagram-locks',
+          name: 'admin-diagram-locks',
+          component: () => import('../views/AdminDiagramLocksView.vue'),
+        },
+      ],
     },
     {
-      path: "/profile",
-      name: "profile",
-      component: () => import("../views/UserProfileView.vue")
+      path: '/profile',
+      name: 'profile',
+      component: () => import('../views/UserProfileView.vue'),
     },
     {
-      path: "/models",
-      name: "models",
-      component: () => import("../views/ModelsView.vue"),
+      path: '/models',
+      name: 'models',
+      component: () => import('../views/ModelsView.vue'),
     },
     {
-      path: "/models/:id",
-      name: "model-editor",
-      component: () => import("../features/models/ModelEditor.vue")
+      path: '/models/:id',
+      name: 'model-editor',
+      component: () => import('../features/models/ModelEditor.vue'),
     },
     {
-      path: "/models/:id/compare",
-      name: "model-visual-compare",
-      component: () => import("../views/ModelVisualCompareView.vue")
+      path: '/models/:id/compare',
+      name: 'model-visual-compare',
+      component: () => import('../views/ModelVisualCompareView.vue'),
     },
     {
-      path: "/models/:id/diagram-compare",
-      name: "diagram-versions-compare",
-      component: () => import("../views/DiagramVersionsCompareView.vue")
+      path: '/models/:id/diagram-compare',
+      name: 'diagram-versions-compare',
+      component: () => import('../views/DiagramVersionsCompareView.vue'),
     },
     {
-      path: "/models/:id/relation-matrix",
-      name: "model-relation-matrix",
-      component: () => import("../views/ModelRelationMatrixView.vue")
+      path: '/models/:id/relation-matrix',
+      name: 'model-relation-matrix',
+      component: () => import('../views/ModelRelationMatrixView.vue'),
     },
     {
-      path: "/notations",
-      name: "notations",
-      component: () => import("../views/NotationsView.vue")
+      path: '/notations',
+      name: 'notations',
+      component: () => import('../views/NotationsView.vue'),
     },
     {
-      path: "/types",
-      name: "types",
-      component: () => import("../views/TypesView.vue")
+      path: '/types',
+      name: 'types',
+      component: () => import('../views/TypesView.vue'),
     },
     {
-      path: "/shapes",
-      name: "shapes",
-      component: () => import("../views/ShapesView.vue")
+      path: '/shapes',
+      name: 'shapes',
+      component: () => import('../views/ShapesView.vue'),
     },
     {
-      path: "/notations/:id",
-      name: "notation-editor",
-      component: () => import("../views/NotationEditorView.vue")
+      path: '/notations/:id',
+      name: 'notation-editor',
+      component: () => import('../views/NotationEditorView.vue'),
     },
     {
-      path: "/docs",
-      redirect: "/docs/overview"
+      path: '/docs',
+      redirect: '/docs/overview',
     },
     {
-      path: "/docs/:section",
-      name: "docs-section",
-      component: () => import("../views/DocsView.vue")
+      path: '/docs/:section',
+      name: 'docs-section',
+      component: () => import('../views/DocsView.vue'),
     },
     {
-      path: "/",
-      redirect: "/login"
+      path: '/',
+      redirect: '/login',
     },
     {
-      path: "/landing",
-      redirect: "/login"
+      path: '/landing',
+      redirect: '/login',
     },
     {
-      path: "/wiki",
-      name: "wiki",
-      component: () => import("../views/WikiView.vue")
+      path: '/wiki',
+      name: 'wiki',
+      component: () => import('../views/WikiView.vue'),
     },
     {
-      path: "/home",
-      name: "home",
-      component: () => import("../views/HomeView.vue")
-    }
-  ]
-});
+      path: '/home',
+      name: 'home',
+      component: () => import('../views/HomeView.vue'),
+    },
+  ],
+})
 
-router.beforeEach(async (to) => {
-  const { isAuthenticated, currentUser } = useAuth();
-  const { checkPermission } = usePermissions();
+router.beforeEach(async to => {
+  const { isAuthenticated, currentUser } = useAuth()
+  const { checkPermission } = usePermissions()
 
   if (to.meta.requiresAuth === false) {
-    if (to.name === "login" && isAuthenticated.value) {
-      return { name: "home" };
+    if (to.name === 'login' && isAuthenticated.value) {
+      return { name: 'home' }
     }
-    return true;
+    return true
   }
 
   if (!isAuthenticated.value) {
-    return { name: "login" };
+    return { name: 'login' }
   }
 
-  if (to.path.startsWith("/admin")) {
-    const currentUserId = currentUser.value?.id;
+  if (to.path.startsWith('/admin')) {
+    const currentUserId = currentUser.value?.id
     if (!currentUserId) {
-      return { name: "home" };
+      return { name: 'home' }
     }
 
     const canViewAdminPanel = await checkPermission({
-      resourceType: "ADMIN_PANEL",
+      resourceType: 'ADMIN_PANEL',
       resourceId: currentUserId,
-      action: "VIEW",
-    });
+      action: 'VIEW',
+    })
 
     if (!canViewAdminPanel) {
-      return { name: "home" };
+      return { name: 'home' }
     }
   }
 
-  return true;
-});
+  return true
+})
 
-export default router;
+export default router

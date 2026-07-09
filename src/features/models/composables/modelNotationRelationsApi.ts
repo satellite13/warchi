@@ -1,8 +1,8 @@
-import { apiGet } from "@/composables/useApi"
-import { pagedListParams } from "@/api/queryHelpers"
-import type { RelationResponse, RelationRuleResponse } from "@/types/api"
-import type { PaginatedResponse } from "@/types/entities"
-import { paginatedIsLastPage } from "@/utils/paginatedResponse"
+import { apiGet } from '@/composables/useApi'
+import { pagedListParams } from '@/api/queryHelpers'
+import type { RelationResponse, RelationRuleResponse } from '@/types/api'
+import type { PaginatedResponse } from '@/types/entities'
+import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 
 const RELATION_RULES_FETCH_SIZE = 5000
 const RELATIONS_FETCH_SIZE = 5000
@@ -56,7 +56,9 @@ export async function fetchAllRelationsByNotationId(
     if (modelId) {
       query.set('modelId', modelId)
     }
-    const result = await apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
+    const result = await apiGet<PaginatedResponse<RelationResponse>>(
+      `/relations?${query.toString()}`
+    )
     if (!result.success) {
       throw new Error(`Ошибка загрузки relations: ${result.error.message}`)
     }

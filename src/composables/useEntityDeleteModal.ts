@@ -6,7 +6,7 @@ import type { EntityListConfig } from './useEntityList'
 
 export function useEntityDeleteModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
-  items: Ref<T[]>,
+  items: Ref<T[]>
 ) {
   const { show, item, isProcessing, error, open, close } = useModalState<T>()
 
@@ -28,14 +28,12 @@ export function useEntityDeleteModal<T extends VersionedEntity>(
         throw new Error(result.error.message)
       }
 
-      items.value = items.value.filter((i) => i.id !== item.value?.id)
+      items.value = items.value.filter(i => i.id !== item.value?.id)
       close()
       return true
     } catch (e) {
       error.value =
-        e instanceof Error
-          ? e.message
-          : `Не удалось удалить ${config.entityName.toLowerCase()}`
+        e instanceof Error ? e.message : `Не удалось удалить ${config.entityName.toLowerCase()}`
       return false
     } finally {
       isProcessing.value = false

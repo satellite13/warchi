@@ -15,7 +15,9 @@ function sanitizeFileName(value: string): string {
 }
 
 function getBackgroundColor(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
+  )
 }
 
 export function useModelDiagramExport(

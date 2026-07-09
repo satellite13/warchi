@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseEntityAttrs, serializeEntityAttrs } from './notationAttrs'
 import { validateCompositeDiagramStyle } from './utils/validationIssues'
+import type { ComposerTranslation } from 'vue-i18n'
 
 describe('notationAttrs composite schema', () => {
   it('round-trips compositeContent and stylePropertyBindings', () => {
@@ -80,11 +81,10 @@ describe('notationAttrs composite schema', () => {
           },
         ],
       },
-      ((key: string) => key) as any
+      ((key: string) => key) as ComposerTranslation
     )
 
-    expect(issues.some((i) => i.code === 'COMPOSITE_NAME_ROLE_MISSING')).toBe(true)
-    expect(issues.some((i) => i.code === 'A5_TARGET_NOT_FOUND')).toBe(true)
+    expect(issues.some(i => i.code === 'COMPOSITE_NAME_ROLE_MISSING')).toBe(true)
+    expect(issues.some(i => i.code === 'A5_TARGET_NOT_FOUND')).toBe(true)
   })
 })
-

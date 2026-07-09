@@ -11,7 +11,9 @@ import {
 import type { DiagramStyle, CustomProperty } from '@/features/notations/notationAttrs'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
 
-function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name: string }): CustomProperty {
+function makeCustomProp(
+  overrides: Partial<CustomProperty> & { id: string; name: string }
+): CustomProperty {
   return {
     type: 'string',
     required: false,

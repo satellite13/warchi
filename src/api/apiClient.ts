@@ -1,6 +1,6 @@
-import { buildApiUrl } from "./config"
-import { normalizeUser } from "../utils/userRole"
-import type { User } from "../types/entities"
+import { buildApiUrl } from './config'
+import { normalizeUser } from '../utils/userRole'
+import type { User } from '../types/entities'
 import {
   clearAuthStorage,
   emitAuthCleared,
@@ -10,12 +10,12 @@ import {
   saveStoredUser,
   setAccessToken,
   setRefreshToken,
-} from "../composables/authStorage"
+} from '../composables/authStorage'
 import {
   clearOutage,
   reportAvailabilityOutage,
   type AvailabilityOutageKind,
-} from "../composables/useAvailabilityGuard"
+} from '../composables/useAvailabilityGuard'
 
 export type ApiError = {
   status: number
@@ -24,9 +24,7 @@ export type ApiError = {
   details?: unknown
 }
 
-export type ApiResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: ApiError }
+export type ApiResult<T> = { success: true; data: T } | { success: false; error: ApiError }
 
 const createApiError = (status: number, message: string, details?: unknown): ApiError => ({
   status,
@@ -61,7 +59,7 @@ const clearSession = (): void => {
 }
 
 const isPublicAuthPath = (path: string): boolean =>
-  ["/auth/login", "/auth/refresh", "/auth/sso/callback", "/auth/sso/link/callback"].includes(path)
+  ['/auth/login', '/auth/refresh', '/auth/sso/callback', '/auth/sso/link/callback'].includes(path)
 
 const tryRefreshAccessToken = async (): Promise<boolean> => {
   if (refreshInFlight) {
@@ -76,11 +74,11 @@ const tryRefreshAccessToken = async (): Promise<boolean> => {
     }
 
     try {
-      const refreshResponse = await fetch(buildApiUrl("/auth/refresh"), {
-        method: "POST",
+      const refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
+        method: 'POST',
         headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({ refreshToken }),
       })
@@ -114,12 +112,12 @@ const extractErrorMessage = (status: number, rawText: string): string => {
 
   try {
     const parsed = JSON.parse(rawText) as unknown
-    if (parsed && typeof parsed === "object") {
+    if (parsed && typeof parsed === 'object') {
       const record = parsed as Record<string, unknown>
-      const preferredKeys = ["message", "detail", "error", "title"]
+      const preferredKeys = ['message', 'detail', 'error', 'title']
       for (const key of preferredKeys) {
         const value = record[key]
-        if (typeof value === "string" && value.trim().length > 0) {
+        if (typeof value === 'string' && value.trim().length > 0) {
           return value.trim()
         }
       }
@@ -131,50 +129,50 @@ const extractErrorMessage = (status: number, rawText: string): string => {
   return rawText.trim() || fallback
 }
 
-const normalizeApiErrorMessage = (
-  status: number,
-  path: string,
-  message: string
-): string => {
+const normalizeApiErrorMessage = (status: number, path: string, message: string): string => {
   const normalized = message.trim().toLowerCase()
   const isGeneric401 =
     normalized.length === 0 ||
-    normalized === "unauthorized" ||
-    normalized === "forbidden" ||
-    normalized.includes("full authentication") ||
-    normalized.includes("access denied") ||
-    normalized.includes("authorization")
+    normalized === 'unauthorized' ||
+    normalized === 'forbidden' ||
+    normalized.includes('full authentication') ||
+    normalized.includes('access denied') ||
+    normalized.includes('authorization')
 
   if (status === 401) {
     if (isPublicAuthPath(path)) {
-      return message || "Ошибка авторизации"
+      return message || 'Ошибка авторизации'
     }
-    return isGeneric401
-      ? "Нет доступа к операции. Проверьте права или войдите заново."
-      : message
+    return isGeneric401 ? 'Нет доступа к операции. Проверьте права или войдите заново.' : message
   }
 
   if (status === 403) {
-    const editorPathPrefixes = ["/models/", "/notations/", "/node-types/", "/link-types/", "/node-shapes/"]
-    const isEditorResourcePath = editorPathPrefixes.some((prefix) => path.startsWith(prefix))
+    const editorPathPrefixes = [
+      '/models/',
+      '/notations/',
+      '/node-types/',
+      '/link-types/',
+      '/node-shapes/',
+    ]
+    const isEditorResourcePath = editorPathPrefixes.some(prefix => path.startsWith(prefix))
     if (isEditorResourcePath) {
-      return "Доступ к ресурсу отозван или отсутствует."
+      return 'Доступ к ресурсу отозван или отсутствует.'
     }
-    return "Недостаточно прав для выполнения операции."
+    return 'Недостаточно прав для выполнения операции.'
   }
 
   return message
 }
 
 const isAuthzUnavailableMessage = (message: string): boolean =>
-  message.trim().toLowerCase().includes("authorization service is unavailable")
+  message.trim().toLowerCase().includes('authorization service is unavailable')
 
 const resolveOutageKind = (status: number, message: string): AvailabilityOutageKind | null => {
   if (status === 503 && isAuthzUnavailableMessage(message)) {
-    return "authz_unavailable"
+    return 'authz_unavailable'
   }
   if (status === 502 || status === 503 || status === 504 || status === 0) {
-    return "backend_unavailable"
+    return 'backend_unavailable'
   }
   return null
 }
@@ -183,11 +181,11 @@ export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
   canRetryAfterRefresh = true,
-  rawText = false,
+  rawText = false
 ): Promise<ApiResult<T>> {
   const url = buildApiUrl(path)
   const headers = {
-    Accept: "application/json",
+    Accept: 'application/json',
     ...options.headers,
   } as Record<string, string>
 
@@ -196,8 +194,8 @@ export async function apiFetch<T>(
     headers.Authorization = `Bearer ${accessToken}`
   }
 
-  if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json"
+  if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
   }
 
   try {
@@ -205,11 +203,7 @@ export async function apiFetch<T>(
     const text = await response.text()
 
     if (!response.ok) {
-      if (
-        response.status === 401 &&
-        canRetryAfterRefresh &&
-        !isPublicAuthPath(path)
-      ) {
+      if (response.status === 401 && canRetryAfterRefresh && !isPublicAuthPath(path)) {
         const refreshed = await tryRefreshAccessToken()
         if (refreshed) {
           return apiFetch<T>(path, options, false)
@@ -225,7 +219,7 @@ export async function apiFetch<T>(
       let errorDetails: unknown
       try {
         const parsed = JSON.parse(text) as unknown
-        if (parsed !== null && typeof parsed === "object") {
+        if (parsed !== null && typeof parsed === 'object') {
           errorDetails = parsed
         }
       } catch {
@@ -244,54 +238,45 @@ export async function apiFetch<T>(
       : ((text.length > 0 ? JSON.parse(text) : undefined) as T)
     return { success: true, data }
   } catch (error) {
-    const fallbackMessage = error instanceof Error ? error.message : "Ошибка подключения"
-    reportAvailabilityOutage("backend_unavailable", fallbackMessage)
+    const fallbackMessage = error instanceof Error ? error.message : 'Ошибка подключения'
+    reportAvailabilityOutage('backend_unavailable', fallbackMessage)
     return {
       success: false,
-      error: createApiError(
-        0,
-        fallbackMessage
-      ),
+      error: createApiError(0, fallbackMessage),
     }
   }
 }
 
 /** Like apiFetch but returns raw text instead of parsing JSON. */
-export function apiFetchText(
-  path: string,
-  options: RequestInit = {},
-): Promise<ApiResult<string>> {
+export function apiFetchText(path: string, options: RequestInit = {}): Promise<ApiResult<string>> {
   return apiFetch<string>(
     path,
     { ...options, headers: { Accept: 'text/markdown, text/plain, */*', ...options.headers } },
     true,
-    true,
+    true
   )
 }
 
 export const apiGet = <T>(path: string): Promise<ApiResult<T>> =>
-  apiFetch<T>(path, { method: "GET" })
+  apiFetch<T>(path, { method: 'GET' })
 
 export const apiPost = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
   apiFetch<T>(path, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
   })
 
 export const apiPut = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
   apiFetch<T>(path, {
-    method: "PUT",
+    method: 'PUT',
     body: JSON.stringify(body),
   })
 
 export const apiDelete = <T>(path: string): Promise<ApiResult<T>> =>
-  apiFetch<T>(path, { method: "DELETE" })
+  apiFetch<T>(path, { method: 'DELETE' })
 
 /** Upload diagram SVG for preview (raw body, no JSON). */
-export function uploadDiagramSvg(
-  diagramId: string,
-  svg: string,
-): Promise<ApiResult<void>> {
+export function uploadDiagramSvg(diagramId: string, svg: string): Promise<ApiResult<void>> {
   return apiFetch<void>(`/diagrams/${diagramId}/svg`, {
     method: 'PUT',
     headers: { 'Content-Type': 'image/svg+xml' },
@@ -308,4 +293,4 @@ export type DiagramShareLinkResponse = { url: string; token: string }
 export const createDiagramShareLink = (
   payload: DiagramShareLinkPayload
 ): Promise<ApiResult<DiagramShareLinkResponse>> =>
-  apiPost<DiagramShareLinkResponse>("/diagrams/share-link", payload)
+  apiPost<DiagramShareLinkResponse>('/diagrams/share-link', payload)

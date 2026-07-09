@@ -20,7 +20,12 @@ vi.mock('@/utils/userRole', () => ({
 }))
 
 import { apiGet, apiPost, apiPut, apiDelete } from './apiClient'
-import { getAccessToken, getRefreshToken, clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
+import {
+  getAccessToken,
+  getRefreshToken,
+  clearAuthStorage,
+  emitAuthCleared,
+} from '@/composables/authStorage'
 
 function mockFetchResponse(body: unknown, status = 200) {
   const text = body === undefined ? '' : JSON.stringify(body)
@@ -60,7 +65,7 @@ describe('apiClient', () => {
             Accept: 'application/json',
             Authorization: 'Bearer test-access-token',
           }),
-        }),
+        })
       )
     })
   })
@@ -80,7 +85,7 @@ describe('apiClient', () => {
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
           }),
-        }),
+        })
       )
     })
   })
@@ -97,7 +102,7 @@ describe('apiClient', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ name: 'updated' }),
-        }),
+        })
       )
     })
   })
@@ -113,7 +118,7 @@ describe('apiClient', () => {
         'http://test-api/api/v1/models/1',
         expect.objectContaining({
           method: 'DELETE',
-        }),
+        })
       )
     })
   })
@@ -240,8 +245,6 @@ describe('apiClient', () => {
       // Should only have made 1 fetch call — no refresh attempt
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
-
-
 
     it('failed refresh returns error without retrying', async () => {
       // Refresh endpoint returns an error

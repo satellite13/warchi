@@ -20,9 +20,25 @@ vi.mock('@/utils/csrfCookie', () => ({
   CSRF_HEADER_NAME: 'X-CSRF-Token',
 }))
 
+vi.mock('@/composables/useAvailabilityGuard', async () => {
+  const actual = await vi.importActual<typeof import('@/composables/useAvailabilityGuard')>(
+    '@/composables/useAvailabilityGuard',
+  )
+  return {
+    ...actual,
+    reportAvailabilityOutage: vi.fn(actual.reportAvailabilityOutage),
+    clearOutage: vi.fn(actual.clearOutage),
+  }
+})
+
 import { apiGet, apiPost, apiPut, apiDelete } from './apiClient'
 import { clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
 import { getCsrfTokenFromCookie } from '@/utils/csrfCookie'
+import {
+  clearOutage,
+  reportAvailabilityOutage,
+  useAvailabilityGuard,
+} from '@/composables/useAvailabilityGuard'
 
 function mockFetchResponse(body: unknown, status = 200) {
   const text = body === undefined ? '' : JSON.stringify(body)
@@ -39,10 +55,12 @@ describe('apiClient', () => {
   beforeEach(() => {
     originalFetch = globalThis.fetch
     vi.clearAllMocks()
+    clearOutage()
   })
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    clearOutage()
   })
 
   describe('apiGet', () => {
@@ -310,6 +328,49 @@ describe('apiClient', () => {
       await apiPost('/auth/login', { email: 'a', password: 'b' })
 
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('availability outage classification', () => {
+    it('reports authz_unavailable on 503 with authorization service message', async () => {
+      const fetchMock = mockFetchResponse(
+        { message: 'Authorization service is unavailable' },
+        503,
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/permissions/check')
+
+      expect(result.success).toBe(false)
+      expect(reportAvailabilityOutage).toHaveBeenCalledWith(
+        'authz_unavailable',
+        expect.stringMatching(/authorization service is unavailable/i),
+      )
+      expect(useAvailabilityGuard().outage.value?.kind).toBe('authz_unavailable')
+    })
+
+    it('reports backend_unavailable on plain 503', async () => {
+      const fetchMock = mockFetchResponse({ message: 'Service Unavailable' }, 503)
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/models')
+
+      expect(result.success).toBe(false)
+      expect(reportAvailabilityOutage).toHaveBeenCalledWith(
+        'backend_unavailable',
+        expect.any(String),
+      )
+    })
+
+    it('clears authz_unavailable after successful permissions check', async () => {
+      reportAvailabilityOutage('authz_unavailable', 'Authorization service is unavailable')
+      const fetchMock = mockFetchResponse({ allowed: true })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await apiGet('/permissions/check')
+
+      expect(clearOutage).toHaveBeenCalledWith('authz_unavailable')
+      expect(useAvailabilityGuard().outage.value).toBeNull()
     })
   })
 })

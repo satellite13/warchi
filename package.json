@@ -26,6 +26,7 @@
     "check:versions": "node scripts/check-versions.mjs",
     "ci:local": "bash ./scripts/ci-local.sh",
     "verify:availability": "bash ./scripts/verify-availability-guard.sh",
+    "verify:csp": "bash ./scripts/verify-csp-headers.sh",
     "generate:badge-icon-names": "node scripts/generate-material-icon-names.mjs",
     "copy:badge-icons": "node scripts/copy-material-badge-icons.mjs",
     "prepare:badge-icons": "npm run generate:badge-icon-names && npm run copy:badge-icons"

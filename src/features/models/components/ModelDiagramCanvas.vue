@@ -18,8 +18,6 @@ import {
   TextLabel,
   type ContextMenuTarget,
   type ContextMenuItem,
-  type ArrowMarkerConfig,
-  type NodeImageOptions,
   type TextStyle,
   type TextLabelOptions,
   type EdgePathType,
@@ -58,6 +56,12 @@ import {
 } from '../utils/diagramCanvasSync'
 import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
+import {
+  buildModelEdgeLabelBackground,
+  buildModelEdgeLabelConfig,
+  buildModelNodeIcon,
+  resolveModelEdgeOptions,
+} from '../utils/diagramCanvasBuilders'
 import {
   applyStylePropertyBindings,
   BIND_TO_NAME,
@@ -706,101 +710,6 @@ const getPapEdgeLabelText = (edge: Edge): string =>
     ? edge.label
     : (edge.label?.editableText ?? edge.label?.text ?? '')
 
-const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
-  const text = labelText?.trim()
-  if (!text) return undefined
-  return text
-}
-
-const buildEdgeLabelWithStyle = (
-  labelText: string | undefined,
-  ds?: DiagramStyle
-): string | TextLabel | undefined => {
-  const text = labelText?.trim()
-  if (!text) return undefined
-  const labelInset = ds?.labelInset
-  if (
-    !ds?.labelColor &&
-    ds?.labelOpacity == null &&
-    !ds?.labelFontSize &&
-    labelInset == null
-  ) {
-    return text
-  }
-  const opts: TextLabelOptions = { text }
-  const style: TextStyle = {}
-  if (ds?.labelColor) style.color = ds.labelColor
-  if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
-  if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
-  if (Object.keys(style).length) opts.style = style
-  if (labelInset != null) opts.inset = labelInset
-  return new TextLabel(opts)
-}
-
-const buildEdgeLabelBackground = (
-  ds?: DiagramStyle
-): { color?: string; opacity?: number; padding?: number; borderRadius?: number } | undefined => {
-  if (!ds) return undefined
-
-  const background: Record<string, unknown> = {}
-  if (ds.labelBgColor) background.color = ds.labelBgColor
-  if (ds.labelBgOpacity != null) background.opacity = ds.labelBgOpacity
-  if (ds.labelBgPadding != null) background.padding = ds.labelBgPadding
-  if (ds.labelBgBorderRadius != null) background.borderRadius = ds.labelBgBorderRadius
-
-  return Object.keys(background).length > 0 ? background : undefined
-}
-
-const resolveEdgeOptions = (
-  ds?: DiagramStyle
-): Partial<{
-  type: EdgePathType
-  style: EdgeStyle
-  startMarker: ArrowMarkerConfig
-  endMarker: ArrowMarkerConfig
-  labelOffset: number
-  labelLineGap: boolean
-}> => {
-  if (!ds) return {}
-  const opts: Partial<{
-    type: EdgePathType
-    style: EdgeStyle
-    startMarker: ArrowMarkerConfig
-    endMarker: ArrowMarkerConfig
-    labelOffset: number
-    labelLineGap: boolean
-  }> = {}
-  const style: EdgeStyle = {}
-  if (ds.strokeColor) style.strokeColor = ds.strokeColor
-  if (ds.strokeWidth != null) style.strokeWidth = ds.strokeWidth
-  if (ds.strokeOpacity != null) style.strokeOpacity = ds.strokeOpacity
-  if (ds.opacity != null) style.opacity = ds.opacity
-  if (ds.lineDash) style.lineDash = ds.lineDash
-  if (Object.keys(style).length) opts.style = style
-  if (ds.edgeType) opts.type = ds.edgeType as EdgePathType
-  if (ds.startMarkerType) {
-    opts.startMarker = {
-      type: ds.startMarkerType as ArrowMarkerConfig['type'],
-      ...(ds.startMarkerSize != null && { size: ds.startMarkerSize }),
-      ...(ds.startMarkerFillColor && { fillColor: ds.startMarkerFillColor }),
-      ...(ds.startMarkerFillOpacity != null && { fillOpacity: ds.startMarkerFillOpacity }),
-    }
-  }
-  if (ds.endMarkerType) {
-    opts.endMarker = {
-      type: ds.endMarkerType as ArrowMarkerConfig['type'],
-      ...(ds.endMarkerSize != null && { size: ds.endMarkerSize }),
-      ...(ds.endMarkerFillColor && { fillColor: ds.endMarkerFillColor }),
-      ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity }),
-    }
-  }
-  if (ds.edgeLabelOffset != null) opts.labelOffset = ds.edgeLabelOffset
-  if (ds.edgeLabelPosition != null) (opts as Record<string, unknown>).labelPosition = ds.edgeLabelPosition
-  if (ds.edgeLabelFollowPath != null) (opts as Record<string, unknown>).labelFollowPath = ds.edgeLabelFollowPath
-  if (ds.edgeLabelLineGap != null) opts.labelLineGap = ds.edgeLabelLineGap
-  return opts
-}
-
 // ── Style resolution ──
 const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined => {
   const node = nodeById.value.get(modelNodeId)
@@ -1100,36 +1009,6 @@ function buildNodeLabel(
   return opts
 }
 
-function buildNodeIcon(ds?: DiagramStyle) {
-  if (!ds?.iconName) return undefined
-  const placement = ds.iconPlacement
-  const resolvedPlacement: NodeImageOptions['placement'] =
-    placement === 'center' ||
-    placement === 'top' ||
-    placement === 'bottom' ||
-    placement === 'left' ||
-    placement === 'right' ||
-    placement === 'top-left' ||
-    placement === 'top-right' ||
-    placement === 'bottom-left' ||
-    placement === 'bottom-right'
-      ? placement
-      : 'left'
-  const iconInset = ds.iconInset ?? ds.iconPadding ?? ds.iconMargin ?? ds.iconGap
-  return {
-    source: `/icons/${ds.iconName}.svg`,
-    placement: resolvedPlacement,
-    width: ds.iconWidth ?? 20,
-    height: ds.iconHeight ?? 20,
-    fit: 'contain' as const,
-    ...(iconInset != null ? { inset: iconInset as unknown as number } : {}),
-    ...(ds.iconOffsetX != null ? { offsetX: ds.iconOffsetX } : {}),
-    ...(ds.iconOffsetY != null ? { offsetY: ds.iconOffsetY } : {}),
-    ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
-    ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {}),
-  }
-}
-
 function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) {
   const dims = getInstanceDimensions(instance)
   const style: Record<string, unknown> = {
@@ -1213,7 +1092,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const commonOptions = {
     ...commonBase,
     label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
-    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
+    ...(buildModelNodeIcon(ds) ? { icon: buildModelNodeIcon(ds) } : {}),
   }
 
   const stickyNoteFactory = diagramShapeFactories['sticky-note']
@@ -1407,7 +1286,7 @@ function syncDiagram() {
       if (existing instanceof RectangleNode) {
         existing.cornerRadius = visual.cornerRadius
       }
-      existing.icon = buildNodeIcon(ds)
+      existing.icon = buildModelNodeIcon(ds)
       ;(existing as DiagramNode & { badges: Array<{ id: string; iconUrl: string }> }).badges =
         getInteractiveBadgesForInstance(instance)
       existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
@@ -1442,7 +1321,7 @@ function syncDiagram() {
     if (!currentNodeIds.has(sourcePapId) || !currentNodeIds.has(targetPapId)) continue
 
     const ds = getEffectiveEdgeStyle(edge)
-    const edgeOpts = resolveEdgeOptions(ds)
+    const edgeOpts = resolveModelEdgeOptions(ds)
     const linkDiffState =
       props.diffStateByEdgeInstanceId?.[edge.id] ?? props.diffStateByModelLinkId?.[edge.modelLinkId]
     if (linkDiffState) {
@@ -1451,9 +1330,12 @@ function syncDiagram() {
       edgeOpts.style = styleObj as EdgeStyle
     }
     const edgeLabel = getInstanceEdgeLabel(edge)
-    const edgeLabelText = buildEdgeLabel(edgeLabel)
-    const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
-    const edgeLabelBackground = buildEdgeLabelBackground(ds)
+    const edgeLabelConfigRaw = buildModelEdgeLabelConfig(edgeLabel, ds)
+    const edgeLabelText =
+      typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw?.text
+    const edgeLabelConfig =
+      typeof edgeLabelConfigRaw === 'object' ? new TextLabel(edgeLabelConfigRaw) : edgeLabelConfigRaw
+    const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
     const controlPoints = readControlPointsFromAttrs(edge.attrs)
 
     const existing = renderer.getEdge(papEdgeId)
@@ -1483,8 +1365,8 @@ function syncDiagram() {
           controlPoints
       }
       existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
-      if (ds?.edgeLabelPosition != null) existing.labelPosition = ds.edgeLabelPosition
-      if (ds?.edgeLabelFollowPath != null) existing.labelFollowPath = ds.edgeLabelFollowPath
+      if (edgeOpts.labelPosition != null) existing.labelPosition = edgeOpts.labelPosition
+      if (edgeOpts.labelFollowPath != null) existing.labelFollowPath = edgeOpts.labelFollowPath
       if (edgeOpts.labelLineGap !== undefined) existing.labelLineGap = edgeOpts.labelLineGap
       existing.label = edgeLabelConfig
       if (existing.label) {
@@ -1522,8 +1404,8 @@ function syncDiagram() {
         endMarker: edgeOpts.endMarker,
         ...(edgeLabelText !== undefined ? { label: edgeLabelText } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
-        ...(ds?.edgeLabelPosition != null ? { labelPosition: ds.edgeLabelPosition } : {}),
-        ...(ds?.edgeLabelFollowPath ? { labelFollowPath: true } : {}),
+        ...(edgeOpts.labelPosition != null ? { labelPosition: edgeOpts.labelPosition } : {}),
+        ...(edgeOpts.labelFollowPath ? { labelFollowPath: true } : {}),
         ...(edgeOpts.labelLineGap !== undefined ? { labelLineGap: edgeOpts.labelLineGap } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),

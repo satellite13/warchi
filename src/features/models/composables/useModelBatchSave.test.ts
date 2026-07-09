@@ -160,7 +160,14 @@ describe('useModelBatchSave', () => {
     ]
     const diagramAttrs = parseDiagramAttrs(null)
     diagramAttrs.instances.nodes = [{ id: 'instance-1', modelNodeId: 'tmp-node', x: 1, y: 2 }]
-    diagramAttrs.instances.edges = [{ id: 'edge-1', modelLinkId: 'tmp-link', points: [] }]
+    diagramAttrs.instances.edges = [
+      {
+        id: 'edge-1',
+        modelLinkId: 'tmp-link',
+        sourceInstanceId: 'instance-1',
+        targetInstanceId: 'instance-2',
+      },
+    ]
     const diagrams = [
       createDiagram({
         id: 'tmp-diagram',

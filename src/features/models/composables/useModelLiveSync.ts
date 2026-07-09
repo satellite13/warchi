@@ -41,7 +41,7 @@ const DEFAULT_FALLBACK_POLL_MS = 15_000
 
 type ModelLiveSyncMode = "ws" | "poll" | "hybrid"
 
-function parseModelLiveSyncMode(raw: string | undefined): ModelLiveSyncMode {
+export function parseModelLiveSyncMode(raw: string | undefined): ModelLiveSyncMode {
   const normalized = raw?.trim().toLowerCase()
   if (normalized === "ws" || normalized === "poll" || normalized === "hybrid") {
     return normalized
@@ -49,7 +49,7 @@ function parseModelLiveSyncMode(raw: string | undefined): ModelLiveSyncMode {
   return "hybrid"
 }
 
-function parseModelLivePollMs(raw: string | undefined): number {
+export function parseModelLivePollMs(raw: string | undefined): number {
   const parsed = Number(raw)
   if (!Number.isFinite(parsed)) return DEFAULT_FALLBACK_POLL_MS
   if (parsed < 1000) return 1000

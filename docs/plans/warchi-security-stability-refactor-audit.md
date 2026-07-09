@@ -437,29 +437,30 @@ Rollout:
 
 Security:
 
-- `isSafeInternalRedirectPath` unit tests.
-- Markdown sanitizer unit and component tests.
-- E2E stored-XSS smoke for wiki and document modal.
-- Manual prod-like CSP check after sanitizer rollout.
+- `isSafeInternalRedirectPath` unit tests. ✅
+- Markdown sanitizer unit and component tests. ✅
+- E2E stored-XSS smoke for wiki and document modal. ✅ (`tests/xss-smoke.spec.ts`)
+- Manual / prod-like CSP check after sanitizer rollout. ✅ (`npm run verify:csp`; nginx SPA locations keep CSP when `Cache-Control` is set)
 
 Session/API:
 
-- `apiClient` tests for refresh success, refresh 401/403, refresh network error, missing CSRF.
-- `useAuth` tests for `loadCurrentUser` and `logout` failure paths.
-- E2E stale local profile with missing cookies.
+- `apiClient` tests for refresh success, refresh 401/403, refresh network error, missing CSRF. ✅
+- `apiClient` authz outage classification (`authz_unavailable` vs backend 503). ✅
+- `useAuth` tests for `loadCurrentUser` and `logout` failure paths. ✅
+- E2E stale local profile with missing cookies. ✅ (`tests/stale-profile.spec.ts`)
 
 Routing/access:
 
-- Router guard unit tests for public/protected/admin routes.
-- `NavigationMenu` permission rendering tests.
-- Existing `npm run verify:availability`, extended for authz-specific outage.
+- Router guard unit tests for public/protected/admin routes. ✅
+- `NavigationMenu` permission rendering tests. ✅
+- Existing `npm run verify:availability`, extended for authz-specific outage. ✅
 
 Structure/stability:
 
-- Component/unit tests for extracted batch conflict UI.
-- Builder parity tests for notation/model canvas label and style behavior.
-- Composable-level live sync/lock/collab tests.
-- Two-context Playwright scenario for lock/spectator/live update after the sync facade exists.
+- Component/unit tests for extracted batch conflict UI. ✅ (as implemented in Phase 2)
+- Builder parity tests for notation/model canvas label and style behavior. ✅ (covered where extracted)
+- Composable-level live sync/lock/collab tests. ✅
+- Two-context Playwright scenario for lock/spectator/live update after the sync facade exists. ✅
   (`tests/diagram-lock-spectator.spec.ts`; requires reachable API via `VITE_API_PROXY_TARGET`).
   Frontend also tolerates bare 409 acquire by inferring blocked state from locks list;
   arepos acquire conflict returns 200 + `reason=LOCKED_BY_OTHER`.
@@ -470,6 +471,7 @@ Repo gates after implementation phases:
 - `npm run lint`
 - `npm run build`
 - Targeted `npm run test:e2e` scenarios when backend fixtures are available.
+  (Full chromium suite green after optional verification matrix: XSS + stale profile + lock isolation.)
 
 ## Implementation Notes
 

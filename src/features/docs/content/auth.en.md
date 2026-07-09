@@ -26,3 +26,7 @@ When the cookie session expires, the client attempts to refresh it via `/auth/re
 ## Sign out
 
 Sign-out first calls the server logout endpoint so httpOnly cookies can be removed. Local session state is cleared after the server confirms logout.
+
+## Service unavailable
+
+If the API or authorization service is temporarily unavailable, a blocking overlay appears with a retry action. While it is shown, editing is paused — wait for recovery or click Retry.

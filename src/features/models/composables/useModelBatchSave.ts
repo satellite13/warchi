@@ -335,7 +335,16 @@ export function applyBatchRemapping(
       ])
     : null
 
+  const isInBatch = (
+    batchIds: ReadonlySet<string> | null,
+    currentId: string,
+    previousId?: string
+  ): boolean => {
+    return !batchIds || batchIds.has(currentId) || (previousId !== undefined && batchIds.has(previousId))
+  }
+
   for (const node of nodes) {
+    const previousId = node.id
     if (node._isNew && nodeIdMap[node.id]) {
       node.id = nodeIdMap[node.id]!
       node._isNew = false
@@ -343,12 +352,13 @@ export function applyBatchRemapping(
     if (node.parentNodeId && nodeIdMap[node.parentNodeId]) {
       node.parentNodeId = nodeIdMap[node.parentNodeId]!
     }
-    if (!batchNodeIds || batchNodeIds.has(node.id)) {
+    if (isInBatch(batchNodeIds, node.id, previousId)) {
       node._isDirty = false
     }
   }
 
   for (const link of links) {
+    const previousId = link.id
     if (nodeIdMap[link.sourceId]) link.sourceId = nodeIdMap[link.sourceId]!
     if (nodeIdMap[link.targetId]) link.targetId = nodeIdMap[link.targetId]!
     if (link._isNew && linkIdMap[link.id]) {
@@ -361,12 +371,13 @@ export function applyBatchRemapping(
         }
       }
     }
-    if (!batchLinkIds || batchLinkIds.has(link.id)) {
+    if (isInBatch(batchLinkIds, link.id, previousId)) {
       link._isDirty = false
     }
   }
 
   for (const diagram of diagrams) {
+    const previousId = diagram.id
     if (diagram.nodeId && nodeIdMap[diagram.nodeId]) {
       diagram.nodeId = nodeIdMap[diagram.nodeId]!
     }
@@ -379,7 +390,7 @@ export function applyBatchRemapping(
       diagram.id = diagramIdMap[diagram.id]!
       diagram._isNew = false
     }
-    if (!batchDiagramIds || batchDiagramIds.has(diagram.id)) {
+    if (isInBatch(batchDiagramIds, diagram.id, previousId)) {
       diagram._isDirty = false
     }
   }

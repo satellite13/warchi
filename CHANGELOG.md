@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-09
+
+### Fixed
+- Shared resource dialogs correctly load access shares from the arepos `ListResponse` `{ items }` envelope.
+
 ## [0.7.0] - 2026-07-06
 
 ### Added

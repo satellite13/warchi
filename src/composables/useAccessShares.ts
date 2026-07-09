@@ -2,7 +2,8 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiDelete, apiGet, apiPost } from "./useApi";
 import { getUserDisplayName } from "../utils/userDisplay";
-import type { UserInfo } from "../types/entities";
+import { paginatedContent } from "../utils/paginatedResponse";
+import type { PaginatedResponse, UserInfo } from "../types/entities";
 import type {
   AccessShareRequest,
   AccessShareResponse,
@@ -43,14 +44,14 @@ export function useAccessShares() {
     errorMessage.value = null;
 
     try {
-      const result = await apiGet<AccessShareResponse[]>(
+      const result = await apiGet<PaginatedResponse<AccessShareResponse> | AccessShareResponse[]>(
         `/access/shares/${resourceType}/${encodeURIComponent(resourceId)}`
       );
       if (!result.success) {
         throw new Error(result.error.message);
       }
 
-      const rawShares = Array.isArray(result.data) ? result.data : [];
+      const rawShares = paginatedContent(result.data);
       const viewRows = await Promise.all(
         rawShares.map(async (share) => ({
           ...share,

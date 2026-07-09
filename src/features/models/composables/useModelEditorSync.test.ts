@@ -1,0 +1,147 @@
+import { describe, expect, it, vi } from 'vitest'
+import { computed, ref } from 'vue'
+import type { ModelData } from '@/types/entities'
+import { createEmptyModelEditorState } from '../types'
+import { parseDiagramAttrs } from '../modelAttrs'
+import { useModelEditorSync } from './useModelEditorSync'
+import { useDiagramEditLock } from './useDiagramEditLock'
+import { useDiagramRealtimeCollab } from './useDiagramRealtimeCollab'
+import { useModelLiveSync } from './useModelLiveSync'
+
+const mocks = vi.hoisted(() => ({
+  useDiagramEditLock: vi.fn(),
+  useDiagramRealtimeCollab: vi.fn(),
+  useModelLiveSync: vi.fn(),
+}))
+
+vi.mock('./useDiagramEditLock', () => ({
+  useDiagramEditLock: mocks.useDiagramEditLock,
+}))
+
+vi.mock('./useDiagramRealtimeCollab', () => ({
+  useDiagramRealtimeCollab: mocks.useDiagramRealtimeCollab,
+}))
+
+vi.mock('./useModelLiveSync', () => ({
+  useModelLiveSync: mocks.useModelLiveSync,
+}))
+
+function createModel(): ModelData {
+  return {
+    id: 'model-1',
+    name: 'Model',
+    version: '1.0.0',
+    ownerId: 'owner-1',
+    attrs: null,
+    accessPermission: 'OWNER',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function createFacade() {
+  const lock = {
+    locksList: ref([{ diagramId: 'diagram-1', isLocked: true }]),
+    isLockHeld: ref(true),
+    isBlockedByOther: ref(false),
+    lockHolderDisplay: ref<string | null>(null),
+    remoteDiagramUpdatedAt: ref<string | null>(null),
+    serverNewerWhileBlocked: ref(false),
+    lockForceRevoked: ref(false),
+    reloadAfterRemoteChange: vi.fn(async (loadModel: () => Promise<void>) => loadModel()),
+    evaluateServerNewer: vi.fn(),
+    verifyLockBeforeSave: vi.fn(async () => true),
+    dismissForceRevoked: vi.fn(),
+  }
+  const collab = {
+    remoteEditorPointer: ref(null),
+    diagramSpectators: ref([{ userId: 'user-2', displayName: 'Second User' }]),
+    onLiveCollaborationGesture: vi.fn(),
+    scheduleDebouncedLivePush: vi.fn(),
+    handleModelTopicBroadcast: vi.fn(),
+    onCanvasMouseMoveForPointer: vi.fn(),
+    onCanvasMouseLeaveForPointer: vi.fn(),
+  }
+  mocks.useDiagramEditLock.mockReturnValue(lock)
+  mocks.useDiagramRealtimeCollab.mockReturnValue(collab)
+
+  const model = ref<ModelData | null>(createModel())
+  const state = ref(createEmptyModelEditorState())
+  state.value.modelId = 'model-1'
+  state.value.diagrams = [
+    {
+      id: 'diagram-1',
+      name: 'Diagram',
+      version: '1.0.0',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      notationId: 'notation-1',
+      nodeId: null,
+      parsedAttrs: parseDiagramAttrs(null),
+    },
+  ]
+
+  const facade = useModelEditorSync({
+    modelId: computed(() => state.value.modelId),
+    state,
+    model,
+    enabled: ref(true),
+    isLoading: ref(false),
+    isSaving: ref(false),
+    modelDirty: ref(false),
+    selectedDiagramId: ref('diagram-1'),
+    activeDiagramUpdatedAt: ref('2026-01-01T00:00:00.000Z'),
+    isActiveDiagramLatest: ref(true),
+    isDiagramReadOnlyBaseline: ref(false),
+    canEditModel: ref(true),
+    canInspectDiagramJson: ref(true),
+    isSelectedDiagramPersistedOnServer: ref(true),
+    currentUserId: ref('user-1'),
+    getDiagramRenderer: () => null,
+    ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+  })
+
+  return { facade, lock, collab }
+}
+
+describe('useModelEditorSync', () => {
+  it('wires lock, collab and live sync with shared derived state', () => {
+    const { facade, lock, collab } = createFacade()
+
+    expect(useDiagramEditLock).toHaveBeenCalled()
+    expect(useDiagramRealtimeCollab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isLockHolder: facade.isDiagramLockHolder,
+        isSpectator: facade.diagramLockBlockedByOther,
+      })
+    )
+    expect(useModelLiveSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onModelTopicBroadcast: collab.handleModelTopicBroadcast,
+      })
+    )
+
+    const liveSyncOptions = vi.mocked(useModelLiveSync).mock.calls[0]?.[0]
+    expect(liveSyncOptions?.preserveOpenDiagramCanvasInstances?.value).toBe(true)
+    lock.isBlockedByOther.value = true
+    expect(liveSyncOptions?.preserveOpenDiagramCanvasInstances?.value).toBe(false)
+    expect(facade.isDiagramReadOnly.value).toBe(true)
+    expect(facade.diagramLockHolderName.value).toBe('—')
+
+    lock.isBlockedByOther.value = false
+    expect(facade.isDiagramLockHolder.value).toBe(true)
+    expect(facade.remoteEditorPointer).toBe(collab.remoteEditorPointer)
+    expect(facade.diagramSpectators).toBe(collab.diagramSpectators)
+  })
+
+  it('delegates lock reload and save verification', async () => {
+    const { facade, lock } = createFacade()
+    const loadModel = vi.fn(async () => undefined)
+
+    await facade.handleReloadModelForDiagramLock(loadModel)
+    await expect(facade.verifyLockBeforeSave()).resolves.toBe(true)
+
+    expect(lock.reloadAfterRemoteChange).toHaveBeenCalledWith(loadModel)
+    expect(lock.verifyLockBeforeSave).toHaveBeenCalled()
+  })
+})

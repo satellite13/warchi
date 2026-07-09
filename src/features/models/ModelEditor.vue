@@ -31,11 +31,9 @@ import {
 } from './utils/batchSaveConflictDisplay'
 import type { EditorLink, EditorNode } from './types'
 import {
-  useDiagramEditLock,
-  useDiagramRealtimeCollab,
   useModelDiagramExport,
   useModelEditor,
-  useModelLiveSync,
+  useModelEditorSync,
   useModelToolbarState,
   useModelVersionDiff,
   useNoteEditor,
@@ -667,80 +665,24 @@ const isSelectedDiagramPersistedOnServer = computed(() => {
   return !!d && !d._isNew
 })
 
-const diagramEditLock = useDiagramEditLock({
-  modelId: computed(() => state.value.modelId ?? null),
-  selectedDiagramId,
-  isActiveDiagramLatest: computed(
-    () =>
-      !!activeDiagram.value &&
-      !!latestDiagramVersion.value &&
-      activeDiagram.value.id === latestDiagramVersion.value.id
-  ),
-  canEditModel: canInspectDiagramJson,
-  isSelectedDiagramPersistedOnServer,
-})
-
-const isDiagramReadOnly = computed(
-  () =>
-    !canInspectDiagramJson.value ||
-    isDiagramReadOnlyBaseline.value ||
-    diagramEditLock.isBlockedByOther.value
-)
-
-watch(
-  [
-    () => diagramEditLock.isBlockedByOther.value,
-    () => activeDiagram.value?.updatedAt,
-    () => diagramEditLock.remoteDiagramUpdatedAt.value,
-  ],
-  () => {
-    if (diagramEditLock.isBlockedByOther.value) {
-      diagramEditLock.evaluateServerNewer(activeDiagram.value?.updatedAt ?? null)
-    }
-  }
-)
-
-async function handleReloadModelForDiagramLock() {
-  await diagramEditLock.reloadAfterRemoteChange(loadModel)
-}
-
-/** Разворачиваем ref из useDiagramEditLock для шаблона (вложенные ref в объекте не разворачиваются) */
-const diagramLocksForTree = computed(() => diagramEditLock.locksList.value)
-const diagramLockBlockedByOther = computed(() => diagramEditLock.isBlockedByOther.value)
-const diagramLockHolderName = computed(() => diagramEditLock.lockHolderDisplay.value ?? '—')
-const diagramLockServerNewerWhileBlocked = computed(
-  () => diagramEditLock.serverNewerWhileBlocked.value
-)
-
-const isDiagramLockHolder = computed(
-  () =>
-    canInspectDiagramJson.value &&
-    !!activeDiagram.value &&
-    !!latestDiagramVersion.value &&
-    activeDiagram.value.id === latestDiagramVersion.value.id &&
-    isSelectedDiagramPersistedOnServer.value &&
-    diagramEditLock.isLockHeld.value &&
-    !diagramEditLock.isBlockedByOther.value
-)
-
 const {
+  diagramEditLock,
+  diagramLocksForTree,
+  diagramLockBlockedByOther,
+  diagramLockHolderName,
+  diagramLockServerNewerWhileBlocked,
+  isDiagramLockHolder,
+  isDiagramReadOnly,
   remoteEditorPointer,
   diagramSpectators,
   onLiveCollaborationGesture,
   scheduleDebouncedLivePush,
-  handleModelTopicBroadcast,
   onCanvasMouseMoveForPointer,
   onCanvasMouseLeaveForPointer,
-} = useDiagramRealtimeCollab({
-  state,
-  selectedDiagramId,
-  currentUserId: computed(() => currentUser.value?.id ?? null),
-  getDiagramRenderer: () => diagramRenderer.value,
-  isLockHolder: isDiagramLockHolder,
-  isSpectator: diagramLockBlockedByOther,
-})
-
-useModelLiveSync({
+  handleReloadModelForDiagramLock: reloadModelForDiagramLock,
+  verifyLockBeforeSave,
+  dismissForceRevoked,
+} = useModelEditorSync({
   modelId: computed(() => state.value.modelId || null),
   state,
   model,
@@ -748,12 +690,26 @@ useModelLiveSync({
   isLoading,
   isSaving,
   modelDirty,
-  ensureNotationRelationsAndRules,
-  openDiagramId: selectedDiagramId,
+  selectedDiagramId,
+  activeDiagramUpdatedAt: computed(() => activeDiagram.value?.updatedAt ?? null),
+  isActiveDiagramLatest: computed(
+    () =>
+      !!activeDiagram.value &&
+      !!latestDiagramVersion.value &&
+      activeDiagram.value.id === latestDiagramVersion.value.id
+  ),
+  isDiagramReadOnlyBaseline,
+  canEditModel: canInspectDiagramJson,
+  canInspectDiagramJson,
+  isSelectedDiagramPersistedOnServer,
   currentUserId: computed(() => currentUser.value?.id ?? null),
-  preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),
-  onModelTopicBroadcast: handleModelTopicBroadcast,
+  getDiagramRenderer: () => diagramRenderer.value,
+  ensureNotationRelationsAndRules,
 })
+
+async function handleReloadModelForDiagramLock() {
+  await reloadModelForDiagramLock(loadModel)
+}
 
 watch(
   () => activeDiagram.value?.parsedAttrs.instances,
@@ -2017,7 +1973,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     return false
   }
   // Проверить, что лок ещё наш, до начала сохранения
-  const lockOk = await diagramEditLock.verifyLockBeforeSave()
+  const lockOk = await verifyLockBeforeSave()
   if (!lockOk) return false
 
   diagramCanvasRef.value?.flushCanvasState()
@@ -4217,7 +4173,7 @@ watch(
   () => diagramEditLock.lockForceRevoked.value,
   (revoked) => {
     if (!revoked) return
-    diagramEditLock.dismissForceRevoked()
+    dismissForceRevoked()
     alert(t('models.diagramLockForceRevoked'))
     allowLeave.value = true
     router.push({ name: 'models' })

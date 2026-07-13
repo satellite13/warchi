@@ -34,7 +34,7 @@
   "dependencies": {
     "@ckpack/vue-color": "^1.6.0",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.6.4",
+    "@ngroznykh/papirus": "file:../papirus",
     "@stomp/stompjs": "^7.3.0",
     "dompurify": "^3.4.11",
     "marked": "^18.0.0",

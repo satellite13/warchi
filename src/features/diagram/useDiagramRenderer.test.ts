@@ -6,32 +6,44 @@ const useMock = vi.fn()
 const resizeMock = vi.fn()
 const destroyMock = vi.fn()
 const enableInteractionsMock = vi.fn(() => ({ selection: {}, navigation: {} }))
+const constructedOptions: Record<string, unknown>[] = []
 
 vi.mock('@ngroznykh/papirus', () => {
   class DiagramRenderer {
     nodes = new Map()
-    edges = new Map()
     use = useMock
     resize = resizeMock
     destroy = destroyMock
     enableInteractions = enableInteractionsMock
+    canvas: HTMLCanvasElement
+    options: Record<string, unknown>
 
-    constructor(
-      public canvas: HTMLCanvasElement,
-      public options: Record<string, unknown>
-    ) {}
+    constructor(canvas: HTMLCanvasElement, options: Record<string, unknown>) {
+      this.canvas = canvas
+      this.options = options
+      constructedOptions.push(options)
+    }
   }
 
   class GridOverlay {
-    constructor(public options: Record<string, unknown>) {}
+    options: Record<string, unknown>
+    constructor(options: Record<string, unknown>) {
+      this.options = options
+    }
   }
 
   class MiniMap {
-    constructor(public options: Record<string, unknown>) {}
+    options: Record<string, unknown>
+    constructor(options: Record<string, unknown>) {
+      this.options = options
+    }
   }
 
   class RulersOverlay {
-    constructor(public options: Record<string, unknown>) {}
+    options: Record<string, unknown>
+    constructor(options: Record<string, unknown>) {
+      this.options = options
+    }
   }
 
   return { DiagramRenderer, GridOverlay, MiniMap, RulersOverlay }
@@ -39,6 +51,7 @@ vi.mock('@ngroznykh/papirus', () => {
 
 describe('useDiagramRenderer', () => {
   it('creates renderer with enabled overlays and interactions', () => {
+    constructedOptions.length = 0
     const canvas = document.createElement('canvas')
     const container = document.createElement('div')
     Object.defineProperty(container, 'clientWidth', { value: 640 })
@@ -60,7 +73,11 @@ describe('useDiagramRenderer', () => {
     const renderer = diagram.mountRenderer()
 
     expect(renderer).toBe(diagram.rendererRef.value)
-    expect(renderer?.options).toMatchObject({ width: 640, height: 480, backgroundColor: '#fafafa' })
+    expect(constructedOptions[0]).toMatchObject({
+      width: 640,
+      height: 480,
+      backgroundColor: '#fafafa',
+    })
     expect(useMock).toHaveBeenCalledTimes(2)
     expect(enableInteractionsMock).toHaveBeenCalledWith({ snapToGrid: true })
     expect(diagram.interactionManagerRef.value).toMatchObject({ selection: {}, navigation: {} })

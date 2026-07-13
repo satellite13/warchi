@@ -56,7 +56,7 @@ export interface ExtendedTextStyle {
   color?: string
   fontSize?: number
   opacity?: number
-  align?: string
+  align?: CanvasTextAlign
   verticalAlign?: 'top' | 'middle' | 'bottom'
 }
 

@@ -8,6 +8,7 @@ import type {
   DiagramRenderer,
   Node,
   Edge,
+  TextStyle,
 } from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
 import ColorWithAlphaField from "./ColorWithAlphaField.vue";
@@ -495,8 +496,8 @@ function toMarkerKind(value: unknown, fallback: MarkerKind): MarkerKind {
 function textStyleWith(
   current: unknown,
   updates: ExtendedTextStyle
-): ExtendedTextStyle {
-  return { ...((current ?? {}) as ExtendedTextStyle), ...updates };
+): TextStyle {
+  return { ...((current ?? {}) as ExtendedTextStyle), ...updates } as TextStyle
 }
 
 function iconConfig() {

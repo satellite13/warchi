@@ -10,7 +10,7 @@ import {
 
 type MaybeFactory<T> = T | (() => T)
 
-export interface DiagramRendererOverlayConfig<TOptions extends Record<string, unknown>> {
+export interface DiagramRendererOverlayConfig<TOptions = unknown> {
   enabled?: boolean
   options?: TOptions
 }

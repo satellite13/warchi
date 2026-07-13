@@ -162,7 +162,7 @@ export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNod
 }
 
 function createFactoryBackedCustomNode(
-  options: ConstructorParameters<typeof CustomShapeNode>[0],
+  options: Omit<ConstructorParameters<typeof CustomShapeNode>[0], 'path' | 'svgPath'>,
   shape: 'beveled-rectangle' | 'trapezoid' | 'slanted-rectangle'
 ): CustomShapeNode {
   const factory = diagramShapeFactories[shape]

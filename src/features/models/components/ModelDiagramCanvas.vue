@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import {
   DiagramRenderer,
   RectangleNode,
-  CircleNode,
   CompositeNode,
   deserializeCComponent,
   Node as DiagramNode,

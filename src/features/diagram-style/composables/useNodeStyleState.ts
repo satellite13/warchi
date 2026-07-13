@@ -33,8 +33,12 @@ export type NodeShape =
   | 'composite'
 
 function getNodeIconOptions(node: ExtendedNodeProps): ExtendedIconConfig | undefined {
-  if (!node.icon) return undefined
-  return 'options' in node.icon ? node.icon.options : node.icon
+  const icon = node.icon
+  if (!icon) return undefined
+  if (typeof icon === 'object' && icon !== null && 'options' in icon) {
+    return (icon as { options?: ExtendedIconConfig }).options
+  }
+  return icon as ExtendedIconConfig
 }
 
 export function useNodeStyleState() {

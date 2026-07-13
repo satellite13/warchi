@@ -5,7 +5,7 @@ import type { LinkResponse } from '@/types/api'
 import type { PaginatedResponse } from '@/types/entities'
 import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import { formatDate } from '@/utils/formatDate'
-import type { BatchConflictItem } from './useModelBatchConflictResolution'
+import type { BatchConflictItem } from './useModelBatchSave'
 import type { ModelEditorState } from '../types'
 import {
   batchConflictCompareKey,
@@ -35,7 +35,7 @@ export function useModelBatchConflictUi(options: {
   locale: Ref<string>
   t: TranslateFn
   resolveBatchSaveReload: () => Promise<void>
-  resolveBatchSaveOverwrite: () => Promise<void>
+  resolveBatchSaveOverwrite: () => Promise<boolean | void>
 }) {
   const batchConflictFieldT: ConflictTranslateFn = (key, params) =>
     String(options.t(key, (params ?? {}) as Record<string, unknown>))

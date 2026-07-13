@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
 import { ref, reactive, computed, watch, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { TextLabel } from "@ngroznykh/papirus";
@@ -12,9 +11,11 @@ import type {
 } from "@ngroznykh/papirus";
 import SketchColorField from "./SketchColorField.vue";
 import ColorWithAlphaField from "./ColorWithAlphaField.vue";
+import EdgeStyleSection from "./EdgeStyleSection.vue";
+import LabelStyleSection from "./LabelStyleSection.vue";
 import LabeledFieldRow from "./LabeledFieldRow.vue";
 import LabeledNumberInput from "./LabeledNumberInput.vue";
-import StyleSection from "./StyleSection.vue";
+import NodeStyleSection from "./NodeStyleSection.vue";
 import LazyIconImg from "@/components/forms/LazyIconImg.vue";
 import SearchableSelect from "@/components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
@@ -24,7 +25,7 @@ import type {
   CustomProperty,
   CompositeSerializedCComponent,
   StylePropertyBindingGroup,
-} from "../notationAttrs";
+} from "@/domain/attrs/notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import {
   COMBINED_ICON_OPTIONS,
@@ -39,7 +40,7 @@ import {
   deleteUserRelationPreset,
   type ComponentStylePreset,
   type RelationStylePreset
-} from "../styles/stylePresets";
+} from "@/features/diagram-style/styles/stylePresets";
 import {
   normalizeIconPlacement,
   toInsetSides,
@@ -51,11 +52,18 @@ import {
 } from "../utils/styleHelpers";
 import { useNodeStyleState, type NodeShape } from "../composables/useNodeStyleState";
 import { useEdgeStyleState } from "../composables/useEdgeStyleState";
+import type {
+  ExtendedEdgeProps,
+  ExtendedEdgeStyle,
+  ExtendedNodeProps,
+  ExtendedNodeStyle,
+  ExtendedTextStyle,
+} from "../types/papirusExtended";
 import A5BindingsEditor from "./composite/A5BindingsEditor.vue";
 import CompositeTreeEditor from "./composite/CompositeTreeEditor.vue";
 import CompositeLivePreview from "./composite/CompositeLivePreview.vue";
-import { validateCompositeDiagramStyle } from "../utils/validationIssues";
-import { createDefaultCompositeContent } from "../utils/compositeBindings";
+import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
+import { createDefaultCompositeContent } from "@/features/diagram-style/utils/compositeBindings";
 
 const props = defineProps<{
   selectedElementId: string | null;
@@ -67,6 +75,9 @@ const props = defineProps<{
   nodeTypeProperties?: CustomProperty[];
   mode?: 'default' | 'composite-only';
 }>();
+
+type EdgeKind = "straight" | "polyline" | "editable-polyline" | "bezier";
+type MarkerKind = "none" | "arrow" | "open" | "diamond" | "circle" | "square";
 
 const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
@@ -136,7 +147,7 @@ function confirmSavePreset() {
   const name = `user_${Date.now()}`;
 
   if (elementType.value === "edge") {
-    const style: import("../notationAttrs").DiagramStyle = {
+    const style: import("@/domain/attrs/notationAttrs").DiagramStyle = {
       strokeColor: edgeStrokeColor.value,
       strokeOpacity: edgeStrokeOpacity.value,
       strokeWidth: edgeStrokeWidth.value,
@@ -167,7 +178,7 @@ function confirmSavePreset() {
     saveUserRelationPreset({ name, label, style });
     selectedRelationPreset.value = name;
   } else {
-    const style: import("../notationAttrs").DiagramStyle = {
+    const style: import("@/domain/attrs/notationAttrs").DiagramStyle = {
       nodeShape: nodeShape.value,
       fillColor: fillColor.value,
       fillOpacity: fillOpacity.value,
@@ -309,22 +320,22 @@ function applyComponentPreset(presetName: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (node.label) {
-      node.label.style = {
-        ...(node.label.style || {}),
+      node.label.style = textStyleWith(node.label.style, {
         color: labelColor.value,
         fontSize: labelFontSize.value,
         opacity: labelOpacity.value,
         verticalAlign: labelVerticalAlign.value
-      } as any;
+      });
       setLabelSpacing(node.label, { inset: insetToPlain(labelInset.value) });
     }
-    (node as any).contentInset = insetToPlain(contentInset.value);
+    const nodeRuntime = node as unknown as ExtendedNodeProps;
+    nodeRuntime.contentInset = insetToPlain(contentInset.value);
     
     // Apply dimensions and corner radius
     node.width = nodeWidth.value;
     node.height = nodeHeight.value;
-    (node as any).cornerRadius = cornerRadius.value;
-    (node as any).anchorPoints = {
+    nodeRuntime.cornerRadius = cornerRadius.value;
+    nodeRuntime.anchorPoints = {
       top: nodePortsTop.value,
       bottom: nodePortsBottom.value,
       left: nodePortsLeft.value,
@@ -332,18 +343,11 @@ function applyComponentPreset(presetName: string) {
     };
     
     if (iconName.value) {
-      (node as any).icon = {
-        source: `/icons/${iconName.value}.svg`,
-        placement: iconPlacement.value,
-        width: iconWidth.value,
-        height: iconHeight.value,
-        fit: "contain",
-        inset: iconInset.value,
-        strokeColor: iconStrokeColor.value,
-        fillColor: iconFillColor.value
-      };
+      const nodeRuntime = node as unknown as ExtendedNodeProps;
+      nodeRuntime.icon = iconConfig();
     } else {
-      (node as any).icon = undefined;
+      const nodeRuntime = node as unknown as ExtendedNodeProps;
+      nodeRuntime.icon = undefined;
     }
   });
   
@@ -362,9 +366,9 @@ function applyEdgePreset(presetName: string) {
   edgeStrokeOpacity.value = style.strokeOpacity ?? 1;
   edgeStrokeWidth.value = style.strokeWidth ?? 2;
   edgeOpacity.value = style.opacity ?? 1;
-  edgeType.value = (style.edgeType as any) ?? "polyline";
-  edgeStartMarker.value = (style.startMarkerType as any) ?? "none";
-  edgeEndMarker.value = (style.endMarkerType as any) ?? "open";
+  edgeType.value = toEdgeKind(style.edgeType, "polyline");
+  edgeStartMarker.value = toMarkerKind(style.startMarkerType, "none");
+  edgeEndMarker.value = toMarkerKind(style.endMarkerType, "open");
   edgeLabelColor.value = style.labelColor ?? "#333333";
   edgeLabelOpacity.value = style.labelOpacity ?? 1;
   edgeLabelFontSize.value = style.labelFontSize ?? 14;
@@ -406,17 +410,17 @@ function applyEdgePreset(presetName: string) {
     edge.startMarker = buildMarkerConfig(edgeStartMarker.value, edgeStartMarkerSize.value, edgeStartMarkerFillColor.value, edgeStartMarkerFillOpacity.value);
     edge.endMarker = buildMarkerConfig(edgeEndMarker.value, edgeEndMarkerSize.value, edgeEndMarkerFillColor.value, edgeEndMarkerFillOpacity.value);
     if (edge.label) {
-      edge.label.style = {
-        ...(edge.label.style || {}),
+      edge.label.style = textStyleWith(edge.label.style, {
         color: edgeLabelColor.value,
         fontSize: edgeLabelFontSize.value,
         opacity: edgeLabelOpacity.value
-      } as any;
+      });
       setLabelSpacing(edge.label, { inset: insetToPlain(edgeLabelInset.value) });
     }
     edge.labelOffset = edgeLabelOffset.value;
     edge.labelLineGap = edgeLabelLineGap.value;
-    (edge as any).labelBackground = { 
+    const edgeRuntime = edge as unknown as ExtendedEdgeProps;
+    edgeRuntime.labelBackground = {
       color: edgeLabelBgColor.value,
       opacity: edgeLabelBgOpacity.value,
       borderRadius: edgeLabelBgBorderRadius.value
@@ -467,6 +471,46 @@ const EDGE_TYPE_OPTIONS = computed(() => ([
   { v: "editable-polyline", l: t("diagram.linkTypeEditablePolyline"), icon: "polyline" },
   { v: "bezier", l: t("diagram.linkTypeBezier"), icon: "line_curve" }
 ] as const));
+
+function toEdgeKind(value: unknown, fallback: EdgeKind): EdgeKind {
+  return value === "straight" ||
+    value === "polyline" ||
+    value === "editable-polyline" ||
+    value === "bezier"
+    ? value
+    : fallback;
+}
+
+function toMarkerKind(value: unknown, fallback: MarkerKind): MarkerKind {
+  return value === "none" ||
+    value === "arrow" ||
+    value === "open" ||
+    value === "diamond" ||
+    value === "circle" ||
+    value === "square"
+    ? value
+    : fallback;
+}
+
+function textStyleWith(
+  current: unknown,
+  updates: ExtendedTextStyle
+): ExtendedTextStyle {
+  return { ...((current ?? {}) as ExtendedTextStyle), ...updates };
+}
+
+function iconConfig() {
+  return {
+    source: `/icons/${iconName.value}.svg`,
+    placement: iconPlacement.value,
+    width: iconWidth.value,
+    height: iconHeight.value,
+    fit: "contain",
+    inset: iconInset.value,
+    strokeColor: iconStrokeColor.value,
+    fillColor: iconFillColor.value
+  };
+}
 
 // --- Node style state (from composable) ---
 const {
@@ -773,18 +817,11 @@ function applyNodeIcon() {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (iconName.value) {
-      (node as any).icon = {
-        source: `/icons/${iconName.value}.svg`,
-        placement: iconPlacement.value,
-        width: iconWidth.value,
-        height: iconHeight.value,
-        fit: "contain",
-        inset: iconInset.value,
-        strokeColor: iconStrokeColor.value,
-        fillColor: iconFillColor.value
-      };
+      const nodeRuntime = node as unknown as ExtendedNodeProps;
+      nodeRuntime.icon = iconConfig();
     } else {
-      (node as any).icon = undefined;
+      const nodeRuntime = node as unknown as ExtendedNodeProps;
+      nodeRuntime.icon = undefined;
     }
   });
 }
@@ -837,7 +874,7 @@ function handleIconFillColorChange(value: string) {
   emitNodeStyle();
 }
 
-function applyNodeStyle(updates: Record<string, any>) {
+function applyNodeStyle(updates: Partial<ExtendedNodeStyle>) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     const baseStyle = node.style || {};
@@ -910,7 +947,8 @@ function handleCornerRadiusChange(value: string) {
   resetComponentPreset();
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if ("cornerRadius" in node) {
-      (node as any).cornerRadius = v;
+      const nodeRuntime = node as unknown as ExtendedNodeProps;
+      nodeRuntime.cornerRadius = v;
     }
   });
   emitNodeStyle();
@@ -967,7 +1005,7 @@ function handleLabelOpacityChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (node.label) {
-      node.label.style = {...(node.label.style || {}), opacity: v} as any;
+      node.label.style = textStyleWith(node.label.style, { opacity: v });
     }
   });
   emitNodeStyle();
@@ -1010,7 +1048,7 @@ function handleLabelVerticalAlignChange(value: string) {
   labelVerticalAlign.value = v;
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    if (node.label) node.label.style = { ...node.label.style, verticalAlign: v } as any;
+    if (node.label) node.label.style = textStyleWith(node.label.style, { verticalAlign: v });
   });
   emitNodeStyle();
 }
@@ -1044,7 +1082,8 @@ function handleContentInsetChange(value: InsetSides) {
   resetComponentPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    (node as any).contentInset = insetToPlain(contentInset.value);
+    const nodeRuntime = node as unknown as ExtendedNodeProps;
+    nodeRuntime.contentInset = insetToPlain(contentInset.value);
   });
   emitNodeStyle();
 }
@@ -1056,8 +1095,9 @@ function handlePortsTopChange(value: string) {
   resetComponentPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
-    (node as any).anchorPoints = { ...anchorPoints, top: v };
+    const nodeRuntime = node as unknown as ExtendedNodeProps;
+    const anchorPoints = nodeRuntime.anchorPoints || {};
+    nodeRuntime.anchorPoints = { ...anchorPoints, top: v };
   });
   emitNodeStyle();
 }
@@ -1069,8 +1109,9 @@ function handlePortsBottomChange(value: string) {
   resetComponentPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
-    (node as any).anchorPoints = { ...anchorPoints, bottom: v };
+    const nodeRuntime = node as unknown as ExtendedNodeProps;
+    const anchorPoints = nodeRuntime.anchorPoints || {};
+    nodeRuntime.anchorPoints = { ...anchorPoints, bottom: v };
   });
   emitNodeStyle();
 }
@@ -1082,8 +1123,9 @@ function handlePortsLeftChange(value: string) {
   resetComponentPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
-    (node as any).anchorPoints = { ...anchorPoints, left: v };
+    const nodeRuntime = node as unknown as ExtendedNodeProps;
+    const anchorPoints = nodeRuntime.anchorPoints || {};
+    nodeRuntime.anchorPoints = { ...anchorPoints, left: v };
   });
   emitNodeStyle();
 }
@@ -1095,14 +1137,15 @@ function handlePortsRightChange(value: string) {
   resetComponentPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, number>;
-    (node as any).anchorPoints = { ...anchorPoints, right: v };
+    const nodeRuntime = node as unknown as ExtendedNodeProps;
+    const anchorPoints = nodeRuntime.anchorPoints || {};
+    nodeRuntime.anchorPoints = { ...anchorPoints, right: v };
   });
   emitNodeStyle();
 }
 
 // --- Edge handlers ---
-function applyEdgeStyle(updates: Record<string, any>) {
+function applyEdgeStyle(updates: Partial<ExtendedEdgeStyle>) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     const baseStyle = edge.style || {};
@@ -1234,7 +1277,7 @@ function handleEdgeLabelOpacityChange(value: string) {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     if (edge.label) {
-      edge.label.style = {...(edge.label.style || {}), opacity: v} as any;
+      edge.label.style = textStyleWith(edge.label.style, { opacity: v });
     }
   });
   emitEdgeStyle();
@@ -1305,7 +1348,8 @@ function handleEdgeLabelBgColorChange(value: string) {
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), color: value};
+    const edgeRuntime = edge as unknown as ExtendedEdgeProps;
+    edgeRuntime.labelBackground = { ...(edgeRuntime.labelBackground || {}), color: value };
   });
   emitEdgeStyle();
 }
@@ -1317,7 +1361,8 @@ function handleEdgeLabelBgOpacityChange(value: string) {
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), opacity: v};
+    const edgeRuntime = edge as unknown as ExtendedEdgeProps;
+    edgeRuntime.labelBackground = { ...(edgeRuntime.labelBackground || {}), opacity: v };
   });
   emitEdgeStyle();
 }
@@ -1329,7 +1374,8 @@ function handleEdgeLabelBgBorderRadiusChange(value: string) {
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
-    (edge as any).labelBackground = {...((edge as any).labelBackground || {}), borderRadius: v};
+    const edgeRuntime = edge as unknown as ExtendedEdgeProps;
+    edgeRuntime.labelBackground = { ...(edgeRuntime.labelBackground || {}), borderRadius: v };
   });
   emitEdgeStyle();
 }
@@ -1526,7 +1572,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         <template v-if="elementType === 'edge'">
 
           <!-- Label -->
-          <StyleSection
+          <LabelStyleSection
             :title="t('nodeStyle.label')"
             :open="edgeSection.label"
             @toggle="toggleSection(edgeSection, 'label')"
@@ -1586,10 +1632,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     @update:model-value="handleEdgeLabelLineGapChange"
                   />
                 </LabeledFieldRow>
-          </StyleSection>
+          </LabelStyleSection>
 
           <!-- Line -->
-          <StyleSection
+          <EdgeStyleSection
             :title="t('nodeStyle.line')"
             :open="edgeSection.line"
             @toggle="toggleSection(edgeSection, 'line')"
@@ -1644,10 +1690,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </button>
                   </div>
                 </LabeledFieldRow>
-          </StyleSection>
+          </EdgeStyleSection>
 
           <!-- Markers -->
-          <StyleSection
+          <EdgeStyleSection
             :title="t('nodeStyle.markers')"
             :open="edgeSection.markers"
             @toggle="toggleSection(edgeSection, 'markers')"
@@ -1704,7 +1750,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </LabeledFieldRow>
                   </template>
                 </div>
-          </StyleSection>
+          </EdgeStyleSection>
 
         </template>
 
@@ -1712,7 +1758,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         <template v-else>
 
           <!-- Label -->
-          <StyleSection
+          <LabelStyleSection
             :title="t('nodeStyle.label')"
             :open="nodeSection.label"
             @toggle="toggleSection(nodeSection, 'label')"
@@ -1769,10 +1815,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
                   </select>
                 </LabeledFieldRow>
-          </StyleSection>
+          </LabelStyleSection>
 
           <!-- Shape & Dimensions -->
-          <StyleSection
+          <NodeStyleSection
             :title="t('nodeStyle.figure')"
             :open="nodeSection.shape"
             @toggle="toggleSection(nodeSection, 'shape')"
@@ -1992,10 +2038,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     @update:model-value="handlePortsRightChange"
                   />
                 </div>
-          </StyleSection>
+          </NodeStyleSection>
 
           <!-- Fill & Stroke -->
-          <StyleSection
+          <NodeStyleSection
             :title="t('nodeStyle.fillAndStroke')"
             :open="nodeSection.fill"
             @toggle="toggleSection(nodeSection, 'fill')"
@@ -2043,10 +2089,10 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <LabeledFieldRow v-if="lineStyle === 'dashed'" :label="t('nodeStyle.pattern')">
                   <input type="text" class="sp-input sp-input--flex" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
                 </LabeledFieldRow>
-          </StyleSection>
+          </NodeStyleSection>
 
           <!-- Icon -->
-          <StyleSection
+          <NodeStyleSection
             :title="t('nodeStyle.icon')"
             :open="nodeSection.icon"
             :pill="iconName || null"
@@ -2141,7 +2187,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     />
                   </div>
                 </template>
-          </StyleSection>
+          </NodeStyleSection>
 
         </template>
       </div>

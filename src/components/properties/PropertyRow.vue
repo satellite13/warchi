@@ -5,7 +5,7 @@ import { parseNumberInput } from "@/utils/number"
 import IconPicker from "@/components/forms/IconPicker.vue"
 import ToggleSwitch from "@/components/forms/ToggleSwitch.vue"
 import type { IconOption } from "@/config/iconOptions"
-import type { CustomProperty, CustomPropertyType, InteractiveKind } from "../../notations/notationAttrs"
+import type { CustomProperty, CustomPropertyType, InteractiveKind } from "@/domain/attrs/notationAttrs"
 
 const props = withDefaults(defineProps<{
   property: CustomProperty

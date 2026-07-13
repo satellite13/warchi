@@ -1,4 +1,4 @@
-import { createId, type CustomProperty } from '../notationAttrs'
+import { createId, type CustomProperty } from '@/domain/attrs/notationAttrs'
 
 export const parseTagsInput = (value: string) =>
   value

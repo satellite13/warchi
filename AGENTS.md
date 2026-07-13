@@ -212,7 +212,7 @@ Save operations process entities in order:
 Flexible schema using JSON `attrs` field:
 
 ```typescript
-// Define in src/features/*/notationAttrs.ts or modelAttrs.ts
+// Define shared attrs in src/domain/attrs/notationAttrs.ts
 interface CustomProperty {
   id: string
   name: string
@@ -227,6 +227,11 @@ serializeEntityAttrs(attrs: EntityAttrs): string
 ```
 
 Internal flags (like `_fromType`) are stripped before serialization.
+
+### Module Boundaries
+
+- `src/domain/attrs/` is the domain kernel for shared attrs schemas and serializers. Feature code should import notation attrs from `@/domain/attrs/notationAttrs`, not from another feature.
+- `src/features/diagram-style/` is shared diagram styling UI and style runtime support used by both models and notations.
 
 ### Authentication & Security
 

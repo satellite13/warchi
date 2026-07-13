@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CompositeSerializedCComponent, CustomProperty } from '../../notationAttrs'
-import { createId } from '../../notationAttrs'
+import type { CompositeSerializedCComponent, CustomProperty } from '@/domain/attrs/notationAttrs'
+import { createId } from '@/domain/attrs/notationAttrs'
 import CompositeNodeInspector from './CompositeNodeInspector.vue'
 
 type TreeNodeRef = { node: CompositeSerializedCComponent; parentId: string | null; depth: number }

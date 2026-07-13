@@ -1,4 +1,4 @@
-import type { DiagramStyle } from "../notationAttrs";
+import type { DiagramStyle } from "@/domain/attrs/notationAttrs";
 import { loadJson, saveJson } from "@/utils/localStorage";
 import componentStylesData from "./componentStyles.json";
 import relationStylesData from "./relationStyles.json";

@@ -3,11 +3,11 @@ import { computed, reactive, ref, watch } from "vue"
 import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
-import type { CustomProperty } from "../../notations/notationAttrs"
+import type { CustomProperty } from "@/domain/attrs/notationAttrs"
 import IconPicker from "@/components/forms/IconPicker.vue"
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
-import PropertyRow from "./PropertyRow.vue"
+import PropertyRow from "@/components/properties/PropertyRow.vue"
 
 const props = withDefaults(
   defineProps<{

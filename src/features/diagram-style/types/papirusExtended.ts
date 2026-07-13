@@ -5,27 +5,28 @@
  */
 import type { InsetInput } from '../utils/styleHelpers'
 
+export type ExtendedIconConfig = {
+  source?: string
+  placement?: string
+  width?: number
+  height?: number
+  fit?: string
+  inset?: number
+  padding?: number
+  margin?: number
+  gap?: number
+  offsetX?: number
+  offsetY?: number
+  strokeColor?: string
+  fillColor?: string
+}
+
 /** Extra runtime-accessible properties on Node, used via `node as unknown as ExtendedNodeProps`. */
 export interface ExtendedNodeProps {
   contentInset?: InsetInput
   cornerRadius?: number
   anchorPoints?: { top?: number; right?: number; bottom?: number; left?: number }
-  icon?:
-    | {
-        options?: {
-          source?: string
-          placement?: string
-          width?: number
-          height?: number
-          fit?: string
-          inset?: number
-          offsetX?: number
-          offsetY?: number
-          strokeColor?: string
-          fillColor?: string
-        }
-      }
-    | undefined
+  icon?: { options?: ExtendedIconConfig } | ExtendedIconConfig | undefined
   shapeType?: string
   typeName?: string
 }
@@ -36,6 +37,8 @@ export interface ExtendedEdgeStyle {
   strokeOpacity?: number
   strokeWidth?: number
   fillOpacity?: number
+  opacity?: number
+  lineDash?: number[]
 }
 
 /** Extra runtime-accessible properties on Edge. */

@@ -86,7 +86,7 @@ const router = createRouter({
     {
       path: "/notations/:id",
       name: "notation-editor",
-      component: () => import("../views/NotationEditorView.vue")
+      component: () => import("../features/notations/NotationEditorPage.vue")
     },
     {
       path: "/docs",

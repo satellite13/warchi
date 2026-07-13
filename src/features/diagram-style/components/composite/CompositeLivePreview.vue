@@ -7,7 +7,7 @@ import {
   type CContainer,
   type CComponent,
 } from '@ngroznykh/papirus'
-import type { CompositeSerializedCComponent } from '../../notationAttrs'
+import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
   content: CompositeSerializedCComponent

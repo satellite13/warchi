@@ -2,7 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, unknown>) => {
+      const templates: Record<string, string> = {
+        'common.enterEntityName': 'Введите название {entity}',
+        'common.enterEntityVersion': 'Введите версию {entity}',
+        'common.versionFormatHint': 'Версия должна быть в формате X.Y.Z (например, 1.0.0)',
+        'common.versionBelowMax':
+          'Версия не может быть меньше максимальной существующей ({maxExisting}) для данного имени',
+        'common.userNotAuthenticated': 'Пользователь не авторизован',
+        'common.createEntityFailed': 'Не удалось создать {entity}',
+        'common.endpointNotFound':
+          'Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../{endpoint} и запущен.',
+      }
+      let message = templates[key] ?? key
+      if (params) {
+        for (const [name, value] of Object.entries(params)) {
+          message = message.replaceAll(`{${name}}`, String(value))
+        }
+      }
+      return message
+    },
+  }),
 }))
 
 vi.mock('./useAuth', () => ({

@@ -1,4 +1,5 @@
 import type { Ref } from "vue"
+import i18n from "@/i18n"
 import type { ModelData } from "@/types/entities"
 import type { BatchConflictItem } from "./useModelBatchSave"
 import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from "../types"
@@ -28,6 +29,9 @@ type ExecuteModelEditorSaveOptions = {
   scheduleSaveErrorClear: () => void
 }
 
+const t = (key: string, params?: Record<string, unknown>): string =>
+  String(i18n.global.t(key, params ?? {}))
+
 /** Same dirty filters as batch/legacy pipelines — used only for guarded fallback detection. */
 export function hasLegacyEntitySaveWork(
   nodes: EditorNode[],
@@ -48,7 +52,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     const { ownerId, modelId, nodes, links, diagrams } = options.state.value
 
     if (options.model.value && options.modelDirty.value) {
-      options.onProgress(`Обновление модели: ${options.model.value.name}`)
+      options.onProgress(t("models.saveUpdatingModel", { name: options.model.value.name }))
       const { data } = await saveModelMetadata(options.model.value, options.modelCatalog.value)
       options.model.value = data
       options.modelInitialName.value = data.name
@@ -68,7 +72,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
       const batchResult = await batchSave(modelId, batchRequest)
       if (batchResult.success) {
         if (!isValidBatchResponse(batchResult.data)) {
-          options.saveError.value = "Некорректный ответ сервера при пакетном сохранении."
+          options.saveError.value = t("models.batchSaveInvalidResponse")
           options.scheduleSaveErrorClear()
           return false
         }
@@ -85,7 +89,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
           return false
         }
         options.saveError.value =
-          batchResult.error.message || "Конфликт версий при сохранении (данные изменены на сервере)."
+          batchResult.error.message || t("models.batchSaveVersionConflict")
         options.scheduleSaveErrorClear()
         return false
       } else {
@@ -108,7 +112,8 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     options.state.value.diagrams = withoutDeleted(options.state.value.diagrams)
     return true
   } catch (error) {
-    options.saveError.value = error instanceof Error ? error.message : "Не удалось сохранить изменения."
+    options.saveError.value =
+      error instanceof Error ? error.message : t("models.saveFailedGeneric")
     options.scheduleSaveErrorClear()
     return false
   }

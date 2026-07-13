@@ -23,7 +23,7 @@ import {
   serializeEntityAttrs,
   parseTypeAttrs,
   serializeTypeAttrs,
-} from '../notationAttrs'
+} from '@/domain/attrs/notationAttrs'
 import {
   type NotationEditorState,
   type EditorNodeType,

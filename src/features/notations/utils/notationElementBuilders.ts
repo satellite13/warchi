@@ -4,7 +4,7 @@ import type {
   NodeImageOptions,
   ArrowMarkerType,
 } from '@ngroznykh/papirus'
-import type { DiagramStyle, CustomProperty } from '../notationAttrs'
+import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 
 const DEFAULT_COMPONENT_ANCHORS = { top: 3, right: 1, bottom: 3, left: 1 }
 

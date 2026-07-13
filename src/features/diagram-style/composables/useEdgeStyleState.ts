@@ -1,7 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
 import { ref } from 'vue'
 import type { Edge } from '@ngroznykh/papirus'
-import type { DiagramStyle } from '../notationAttrs'
+import type { DiagramStyle } from '@/domain/attrs/notationAttrs'
+import type {
+  ExtendedEdgeProps,
+  ExtendedEdgeStyle,
+  ExtendedTextStyle,
+} from '../types/papirusExtended'
 import {
   toInsetSides,
   insetToPlain,
@@ -42,11 +46,12 @@ export function useEdgeStyleState() {
   /** Populate all edge-style refs from a canvas Edge + optional DiagramStyle. */
   function loadEdgeProps(edge: Edge, currentDiagramStyle?: DiagramStyle): void {
     const styleFromDiagram = currentDiagramStyle
+    const edgeRuntime = edge as unknown as ExtendedEdgeProps
 
     edgeLabel.value = typeof edge.label === 'string' ? edge.label : (edge.label?.text ?? '')
-    const style = edge.style || {}
+    const style = (edge.style || {}) as ExtendedEdgeStyle
     edgeStrokeColor.value = styleFromDiagram?.strokeColor ?? style.strokeColor ?? '#666666'
-    edgeStrokeOpacity.value = styleFromDiagram?.strokeOpacity ?? (style as any).strokeOpacity ?? 1
+    edgeStrokeOpacity.value = styleFromDiagram?.strokeOpacity ?? style.strokeOpacity ?? 1
     edgeStrokeWidth.value = styleFromDiagram?.strokeWidth ?? style.strokeWidth ?? 2
     edgeOpacity.value = styleFromDiagram?.opacity ?? style.opacity ?? 1
     edgeType.value = (styleFromDiagram?.edgeType ?? edge.type ?? 'polyline') as
@@ -76,9 +81,9 @@ export function useEdgeStyleState() {
       | 'circle'
       | 'square'
 
-    const eLabelStyle = edge.label?.style
+    const eLabelStyle = edge.label?.style as ExtendedTextStyle | undefined
     edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? '#333333'
-    edgeLabelOpacity.value = styleFromDiagram?.labelOpacity ?? (eLabelStyle as any)?.opacity ?? 1
+    edgeLabelOpacity.value = styleFromDiagram?.labelOpacity ?? eLabelStyle?.opacity ?? 1
     edgeLabelFontSize.value = styleFromDiagram?.labelFontSize ?? eLabelStyle?.fontSize ?? 14
     const edgeLabelSpacing = getLabelSpacing(edge.label)
     edgeLabelInset.value = toInsetSides(
@@ -91,12 +96,12 @@ export function useEdgeStyleState() {
       styleFromDiagram?.edgeLabelFollowPath ?? edge.labelFollowPath ?? false
     edgeLabelLineGap.value = styleFromDiagram?.edgeLabelLineGap ?? edge.labelLineGap ?? false
     edgeLabelBgColor.value =
-      styleFromDiagram?.labelBgColor ?? (edge as any).labelBackground?.color ?? '#ffffff'
+      styleFromDiagram?.labelBgColor ?? edgeRuntime.labelBackground?.color ?? '#ffffff'
     edgeLabelBgOpacity.value =
-      styleFromDiagram?.labelBgOpacity ?? ((edge as any).labelBackground as any)?.opacity ?? 1
+      styleFromDiagram?.labelBgOpacity ?? edgeRuntime.labelBackground?.opacity ?? 1
     edgeLabelBgBorderRadius.value =
       styleFromDiagram?.labelBgBorderRadius ??
-      ((edge as any).labelBackground as any)?.borderRadius ??
+      edgeRuntime.labelBackground?.borderRadius ??
       2
     edgeStartMarkerSize.value = styleFromDiagram?.startMarkerSize ?? edge.startMarker?.size ?? 12
     edgeStartMarkerFillColor.value =

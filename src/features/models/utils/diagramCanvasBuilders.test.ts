@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
-import type { DiagramStyle } from '@/features/notations/notationAttrs'
+import type { DiagramStyle } from '@/domain/attrs/notationAttrs'
 import {
   buildEdgeLabel as buildNotationEdgeLabel,
   buildEdgeLabelBackground as buildNotationEdgeLabelBackground,

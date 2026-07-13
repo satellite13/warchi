@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDiagramNodeLabelTemplate } from './nodeLabelTemplate'
-import type { CustomProperty } from '@/features/notations/notationAttrs'
+import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 
 function prop(
   overrides: Partial<CustomProperty> & { id: string; name: string }

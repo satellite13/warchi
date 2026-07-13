@@ -7,7 +7,7 @@ import type {
   CustomProperty,
   StylePropertyBindingGroup,
   StyleBindingWhen,
-} from '../../notationAttrs'
+} from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
   modelValue: StylePropertyBindingGroup[]

@@ -1,11 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- Papirus runtime nodes expose dynamic style fields */
 import { ref } from 'vue'
 import type { Node } from '@ngroznykh/papirus'
 import type {
   DiagramStyle,
   CompositeSerializedCComponent,
   StylePropertyBindingGroup,
-} from '../notationAttrs'
+} from '@/domain/attrs/notationAttrs'
+import type {
+  ExtendedIconConfig,
+  ExtendedNodeProps,
+  ExtendedNodeStyle,
+  ExtendedTextStyle,
+} from '../types/papirusExtended'
 import {
   normalizeIconPlacement,
   toInsetSides,
@@ -15,7 +20,7 @@ import {
   type IconPlacement,
   type InsetSides,
 } from '../utils/styleHelpers'
-import { createDefaultCompositeContent } from '../utils/compositeBindings'
+import { createDefaultCompositeContent } from '@/features/diagram-style/utils/compositeBindings'
 
 export type NodeShape =
   | 'rectangle'
@@ -26,6 +31,11 @@ export type NodeShape =
   | 'slanted-rectangle'
   | 'custom'
   | 'composite'
+
+function getNodeIconOptions(node: ExtendedNodeProps): ExtendedIconConfig | undefined {
+  if (!node.icon) return undefined
+  return 'options' in node.icon ? node.icon.options : node.icon
+}
 
 export function useNodeStyleState() {
   // --- Node style refs ---
@@ -83,16 +93,17 @@ export function useNodeStyleState() {
    */
   function loadNodeProps(node: Node, currentDiagramStyle?: DiagramStyle): boolean {
     let needsCatalogShapes = false
+    const nodeRuntime = node as unknown as ExtendedNodeProps
 
     // Load icon
-    const iconSource = (node as any).icon?.options?.source as string | undefined
+    const iconOptions = getNodeIconOptions(nodeRuntime)
+    const iconSource = iconOptions?.source
     if (iconSource && typeof iconSource === 'string') {
       const match = iconSource.match(/\/icons\/(.+)\.svg$/)
       iconName.value = match?.[1] ?? ''
     } else {
       iconName.value = ''
     }
-    const iconOptions = (node as any).icon?.options as Record<string, unknown> | undefined
     iconPlacement.value = normalizeIconPlacement(
       iconOptions?.placement,
       normalizeIconPlacement(currentDiagramStyle?.iconPlacement, 'top-left'),
@@ -106,7 +117,7 @@ export function useNodeStyleState() {
     iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? '#000000'
     iconFillColor.value = (iconOptions?.fillColor as string) ?? '#000000'
 
-    const rawShape = (node as any).shapeType as NodeShape | undefined
+    const rawShape = nodeRuntime.shapeType as NodeShape | undefined
     if (
       rawShape === 'rectangle' ||
       rawShape === 'beveled-rectangle' ||
@@ -127,7 +138,7 @@ export function useNodeStyleState() {
         customShapeIdRef.value = null
       }
     } else {
-      const typeName = (node as any).typeName as string | undefined
+      const typeName = nodeRuntime.typeName
       nodeShape.value =
         typeName === 'diamond' ? 'diamond' : typeName === 'circle' ? 'circle' : 'rectangle'
       customOutlineRef.value = undefined
@@ -135,11 +146,11 @@ export function useNodeStyleState() {
     }
 
     label.value = node.label?.text ?? ''
-    const style = node.style || {}
+    const style = (node.style || {}) as ExtendedNodeStyle
     fillColor.value = style.fillColor || '#ffffff'
-    fillOpacity.value = (style as any).fillOpacity ?? 1
+    fillOpacity.value = style.fillOpacity ?? 1
     strokeColor.value = style.strokeColor || '#333333'
-    strokeOpacity.value = (style as any).strokeOpacity ?? 1
+    strokeOpacity.value = style.strokeOpacity ?? 1
     strokeWidth.value = style.strokeWidth ?? 2
     opacity.value = style.opacity ?? 1
 
@@ -148,20 +159,20 @@ export function useNodeStyleState() {
     lineDashPattern.value = lineDash.length > 0 ? lineDash.join(',') : '8,4'
 
     if ('cornerRadius' in node) {
-      cornerRadius.value = (node as any).cornerRadius ?? 0
+      cornerRadius.value = nodeRuntime.cornerRadius ?? 0
     } else {
       cornerRadius.value = 0
     }
 
-    const labelStyle = node.label?.style
+    const labelStyle = node.label?.style as ExtendedTextStyle | undefined
     labelColor.value = labelStyle?.color || '#333333'
-    labelOpacity.value = (labelStyle as any)?.opacity ?? 1
+    labelOpacity.value = labelStyle?.opacity ?? 1
     labelFontSize.value = labelStyle?.fontSize ?? 14
     const nodeLabelSpacing = getLabelSpacing(node.label)
     labelInset.value = toInsetSides(nodeLabelSpacing.inset, 8)
     labelAlign.value = (labelStyle?.align as 'center' | 'left' | 'right') ?? 'center'
     labelVerticalAlign.value =
-      ((labelStyle as any)?.verticalAlign as 'top' | 'middle' | 'bottom') ?? 'middle'
+      labelStyle?.verticalAlign ?? 'middle'
     labelTemplate.value = currentDiagramStyle?.labelTemplate ?? ''
     compositeContentJson.value = currentDiagramStyle?.compositeContent
       ? JSON.stringify(currentDiagramStyle.compositeContent, null, 2)
@@ -187,10 +198,10 @@ export function useNodeStyleState() {
     nodeWidth.value = Math.round(node.width ?? 140)
     nodeHeight.value = Math.round(node.height ?? 50)
     contentInset.value = toInsetSides(
-      (node as any).contentInset ?? currentDiagramStyle?.contentInset,
+      nodeRuntime.contentInset ?? currentDiagramStyle?.contentInset,
       0,
     )
-    const anchorPoints = ((node as any).anchorPoints || {}) as Record<string, unknown>
+    const anchorPoints = nodeRuntime.anchorPoints || {}
     nodePortsTop.value = Math.max(0, Math.round(Number(anchorPoints.top ?? 3)))
     nodePortsBottom.value = Math.max(0, Math.round(Number(anchorPoints.bottom ?? 3)))
     nodePortsLeft.value = Math.max(0, Math.round(Number(anchorPoints.left ?? 1)))

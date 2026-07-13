@@ -1,4 +1,4 @@
-import type { CustomProperty, CompositeSerializedCComponent, DiagramStyle } from '../notationAttrs'
+import type { CustomProperty, CompositeSerializedCComponent, DiagramStyle } from '@/domain/attrs/notationAttrs'
 
 const OUTER_TARGET_ID = '__compositeOuter__'
 

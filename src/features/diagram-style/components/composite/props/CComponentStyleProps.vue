@@ -5,7 +5,7 @@ import LabeledFieldRow from '../../LabeledFieldRow.vue'
 import LabeledNumberInput from '../../LabeledNumberInput.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import InsetSidesInput from '@/components/forms/InsetSidesInput.vue'
-import type { CompositeSerializedCComponent } from '../../../notationAttrs'
+import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
   modelValue: CompositeSerializedCComponent

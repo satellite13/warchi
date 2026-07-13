@@ -1,4 +1,4 @@
-import type { CustomProperty } from '@/features/notations/notationAttrs'
+import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 
 export type DiagramNodeLabelTemplateContext = {
   typeProperties: CustomProperty[]

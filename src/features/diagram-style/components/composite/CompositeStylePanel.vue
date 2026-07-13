@@ -11,20 +11,20 @@ import CompositeTreeEditor from './CompositeTreeEditor.vue'
 import CompositeLivePreview from './CompositeLivePreview.vue'
 import A5BindingsEditor from './A5BindingsEditor.vue'
 import { useNodeShapes } from '@/composables/useNodeShapes'
-import { validateCompositeDiagramStyle } from '../../utils/validationIssues'
-import { createDefaultCompositeContent } from '../../utils/compositeBindings'
+import { validateCompositeDiagramStyle } from '@/features/notations/utils/validationIssues'
+import { createDefaultCompositeContent } from '@/features/diagram-style/utils/compositeBindings'
 import {
   toInsetSides,
   insetToPlain,
   type InsetSides,
 } from '../../utils/styleHelpers'
-import type { OutlineSegment } from '../../notationAttrs'
+import type { OutlineSegment } from '@/domain/attrs/notationAttrs'
 import type {
   DiagramStyle,
   CustomProperty,
   CompositeSerializedCComponent,
   StylePropertyBindingGroup,
-} from '../../notationAttrs'
+} from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
   currentDiagramStyle?: DiagramStyle

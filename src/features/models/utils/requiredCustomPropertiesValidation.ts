@@ -1,4 +1,4 @@
-import { parseEntityAttrs } from '@/features/notations/notationAttrs'
+import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import type { DiagramAttrs } from '../modelAttrs'
 import type { ModelEditorState } from '../types'
 import {

@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useTypeEditor } from './composables/useTypeEditor'
 import { useTypeDocument } from './composables/useTypeDocument'
 import { apiPost } from '@/composables/useApi'
-import { serializeTypeAttrs, type CustomProperty } from '../notations/notationAttrs'
+import { serializeTypeAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
 import { useCanShare } from '@/composables/useCanShare'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
@@ -29,6 +29,7 @@ const {
   selectedTypeOwnerName,
   loadAll,
   selectType,
+  markTypeDirty,
   addType,
   saveType,
   deleteType,
@@ -127,12 +128,16 @@ async function handleDelete() {
 function handleTypeNameUpdate(value: string) {
   if (!selectedType.value) return
   selectedType.value.name = value
+  markTypeDirty(selectedType.value)
 }
 
 function handleMutateProperty(propertyId: string, apply: (p: CustomProperty) => void) {
   if (!selectedType.value) return
   const p = selectedType.value.parsedAttrs.customProperties?.find(cp => cp.id === propertyId)
-  if (p) apply(p)
+  if (p) {
+    apply(p)
+    markTypeDirty(selectedType.value)
+  }
 }
 
 function handleDefaultDirectoryPathUpdate(value: string) {
@@ -140,9 +145,11 @@ function handleDefaultDirectoryPathUpdate(value: string) {
   const normalized = value.trim()
   if (!normalized) {
     delete selectedType.value.parsedAttrs.defaultDirectoryPath
+    markTypeDirty(selectedType.value)
     return
   }
   selectedType.value.parsedAttrs.defaultDirectoryPath = normalized
+  markTypeDirty(selectedType.value)
 }
 
 function handleIconUpdate(value: string) {
@@ -150,9 +157,11 @@ function handleIconUpdate(value: string) {
   const normalized = value.trim()
   if (!normalized) {
     delete selectedType.value.parsedAttrs.icon
+    markTypeDirty(selectedType.value)
     return
   }
   selectedType.value.parsedAttrs.icon = normalized
+  markTypeDirty(selectedType.value)
 }
 
 // --- Unsaved changes dialog ---

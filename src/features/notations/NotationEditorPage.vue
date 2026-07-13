@@ -5,46 +5,46 @@ import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const { t } = useI18n()
-import MainLayout from '../layouts/MainLayout.vue'
-import AppFooter from '../components/layout/AppFooter.vue'
-import BaseModal from '../components/modals/BaseModal.vue'
-import ShareAccessModal from '../components/modals/ShareAccessModal.vue'
-import { apiGet, apiPost } from '../composables/useApi'
+import MainLayout from '@/layouts/MainLayout.vue'
+import AppFooter from '@/components/layout/AppFooter.vue'
+import BaseModal from '@/components/modals/BaseModal.vue'
+import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
+import { apiGet, apiPost } from '@/composables/useApi'
 import { listParams, PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
-import { useAuth } from '../composables/useAuth'
-import { useCanShare } from '../composables/useCanShare'
-import { usePermissions } from '../composables/usePermissions'
-import NotationMainPanelLayout from '../features/notations/layout/NotationMainPanelLayout.vue'
-import NotationAppHeader from '../features/notations/layout/NotationAppHeader.vue'
-import NotationComponentList from '../features/notations/layout/NotationComponentList.vue'
-import NotationDiagram from '../features/notations/components/NotationDiagram.vue'
-import NotationEntityModal from '../features/notations/components/NotationEntityModal.vue'
-import CustomPropertiesPanel from '../features/notations/components/CustomPropertiesPanel.vue'
-import NodeStylePanel from '../features/notations/components/NodeStylePanel.vue'
-import CompositeStylePanel from '../features/notations/components/composite/CompositeStylePanel.vue'
-import TabPanel from '../components/layout/TabPanel.vue'
-import DocumentEditorModal from '../components/modals/DocumentEditorModal.vue'
-import { useNotationEditor } from '../features/notations/composables/useNotationEditor'
+import { useAuth } from '@/composables/useAuth'
+import { useCanShare } from '@/composables/useCanShare'
+import { usePermissions } from '@/composables/usePermissions'
+import NotationMainPanelLayout from '@/features/notations/layout/NotationMainPanelLayout.vue'
+import NotationAppHeader from '@/features/notations/layout/NotationAppHeader.vue'
+import NotationComponentList from '@/features/notations/layout/NotationComponentList.vue'
+import NotationDiagram from '@/features/notations/components/NotationDiagram.vue'
+import NotationEntityModal from '@/features/notations/components/NotationEntityModal.vue'
+import CustomPropertiesPanel from '@/features/notations/components/CustomPropertiesPanel.vue'
+import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
+import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
+import TabPanel from '@/components/layout/TabPanel.vue'
+import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
+import { useNotationEditor } from '@/features/notations/composables/useNotationEditor'
 import {
   useNotationEntity,
   appendTagValue,
-} from '../features/notations/composables/useNotationEntity'
-import { useNotationToolbarState } from '../features/notations/composables/useNotationToolbarState'
-import { useNotationExport } from '../features/notations/composables/useNotationExport'
-import type { DiagramStyle } from '../features/notations/notationAttrs'
-import { createId } from '../features/notations/notationAttrs'
+} from '@/features/notations/composables/useNotationEntity'
+import { useNotationToolbarState } from '@/features/notations/composables/useNotationToolbarState'
+import { useNotationExport } from '@/features/notations/composables/useNotationExport'
+import type { DiagramStyle } from '@/domain/attrs/notationAttrs'
+import { createId } from '@/domain/attrs/notationAttrs'
 import {
   customPropertyErrors,
   validateCompositeDiagramStyle,
   type ValidationIssue,
-} from '../features/notations/utils/validationIssues'
-import type { NodeResponse, LinkResponse } from '../types/api'
+} from '@/features/notations/utils/validationIssues'
+import type { NodeResponse, LinkResponse } from '@/types/api'
 import type {
   EditorComponent,
   EditorRelation,
   EditorRelationRule,
-} from '../features/notations/types'
-import type { PaginatedResponse } from '../types/entities'
+} from '@/features/notations/types'
+import type { PaginatedResponse } from '@/types/entities'
 
 const {
   notation,

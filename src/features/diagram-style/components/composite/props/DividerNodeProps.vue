@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import LabeledFieldRow from '../../LabeledFieldRow.vue'
 import LabeledNumberInput from '../../LabeledNumberInput.vue'
 import SketchColorField from '../../SketchColorField.vue'
-import type { CompositeSerializedCComponent } from '../../../notationAttrs'
+import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 
 defineProps<{
   modelValue: CompositeSerializedCComponent

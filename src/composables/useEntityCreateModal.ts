@@ -1,4 +1,5 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { apiPost } from './useApi'
 import { useModalState } from './useModalState'
 import { bumpMinor, compareVersions, isValidVersion } from '../utils/version'
@@ -13,6 +14,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
   ownerEmails: Ref<Map<string, string>>,
   selectedVersionByName: Ref<Record<string, string>>,
 ) {
+  const { t } = useI18n()
   const modal = useModalState<T>()
   const newItemName = ref('')
   const newItemVersion = ref('1.0.0')
@@ -51,14 +53,15 @@ export function useEntityCreateModal<T extends VersionedEntity>(
   })
 
   const validateCreate = (): string | null => {
+    const entity = config.entityName.toLowerCase()
     if (!newItemName.value.trim()) {
-      return `Введите название ${config.entityName.toLowerCase()}`
+      return t('common.enterEntityName', { entity })
     }
     if (!newItemVersion.value.trim()) {
-      return `Введите версию ${config.entityName.toLowerCase()}`
+      return t('common.enterEntityVersion', { entity })
     }
     if (!isValidVersion(newItemVersion.value.trim())) {
-      return 'Версия должна быть в формате X.Y.Z (например, 1.0.0)'
+      return t('common.versionFormatHint')
     }
     const name = newItemName.value.trim()
     const version = newItemVersion.value.trim()
@@ -73,7 +76,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     }
     const maxExisting = sameNameGroup?.versions[0]?.version
     if (maxExisting && compareVersions(version, maxExisting) < 0) {
-      return `Версия не может быть меньше максимальной существующей (${maxExisting}) для данного имени`
+      return t('common.versionBelowMax', { maxExisting })
     }
     return null
   }
@@ -86,7 +89,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     }
 
     if (!ownerId) {
-      modal.error.value = 'Пользователь не авторизован'
+      modal.error.value = t('common.userNotAuthenticated')
       return null
     }
 
@@ -111,7 +114,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
         if (result.error.status === 404) {
           throw new Error(
             config.createNotFoundMessage ??
-              `Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../${config.endpoint} и запущен.`,
+              t('common.endpointNotFound', { endpoint: config.endpoint }),
           )
         }
         throw new Error(result.error.message)
@@ -144,7 +147,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
       modal.error.value =
         e instanceof Error
           ? e.message
-          : `Не удалось создать ${config.entityName.toLowerCase()}`
+          : t('common.createEntityFailed', { entity: config.entityName.toLowerCase() })
       return null
     } finally {
       modal.isProcessing.value = false

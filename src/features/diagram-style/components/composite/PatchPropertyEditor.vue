@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SketchColorField from '../SketchColorField.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
-import type { CompositeSerializedCComponent } from '../../notationAttrs'
+import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 
 type PropDef = {
   key: string

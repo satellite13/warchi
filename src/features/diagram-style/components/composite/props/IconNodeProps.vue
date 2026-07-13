@@ -8,7 +8,7 @@ import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import { COMBINED_ICON_OPTIONS, ICON_SELECT_MIN_SEARCH_LENGTH } from '@/config/iconOptions'
-import type { CompositeSerializedCComponent } from '../../../notationAttrs'
+import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
   modelValue: CompositeSerializedCComponent

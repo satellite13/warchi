@@ -8,7 +8,7 @@ import IconNodeProps from './props/IconNodeProps.vue'
 import ShapeNodeProps from './props/ShapeNodeProps.vue'
 import DividerNodeProps from './props/DividerNodeProps.vue'
 import CComponentStyleProps from './props/CComponentStyleProps.vue'
-import type { CompositeSerializedCComponent, CustomProperty } from '../../notationAttrs'
+import type { CompositeSerializedCComponent, CustomProperty } from '@/domain/attrs/notationAttrs'
 
 defineProps<{
   selectedNode: CompositeSerializedCComponent | null

@@ -4,8 +4,8 @@ import { useI18n } from "vue-i18n";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
-import type { CompositeSerializedCComponent } from "../notationAttrs";
-import { resolveCompositeBoundIconName } from "../utils/compositeBindings";
+import type { CompositeSerializedCComponent } from "@/domain/attrs/notationAttrs";
+import { resolveCompositeBoundIconName } from "@/features/diagram-style/utils/compositeBindings";
 
 const { t } = useI18n();
 

@@ -48,6 +48,20 @@ export const commonMessages = {
       outageBackendMessage: 'Backend недоступен. Работа с приложением временно невозможна.',
       outageRetry: 'Повторить',
       outageChecking: 'Проверка...',
+      enterEntityName: 'Введите название {entity}',
+      enterEntityVersion: 'Введите версию {entity}',
+      versionFormatHint: 'Версия должна быть в формате X.Y.Z (например, 1.0.0)',
+      versionBelowMax: 'Версия не может быть меньше максимальной существующей ({maxExisting}) для данного имени',
+      userNotAuthenticated: 'Пользователь не авторизован',
+      createEntityFailed: 'Не удалось создать {entity}',
+      endpointNotFound:
+        'Эндпоинт не найден (404). Убедитесь, что бэкенд поддерживает POST /api/.../{endpoint} и запущен.',
+      saveInsufficientRights:
+        'Недостаточно прав для редактирования {context}. Войдите заново или обратитесь к администратору.',
+      saveEntityError: 'Ошибка {action} {entity}: {message}',
+      saveActionCreate: 'создания',
+      saveActionUpdate: 'обновления',
+      saveActionDelete: 'удаления',
     },
     toolbar: {
       navigationMode: 'Режим навигации (только перемещение и зум)',
@@ -158,6 +172,21 @@ export const commonMessages = {
       outageBackendMessage: 'Backend is unavailable. The application cannot be used right now.',
       outageRetry: 'Retry',
       outageChecking: 'Checking...',
+      enterEntityName: 'Enter {entity} name',
+      enterEntityVersion: 'Enter {entity} version',
+      versionFormatHint: 'Version must be in X.Y.Z format (for example, 1.0.0)',
+      versionBelowMax:
+        'Version cannot be lower than the maximum existing version ({maxExisting}) for this name',
+      userNotAuthenticated: 'User is not authenticated',
+      createEntityFailed: 'Failed to create {entity}',
+      endpointNotFound:
+        'Endpoint not found (404). Ensure the backend supports POST /api/.../{endpoint} and is running.',
+      saveInsufficientRights:
+        'Insufficient permissions to edit {context}. Sign in again or contact an administrator.',
+      saveEntityError: 'Error while {action} {entity}: {message}',
+      saveActionCreate: 'creating',
+      saveActionUpdate: 'updating',
+      saveActionDelete: 'deleting',
     },
     toolbar: {
       navigationMode: 'Navigation mode (pan and zoom only)',

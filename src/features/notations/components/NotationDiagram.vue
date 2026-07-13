@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, toRef, onMounted, onBeforeUnmount } from "vue";
-import { DiagramRenderer } from "@ngroznykh/papirus";
-import type { DiagramOptions } from "@ngroznykh/papirus";
+import { ref, toRef } from "vue";
 import type { NotationEditorState } from "../types";
+import { useDiagramRenderer } from "@/features/diagram/useDiagramRenderer";
 import { useNotationDiagram, type EntityKind } from "../composables/useNotationDiagram";
 
 const props = defineProps<{
@@ -16,24 +15,17 @@ const emit = defineEmits<{
 
 const containerRef = ref<HTMLDivElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
-const canvasWidth = ref(800);
-const canvasHeight = ref(600);
 
 const stateRef = toRef(props, "state");
 const selectedIdRef = toRef(props, "selectedId");
 
-let renderer: DiagramRenderer | null = null;
-
 const {
   initRenderer,
-  destroyRenderer,
+  destroyRenderer: destroyNotationRenderer,
   fitToView,
   autoLayoutComponents,
   resetView,
   interactionManagerRef,
-  gridOverlayRef,
-  miniMapRef,
-  rulersOverlayRef,
   rendererRef: diagramRendererRef,
   getNodeEntity
 } = useNotationDiagram({
@@ -42,68 +34,32 @@ const {
   onSelect: (id, kind) => emit("select", id, kind)
 });
 
-function updateSize() {
-  if (containerRef.value) {
-    const newWidth = containerRef.value.clientWidth || 800;
-    const newHeight = containerRef.value.clientHeight || 600;
-
-    if (newWidth !== canvasWidth.value || newHeight !== canvasHeight.value) {
-      canvasWidth.value = newWidth;
-      canvasHeight.value = newHeight;
-      if (renderer) {
-        renderer.resize(newWidth, newHeight);
-      }
-    }
-  }
-}
-
-let resizeObserver: ResizeObserver | null = null;
-
-onMounted(() => {
-  if (!canvasRef.value || !containerRef.value) {
-    return;
-  }
-
-  const initCanvas = () => {
-    if (!canvasRef.value || !containerRef.value) return;
-
-    const width = containerRef.value.clientWidth;
-    const height = containerRef.value.clientHeight;
-
-    if (width === 0 || height === 0) {
-      window.requestAnimationFrame(initCanvas);
-      return;
-    }
-
-    canvasWidth.value = width;
-    canvasHeight.value = height;
-
-    const options: DiagramOptions = {
-      width,
-      height,
-      backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || "#f4f2ef"
-    };
-
-    renderer = new DiagramRenderer(canvasRef.value, options);
-    initRenderer(renderer);
-
-    resizeObserver = new ResizeObserver(() => {
-      updateSize();
-    });
-    resizeObserver.observe(containerRef.value);
-  };
-
-  initCanvas();
-});
-
-onBeforeUnmount(() => {
-  destroyRenderer();
-  renderer?.destroy();
-  renderer = null;
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-    resizeObserver = null;
-  }
+const {
+  gridOverlayRef,
+  miniMapRef,
+  rulersOverlayRef,
+} = useDiagramRenderer({
+  canvasRef,
+  containerRef,
+  backgroundColor: () =>
+    getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || "#f4f2ef",
+  overlays: {
+    grid: { options: { gridSize: 20, color: "#e2e8f0" } },
+    rulers: { options: { enabled: true } },
+    miniMap: { options: { width: 120, height: 60, padding: 20, contentMargin: 200 } },
+  },
+  interactions: {
+    snapToGrid: true,
+    gridSize: 20,
+    alignToNodes: true,
+    alignmentScreenTolerance: 40,
+    previewPathType: "straight",
+    keymap: { deleteKeys: [] }
+  },
+  onReady: ({ renderer, interactionManager }) => {
+    if (interactionManager) initRenderer(renderer, interactionManager)
+  },
+  onBeforeDestroy: () => destroyNotationRenderer(),
 });
 
 defineExpose({

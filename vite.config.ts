@@ -48,7 +48,11 @@ export default defineConfig(({ mode }) => {
       exclude: ["tests/**", "node_modules/**"],
       coverage: {
         provider: "v8",
-        include: ["src/**/*.{ts,vue}"],
+        include: [
+          "src/composables/**/*.{ts,vue}",
+          "src/api/**/*.{ts,vue}",
+          "src/features/models/utils/**/*.{ts,vue}",
+        ],
         exclude: [
           "src/**/*.test.ts",
           "src/**/*.d.ts",
@@ -59,6 +63,12 @@ export default defineConfig(({ mode }) => {
           "src/env.d.ts",
         ],
         reporter: ["text", "html"],
+        thresholds: {
+          lines: 40,
+          functions: 40,
+          branches: 30,
+          statements: 40,
+        },
       },
     },
     server: {

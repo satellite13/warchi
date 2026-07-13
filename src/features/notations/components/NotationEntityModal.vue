@@ -5,7 +5,7 @@ import BaseModal from "@/components/modals/BaseModal.vue"
 import SearchableSelect from "@/components/forms/SearchableSelect.vue"
 import TagSuggestions from "./TagSuggestions.vue"
 import type { EditorNodeType, EditorLinkType } from "../types"
-import type { ComponentStylePreset, RelationStylePreset } from "../styles/stylePresets"
+import type { ComponentStylePreset, RelationStylePreset } from "@/features/diagram-style/styles/stylePresets"
 
 const nameModel = defineModel<string>("name", { default: "" })
 const tagsModel = defineModel<string>("tags", { default: "" })

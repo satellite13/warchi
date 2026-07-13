@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { applyStylePropertyBindings, injectCompositeNameAndIcon, BIND_TO_NAME } from './compositeBindings'
-import type { CompositeSerializedCComponent, DiagramStyle } from '../notationAttrs'
+import { applyStylePropertyBindings, injectCompositeNameAndIcon, BIND_TO_NAME } from '@/features/diagram-style/utils/compositeBindings'
+import type { CompositeSerializedCComponent, DiagramStyle } from '@/domain/attrs/notationAttrs'
 
 describe('compositeBindings', () => {
   it('applies first matched branch patch to target id', () => {

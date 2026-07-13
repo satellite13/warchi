@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
-import { pagedListParams } from '@/api/queryHelpers'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
@@ -19,24 +18,19 @@ import {
   type DiagramAttrs,
   type DiagramNodeInstance,
 } from './modelAttrs'
-import type { BatchConflictItem } from './composables'
-import {
-  batchConflictCompareKey,
-  buildConflictCompareRows,
-  type ConflictTranslateFn,
-  computeMissingServerLinksOnCanvas,
-  type MissingServerLinkOnCanvasRow,
-  fetchServerConflictEntity,
-  filterConflictCompareRowsForUi,
-} from './utils/batchSaveConflictDisplay'
 import type { EditorLink, EditorNode } from './types'
 import {
+  useModelBatchConflictUi,
   useModelDiagramExport,
   useModelEditor,
   useModelEditorSync,
+  useModelSelection,
   useModelToolbarState,
+  useModelTreeOperations,
   useModelVersionDiff,
+  useNotationVersionBanner,
   useNoteEditor,
+  useOefImport,
 } from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import {
@@ -47,9 +41,6 @@ import {
 } from './utils/diagramScopedProperties'
 import { useAuth } from '@/composables/useAuth'
 import { usePermissions } from '@/composables/usePermissions'
-import { getUserDisplayName } from '@/utils/userDisplay'
-import type { PaginatedResponse, UserInfo } from '@/types/entities'
-import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import { useCanShare } from '@/composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
@@ -60,33 +51,21 @@ import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
 import {
   parseEntityAttrs,
-  parseTypeAttrs,
   type CustomProperty,
   type DiagramStyle,
-} from '../notations/notationAttrs'
-import type { ImportMappingState } from './utils/oef/mappingState'
-import type { ImportDraft } from './utils/oef/types'
-import { buildOefBatchSaveRequest } from './utils/oef/oefToBatchSave'
-import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
-import CompositeStylePanel from '../notations/components/composite/CompositeStylePanel.vue'
+} from '@/domain/attrs/notationAttrs'
+import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
+import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
 import TabPanel from '@/components/layout/TabPanel.vue'
 import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
-import { bumpMinor, compareVersions } from '@/utils/version'
+import { compareVersions } from '@/utils/version'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
-import type {
-  LinkResponse,
-  NotationMetaResponse,
-  NotationResponse,
-  RelationResponse,
-} from '@/types/api'
+import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
-import { formatDate } from '@/utils/formatDate'
-import { batchSave, hasBatchChanges } from './composables/useModelBatchSave'
 import {
-  isRequiredPropertyFilled,
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
 
@@ -125,12 +104,6 @@ const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const { t, locale } = useI18n()
 
-const batchConflictFieldT: ConflictTranslateFn = (key, params) =>
-  String(t(key, (params ?? {}) as Record<string, unknown>))
-
-function formatBatchCrossLinkDiagramNames(names: readonly string[]): string {
-  return names.map(n => `«${n}»`).join(', ')
-}
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
 /** Правка содержимого модели (диаграмма, узлы, документы), не только просмотр по шаре VIEW */
 const canInspectDiagramJson = computed(() => {
@@ -156,92 +129,22 @@ const showModelWikiHeaderButton = computed(
   () => canInspectDiagramJson.value || !!modelRootDocumentFileId.value
 )
 
-const selectedNodeId = ref<string | null>(null)
-const selectedDiagramId = ref<string | null>(null)
-/** `updatedAt` диаграммы с сервера на момент последнего переключения на её вкладку (для текста «только метка времени с момента открытия»). */
-const diagramConflictOpenBaselineUpdatedAt = ref<Record<string, string>>({})
-
-watch(
-  () => state.value.modelId,
-  () => {
-    diagramConflictOpenBaselineUpdatedAt.value = {}
-  }
-)
-
-watch(
-  () => selectedDiagramId.value,
-  id => {
-    if (!id) return
-    const d = state.value.diagrams.find(x => x.id === id && !x._isDeleted)
-    const u = d?.updatedAt
-    if (typeof u === 'string' && u.length > 0) {
-      diagramConflictOpenBaselineUpdatedAt.value = {
-        ...diagramConflictOpenBaselineUpdatedAt.value,
-        [id]: u,
-      }
-    }
-  },
-  { flush: 'post', immediate: true }
-)
-
-/** После сохранения `updatedAt` обновляется, вкладка та же — синхронизируем baseline для подсказок в модалке конфликта. */
-watch(
-  () => {
-    const id = selectedDiagramId.value
-    if (!id) return null
-    const d = state.value.diagrams.find(x => x.id === id && !x._isDeleted)
-    if (!d || d._isDirty) return null
-    const u = d.updatedAt
-    if (typeof u !== 'string' || !u.length) return null
-    return { id, u }
-  },
-  v => {
-    if (!v) return
-    diagramConflictOpenBaselineUpdatedAt.value = {
-      ...diagramConflictOpenBaselineUpdatedAt.value,
-      [v.id]: v.u,
-    }
-  },
-  { flush: 'post' }
-)
+const {
+  selectedNodeId,
+  selectedDiagramId,
+  selectedModelNodeIds,
+  selectedInstanceIds,
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+  selectedNode,
+  selectedLink,
+  selectedNodeInstanceId,
+  selectedLinkEdgeInstanceId,
+  applyDiagramSelection,
+} = useModelSelection({ state })
 const showShareModal = ref(false)
 const showCompareModal = ref(false)
-const showImportWizard = ref(false)
-const isImportingOef = ref(false)
-const oefImportReport = ref<{
-  nodes: number
-  links: number
-  diagrams: number
-  diagramNodeInstances: number
-  diagramConnectionInstances: number
-  warningsCount: number
-  warningGroups: Array<{ code: string; count: number }>
-  missingRequired: {
-    nodeType: number
-    component: number
-    relation: number
-    total: number
-  }
-} | null>(null)
-
-function oefWarningLabel(code: string): string {
-  switch (code) {
-    case 'nodeTypeNotMapped':
-      return t('models.oefImportWarningNodeTypeNotMapped')
-    case 'linkTypeNotMapped':
-      return t('models.oefImportWarningLinkTypeNotMapped')
-    case 'linkMissingNode':
-      return t('models.oefImportWarningLinkMissingNode')
-    case 'diagramNodeMissingModelNode':
-      return t('models.oefImportWarningDiagramNodeMissingModelNode')
-    case 'diagramConnectionMissingModelLink':
-      return t('models.oefImportWarningDiagramConnectionMissingModelLink')
-    case 'diagramConnectionMissingNodeInstance':
-      return t('models.oefImportWarningDiagramConnectionMissingNodeInstance')
-    default:
-      return code
-  }
-}
 
 const versionDiff = useModelVersionDiff()
 
@@ -269,293 +172,19 @@ function handleCompareModalClose() {
   versionDiff.clearCompare()
 }
 
-function batchConflictKindLabel(kind: string): string {
-  switch (kind) {
-    case 'node':
-      return t('models.batchSaveConflictKindNode')
-    case 'link':
-      return t('models.batchSaveConflictKindLink')
-    case 'diagram':
-      return t('models.batchSaveConflictKindDiagram')
-    default:
-      return kind
-  }
-}
-
-function conflictShortId(id: string): string {
-  if (id.length <= 13) return id
-  return `${id.slice(0, 8)}…`
-}
-
-function batchConflictNodeContextLine(c: BatchConflictItem): string | null {
-  if (c.kind !== 'node') return null
-  const { nodes, nodeTypes } = state.value
-  const n =
-    nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
-  if (!n) return null
-  const typeName = nodeTypes.find(nt => nt.id === n.nodeTypeId)?.name?.trim()
-  const typePart = typeName
-    ? t('models.batchSaveConflictNodeTypeLabel', { name: typeName })
-    : t('models.batchSaveConflictNodeTypeUnknown')
-  let parentPart: string
-  if (!n.parentNodeId) {
-    parentPart = t('models.batchSaveConflictNodeRootParent')
-  } else {
-    const p = nodes.find(x => x.id === n.parentNodeId)
-    const parentName = p?.name?.trim()
-    parentPart = parentName
-      ? t('models.batchSaveConflictNodeParentLabel', { name: parentName })
-      : t('models.batchSaveConflictNodeParentMissing')
-  }
-  return `${typePart} · ${parentPart}`
-}
-
-function batchConflictPrimaryLine(c: BatchConflictItem): string {
-  const { nodes, links, diagrams, linkTypes } = state.value
-  if (c.kind === 'node') {
-    const n =
-      nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
-    const name = n?.name?.trim()
-    if (name) return name
-    if (n) return t('models.batchSaveConflictUnnamedNode')
-    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('node') })
-  }
-  if (c.kind === 'link') {
-    const l =
-      links.find(x => x.id === c.id && !x._isDeleted) ?? links.find(x => x.id === c.id)
-    if (l) {
-      const src = nodes.find(x => x.id === l.sourceId)
-      const tgt = nodes.find(x => x.id === l.targetId)
-      const srcName = src?.name?.trim() || conflictShortId(l.sourceId)
-      const tgtName = tgt?.name?.trim() || conflictShortId(l.targetId)
-      const lt = linkTypes.find(x => x.id === l.linkTypeId)
-      const typeName = lt?.name?.trim()
-      if (typeName) {
-        return t('models.batchSaveConflictLinkWithType', { type: typeName, from: srcName, to: tgtName })
-      }
-      return t('models.batchSaveConflictLinkLine', { from: srcName, to: tgtName })
-    }
-    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('link') })
-  }
-  if (c.kind === 'diagram') {
-    const d =
-      diagrams.find(x => x.id === c.id && !x._isDeleted) ??
-      diagrams.find(x => x.id === c.id)
-    if (d) {
-      return t('models.batchSaveConflictDiagramLine', { name: d.name, version: d.version })
-    }
-    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('diagram') })
-  }
-  return conflictShortId(c.id)
-}
-
-function batchConflictDetailLine(c: BatchConflictItem): string | null {
-  const loc = locale.value === 'ru' ? undefined : 'en'
-  const your = c.clientBaseUpdatedAt
-    ? t('models.batchSaveConflictYourBaseTime', {
-        time: formatDate(c.clientBaseUpdatedAt, loc),
-      })
-    : null
-  const server = c.serverUpdatedAt
-    ? t('models.batchSaveConflictServerTime', {
-        time: formatDate(c.serverUpdatedAt, loc),
-      })
-    : null
-  if (your && server) return `${your} · ${server}`
-  return server ?? your
-}
-
-async function handleBatchConflictReload(): Promise<void> {
-  await resolveBatchSaveReload()
-}
-
-async function handleBatchConflictOverwrite(): Promise<void> {
-  await resolveBatchSaveOverwrite()
-}
-
-const batchConflictCompare = ref<
-  Record<
-    string,
-    {
-      rows: ReturnType<typeof buildConflictCompareRows>
-      serverLoading: boolean
-      serverError: string | null
-    }
-  >
->({})
-
-let batchConflictFetchGen = 0
-let batchConflictCrossLinkGen = 0
-
-const batchConflictCrossLinkWarnings = ref<{
-  loading: boolean
-  error: string | null
-  items: MissingServerLinkOnCanvasRow[]
-}>({ loading: false, error: null, items: [] })
-
-const batchConflictCrossLinkWarningRows = computed(() => ({
-  loading: batchConflictCrossLinkWarnings.value.loading,
-  error: batchConflictCrossLinkWarnings.value.error,
-  items: batchConflictCrossLinkWarnings.value.items.map((cw, cwi) => ({
-    key: `${cw.modelLinkId}-${cwi}`,
-    diagramNames: formatBatchCrossLinkDiagramNames(cw.diagramNames),
-    edgeSummary: cw.edgeSummary,
-  })),
-}))
-
-/** Id связей на сервере после последнего опроса при открытой модалке конфликта (для пересчёта предупреждений при смене диаграммы). */
-const batchConflictServerLinkIds = ref<ReadonlySet<string> | null>(null)
-
-function recomputeBatchCrossLinkWarningItems(): void {
-  const ids = batchConflictServerLinkIds.value
-  if (!ids) return
-  const sid = selectedDiagramId.value
-  const activeDiag = sid
-    ? state.value.diagrams.find(d => d.id === sid && !d._isDeleted)
-    : undefined
-  const onlyDiagramId = activeDiag?.id
-  const items = computeMissingServerLinksOnCanvas(
-    state.value,
-    ids,
-    batchConflictFieldT,
-    onlyDiagramId
-  )
-  batchConflictCrossLinkWarnings.value = {
-    ...batchConflictCrossLinkWarnings.value,
-    items,
-  }
-}
-
-watch(
-  () => batchSaveConflict.value,
-  list => {
-    batchConflictFetchGen += 1
-    const gen = batchConflictFetchGen
-    if (!list?.length) {
-      batchConflictCompare.value = {}
-      batchConflictCrossLinkGen += 1
-      batchConflictServerLinkIds.value = null
-      batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
-      return
-    }
-    const next: Record<
-      string,
-      {
-        rows: ReturnType<typeof buildConflictCompareRows>
-        serverLoading: boolean
-        serverError: string | null
-      }
-    > = {}
-    for (const c of list) {
-      const key = batchConflictCompareKey(c)
-      next[key] = {
-        rows: buildConflictCompareRows(c, state.value, null, true, null, batchConflictFieldT),
-        serverLoading: true,
-        serverError: null,
-      }
-    }
-    batchConflictCompare.value = next
-
-    batchConflictCrossLinkGen += 1
-    const gCross = batchConflictCrossLinkGen
-    batchConflictServerLinkIds.value = null
-    batchConflictCrossLinkWarnings.value = { loading: true, error: null, items: [] }
-    void (async () => {
-      const mid = state.value.modelId
-      if (!mid) {
-        if (gCross === batchConflictCrossLinkGen) {
-          batchConflictServerLinkIds.value = null
-          batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
-        }
-        return
-      }
-      const collected: LinkResponse[] = []
-      let page = 0
-      const pageSize = 2000
-      while (true) {
-        const q = pagedListParams(page, pageSize)
-        const r = await apiGet<PaginatedResponse<LinkResponse>>(
-          `/links?modelId=${encodeURIComponent(mid)}&${q.toString()}`
-        )
-        if (gCross !== batchConflictCrossLinkGen) return
-        if (!r.success) {
-          batchConflictServerLinkIds.value = null
-          batchConflictCrossLinkWarnings.value = { loading: false, error: r.error.message, items: [] }
-          return
-        }
-        const chunk = r.data.content ?? []
-        collected.push(...chunk)
-        if (paginatedIsLastPage(r.data, page)) break
-        page += 1
-      }
-      if (gCross !== batchConflictCrossLinkGen) return
-      const serverIds = new Set(collected.map(l => l.id))
-      batchConflictServerLinkIds.value = serverIds
-      batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
-      recomputeBatchCrossLinkWarningItems()
-    })()
-
-    void Promise.all(
-      list.map(async c => {
-        const key = batchConflictCompareKey(c)
-        const res = await fetchServerConflictEntity(c, apiGet)
-        if (gen !== batchConflictFetchGen) return
-        if (!batchConflictCompare.value[key]) return
-        batchConflictCompare.value = {
-          ...batchConflictCompare.value,
-          [key]: {
-            serverLoading: false,
-            serverError: res.ok ? null : res.error,
-            rows: buildConflictCompareRows(
-              c,
-              state.value,
-              res.ok ? res.data : null,
-              false,
-              res.ok ? null : res.error,
-              batchConflictFieldT
-            ),
-          },
-        }
-      })
-    )
-  }
-)
-
-const batchSaveConflictRows = computed(() => {
-  const list = batchSaveConflict.value
-  if (!list?.length) return []
-  return list.map((c, idx) => {
-    const key = batchConflictCompareKey(c)
-    const cmp = batchConflictCompare.value[key]
-    const rawRows = cmp?.rows ?? []
-    const compareServerLoading = cmp?.serverLoading ?? true
-    const compareServerError = cmp?.serverError ?? null
-    const compareRows = compareServerLoading
-      ? []
-      : filterConflictCompareRowsForUi(rawRows)
-    const compareOnlyTimestampDiff =
-      !compareServerLoading &&
-      compareRows.length === 0 &&
-      rawRows.some(r => r.differs)
-    const openBaseline = diagramConflictOpenBaselineUpdatedAt.value[c.id]
-    const compareTimestampOnlySinceDiagramOpen =
-      compareOnlyTimestampDiff &&
-      c.kind === 'diagram' &&
-      c.clientBaseUpdatedAt != null &&
-      openBaseline === c.clientBaseUpdatedAt
-    return {
-      key: `${c.kind}-${c.id}-${idx}`,
-      kindLabel: batchConflictKindLabel(c.kind),
-      primary: batchConflictPrimaryLine(c),
-      context: batchConflictNodeContextLine(c),
-      detail: batchConflictDetailLine(c),
-      compareRows,
-      compareServerLoading,
-      compareServerError,
-      compareOnlyTimestampDiff,
-      compareTimestampOnlySinceDiagramOpen,
-    }
-  })
+const {
+  batchSaveConflictRows,
+  batchConflictCrossLinkWarningRows,
+  handleBatchConflictReload,
+  handleBatchConflictOverwrite,
+} = useModelBatchConflictUi({
+  state,
+  batchSaveConflict,
+  selectedDiagramId,
+  locale,
+  t: (key, params) => String(t(key, params ?? {})),
+  resolveBatchSaveReload,
+  resolveBatchSaveOverwrite,
 })
 
 const compareModalState = computed(() => ({
@@ -566,11 +195,6 @@ const compareModalState = computed(() => ({
   compareTargetError: versionDiff.compareTargetError.value,
   diff: versionDiff.diff.value,
 }))
-const selectedModelNodeIds = ref<string[]>([])
-const selectedInstanceIds = ref<string[]>([])
-const selectedModelLinkId = ref<string | null>(null)
-const selectedEdgeInstanceId = ref<string | null>(null)
-const selectedCanvasElementId = ref<string | null>(null)
 const diagramRenderer = shallowRef<DiagramRenderer | null>(null)
 const diagramInteractionManager = shallowRef<InteractionManager | null>(null)
 const activeRightTab = ref('properties')
@@ -765,171 +389,6 @@ const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const isActiveNotationRulesLoading = computed(() =>
   isNotationRelationsAndRulesLoading(activeNotationId.value)
 )
-const newerNotationVersions = ref<NotationResponse[]>([])
-const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
-const fallbackNotationMetaLoading = ref(false)
-const fallbackNotationMetaError = ref<string | null>(null)
-const fallbackNotationOwnerDisplayName = ref('')
-const activeDiagramNotationName = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ''
-  const notation = state.value.notations.find(item => item.id === notationId)
-  if (notation) return notation.name
-  if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.name
-  if (fallbackNotationMetaLoading.value) return t('models.notationLoading')
-  if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
-  return t('models.notationUnavailable')
-})
-const activeDiagramNotationVersion = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ''
-  const notation = state.value.notations.find(item => item.id === notationId)
-  if (notation) return notation.version
-  if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.version
-  return ''
-})
-const activeDiagramNotationOwnerLabel = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ''
-  if (fallbackNotationMeta.value?.id !== notationId) return ''
-  return fallbackNotationOwnerDisplayName.value || fallbackNotationMeta.value.ownerDisplayName || fallbackNotationMeta.value.ownerEmail
-})
-const canOpenActiveDiagramNotation = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return false
-  if (state.value.notations.some(item => item.id === notationId)) return true
-  return fallbackNotationMeta.value?.id === notationId
-})
-
-watch(
-  activeNotationId,
-  async (notationId) => {
-    if (!notationId) {
-      newerNotationVersions.value = []
-      return
-    }
-    try {
-      await ensureNotationRelationsAndRules(notationId)
-    } catch (error) {
-      setUiError(
-        error instanceof Error
-          ? error.message
-          : t('models.notationRelationRulesLoadFailed')
-      )
-    }
-    const result = await apiGet<NotationResponse[]>(`/notations/${notationId}/newer-versions`)
-    if (result.success) {
-      newerNotationVersions.value = result.data
-    } else {
-      newerNotationVersions.value = []
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  selectedDiagramId,
-  async () => {
-    const notationId = activeNotationId.value
-    if (!notationId) return
-    try {
-      await ensureNotationRelationsAndRules(notationId, { force: true })
-    } catch (error) {
-      setUiError(
-        error instanceof Error
-          ? error.message
-          : t('models.notationRelationRulesRefreshFailed')
-      )
-    }
-  }
-)
-
-
-watch(
-  () => activeDiagram.value?.notationId ?? null,
-  async notationId => {
-    fallbackNotationMeta.value = null
-    fallbackNotationMetaError.value = null
-    fallbackNotationMetaLoading.value = false
-    if (!notationId) return
-    const hasNotationInState = state.value.notations.some(item => item.id === notationId)
-    if (hasNotationInState) return
-
-    fallbackNotationMetaLoading.value = true
-    const mid = state.value.modelId
-    const metaPath =
-      mid.length > 0
-        ? `/notations/${notationId}/meta?modelId=${encodeURIComponent(mid)}`
-        : `/notations/${notationId}/meta`
-    const result = await apiGet<NotationMetaResponse>(metaPath)
-    if (activeDiagram.value?.notationId !== notationId) return
-    fallbackNotationMetaLoading.value = false
-    if (!result.success) {
-      fallbackNotationMetaError.value =
-        result.error.status === 404
-          ? t('models.notationMetaUnavailable')
-          : result.error.status === 403
-            ? t('models.notationAccessDenied')
-            : t('models.notationLoadFailed')
-      return
-    }
-    fallbackNotationMeta.value = result.data
-    fallbackNotationOwnerDisplayName.value = result.data.ownerDisplayName?.trim() || ''
-    if (fallbackNotationOwnerDisplayName.value) return
-    const ownerResult = await apiGet<UserInfo>(`/users/${result.data.ownerId}/public`)
-    if (ownerResult.success) {
-      fallbackNotationOwnerDisplayName.value = getUserDisplayName(
-        ownerResult.data,
-        result.data.ownerEmail
-      )
-    }
-  }
-)
-
-const selectedTreeNode = computed(() =>
-  selectedNodeId.value
-    ? (state.value.nodes.find(node => node.id === selectedNodeId.value && !node._isDeleted) ?? null)
-    : null
-)
-const selectedDiagramNode = computed(() =>
-  selectedModelNodeIds.value.length === 1
-    ? (state.value.nodes.find(
-        node => node.id === selectedModelNodeIds.value[0] && !node._isDeleted
-      ) ?? null)
-    : null
-)
-const selectedNode = computed(() => selectedDiagramNode.value ?? selectedTreeNode.value)
-
-const selectedLink = computed(() =>
-  selectedModelLinkId.value
-    ? (state.value.links.find(link => link.id === selectedModelLinkId.value && !link._isDeleted) ??
-      null)
-    : null
-)
-
-const selectedNodeInstanceId = computed<string | null>(() => {
-  const selectedElementId = selectedCanvasElementId.value
-  if (selectedElementId?.startsWith('instance-')) {
-    return selectedElementId.slice('instance-'.length)
-  }
-  if (selectedInstanceIds.value.length === 1) {
-    return selectedInstanceIds.value[0] ?? null
-  }
-  const diagram = activeDiagram.value
-  const modelNodeId = selectedNode.value?.id
-  if (!diagram || !modelNodeId) return null
-  return diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
-})
-
-const selectedLinkEdgeInstanceId = computed<string | null>(() => {
-  if (selectedEdgeInstanceId.value) return selectedEdgeInstanceId.value
-  const selectedElementId = selectedCanvasElementId.value
-  if (selectedElementId?.startsWith('edge-')) {
-    return selectedElementId.slice('edge-'.length)
-  }
-  return null
-})
-
 const availableNodeComponents = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
@@ -1129,6 +588,22 @@ const setUiError = (msg: string) => {
 }
 
 const {
+  newerNotationVersions,
+  activeDiagramNotationName,
+  activeDiagramNotationVersion,
+  activeDiagramNotationOwnerLabel,
+  canOpenActiveDiagramNotation,
+} = useNotationVersionBanner({
+  state,
+  activeDiagram,
+  activeNotationId,
+  selectedDiagramId,
+  t: (key, params) => String(t(key, params ?? {})),
+  ensureNotationRelationsAndRules,
+  setUiError,
+})
+
+const {
   showNoteEditorModal,
   editingNoteInstanceId,
   noteEditorText,
@@ -1224,47 +699,62 @@ const handleRenameModel = (nextName: string) => {
 const handleOpenNotationEditor = (notationId: string) => {
   router.push({ name: 'notation-editor', params: { id: notationId } })
 }
-const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
-  parentNodeId: null,
-  kind: 'node',
+const {
+  createNodeModal,
+  showCreateNodeModal,
+  newNodeName,
+  newNodeTypeId,
+  showCreateDiagramModal,
+  newDiagramName,
+  newDiagramVersion,
+  newDiagramNotationId,
+  hasDiagramNameVersionConflict,
+  directoryNodeType,
+  nodeTypeDefaultDirectoryById,
+  createNodeModalTitle,
+  nodeTypeSearchQuery,
+  nodeTypeDropdownOpen,
+  filteredNodeTypes,
+  selectedNodeTypeName,
+  treeRootNodeId,
+  canCreateNodeFromModal,
+  getNextTreeOrderForParent,
+  ensureDirectoryPath,
+  openCreateFolder,
+  openCreateRegularNode,
+  createNode,
+  openCreateDiagram,
+  createDiagram,
+  isDirectoryNode,
+  handleMoveNode,
+  handleMoveDiagram,
+  handleRenameNode,
+  handleRenameDiagram,
+} = useModelTreeOperations({
+  state,
+  model,
+  selectedDiagramId,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  clearUiError: () => {
+    uiError.value = null
+  },
+  markNodeDirty,
+  markDiagramDirty,
 })
-const showCreateNodeModal = ref(false)
-const newNodeName = ref('')
-const newNodeTypeId = ref('')
 
-const showCreateDiagramModal = ref(false)
-const createDiagramNodeId = ref<string | null>(null)
-const newDiagramName = ref('')
-const newDiagramVersion = ref('1.0.0')
-const newDiagramNotationId = ref('')
-
-const normalizedNewDiagramName = computed(() => newDiagramName.value.trim().toLowerCase())
-const normalizedNewDiagramVersion = computed(() => (newDiagramVersion.value || '1.0.0').trim())
-const hasDiagramNameVersionConflict = computed(() => {
-  if (!normalizedNewDiagramName.value || !normalizedNewDiagramVersion.value) return false
-  return state.value.diagrams.some(diagram => {
-    if (diagram._isDeleted) return false
-    return (
-      diagram.name.trim().toLowerCase() === normalizedNewDiagramName.value &&
-      diagram.version.trim() === normalizedNewDiagramVersion.value
-    )
-  })
-})
-
-watch([normalizedNewDiagramName, () => newDiagramNotationId.value], () => {
-  const name = normalizedNewDiagramName.value
-  const notationId = newDiagramNotationId.value
-  if (!name || !notationId) return
-  const matching = state.value.diagrams.filter(
-    d => !d._isDeleted && d.name.trim().toLowerCase() === name && d.notationId === notationId
-  )
-  if (matching.length === 0) return
-  const maxVersion = matching.reduce(
-    (max, d) => (compareVersions(d.version, max) > 0 ? d.version : max),
-    matching[0]!.version
-  )
-  const bumped = bumpMinor(maxVersion)
-  if (bumped) newDiagramVersion.value = bumped
+const {
+  showImportWizard,
+  isImportingOef,
+  oefImportReport,
+  oefWarningLabel,
+  handleOefImportSubmit,
+} = useOefImport({
+  state,
+  treeRootNodeId,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  loadModel,
 })
 
 const showComponentChoiceModal = ref(false)
@@ -1400,141 +890,6 @@ const getReuseLinkCustomProperties = (
   }
 
   return result
-}
-
-const directoryNodeType = computed(
-  () =>
-    state.value.nodeTypes.find(typeItem => typeItem.name.trim().toLowerCase() === 'directory') ??
-    null
-)
-const nonDirectoryNodeTypes = computed(() =>
-  state.value.nodeTypes.filter(typeItem => typeItem.name.trim().toLowerCase() !== 'directory')
-)
-const nodeTypeDefaultDirectoryById = computed(() => {
-  const map = new Map<string, string>()
-  for (const nodeType of state.value.nodeTypes) {
-    const defaultDirectoryPath = parseTypeAttrs(nodeType.attrs ?? null).defaultDirectoryPath?.trim()
-    if (defaultDirectoryPath) {
-      map.set(nodeType.id, defaultDirectoryPath)
-    }
-  }
-  return map
-})
-const createNodeModalTitle = computed(() =>
-  createNodeModal.value.kind === 'folder'
-    ? t('models.createFolderTitle')
-    : t('models.createNodeTitle')
-)
-const nodeTypeSearchQuery = ref('')
-const nodeTypeDropdownOpen = ref(false)
-const filteredNodeTypes = computed(() => {
-  const query = nodeTypeSearchQuery.value.trim().toLowerCase()
-  if (!query) return nonDirectoryNodeTypes.value
-  return nonDirectoryNodeTypes.value.filter(t => t.name.toLowerCase().includes(query))
-})
-const selectedNodeTypeName = computed(() => {
-  if (!newNodeTypeId.value) return ''
-  return nonDirectoryNodeTypes.value.find(t => t.id === newNodeTypeId.value)?.name ?? ''
-})
-
-const treeRootNodeId = computed<string | null>(() => {
-  const raw = model.value?.attrs
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const rootId = parsed.treeRootNodeId
-    return typeof rootId === 'string' && rootId.trim().length > 0 ? rootId : null
-  } catch {
-    return null
-  }
-})
-
-const resolveTreeParentId = (parentNodeId: string | null): string | null =>
-  parentNodeId ?? treeRootNodeId.value ?? null
-
-
-const canCreateNodeFromModal = computed(() => {
-  if (!newNodeName.value.trim()) return false
-  if (createNodeModal.value.kind === 'folder') return !!directoryNodeType.value
-  return !!newNodeTypeId.value
-})
-
-const getNextTreeOrderForParent = (parentNodeId: string | null): number => {
-  const siblingOrders = state.value.nodes
-    .filter(node => !node._isDeleted && node.parentNodeId === parentNodeId)
-    .map(node => node.parsedAttrs.treeOrder ?? 0)
-  if (siblingOrders.length === 0) return 0
-  return Math.max(...siblingOrders) + 1
-}
-
-const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
-  rawPath
-    .split(/[\\/]+/)
-    .map(segment => segment.trim())
-    .filter(segment => segment.length > 0)
-
-const ensureDirectoryPath = (
-  rawPath: string
-): { parentNodeId: string | null; createdDirectoryIds: string[] } => {
-  const directoryTypeId = directoryNodeType.value?.id
-  if (!directoryTypeId) return { parentNodeId: null, createdDirectoryIds: [] }
-
-  const segments = normalizeDirectoryPathSegments(rawPath)
-  if (segments.length === 0)
-    return { parentNodeId: resolveTreeParentId(null), createdDirectoryIds: [] }
-
-  let currentParentNodeId = resolveTreeParentId(null)
-  const createdDirectoryIds: string[] = []
-
-  for (const segment of segments) {
-    const normalizedSegment = segment.toLowerCase()
-    const existingDirectory = state.value.nodes.find(node => {
-      if (node._isDeleted) return false
-      if (node.nodeTypeId !== directoryTypeId) return false
-      if ((node.parentNodeId ?? null) !== (currentParentNodeId ?? null)) return false
-      return node.name.trim().toLowerCase() === normalizedSegment
-    })
-
-    if (existingDirectory) {
-      currentParentNodeId = existingDirectory.id
-      continue
-    }
-
-    const createdDirectoryId = createId()
-    state.value.nodes.push({
-      id: createdDirectoryId,
-      name: segment,
-      modelId: state.value.modelId,
-      ownerId: state.value.ownerId,
-      nodeTypeId: directoryTypeId,
-      parentNodeId: currentParentNodeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: {
-        ...parseNodeAttrs(null),
-        treeOrder: getNextTreeOrderForParent(currentParentNodeId),
-      },
-      _isNew: true,
-    })
-    createdDirectoryIds.push(createdDirectoryId)
-    currentParentNodeId = createdDirectoryId
-  }
-
-  return { parentNodeId: currentParentNodeId, createdDirectoryIds }
-}
-
-const reindexTreeOrders = () => {
-  const counters = new Map<string, number>()
-  for (const node of state.value.nodes) {
-    if (node._isDeleted) continue
-    const parentKey = node.parentNodeId ?? '__root__'
-    const nextOrder = counters.get(parentKey) ?? 0
-    counters.set(parentKey, nextOrder + 1)
-    if (node.parsedAttrs.treeOrder !== nextOrder) {
-      node.parsedAttrs.treeOrder = nextOrder
-      markNodeDirty(node.id)
-    }
-  }
 }
 
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
@@ -1715,92 +1070,6 @@ const bindLinkRelation = (
   }
 }
 
-const openCreateFolder = (parentNodeId: string | null) => {
-  if (!directoryNodeType.value) {
-    setUiError(t('models.directoryTypeNotFound'))
-    return
-  }
-  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'folder' }
-  newNodeName.value = ''
-  newNodeTypeId.value = directoryNodeType.value.id
-  uiError.value = null
-  showCreateNodeModal.value = true
-}
-
-const openCreateRegularNode = (parentNodeId: string | null) => {
-  if (nonDirectoryNodeTypes.value.length === 0) {
-    setUiError(t('models.noAvailableNodeTypes'))
-    return
-  }
-  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'node' }
-  newNodeName.value = ''
-  newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ''
-  nodeTypeSearchQuery.value = ''
-  nodeTypeDropdownOpen.value = false
-  uiError.value = null
-  showCreateNodeModal.value = true
-}
-
-const createNode = () => {
-  if (!newNodeName.value.trim()) return
-  const nodeTypeId =
-    createNodeModal.value.kind === 'folder'
-      ? (directoryNodeType.value?.id ?? '')
-      : newNodeTypeId.value
-  if (!nodeTypeId) return
-  const parentNodeId = createNodeModal.value.parentNodeId ?? null
-  state.value.nodes.push({
-    id: createId(),
-    name: newNodeName.value.trim(),
-    modelId: state.value.modelId,
-    ownerId: state.value.ownerId,
-    nodeTypeId,
-    parentNodeId,
-    createdAt: null,
-    updatedAt: null,
-    parsedAttrs: {
-      ...parseNodeAttrs(null),
-      treeOrder: getNextTreeOrderForParent(parentNodeId),
-    },
-    _isNew: true,
-  })
-  showCreateNodeModal.value = false
-}
-
-const openCreateDiagram = (nodeId: string | null) => {
-  createDiagramNodeId.value = nodeId ?? treeRootNodeId.value ?? null
-  newDiagramName.value = ''
-  newDiagramVersion.value = '1.0.0'
-  newDiagramNotationId.value = state.value.notations[0]?.id ?? ''
-  uiError.value = null
-  showCreateDiagramModal.value = true
-}
-
-const createDiagram = () => {
-  if (!newDiagramName.value.trim() || !newDiagramNotationId.value) return
-  if (hasDiagramNameVersionConflict.value) {
-    setUiError(t('models.diagramConflictMessage'))
-    return
-  }
-  uiError.value = null
-  const id = createId()
-  state.value.diagrams.push({
-    id,
-    name: newDiagramName.value.trim(),
-    version: newDiagramVersion.value || '1.0.0',
-    ownerId: state.value.ownerId,
-    modelId: state.value.modelId,
-    nodeId: createDiagramNodeId.value ?? treeRootNodeId.value ?? null,
-    notationId: newDiagramNotationId.value,
-    createdAt: null,
-    updatedAt: null,
-    parsedAttrs: { instances: { nodes: [], edges: [] } },
-    _isNew: true,
-  })
-  selectedDiagramId.value = id
-  showCreateDiagramModal.value = false
-}
-
 const markNodeDeleted = (nodeId: string) => {
   const node = state.value.nodes.find(item => item.id === nodeId)
   if (!node) return
@@ -1908,14 +1177,6 @@ const markLinkDeleted = (linkId: string) => {
     selectedEdgeInstanceId.value = null
   }
   if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
-}
-
-const applyDiagramSelection = (diagramId: string) => {
-  selectedDiagramId.value = diagramId
-  selectedModelNodeIds.value = []
-  selectedInstanceIds.value = []
-  selectedModelLinkId.value = null
-  selectedEdgeInstanceId.value = null
 }
 
 const cancelDiagramSwitch = () => {
@@ -3239,115 +2500,6 @@ const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
   markNodeDirty(node.id)
 }
 
-const isDirectoryNode = (nodeId: string): boolean => {
-  const node = state.value.nodes.find(item => item.id === nodeId)
-  if (!node) return false
-  const nodeType = state.value.nodeTypes.find(type => type.id === node.nodeTypeId)
-  return (nodeType?.name ?? '').trim().toLowerCase() === 'directory'
-}
-
-const isDescendantNode = (nodeId: string, potentialParentId: string): boolean => {
-  const children = state.value.nodes.filter(
-    item => item.parentNodeId === potentialParentId && !item._isDeleted
-  )
-  for (const child of children) {
-    if (child.id === nodeId) return true
-    if (isDescendantNode(nodeId, child.id)) return true
-  }
-  return false
-}
-
-const handleMoveNode = (
-  nodeId: string,
-  targetNodeId: string | null,
-  position: 'above' | 'below' | 'inside'
-) => {
-  const nodes = state.value.nodes
-  const fromIndex = nodes.findIndex(item => item.id === nodeId)
-  if (fromIndex < 0) return
-  const movingNode = nodes[fromIndex]!
-
-  if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
-
-  const targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
-  if (targetNodeId && !targetNode) return
-
-  let newParentNodeId: string | null
-  let insertIndex: number
-
-  if (!targetNode) {
-    newParentNodeId = treeRootNodeId.value ?? null
-    const rootIndices = nodes
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => item.id !== nodeId && !item._isDeleted && !item.parentNodeId)
-      .map(({ index }) => index)
-    insertIndex = rootIndices.length > 0 ? rootIndices[rootIndices.length - 1]! + 1 : nodes.length
-  } else if (position === 'inside' && isDirectoryNode(targetNode.id)) {
-    newParentNodeId = targetNode.id
-    const childIndices = nodes
-      .map((item, index) => ({ item, index }))
-      .filter(
-        ({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
-      )
-      .map(({ index }) => index)
-    insertIndex =
-      childIndices.length > 0
-        ? childIndices[childIndices.length - 1]! + 1
-        : nodes.indexOf(targetNode) + 1
-  } else {
-    newParentNodeId = targetNode.parentNodeId ?? null
-    const targetIndex = nodes.indexOf(targetNode)
-    insertIndex = position === 'above' ? targetIndex : targetIndex + 1
-  }
-
-  const parentChanged = movingNode.parentNodeId !== newParentNodeId
-  movingNode.parentNodeId = newParentNodeId
-
-  nodes.splice(fromIndex, 1)
-  if (fromIndex < insertIndex) insertIndex -= 1
-  insertIndex = Math.max(0, Math.min(insertIndex, nodes.length))
-  nodes.splice(insertIndex, 0, movingNode)
-
-  const orderChanged = fromIndex !== insertIndex
-  if (parentChanged || orderChanged) {
-    markNodeDirty(movingNode.id)
-    reindexTreeOrders()
-  }
-}
-
-const handleMoveDiagram = (diagramId: string, newNodeId: string | null) => {
-  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
-  if (!diagram) return
-  const resolvedNodeId = newNodeId ?? treeRootNodeId.value ?? null
-  if (diagram.nodeId === resolvedNodeId) return
-  diagram.nodeId = resolvedNodeId
-  markDiagramDirty(diagram.id)
-}
-
-const handleRenameNode = (nodeId: string, newName: string) => {
-  const node = state.value.nodes.find(item => item.id === nodeId)
-  if (!node || node.name === newName) return
-  node.name = newName
-  markNodeDirty(node.id)
-}
-
-const handleRenameDiagram = (diagramId: string, newName: string) => {
-  const diagram = state.value.diagrams.find(item => item.id === diagramId)
-  const trimmedName = newName.trim()
-  if (!diagram || !trimmedName) return
-  if (diagram.name === trimmedName) return
-
-  const oldNameNormalized = diagram.name.trim().toLowerCase()
-  for (const row of state.value.diagrams) {
-    if (row._isDeleted) continue
-    if (row.modelId !== diagram.modelId) continue
-    if (row.name.trim().toLowerCase() !== oldNameNormalized) continue
-    if (row.name === trimmedName) continue
-    row.name = trimmedName
-    markDiagramDirty(row.id)
-  }
-}
-
 const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
   const diagram = activeDiagram.value
   if (!diagram || instanceIds.length === 0) return
@@ -3529,149 +2681,6 @@ const confirmDiagramDelete = () => {
   markDiagramDeleted(diagramId)
   cancelDiagramDelete()
 }
-
-const collectDefaultCustomPropertyValues = (
-  customProperties: { name: string; defaultValue?: string | number | boolean; system?: boolean }[]
-): Record<string, unknown> => {
-  const defaults: Record<string, unknown> = {}
-  for (const property of customProperties) {
-    if (property.system) continue
-    if (!property.name) continue
-    if (property.defaultValue !== undefined) {
-      defaults[property.name] = property.defaultValue
-    }
-  }
-  return defaults
-}
-
-const collectOefMissingRequiredReport = (request: ReturnType<typeof buildOefBatchSaveRequest>['request']) => {
-  const componentById = new Map(state.value.components.map(component => [component.id, component]))
-  const relationById = new Map(state.value.relations.map(relation => [relation.id, relation]))
-  const nodeTypeById = new Map(state.value.nodeTypes.map(nodeType => [nodeType.id, nodeType]))
-
-  let nodeType = 0
-  let component = 0
-  let relation = 0
-
-  for (const node of request.nodes.create) {
-    const nodeAttrs = parseNodeAttrs(node.attrs)
-    const nodeTypeEntity = nodeTypeById.get(node.nodeTypeId)
-    if (nodeTypeEntity) {
-      const requiredTypeProps = (parseTypeAttrs(nodeTypeEntity.attrs ?? null).customProperties ?? []).filter(
-        property => property.required && !property.system
-      )
-      for (const property of requiredTypeProps) {
-        const value = nodeAttrs.typeProperties[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          nodeType += 1
-        }
-      }
-    }
-
-    for (const [notationId, binding] of Object.entries(nodeAttrs.notationComponents)) {
-      const componentEntity = componentById.get(binding.componentId)
-      if (!componentEntity || componentEntity.notationId !== notationId) continue
-
-      const requiredProps = parseEntityAttrs(componentEntity.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      const scopedValues = nodeAttrs.componentProperties?.[notationId]?.[binding.componentId] ?? {}
-      for (const property of requiredProps) {
-        const value = scopedValues[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          component += 1
-        }
-      }
-    }
-  }
-
-  for (const link of request.links.create) {
-    const linkAttrs = parseLinkAttrs(link.attrs)
-    for (const [notationId, binding] of Object.entries(linkAttrs.notationRelations)) {
-      const relationEntity = relationById.get(binding.relationId)
-      if (!relationEntity || relationEntity.notationId !== notationId) continue
-
-      const requiredProps = parseEntityAttrs(relationEntity.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      const scopedValues = linkAttrs.relationProperties?.[notationId]?.[binding.relationId] ?? {}
-      for (const property of requiredProps) {
-        const value = scopedValues[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          relation += 1
-        }
-      }
-    }
-  }
-
-  const total = nodeType + component + relation
-  return { nodeType, component, relation, total }
-}
-
-const handleOefImportSubmit = async (payload: {
-  draft: ImportDraft
-  notationId: string
-  mapping: ImportMappingState
-}) => {
-  const modelId = state.value.modelId
-  if (!modelId) return
-  const nodeTypePropertyDefaultsById = Object.fromEntries(
-    state.value.nodeTypes.map(nodeType => [
-      nodeType.id,
-      collectDefaultCustomPropertyValues(parseTypeAttrs(nodeType.attrs ?? null).customProperties ?? []),
-    ])
-  )
-  const componentPropertyDefaultsById = Object.fromEntries(
-    state.value.components.map(component => [
-      component.id,
-      collectDefaultCustomPropertyValues(parseEntityAttrs(component.attrs ?? null).customProperties),
-    ])
-  )
-  const relationPropertyDefaultsById = Object.fromEntries(
-    state.value.relations.map(relation => [
-      relation.id,
-      collectDefaultCustomPropertyValues(parseEntityAttrs(relation.attrs ?? null).customProperties),
-    ])
-  )
-  const built = buildOefBatchSaveRequest({
-    draft: payload.draft,
-    notationId: payload.notationId,
-    mapping: payload.mapping,
-    parentNodeId: treeRootNodeId.value ?? null,
-    nodeTypePropertyDefaultsById,
-    componentPropertyDefaultsById,
-    relationPropertyDefaultsById,
-  })
-  if (!hasBatchChanges(built.request)) {
-    setUiError(t('models.oefImportNoChanges'))
-    return
-  }
-
-  isImportingOef.value = true
-  const result = await batchSave(modelId, built.request)
-  isImportingOef.value = false
-  if (!result.success) {
-    setUiError(t('models.oefImportFailed', { message: result.error.message }))
-    return
-  }
-  await loadModel()
-  const warningCounts = new Map<string, number>()
-  for (const warning of built.warnings) {
-    warningCounts.set(warning.code, (warningCounts.get(warning.code) ?? 0) + 1)
-  }
-  const warningGroups = [...warningCounts.entries()]
-    .map(([code, count]) => ({ code, count }))
-    .sort((a, b) => b.count - a.count)
-  const missingRequired = collectOefMissingRequiredReport(built.request)
-  showImportWizard.value = false
-  oefImportReport.value = {
-    ...built.createdCounts,
-    warningsCount: built.warnings.length,
-    warningGroups,
-    missingRequired,
-  }
-}
-
 
 const handleToolbarAction = async (event: string) => {
   switch (event) {

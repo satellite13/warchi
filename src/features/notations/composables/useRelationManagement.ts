@@ -1,12 +1,12 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
-import { createId } from '../notationAttrs'
+import { createId } from '@/domain/attrs/notationAttrs'
 import type { EditorRelation, NotationEditorState } from '../types'
 import {
   getAllRelationPresets,
   applyRelationStylePreset,
   getDefaultRelationStylePresetName,
   type RelationStylePreset,
-} from '../styles/stylePresets'
+} from '@/features/diagram-style/styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
 import { parseTagsInput, getTagQuery, copyTypeProperties } from '../utils/tagParsers'
 import { addType } from '../utils/typeManagement'

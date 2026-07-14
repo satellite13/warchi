@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import type { NodeStyle } from '../notationAttrs'
+import type { NodeStyle } from '@/domain/attrs/notationAttrs'
 import type {
   NotationEditorState,
   EditorNodeType,

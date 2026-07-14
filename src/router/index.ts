@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuth } from "../composables/useAuth";
-import { usePermissions } from "../composables/usePermissions";
+import { canViewAdminPanel } from "../composables/usePermissions";
 import "./types";
 
 const router = createRouter({
@@ -15,6 +15,7 @@ const router = createRouter({
     {
       path: "/admin",
       component: () => import("../layouts/AdminLayout.vue"),
+      meta: { requiresAdminPanel: true },
       children: [
         {
           path: "",
@@ -85,7 +86,7 @@ const router = createRouter({
     {
       path: "/notations/:id",
       name: "notation-editor",
-      component: () => import("../views/NotationEditorView.vue")
+      component: () => import("../features/notations/NotationEditorPage.vue")
     },
     {
       path: "/docs",
@@ -115,13 +116,17 @@ const router = createRouter({
       path: "/home",
       name: "home",
       component: () => import("../views/HomeView.vue")
+    },
+    {
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      redirect: { name: "home" }
     }
   ]
 });
 
 router.beforeEach(async (to) => {
   const { isAuthenticated, currentUser } = useAuth();
-  const { checkPermission } = usePermissions();
 
   if (to.meta.requiresAuth === false) {
     if (to.name === "login" && isAuthenticated.value) {
@@ -134,19 +139,14 @@ router.beforeEach(async (to) => {
     return { name: "login" };
   }
 
-  if (to.path.startsWith("/admin")) {
+  if (to.meta.requiresAdminPanel === true) {
     const currentUserId = currentUser.value?.id;
     if (!currentUserId) {
       return { name: "home" };
     }
 
-    const canViewAdminPanel = await checkPermission({
-      resourceType: "ADMIN_PANEL",
-      resourceId: currentUserId,
-      action: "VIEW",
-    });
-
-    if (!canViewAdminPanel) {
+    const allowed = await canViewAdminPanel(currentUserId);
+    if (!allowed) {
       return { name: "home" };
     }
   }

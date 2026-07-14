@@ -4,7 +4,7 @@ import type {
   ComponentResponse,
   RelationResponse,
 } from '@/types/api'
-import type { CustomProperty, DiagramStyle, NodeStyle } from './notationAttrs'
+import type { CustomProperty, DiagramStyle, NodeStyle } from '@/domain/attrs/notationAttrs'
 
 export interface DiagramLayerNode {
   id: string

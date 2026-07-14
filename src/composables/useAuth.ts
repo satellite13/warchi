@@ -15,8 +15,6 @@ import { normalizeUser } from "../utils/userRole";
 export type { User };
 
 type AuthResponse = {
-  accessToken?: string;
-  refreshToken?: string;
   user: User;
 };
 
@@ -33,6 +31,12 @@ const applyAuth = (response: AuthResponse): void => {
   currentUser.value = normalizedUser;
   saveStoredUser(normalizedUser);
   emitAuthUpdated(normalizedUser);
+};
+
+const clearLocalAuth = (): void => {
+  clearAuthStorage();
+  emitAuthCleared();
+  currentUser.value = null;
 };
 
 const AUTH_LISTENERS_FLAG = "__warchiAuthListenersAttached__";
@@ -110,7 +114,12 @@ export function useAuth() {
 
   async function loadCurrentUser(): Promise<void> {
     const result = await apiGet<User>("/auth/me");
-    if (!result.success) return;
+    if (!result.success) {
+      if (result.error.status === 401 || result.error.status === 403) {
+        clearLocalAuth();
+      }
+      return;
+    }
 
     const normalizedUser = normalizeUser(result.data);
     currentUser.value = normalizedUser;
@@ -130,11 +139,13 @@ export function useAuth() {
     return { success: true };
   }
 
-  async function logout(): Promise<void> {
-    await apiPost<void>("/auth/logout", {});
-    clearAuthStorage();
-    emitAuthCleared();
-    currentUser.value = null;
+  async function logout(): Promise<AuthResult> {
+    const result = await apiPost<void>("/auth/logout", {});
+    if (!result.success) {
+      return { success: false, error: result.error.message };
+    }
+    clearLocalAuth();
+    return { success: true };
   }
 
   return {

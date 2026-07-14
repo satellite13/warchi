@@ -1,12 +1,13 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
-import { createId, type CompositeSerializedCComponent } from '../notationAttrs'
+import { useI18n } from 'vue-i18n'
+import { createId, type CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 import type { EditorComponent, NotationEditorState } from '../types'
 import {
   getAllComponentPresets,
   applyComponentStylePreset,
   getDefaultComponentStylePresetName,
   type ComponentStylePreset,
-} from '../styles/stylePresets'
+} from '@/features/diagram-style/styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
 import { parseTagsInput, getTagQuery, copyTypeProperties } from '../utils/tagParsers'
 import { addType } from '../utils/typeManagement'
@@ -33,6 +34,7 @@ export interface ComponentManagementOptions {
 
 export function useComponentManagement(options: ComponentManagementOptions) {
   const { state, selectedEntity, availableTags, stylePresetsVersion } = options
+  const { t } = useI18n()
 
   const showComponentModal = ref(false)
   const componentName = ref('')
@@ -66,13 +68,13 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     componentFormError.value = null
     const name = componentName.value.trim()
     if (!name) {
-      componentFormError.value = 'Введите название компонента'
+      componentFormError.value = t('notations.enterComponentName')
       return
     }
 
     const version = componentVersion.value.trim()
     if (!version) {
-      componentFormError.value = 'Введите версию компонента'
+      componentFormError.value = t('notations.enterComponentVersion')
       return
     }
 
@@ -84,7 +86,7 @@ export function useComponentManagement(options: ComponentManagementOptions) {
       nodeTypeId =
         addType(state.value.nodeTypes, componentNewTypeName.value, state.value.ownerId) || ''
       if (!nodeTypeId) {
-        componentFormError.value = 'Введите название нового типа узла'
+        componentFormError.value = t('notations.enterNewNodeTypeName')
         return
       }
     }

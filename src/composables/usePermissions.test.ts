@@ -6,7 +6,7 @@ vi.mock("@/composables/useApi", () => ({
   apiPost: (...args: unknown[]) => mockApiPost(...args),
 }))
 
-import { usePermissions } from "./usePermissions"
+import { canViewAdminPanel, usePermissions } from "./usePermissions"
 
 describe("usePermissions", () => {
   beforeEach(() => {
@@ -52,5 +52,25 @@ describe("usePermissions", () => {
     })
 
     expect(decisions).toEqual({})
+  })
+
+  it("canViewAdminPanel checks ADMIN_PANEL VIEW for the current user id", async () => {
+    mockApiPost.mockResolvedValue({
+      success: true,
+      data: {
+        resourceType: "ADMIN_PANEL",
+        resourceId: "u1",
+        decisions: { VIEW: true },
+      },
+    })
+
+    const allowed = await canViewAdminPanel("u1")
+
+    expect(allowed).toBe(true)
+    expect(mockApiPost).toHaveBeenCalledWith("/permissions/check", {
+      resourceType: "ADMIN_PANEL",
+      resourceId: "u1",
+      actions: ["VIEW"],
+    })
   })
 })

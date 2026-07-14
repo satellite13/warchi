@@ -1,8 +1,8 @@
 import {ref, type Ref} from "vue";
 import {useI18n} from "vue-i18n";
 import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
-import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "../notationAttrs";
-import { validateCompositeDiagramStyle } from "../utils/validationIssues";
+import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "@/domain/attrs/notationAttrs";
+import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
 import type {NotationData} from "@/types/entities";
 import type {
   NotationEditorState,

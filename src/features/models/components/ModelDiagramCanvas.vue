@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   DiagramRenderer,
   RectangleNode,
-  CircleNode,
-  DiamondNode,
-  CustomShapeNode,
   CompositeNode,
   deserializeCComponent,
   Node as DiagramNode,
@@ -18,26 +15,26 @@ import {
   TextLabel,
   type ContextMenuTarget,
   type ContextMenuItem,
-  type ArrowMarkerConfig,
-  type NodeImageOptions,
   type TextStyle,
   type TextLabelOptions,
   type EdgePathType,
   type EdgeStyle,
   type CContainer,
 } from '@ngroznykh/papirus'
-import { diagramShapeFactories } from '@/utils/diagramShapes'
 import {
-  customOutlineToPath2D,
-  customOutlineToSvgPath,
-} from '@/utils/customOutlinePath'
+  createDiagramNode,
+  getDiagramNodeShape,
+  hasSpecialRectangleShape,
+  resolveDiagramNodeShape,
+} from '@/features/diagram/diagramNodeFactory'
+import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
 import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import {
   parseEntityAttrs,
   type CustomProperty,
   type DiagramStyle,
   type InteractiveKind,
-} from '../../notations/notationAttrs'
+} from '@/domain/attrs/notationAttrs'
 import {
   DEFAULT_INTERACTIVE_BADGE_ICON,
   getInteractiveBadgeIconIds,
@@ -59,12 +56,19 @@ import {
 import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
+  buildModelEdgeLabelBackground,
+  buildModelEdgeLabelConfig,
+  buildModelNodeIcon,
+  resolveModelEdgeOptions,
+} from '../utils/diagramCanvasBuilders'
+import { resolveComponentAnchorPoints } from '../../notations/utils/notationElementBuilders'
+import {
   applyStylePropertyBindings,
   BIND_TO_NAME,
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
   resolveCompositeBoundIconName,
-} from '../../notations/utils/compositeBindings'
+} from '@/features/diagram-style/utils/compositeBindings'
 
 const props = withDefaults(
   defineProps<{
@@ -269,7 +273,6 @@ let interactionManager: InteractionManager | null = null
 let gridOverlay: GridOverlay | null = null
 let miniMap: MiniMap | null = null
 let rulersOverlay: RulersOverlay | null = null
-let resizeObserver: ResizeObserver | null = null
 let suppressSelectionEvent = false
 let suppressViewportPersistence = false
 let lastActiveDiagramId: string | null = null
@@ -706,101 +709,6 @@ const getPapEdgeLabelText = (edge: Edge): string =>
     ? edge.label
     : (edge.label?.editableText ?? edge.label?.text ?? '')
 
-const buildEdgeLabel = (labelText: string | undefined): string | undefined => {
-  const text = labelText?.trim()
-  if (!text) return undefined
-  return text
-}
-
-const buildEdgeLabelWithStyle = (
-  labelText: string | undefined,
-  ds?: DiagramStyle
-): string | TextLabel | undefined => {
-  const text = labelText?.trim()
-  if (!text) return undefined
-  const labelInset = ds?.labelInset
-  if (
-    !ds?.labelColor &&
-    ds?.labelOpacity == null &&
-    !ds?.labelFontSize &&
-    labelInset == null
-  ) {
-    return text
-  }
-  const opts: TextLabelOptions = { text }
-  const style: TextStyle = {}
-  if (ds?.labelColor) style.color = ds.labelColor
-  if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
-  if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
-  if (Object.keys(style).length) opts.style = style
-  if (labelInset != null) opts.inset = labelInset
-  return new TextLabel(opts)
-}
-
-const buildEdgeLabelBackground = (
-  ds?: DiagramStyle
-): { color?: string; opacity?: number; padding?: number; borderRadius?: number } | undefined => {
-  if (!ds) return undefined
-
-  const background: Record<string, unknown> = {}
-  if (ds.labelBgColor) background.color = ds.labelBgColor
-  if (ds.labelBgOpacity != null) background.opacity = ds.labelBgOpacity
-  if (ds.labelBgPadding != null) background.padding = ds.labelBgPadding
-  if (ds.labelBgBorderRadius != null) background.borderRadius = ds.labelBgBorderRadius
-
-  return Object.keys(background).length > 0 ? background : undefined
-}
-
-const resolveEdgeOptions = (
-  ds?: DiagramStyle
-): Partial<{
-  type: EdgePathType
-  style: EdgeStyle
-  startMarker: ArrowMarkerConfig
-  endMarker: ArrowMarkerConfig
-  labelOffset: number
-  labelLineGap: boolean
-}> => {
-  if (!ds) return {}
-  const opts: Partial<{
-    type: EdgePathType
-    style: EdgeStyle
-    startMarker: ArrowMarkerConfig
-    endMarker: ArrowMarkerConfig
-    labelOffset: number
-    labelLineGap: boolean
-  }> = {}
-  const style: EdgeStyle = {}
-  if (ds.strokeColor) style.strokeColor = ds.strokeColor
-  if (ds.strokeWidth != null) style.strokeWidth = ds.strokeWidth
-  if (ds.strokeOpacity != null) style.strokeOpacity = ds.strokeOpacity
-  if (ds.opacity != null) style.opacity = ds.opacity
-  if (ds.lineDash) style.lineDash = ds.lineDash
-  if (Object.keys(style).length) opts.style = style
-  if (ds.edgeType) opts.type = ds.edgeType as EdgePathType
-  if (ds.startMarkerType) {
-    opts.startMarker = {
-      type: ds.startMarkerType as ArrowMarkerConfig['type'],
-      ...(ds.startMarkerSize != null && { size: ds.startMarkerSize }),
-      ...(ds.startMarkerFillColor && { fillColor: ds.startMarkerFillColor }),
-      ...(ds.startMarkerFillOpacity != null && { fillOpacity: ds.startMarkerFillOpacity }),
-    }
-  }
-  if (ds.endMarkerType) {
-    opts.endMarker = {
-      type: ds.endMarkerType as ArrowMarkerConfig['type'],
-      ...(ds.endMarkerSize != null && { size: ds.endMarkerSize }),
-      ...(ds.endMarkerFillColor && { fillColor: ds.endMarkerFillColor }),
-      ...(ds.endMarkerFillOpacity != null && { fillOpacity: ds.endMarkerFillOpacity }),
-    }
-  }
-  if (ds.edgeLabelOffset != null) opts.labelOffset = ds.edgeLabelOffset
-  if (ds.edgeLabelPosition != null) (opts as Record<string, unknown>).labelPosition = ds.edgeLabelPosition
-  if (ds.edgeLabelFollowPath != null) (opts as Record<string, unknown>).labelFollowPath = ds.edgeLabelFollowPath
-  if (ds.edgeLabelLineGap != null) opts.labelLineGap = ds.edgeLabelLineGap
-  return opts
-}
-
 // ── Style resolution ──
 const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined => {
   const node = nodeById.value.get(modelNodeId)
@@ -867,16 +775,6 @@ function applyMinSizeConstraint(node: DiagramNode, modelNodeId: string) {
   }
 }
 
-type ComponentShape =
-  | 'rectangle'
-  | 'beveled-rectangle'
-  | 'diamond'
-  | 'circle'
-  | 'trapezoid'
-  | 'slanted-rectangle'
-  | 'custom'
-  | 'composite'
-
 const getInstanceArea = (instance: DiagramNodeInstance): number => {
   const { width, height } = getInstanceDimensions(instance)
   return width * height
@@ -933,22 +831,6 @@ const reorderRendererNodesBySize = (orderedInstances: DiagramNodeInstance[]) => 
   nodesMap.clear()
   for (const node of orderedNodes) {
     nodesMap.set(node.id, node)
-  }
-}
-
-function getComponentShape(ds?: DiagramStyle): ComponentShape {
-  const shape = ds?.nodeShape as ComponentShape | undefined
-  switch (shape) {
-    case 'beveled-rectangle':
-    case 'diamond':
-    case 'circle':
-    case 'trapezoid':
-    case 'slanted-rectangle':
-    case 'custom':
-    case 'composite':
-      return shape
-    default:
-      return 'rectangle'
   }
 }
 
@@ -1100,36 +982,6 @@ function buildNodeLabel(
   return opts
 }
 
-function buildNodeIcon(ds?: DiagramStyle) {
-  if (!ds?.iconName) return undefined
-  const placement = ds.iconPlacement
-  const resolvedPlacement: NodeImageOptions['placement'] =
-    placement === 'center' ||
-    placement === 'top' ||
-    placement === 'bottom' ||
-    placement === 'left' ||
-    placement === 'right' ||
-    placement === 'top-left' ||
-    placement === 'top-right' ||
-    placement === 'bottom-left' ||
-    placement === 'bottom-right'
-      ? placement
-      : 'left'
-  const iconInset = ds.iconInset ?? ds.iconPadding ?? ds.iconMargin ?? ds.iconGap
-  return {
-    source: `/icons/${ds.iconName}.svg`,
-    placement: resolvedPlacement,
-    width: ds.iconWidth ?? 20,
-    height: ds.iconHeight ?? 20,
-    fit: 'contain' as const,
-    ...(iconInset != null ? { inset: iconInset as unknown as number } : {}),
-    ...(ds.iconOffsetX != null ? { offsetX: ds.iconOffsetX } : {}),
-    ...(ds.iconOffsetY != null ? { offsetY: ds.iconOffsetY } : {}),
-    ...(ds.iconStrokeColor ? { strokeColor: ds.iconStrokeColor } : {}),
-    ...(ds.iconFillColor ? { fillColor: ds.iconFillColor } : {}),
-  }
-}
-
 function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) {
   const dims = getInstanceDimensions(instance)
   const style: Record<string, unknown> = {
@@ -1149,103 +1001,31 @@ function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) 
   }
 }
 
-function resolveAnchorPoints(ds?: DiagramStyle): {
-  top: number
-  bottom: number
-  left: number
-  right: number
-} {
-  const normalize = (value: unknown, fallback: number): number => {
-    const parsed = Math.round(Number(value))
-    if (!Number.isFinite(parsed) || parsed < 0) return fallback
-    return parsed
-  }
-  return {
-    top: normalize(ds?.portsTop, 3),
-    bottom: normalize(ds?.portsBottom, 3),
-    left: normalize(ds?.portsLeft, 1),
-    right: normalize(ds?.portsRight, 1),
-  }
-}
-
-function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
-  return node instanceof CustomShapeNode
-}
-
-function isStickyNoteNode(node: DiagramNode): boolean {
-  return isCustomShapeNode(node) && (node as unknown as { noteShape?: boolean }).noteShape === true
-}
-
-function isFolderTabNode(node: DiagramNode): boolean {
-  return isCustomShapeNode(node) && (node as unknown as { folderShape?: boolean }).folderShape === true
-}
-
-function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
-  if (node instanceof CompositeNode) return 'composite'
-  if (node instanceof DiamondNode) return 'diamond'
-  if (node instanceof CircleNode) return 'circle'
-  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? 'rectangle'
-  return 'rectangle'
-}
-
 // ── Node creation ──
 function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const ds = getEffectiveStyle(instance)
   const visual = resolveInstanceStyle(instance, ds)
   const diffState = props.diffStateByModelNodeId?.[instance.modelNodeId]
   if (diffState) applyDiffOverlayToNodeStyle(visual.style, diffState)
-  const shape = getComponentShape(ds)
+  const shape = resolveDiagramNodeShape(ds)
   const nodeName = isNoteInstance(instance)
     ? getNoteText(instance)
     : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
-
-  const commonBase = {
-    id: `instance-${instance.id}`,
-    x: instance.x,
-    y: instance.y,
-    width: visual.width,
-    height: visual.height,
-    style: visual.style,
-    anchorPoints: resolveAnchorPoints(ds),
-    contentInset: (ds?.contentInset ?? 0) as unknown as number,
-    badges: getInteractiveBadgesForInstance(instance),
+  const icon = buildModelNodeIcon(ds)
+  let specialRectangleShape: 'sticky-note' | 'folder-tab' | undefined
+  if (shape === 'rectangle' && isDirectoryNoteInstance(instance)) {
+    specialRectangleShape = 'folder-tab'
+  } else if (shape === 'rectangle' && isNoteInstance(instance)) {
+    specialRectangleShape = 'sticky-note'
   }
-  const commonOptions = {
-    ...commonBase,
-    label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
-    ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
-  }
+  let composite:
+    | {
+        content: CContainer
+        stylePatch?: Record<string, unknown>
+      }
+    | undefined
 
-  const stickyNoteFactory = diagramShapeFactories['sticky-note']
-  const folderTabFactory = diagramShapeFactories['folder-tab']
-  const beveledFactory = diagramShapeFactories['beveled-rectangle']
-  const trapezoidFactory = diagramShapeFactories['trapezoid']
-  const slantedFactory = diagramShapeFactories['slanted-rectangle']
-
-  let node: DiagramNode
-  if (isDirectoryNoteInstance(instance) && shape === 'rectangle') {
-    const folderNode = new CustomShapeNode({
-      ...commonOptions,
-      path: folderTabFactory.path,
-      svgPath: folderTabFactory.svgPath,
-    })
-    folderNode.shapeType = 'rectangle'
-    ;(folderNode as unknown as { folderShape?: boolean }).folderShape = true
-    node = folderNode
-  } else if (isNoteInstance(instance) && shape === 'rectangle') {
-    const noteNode = new CustomShapeNode({
-      ...commonOptions,
-      path: stickyNoteFactory.path,
-      svgPath: stickyNoteFactory.svgPath,
-    })
-    noteNode.shapeType = 'rectangle'
-    ;(noteNode as unknown as { noteShape?: boolean }).noteShape = true
-    node = noteNode
-  } else if (shape === 'diamond') {
-    node = new DiamondNode(commonOptions)
-  } else if (shape === 'circle') {
-    node = new CircleNode(commonOptions)
-  } else if (shape === 'composite') {
+  if (shape === 'composite') {
     const componentProperties = getNodeComponentCustomProperties(instance.modelNodeId)
     const nodeTypeProperties = getNodeTypeCustomProperties(instance.modelNodeId)
     const nodeEntry = nodeById.value.get(instance.modelNodeId)
@@ -1264,79 +1044,29 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
       nodeTypeProperties,
       nodeTypeValues,
     })
-    const compositeStyle = {
-      ...visual.style,
-      ...bindingResult.outerPatch,
-      ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
-      ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
-      ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-      ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
-    }
-    const rawCompositeShape = ds?.compositeShapeType ?? 'rectangle'
-    const compositeShapeMappedToCustom =
-      rawCompositeShape === 'beveled-rectangle' ||
-      rawCompositeShape === 'trapezoid' ||
-      rawCompositeShape === 'slanted-rectangle'
-    let compositePathFactory: ((w: number, h: number) => Path2D) | undefined
-    let compositeSvgPathFactory: ((w: number, h: number) => string) | undefined
-    if (compositeShapeMappedToCustom) {
-      compositePathFactory = diagramShapeFactories[rawCompositeShape]?.path
-      compositeSvgPathFactory = diagramShapeFactories[rawCompositeShape]?.svgPath
-    } else if (rawCompositeShape === 'custom' && ds?.customOutline?.length) {
-      const segments = ds.customOutline
-      compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h)
-      compositeSvgPathFactory = (w, h) => customOutlineToSvgPath(segments, w, h)
-    }
-    node = new CompositeNode({
-      ...commonBase,
-      style: compositeStyle,
-      shapeType: compositeShapeMappedToCustom || (rawCompositeShape === 'custom' && compositePathFactory) ? 'custom' : (rawCompositeShape as 'rectangle' | 'circle' | 'diamond' | 'custom'),
-      cornerRadius: visual.cornerRadius,
-      autoSize: ds?.compositeAutoSize ?? false,
-      minWidth: ds?.compositeMinWidth ?? 0,
-      minHeight: ds?.compositeMinHeight ?? 0,
+    composite = {
       content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
-      ...(compositePathFactory ? { pathFactory: compositePathFactory } : {}),
-      ...(compositeSvgPathFactory ? { svgPath: compositeSvgPathFactory } : {}),
-    })
-  } else if (shape === 'beveled-rectangle') {
-    node = new CustomShapeNode({
-      ...commonOptions,
-      path: beveledFactory.path,
-      svgPath: beveledFactory.svgPath,
-    })
-  } else if (shape === 'trapezoid') {
-    node = new CustomShapeNode({
-      ...commonOptions,
-      path: trapezoidFactory.path,
-      svgPath: trapezoidFactory.svgPath,
-    })
-  } else if (shape === 'slanted-rectangle') {
-    node = new CustomShapeNode({
-      ...commonOptions,
-      path: slantedFactory.path,
-      svgPath: slantedFactory.svgPath,
-    })
-  } else if (shape === 'custom' && ds?.customOutline?.length) {
-    const segments = ds.customOutline
-    node = new CustomShapeNode({
-      ...commonOptions,
-      path: (w, h) => customOutlineToPath2D(segments, w, h),
-      svgPath: (w, h) => customOutlineToSvgPath(segments, w, h),
-    })
-  } else {
-    node = new RectangleNode({
-      ...commonOptions,
-      cornerRadius: visual.cornerRadius,
-    })
+      stylePatch: bindingResult.outerPatch,
+    }
   }
 
-  if (node instanceof CustomShapeNode) {
-    node.shapeType = shape
-  }
-  if (ds?.labelPlacement) {
-    ;(node as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
-  }
+  const node = createDiagramNode({
+    id: `instance-${instance.id}`,
+    x: instance.x,
+    y: instance.y,
+    width: visual.width,
+    height: visual.height,
+    style: visual.style,
+    diagramStyle: ds,
+    anchorPoints: resolveComponentAnchorPoints(ds),
+    contentInset: (ds?.contentInset ?? 0) as unknown as number,
+    badges: getInteractiveBadgesForInstance(instance),
+    label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
+    ...(icon ? { icon } : {}),
+    cornerRadius: visual.cornerRadius,
+    composite,
+    specialRectangleShape,
+  })
   applyMinSizeConstraint(node, instance.modelNodeId)
   return node
 }
@@ -1365,13 +1095,15 @@ function syncDiagram() {
     const existing = renderer.getNode(papNodeId)
     if (existing) {
       const ds = getEffectiveStyle(instance)
-      const expectedShape = getComponentShape(ds)
-      const existingShape = getNodeShapeFromNode(existing)
+      const expectedShape = resolveDiagramNodeShape(ds)
+      const existingShape = getDiagramNodeShape(existing)
       const shouldUseFolderTab = isDirectoryNoteInstance(instance) && expectedShape === 'rectangle'
       const shouldUseStickyNote =
         isNoteInstance(instance) && !isDirectoryNoteInstance(instance) && expectedShape === 'rectangle'
-      const needsFolderTabRebuild = shouldUseFolderTab && !isFolderTabNode(existing)
-      const needsStickyNoteRebuild = shouldUseStickyNote && !isStickyNoteNode(existing)
+      const needsFolderTabRebuild =
+        shouldUseFolderTab && !hasSpecialRectangleShape(existing, 'folder-tab')
+      const needsStickyNoteRebuild =
+        shouldUseStickyNote && !hasSpecialRectangleShape(existing, 'sticky-note')
 
       if (expectedShape !== existingShape || needsFolderTabRebuild || needsStickyNoteRebuild) {
         renderer.removeNode(papNodeId)
@@ -1397,7 +1129,7 @@ function syncDiagram() {
       existing.width = visual.width
       existing.height = visual.height
       existing.style = visual.style
-      existing.anchorPoints = resolveAnchorPoints(ds)
+      existing.anchorPoints = resolveComponentAnchorPoints(ds)
       const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id)
       if (typeof newLabel === 'string') {
         existing.label = newLabel
@@ -1407,7 +1139,7 @@ function syncDiagram() {
       if (existing instanceof RectangleNode) {
         existing.cornerRadius = visual.cornerRadius
       }
-      existing.icon = buildNodeIcon(ds)
+      existing.icon = buildModelNodeIcon(ds)
       ;(existing as DiagramNode & { badges: Array<{ id: string; iconUrl: string }> }).badges =
         getInteractiveBadgesForInstance(instance)
       existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
@@ -1442,7 +1174,7 @@ function syncDiagram() {
     if (!currentNodeIds.has(sourcePapId) || !currentNodeIds.has(targetPapId)) continue
 
     const ds = getEffectiveEdgeStyle(edge)
-    const edgeOpts = resolveEdgeOptions(ds)
+    const edgeOpts = resolveModelEdgeOptions(ds)
     const linkDiffState =
       props.diffStateByEdgeInstanceId?.[edge.id] ?? props.diffStateByModelLinkId?.[edge.modelLinkId]
     if (linkDiffState) {
@@ -1451,9 +1183,12 @@ function syncDiagram() {
       edgeOpts.style = styleObj as EdgeStyle
     }
     const edgeLabel = getInstanceEdgeLabel(edge)
-    const edgeLabelText = buildEdgeLabel(edgeLabel)
-    const edgeLabelConfig = buildEdgeLabelWithStyle(edgeLabel, ds) ?? buildEdgeLabel(edgeLabel)
-    const edgeLabelBackground = buildEdgeLabelBackground(ds)
+    const edgeLabelConfigRaw = buildModelEdgeLabelConfig(edgeLabel, ds)
+    const edgeLabelText =
+      typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw?.text
+    const edgeLabelConfig =
+      typeof edgeLabelConfigRaw === 'object' ? new TextLabel(edgeLabelConfigRaw) : edgeLabelConfigRaw
+    const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
     const controlPoints = readControlPointsFromAttrs(edge.attrs)
 
     const existing = renderer.getEdge(papEdgeId)
@@ -1483,8 +1218,8 @@ function syncDiagram() {
           controlPoints
       }
       existing.labelOffset = edgeOpts.labelOffset ?? existing.labelOffset
-      if (ds?.edgeLabelPosition != null) existing.labelPosition = ds.edgeLabelPosition
-      if (ds?.edgeLabelFollowPath != null) existing.labelFollowPath = ds.edgeLabelFollowPath
+      if (edgeOpts.labelPosition != null) existing.labelPosition = edgeOpts.labelPosition
+      if (edgeOpts.labelFollowPath != null) existing.labelFollowPath = edgeOpts.labelFollowPath
       if (edgeOpts.labelLineGap !== undefined) existing.labelLineGap = edgeOpts.labelLineGap
       existing.label = edgeLabelConfig
       if (existing.label) {
@@ -1522,8 +1257,8 @@ function syncDiagram() {
         endMarker: edgeOpts.endMarker,
         ...(edgeLabelText !== undefined ? { label: edgeLabelText } : {}),
         ...(edgeOpts.labelOffset != null ? { labelOffset: edgeOpts.labelOffset } : {}),
-        ...(ds?.edgeLabelPosition != null ? { labelPosition: ds.edgeLabelPosition } : {}),
-        ...(ds?.edgeLabelFollowPath ? { labelFollowPath: true } : {}),
+        ...(edgeOpts.labelPosition != null ? { labelPosition: edgeOpts.labelPosition } : {}),
+        ...(edgeOpts.labelFollowPath ? { labelFollowPath: true } : {}),
         ...(edgeOpts.labelLineGap !== undefined ? { labelLineGap: edgeOpts.labelLineGap } : {}),
         ...(edgeLabelBackground ? { labelBackground: edgeLabelBackground } : {}),
         ...(controlPoints.length > 0 ? { controlPoints } : {}),
@@ -2165,49 +1900,32 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
 }
 
 // ── Renderer init ──
-function initRenderer(r: DiagramRenderer) {
+function initRenderer(
+  r: DiagramRenderer,
+  manager: InteractionManager,
+  overlays: {
+    gridOverlay: GridOverlay | null
+    miniMap: MiniMap | null
+    rulersOverlay: RulersOverlay | null
+  }
+) {
   renderer = r
+  interactionManager = manager
+  gridOverlay = overlays.gridOverlay
+  miniMap = overlays.miniMap
+  rulersOverlay = overlays.rulersOverlay
+  gridOverlay?.setEnabled(gridVisible.value)
+  miniMap?.setEnabled(miniMapVisible.value)
+  rulersOverlay?.setEnabled(rulersEnabled.value)
   lastActiveDiagramId = props.activeDiagram?.id ?? null
   r.getCanvas().addEventListener('click', handleCanvasClickPrioritizeEdge)
   r.getCanvas().addEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
   window.addEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
 
-  // Grid overlay
-  gridOverlay = new GridOverlay({ gridSize: 24, color: '#e2e8f0' })
-  r.use(gridOverlay)
-  gridOverlay.setEnabled(gridVisible.value)
-
-  // Rulers
-  rulersOverlay = new RulersOverlay({
-    enabled: rulersEnabled.value,
-  })
-  r.use(rulersOverlay)
-
-  // MiniMap
-  miniMap = new MiniMap({
-    enabled: miniMapVisible.value,
-    width: 120,
-    height: 60,
-    padding: 20,
-    contentMargin: 200,
-    anchor: 'bottom-left',
-  })
-  r.use(miniMap)
-
   // Always enable interactions: when readOnly or navigationOnlyMode use navigationOnly (zoom/pan only, no edit)
   const navOnly = props.readOnly || props.navigationOnlyMode
-  interactionManager = r.enableInteractions({
-    snapToGrid: snapEnabled.value,
-    gridSize: GRID_SIZE,
-    alignToNodes: alignEnabled.value,
-    alignmentScreenTolerance: 40,
-    previewPathType: 'straight',
-    attachToOutline: attachToOutlineEnabled.value,
-    keymap: { deleteKeys: [] },
-    navigationOnly: navOnly,
-  } as Parameters<DiagramRenderer['enableInteractions']>[0])
-  setupInteractionManager(interactionManager, r, navOnly)
-  bindInteractionEvents(interactionManager, r)
+  setupInteractionManager(manager, r, navOnly)
+  bindInteractionEvents(manager, r)
   r.on('zoom', () => {
     viewportRev.value += 1
     const diagramId = props.activeDiagram?.id
@@ -2253,7 +1971,7 @@ function initRenderer(r: DiagramRenderer) {
     return undefined
   }
 
-  emit('canvasContextChange', { renderer: r, interactionManager })
+  emit('canvasContextChange', { renderer: r, interactionManager: manager })
 
   ;(r as { on(event: 'nodeBadgeClick', cb: (nodeId: string, badgeId: string) => void): void }).on(
     'nodeBadgeClick',
@@ -2284,7 +2002,7 @@ function initRenderer(r: DiagramRenderer) {
   }
   )
 
-  if (interactionManager) {
+  if (manager) {
   // Context menu only when editable (not read-only baseline view)
   if (!props.readOnly) {
   r.enableContextMenu({
@@ -2763,48 +2481,13 @@ const setPaletteVisible = (visible: boolean) => {
 }
 
 // ── Lifecycle ──
-onMounted(() => {
-  const mount = () => {
-    if (!containerRef.value || !canvasRef.value) return
-    if (containerRef.value.clientWidth === 0 || containerRef.value.clientHeight === 0) {
-      requestAnimationFrame(mount)
-      return
-    }
-
-    const width = containerRef.value.clientWidth
-    const height = containerRef.value.clientHeight
-
-    const bgColor =
-      getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#f4f2ef'
-    const r = new DiagramRenderer(canvasRef.value, {
-      width,
-      height,
-      backgroundColor: bgColor,
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-      scrollbarOverlay: true,
-    })
-    initRenderer(r)
-
-    resizeObserver = new ResizeObserver(() => {
-      if (!renderer || !containerRef.value) return
-      renderer.resize(containerRef.value.clientWidth, containerRef.value.clientHeight)
-    })
-    resizeObserver.observe(containerRef.value)
+function cleanupRendererBeforeDestroy(currentRenderer: DiagramRenderer) {
+  if (lastActiveDiagramId) {
+    safePersistViewport(lastActiveDiagramId, currentRenderer)
   }
-  mount()
-})
-
-onBeforeUnmount(() => {
-  if (renderer && lastActiveDiagramId) {
-    safePersistViewport(lastActiveDiagramId, renderer)
-  }
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  renderer?.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
-  renderer?.getCanvas().removeEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
+  currentRenderer.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
+  currentRenderer.getCanvas().removeEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
   window.removeEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
-  renderer?.destroy()
   renderer = null
   interactionManager = null
   emit('canvasContextChange', { renderer: null, interactionManager: null })
@@ -2813,6 +2496,47 @@ onBeforeUnmount(() => {
   rulersOverlay = null
   nodeIdToInstance.clear()
   edgeIdToInstance.clear()
+}
+
+useDiagramRenderer({
+  canvasRef,
+  containerRef,
+  backgroundColor: () =>
+    getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#f4f2ef',
+  rendererOptions: {
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    scrollbarOverlay: true,
+  },
+  overlays: {
+    grid: { options: { gridSize: 24, color: '#e2e8f0' } },
+    rulers: { options: { enabled: rulersEnabled.value } },
+    miniMap: {
+      options: {
+        enabled: miniMapVisible.value,
+        width: 120,
+        height: 60,
+        padding: 20,
+        contentMargin: 200,
+        anchor: 'bottom-left',
+      },
+    },
+  },
+  interactions: {
+    snapToGrid: snapEnabled.value,
+    gridSize: GRID_SIZE,
+    alignToNodes: alignEnabled.value,
+    alignmentScreenTolerance: 40,
+    previewPathType: 'straight',
+    attachToOutline: attachToOutlineEnabled.value,
+    keymap: { deleteKeys: [] },
+    navigationOnly: props.readOnly || props.navigationOnlyMode,
+  } as Parameters<DiagramRenderer['enableInteractions']>[0],
+  onReady: ({ renderer: readyRenderer, interactionManager: readyInteractionManager, ...overlays }) => {
+    if (!readyInteractionManager) return
+    initRenderer(readyRenderer, readyInteractionManager, overlays)
+  },
+  onBeforeDestroy: cleanupRendererBeforeDestroy,
 })
 
 // Watch for data changes

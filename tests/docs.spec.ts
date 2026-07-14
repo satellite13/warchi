@@ -59,4 +59,14 @@ test.describe('Docs page', () => {
     await secondLink.click()
     await expect(secondLink).toHaveClass(/docs-sidebar__link--active/, { timeout: 5000 })
   })
+
+  test('auth docs describe cookie session without JS-readable JWTs', async ({ page }) => {
+    await page.goto('/docs/auth')
+    const body = page.locator('.docs-content__body')
+    await expect(body).toBeVisible({ timeout: 10000 })
+    await expect(body).toContainText(/cookie session|cookie-сесс/i)
+    await expect(body).toContainText(/localStorage|sessionStorage/)
+    await expect(body).toContainText(/JWT/)
+    await expect(body).toContainText(/недоступн|unavailable|Retry|Повторить/i)
+  })
 })

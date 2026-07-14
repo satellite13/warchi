@@ -3,30 +3,24 @@ import {
   DiagramRenderer,
   RectangleNode,
   CircleNode,
-  DiamondNode,
-  CustomShapeNode,
-  CompositeNode,
   deserializeCComponent,
   Node as DiagramNode,
   Edge,
   AutoLayout,
-  GridOverlay,
-  MiniMap,
-  RulersOverlay,
-  NavigationManager,
   SelectionManager,
-  InteractionManager,
   TextLabel,
+  type InteractionManager,
+  type NavigationManager,
   type ElementState,
   type EdgeStyle as PapirusEdgeStyle,
   type CContainer,
 } from "@ngroznykh/papirus"
-import { diagramShapeFactories } from "@/utils/diagramShapes"
 import {
-  customOutlineToPath2D,
-  customOutlineToSvgPath
-} from "@/utils/customOutlinePath"
-import type { CustomProperty, DiagramStyle } from "../notationAttrs"
+  createDiagramNode,
+  getDiagramNodeShape,
+  resolveDiagramNodeShape,
+} from "@/features/diagram/diagramNodeFactory"
+import type { CustomProperty, DiagramStyle } from "@/domain/attrs/notationAttrs"
 import type {
   NotationEditorState,
   EditorComponent,
@@ -48,7 +42,7 @@ import {
   applyStylePropertyBindings,
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
-} from "../utils/compositeBindings"
+} from "@/features/diagram-style/utils/compositeBindings"
 
 export type EntityKind = "component" | "relation"
 
@@ -82,17 +76,11 @@ type AnchorRelationMeta = {
   diagramStyle?: DiagramStyle
 }
 
-type NodeWithLabelPlacement = DiagramNode & { labelPlacement?: string }
 type InsetSides = { top?: number; right?: number; bottom?: number; left?: number }
 type TextLabelWithSpacing = TextLabel & {
   inset?: number | InsetSides
   padding?: number
   margin?: number
-}
-
-function setNodeLabelPlacement(node: DiagramNode, placement: string | undefined): void {
-  if (!placement) return
-  ;(node as NodeWithLabelPlacement).labelPlacement = placement
 }
 
 function setTextLabelSpacing(
@@ -107,46 +95,8 @@ function setTextLabelSpacing(
 }
 
 
-type ComponentShape =
-  | "rectangle"
-  | "beveled-rectangle"
-  | "diamond"
-  | "circle"
-  | "trapezoid"
-  | "slanted-rectangle"
-  | "custom"
-  | "composite"
-
 function disableTransformerFrame(node: DiagramNode) {
   node.resizeHandlesEnabled = false
-}
-
-function getComponentShape(ds?: DiagramStyle): ComponentShape {
-  const shape = ds?.nodeShape as ComponentShape | undefined
-  switch (shape) {
-    case "beveled-rectangle":
-    case "diamond":
-    case "circle":
-    case "trapezoid":
-    case "slanted-rectangle":
-    case "custom":
-    case "composite":
-      return shape
-    default:
-      return "rectangle"
-  }
-}
-
-function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
-  return node instanceof CustomShapeNode
-}
-
-function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
-  if (node instanceof CompositeNode) return "composite"
-  if (node instanceof DiamondNode) return "diamond"
-  if (node instanceof CircleNode) return "circle"
-  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? "rectangle"
-  return "rectangle"
 }
 
 function normalizeTagForSort(value: string): string {
@@ -180,9 +130,6 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   const interactionManagerRef = shallowRef<InteractionManager | null>(null)
   const selectionManagerRef = shallowRef<SelectionManager | null>(null)
   const navigationManagerRef = shallowRef<NavigationManager | null>(null)
-  const gridOverlayRef = shallowRef<GridOverlay | null>(null)
-  const miniMapRef = shallowRef<MiniMap | null>(null)
-  const rulersOverlayRef = shallowRef<RulersOverlay | null>(null)
   const nodeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   const edgeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   let cleanupSelectionOutlineOverlay: (() => void) | null = null
@@ -207,39 +154,24 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   ): DiagramNode {
     const visual = resolveComponentStyle(item)
     const ds = item.parsedAttrs.diagramStyle
-    const shape = getComponentShape(ds)
-    const commonBase = {
-      id: `component-${item.id}`,
-      x,
-      y,
-      width: visual.width,
-      height: visual.height,
-      style: visual.style,
-      anchorPoints: resolveComponentAnchorPoints(ds),
-      contentInset: (ds?.contentInset ?? 0) as unknown as number,
-    }
-    const commonOptions = {
-      ...commonBase,
-      label: buildNodeLabel(
-        item.name,
-        ds,
-        item.parsedAttrs.customProperties.filter((p) => !p.system),
-        typeCustomPropertiesForComponent(item),
-      ),
-      ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {})
-    }
-    const beveledFactory = diagramShapeFactories["beveled-rectangle"]
-    const trapezoidFactory = diagramShapeFactories["trapezoid"]
-    const slantedFactory = diagramShapeFactories["slanted-rectangle"]
+    const shape = resolveDiagramNodeShape(ds)
+    const componentProperties = item.parsedAttrs.customProperties.filter((p) => !p.system)
+    const nodeTypeProperties = typeCustomPropertiesForComponent(item)
+    const icon = buildNodeIcon(ds)
+    let composite:
+      | {
+          content: CContainer
+          stylePatch?: Record<string, unknown>
+        }
+      | undefined
 
-    let node: DiagramNode
     if (shape === "composite") {
-      const componentProperties = item.parsedAttrs.customProperties.filter((p) => !p.system)
-      const nodeTypeProperties = typeCustomPropertiesForComponent(item)
       const componentValues = Object.fromEntries(
         componentProperties.map((p) => [p.name, p.defaultValue])
       )
-      const nodeTypeValues = Object.fromEntries(nodeTypeProperties.map((p) => [p.name, p.defaultValue]))
+      const nodeTypeValues = Object.fromEntries(
+        nodeTypeProperties.map((p) => [p.name, p.defaultValue])
+      )
       const baseContent = ds?.compositeContent ?? createDefaultCompositeContent(item.name)
       const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
         displayName: item.name,
@@ -252,80 +184,32 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         nodeTypeProperties,
         nodeTypeValues,
       })
-      const compositeStyle = {
-        ...visual.style,
-        ...bindingResult.outerPatch,
-        ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
-        ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
-        ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-        ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
-      }
-      const rawCompositeShape = ds?.compositeShapeType ?? "rectangle"
-      const compositeShapeMappedToCustom =
-        rawCompositeShape === "beveled-rectangle" ||
-        rawCompositeShape === "trapezoid" ||
-        rawCompositeShape === "slanted-rectangle"
-      let compositePathFactory: ((w: number, h: number) => Path2D) | undefined
-      let compositeSvgPathFactory: ((w: number, h: number) => string) | undefined
-      if (compositeShapeMappedToCustom) {
-        compositePathFactory = diagramShapeFactories[rawCompositeShape]?.path
-        compositeSvgPathFactory = diagramShapeFactories[rawCompositeShape]?.svgPath
-      } else if (rawCompositeShape === "custom" && ds?.customOutline?.length) {
-        const segments = ds.customOutline
-        compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h)
-        compositeSvgPathFactory = (w, h) => customOutlineToSvgPath(segments, w, h)
-      }
-      node = new CompositeNode({
-        ...commonBase,
-        style: compositeStyle,
-        shapeType: compositeShapeMappedToCustom || (rawCompositeShape === "custom" && compositePathFactory) ? "custom" : (rawCompositeShape as "rectangle" | "circle" | "diamond" | "custom"),
-        cornerRadius: visual.cornerRadius,
-        autoSize: ds?.compositeAutoSize ?? false,
-        minWidth: ds?.compositeMinWidth ?? 0,
-        minHeight: ds?.compositeMinHeight ?? 0,
+      composite = {
         content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
-        ...(compositePathFactory ? { pathFactory: compositePathFactory } : {}),
-        ...(compositeSvgPathFactory ? { svgPath: compositeSvgPathFactory } : {}),
-      })
-    } else if (shape === "diamond") {
-      node = new DiamondNode(commonOptions)
-    } else if (shape === "circle") {
-      node = new CircleNode(commonOptions)
-    } else if (shape === "beveled-rectangle") {
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: beveledFactory.path,
-        svgPath: beveledFactory.svgPath
-      })
-    } else if (shape === "trapezoid") {
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: trapezoidFactory.path,
-        svgPath: trapezoidFactory.svgPath
-      })
-    } else if (shape === "slanted-rectangle") {
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: slantedFactory.path,
-        svgPath: slantedFactory.svgPath
-      })
-    } else if (shape === "custom" && ds?.customOutline?.length) {
-      const segments = ds.customOutline
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: (w, h) => customOutlineToPath2D(segments, w, h),
-        svgPath: (w, h) => customOutlineToSvgPath(segments, w, h)
-      })
-    } else {
-      node = new RectangleNode({
-        ...commonOptions,
-        cornerRadius: visual.cornerRadius
-      })
+        stylePatch: bindingResult.outerPatch,
+      }
     }
-    if (node instanceof CustomShapeNode) {
-      node.shapeType = shape
-    }
-    setNodeLabelPlacement(node, ds?.labelPlacement)
+
+    const node = createDiagramNode({
+      id: `component-${item.id}`,
+      x,
+      y,
+      width: visual.width,
+      height: visual.height,
+      style: visual.style,
+      diagramStyle: ds,
+      anchorPoints: resolveComponentAnchorPoints(ds),
+      contentInset: (ds?.contentInset ?? 0) as unknown as number,
+      label: buildNodeLabel(
+        item.name,
+        ds,
+        componentProperties,
+        nodeTypeProperties,
+      ),
+      ...(icon ? { icon } : {}),
+      cornerRadius: visual.cornerRadius,
+      composite,
+    })
     disableTransformerFrame(node)
     return node
   }
@@ -371,8 +255,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const existing = renderer.getNode(nodeId)
       if (existing) {
         const ds = component.parsedAttrs.diagramStyle
-        const expectedShape = getComponentShape(ds)
-        const existingShape = getNodeShapeFromNode(existing)
+        const expectedShape = resolveDiagramNodeShape(ds)
+        const existingShape = getDiagramNodeShape(existing)
         if (expectedShape !== existingShape) {
           const replacement = createComponentNode(component, existing.x, existing.y)
           renderer.removeNode(nodeId)
@@ -414,7 +298,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         }
         existing.icon = buildNodeIcon(ds)
         existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
-        setNodeLabelPlacement(existing, ds?.labelPlacement)
+        if (ds?.labelPlacement) {
+          ;(existing as DiagramNode & { labelPlacement?: string }).labelPlacement = ds.labelPlacement
+        }
       } else {
         componentNodes.push(createComponentNode(component, 0, 0))
       }
@@ -772,32 +658,8 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     }
   }
 
-  function initRenderer(renderer: DiagramRenderer) {
+  function initRenderer(renderer: DiagramRenderer, interactionManager: InteractionManager) {
     rendererRef.value = renderer
-
-    const gridOverlay = new GridOverlay({
-      gridSize: GRID_SIZE,
-      color: "#e2e8f0"
-    })
-    renderer.use(gridOverlay)
-    gridOverlayRef.value = gridOverlay
-
-    const rulersOverlay = new RulersOverlay({ enabled: true })
-    renderer.use(rulersOverlay)
-    rulersOverlayRef.value = rulersOverlay
-
-    const miniMap = new MiniMap({ width: 120, height: 60, padding: 20, contentMargin: 200 })
-    renderer.use(miniMap)
-    miniMapRef.value = miniMap
-
-    const interactionManager = renderer.enableInteractions({
-      snapToGrid: true,
-      gridSize: GRID_SIZE,
-      alignToNodes: true,
-      alignmentScreenTolerance: 40,
-      previewPathType: 'straight',
-      keymap: { deleteKeys: [] }
-    })
     // Notation editor does not support interactive port-to-port connections.
     const connectionManager =
       interactionManager.connection as unknown as {
@@ -1002,9 +864,6 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     interactionManagerRef.value = null
     selectionManagerRef.value = null
     navigationManagerRef.value = null
-    gridOverlayRef.value = null
-    miniMapRef.value = null
-    rulersOverlayRef.value = null
     rendererRef.value = null
     nodeIdToEntity.clear()
     edgeIdToEntity.clear()
@@ -1013,9 +872,6 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   return {
     rendererRef,
     interactionManagerRef,
-    gridOverlayRef,
-    miniMapRef,
-    rulersOverlayRef,
     initRenderer,
     destroyRenderer,
     fitToView,

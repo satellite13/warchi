@@ -20,8 +20,25 @@ vi.mock('@/utils/csrfCookie', () => ({
   CSRF_HEADER_NAME: 'X-CSRF-Token',
 }))
 
+vi.mock('@/composables/useAvailabilityGuard', async () => {
+  const actual = await vi.importActual<typeof import('@/composables/useAvailabilityGuard')>(
+    '@/composables/useAvailabilityGuard',
+  )
+  return {
+    ...actual,
+    reportAvailabilityOutage: vi.fn(actual.reportAvailabilityOutage),
+    clearOutage: vi.fn(actual.clearOutage),
+  }
+})
+
 import { apiGet, apiPost, apiPut, apiDelete } from './apiClient'
 import { clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
+import { getCsrfTokenFromCookie } from '@/utils/csrfCookie'
+import {
+  clearOutage,
+  reportAvailabilityOutage,
+  useAvailabilityGuard,
+} from '@/composables/useAvailabilityGuard'
 
 function mockFetchResponse(body: unknown, status = 200) {
   const text = body === undefined ? '' : JSON.stringify(body)
@@ -38,10 +55,12 @@ describe('apiClient', () => {
   beforeEach(() => {
     originalFetch = globalThis.fetch
     vi.clearAllMocks()
+    clearOutage()
   })
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    clearOutage()
   })
 
   describe('apiGet', () => {
@@ -262,6 +281,96 @@ describe('apiClient', () => {
       expect(callCount).toBe(2)
       expect(clearAuthStorage).toHaveBeenCalled()
       expect(emitAuthCleared).toHaveBeenCalled()
+    })
+
+    it('does not clear session when refresh fails because of a network error', async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/auth/refresh')) {
+          return Promise.reject(new Error('Network failure'))
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          text: () => Promise.resolve(JSON.stringify({ message: 'Unauthorized' })),
+        })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/models')
+
+      expect(result.success).toBe(false)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(clearAuthStorage).not.toHaveBeenCalled()
+      expect(emitAuthCleared).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('CSRF protection', () => {
+    it('fails mutating protected requests before fetch when CSRF cookie is missing', async () => {
+      vi.mocked(getCsrfTokenFromCookie).mockReturnValueOnce(null)
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiPost('/models', { name: 'test' })
+
+      expect(result).toEqual({
+        success: false,
+        error: { status: 419, message: 'CSRF token is missing.' },
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('does not require CSRF for public auth requests', async () => {
+      vi.mocked(getCsrfTokenFromCookie).mockReturnValueOnce(null)
+      const fetchMock = mockFetchResponse({ user: { id: 'u1' } })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await apiPost('/auth/login', { email: 'a', password: 'b' })
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('availability outage classification', () => {
+    it('reports authz_unavailable on 503 with authorization service message', async () => {
+      const fetchMock = mockFetchResponse(
+        { message: 'Authorization service is unavailable' },
+        503,
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/permissions/check')
+
+      expect(result.success).toBe(false)
+      expect(reportAvailabilityOutage).toHaveBeenCalledWith(
+        'authz_unavailable',
+        expect.stringMatching(/authorization service is unavailable/i),
+      )
+      expect(useAvailabilityGuard().outage.value?.kind).toBe('authz_unavailable')
+    })
+
+    it('reports backend_unavailable on plain 503', async () => {
+      const fetchMock = mockFetchResponse({ message: 'Service Unavailable' }, 503)
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/models')
+
+      expect(result.success).toBe(false)
+      expect(reportAvailabilityOutage).toHaveBeenCalledWith(
+        'backend_unavailable',
+        expect.any(String),
+      )
+    })
+
+    it('clears authz_unavailable after successful permissions check', async () => {
+      reportAvailabilityOutage('authz_unavailable', 'Authorization service is unavailable')
+      const fetchMock = mockFetchResponse({ allowed: true })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await apiGet('/permissions/check')
+
+      expect(clearOutage).toHaveBeenCalledWith('authz_unavailable')
+      expect(useAvailabilityGuard().outage.value).toBeNull()
     })
   })
 })

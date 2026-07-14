@@ -81,6 +81,9 @@ export const notationsMessages = {
       compositeValidationIconBindTargetInvalid:
         'Флаг bindsNotationIcon допустим только для узла icon',
       compositeValidationTargetNotFound: 'Не найден targetId в compositeContent: {targetId}',
+      enterComponentName: 'Введите название компонента',
+      enterComponentVersion: 'Введите версию компонента',
+      enterNewNodeTypeName: 'Введите название нового типа узла',
     },
   },
   en: {
@@ -165,6 +168,9 @@ export const notationsMessages = {
       compositeValidationIconBindTargetInvalid:
         'bindsNotationIcon is allowed only on icon nodes',
       compositeValidationTargetNotFound: 'Target id is not found in compositeContent: {targetId}',
+      enterComponentName: 'Enter component name',
+      enterComponentVersion: 'Enter component version',
+      enterNewNodeTypeName: 'Enter new node type name',
     },
   },
 }

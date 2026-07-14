@@ -220,8 +220,26 @@ export function useDiagramEditLock(options: {
         lockHolderDisplay.value = d.lockedByDisplay ?? null
         remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
         startBlockedPoll(diagramId)
+        void fetchLocksList()
+        return
       }
     }
+
+    // Fallback for backends that still return a bare 409 without lock payload:
+    // infer blocked state from the locks list for the selected diagram.
+    if (!res.success && res.error.status === 409) {
+      await fetchLocksList()
+      if (seq !== lockOpSeq) return
+      const entry = locksList.value.find((l) => l.diagramId === diagramId && l.isLocked)
+      if (entry) {
+        isBlockedByOther.value = true
+        lockHolderDisplay.value = entry.lockedByDisplay ?? null
+        remoteDiagramUpdatedAt.value = entry.diagramUpdatedAt ?? null
+        startBlockedPoll(diagramId)
+        return
+      }
+    }
+
     void fetchLocksList()
   }
 

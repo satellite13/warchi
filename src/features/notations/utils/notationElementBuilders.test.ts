@@ -8,7 +8,7 @@ import {
   buildNodeIcon,
   buildMarker,
 } from '@/features/notations/utils/notationElementBuilders'
-import type { DiagramStyle, CustomProperty } from '@/features/notations/notationAttrs'
+import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
 
 function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name: string }): CustomProperty {

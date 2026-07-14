@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { NotationEditorState } from '../types'
 import type { SelectedEntity } from './useNotationEntity'
 
-vi.mock('../styles/stylePresets', () => ({
+vi.mock('@/features/diagram-style/styles/stylePresets', () => ({
   getAllRelationPresets: () => [],
   applyRelationStylePreset: () => ({}),
   getDefaultRelationStylePresetName: () => 'default',

@@ -2,7 +2,7 @@
 import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { NodeShapeResponse } from "@/types/api"
-import type { OutlineSegment } from "../../notations/notationAttrs"
+import type { OutlineSegment } from "@/domain/attrs/notationAttrs"
 import CustomOutlineEditor from "../CustomOutlineEditor.vue"
 
 defineProps<{

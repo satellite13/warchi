@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import PropertyRow from '../../types/components/PropertyRow.vue'
+import PropertyRow from '@/components/properties/PropertyRow.vue'
 import CollapseSection from './CollapseSection.vue'
 import TypeSelectSection from './TypeSelectSection.vue'
 import RelationRulesSection from './RelationRulesSection.vue'
-import type { CustomProperty, CustomPropertyType } from '../notationAttrs'
+import type { CustomProperty, CustomPropertyType } from '@/domain/attrs/notationAttrs'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 import { useCustomProperties } from '../composables/useCustomProperties'
 import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'

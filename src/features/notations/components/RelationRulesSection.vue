@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import CollapseSection from './CollapseSection.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import MultiSelect from '@/components/forms/MultiSelect.vue'
-import { createId } from '../notationAttrs'
+import { createId } from '@/domain/attrs/notationAttrs'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 
 const props = defineProps<{

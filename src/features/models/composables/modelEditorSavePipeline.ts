@@ -1,4 +1,5 @@
 import { apiDelete, apiPost, apiPut } from "@/composables/useApi"
+import i18n from "@/i18n"
 import type { ModelData } from "@/types/entities"
 import type {
   DiagramRequest,
@@ -15,6 +16,8 @@ import { compareVersions } from "@/utils/version"
 import { serializeDiagramAttrs, serializeLinkAttrs, serializeNodeAttrs } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "../types"
 
+const t = (key: string, params?: Record<string, unknown>): string =>
+  String(i18n.global.t(key, params ?? {}))
 
 export async function saveModelMetadata(
   model: ModelData,
@@ -29,9 +32,9 @@ export async function saveModelMetadata(
   const result = await apiPut<ModelData>(`/models/${model.id}`, request)
   if (!result.success) {
     if (result.error.status === 409) {
-      throw new Error("Модель с таким именем и версией уже существует.")
+      throw new Error(t("models.saveConflictNameVersion"))
     }
-    throw new Error(`Ошибка обновления модели: ${result.error.message}`)
+    throw new Error(t("models.saveModelUpdateError", { message: result.error.message }))
   }
   const idx = modelCatalog.findIndex(item => item.id === result.data.id)
   if (idx >= 0) modelCatalog[idx] = result.data
@@ -61,7 +64,7 @@ export async function saveNodes(
       }
 
       const resolvedParentId = rawParentId ? (newNodeIdMap.get(rawParentId) ?? rawParentId) : null
-      onProgress(`Создание узла: ${node.name}`)
+      onProgress(t("models.saveCreatingNode", { name: node.name }))
       const request: NodeRequest = {
         name: node.name,
         modelId,
@@ -73,7 +76,13 @@ export async function saveNodes(
       const result = await apiPost<NodeResponse>("/nodes", request)
       if (!result.success) {
         throw new Error(
-          formatEntitySaveError("модели", "создания", "узла", result.error.status, result.error.message)
+          formatEntitySaveError(
+            t("models.saveContextModel"),
+            "create",
+            t("models.saveEntityNode"),
+            result.error.status,
+            result.error.message
+          )
         )
       }
       const oldId = node.id
@@ -90,12 +99,12 @@ export async function saveNodes(
     }
 
     if (!progress) {
-      throw new Error("Не удалось сохранить новые узлы: проверьте иерархию дерева.")
+      throw new Error(t("models.saveNodesHierarchyError"))
     }
   }
 
   for (const node of nodes.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
-    onProgress(`Обновление узла: ${node.name}`)
+    onProgress(t("models.saveUpdatingNode", { name: node.name }))
     const resolvedParentId = node.parentNodeId
       ? (newNodeIdMap.get(node.parentNodeId) ?? node.parentNodeId)
       : null
@@ -110,7 +119,13 @@ export async function saveNodes(
     const result = await apiPut<NodeResponse>(`/nodes/${node.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError("модели", "обновления", "узла", result.error.status, result.error.message)
+        formatEntitySaveError(
+          t("models.saveContextModel"),
+          "update",
+          t("models.saveEntityNode"),
+          result.error.status,
+          result.error.message
+        )
       )
     }
     node.parentNodeId = result.data.parentNodeId ?? resolvedParentId
@@ -120,11 +135,17 @@ export async function saveNodes(
   }
 
   for (const node of nodes.filter(row => row._isDeleted && !row._isNew)) {
-    onProgress(`Удаление узла: ${node.name}`)
+    onProgress(t("models.saveDeletingNode", { name: node.name }))
     const result = await apiDelete<void>(`/nodes/${node.id}`)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError("модели", "удаления", "узла", result.error.status, result.error.message)
+        formatEntitySaveError(
+          t("models.saveContextModel"),
+          "delete",
+          t("models.saveEntityNode"),
+          result.error.status,
+          result.error.message
+        )
       )
     }
   }
@@ -162,13 +183,13 @@ export async function saveLinks(
   onProgress: (msg: string) => void
 ): Promise<void> {
   for (const link of links.filter(row => row._isDeleted && !row._isNew)) {
-    onProgress("Удаление связи")
+    onProgress(t("models.saveDeletingLink"))
     const result = await apiDelete<void>(`/links/${link.id}`)
-    if (!result.success) throw new Error(`Ошибка удаления связи: ${result.error.message}`)
+    if (!result.success) throw new Error(t("models.saveLinkDeleteError", { message: result.error.message }))
   }
 
   for (const link of links.filter(row => row._isNew && !row._isDeleted)) {
-    onProgress("Создание связи")
+    onProgress(t("models.saveCreatingLink"))
     const request: LinkRequest = {
       sourceId: link.sourceId,
       targetId: link.targetId,
@@ -178,7 +199,7 @@ export async function saveLinks(
       attrs: serializeLinkAttrs(link.parsedAttrs),
     }
     const result = await apiPost<LinkResponse>("/links", request)
-    if (!result.success) throw new Error(`Ошибка создания связи: ${result.error.message}`)
+    if (!result.success) throw new Error(t("models.saveLinkCreateError", { message: result.error.message }))
     const oldId = link.id
     link.id = result.data.id
     link._isNew = false
@@ -192,7 +213,7 @@ export async function saveLinks(
   }
 
   for (const link of links.filter(row => row._isDirty && !row._isDeleted && !row._isNew)) {
-    onProgress("Обновление связи")
+    onProgress(t("models.saveUpdatingLink"))
     const request: LinkRequest = {
       sourceId: link.sourceId,
       targetId: link.targetId,
@@ -202,7 +223,7 @@ export async function saveLinks(
       attrs: serializeLinkAttrs(link.parsedAttrs),
     }
     const result = await apiPut<LinkResponse>(`/links/${link.id}`, request)
-    if (!result.success) throw new Error(`Ошибка обновления связи: ${result.error.message}`)
+    if (!result.success) throw new Error(t("models.saveLinkUpdateError", { message: result.error.message }))
     link._isDirty = false
     const linkU = result.data.updatedAt
     if (typeof linkU === "string" && linkU.length > 0) link.updatedAt = linkU
@@ -216,13 +237,13 @@ export async function saveDiagrams(
   onProgress: (msg: string) => void
 ): Promise<void> {
   for (const diagram of diagrams.filter(row => row._isDeleted && !row._isNew)) {
-    onProgress(`Удаление диаграммы: ${diagram.name}`)
+    onProgress(t("models.saveDeletingDiagram", { name: diagram.name }))
     const result = await apiDelete<void>(`/diagrams/${diagram.id}`)
-    if (!result.success) throw new Error(`Ошибка удаления диаграммы: ${result.error.message}`)
+    if (!result.success) throw new Error(t("models.saveDiagramDeleteError", { message: result.error.message }))
   }
 
   for (const diagram of diagrams.filter(row => row._isNew && !row._isDeleted)) {
-    onProgress(`Создание диаграммы: ${diagram.name}`)
+    onProgress(t("models.saveCreatingDiagram", { name: diagram.name }))
     const request: DiagramRequest = {
       name: diagram.name,
       version: diagram.version,
@@ -233,7 +254,7 @@ export async function saveDiagrams(
       attrs: serializeDiagramAttrs(diagram.parsedAttrs),
     }
     const result = await apiPost<DiagramResponse>("/diagrams", request)
-    if (!result.success) throw new Error(`Ошибка создания диаграммы: ${result.error.message}`)
+    if (!result.success) throw new Error(t("models.saveDiagramCreateError", { message: result.error.message }))
     diagram.id = result.data.id
     diagram._isNew = false
     const dCreatedU = result.data.updatedAt
@@ -244,7 +265,7 @@ export async function saveDiagrams(
     .filter(row => row._isDirty && !row._isDeleted && !row._isNew)
     .sort((a, b) => compareVersions(b.version, a.version))
   for (const diagram of dirtyDiagrams) {
-    onProgress(`Обновление диаграммы: ${diagram.name}`)
+    onProgress(t("models.saveUpdatingDiagram", { name: diagram.name }))
     const request: DiagramUpdateRequest = {
       name: diagram.name,
       version: diagram.version,
@@ -255,7 +276,7 @@ export async function saveDiagrams(
       attrs: serializeDiagramAttrs(diagram.parsedAttrs),
     }
     const result = await apiPut<DiagramResponse>(`/diagrams/${diagram.id}`, request)
-    if (!result.success) throw new Error(`Ошибка обновления диаграммы: ${result.error.message}`)
+    if (!result.success) throw new Error(t("models.saveDiagramUpdateError", { message: result.error.message }))
     diagram._isDirty = false
     const dU = result.data.updatedAt
     if (typeof dU === "string" && dU.length > 0) diagram.updatedAt = dU

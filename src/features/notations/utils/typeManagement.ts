@@ -1,4 +1,4 @@
-import { createId } from '../notationAttrs'
+import { createId } from '@/domain/attrs/notationAttrs'
 import type { TypeParsedAttrs } from '../types'
 
 interface BaseEditorType {

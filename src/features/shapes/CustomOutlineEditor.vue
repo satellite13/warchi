@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from "vue"
-import type { OutlineSegment, OutlineSegmentLine } from "../notations/notationAttrs"
-import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
+import type { OutlineSegment, OutlineSegmentLine } from "@/domain/attrs/notationAttrs"
+import { DEFAULT_RECTANGLE_OUTLINE } from "@/domain/attrs/notationAttrs"
 import {
   cloneSegments,
   segmentStart,

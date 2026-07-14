@@ -23,11 +23,12 @@ const handleAuthCleared = () => {
 };
 
 onMounted(() => {
+  // Register before loadCurrentUser so AUTH_CLEARED from a stale session redirects reliably.
+  window.addEventListener(AUTH_CLEARED_EVENT, handleAuthCleared);
+
   if (isAuthenticated.value) {
     loadCurrentUser();
   }
-
-  window.addEventListener(AUTH_CLEARED_EVENT, handleAuthCleared);
 });
 
 onUnmounted(() => {

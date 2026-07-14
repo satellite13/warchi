@@ -3,7 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { NotationEditorState } from '../types'
 import type { SelectedEntity } from './useNotationEntity'
 
-vi.mock('../styles/stylePresets', () => ({
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
+vi.mock('@/features/diagram-style/styles/stylePresets', () => ({
   getAllComponentPresets: () => [],
   applyComponentStylePreset: (presetName: string) => {
     if (presetName === 'composite-preset') {
@@ -76,7 +82,7 @@ describe('useComponentManagement', () => {
       cm.componentName.value = ''
       cm.componentVersion.value = '1.0.0'
       cm.addComponent()
-      expect(cm.componentFormError.value).toBe('Введите название компонента')
+      expect(cm.componentFormError.value).toBe('notations.enterComponentName')
       expect(options.state.value.components).toHaveLength(0)
     })
 
@@ -85,7 +91,7 @@ describe('useComponentManagement', () => {
       cm.componentName.value = 'MyComponent'
       cm.componentVersion.value = ''
       cm.addComponent()
-      expect(cm.componentFormError.value).toBe('Введите версию компонента')
+      expect(cm.componentFormError.value).toBe('notations.enterComponentVersion')
       expect(options.state.value.components).toHaveLength(0)
     })
 
@@ -96,7 +102,7 @@ describe('useComponentManagement', () => {
       cm.componentTypeSelection.value = '__new__'
       cm.componentNewTypeName.value = ''
       cm.addComponent()
-      expect(cm.componentFormError.value).toBe('Введите название нового типа узла')
+      expect(cm.componentFormError.value).toBe('notations.enterNewNodeTypeName')
       expect(options.state.value.components).toHaveLength(0)
     })
 

@@ -1,7 +1,8 @@
 import { computed, type ComputedRef } from "vue"
 import { useI18n } from "vue-i18n"
-import { createId, type CustomProperty } from "../notationAttrs"
+import { createId, type CustomProperty } from "@/domain/attrs/notationAttrs"
 import type { EditorComponent, EditorRelation } from "../types"
+import { customPropertyValidationErrors } from "../utils/customPropertyValidation"
 
 export interface CustomPropertiesReturn {
   hasValidationErrors: ComputedRef<boolean>
@@ -17,52 +18,9 @@ export function useCustomProperties(
   onMutateItem?: (id: string, apply: (item: EditorComponent | EditorRelation) => void) => void
 ): CustomPropertiesReturn {
   const { t } = useI18n()
-  const hasDefaultValue = (property: CustomProperty): boolean => {
-    if (property.type === "number") {
-      return typeof property.defaultValue === "number" && Number.isFinite(property.defaultValue)
-    }
-    if (property.type === "boolean") {
-      return typeof property.defaultValue === "boolean"
-    }
-    return typeof property.defaultValue === "string" && property.defaultValue.trim().length > 0
-  }
 
-  const propertyErrors = (property: CustomProperty): string[] => {
-    const errors: string[] = []
-    if (!property.name.trim()) {
-      errors.push(t("types.validationNameRequired"))
-    }
-
-    if (property.regex) {
-      try {
-        new RegExp(property.regex)
-      } catch {
-        errors.push(t("types.validationRegexInvalid"))
-      }
-    }
-
-    if (
-      property.type === "number" &&
-      property.min !== null &&
-      property.max !== null &&
-      property.min > property.max
-    ) {
-      errors.push(t("types.validationMinGtMax"))
-    }
-
-    if (
-      property.type === "enum" &&
-      (!property.enumValues || !property.enumValues.length)
-    ) {
-      errors.push(t("types.validationEnumEmpty"))
-    }
-
-    if (property.required && !hasDefaultValue(property)) {
-      errors.push(t("types.validationRequiredDefault"))
-    }
-
-    return errors
-  }
+  const propertyErrors = (property: CustomProperty): string[] =>
+    customPropertyValidationErrors(property, (key) => String(t(key)))
 
   const hasValidationErrors = computed(() => {
     const target = selectedItem.value

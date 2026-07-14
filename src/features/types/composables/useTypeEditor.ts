@@ -3,12 +3,13 @@ import { useI18n } from "vue-i18n"
 import { apiGet, apiPost, apiPut, apiDelete } from "@/composables/useApi"
 import { listParams } from '@/api/queryHelpers'
 import { useAuth } from "@/composables/useAuth"
+import { useSaveState } from "@/composables/useSaveState"
 import {
   normalizeOwnerId,
   resolveOwnerDisplayNames,
   resolveOwnerLabel,
 } from "@/utils/resolveOwnerNames"
-import { parseTypeAttrs, serializeTypeAttrs, createId } from "../../notations/notationAttrs"
+import { parseTypeAttrs, serializeTypeAttrs, createId } from "@/domain/attrs/notationAttrs"
 import type { TypeParsedAttrs } from "../../notations/types"
 import type {
   NodeTypeResponse,
@@ -35,6 +36,7 @@ export interface TypeItem {
   kind: TypeKind
   parsedAttrs: TypeParsedAttrs
   _isNew?: boolean
+  _isDirty?: boolean
 }
 
 function toTypeItem(resp: NodeTypeResponse | LinkTypeResponse, kind: TypeKind): TypeItem {
@@ -72,8 +74,16 @@ export function useTypeEditor() {
   const linkTypes: Ref<TypeItem[]> = ref([])
   const selectedTypeId = ref<string | null>(null)
   const isLoading = ref(false)
-  const isSaving = ref(false)
-  const saveError = ref<string | null>(null)
+  const {
+    isSaving,
+    saveError,
+    saveSuccess,
+    saveProgress,
+    startSave,
+    completeSave,
+    failSave,
+    finishSave,
+  } = useSaveState()
   const ownerDisplayNames: Ref<Map<string, string>> = ref(new Map())
 
   const selectedType = computed(() => {
@@ -85,35 +95,15 @@ export function useTypeEditor() {
     )
   })
 
-  // --- Dirty tracking ---
-  const savedSnapshot = ref<string | null>(null)
-
-  function takeSnapshot(item: TypeItem): string {
-    return JSON.stringify({
-      name: item.name,
-      attrs: serializeTypeAttrs(item.parsedAttrs)
-    })
-  }
-
-  function updateSnapshot() {
-    const item = selectedType.value
-    if (item) {
-      savedSnapshot.value = item._isNew ? null : takeSnapshot(item)
-    } else {
-      savedSnapshot.value = null
-    }
-  }
-
-  function refreshSnapshot() {
-    updateSnapshot()
+  function markTypeDirty(item: TypeItem): void {
+    if (item._isNew) return
+    item._isDirty = true
   }
 
   const isDirty = computed(() => {
     const item = selectedType.value
     if (!item) return false
-    if (item._isNew) return true
-    if (savedSnapshot.value === null) return false
-    return takeSnapshot(item) !== savedSnapshot.value
+    return Boolean(item._isNew || item._isDirty)
   })
 
   function collectOwnerIds(extraOwnerId?: string | null): string[] {
@@ -198,7 +188,6 @@ export function useTypeEditor() {
 
   function selectType(id: string | null) {
     selectedTypeId.value = id
-    updateSnapshot()
   }
 
   function addType(kind: TypeKind) {
@@ -219,8 +208,7 @@ export function useTypeEditor() {
   }
 
   async function saveType(item: TypeItem): Promise<boolean> {
-    isSaving.value = true
-    saveError.value = null
+    startSave()
 
     const attrs = serializeTypeAttrs(item.parsedAttrs)
     const requestOwnerId = item.ownerId || undefined
@@ -235,10 +223,8 @@ export function useTypeEditor() {
           }
           const result = await apiPost<NodeTypeResponse>("/node-types", body)
           if (!result.success) {
-            saveError.value = formatTypeOperationError(
-              "save",
-              result.error.status,
-              result.error.message
+            failSave(
+              formatTypeOperationError("save", result.error.status, result.error.message)
             )
             return false
           }
@@ -258,10 +244,8 @@ export function useTypeEditor() {
           }
           const result = await apiPost<LinkTypeResponse>("/link-types", body)
           if (!result.success) {
-            saveError.value = formatTypeOperationError(
-              "save",
-              result.error.status,
-              result.error.message
+            failSave(
+              formatTypeOperationError("save", result.error.status, result.error.message)
             )
             return false
           }
@@ -279,10 +263,8 @@ export function useTypeEditor() {
           const body: NodeTypeUpdateRequest = { name: item.name, attrs }
           const result = await apiPut<NodeTypeResponse>(`/node-types/${item.id}`, body)
           if (!result.success) {
-            saveError.value = formatTypeOperationError(
-              "save",
-              result.error.status,
-              result.error.message
+            failSave(
+              formatTypeOperationError("save", result.error.status, result.error.message)
             )
             return false
           }
@@ -294,10 +276,8 @@ export function useTypeEditor() {
           const body: LinkTypeUpdateRequest = { name: item.name, attrs }
           const result = await apiPut<LinkTypeResponse>(`/link-types/${item.id}`, body)
           if (!result.success) {
-            saveError.value = formatTypeOperationError(
-              "save",
-              result.error.status,
-              result.error.message
+            failSave(
+              formatTypeOperationError("save", result.error.status, result.error.message)
             )
             return false
           }
@@ -307,10 +287,10 @@ export function useTypeEditor() {
           }
         }
       }
-      updateSnapshot()
+      completeSave()
       return true
     } finally {
-      isSaving.value = false
+      finishSave()
     }
   }
 
@@ -320,24 +300,22 @@ export function useTypeEditor() {
       return true
     }
 
-    isSaving.value = true
-    saveError.value = null
+    startSave()
 
     try {
       const path = item.kind === "node" ? `/node-types/${item.id}` : `/link-types/${item.id}`
       const result = await apiDelete<void>(path)
       if (!result.success) {
-        saveError.value = formatTypeOperationError(
-          "delete",
-          result.error.status,
-          result.error.message
+        failSave(
+          formatTypeOperationError("delete", result.error.status, result.error.message)
         )
         return false
       }
       removeLocal(item)
+      completeSave()
       return true
     } finally {
-      isSaving.value = false
+      finishSave()
     }
   }
 
@@ -367,6 +345,7 @@ export function useTypeEditor() {
       enumValues: [],
       defaultValue: undefined
     })
+    markTypeDirty(item)
   }
 
   function removeCustomProperty(item: TypeItem, propertyId: string) {
@@ -374,6 +353,7 @@ export function useTypeEditor() {
     item.parsedAttrs.customProperties = item.parsedAttrs.customProperties.filter(
       (p) => p.id !== propertyId
     )
+    markTypeDirty(item)
   }
 
   // --- Type usages ---
@@ -515,11 +495,13 @@ watch(selectedTypeId, () => {
     isLoading,
     isSaving,
     saveError,
+    saveSuccess,
+    saveProgress,
     ownerDisplayNames,
     selectedTypeOwnerName,
     loadAll,
     selectType,
-    refreshSnapshot,
+    markTypeDirty,
     addType,
     saveType,
     deleteType,

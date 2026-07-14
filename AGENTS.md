@@ -205,14 +205,14 @@ Save operations process entities in order:
 2. Update modified entities
 3. Delete marked entities
 
-**Batch save conflict (HTTP 409):** `POST /models/{id}/batch-save` sends `baseUpdatedAt` on updates; mismatch yields `conflicts[]`. In the UI ([`ModelEditor.vue`](src/features/models/ModelEditor.vue)), users choose **reload from server** vs **force overwrite**, with per-entity **field diff** compare (differing fields only; see [`batchSaveConflictDisplay.ts`](src/features/models/utils/batchSaveConflictDisplay.ts)). Product docs: [`docs/plans/model-batch-save-conflicts.md`](docs/plans/model-batch-save-conflicts.md); in-app help: `/docs/models` (Saving → conflict).
+**Batch save conflict (HTTP 409):** `POST /models/{id}/batch-save` sends `baseUpdatedAt` on updates; mismatch yields `conflicts[]`. In the UI ([`ModelEditor.vue`](src/features/models/ModelEditor.vue)), users choose **reload from server** vs **force overwrite**, with per-entity **field diff** compare (differing fields only; see [`batchSaveConflictDisplay.ts`](src/features/models/utils/batchSaveConflictDisplay.ts)). Product docs live in the in-app help at `/docs/models` (Saving → conflict).
 
 ### Custom Properties System
 
 Flexible schema using JSON `attrs` field:
 
 ```typescript
-// Define in src/features/*/notationAttrs.ts or modelAttrs.ts
+// Define shared attrs in src/domain/attrs/notationAttrs.ts
 interface CustomProperty {
   id: string
   name: string
@@ -228,12 +228,19 @@ serializeEntityAttrs(attrs: EntityAttrs): string
 
 Internal flags (like `_fromType`) are stripped before serialization.
 
+### Module Boundaries
+
+- `src/domain/attrs/` is the domain kernel for shared attrs schemas and serializers. Feature code should import notation attrs from `@/domain/attrs/notationAttrs`, not from another feature.
+- `src/features/diagram-style/` is shared diagram styling UI and style runtime support used by both models and notations.
+
 ### Authentication & Security
 
-- JWT tokens stored in localStorage
-- Automatic token refresh on 401 responses
+- JWT tokens are held in httpOnly cookies; frontend localStorage stores only the user profile for UI state
+  (profile in localStorage is not a security boundary; see in-app docs `/docs/auth`)
+- Automatic cookie-session refresh on 401 responses
 - Custom events for auth state changes (`warchi-auth-updated`, `warchi-auth-cleared`)
-- Router guards check `isAuthenticated` and `requiresRole`
+- Router guards check `isAuthenticated` and `requiresAdminPanel` via permission API for admin routes
+- Mutating API calls require CSRF (`X-CSRF-Token` from cookie); missing token fails closed (419)
 
 ## Testing Guidelines
 
@@ -391,9 +398,9 @@ Environment variables for deployment:
 
 ## Security Considerations
 
-- JWT tokens are stored in localStorage (vulnerable to XSS)
-- All API calls include Authorization header
-- Automatic logout on 401/403 responses
+- JWT tokens are stored in httpOnly cookies; frontend code cannot read them
+- Mutating API calls include CSRF protection
+- Explicit 401/403 session failures clear local auth state; transient network failures do not force logout
 - Router guards prevent unauthorized access
 - User input is validated before API calls
 

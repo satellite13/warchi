@@ -10,17 +10,16 @@ import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
-  createId,
-  parseLinkAttrs,
-  parseNodeAttrs,
   resolveComponentByNodeType,
   resolveRelationByLinkType,
   type DiagramAttrs,
-  type DiagramNodeInstance,
 } from './modelAttrs'
-import type { EditorLink, EditorNode } from './types'
+import type { EditorLink } from './types'
 import {
   useModelBatchConflictUi,
+  isDiagramOnlyEdgeModelLinkId,
+  useModelDiagramConnections,
+  useModelDiagramInstances,
   useModelDiagramExport,
   useModelEditor,
   useModelEditorSync,
@@ -46,6 +45,7 @@ import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
@@ -202,9 +202,6 @@ const { canShare: canShareModel } = useCanShare(model)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const NOTE_NODE_PREFIX = '__diagram-note__:'
-const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
-const UNTYPED_EDGE_PREFIX = '__diagram-untyped-edge__:'
-const NOTE_PASTE_STEP = 24
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
 const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -757,28 +754,6 @@ const {
   loadModel,
 })
 
-const showComponentChoiceModal = ref(false)
-const componentChoiceOptions = ref<{ id: string; name: string }[]>([])
-const componentChoiceNodeId = ref<string | null>(null)
-/** Drop узла с дерева на диаграмму, отложенный пока открыта модалка выбора компонента нотации */
-const pendingTreeNodeDiagramDrop = ref<{ modelNodeId: string; x: number; y: number } | null>(null)
-
-const showRelationChoiceModal = ref(false)
-const relationChoiceOptions = ref<{ id: string; name: string; linkTypeId: string }[]>([])
-const pendingConnection = ref<{
-  sourceModelNodeId: string
-  targetModelNodeId: string
-  sourceInstanceId: string
-  targetInstanceId: string
-  sourcePortId?: string
-  targetPortId?: string
-  sourceOutlineParam?: number
-  targetOutlineParam?: number
-} | null>(null)
-
-const showReuseLinkModal = ref(false)
-const reuseLinkOptions = ref<EditorLink[]>([])
-const pendingRelationId = ref<string | null>(null)
 const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
 const pendingDeleteEdgeInstanceId = ref<string | null>(null)
@@ -827,8 +802,7 @@ const resolveRelationForLink = (link: EditorLink): RelationResponse | null => {
   const notationId = activeNotationId.value
   if (!notationId) return null
 
-  const explicitRelationId =
-    link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
+  const explicitRelationId = link.parsedAttrs.notationRelations[notationId]?.relationId
   if (explicitRelationId) {
     const explicitRelation = state.value.relations.find(
       item => item.id === explicitRelationId && item.notationId === notationId
@@ -893,14 +867,9 @@ const getReuseLinkCustomProperties = (
 }
 
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
-const noteClipboard = ref<DiagramNodeInstance[] | null>(null)
-const notePasteCount = ref(0)
 
 const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
   modelNodeId.startsWith(NOTE_NODE_PREFIX)
-
-const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
-  modelLinkId.startsWith(NOTE_EDGE_PREFIX) || modelLinkId.startsWith(UNTYPED_EDGE_PREFIX)
 
 const isUntypedModelLinkId = (modelLinkId: string): boolean => {
   const link = state.value.links.find(item => item.id === modelLinkId && !item._isDeleted)
@@ -915,24 +884,6 @@ const isDirectoryNoteInstanceId = (instanceId: string): boolean => {
   return instance?.attrs?.isDirectoryNote === true
 }
 
-const isNoteLikeConnection = (
-  sourceModelNodeId: string,
-  targetModelNodeId: string,
-  sourceInstanceId: string,
-  targetInstanceId: string
-): boolean => {
-  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
-    return true
-  }
-  if (isDirectoryNode(sourceModelNodeId) || isDirectoryNode(targetModelNodeId)) {
-    return true
-  }
-  if (isDirectoryNoteInstanceId(sourceInstanceId) || isDirectoryNoteInstanceId(targetInstanceId)) {
-    return true
-  }
-  return false
-}
-
 const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
   if (history && typeof history.execute === 'function') {
@@ -941,6 +892,43 @@ const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () =
   }
   command.execute()
 }
+
+const {
+  showComponentChoiceModal,
+  componentChoiceOptions,
+  handleComponentChoiceModalClose,
+  finalizeComponentChoiceForDiagram,
+  bindNodeComponent,
+  addExistingNodeToDiagram,
+  createNodeFromPaletteComponent,
+  createDiagramNote,
+  copySelectedNotesToClipboard,
+  pasteCopiedNotes,
+} = useModelDiagramInstances({
+  state,
+  activeDiagram,
+  activeNotationId,
+  isDiagramReadOnly,
+  directoryNodeType,
+  nodeTypeDefaultDirectoryById,
+  selectedModelNodeIds,
+  selectedInstanceIds,
+  selectedNodeId,
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+  editingNoteInstanceId,
+  showNoteEditorModal,
+  isDirectoryNode,
+  isNoteInstance,
+  ensureDirectoryPath,
+  getNextTreeOrderForParent,
+  executeDiagramHistoryCommand,
+  markDiagramDirty,
+  markNodeDirty,
+  setUiError,
+  t: key => String(t(key)),
+})
 
 const applyDefaultCustomValues = (
   target: Record<string, unknown>,
@@ -998,51 +986,6 @@ const syncDefaultsOnLoad = () => {
   }
 }
 
-function handleComponentChoiceModalClose() {
-  showComponentChoiceModal.value = false
-  pendingTreeNodeDiagramDrop.value = null
-  componentChoiceNodeId.value = null
-  componentChoiceOptions.value = []
-}
-
-function finalizeComponentChoiceForDiagram(componentId: string) {
-  const nodeId = componentChoiceNodeId.value
-  const pending = pendingTreeNodeDiagramDrop.value
-  const node =
-    nodeId != null
-      ? state.value.nodes.find(n => n.id === nodeId && !n._isDeleted)
-      : undefined
-  if (node) bindNodeComponent(node, componentId)
-  showComponentChoiceModal.value = false
-  componentChoiceNodeId.value = null
-  componentChoiceOptions.value = []
-  pendingTreeNodeDiagramDrop.value = null
-  if (pending && pending.modelNodeId === nodeId && node) {
-    addExistingNodeToDiagram(pending.modelNodeId, pending.x, pending.y)
-  }
-}
-
-const bindNodeComponent = (node: EditorNode, componentId: string) => {
-  const notationId = activeNotationId.value
-  if (!notationId) return
-  node.parsedAttrs.notationComponents[notationId] = { componentId }
-  if (!node.parsedAttrs.componentProperties[notationId])
-    node.parsedAttrs.componentProperties[notationId] = {}
-  if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
-    node.parsedAttrs.componentProperties[notationId][componentId] = {}
-  }
-  const component = state.value.components.find(
-    item => item.id === componentId && item.notationId === notationId
-  )
-  if (component) {
-    applyDefaultCustomValues(
-      node.parsedAttrs.componentProperties[notationId][componentId]!,
-      component.attrs
-    )
-  }
-  markNodeDirty(node.id)
-}
-
 const bindLinkRelation = (
   link: EditorLink,
   relationId: string,
@@ -1069,6 +1012,47 @@ const bindLinkRelation = (
     markLinkDirty(link.id)
   }
 }
+
+const {
+  showRelationChoiceModal,
+  relationChoiceOptions,
+  showReuseLinkModal,
+  reuseLinkOptions,
+  startConnectNodes,
+  finalizeConnection,
+  handleCreateNewLinkFromReuseModal,
+  handleRequestAutoLink,
+  handleSelectExistingLink,
+  placeTraceLinkOnDiagram,
+  canConnect,
+} = useModelDiagramConnections({
+  state,
+  activeDiagram,
+  activeNotationId,
+  defaultEdgeType,
+  isRelationRulesLoading: isActiveNotationRulesLoading,
+  isDiagramReadOnly,
+  isDiagramNoteModelNodeId,
+  isDirectoryNode,
+  isDirectoryNoteInstanceId,
+  executeDiagramHistoryCommand,
+  markDiagramDirty,
+  markLinkDirty,
+  bindLinkRelation,
+  setUiError,
+  t: key => String(t(key)),
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+})
+
+const reuseLinkModalOptions = computed(() =>
+  reuseLinkOptions.value.map(link => ({
+    id: link.id,
+    linkTypeName: getLinkTypeName(link.linkTypeId),
+    customProperties: getReuseLinkCustomProperties(link),
+  }))
+)
 
 const markNodeDeleted = (nodeId: string) => {
   const node = state.value.nodes.find(item => item.id === nodeId)
@@ -1435,103 +1419,6 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
   )
 }
 
-const getSelectedDiagramInstances = (): DiagramNodeInstance[] => {
-  const diagram = activeDiagram.value
-  if (!diagram) return []
-
-  const byId = new Map<string, DiagramNodeInstance>()
-
-  if (selectedInstanceIds.value.length > 0) {
-    const selectedSet = new Set(selectedInstanceIds.value)
-    for (const instance of diagram.parsedAttrs.instances.nodes) {
-      if (selectedSet.has(instance.id)) {
-        byId.set(instance.id, instance)
-      }
-    }
-  } else if (selectedModelNodeIds.value.length > 0) {
-    const selectedSet = new Set(selectedModelNodeIds.value)
-    for (const instance of diagram.parsedAttrs.instances.nodes) {
-      if (selectedSet.has(instance.modelNodeId)) {
-        byId.set(instance.id, instance)
-      }
-    }
-  }
-
-  return Array.from(byId.values())
-}
-
-const copySelectedNotesToClipboard = (): boolean => {
-  if (!activeDiagram.value) return false
-
-  const selectedNotes = getSelectedDiagramInstances()
-    .filter(instance => isNoteInstance(instance))
-    .map(instance => deepClone(instance))
-
-  if (selectedNotes.length === 0) return false
-
-  noteClipboard.value = selectedNotes
-  notePasteCount.value = 0
-  return true
-}
-
-const pasteCopiedNotes = (): boolean => {
-  const diagram = activeDiagram.value
-  if (!diagram || isDiagramReadOnly.value) return false
-  if (!noteClipboard.value || noteClipboard.value.length === 0) return false
-
-  const pasteOffset = NOTE_PASTE_STEP * (notePasteCount.value + 1)
-  const pastedNotes = noteClipboard.value.map(source => {
-    const nextId = createId()
-    const isDirectoryNote = source.attrs?.isDirectoryNote === true
-    return {
-      ...deepClone(source),
-      id: nextId,
-      modelNodeId: isDirectoryNote ? source.modelNodeId : `${NOTE_NODE_PREFIX}${nextId}`,
-      x: source.x + pasteOffset,
-      y: source.y + pasteOffset,
-    } satisfies DiagramNodeInstance
-  })
-
-  const pastedInstanceIds = pastedNotes.map(note => note.id)
-  const pastedModelNodeIds = pastedNotes.map(note => note.modelNodeId)
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      const existingIds = new Set(diagram.parsedAttrs.instances.nodes.map(item => item.id))
-      for (const note of pastedNotes) {
-        if (!existingIds.has(note.id)) {
-          diagram.parsedAttrs.instances.nodes.push(deepClone(note))
-        }
-      }
-      selectedModelNodeIds.value = pastedModelNodeIds
-      selectedInstanceIds.value = pastedInstanceIds
-      selectedModelLinkId.value = null
-      selectedEdgeInstanceId.value = null
-      selectedCanvasElementId.value =
-        pastedInstanceIds.length === 1 ? `instance-${pastedInstanceIds[0]}` : null
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      const pastedSet = new Set(pastedInstanceIds)
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => !pastedSet.has(item.id)
-      )
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge => !pastedSet.has(edge.sourceInstanceId) && !pastedSet.has(edge.targetInstanceId)
-      )
-      selectedModelNodeIds.value = []
-      selectedInstanceIds.value = []
-      selectedModelLinkId.value = null
-      selectedEdgeInstanceId.value = null
-      selectedCanvasElementId.value = null
-      markDiagramDirty(diagram.id)
-    },
-  })
-
-  notePasteCount.value += 1
-  return true
-}
-
 watch(
   () => activeDiagram.value?.id ?? null,
   diagramId => {
@@ -1564,785 +1451,6 @@ const setDiagramAttrs = (next: DiagramAttrs) => {
     state.value.diagrams = diagrams
   }
   markDiagramDirty(diagram.id)
-}
-
-const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
-  const notationId = activeNotationId.value
-  if (!notationId) return false
-  const existing = node.parsedAttrs.notationComponents[notationId]?.componentId
-  if (existing) return true
-  const options = resolveComponentByNodeType(state.value.components, notationId, node.nodeTypeId)
-  if (options.length === 1) {
-    bindNodeComponent(node, options[0]!.id)
-    return true
-  }
-  if (options.length > 1) {
-    componentChoiceNodeId.value = node.id
-    componentChoiceOptions.value = options.map(item => ({ id: item.id, name: item.name }))
-    showComponentChoiceModal.value = true
-    return false
-  }
-  setUiError(t('models.noMatchingComponent'))
-  return false
-}
-
-const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-  const node = state.value.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
-  if (!node) return
-  if (isDirectoryNode(modelNodeId)) {
-    const directoryNoteInstance = {
-      id: createId(),
-      modelNodeId,
-      x,
-      y,
-      width: 230,
-      height: 126,
-      attrs: {
-        isNote: true,
-        isDirectoryNote: true,
-        noteText: node.name,
-        diagramStyle: {
-          nodeShape: 'rectangle',
-          fillColor: '#eaf2ff',
-          strokeColor: '#6f94ff',
-          strokeWidth: 1.5,
-          labelColor: '#233a80',
-          labelFontSize: 13,
-          labelAlign: 'left',
-          labelInset: 12,
-          labelPlacement: 'center',
-        },
-      } as Record<string, unknown>,
-    }
-
-    executeDiagramHistoryCommand({
-      execute: () => {
-        const alreadyExists = diagram.parsedAttrs.instances.nodes.some(
-          item => item.id === directoryNoteInstance.id
-        )
-        if (!alreadyExists) {
-          diagram.parsedAttrs.instances.nodes.push(deepClone(directoryNoteInstance))
-        }
-        markDiagramDirty(diagram.id)
-      },
-      undo: () => {
-        diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-          item => item.id !== directoryNoteInstance.id
-        )
-        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge =>
-            edge.sourceInstanceId !== directoryNoteInstance.id &&
-            edge.targetInstanceId !== directoryNoteInstance.id
-        )
-        markDiagramDirty(diagram.id)
-      },
-    })
-    return
-  }
-  const notationIdForChoice = activeNotationId.value
-  let willOpenComponentChoiceModal = false
-  if (notationIdForChoice) {
-    const existingComp = node.parsedAttrs.notationComponents[notationIdForChoice]?.componentId
-    if (!existingComp) {
-      const compOptions = resolveComponentByNodeType(
-        state.value.components,
-        notationIdForChoice,
-        node.nodeTypeId
-      )
-      willOpenComponentChoiceModal = compOptions.length > 1
-    }
-  }
-
-  const hasBinding = ensureNodeBindingByNodeType(node)
-  if (!hasBinding) {
-    if (willOpenComponentChoiceModal) {
-      pendingTreeNodeDiagramDrop.value = { modelNodeId, x, y }
-    }
-    return
-  }
-
-  const notationId = activeNotationId.value
-  const componentId = notationId
-    ? (node.parsedAttrs.notationComponents[notationId]?.componentId ?? null)
-    : null
-  const component = componentId
-    ? state.value.components.find(item => item.id === componentId && item.notationId === notationId)
-    : null
-  const diagramStyle = component
-    ? parseEntityAttrs(component.attrs ?? null).diagramStyle
-    : undefined
-  const width = typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160
-  const height = typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56
-
-  const nodeInstance = {
-    id: createId(),
-    modelNodeId,
-    x,
-    y,
-    width,
-    height,
-    attrs: diagramStyle ? { diagramStyle: JSON.parse(JSON.stringify(diagramStyle)) } : undefined,
-  }
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      const alreadyExists = diagram.parsedAttrs.instances.nodes.some(
-        item => item.id === nodeInstance.id
-      )
-      if (!alreadyExists) {
-        diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => item.id !== nodeInstance.id
-      )
-      markDiagramDirty(diagram.id)
-    },
-  })
-}
-
-const createNodeFromPaletteComponent = (componentId: string, x: number, y: number) => {
-  if (isDiagramReadOnly.value) return
-  const diagram = activeDiagram.value
-  if (!diagram || !diagram.nodeId) {
-    setUiError(t('models.cannotCreateNodeWithoutDirectory'))
-    return
-  }
-  const component = state.value.components.find(item => item.id === componentId)
-  if (!component) return
-  const nodeId = createId()
-  const notationId = activeNotationId.value
-  const defaultDirectoryPath = nodeTypeDefaultDirectoryById.value.get(component.nodeTypeId) ?? ''
-  if (defaultDirectoryPath && !directoryNodeType.value) {
-    setUiError(t('models.directoryTypeRequiredForAutoPath'))
-    return
-  }
-  const parsedComponentAttrs = parseEntityAttrs(component.attrs ?? null)
-  const ds = parsedComponentAttrs.diagramStyle
-  const width = typeof ds?.width === 'number' ? ds.width : 160
-  const height = typeof ds?.height === 'number' ? ds.height : 56
-  const instanceId = createId()
-  const newInstance = {
-    id: instanceId,
-    modelNodeId: nodeId,
-    x,
-    y,
-    width,
-    height,
-    attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined,
-  }
-  let createdDirectoryIds: string[] = []
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      createdDirectoryIds = []
-      let parentNodeId = diagram.nodeId
-
-      if (defaultDirectoryPath) {
-        const ensuredPath = ensureDirectoryPath(defaultDirectoryPath)
-        if (!ensuredPath.parentNodeId) return
-        parentNodeId = ensuredPath.parentNodeId
-        createdDirectoryIds = ensuredPath.createdDirectoryIds
-      }
-
-      const parsedAttrs = parseNodeAttrs(null)
-      parsedAttrs.treeOrder = getNextTreeOrderForParent(parentNodeId ?? null)
-      if (notationId) {
-        parsedAttrs.notationComponents[notationId] = { componentId }
-        const scopedDefaults: Record<string, unknown> = {}
-        applyDefaultCustomValues(scopedDefaults, component.attrs)
-        parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
-      }
-
-      const newNode: EditorNode = {
-        id: nodeId,
-        name: component.name,
-        modelId: state.value.modelId,
-        ownerId: state.value.ownerId,
-        nodeTypeId: component.nodeTypeId,
-        parentNodeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs,
-        _isNew: true,
-      }
-
-      const hasNode = state.value.nodes.some(item => item.id === nodeId)
-      if (!hasNode) {
-        state.value.nodes.push(deepClone(newNode))
-      }
-      const hasInstance = diagram.parsedAttrs.instances.nodes.some(
-        item => item.id === newInstance.id
-      )
-      if (!hasInstance) {
-        diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      state.value.nodes = state.value.nodes.filter(
-        item => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
-      )
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => item.id !== newInstance.id
-      )
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
-      )
-      if (selectedModelNodeIds.value.includes(nodeId)) {
-        selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== nodeId)
-      }
-      if (
-        selectedNodeId.value === nodeId ||
-        createdDirectoryIds.includes(selectedNodeId.value ?? '')
-      ) {
-        selectedNodeId.value = null
-      }
-      markDiagramDirty(diagram.id)
-    },
-  })
-}
-
-const createDiagramNote = (x: number, y: number) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-
-  const instanceId = createId()
-  const modelNodeId = `${NOTE_NODE_PREFIX}${instanceId}`
-  const noteInstance = {
-    id: instanceId,
-    modelNodeId,
-    x,
-    y,
-    width: 220,
-    height: 120,
-    attrs: {
-      isNote: true,
-      noteText: t('models.newNoteText'),
-      diagramStyle: {
-        nodeShape: 'rectangle',
-        fillColor: '#fff9c4',
-        strokeColor: '#e6c85b',
-        strokeWidth: 1.5,
-        labelColor: '#5a4600',
-        labelFontSize: 13,
-        labelAlign: 'left',
-        labelInset: 10,
-        labelPlacement: 'center',
-      },
-    } as Record<string, unknown>,
-  }
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      const exists = diagram.parsedAttrs.instances.nodes.some(item => item.id === noteInstance.id)
-      if (!exists) {
-        diagram.parsedAttrs.instances.nodes.push(deepClone(noteInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => item.id !== noteInstance.id
-      )
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge =>
-          edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
-      )
-      selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== modelNodeId)
-      if (selectedCanvasElementId.value === `instance-${noteInstance.id}`) {
-        selectedCanvasElementId.value = null
-      }
-      if (editingNoteInstanceId.value === noteInstance.id) {
-        showNoteEditorModal.value = false
-        editingNoteInstanceId.value = null
-      }
-      markDiagramDirty(diagram.id)
-    },
-  })
-}
-
-const startConnectNodes = (
-  sourceModelNodeId: string,
-  targetModelNodeId: string,
-  sourceInstanceId: string,
-  targetInstanceId: string,
-  sourcePortId?: string,
-  targetPortId?: string,
-  sourceOutlineParam?: number,
-  targetOutlineParam?: number
-) => {
-  if (isActiveNotationRulesLoading.value) {
-    setUiError(t('models.relationRulesLoadingConnectBlocked'))
-    return
-  }
-
-  const diagram = activeDiagram.value
-  if (!diagram) return
-  if (
-    isNoteLikeConnection(sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId)
-  ) {
-    const modelLinkId = `${NOTE_EDGE_PREFIX}${createId()}`
-    const edgeAttrs: Record<string, unknown> = {
-      isDiagramOnly: true,
-      diagramStyle: {
-        edgeType: defaultEdgeType.value,
-        startMarkerType: 'none',
-        endMarkerType: 'none',
-        lineDash: [4, 4],
-      },
-    }
-    if (sourcePortId) edgeAttrs.fromPortId = sourcePortId
-    if (targetPortId) edgeAttrs.toPortId = targetPortId
-    if (sourceOutlineParam !== undefined) edgeAttrs.fromOutlineParam = sourceOutlineParam
-    if (targetOutlineParam !== undefined) edgeAttrs.toOutlineParam = targetOutlineParam
-    const noteEdgeInstance = {
-      id: createId(),
-      modelLinkId,
-      sourceInstanceId,
-      targetInstanceId,
-      attrs: edgeAttrs,
-    }
-    executeDiagramHistoryCommand({
-      execute: () => {
-        const hasEdge = diagram.parsedAttrs.instances.edges.some(
-          edge => edge.id === noteEdgeInstance.id
-        )
-        if (!hasEdge) {
-          diagram.parsedAttrs.instances.edges.push(deepClone(noteEdgeInstance))
-        }
-        markDiagramDirty(diagram.id)
-      },
-      undo: () => {
-        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge => edge.id !== noteEdgeInstance.id
-        )
-        if (selectedModelLinkId.value === modelLinkId) {
-          selectedModelLinkId.value = null
-          selectedEdgeInstanceId.value = null
-          selectedCanvasElementId.value = null
-        }
-        markDiagramDirty(diagram.id)
-      },
-    })
-    return
-  }
-
-  const notationId = activeNotationId.value
-  if (!notationId) return
-  const sourceNode = state.value.nodes.find(item => item.id === sourceModelNodeId)
-  const targetNode = state.value.nodes.find(item => item.id === targetModelNodeId)
-  if (!sourceNode || !targetNode) return
-
-  const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
-  const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
-  if (!sourceComponentId || !targetComponentId) {
-    setUiError(t('models.noComponentsForLink'))
-    return
-  }
-
-  const sourceComponent = state.value.components.find(
-    component => component.id === sourceComponentId && component.notationId === notationId
-  )
-  const targetComponent = state.value.components.find(
-    component => component.id === targetComponentId && component.notationId === notationId
-  )
-  const sourceIsUntyped = sourceComponent
-    ? isUntypedNodeTypeId(sourceComponent.nodeTypeId)
-    : false
-  const targetIsUntyped = targetComponent
-    ? isUntypedNodeTypeId(targetComponent.nodeTypeId)
-    : false
-  const allowedUntypedRelations = state.value.relations.filter(
-    relation =>
-      relation.notationId === notationId &&
-      isUntypedLinkTypeId(relation.linkTypeId)
-  )
-  if (!sourceIsUntyped && targetIsUntyped) {
-    setUiError(t('models.noAllowedRelationRules'))
-    return
-  }
-
-  const allowedRelations = sourceIsUntyped
-    ? allowedUntypedRelations
-    : (() => {
-        const ruleRelationIds = state.value.relationRules
-          .filter(
-            rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
-          )
-          .map(rule => rule.relationId)
-        if (ruleRelationIds.length === 0) {
-          setUiError(t('models.noAllowedRelationRules'))
-          return [] as RelationResponse[]
-        }
-        return state.value.relations.filter(
-          relation =>
-            relation.notationId === notationId &&
-            ruleRelationIds.includes(relation.id) &&
-            !isUntypedLinkTypeId(relation.linkTypeId)
-        )
-      })()
-  if (allowedRelations.length === 0) {
-    setUiError(t('models.noAvailableRelations'))
-    return
-  }
-  pendingConnection.value = {
-    sourceModelNodeId,
-    targetModelNodeId,
-    sourceInstanceId,
-    targetInstanceId,
-    sourcePortId,
-    targetPortId,
-    sourceOutlineParam,
-    targetOutlineParam,
-  }
-
-  // Сохраняем доступные relations для возможного выбора позже
-  relationChoiceOptions.value = allowedRelations.map(relation => ({
-    id: relation.id,
-    name: relation.name,
-    linkTypeId: relation.linkTypeId,
-  }))
-
-  // Для связи из untyped-компонента всегда создаём новую связь на диаграмме:
-  // reuse существующих link-объектов здесь запрещён по продуктовым правилам.
-  if (sourceIsUntyped) {
-    if (allowedRelations.length === 1) {
-      finalizeConnection(allowedRelations[0]!.id)
-      return
-    }
-    showRelationChoiceModal.value = true
-    return
-  }
-
-  // Собираем все существующие связи для всех allowedRelations
-  const existingLinks: EditorLink[] = []
-  for (const relation of allowedRelations) {
-    const links = state.value.links.filter(
-      link =>
-        !link._isDeleted &&
-        link.sourceId === sourceModelNodeId &&
-        link.targetId === targetModelNodeId &&
-        link.linkTypeId === relation.linkTypeId
-    )
-    existingLinks.push(...links)
-  }
-
-  // Если есть существующие связи, показываем их первым делом
-  if (existingLinks.length > 0) {
-    reuseLinkOptions.value = existingLinks
-    showReuseLinkModal.value = true
-    return
-  }
-
-  // Если нет существующих связей, показываем выбор relation (если > 1)
-  if (allowedRelations.length === 1) {
-    finalizeConnection(allowedRelations[0]!.id)
-    return
-  }
-  showRelationChoiceModal.value = true
-}
-
-const finalizeConnection = (relationId: string) => {
-  const notationId = activeNotationId.value
-  const diagram = activeDiagram.value
-  const connection = pendingConnection.value
-  if (!notationId || !diagram || !connection) return
-  showRelationChoiceModal.value = false
-  const relation = state.value.relations.find(item => item.id === relationId)
-  if (!relation) return
-
-  pendingRelationId.value = relationId
-  createOrReuseLink(null)
-}
-
-const handleCreateNewLinkFromReuseModal = () => {
-  showReuseLinkModal.value = false
-
-  // Если есть только один relation, используем его сразу
-  if (relationChoiceOptions.value.length === 1) {
-    finalizeConnection(relationChoiceOptions.value[0]!.id)
-    return
-  }
-
-  // Иначе показываем выбор relation
-  showRelationChoiceModal.value = true
-}
-
-const handleRequestAutoLink = (
-  sourceModelNodeId: string,
-  targetModelNodeId: string,
-  sourceInstanceId: string,
-  targetInstanceId: string,
-  availableRelations: RelationResponse[],
-  existingLinksNotOnDiagram: EditorLink[]
-) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-
-  // Store connection data
-  pendingConnection.value = {
-    sourceModelNodeId,
-    targetModelNodeId,
-    sourceInstanceId,
-    targetInstanceId,
-    sourcePortId: undefined,
-    targetPortId: undefined,
-    sourceOutlineParam: undefined,
-    targetOutlineParam: undefined,
-  }
-
-  // Если есть существующие связи не на диаграмме - показываем диалог использования
-  if (existingLinksNotOnDiagram.length > 0) {
-    reuseLinkOptions.value = existingLinksNotOnDiagram
-    showReuseLinkModal.value = true
-    return
-  }
-
-  // Prepare relation options
-  relationChoiceOptions.value = availableRelations.map(relation => ({
-    id: relation.id,
-    name: relation.name,
-    linkTypeId: relation.linkTypeId,
-  }))
-
-  // Связей нет - нужно создать новую
-  // Если только один relation - спрашиваем создать ли связь
-  if (availableRelations.length === 1) {
-    // Показываем диалог с одним вариантом (как при перетаскивании с Shift)
-    showRelationChoiceModal.value = true
-    return
-  }
-
-  // Несколько вариантов - показываем выбор
-  showRelationChoiceModal.value = true
-}
-
-const handleSelectExistingLink = (linkId: string) => {
-  const notationId = activeNotationId.value
-  const link = state.value.links.find(item => item.id === linkId)
-  if (!notationId || !link) return
-
-  // Находим relationId по linkTypeId и notationId
-  const relation = state.value.relations.find(
-    item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
-  )
-  if (!relation) return
-
-  pendingRelationId.value = relation.id
-  createOrReuseLink(linkId)
-}
-
-const placeTraceLinkOnDiagram = (linkId: string) => {
-  const diagram = activeDiagram.value
-  const notationId = activeNotationId.value
-  if (!diagram || !notationId || isDiagramReadOnly.value) return
-
-  const link = state.value.links.find(item => item.id === linkId && !item._isDeleted)
-  if (!link) return
-
-  const alreadyOnDiagram = diagram.parsedAttrs.instances.edges.some(
-    edge => edge.modelLinkId === link.id
-  )
-  if (alreadyOnDiagram) return
-
-  const relation = state.value.relations.find(
-    item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
-  )
-  if (!relation) return
-
-  if (!canConnect(link.sourceId, link.targetId)) return
-
-  const sourceInstance = diagram.parsedAttrs.instances.nodes.find(
-    instance => instance.modelNodeId === link.sourceId
-  )
-  const targetInstance = diagram.parsedAttrs.instances.nodes.find(
-    instance => instance.modelNodeId === link.targetId
-  )
-  if (!sourceInstance || !targetInstance) return
-
-  pendingConnection.value = {
-    sourceModelNodeId: link.sourceId,
-    targetModelNodeId: link.targetId,
-    sourceInstanceId: sourceInstance.id,
-    targetInstanceId: targetInstance.id,
-    sourcePortId: undefined,
-    targetPortId: undefined,
-    sourceOutlineParam: undefined,
-    targetOutlineParam: undefined,
-  }
-  pendingRelationId.value = relation.id
-  createOrReuseLink(link.id)
-}
-
-const createOrReuseLink = (linkId: string | null) => {
-  const notationId = activeNotationId.value
-  const diagram = activeDiagram.value
-  const connection = pendingConnection.value
-  const relationId = pendingRelationId.value
-  if (!notationId || !diagram || !connection || !relationId) return
-  const relation = state.value.relations.find(item => item.id === relationId)
-  if (!relation) return
-  const isUntypedRelation = isUntypedLinkTypeId(relation.linkTypeId)
-
-  const isNewLink = !linkId || isUntypedRelation
-  const resolvedLinkId = isUntypedRelation
-    ? `${UNTYPED_EDGE_PREFIX}${createId()}`
-    : (linkId ?? createId())
-  const existingLink = state.value.links.find(item => item.id === resolvedLinkId) ?? null
-  if (!isNewLink && !existingLink) return
-  const previousParsedAttrs = existingLink ? deepClone(existingLink.parsedAttrs) : null
-  const newLink: EditorLink | null = isNewLink && !isUntypedRelation
-    ? {
-        id: resolvedLinkId,
-        sourceId: connection.sourceModelNodeId,
-        targetId: connection.targetModelNodeId,
-        modelId: state.value.modelId,
-        ownerId: state.value.ownerId,
-        linkTypeId: relation.linkTypeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs: parseLinkAttrs(null),
-        _isNew: true,
-      }
-    : null
-
-  const relParsed = parseEntityAttrs(relation.attrs ?? null)
-  const relationDs = relParsed.diagramStyle
-  const edgeAttrs: Record<string, unknown> = {}
-  const diagramStyle: Record<string, unknown> = relationDs
-    ? JSON.parse(JSON.stringify(relationDs))
-    : {}
-  diagramStyle.edgeType = defaultEdgeType.value
-  if (Object.keys(diagramStyle).length > 0) {
-    edgeAttrs.diagramStyle = diagramStyle
-  }
-  if (connection.sourcePortId) {
-    edgeAttrs.fromPortId = connection.sourcePortId
-  }
-  if (connection.targetPortId) {
-    edgeAttrs.toPortId = connection.targetPortId
-  }
-  if (connection.sourceOutlineParam !== undefined) {
-    edgeAttrs.fromOutlineParam = connection.sourceOutlineParam
-  }
-  if (connection.targetOutlineParam !== undefined) {
-    edgeAttrs.toOutlineParam = connection.targetOutlineParam
-  }
-  const newEdgeInstance = {
-    id: createId(),
-    modelLinkId: resolvedLinkId,
-    sourceInstanceId: connection.sourceInstanceId,
-    targetInstanceId: connection.targetInstanceId,
-    attrs: Object.keys(edgeAttrs).length ? edgeAttrs : undefined,
-  }
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      if (isUntypedRelation) {
-        const hasEdge = diagram.parsedAttrs.instances.edges.some(
-          edge => edge.id === newEdgeInstance.id
-        )
-        if (!hasEdge) {
-          diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
-        }
-        markDiagramDirty(diagram.id)
-        return
-      }
-      let link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
-      if (!link && newLink) {
-        state.value.links.push(deepClone(newLink))
-        link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
-      }
-      if (!link) return
-
-      bindLinkRelation(link, relation.id)
-      const hasEdge = diagram.parsedAttrs.instances.edges.some(
-        edge => edge.id === newEdgeInstance.id
-      )
-      if (!hasEdge) {
-        diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge => edge.id !== newEdgeInstance.id
-      )
-
-      if (isUntypedRelation) {
-        markDiagramDirty(diagram.id)
-        return
-      }
-
-      if (isNewLink) {
-        state.value.links = state.value.links.filter(item => item.id !== resolvedLinkId)
-      } else if (previousParsedAttrs) {
-        const link = state.value.links.find(item => item.id === resolvedLinkId)
-        if (link) {
-          link.parsedAttrs = deepClone(previousParsedAttrs)
-          markLinkDirty(link.id)
-        }
-      }
-      markDiagramDirty(diagram.id)
-    },
-  })
-
-  pendingConnection.value = null
-  pendingRelationId.value = null
-  showReuseLinkModal.value = false
-}
-
-const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boolean => {
-  if (isActiveNotationRulesLoading.value) return false
-  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
-    return true
-  }
-  if (isDirectoryNode(sourceModelNodeId) || isDirectoryNode(targetModelNodeId)) {
-    return true
-  }
-  const notationId = activeNotationId.value
-  if (!notationId) return false
-  const sourceNode = state.value.nodes.find(item => item.id === sourceModelNodeId)
-  const targetNode = state.value.nodes.find(item => item.id === targetModelNodeId)
-  if (!sourceNode || !targetNode) return false
-  const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
-  const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
-  if (!sourceComponentId || !targetComponentId) return false
-  const sourceComponent = state.value.components.find(
-    component => component.id === sourceComponentId && component.notationId === notationId
-  )
-  const targetComponent = state.value.components.find(
-    component => component.id === targetComponentId && component.notationId === notationId
-  )
-  const sourceIsUntyped = sourceComponent
-    ? isUntypedNodeTypeId(sourceComponent.nodeTypeId)
-    : false
-  const targetIsUntyped = targetComponent
-    ? isUntypedNodeTypeId(targetComponent.nodeTypeId)
-    : false
-  if (sourceIsUntyped) {
-    return state.value.relations.some(
-      relation =>
-        relation.notationId === notationId &&
-        isUntypedLinkTypeId(relation.linkTypeId)
-    )
-  }
-  if (targetIsUntyped) return false
-  const typedRuleRelationIds = state.value.relationRules
-    .filter(rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId)
-    .map(rule => rule.relationId)
-  if (typedRuleRelationIds.length === 0) return false
-  return state.value.relations.some(
-    relation =>
-      relation.notationId === notationId &&
-      typedRuleRelationIds.includes(relation.id) &&
-      !isUntypedLinkTypeId(relation.linkTypeId)
-  )
 }
 
 const handleReconnectEdge = (
@@ -3766,56 +2874,13 @@ onBeforeUnmount(() => {
     </div>
   </BaseModal>
 
-  <BaseModal
+  <LinkReuseModal
     v-if="showReuseLinkModal"
-    :title="t('models.existingLinksFoundTitle')"
-    max-width="500px"
+    :options="reuseLinkModalOptions"
     @close="showReuseLinkModal = false"
-  >
-    <div class="choice-list">
-      <button
-        v-for="link in reuseLinkOptions"
-        :key="link.id"
-        type="button"
-        class="choice-item"
-        @click="handleSelectExistingLink(link.id)"
-      >
-        <div class="reuse-link-option">
-          <div class="reuse-link-option__title">
-            {{ t('models.useExistingLink') }}
-          </div>
-          <div class="reuse-link-option__meta">
-            {{ t('models.reuseLinkTypeLabel') }}: {{ getLinkTypeName(link.linkTypeId) }}
-          </div>
-          <div class="reuse-link-option__props">
-            <div class="reuse-link-option__props-title">
-              {{ t('models.reuseLinkCustomPropertiesLabel') }}
-            </div>
-            <div
-              v-for="property in getReuseLinkCustomProperties(link)"
-              :key="`${link.id}-${property.name}`"
-              class="reuse-link-option__prop"
-            >
-              {{ property.name }}: {{ property.value }}
-            </div>
-            <div
-              v-if="getReuseLinkCustomProperties(link).length === 0"
-              class="reuse-link-option__empty"
-            >
-              {{ t('models.reuseLinkNoCustomProperties') }}
-            </div>
-          </div>
-        </div>
-      </button>
-      <button
-        type="button"
-        class="choice-item choice-item--primary"
-        @click="handleCreateNewLinkFromReuseModal"
-      >
-        {{ t('models.createNewLink') }}
-      </button>
-    </div>
-  </BaseModal>
+    @select="handleSelectExistingLink"
+    @create-new="handleCreateNewLinkFromReuseModal"
+  />
 
   <BaseModal
     v-if="showDiagramSwitchModal"

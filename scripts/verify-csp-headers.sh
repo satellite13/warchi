@@ -72,4 +72,20 @@ if ! rg -n "location / \\{" -A 20 config/default.conf | rg -q "Content-Security-
 fi
 log_info "OK: nginx config keeps CSP on SPA locations"
 
+# Landing is iframe-embedded by the SPA — must allow same-origin framing.
+LANDING_HEADERS="$(curl -sS -D - -o /dev/null "$WARCHI_URL/landing.html" || true)"
+if [[ -z "$LANDING_HEADERS" ]] || echo "$LANDING_HEADERS" | head -1 | grep -qE '000|Failed'; then
+  log_error "No response from $WARCHI_URL/landing.html"
+  exit 1
+fi
+HEADERS="$LANDING_HEADERS"
+log_info "Checking landing.html framing headers at $WARCHI_URL/landing.html"
+assert_header "Content-Security-Policy" "frame-ancestors 'self'"
+assert_header "X-Frame-Options" "SAMEORIGIN"
+if ! rg -n "location = /landing.html" -A 20 config/default.conf | rg -q "frame-ancestors 'self'"; then
+  log_error "config/default.conf: location = /landing.html must set frame-ancestors 'self'"
+  exit 1
+fi
+log_info "OK: landing.html allows same-origin iframe embed"
+
 log_info "CSP verification passed"

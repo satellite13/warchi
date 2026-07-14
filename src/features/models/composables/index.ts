@@ -3,6 +3,11 @@ export { useDiagramRealtimeCollab } from "./useDiagramRealtimeCollab"
 export { useDocumentModal } from "./useDocumentModal"
 export * from "./useModelBatchSave"
 export { useModelDiagramExport } from "./useModelDiagramExport"
+export {
+  isDiagramOnlyEdgeModelLinkId,
+  useModelDiagramConnections,
+} from "./useModelDiagramConnections"
+export { useModelDiagramInstances } from "./useModelDiagramInstances"
 export { useModelEditor } from "./useModelEditor"
 export { useModelEditorSync } from "./useModelEditorSync"
 export { useModelLiveSync } from "./useModelLiveSync"

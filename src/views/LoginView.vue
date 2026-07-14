@@ -117,13 +117,13 @@ const handleSubmit = async () => {
   if (result.success) {
     successMessage.value =
       mode.value === "login" ? t("auth.successLogin") : t("auth.successRegister");
+    const returnUrl =
+      typeof route.query.returnUrl === "string" ? route.query.returnUrl : null;
+    if (returnUrl && isSafeSiteReturnUrl(returnUrl)) {
+      window.location.assign(returnUrl);
+      return;
+    }
     if (mode.value === "login") {
-      const returnUrl =
-        typeof route.query.returnUrl === "string" ? route.query.returnUrl : null
-      if (returnUrl && isSafeSiteReturnUrl(returnUrl)) {
-        window.location.assign(returnUrl)
-        return
-      }
       const redirectTarget =
         typeof route.query.redirect === "string" && isSafeInternalRedirectPath(route.query.redirect)
           ? route.query.redirect
@@ -152,6 +152,11 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   errorMessage.value = null;
   successMessage.value = null;
 };
+
+const siteReturnUrl = computed(() => {
+  const value = typeof route.query.returnUrl === "string" ? route.query.returnUrl : null;
+  return value && isSafeSiteReturnUrl(value) ? value : null;
+});
 </script>
 
 <template>
@@ -174,6 +179,10 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
         </div>
         <LanguageSwitcher class="card-header__language" />
       </div>
+
+      <p v-if="siteReturnUrl" class="return-to-site">
+        <a :href="siteReturnUrl">{{ t("auth.returnToSite") }}</a>
+      </p>
 
       <div class="tabs">
         <button
@@ -400,6 +409,21 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
   background: #f0ede8;
   position: relative;
   overflow: hidden;
+}
+
+.return-to-site {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.return-to-site a {
+  color: var(--primary, #7c5cfc);
+  text-decoration: none;
+}
+
+.return-to-site a:hover {
+  text-decoration: underline;
 }
 
 /* ─── Background ──────────────────────────────── */

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { canViewAdminPanel } from "../composables/usePermissions";
+import { isSafeSiteReturnUrl } from "../utils/safeRedirect";
 import "./types";
 
 const router = createRouter({
@@ -141,6 +142,12 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth === false) {
     if (to.name === "login" && isAuthenticated.value) {
+      const returnUrl =
+        typeof to.query.returnUrl === "string" ? to.query.returnUrl : null;
+      if (returnUrl && isSafeSiteReturnUrl(returnUrl)) {
+        window.location.replace(returnUrl);
+        return false;
+      }
       return { name: "home" };
     }
     return true;

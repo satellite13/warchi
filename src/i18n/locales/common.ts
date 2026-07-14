@@ -115,6 +115,7 @@ export const commonMessages = {
       wiki: 'Вики',
       profile: 'Профиль',
       admin: 'Администрирование',
+      site: 'На сайт',
     },
     time: {
       justNow: 'только что',
@@ -240,6 +241,7 @@ export const commonMessages = {
       wiki: 'Wiki',
       profile: 'Profile',
       admin: 'Administration',
+      site: 'Site',
     },
     time: {
       justNow: 'just now',

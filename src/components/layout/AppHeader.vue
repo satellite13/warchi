@@ -13,6 +13,7 @@ const router = useRouter();
 const { t } = useI18n();
 const {currentUser, logout} = useAuth();
 const userDisplayName = computed(() => getUserDisplayName(currentUser.value, t("common.user")));
+const siteUrl = (import.meta.env.VITE_SITE_URL || "").trim();
 
 const handleLogout = async () => {
   await logout();
@@ -27,6 +28,7 @@ const handleLogout = async () => {
       <NavigationMenu/>
     </div>
     <div class="user-info">
+      <a v-if="siteUrl" class="site-link" :href="siteUrl">{{ t("nav.site") }}</a>
       <LanguageSwitcher />
       <UserAvatar :label="userDisplayName" size="sm"/>
       <span class="user-email">{{ userDisplayName }}</span>
@@ -67,6 +69,21 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.site-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.site-link:hover {
+  color: var(--base-text);
+  background: var(--surface-strong);
 }
 
 .user-email {

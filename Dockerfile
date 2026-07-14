@@ -11,6 +11,8 @@ ENV VITE_SITE_RETURN_ORIGINS=$VITE_SITE_RETURN_ORIGINS
 ARG APP_VERSION
 ENV VITE_APP_VERSION=$APP_VERSION
 WORKDIR /app
+# Supports package.json "file:../papirus" via: docker build --build-context papirus=../papirus
+COPY --from=papirus . /papirus
 COPY package*.json ./
 RUN npm ci --no-audit --fund=false
 COPY . .

@@ -161,7 +161,7 @@ const setMode = (newMode: "login" | "register" | "register-admin") => {
     <!-- Card -->
     <div class="card">
       <div class="card-header">
-        <object class="card-logo" data="/warchi.svg" type="image/svg+xml" />
+        <img class="card-logo" src="/warchi.svg" alt="" />
         <div>
           <h1 class="card-brand">wArchi</h1>
           <p class="card-desc">{{ t("auth.cardSubtitle") }}</p>

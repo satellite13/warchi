@@ -13,9 +13,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 node scripts/sync-chart-version.mjs
 VERSION=$(node -p "require('./package.json').version")
+VITE_SITE_URL="${VITE_SITE_URL:-http://localhost:8082}"
+VITE_SITE_RETURN_ORIGINS="${VITE_SITE_RETURN_ORIGINS:-http://localhost:8082}"
 docker build \
   --build-arg APP_VERSION="${VERSION}" \
   --build-arg VITE_API_BASE_URL="" \
   --build-arg VITE_NOTATION_URL="/api/v1/notation" \
+  --build-arg "VITE_SITE_URL=${VITE_SITE_URL}" \
+  --build-arg "VITE_SITE_RETURN_ORIGINS=${VITE_SITE_RETURN_ORIGINS}" \
   -t "arch/warchi:${VERSION}" \
   .

@@ -99,8 +99,19 @@ const router = createRouter({
     },
     {
       path: "/",
-      name: "landing",
-      component: () => import("../views/LandingView.vue"),
+      name: "root",
+      redirect: () => {
+        const { isAuthenticated } = useAuth()
+        if (isAuthenticated.value) {
+          return { name: "home" }
+        }
+        const siteUrl = (import.meta.env.VITE_SITE_URL || "").trim()
+        if (siteUrl) {
+          window.location.replace(siteUrl)
+          return { name: "home" }
+        }
+        return { name: "home" }
+      },
       meta: { requiresAuth: false }
     },
     {

@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_API_VERSION?: string;
   readonly VITE_MODEL_LIVE_SYNC_MODE?: "ws" | "poll" | "hybrid";
   readonly VITE_MODEL_LIVE_POLL_MS?: string;
+  readonly VITE_SITE_URL?: string;
+  readonly VITE_SITE_RETURN_ORIGINS?: string;
   readonly APP_VERSION?: string;
   readonly APP_BUILD_TIME?: string;
 }

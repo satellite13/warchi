@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { isSafeInternalRedirectPath } from './safeRedirect'
+import {
+  isSafeInternalRedirectPath,
+  isSafeSiteReturnUrl,
+  allowedSiteReturnOrigins
+} from './safeRedirect'
 
 describe('isSafeInternalRedirectPath', () => {
   it('allows normal internal absolute paths', () => {
@@ -18,5 +22,26 @@ describe('isSafeInternalRedirectPath', () => {
   it('rejects backslash-based URL confusion', () => {
     expect(isSafeInternalRedirectPath('/\\evil.example')).toBe(false)
     expect(isSafeInternalRedirectPath('/%5Cevil.example')).toBe(false)
+  })
+})
+
+describe('isSafeSiteReturnUrl', () => {
+  it('allows only configured origins', () => {
+    const allowed = ['http://localhost:5174', 'https://www.example.com']
+    expect(isSafeSiteReturnUrl('http://localhost:5174/feedback', allowed)).toBe(true)
+    expect(isSafeSiteReturnUrl('https://www.example.com/downloads', allowed)).toBe(true)
+    expect(isSafeSiteReturnUrl('https://evil.com/', allowed)).toBe(false)
+  })
+
+  it('reads origins from env helpers', () => {
+    expect(
+      allowedSiteReturnOrigins({
+        VITE_SITE_RETURN_ORIGINS: 'http://a.test, http://b.test',
+        VITE_SITE_URL: 'http://ignored.test'
+      })
+    ).toEqual(['http://a.test', 'http://b.test'])
+    expect(allowedSiteReturnOrigins({ VITE_SITE_URL: 'http://site.test' })).toEqual([
+      'http://site.test'
+    ])
   })
 })

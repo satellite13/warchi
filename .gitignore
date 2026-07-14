@@ -43,3 +43,5 @@ coverage/
 infra/env.*.local
 infra/state.*.env
 .env.local
+# Local brainstorm / agent scratch
+.superpowers/

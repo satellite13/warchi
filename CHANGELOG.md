@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-14
+
+### Added
+- Content-Security-Policy and related security headers on nginx SPA/static responses, with `verify:csp` check script.
+
+### Changed
+- Diagram styling UI and notation attrs live in shared `diagram-style` / `domain/attrs` modules used by models and notations.
+- Markdown preview and wiki/docs HTML go through DOMPurify sanitization.
+- `@ngroznykh/papirus` updated to 0.6.5.
+
+### Fixed
+- Landing page iframe embed under CSP (`frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`).
+- Landing fonts self-hosted (Manrope, JetBrains Mono) so Google Fonts no longer violate `style-src`.
+
 ## [0.7.1] - 2026-07-09
 
 ### Fixed

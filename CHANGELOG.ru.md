@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-14
+
+### Добавлено
+- Content-Security-Policy и связанные security headers в nginx для SPA/статики, скрипт проверки `verify:csp`.
+
+### Изменено
+- UI стилей диаграмм и attrs нотаций вынесены в общие модули `diagram-style` / `domain/attrs` для models и notations.
+- Превью markdown и HTML в wiki/docs проходят санитизацию через DOMPurify.
+- `@ngroznykh/papirus` обновлён до 0.6.5.
+
+### Исправлено
+- Лендинг снова открывается в iframe SPA при CSP (`frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`).
+- Шрифты лендинга (Manrope, JetBrains Mono) раздаются локально — без Google Fonts и без нарушения `style-src`.
+
 ## [0.7.1] - 2026-07-09
 
 ### Исправлено

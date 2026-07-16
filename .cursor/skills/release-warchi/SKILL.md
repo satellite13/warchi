@@ -24,7 +24,8 @@ description: Executes the full release cycle for warchi: commit changes, bump ve
 ### 3. Поднять версии
 
 - Обновить `version` в `package.json`
-- При необходимости — связанные версии в соседних проектах (papirus, arepos-server)
+- При необходимости — связанные версии в соседних проектах (papirus, arepos-server, warchi-site)
+- При запросе релиза «всех проектов» не забывать **warchi-site** (отдельный репозиторий / skill `release-warchi-site`)
 - Если используется зависимость papirus на локальный проект, перевести на последную версию с npmjs
 - **Важно:** после переключения papirus с `file:../papirus` на npm-версию выполнить `rm -rf node_modules package-lock.json && npm install` — иначе в `package-lock.json` остаются локальные ссылки (`"../papirus"` в `packages`, `"node_modules/@ngroznykh/papirus": { "resolved": "../papirus", "link": true }`), из-за которых сборка Docker-образа падает с `TS2307: Cannot find module '@ngroznykh/papirus'` (локальный путь недоступен в контексте сборки образа)
 - При изменении зависимостей зафиксировать `package-lock.json`

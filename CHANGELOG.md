@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.11] - 2026-07-16
+
+### Fixed
+- Kept the VPS deployment workflow version contract synchronized with the published release tag.
+
 ## [0.8.10] - 2026-07-16
 
 ### Fixed

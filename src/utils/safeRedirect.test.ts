@@ -33,6 +33,14 @@ describe('isSafeSiteReturnUrl', () => {
     expect(isSafeSiteReturnUrl('https://evil.com/', allowed)).toBe(false)
   })
 
+  it('accepts http/https variants for the same configured host', () => {
+    const allowed = ['http://warchi-site.arch.svc.cluster.local']
+    expect(isSafeSiteReturnUrl('https://warchi-site.arch.svc.cluster.local/', allowed)).toBe(true)
+    expect(isSafeSiteReturnUrl('http://warchi-site.arch.svc.cluster.local/feedback', allowed)).toBe(
+      true
+    )
+  })
+
   it('reads origins from env helpers', () => {
     expect(
       allowedSiteReturnOrigins({

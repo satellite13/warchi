@@ -13,8 +13,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 node scripts/sync-chart-version.mjs
 VERSION=$(node -p "require('./package.json').version")
-VITE_SITE_URL="${VITE_SITE_URL:-http://localhost:8082}"
-VITE_SITE_RETURN_ORIGINS="${VITE_SITE_RETURN_ORIGINS:-http://localhost:8082}"
+# VITE_SITE_URL redirects an unauthenticated visit to `/` to the marketing site.
+# Keep it empty in the cluster: only VITE_SITE_RETURN_ORIGINS is needed to accept a
+# safe return URL from warchi-site after sign-in.
+VITE_SITE_URL="${VITE_SITE_URL:-}"
+VITE_SITE_RETURN_ORIGINS="${VITE_SITE_RETURN_ORIGINS:-http://warchi-site.arch.svc.cluster.local,https://warchi-site.arch.svc.cluster.local}"
 
 PAPIRUS_DEP=$(node -p "require('./package.json').dependencies['@ngroznykh/papirus'] || ''")
 PAPIRUS_CONTEXT=""

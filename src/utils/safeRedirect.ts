@@ -38,7 +38,10 @@ export function isSafeSiteReturnUrl(
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
     return allowedOrigins.some((origin) => {
       try {
-        return new URL(origin).origin === url.origin
+        const allowed = new URL(origin)
+        if (allowed.origin === url.origin) return true
+        // Accept http/https variants of the same configured site host.
+        return allowed.hostname === url.hostname && allowed.port === url.port
       } catch {
         return false
       }

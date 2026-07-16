@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-07-16
+
+### Fixed
+- VPS backup archives MinIO through a serialized, read-only helper pod and always restores application replicas.
+
 ## [0.8.3] - 2026-07-16
 
 ### Fixed

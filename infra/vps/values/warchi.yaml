@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: arch/warchi
   pullPolicy: IfNotPresent
-  tag: "0.8.8"
+  tag: "0.8.9"
 
 ingress:
   enabled: true

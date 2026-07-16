@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.9] - 2026-07-16
+
+### Fixed
+- VPS cutover retries only transient ingress-health failures before triggering guarded rollback.
+
 ## [0.8.8] - 2026-07-16
 
 ### Fixed

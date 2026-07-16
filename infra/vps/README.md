@@ -18,8 +18,10 @@ On the operator workstation:
 
 - `git`, `node`, `awk`, `ssh`, `ssh-keyscan`, `ssh-keygen`, `rsync`, and `dig`;
 - sibling repositories `warchi`, `arepos-server`, and `warchi-site`;
-- each repository clean, checked out on its default branch, at the exact matching annotated or
-  lightweight tag (`v0.8.2`, `v0.5.2`, or `v0.2.1`);
+- each repository clean, with `warchi` and `arepos-server` checked out on `master` and
+  `warchi-site` checked out on `main`, at the exact matching annotated or lightweight tag
+  (`v0.8.2`, `v0.5.2`, or `v0.2.1`); these release branches are pinned rather than inferred from
+  local remote metadata;
 - package, Gradle, and chart versions matching those tags;
 - DNS configured so `warchi.ru A` is the single address `138.124.14.246`,
   `app.warchi.ru CNAME` is exactly `warchi.ru.` (the trailing dot is normalized), and the CNAME

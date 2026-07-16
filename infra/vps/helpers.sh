@@ -56,6 +56,98 @@ bounded_curl() {
     --max-time "${CURL_MAX_TIME:-20}" "$@"
 }
 
+site_root_is_spa_html() {
+  local content_type="$1"
+  local body_file="$2"
+  local media_type
+
+  media_type="$(printf '%s' "${content_type%%;*}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  [[ "${media_type}" == "text/html" ]] || return 1
+
+  awk '
+    BEGIN {
+      app_id = "[[:space:]]id[[:space:]]*=[[:space:]]*[\"\047]app[\"\047]([[:space:]/>]|$)"
+      module_type = "[[:space:]]type[[:space:]]*=[[:space:]]*[\"\047]module[\"\047]([[:space:]/>]|$)"
+      asset_src = "[[:space:]]src[[:space:]]*=[[:space:]]*[\"\047]/assets/[^\"\047[:space:]>]+[\"\047]([[:space:]/>]|$)"
+    }
+    {
+      line = $0
+      while (1) {
+        if (in_comment) {
+          comment_end = index(line, "-->")
+          if (!comment_end) {
+            line = ""
+            break
+          }
+          line = substr(line, comment_end + 3)
+          in_comment = 0
+        }
+        comment_start = index(line, "<!--")
+        if (!comment_start) {
+          html = html line "\n"
+          break
+        }
+        html = html substr(line, 1, comment_start - 1)
+        line = substr(line, comment_start + 4)
+        in_comment = 1
+      }
+    }
+    END {
+      tag_count = split(html, tags, ">")
+      for (tag_index = 1; tag_index <= tag_count; tag_index++) {
+        tag = tags[tag_index] ">"
+        if (tag ~ /<div[[:space:]]/ && tag ~ app_id) {
+          has_app_mount = 1
+        }
+        if (tag ~ /<script[[:space:]]/ && tag ~ module_type && tag ~ asset_src) {
+          has_module_asset = 1
+        }
+      }
+      exit !(has_app_mount && has_module_asset)
+    }
+  ' "${body_file}"
+}
+
+verify_site_root() (
+  local url="$1"
+  local headers="" body="" status content_type
+
+  cleanup_site_root_response() {
+    local exit_status=$?
+    rm -f "${headers}" "${body}"
+    trap - EXIT
+    exit "${exit_status}"
+  }
+  headers="$(mktemp)" || exit 1
+  trap cleanup_site_root_response EXIT
+  body="$(mktemp)" || exit 1
+
+  status="$(
+    bounded_curl --silent --show-error --dump-header "${headers}" --output "${body}" \
+      --write-out '%{http_code}' "${url}"
+  )" || {
+    printf 'Root page request failed\n' >&2
+    exit 1
+  }
+  [[ "${status}" == "200" ]] || {
+    printf 'Unexpected root page status: expected 200, got %s\n' "${status}" >&2
+    exit 1
+  }
+  content_type="$(
+    awk 'tolower($1) == "content-type:" {
+      value = $0
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      sub(/\r$/, "", value)
+      print value
+      exit
+    }' "${headers}"
+  )"
+  site_root_is_spa_html "${content_type}" "${body}" || {
+    printf 'Root page is not HTML with the expected SPA app mount and module asset\n' >&2
+    exit 1
+  }
+)
+
 wait_http_success() {
   local url="$1"
   local max_attempts="${2:-18}"

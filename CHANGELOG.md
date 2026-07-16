@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.14] - 2026-07-16
+
+### Added
+- Docker Compose quick-start for a local wArchi stack with arepos-server, PostgreSQL, MinIO, and Cerbos.
+
 ## [0.8.13] - 2026-07-16
 
 ### Fixed

@@ -7,8 +7,8 @@ This bundle deploys the three wArchi services to the existing `warchi` k3d clust
 - `https://app.warchi.ru` — `warchi`, including the same-origin `/api/` and `/ws` proxy;
 - `arepos-server` — cluster-internal only, with PostgreSQL, MinIO, and Cerbos in namespace `arch`.
 
-The fixed default versions are arepos-server `0.5.2`, warchi `0.8.13`, and warchi-site
-`0.2.1`. The scripts never deploy Papirus source; the warchi release consumes
+The fixed default versions are arepos-server `0.5.2`, warchi `0.8.14`, and warchi-site
+`0.2.2`. The scripts never deploy Papirus source; the warchi release consumes
 `@ngroznykh/papirus@^0.6.5` from npm and receives an empty named `papirus` Docker build context
 only to satisfy the release Dockerfile.
 
@@ -20,7 +20,7 @@ On the operator workstation:
 - sibling repositories `warchi`, `arepos-server`, and `warchi-site`;
 - each repository clean, with `warchi` and `arepos-server` checked out on `master` and
   `warchi-site` checked out on `main`, at the exact matching annotated or lightweight tag
-  (`v0.8.13`, `v0.5.2`, or `v0.2.1`); these release branches are pinned rather than inferred from
+  (`v0.8.14`, `v0.5.2`, or `v0.2.2`); these release branches are pinned rather than inferred from
   local remote metadata;
 - package, Gradle, and chart versions matching those tags;
 - DNS configured so `warchi.ru A` is the single address `138.124.14.246`,

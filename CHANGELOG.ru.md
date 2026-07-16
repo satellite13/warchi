@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.8.14] - 2026-07-16
+
+### Добавлено
+- Docker Compose quick-start локального стека wArchi с arepos-server, PostgreSQL, MinIO и Cerbos.
+
 ## [0.8.13] - 2026-07-16
 
 ### Исправлено

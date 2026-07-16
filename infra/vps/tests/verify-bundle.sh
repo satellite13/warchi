@@ -389,6 +389,7 @@ scripts=(
   "${VPS_DIR}/tests/image-recovery-scenario.sh"
   "${VPS_DIR}/tests/mixed-image-recovery-scenario.sh"
   "${VPS_DIR}/tests/fixtures/ctr"
+  "${VPS_DIR}/tests/certificate-adoption-scenario.sh"
   "${VPS_DIR}/tests/backup-helper-failure.sh"
   "${VPS_DIR}/tests/backup-lock-exclusion.sh"
   "${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
@@ -424,6 +425,7 @@ assert_contains "${DEPLOY_SKILL}" 'infra/vps/deploy.sh'
 assert_contains "${DEPLOY_SKILL}" 'SHA256:5Cd7rCnHE8YjAIc7SuILJy6IfZNygAUmzw5Xkpn8VAA'
 manifests=(
   "${VPS_DIR}/k8s/redirect-https.yaml"
+  "${VPS_DIR}/k8s/prestage-app-certificate.yaml"
   "${VPS_DIR}/k8s/prestage-app-ingress.yaml"
   "${VPS_DIR}/k8s/prestage-site-certificate.yaml"
 )
@@ -480,11 +482,13 @@ assert_contains "${TMP_DIR}/warchi.yaml" 'host: "app.warchi.ru"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'secretName: warchi-app-ru-tls'
 assert_contains "${TMP_DIR}/warchi.yaml" 'traefik.ingress.kubernetes.io/router.entrypoints: web,websecure'
 assert_contains "${TMP_DIR}/warchi.yaml" 'traefik.ingress.kubernetes.io/router.middlewares: arch-redirect-https@kubernetescrd'
+assert_not_contains "${TMP_DIR}/warchi.yaml" 'cert-manager.io/'
 assert_contains "${TMP_DIR}/site.yaml" 'image: "arch/warchi-site:0.2.1"'
 assert_contains "${TMP_DIR}/site.yaml" 'host: "warchi.ru"'
 assert_contains "${TMP_DIR}/site.yaml" 'secretName: "warchi-site-ru-tls"'
 assert_contains "${TMP_DIR}/site.yaml" 'traefik.ingress.kubernetes.io/router.entrypoints: web,websecure'
 assert_contains "${TMP_DIR}/site.yaml" 'traefik.ingress.kubernetes.io/router.middlewares: arch-redirect-https@kubernetescrd'
+assert_not_contains "${TMP_DIR}/site.yaml" 'cert-manager.io/'
 
 assert_contains "${VPS_DIR}/values/arepos-server.yaml" 'size: 20Gi'
 [[ "$(grep -Fc 'size: 20Gi' "${VPS_DIR}/values/arepos-server.yaml")" == "2" ]] ||
@@ -496,15 +500,35 @@ assert_contains "${VPS_DIR}/k8s/redirect-https.yaml" 'name: redirect-https'
 assert_contains "${VPS_DIR}/k8s/redirect-https.yaml" 'scheme: https'
 assert_contains "${VPS_DIR}/k8s/redirect-https.yaml" 'permanent: true'
 assert_not_contains "${VPS_DIR}/k8s/redirect-https.yaml" 'cert-manager'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'kind: Certificate'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'name: warchi-app-ru-tls'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'secretName: warchi-app-ru-tls'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'name: letsencrypt-prod'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'kind: ClusterIssuer'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'dnsNames:'
+assert_contains "${VPS_DIR}/k8s/prestage-app-certificate.yaml" 'app.warchi.ru'
 assert_contains "${VPS_DIR}/k8s/prestage-app-ingress.yaml" 'name: warchi-app-tls-prestage'
 assert_contains "${VPS_DIR}/k8s/prestage-app-ingress.yaml" 'host: app.warchi.ru'
 assert_contains "${VPS_DIR}/k8s/prestage-app-ingress.yaml" 'name: warchi'
 assert_contains "${VPS_DIR}/k8s/prestage-app-ingress.yaml" 'secretName: warchi-app-ru-tls'
 assert_not_contains "${VPS_DIR}/k8s/prestage-app-ingress.yaml" 'router.middlewares'
+assert_not_contains "${VPS_DIR}/k8s/prestage-app-ingress.yaml" 'cert-manager.io/'
 assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'kind: Certificate'
 assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'name: warchi-site-ru-tls'
+assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'secretName: warchi-site-ru-tls'
+assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'name: letsencrypt-prod'
+assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'kind: ClusterIssuer'
 assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'dnsNames:'
 assert_contains "${VPS_DIR}/k8s/prestage-site-certificate.yaml" 'warchi.ru'
+[[ "$(grep -hEc '^kind: Certificate$' \
+  "${VPS_DIR}"/k8s/prestage-*-certificate.yaml | awk '{ total += $1 } END { print total + 0 }')" == "2" ]] ||
+  fail "exactly two explicit prestage Certificates must exist"
+[[ "$(grep -hEc '^  name: warchi-app-ru-tls$' \
+  "${VPS_DIR}"/k8s/prestage-*-certificate.yaml | awk '{ total += $1 } END { print total + 0 }')" == "1" ]] ||
+  fail "exactly one explicit app Certificate must exist"
+[[ "$(grep -hEc '^  name: warchi-site-ru-tls$' \
+  "${VPS_DIR}"/k8s/prestage-*-certificate.yaml | awk '{ total += $1 } END { print total + 0 }')" == "1" ]] ||
+  fail "exactly one explicit site Certificate must exist"
 
 assert_contains "${VPS_DIR}/common.sh" 'SHA256:5Cd7rCnHE8YjAIc7SuILJy6IfZNygAUmzw5Xkpn8VAA'
 assert_contains "${VPS_DIR}/common.sh" 'StrictHostKeyChecking=yes'
@@ -635,7 +659,13 @@ assert_contains "${VPS_DIR}/remote-deploy.sh" 'secret-key'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'Bound'
 assert_contains "${VPS_DIR}/remote-deploy.sh" '20Gi'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'warchi-app-tls-prestage'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'prestage-app-certificate.yaml'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'warchi-site-ru-tls'
+assert_contains "${VPS_DIR}/helpers.sh" 'adopt_explicit_certificate()'
+assert_contains "${VPS_DIR}/helpers.sh" \
+  "-p '{\"metadata\":{\"ownerReferences\":[]}}'"
+assert_contains "${VPS_DIR}/helpers.sh" \
+  '((.metadata.ownerReferences // []) | length) == 0'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'ingress.enabled=false'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'WARCHI_PREVIOUS_REVISION'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'rollback_cutover_if_needed'
@@ -643,12 +673,30 @@ assert_contains "${VPS_DIR}/remote-deploy.sh" 'SITE_HEALTHY'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'infra/vps/verify.sh'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/redirect-https.yaml"'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'kubectl delete ingress warchi-app-tls-prestage'
+assert_not_contains "${VPS_DIR}/remote-deploy.sh" 'kubectl delete certificate'
 assert_contains "${VPS_DIR}/remote-deploy.sh" \
   'wait_http_success https://app.warchi.ru/health'
 assert_contains "${VPS_DIR}/remote-deploy.sh" \
   'wait_http_success https://warchi.ru/health'
 assert_contains "${VPS_DIR}/remote-deploy.sh" \
   '"CUTOVER_READINESS_CONFIRMED=1"'
+assert_line_order "${VPS_DIR}/remote-deploy.sh" \
+  'adopt_explicit_certificate warchi-app-ru-tls' \
+  'kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/prestage-app-ingress.yaml"'
+assert_line_order "${VPS_DIR}/remote-deploy.sh" \
+  'adopt_explicit_certificate warchi-site-ru-tls' \
+  'kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/prestage-app-ingress.yaml"'
+certificate_wait_line="$(
+  line_number "${VPS_DIR}/remote-deploy.sh" \
+    'kubectl wait --for=condition=Ready "certificate/${certificate}"'
+)"
+prestage_apply_line="$(
+  line_number "${VPS_DIR}/remote-deploy.sh" \
+    'kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/prestage-app-ingress.yaml"'
+)"
+[[ -n "${certificate_wait_line}" && -n "${prestage_apply_line}" &&
+  "${certificate_wait_line}" -lt "${prestage_apply_line}" ]] ||
+  fail "both explicit Certificates must be waited Ready before prestage ingress apply"
 assert_line_order "${VPS_DIR}/remote-deploy.sh" \
   'kubectl wait --for=condition=Ready certificate/warchi-app-ru-tls' \
   'wait_http_success https://app.warchi.ru/health'
@@ -662,6 +710,12 @@ prestage_delete_line="$(
 )"
 [[ "${app_health_line}" -lt "${prestage_delete_line}" ]] ||
   fail "app health readiness must precede operational prestage ingress deletion"
+full_verify_line="$(
+  line_number "${VPS_DIR}/remote-deploy.sh" \
+    'bash "${WARCHI_REPO}/infra/vps/verify.sh"'
+)"
+[[ -n "${full_verify_line}" && "${prestage_delete_line}" -lt "${full_verify_line}" ]] ||
+  fail "full verification must inspect Certificates after prestage ingress deletion"
 assert_line_order "${VPS_DIR}/remote-deploy.sh" \
   'wait_http_success https://warchi.ru/health' \
   'bash "${WARCHI_REPO}/infra/vps/verify.sh"'
@@ -717,6 +771,7 @@ assert_not_contains "${VPS_DIR}/backup.sh" \
 "${VPS_DIR}/tests/backup-helper-failure.sh"
 "${VPS_DIR}/tests/backup-lock-exclusion.sh"
 "${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
+"${VPS_DIR}/tests/certificate-adoption-scenario.sh"
 "${VPS_DIR}/tests/image-recovery-scenario.sh"
 "${VPS_DIR}/tests/mixed-image-recovery-scenario.sh"
 

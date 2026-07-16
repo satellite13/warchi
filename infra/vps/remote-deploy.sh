@@ -405,8 +405,10 @@ WARCHI_PREVIOUS_REVISION="$(
   exit 1
 }
 
-kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/prestage-app-ingress.yaml" >/dev/null
-kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/prestage-site-certificate.yaml" >/dev/null
+adopt_explicit_certificate warchi-app-ru-tls \
+  "${WARCHI_REPO}/infra/vps/k8s/prestage-app-certificate.yaml" "${NAMESPACE}"
+adopt_explicit_certificate warchi-site-ru-tls \
+  "${WARCHI_REPO}/infra/vps/k8s/prestage-site-certificate.yaml" "${NAMESPACE}"
 for certificate in warchi-app-ru-tls warchi-site-ru-tls; do
   for _attempt in {1..60}; do
     kubectl get certificate "${certificate}" -n "${NAMESPACE}" >/dev/null 2>&1 && break
@@ -415,6 +417,7 @@ for certificate in warchi-app-ru-tls warchi-site-ru-tls; do
   kubectl wait --for=condition=Ready "certificate/${certificate}" \
     -n "${NAMESPACE}" --timeout=5m
 done
+kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/prestage-app-ingress.yaml" >/dev/null
 
 WARCHI_RUNTIME_VALUES="$(mktemp)"
 chmod 600 "${WARCHI_RUNTIME_VALUES}"

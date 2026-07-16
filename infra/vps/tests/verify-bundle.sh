@@ -880,7 +880,6 @@ assert_not_contains "${VPS_DIR}/backup.sh" \
 "${VPS_DIR}/tests/image-recovery-scenario.sh"
 "${VPS_DIR}/tests/mixed-image-recovery-scenario.sh"
 
-assert_contains "${VPS_DIR}/verify.sh" '400 | 401 | 403'
 assert_contains "${VPS_DIR}/helpers.sh" '--max-time'
 assert_contains "${VPS_DIR}/helpers.sh" 'local max_attempts="${2:-18}"'
 assert_contains "${VPS_DIR}/helpers.sh" 'local delay_seconds="${3:-5}"'
@@ -901,16 +900,26 @@ assert_contains "${VPS_DIR}/helpers.sh" 'tolower($1) == "content-type:"'
 assert_matches "${VPS_DIR}/verify.sh" '30(1|8)'
 assert_contains "${VPS_DIR}/verify.sh" 'assert_dns_configuration'
 assert_contains "${VPS_DIR}/verify.sh" 'for tool in dig curl jq k3d kubectl tr'
-assert_contains "${VPS_DIR}/verify.sh" 'direct_websocket_status'
-assert_contains "${VPS_DIR}/verify.sh" 'direct_websocket_content_type'
 assert_contains "${VPS_DIR}/verify.sh" 'public_websocket_status'
-assert_contains "${VPS_DIR}/verify.sh" 'content-type'
+assert_contains "${VPS_DIR}/verify.sh" 'CURL_MAX_TIME=10 bounded_curl'
+assert_contains "${VPS_DIR}/verify.sh" "Connection: Upgrade"
+assert_contains "${VPS_DIR}/verify.sh" "Upgrade: websocket"
+assert_contains "${VPS_DIR}/verify.sh" "Sec-WebSocket-Version: 13"
+assert_contains "${VPS_DIR}/verify.sh" "Sec-WebSocket-Key:"
+assert_matches "${VPS_DIR}/verify.sh" 'case "\$\{public_websocket_status\}" in'
+assert_matches "${VPS_DIR}/verify.sh" '\[1-5\]\[0-9\]\[0-9\]'
 assert_contains "${VPS_DIR}/verify.sh" 'text/html'
+assert_not_contains "${VPS_DIR}/verify.sh" 'http://arepos-server:8080/ws'
+assert_not_contains "${VPS_DIR}/verify.sh" 'direct_websocket_'
+assert_not_contains "${VPS_DIR}/verify.sh" 'Public/direct WebSocket'
 assert_contains "${VPS_DIR}/verify.sh" 'deployment/warchi'
 assert_contains "${VPS_DIR}/verify.sh" 'nginx -T'
 assert_contains "${VPS_DIR}/verify.sh" 'extract_nginx_location_block'
 assert_contains "${VPS_DIR}/verify.sh" 'nginx_websocket_block'
 assert_contains "${VPS_DIR}/verify.sh" 'proxy_pass[[:space:]]+http://arepos-server\.arch\.svc\.cluster\.local:8080;'
+assert_contains "${VPS_DIR}/verify.sh" 'proxy_http_version[[:space:]]+1\.1;'
+assert_contains "${VPS_DIR}/verify.sh" 'proxy_set_header[[:space:]]+Upgrade[[:space:]]+\$http_upgrade;'
+assert_contains "${VPS_DIR}/verify.sh" 'proxy_set_header[[:space:]]+Connection[[:space:]]+\$connection_upgrade;'
 if grep -Eq '^[[:space:]]*curl[[:space:]]' \
   "${VPS_DIR}/remote-deploy.sh" "${VPS_DIR}/verify.sh"; then
   fail "production network calls must use bounded_curl"

@@ -223,12 +223,11 @@ are preserved. Old images and timestamped backups are retained.
 migration `042`, exact 301/308 HTTP-to-HTTPS redirects, and that the root response is HTML with
 the stable `<div id="app">` SPA mount. It does not inspect lazy-loaded JavaScript chunks.
 It also checks unauthenticated 401 responses from `/api/v1/auth/me` through both public origins,
-and a bounded
-non-mutating WebSocket handshake whose public status and content type must match the direct
-in-cluster backend rejection rather than return SPA 200/404 or HTML. All production `curl`
-requests have bounded connect and total timeouts; a timeout inside guarded verification triggers
-the normal automatic rollback. Verification also inspects the active `nginx -T` output in the
-deployed warchi pod for the exact `/ws` backend proxy before performing the handshakes.
+the active `nginx -T` output for the exact `/ws` backend proxy and WebSocket upgrade directives,
+and a bounded non-mutating public WebSocket probe with Upgrade headers. The probe accepts any HTTP
+status because unauthenticated handshake behavior depends on the framework and WebSocket client;
+it only rejects an SPA HTML fallback. All production `curl` requests have bounded connect and
+total timeouts; a timeout inside guarded verification triggers the normal automatic rollback.
 
 SSO and CSRF cannot be honestly verified by a non-mutating script. After deployment, manually:
 
@@ -236,7 +235,11 @@ SSO and CSRF cannot be honestly verified by a non-mutating script. After deploym
 2. visit `https://warchi.ru` and confirm the shared `.warchi.ru` session behavior;
 3. perform one authorized admin mutation in the browser and confirm CSRF succeeds;
 4. confirm the `SELF-HOSTED` visibility in the browser after the SPA loads;
-5. confirm registration and Swagger are unavailable publicly.
+5. open an authenticated STOMP/WebSocket connection and confirm model live sync;
+6. confirm registration and Swagger are unavailable publicly.
+
+An authenticated STOMP/WebSocket smoke test needs a browser or WebSocket-capable client. `wget`
+is not a valid imitation of that handshake and is deliberately not used by `verify.sh`.
 
 ## Rollback
 

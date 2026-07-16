@@ -166,16 +166,30 @@ Cutover order minimizes the root-site gap:
 
 1. `arepos-server`: atomic Helm upgrade, rollout, API `0.5.2`, Liquibase migration `042`;
 2. apply the namespaced Traefik `redirect-https` Middleware before any ingress upgrade;
-3. create a temporary app prestage Ingress pointing `app.warchi.ru` at the existing `warchi`
-   Service and pre-issue `warchi-app-ru-tls`; create a direct Certificate for
-   `warchi-site-ru-tls`. The redirect is ingress-scoped, so cert-manager HTTP01 solver ingresses
-   are not affected;
-4. install/upgrade the `warchi-site` workload with ingress disabled and capture the current
+3. apply one explicit cert-manager Certificate for each production TLS secret
+   (`warchi-app-ru-tls` and `warchi-site-ru-tls`) and wait for both to become Ready;
+4. create a temporary app prestage Ingress pointing `app.warchi.ru` at the existing `warchi`
+   Service and referencing the already-issued `warchi-app-ru-tls` secret. The redirect is
+   ingress-scoped, so cert-manager HTTP01 solver ingresses are not affected;
+5. install/upgrade the `warchi-site` workload with ingress disabled and capture the current
    deployed `warchi` Helm revision;
-5. atomically move `warchi` to `app.warchi.ru`, wait for its certificate and health, then remove
+6. atomically move `warchi` to `app.warchi.ru`, wait for its certificate and health, then remove
    the temporary prestage Ingress;
-6. immediately atomically enable `warchi-site` on `warchi.ru`, wait for rollout, TLS, and health;
-7. run full non-mutating production verification inside the rollback guard.
+7. immediately atomically enable `warchi-site` on `warchi.ru`, wait for rollout, TLS, and health;
+8. run full non-mutating production verification inside the rollback guard.
+
+Certificate ownership is explicit and independent of Ingress lifecycle. The temporary and final
+production Ingresses contain TLS secret references but no cert-manager shim issuer annotations,
+so cert-manager does not synthesize additional ingress-owned Certificates. Cleanup deletes only
+the temporary `warchi-app-tls-prestage` Ingress; both explicit Certificates and their TLS secrets
+remain available for final verification and later deployments.
+
+Deployments also adopt migration state left by the former ingress-shim flow. For each app and site
+Certificate, deployment checks whether the resource already exists, clears any
+`metadata.ownerReferences`, applies the explicit manifest, and fails closed unless the resulting
+Certificate has no owners. This adoption is idempotent and never deletes or recreates the TLS
+Secret. After adoption, cert-manager continues normal issuance and renewal from the explicit
+Certificate resource; Ingress replacement or prestage cleanup cannot garbage-collect it.
 
 Public health checks allow a bounded ingress convergence window after each host switch. They make
 18 attempts, five seconds apart; every attempt uses a three-second connect timeout and a ten-second
@@ -187,11 +201,11 @@ bodies or URLs.
 
 An integrated deployment has at most two endpoint readiness windows total: one for the app and one
 for the site, for a combined maximum of 530 seconds. The app check runs while the prestage Ingress
-and its already-ready certificate still exist; the prestage Ingress is removed only after public
-app health converges. `remote-deploy.sh` then invokes full verification with readiness explicitly
-confirmed, so those waits are not repeated. Standalone `verify.sh` defaults to both readiness
-waits. In either mode, exact versions, redirects, proxies, health, and all other strict assertions
-still run once and fail without retrying mismatches.
+and its already-ready explicit certificate still exist; the prestage Ingress is removed only after
+public app health converges, without deleting the Certificate. `remote-deploy.sh` then invokes full
+verification with readiness explicitly confirmed, so those waits are not repeated. Standalone
+`verify.sh` defaults to both readiness waits. In either mode, exact versions, redirects, proxies,
+health, and all other strict assertions still run once and fail without retrying mismatches.
 
 If any step fails after the host switch or during the full verification (including redirects,
 same-origin proxies, `SELF-HOSTED`, images, versions, and WebSocket routing), the exit trap

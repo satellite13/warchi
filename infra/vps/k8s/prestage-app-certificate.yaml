@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: warchi-app-ru-tls
+  namespace: arch
+spec:
+  secretName: warchi-app-ru-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - app.warchi.ru

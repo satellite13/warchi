@@ -108,6 +108,33 @@ cutover_readiness_required() {
   [[ "${1:-0}" != "1" ]]
 }
 
+adopt_explicit_certificate() {
+  local certificate="$1"
+  local manifest="$2"
+  local namespace="$3"
+  local existing certificate_json
+
+  existing="$(
+    kubectl get certificate "${certificate}" -n "${namespace}" \
+      --ignore-not-found -o name
+  )" || return 1
+  if [[ -n "${existing}" ]]; then
+    kubectl patch certificate "${certificate}" -n "${namespace}" \
+      --type=merge -p '{"metadata":{"ownerReferences":[]}}' >/dev/null || return 1
+  fi
+
+  kubectl apply -f "${manifest}" >/dev/null || return 1
+  certificate_json="$(
+    kubectl get certificate "${certificate}" -n "${namespace}" -o json
+  )" || return 1
+  jq -e '((.metadata.ownerReferences // []) | length) == 0' \
+    <<<"${certificate_json}" >/dev/null || {
+    printf 'Certificate %s still has ownerReferences after adoption\n' \
+      "${certificate}" >&2
+    return 1
+  }
+}
+
 assert_dns_configuration() {
   local target_ip="$1"
   local root_answers root_aaaa app_cname app_answers app_aaaa

@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-07-16
+
+### Исправлено
+- Recovery распознаёт эквивалентные digest OCI index и image config между Docker и containerd.
+
 ## [0.8.7] - 2026-07-16
 
 ### Исправлено

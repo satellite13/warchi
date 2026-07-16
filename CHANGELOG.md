@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-07-16
+
+### Fixed
+- Recovery recognizes equivalent OCI index and image-config digests across Docker and containerd.
+
 ## [0.8.7] - 2026-07-16
 
 ### Fixed

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.10] - 2026-07-16
+
+### Fixed
+- App TLS certificate ownership survives removal of the temporary ingress during VPS cutover.
+
 ## [0.8.9] - 2026-07-16
 
 ### Fixed

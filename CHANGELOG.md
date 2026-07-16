@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Docker Compose quick-start no longer needs a local papirus clone: `@ngroznykh/papirus` comes from npm, and the named Docker context is an empty in-repo directory.
+
 ## [0.8.14] - 2026-07-16
 
 ### Added

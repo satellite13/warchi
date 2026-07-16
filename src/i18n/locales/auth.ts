@@ -106,6 +106,8 @@ export const authMessages = {
       confirmPermanently: 'Удалить объект из базы навсегда? Это действие нельзя отменить.',
       loading: 'Загрузка...',
       deletedSuccess: 'Объект удалён навсегда',
+      deleteConflictActiveModels:
+        'Нельзя удалить: нотация ещё используется диаграммами в активных моделях. Сначала удалите эти модели навсегда или смените нотацию на диаграммах.',
       name: 'Название',
       version: 'Версия',
       updated: 'Обновлено',
@@ -218,6 +220,8 @@ export const authMessages = {
       confirmPermanently: 'Permanently delete this item from the database? This action cannot be undone.',
       loading: 'Loading...',
       deletedSuccess: 'Item permanently deleted',
+      deleteConflictActiveModels:
+        'Cannot delete: the notation is still used by diagrams in active models. Permanently delete those models first or change the notation on their diagrams.',
       name: 'Name',
       version: 'Version',
       updated: 'Updated',

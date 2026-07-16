@@ -68,6 +68,8 @@ const deleteNotationPermanently = async (id: string): Promise<void> => {
   if (result.success) {
     deletedNotations.value = deletedNotations.value.filter((n) => n.id !== id)
     successMessage.value = t('adminDeleted.deletedSuccess')
+  } else if (result.error.status === 409) {
+    errorMessage.value = t('adminDeleted.deleteConflictActiveModels')
   } else {
     errorMessage.value = result.error.message
   }

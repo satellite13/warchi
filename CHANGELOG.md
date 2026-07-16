@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-16
+
+### Added
+- Local HTTPS for the wArchi SPA in Kubernetes (self-signed cert for cluster hostname access).
+
+### Changed
+- Refreshed in-app help for models, notations, admin, auth, and related topics.
+
+### Fixed
+- Admin permanent-delete shows a clear conflict message when active models still use a notation.
+- SSO return URLs accept both `http` and `https` for the marketing site.
+
 ## [0.8.0] - 2026-07-14
 
 ### Added

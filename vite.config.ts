@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "happy-dom",
       setupFiles: ["./src/test/setup.ts"],
-      exclude: ["tests/**", "node_modules/**"],
+      exclude: ["tests/**", "node_modules/**", ".worktrees/**"],
       coverage: {
         provider: "v8",
         include: [

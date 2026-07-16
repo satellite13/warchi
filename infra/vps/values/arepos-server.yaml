@@ -5,6 +5,14 @@ image:
   pullPolicy: IfNotPresent
   tag: "0.5.2"
 
+resources:
+  requests:
+    cpu: 300m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
 ingress:
   enabled: false
 

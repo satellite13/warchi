@@ -110,6 +110,11 @@ PostgreSQL and MinIO Secret keys with `secrets.env` without printing values. Bot
 must already be `Bound` with an exact `20Gi` request and capacity and a valid StorageClass, so no
 storage expansion is attempted during deployment.
 
+The VPS values retain the verified production sizing for the arepos-server container: requests
+are `300m` CPU and `512Mi` memory, while limits are `1000m` CPU and `1Gi` memory. The local bundle
+test renders the Deployment and checks these exact values as a preflight, preventing a chart
+default with insufficient memory from reaching an atomic Helm upgrade.
+
 After the mandatory backup, the deployment shreds the obsolete
 `/opt/warchi-deploy/values/arepos-server-vps.yaml` that previously held inline credentials. This
 is cleanup, not rotation: credentials remain in root-only `secrets.env`, the Kubernetes Secret,

@@ -290,6 +290,25 @@ helm template warchi-site "${SITE_REPO}/charts/warchi-site" \
   >"${TMP_DIR}/site.yaml"
 
 assert_contains "${TMP_DIR}/arepos.yaml" 'image: "arch/arepos-server:0.5.2"'
+arepos_resources="$(
+  awk '
+    $0 == "kind: Deployment" { in_deployment = 1; next }
+    in_deployment && $0 == "---" { in_deployment = 0 }
+    in_deployment && $0 == "        - name: arepos-server" { in_container = 1; next }
+    in_container && $0 == "          resources:" {
+      print
+      for (line = 1; line <= 6; line++) {
+        getline
+        print
+      }
+      exit
+    }
+  ' "${TMP_DIR}/arepos.yaml"
+)"
+assert_equal \
+  $'          resources:\n            limits:\n              cpu: 1000m\n              memory: 1Gi\n            requests:\n              cpu: 300m\n              memory: 512Mi' \
+  "${arepos_resources}" \
+  "rendered arepos-server production resources"
 assert_not_contains "${TMP_DIR}/arepos.yaml" 'kind: Ingress'
 assert_contains "${TMP_DIR}/arepos.yaml" 'name: SPRING_PROFILES_ACTIVE'
 assert_contains "${TMP_DIR}/arepos.yaml" 'value: prod'

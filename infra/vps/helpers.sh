@@ -131,17 +131,33 @@ auth_secret_action() {
 }
 
 image_digest_records_match() {
-  local expected="$1"
+  local local_digest="$1"
   local records="$2"
-  local record digest count=0
+  local record node target_digest config_digest extra
+  local unanimous_target="" unanimous_config="" seen_nodes=""
+  local count=0
+  is_sha256_digest "${local_digest}" || return 1
   while IFS= read -r record; do
     [[ -n "${record}" ]] || continue
-    digest="${record#*=}"
-    [[ "${digest}" != "${record}" ]] || return 1
-    constant_string_equal "${digest}" "${expected}" || return 1
+    IFS='|' read -r node target_digest config_digest extra <<<"${record}"
+    [[ -n "${node}" && -n "${target_digest}" && -n "${config_digest}" &&
+      -z "${extra}" ]] || return 1
+    is_sha256_digest "${target_digest}" && is_sha256_digest "${config_digest}" ||
+      return 1
+    grep -Fqx -- "${node}" <<<"${seen_nodes}" && return 1
+    seen_nodes="${seen_nodes}${seen_nodes:+$'\n'}${node}"
+    if [[ "${count}" == "0" ]]; then
+      unanimous_target="${target_digest}"
+      unanimous_config="${config_digest}"
+    else
+      constant_string_equal "${target_digest}" "${unanimous_target}" &&
+        constant_string_equal "${config_digest}" "${unanimous_config}" || return 1
+    fi
     count=$((count + 1))
   done <<<"${records}"
-  [[ "${count}" -gt 0 ]]
+  [[ "${count}" -gt 0 ]] || return 1
+  constant_string_equal "${local_digest}" "${unanimous_target}" ||
+    constant_string_equal "${local_digest}" "${unanimous_config}"
 }
 
 is_sha256_digest() {
@@ -175,12 +191,12 @@ node_image_target_digest() {
   printf '%s' "${target_digest}"
 }
 
-node_image_config_digest() {
+node_image_config_digest_for_target() {
   local node="$1"
-  local image_ref="$2"
-  local target_digest target_json media_type manifest_digest manifest_json config_digest
+  local target_digest="$2"
+  local target_json media_type manifest_digest manifest_json config_digest
 
-  target_digest="$(node_image_target_digest "${node}" "${image_ref}")" || return 1
+  is_sha256_digest "${target_digest}" || return 1
   target_json="$(
     docker exec "${node}" ctr -n k8s.io content get "${target_digest}"
   )" || return 1
@@ -225,6 +241,66 @@ node_image_config_digest() {
     return 1
   is_sha256_digest "${config_digest}" || return 1
   printf '%s' "${config_digest}"
+}
+
+node_image_config_digest() {
+  local node="$1"
+  local image_ref="$2"
+  local target_digest
+  target_digest="$(node_image_target_digest "${node}" "${image_ref}")" || return 1
+  node_image_config_digest_for_target "${node}" "${target_digest}"
+}
+
+node_image_digest_pair() {
+  local node="$1"
+  local image_ref="$2"
+  local target_digest config_digest
+  target_digest="$(node_image_target_digest "${node}" "${image_ref}")" || return 1
+  config_digest="$(node_image_config_digest_for_target "${node}" "${target_digest}")" ||
+    return 1
+  printf '%s|%s' "${target_digest}" "${config_digest}"
+}
+
+image_cluster_digest_records() {
+  local image="$1"
+  local cluster_name="$2"
+  local nodes node images listed_image candidate pair target_digest config_digest
+  local unanimous_target="" unanimous_config=""
+  local seen_nodes="" records="" node_count=0 candidate_count
+
+  nodes="$(list_all_k3d_cluster_nodes "${cluster_name}")" || return 1
+  while IFS= read -r node; do
+    [[ -n "${node}" ]] || continue
+    is_k3d_workload_node_name "${node}" "${cluster_name}" || continue
+    grep -Fqx -- "${node}" <<<"${seen_nodes}" && return 1
+    seen_nodes="${seen_nodes}${seen_nodes:+$'\n'}${node}"
+    node_count=$((node_count + 1))
+    images="$(list_node_images "${node}")" || return 1
+    candidate=""
+    candidate_count=0
+    while IFS= read -r listed_image; do
+      if [[ "${listed_image}" == "${image}" || "${listed_image}" == */"${image}" ]]; then
+        candidate="${listed_image}"
+        candidate_count=$((candidate_count + 1))
+      fi
+    done <<<"${images}"
+    [[ "${candidate_count}" == "1" ]] || return 1
+    pair="$(node_image_digest_pair "${node}" "${candidate}")" || return 1
+    IFS='|' read -r target_digest config_digest <<<"${pair}"
+    is_sha256_digest "${target_digest}" && is_sha256_digest "${config_digest}" ||
+      return 1
+    if [[ "${node_count}" == "1" ]]; then
+      unanimous_target="${target_digest}"
+      unanimous_config="${config_digest}"
+    else
+      constant_string_equal "${target_digest}" "${unanimous_target}" &&
+        constant_string_equal "${config_digest}" "${unanimous_config}" || return 1
+    fi
+    records="${records}${records:+$'\n'}${node}|${pair}"
+  done <<<"${nodes}"
+
+  [[ "${node_count}" -gt 0 ]] || return 1
+  printf '%s' "${records}"
 }
 
 release_image_action() {

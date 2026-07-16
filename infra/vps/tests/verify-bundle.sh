@@ -159,10 +159,21 @@ assert_equal "match" "$(auth_secret_action 1 jwt admin jwt admin)" \
 if auth_secret_action 1 wrong admin jwt admin >/dev/null; then
   fail "mismatched auth secret was accepted"
 fi
-image_digest_records_match 'sha256:abc' $'server-0=sha256:abc\nagent-0=sha256:abc' ||
-  fail "matching per-node image digests were rejected"
-if image_digest_records_match 'sha256:abc' $'server-0=sha256:abc\nagent-0=sha256:def'; then
-  fail "mismatched per-node image digest was accepted"
+bundle_target_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+bundle_config_digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+bundle_digest_records=$(
+  printf '%s\n' \
+    "server-0|${bundle_target_digest}|${bundle_config_digest}" \
+    "agent-0|${bundle_target_digest}|${bundle_config_digest}"
+)
+image_digest_records_match "${bundle_target_digest}" "${bundle_digest_records}" ||
+  fail "matching per-node target digests were rejected"
+image_digest_records_match "${bundle_config_digest}" "${bundle_digest_records}" ||
+  fail "matching per-node config digests were rejected"
+if image_digest_records_match \
+  "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" \
+  "${bundle_digest_records}"; then
+  fail "unrelated local image digest was accepted"
 fi
 scenario_log="${TMP_DIR}/scenarios.log"
 helm() {

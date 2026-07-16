@@ -101,11 +101,7 @@ app_payload="$(bounded_curl --fail --silent --show-error https://app.warchi.ru/v
 
 bounded_curl --fail --silent --show-error https://app.warchi.ru/health >/dev/null
 bounded_curl --fail --silent --show-error https://warchi.ru/health >/dev/null
-bounded_curl --fail --silent --show-error https://warchi.ru/ |
-  grep -F 'SELF-HOSTED' >/dev/null || {
-  printf 'Root page does not contain the expected SELF-HOSTED marker\n' >&2
-  exit 1
-}
+verify_site_root https://warchi.ru/
 
 assert_status https://app.warchi.ru/api/v1/auth/me 401
 assert_status https://warchi.ru/api/v1/auth/me 401

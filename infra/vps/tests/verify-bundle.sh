@@ -114,6 +114,111 @@ HELPERS="${VPS_DIR}/helpers.sh"
 # shellcheck source=../helpers.sh
 source "${HELPERS}"
 
+spa_index_fixture="${TMP_DIR}/spa-index.html"
+printf '%s\n' \
+  '<!doctype html>' \
+  '<html lang="en">' \
+  '  <body><div class="site-shell" data-build="current" id='\''app'\''></div>' \
+  '  <script defer src="/assets/index.js" type="module"></script></body>' \
+  '</html>' \
+  >"${spa_index_fixture}"
+assert_not_contains "${spa_index_fixture}" 'SELF-HOSTED'
+declare -F site_root_is_spa_html >/dev/null ||
+  fail "missing SPA root response validator"
+site_root_is_spa_html 'TEXT/HTML; charset=utf-8' "${spa_index_fixture}" ||
+  fail "SPA root validator rejected HTML with an attributed app mount and module asset"
+if site_root_is_spa_html 'text/html; charset=utf-8' /dev/null; then
+  fail "SPA root validator accepted HTML without the app mount"
+fi
+if site_root_is_spa_html 'application/json' "${spa_index_fixture}"; then
+  fail "SPA root validator accepted a non-HTML response"
+fi
+spa_without_script_fixture="${TMP_DIR}/spa-without-script.html"
+printf '%s\n' '<div id="app"></div>' >"${spa_without_script_fixture}"
+if site_root_is_spa_html 'text/html' "${spa_without_script_fixture}"; then
+  fail "SPA root validator accepted HTML without the module asset"
+fi
+spa_data_id_fixture="${TMP_DIR}/spa-data-id.html"
+printf '%s\n' \
+  '<div data-id="app"></div><script type="module" src="/assets/index.js"></script>' \
+  >"${spa_data_id_fixture}"
+if site_root_is_spa_html 'text/html' "${spa_data_id_fixture}"; then
+  fail "SPA root validator accepted data-id as the app mount"
+fi
+spa_data_script_fixture="${TMP_DIR}/spa-data-script.html"
+printf '%s\n' \
+  '<div id="app"></div><script data-type="module" data-src="/assets/index.js"></script>' \
+  >"${spa_data_script_fixture}"
+if site_root_is_spa_html 'text/html' "${spa_data_script_fixture}"; then
+  fail "SPA root validator accepted data-type or data-src as module attributes"
+fi
+spa_comment_only_fixture="${TMP_DIR}/spa-comment-only.html"
+printf '%s\n' \
+  '<!-- <div id="app"></div><script type="module" src="/assets/index.js"></script> -->' \
+  >"${spa_comment_only_fixture}"
+if site_root_is_spa_html 'text/html' "${spa_comment_only_fixture}"; then
+  fail "SPA root validator accepted app and module tags inside an HTML comment"
+fi
+spa_empty_asset_fixture="${TMP_DIR}/spa-empty-asset.html"
+printf '%s\n' \
+  '<div id="app"></div><script type="module" src="/assets/"></script>' \
+  >"${spa_empty_asset_fixture}"
+if site_root_is_spa_html 'text/html' "${spa_empty_asset_fixture}"; then
+  fail "SPA root validator accepted an empty /assets/ module path"
+fi
+
+site_root_tmpdir="${TMP_DIR}/site-root-temp"
+mkdir "${site_root_tmpdir}"
+site_root_curl_status=200
+site_root_curl_exit=0
+site_root_curl_headers='Content-Type: TEXT/HTML; charset=utf-8'
+site_root_curl_body="$(<"${spa_index_fixture}")"
+curl() {
+  local argument header_file="" body_file=""
+  while [[ "$#" -gt 0 ]]; do
+    argument="$1"
+    case "${argument}" in
+      --dump-header)
+        header_file="$2"
+        shift 2
+        ;;
+      --output)
+        body_file="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  printf '%s\n' "${site_root_curl_headers}" >"${header_file}"
+  printf '%s\n' "${site_root_curl_body}" >"${body_file}"
+  printf '%s' "${site_root_curl_status}"
+  return "${site_root_curl_exit}"
+}
+TMPDIR="${site_root_tmpdir}" verify_site_root https://site.example.invalid/ ||
+  fail "SPA root smoke rejected HTTP 200 HTML"
+site_root_curl_status=302
+if TMPDIR="${site_root_tmpdir}" verify_site_root https://site.example.invalid/ \
+  2>"${TMP_DIR}/site-root-302.log"; then
+  fail "SPA root smoke accepted HTTP 302"
+fi
+assert_contains "${TMP_DIR}/site-root-302.log" 'expected 200, got 302'
+site_root_curl_status=200
+site_root_curl_exit=28
+if TMPDIR="${site_root_tmpdir}" verify_site_root https://site.example.invalid/ \
+  2>"${TMP_DIR}/site-root-curl-failure.log"; then
+  fail "SPA root smoke accepted a curl failure"
+fi
+assert_contains "${TMP_DIR}/site-root-curl-failure.log" 'Root page request failed'
+site_root_curl_exit=0
+shopt -s nullglob
+site_root_temp_files=("${site_root_tmpdir}"/*)
+shopt -u nullglob
+[[ "${#site_root_temp_files[@]}" == "0" ]] ||
+  fail "SPA root smoke did not clean temporary response files"
+unset -f curl
+
 release_repo="${TMP_DIR}/release-repo"
 git init --quiet --initial-branch=main "${release_repo}"
 git -C "${release_repo}" -c user.name='Bundle Test' -c user.email='bundle@example.invalid' \
@@ -789,7 +894,10 @@ assert_line_order "${VPS_DIR}/verify.sh" \
   'api_payload="$(bounded_curl'
 assert_contains "${VPS_DIR}/verify.sh" 'https://app.warchi.ru/api/v1/auth/me'
 assert_contains "${VPS_DIR}/verify.sh" 'https://warchi.ru/api/v1/auth/me'
-assert_contains "${VPS_DIR}/verify.sh" "grep -F 'SELF-HOSTED' >/dev/null"
+assert_contains "${VPS_DIR}/verify.sh" 'verify_site_root https://warchi.ru/'
+assert_not_contains "${VPS_DIR}/verify.sh" 'SELF-HOSTED'
+assert_contains "${VPS_DIR}/helpers.sh" "--write-out '%{http_code}'"
+assert_contains "${VPS_DIR}/helpers.sh" 'tolower($1) == "content-type:"'
 assert_matches "${VPS_DIR}/verify.sh" '30(1|8)'
 assert_contains "${VPS_DIR}/verify.sh" 'assert_dns_configuration'
 assert_contains "${VPS_DIR}/verify.sh" 'for tool in dig curl jq k3d kubectl tr'

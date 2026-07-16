@@ -208,7 +208,7 @@ verification with readiness explicitly confirmed, so those waits are not repeate
 health, and all other strict assertions still run once and fail without retrying mismatches.
 
 If any step fails after the host switch or during the full verification (including redirects,
-same-origin proxies, `SELF-HOSTED`, images, versions, and WebSocket routing), the exit trap
+same-origin proxies, SPA root structure, images, versions, and WebSocket routing), the exit trap
 automatically rolls the site back to its ingress-disabled prestage revision and rolls `warchi`
 back to the captured revision, restoring the root host. The failed deployment still exits
 non-zero; inspect Helm history and rerun with `REUSE_EXISTING_IMAGES=1` only after correcting the
@@ -220,8 +220,10 @@ are preserved. Old images and timestamped backups are retained.
 ## Verification and manual smoke
 
 `verify.sh` checks DNS, rollouts, exact images, certificates, API and app versions, health,
-migration `042`, exact 301/308 HTTP-to-HTTPS redirects, the root `SELF-HOSTED` marker,
-unauthenticated 401 responses from `/api/v1/auth/me` through both public origins, and a bounded
+migration `042`, exact 301/308 HTTP-to-HTTPS redirects, and that the root response is HTML with
+the stable `<div id="app">` SPA mount. It does not inspect lazy-loaded JavaScript chunks.
+It also checks unauthenticated 401 responses from `/api/v1/auth/me` through both public origins,
+and a bounded
 non-mutating WebSocket handshake whose public status and content type must match the direct
 in-cluster backend rejection rather than return SPA 200/404 or HTML. All production `curl`
 requests have bounded connect and total timeouts; a timeout inside guarded verification triggers
@@ -233,7 +235,8 @@ SSO and CSRF cannot be honestly verified by a non-mutating script. After deploym
 1. sign in at `https://app.warchi.ru`;
 2. visit `https://warchi.ru` and confirm the shared `.warchi.ru` session behavior;
 3. perform one authorized admin mutation in the browser and confirm CSRF succeeds;
-4. confirm registration and Swagger are unavailable publicly.
+4. confirm the `SELF-HOSTED` visibility in the browser after the SPA loads;
+5. confirm registration and Swagger are unavailable publicly.
 
 ## Rollback
 

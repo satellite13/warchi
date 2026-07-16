@@ -29,8 +29,10 @@ On the operator workstation:
 
 On the VPS:
 
-- Ubuntu x86_64, Docker 29, k3d, kubectl, Helm, curl, jq, tar, dig, rsync,
+- Ubuntu x86_64, Docker 29, k3d, kubectl, Helm, curl, jq, tar, flock, dig, rsync,
   `sha256sum`, `shred`, and at least 10 GiB free disk;
+- cluster nodes able to use the pinned `busybox:1.36` image (it is reused from the node cache when
+  present and pulled when absent);
 - running k3d cluster `warchi`, namespace `arch`, Traefik, and cert-manager;
 - healthy existing `arepos-server` and `warchi` releases and their existing PVCs;
 - `/opt/warchi-deploy/secrets.env`, owned by `root:root` with mode `600`;
@@ -121,13 +123,28 @@ The backup creates a root-only timestamp directory containing a PostgreSQL custo
 MinIO archive, and root-only Helm values/manifests. Empty database or MinIO artifacts fail the
 deployment. `arepos-server` and `warchi` Helm status, values, and manifests are mandatory and
 nonempty. `warchi-site` is optional only when no release exists; once present, its complete Helm
-backup is equally mandatory.
+backup is equally mandatory. Host-level nonblocking `flock` on
+`/var/lock/warchi-backup.lock` serializes backup runs; a concurrent run exits before creating
+artifacts or mutating Kubernetes resources.
 
 For a consistent PostgreSQL/MinIO snapshot, backup records the application replica count, scales
 only `arepos-server` to zero, and restores it with rollout waiting from an exit trap on both success
-and failure. PostgreSQL and MinIO remain running. This creates a short maintenance interruption
-for writes. The finished dump is validated with `pg_restore --list` inside the PostgreSQL pod and
-the MinIO archive with `tar -tzf` before deployment continues.
+and failure. PostgreSQL and MinIO remain running. MinIO files are archived by a unique temporary
+Pod using `busybox:1.36` pinned to multi-architecture digest
+`sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662`; the Pod mounts
+the existing `arepos-server-minio-data` PVC
+read-only at `/data`, is pinned to the running MinIO Pod's node, waits until Ready, and has a
+ten-minute active deadline. Labeled stale helpers are deleted asynchronously at the start of the
+next backup. The exit trap also requests asynchronous helper deletion before immediately restoring
+the original application replicas, so helper cleanup cannot hold the maintenance window open. The
+backup does not require a shell or `tar` in the MinIO image. This creates a short maintenance
+interruption for writes. The finished dump is validated with `pg_restore --list` inside the
+PostgreSQL pod and the MinIO archive with local `tar -tzf` before deployment continues.
+
+A timestamped backup directory is a valid restore point only when it contains the root-only
+`COMPLETE` marker. The directory starts with a root-only `.failed` marker; any backup, helper-Pod,
+validation, cleanup, or replica-restore failure leaves `.failed` in place and never creates
+`COMPLETE`. Failed directories may contain incomplete artifacts and must not be used for restore.
 
 Cutover order minimizes the root-site gap:
 

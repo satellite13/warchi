@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-07-16
+
+### Fixed
+- VPS backup validates PostgreSQL dumps through bounded file-based checks with guaranteed cleanup.
+
 ## [0.8.4] - 2026-07-16
 
 ### Fixed

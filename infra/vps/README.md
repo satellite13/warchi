@@ -7,7 +7,7 @@ This bundle deploys the three wArchi services to the existing `warchi` k3d clust
 - `https://app.warchi.ru` — `warchi`, including the same-origin `/api/` and `/ws` proxy;
 - `arepos-server` — cluster-internal only, with PostgreSQL, MinIO, and Cerbos in namespace `arch`.
 
-The fixed default versions are arepos-server `0.5.2`, warchi `0.8.5`, and warchi-site
+The fixed default versions are arepos-server `0.5.2`, warchi `0.8.6`, and warchi-site
 `0.2.1`. The scripts never deploy Papirus source; the warchi release consumes
 `@ngroznykh/papirus@^0.6.5` from npm and receives an empty named `papirus` Docker build context
 only to satisfy the release Dockerfile.
@@ -20,7 +20,7 @@ On the operator workstation:
 - sibling repositories `warchi`, `arepos-server`, and `warchi-site`;
 - each repository clean, with `warchi` and `arepos-server` checked out on `master` and
   `warchi-site` checked out on `main`, at the exact matching annotated or lightweight tag
-  (`v0.8.5`, `v0.5.2`, or `v0.2.1`); these release branches are pinned rather than inferred from
+  (`v0.8.6`, `v0.5.2`, or `v0.2.1`); these release branches are pinned rather than inferred from
   local remote metadata;
 - package, Gradle, and chart versions matching those tags;
 - DNS configured so `warchi.ru A` is the single address `138.124.14.246`,
@@ -88,16 +88,24 @@ outputs, coverage, and common secret/key file names.
 ## Deployment and cutover
 
 The remote flow writes an explicit kubeconfig with `k3d kubeconfig write warchi`, refuses to
-overwrite any of the three immutable image tags, builds the images, and imports them into k3d.
-Normal builds first use unique temporary tags. Final immutable tags are assigned only after all
-three builds succeed; failures before the first Helm mutation remove temporary/new final tags
-from Docker and actual k3d server/agent nodes.
-For recovery after an interrupted run, `REUSE_EXISTING_IMAGES=1 infra/vps/deploy.sh` skips both
-build and import only after all three exact images are verified both in the root Docker daemon and
-on every actual k3d server/agent node. The k3d load-balancer container is intentionally excluded.
-Verification compares the Docker config digest with the config digest referenced by each
-containerd manifest; tag presence alone is insufficient. It never overwrites a tag and it does
-not skip the mandatory backup.
+overwrite immutable image tags in normal mode, builds the images, and imports them into k3d.
+Builds first use unique temporary tags. Final immutable tags are assigned only after every
+required build succeeds; failures before the first Helm mutation remove only newly built
+temporary/final tags from Docker and actual k3d server/agent nodes.
+For recovery after an interrupted run, `REUSE_EXISTING_IMAGES=1 infra/vps/deploy.sh` makes a
+decision per image. It may reuse a verified image and build an absent exact-tag release image in
+the same run. An image that exists anywhere must exist in the root Docker daemon and on every
+actual k3d server/agent node with the same config digest. Partial presence, local absence, or a
+node digest mismatch aborts. Failure to list containers or inspect images on any workload node is
+an unknown state and also aborts; it is never treated as absence. Completely absent images are
+built to temporary tags, assigned final tags only after all missing builds succeed, and imported;
+reused tags are never overwritten or cleaned up. If every image is reusable, build and import are
+skipped. The k3d load-balancer container is intentionally excluded. Tag presence alone is
+insufficient.
+
+Recovery mode still requires clean repositories at exact release tags with matching versions,
+the mandatory backup, and all normal preflight, storage, Secret, Helm, rollback, and verification
+guards.
 Database and MinIO values are generated from `secrets.env` in a mode-`600` temporary file and
 securely removed by a trap. Static values contain no credentials. JWT and admin credentials are
 read only through uppercase `valueFrom` keys. The deployment creates or safely applies

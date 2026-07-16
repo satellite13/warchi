@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
 AREPOS_VERSION="${AREPOS_VERSION:-0.5.2}"
-WARCHI_VERSION="${WARCHI_VERSION:-0.8.5}"
+WARCHI_VERSION="${WARCHI_VERSION:-0.8.6}"
 SITE_VERSION="${SITE_VERSION:-0.2.1}"
 AREPOS_REPO="${AREPOS_REPO:-${ROOT_DIR}/../arepos-server}"
 SITE_REPO="${SITE_REPO:-${ROOT_DIR}/../warchi-site}"
@@ -24,11 +24,15 @@ print_dry_run() {
     '2. Preflight SSH fingerprint, VPS disk/RAM, k3d, release, and health state' \
     '3. Rsync warchi, arepos-server, and warchi-site sources with secret/build exclusions' \
     '4. Backup PostgreSQL, MinIO, and Helm state' \
-    '5. Build immutable images unless REUSE_EXISTING_IMAGES=1 verifies all three already exist' \
+    '5. Build immutable images after per-image immutable-tag decisions' \
     "6. Deploy arepos-server ${AREPOS_VERSION}; verify rollout, API version, and migration 042" \
     '7. Pre-issue certificates and preinstall warchi-site with ingress disabled' \
     "8. Deploy warchi ${WARCHI_VERSION} to app.warchi.ru, then Deploy warchi-site ${SITE_VERSION} to warchi.ru" \
     '9. Verify production DNS, TLS, redirects, API, app, site, and WebSocket endpoint'
+  if [[ "${REUSE_EXISTING_IMAGES:-0}" == "1" ]]; then
+    printf '%s\n' \
+      'Recovery mode may reuse verified images and build absent exact-tag release images'
+  fi
 }
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then

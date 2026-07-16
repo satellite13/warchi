@@ -6,7 +6,7 @@ readonly REMOTE_ROOT="/opt/warchi-deploy"
 readonly NAMESPACE="arch"
 readonly CLUSTER_NAME="warchi"
 AREPOS_VERSION="${AREPOS_VERSION:-0.5.2}"
-WARCHI_VERSION="${WARCHI_VERSION:-0.8.5}"
+WARCHI_VERSION="${WARCHI_VERSION:-0.8.6}"
 SITE_VERSION="${SITE_VERSION:-0.2.1}"
 REUSE_EXISTING_IMAGES="${REUSE_EXISTING_IMAGES:-0}"
 SRC_ROOT="${REMOTE_ROOT}/src"
@@ -228,69 +228,87 @@ fi
 secure_remove "${REMOTE_ROOT}/values/arepos-server-vps.yaml"
 chmod 600 "${WARCHI_REPO}/infra/vps/values/"*.yaml
 
-image_exists_in_cluster() {
-  local image="$1"
-  local node
-  while IFS= read -r node; do
-    is_k3d_workload_node_name "${node}" "${CLUSTER_NAME}" || continue
-    if docker exec "${node}" ctr -n k8s.io images list -q 2>/dev/null |
-      grep -Eq "(^|/)${image//./\\.}$"; then
-      return 0
-    fi
-  done < <(docker ps -a --filter "label=k3d.cluster=${CLUSTER_NAME}" --format '{{.Names}}')
-  return 1
+list_all_k3d_cluster_nodes() {
+  local cluster_name="$1"
+  docker ps -a --filter "label=k3d.cluster=${cluster_name}" --format '{{.Names}}'
 }
 
-image_exists_on_all_cluster_nodes() {
-  local image="$1"
-  local node
-  local node_count=0
-  while IFS= read -r node; do
-    [[ -n "${node}" ]] || continue
-    is_k3d_workload_node_name "${node}" "${CLUSTER_NAME}" || continue
-    node_count=$((node_count + 1))
-    docker exec "${node}" ctr -n k8s.io images list -q 2>/dev/null |
-      grep -Eq "(^|/)${image//./\\.}$" || return 1
-  done < <(docker ps -a --filter "label=k3d.cluster=${CLUSTER_NAME}" --format '{{.Names}}')
-  [[ "${node_count}" -gt 0 ]]
+list_node_images() {
+  local node="$1"
+  docker exec "${node}" ctr -n k8s.io images list -q
 }
 
 image_config_digest_matches_all_nodes() {
   local image="$1"
-  local local_digest node candidate manifest_digest config_digest
-  local records=""
-  local_digest="$(docker image inspect --format '{{.Id}}' "${image}")"
+  local local_digest nodes node images listed_image candidate manifest_digest config_digest
+  local records="" node_count=0
+  local_digest="$(docker image inspect --format '{{.Id}}' "${image}")" || return 2
   [[ -n "${local_digest}" ]] || return 1
+  nodes="$(list_all_k3d_cluster_nodes "${CLUSTER_NAME}")" || return 2
   while IFS= read -r node; do
     is_k3d_workload_node_name "${node}" "${CLUSTER_NAME}" || continue
-    candidate="$(
-      docker exec "${node}" ctr -n k8s.io images list -q 2>/dev/null |
-        awk -v image="${image}" '$0 == image ||
-          (length($0) > length(image) &&
-           substr($0, length($0) - length(image), length(image) + 1) == "/" image) {
-          candidate = $0
-        } END { print candidate }'
-    )"
-    [[ -n "${candidate}" ]] || return 1
+    node_count=$((node_count + 1))
+    images="$(list_node_images "${node}")" || return 2
+    candidate=""
+    while IFS= read -r listed_image; do
+      if [[ "${listed_image}" == "${image}" || "${listed_image}" == */"${image}" ]]; then
+        candidate="${listed_image}"
+      fi
+    done <<<"${images}"
+    [[ -n "${candidate}" ]] || return 2
     manifest_digest="$(
       docker exec "${node}" ctr -n k8s.io images info "${candidate}" |
         jq -er '.target.digest'
-    )"
+    )" || return 2
     config_digest="$(
       docker exec "${node}" ctr -n k8s.io content get "${manifest_digest}" |
         jq -er '.config.digest'
-    )"
+    )" || return 2
     records="${records}${records:+$'\n'}${node}=${config_digest}"
-  done < <(docker ps -a --filter "label=k3d.cluster=${CLUSTER_NAME}" --format '{{.Names}}')
+  done <<<"${nodes}"
+  [[ "${node_count}" -gt 0 ]] || return 1
   image_digest_records_match "${local_digest}" "${records}"
 }
 
-assert_new_image_tag() {
+decide_release_image_action() {
   local image="$1"
-  if docker image inspect "${image}" >/dev/null 2>&1 || image_exists_in_cluster "${image}"; then
-    printf 'Refusing to overwrite immutable image tag %s\n' "${image}" >&2
-    exit 1
+  local local_present=0 presence node_count nodes_with_image
+  local digests_match=0 digest_status=0 action
+  docker image inspect "${image}" >/dev/null 2>&1 && local_present=1
+  presence="$(image_cluster_presence_counts "${image}" "${CLUSTER_NAME}")" || {
+    printf 'Image state is UNKNOWN; unable to inspect every k3d workload node: %s\n' \
+      "${image}" >&2
+    return 1
+  }
+  read -r node_count nodes_with_image <<<"${presence}"
+
+  if [[ "${local_present}" == "1" &&
+    "${node_count}" -gt 0 &&
+    "${nodes_with_image}" == "${node_count}" ]]; then
+    if image_config_digest_matches_all_nodes "${image}"; then
+      digests_match=1
+    else
+      digest_status=$?
+      if [[ "${digest_status}" == "2" ]]; then
+        printf 'Image state is UNKNOWN; config digest inspection failed: %s\n' \
+          "${image}" >&2
+        return 1
+      fi
+    fi
   fi
+
+  action="$(
+    release_image_action "${REUSE_EXISTING_IMAGES}" "${local_present}" \
+      "${node_count}" "${nodes_with_image}" "${digests_match}"
+  )" || {
+    if [[ "${REUSE_EXISTING_IMAGES}" == "0" ]]; then
+      printf 'Refusing to overwrite immutable image tag %s\n' "${image}" >&2
+    else
+      printf 'Recovery image is partial or has a config digest mismatch: %s\n' "${image}" >&2
+    fi
+    return 1
+  }
+  printf '%s' "${action}"
 }
 
 AREPOS_IMAGE="arch/arepos-server:${AREPOS_VERSION}"
@@ -300,52 +318,56 @@ BUILD_ID="vps-build-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 AREPOS_TEMP_IMAGE="arch/arepos-server:${AREPOS_VERSION}-${BUILD_ID}"
 WARCHI_TEMP_IMAGE="arch/warchi:${WARCHI_VERSION}-${BUILD_ID}"
 SITE_TEMP_IMAGE="arch/warchi-site:${SITE_VERSION}-${BUILD_ID}"
-for image in "${AREPOS_IMAGE}" "${WARCHI_IMAGE}" "${SITE_IMAGE}"; do
-  if [[ "${REUSE_EXISTING_IMAGES}" == "1" ]]; then
-    image_config_digest_matches_all_nodes "${image}" || {
-      printf 'Recovery reuse requires identical image config digest on every k3d node: %s\n' \
-        "${image}" >&2
-      exit 1
-    }
-  else
-    assert_new_image_tag "${image}"
-  fi
-done
 
-if [[ "${REUSE_EXISTING_IMAGES}" == "1" ]]; then
-  printf 'Reusing all three existing immutable images; build and import skipped\n'
-else
-  TEMP_IMAGES="${AREPOS_TEMP_IMAGE}"$'\n'"${WARCHI_TEMP_IMAGE}"$'\n'"${SITE_TEMP_IMAGE}"
-  docker build --pull -t "${AREPOS_TEMP_IMAGE}" "${AREPOS_REPO}"
+build_release_image() {
+  local component="$1" temporary_image="$2"
+  case "${component}" in
+    arepos-server)
+      docker build --pull -t "${temporary_image}" "${AREPOS_REPO}"
+      ;;
+    warchi)
+      EMPTY_CONTEXT="$(mktemp -d)"
+      : >"${EMPTY_CONTEXT}/.placeholder"
+      docker build --pull \
+        --build-context "papirus=${EMPTY_CONTEXT}" \
+        --build-arg 'VITE_API_BASE_URL=' \
+        --build-arg 'VITE_NOTATION_URL=/api/v1/notation' \
+        --build-arg 'VITE_SITE_URL=https://warchi.ru' \
+        --build-arg 'VITE_SITE_RETURN_ORIGINS=https://warchi.ru' \
+        --build-arg "APP_VERSION=${WARCHI_VERSION}" \
+        -t "${temporary_image}" \
+        "${WARCHI_REPO}"
+      ;;
+    warchi-site)
+      docker build --pull \
+        --build-arg 'VITE_API_BASE_URL=' \
+        --build-arg 'VITE_APP_URL=https://app.warchi.ru' \
+        --build-arg 'VITE_SITE_URL=https://warchi.ru' \
+        -t "${temporary_image}" \
+        "${SITE_REPO}"
+      ;;
+    *) return 1 ;;
+  esac
+}
 
-  EMPTY_CONTEXT="$(mktemp -d)"
-  : >"${EMPTY_CONTEXT}/.placeholder"
-  docker build --pull \
-    --build-context "papirus=${EMPTY_CONTEXT}" \
-    --build-arg 'VITE_API_BASE_URL=' \
-    --build-arg 'VITE_NOTATION_URL=/api/v1/notation' \
-    --build-arg 'VITE_SITE_URL=https://warchi.ru' \
-    --build-arg 'VITE_SITE_RETURN_ORIGINS=https://warchi.ru' \
-    --build-arg "APP_VERSION=${WARCHI_VERSION}" \
-    -t "${WARCHI_TEMP_IMAGE}" \
-    "${WARCHI_REPO}"
+tag_release_image() {
+  docker tag "$1" "$2"
+}
 
-  docker build --pull \
-    --build-arg 'VITE_API_BASE_URL=' \
-    --build-arg 'VITE_APP_URL=https://app.warchi.ru' \
-    --build-arg 'VITE_SITE_URL=https://warchi.ru' \
-    -t "${SITE_TEMP_IMAGE}" \
-    "${SITE_REPO}"
+import_release_images() {
+  k3d image import -c "${CLUSTER_NAME}" "$@"
+}
 
-  docker tag "${AREPOS_TEMP_IMAGE}" "${AREPOS_IMAGE}"
-  NEW_FINAL_IMAGES="${AREPOS_IMAGE}"
-  docker tag "${WARCHI_TEMP_IMAGE}" "${WARCHI_IMAGE}"
-  NEW_FINAL_IMAGES="${NEW_FINAL_IMAGES}"$'\n'"${WARCHI_IMAGE}"
-  docker tag "${SITE_TEMP_IMAGE}" "${SITE_IMAGE}"
-  NEW_FINAL_IMAGES="${NEW_FINAL_IMAGES}"$'\n'"${SITE_IMAGE}"
-
-  k3d image import -c "${CLUSTER_NAME}" \
-    "${AREPOS_IMAGE}" "${WARCHI_IMAGE}" "${SITE_IMAGE}"
+IMAGE_RELEASE_PLAN=$(
+  printf '%s\n' \
+    "arepos-server|${AREPOS_TEMP_IMAGE}|${AREPOS_IMAGE}" \
+    "warchi|${WARCHI_TEMP_IMAGE}|${WARCHI_IMAGE}" \
+    "warchi-site|${SITE_TEMP_IMAGE}|${SITE_IMAGE}"
+)
+orchestrate_release_image_plan "${IMAGE_RELEASE_PLAN}"
+printf 'Image plan: %s\n' "${IMAGE_PLAN_SUMMARY}"
+if [[ -z "${NEW_FINAL_IMAGES}" ]]; then
+  printf 'All release images verified for reuse; build and import skipped\n'
 fi
 
 yaml_quote() {

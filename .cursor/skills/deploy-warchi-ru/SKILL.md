@@ -51,7 +51,10 @@ infra/vps/deploy.sh
 Secrets без отдельного явного одобрения.
 
 `REUSE_EXISTING_IMAGES=1 infra/vps/deploy.sh` допустим только для emergency recovery по README и
-только если оркестратор подтверждает digests. Режим не отменяет остальные guards.
+принимает решение отдельно для каждого образа: verified exact-tag images можно переиспользовать,
+а absent exact-tag release images — собрать. Частичное наличие или несовпадение digest останавливает
+запуск; переиспользуемые теги никогда не перезаписываются. Режим по-прежнему требует clean source
+на exact release tags, обязательный backup и все остальные guards.
 
 ## Условия завершения
 

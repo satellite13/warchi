@@ -144,6 +144,90 @@ image_digest_records_match() {
   [[ "${count}" -gt 0 ]]
 }
 
+release_image_action() {
+  local reuse="$1"
+  local local_present="$2"
+  local node_count="$3"
+  local nodes_with_image="$4"
+  local digests_match="$5"
+
+  if [[ "${reuse}" == "0" ]]; then
+    [[ "${local_present}" == "0" && "${nodes_with_image}" == "0" ]] || return 1
+    printf 'build'
+    return 0
+  fi
+
+  if [[ "${local_present}" == "0" && "${nodes_with_image}" == "0" ]]; then
+    printf 'build'
+    return 0
+  fi
+
+  [[ "${local_present}" == "1" &&
+    "${node_count}" -gt 0 &&
+    "${nodes_with_image}" == "${node_count}" &&
+    "${digests_match}" == "1" ]] || return 1
+  printf 'reuse'
+}
+
+image_cluster_presence_counts() {
+  local image="$1"
+  local cluster_name="$2"
+  local nodes node images candidate
+  local node_count=0 nodes_with_image=0 node_has_image
+
+  nodes="$(list_all_k3d_cluster_nodes "${cluster_name}")" || return 1
+  while IFS= read -r node; do
+    [[ -n "${node}" ]] || continue
+    is_k3d_workload_node_name "${node}" "${cluster_name}" || continue
+    node_count=$((node_count + 1))
+    images="$(list_node_images "${node}")" || return 1
+    node_has_image=0
+    while IFS= read -r candidate; do
+      if [[ "${candidate}" == "${image}" || "${candidate}" == */"${image}" ]]; then
+        node_has_image=1
+        break
+      fi
+    done <<<"${images}"
+    nodes_with_image=$((nodes_with_image + node_has_image))
+  done <<<"${nodes}"
+
+  printf '%s %s' "${node_count}" "${nodes_with_image}"
+}
+
+orchestrate_release_image_plan() {
+  local plan="$1"
+  local resolved_plan=""
+  local component temporary_image final_image action record
+  local -a new_final_image_args=()
+  IMAGE_PLAN_SUMMARY=""
+
+  while IFS= read -r record; do
+    [[ -n "${record}" ]] || continue
+    IFS='|' read -r component temporary_image final_image <<<"${record}"
+    action="$(decide_release_image_action "${final_image}")" || return 1
+    [[ "${action}" == "reuse" || "${action}" == "build" ]] || return 1
+    IMAGE_PLAN_SUMMARY="${IMAGE_PLAN_SUMMARY}${IMAGE_PLAN_SUMMARY:+ }${component}=${action}"
+    resolved_plan="${resolved_plan}${resolved_plan:+$'\n'}${component}|${action}|${temporary_image}|${final_image}"
+  done <<<"${plan}"
+
+  while IFS='|' read -r component action temporary_image final_image; do
+    [[ -n "${component}" && "${action}" == "build" ]] || continue
+    TEMP_IMAGES="${TEMP_IMAGES}${TEMP_IMAGES:+$'\n'}${temporary_image}"
+    build_release_image "${component}" "${temporary_image}" || return 1
+  done <<<"${resolved_plan}"
+
+  while IFS='|' read -r component action temporary_image final_image; do
+    [[ -n "${component}" && "${action}" == "build" ]] || continue
+    tag_release_image "${temporary_image}" "${final_image}" || return 1
+    NEW_FINAL_IMAGES="${NEW_FINAL_IMAGES}${NEW_FINAL_IMAGES:+$'\n'}${final_image}"
+    new_final_image_args+=("${final_image}")
+  done <<<"${resolved_plan}"
+
+  if [[ "${#new_final_image_args[@]}" -gt 0 ]]; then
+    import_release_images "${new_final_image_args[@]}" || return 1
+  fi
+}
+
 rollback_cutover_if_needed() {
   local status="$1" cutover="$2" site_healthy="$3"
   local warchi_revision="$4" site_revision="$5" namespace="$6"

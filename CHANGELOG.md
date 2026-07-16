@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-07-16
+
+### Fixed
+- VPS deployment retains the verified 1 GiB backend memory limit instead of insufficient chart defaults.
+- Recovery mode reuses digest-verified images and builds only missing immutable release images.
+
 ## [0.8.5] - 2026-07-16
 
 ### Fixed

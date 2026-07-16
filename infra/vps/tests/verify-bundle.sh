@@ -232,6 +232,8 @@ scripts=(
   "${VPS_DIR}/remote-deploy.sh"
   "${VPS_DIR}/backup.sh"
   "${VPS_DIR}/verify.sh"
+  "${VPS_DIR}/tests/image-recovery-scenario.sh"
+  "${VPS_DIR}/tests/mixed-image-recovery-scenario.sh"
   "${VPS_DIR}/tests/backup-helper-failure.sh"
   "${VPS_DIR}/tests/backup-lock-exclusion.sh"
   "${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
@@ -318,7 +320,7 @@ assert_contains "${TMP_DIR}/arepos.yaml" 'name: ADMIN_SECRET'
 assert_contains "${TMP_DIR}/arepos.yaml" 'name: MODEL_SYNC_OUTBOX_ENABLED'
 [[ "$(grep -Fc 'storage: 20Gi' "${TMP_DIR}/arepos.yaml")" == "2" ]] ||
   fail "rendered PostgreSQL and MinIO PVC requests must both be 20Gi"
-assert_contains "${TMP_DIR}/warchi.yaml" 'image: "arch/warchi:0.8.5"'
+assert_contains "${TMP_DIR}/warchi.yaml" 'image: "arch/warchi:0.8.6"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'host: "app.warchi.ru"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'secretName: warchi-app-ru-tls'
 assert_contains "${TMP_DIR}/warchi.yaml" 'traefik.ingress.kubernetes.io/router.entrypoints: web,websecure'
@@ -449,12 +451,21 @@ assert_contains "${VPS_DIR}/remote-deploy.sh" 'NEW_FINAL_IMAGES'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'HELM_MUTATION_STARTED'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'cleanup_new_image_tags'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'docker tag'
-assert_contains "${VPS_DIR}/remote-deploy.sh" 'image_exists_on_all_cluster_nodes'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'decide_release_image_action'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'image_cluster_presence_counts'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'orchestrate_release_image_plan'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'build_release_image'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'tag_release_image'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'import_release_images'
+assert_contains "${VPS_DIR}/helpers.sh" 'list_all_k3d_cluster_nodes'
+assert_contains "${VPS_DIR}/helpers.sh" 'list_node_images'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'Image state is UNKNOWN'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'ctr -n k8s.io images info'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'ctr -n k8s.io content get'
 assert_contains "${VPS_DIR}/remote-deploy.sh" '.config.digest'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'is_k3d_workload_node_name'
-assert_contains "${VPS_DIR}/remote-deploy.sh" "docker ps -a --filter \"label=k3d.cluster=\${CLUSTER_NAME}\""
+assert_contains "${VPS_DIR}/remote-deploy.sh" \
+  "docker ps -a --filter \"label=k3d.cluster=\${cluster_name}\""
 assert_not_contains "${VPS_DIR}/remote-deploy.sh" 'set -a'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'assert_existing_storage_state'
 [[ "$(grep -Ec '^assert_existing_storage_state$' \
@@ -527,6 +538,8 @@ assert_not_contains "${VPS_DIR}/backup.sh" \
 "${VPS_DIR}/tests/backup-helper-failure.sh"
 "${VPS_DIR}/tests/backup-lock-exclusion.sh"
 "${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
+"${VPS_DIR}/tests/image-recovery-scenario.sh"
+"${VPS_DIR}/tests/mixed-image-recovery-scenario.sh"
 
 assert_contains "${VPS_DIR}/verify.sh" '400 | 401 | 403'
 assert_contains "${VPS_DIR}/helpers.sh" '--max-time'
@@ -558,10 +571,12 @@ lines_are_in_order "${VPS_DIR}/remote-deploy.sh" \
 lines_are_in_order "${VPS_DIR}/remote-deploy.sh" \
   '^assert_existing_storage_state$' '^helm upgrade --install arepos-server' ||
   fail "storage preflight call must precede arepos-server Helm mutation"
-assert_line_order "${VPS_DIR}/remote-deploy.sh" \
-  'docker build --pull -t "${AREPOS_TEMP_IMAGE}"' 'docker tag "${AREPOS_TEMP_IMAGE}"'
-assert_line_order "${VPS_DIR}/remote-deploy.sh" \
-  'docker tag "${SITE_TEMP_IMAGE}"' 'HELM_MUTATION_STARTED=1'
+assert_line_order "${HELPERS}" \
+  'build_release_image "${component}" "${temporary_image}"' \
+  'tag_release_image "${temporary_image}" "${final_image}"'
+assert_line_order "${HELPERS}" \
+  'tag_release_image "${temporary_image}" "${final_image}"' \
+  'import_release_images "${new_final_image_args[@]}"'
 
 assert_line_order "${VPS_DIR}/remote-deploy.sh" \
   'CUTOVER_STARTED=1' 'infra/vps/verify.sh'
@@ -572,6 +587,8 @@ assert_line_order "${VPS_DIR}/remote-deploy.sh" \
   fail "remote-deploy.sh must invoke the authoritative verify exactly once"
 
 assert_contains "${VPS_DIR}/README.md" 'REUSE_EXISTING_IMAGES=1'
+assert_contains "${VPS_DIR}/README.md" 'absent'
+assert_contains "${DEPLOY_SKILL}" 'absent'
 assert_contains "${VPS_DIR}/README.md" 'automatic'
 assert_contains "${VPS_DIR}/README.md" 'CNAME'
 assert_contains "${VPS_DIR}/README.md" 'CSRF'
@@ -599,11 +616,24 @@ assert_contains "${TMP_DIR}/dry-run.out" 'Preflight'
 assert_contains "${TMP_DIR}/dry-run.out" 'Backup'
 assert_contains "${TMP_DIR}/dry-run.out" 'Build immutable images'
 assert_contains "${TMP_DIR}/dry-run.out" 'Deploy arepos-server 0.5.2'
-assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi 0.8.5'
+assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi 0.8.6'
 assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi-site 0.2.1'
 assert_contains "${TMP_DIR}/dry-run.out" 'Verify production'
 assert_not_contains "${TMP_DIR}/dry-run.out" 'dry-jwt-secret-value'
 assert_not_contains "${TMP_DIR}/dry-run.out" 'dry-admin-secret-value'
 assert_not_contains "${TMP_DIR}/dry-run.out" 'dry-minio-secret-value'
+
+REUSE_EXISTING_IMAGES=1 \
+  DRY_RUN=1 \
+  JWT_SECRET='reuse-dry-jwt-secret-value' \
+  ADMIN_SECRET='reuse-dry-admin-secret-value' \
+  MINIO_SECRET_KEY='reuse-dry-minio-secret-value' \
+  "${VPS_DIR}/deploy.sh" >"${TMP_DIR}/reuse-dry-run.out"
+assert_contains "${TMP_DIR}/reuse-dry-run.out" 'DRY RUN'
+assert_contains "${TMP_DIR}/reuse-dry-run.out" \
+  'Recovery mode may reuse verified images and build absent exact-tag release images'
+assert_not_contains "${TMP_DIR}/reuse-dry-run.out" 'reuse-dry-jwt-secret-value'
+assert_not_contains "${TMP_DIR}/reuse-dry-run.out" 'reuse-dry-admin-secret-value'
+assert_not_contains "${TMP_DIR}/reuse-dry-run.out" 'reuse-dry-minio-secret-value'
 
 printf 'PASS: VPS bundle verification completed\n'

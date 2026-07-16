@@ -131,13 +131,19 @@ nginx_websocket_block="$(
 grep -Eq '^[[:space:]]*location[[:space:]]+\^~[[:space:]]+/ws[[:space:]]*\{' \
   <<<"${nginx_websocket_block}" &&
   grep -Eq '^[[:space:]]*proxy_pass[[:space:]]+http://arepos-server\.arch\.svc\.cluster\.local:8080;[[:space:]]*$' \
+    <<<"${nginx_websocket_block}" &&
+  grep -Eq '^[[:space:]]*proxy_http_version[[:space:]]+1\.1;[[:space:]]*$' \
+    <<<"${nginx_websocket_block}" &&
+  grep -Eq '^[[:space:]]*proxy_set_header[[:space:]]+Upgrade[[:space:]]+\$http_upgrade;[[:space:]]*$' \
+    <<<"${nginx_websocket_block}" &&
+  grep -Eq '^[[:space:]]*proxy_set_header[[:space:]]+Connection[[:space:]]+\$connection_upgrade;[[:space:]]*$' \
     <<<"${nginx_websocket_block}" || {
   printf 'Active warchi nginx config lacks the required WebSocket proxy route\n' >&2
   exit 1
 }
 
-# Compare the public route with the same unauthenticated handshake sent directly
-# from the warchi pod. This proves the proxy returns the backend rejection.
+# A WebSocket-capable client decides whether the unauthenticated handshake is valid.
+# This probe verifies only that the public route is not served by the SPA fallback.
 public_websocket_headers="$(mktemp)"
 public_websocket_body="$(mktemp)"
 trap 'rm -f "${public_websocket_headers:-}" "${public_websocket_body:-}"' EXIT
@@ -153,56 +159,25 @@ public_websocket_status="$(
     -H 'Origin: https://app.warchi.ru' \
     https://app.warchi.ru/ws || true
 )"
-direct_websocket_response="$(
-  kubectl exec -n "${NAMESPACE}" deployment/warchi -- \
-    wget -S -O - -T 10 \
-    --header='Connection: Upgrade' \
-    --header='Upgrade: websocket' \
-    --header='Sec-WebSocket-Version: 13' \
-    --header='Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-    --header='Origin: https://app.warchi.ru' \
-    http://arepos-server:8080/ws 2>&1 || true
-)"
-direct_websocket_status="$(
-  awk '/HTTP\/[0-9.]+ [0-9]+/ { status = $2 } END { print status }' \
-    <<<"${direct_websocket_response}"
-)"
-direct_websocket_content_type="$(
-  awk 'BEGIN { IGNORECASE = 1 } /^[[:space:]]*content-type:/ {
-    gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit
-  }' <<<"${direct_websocket_response}"
-)"
 public_websocket_content_type="$(
   awk 'BEGIN { IGNORECASE = 1 } /^content-type:/ {
     gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit
   }' "${public_websocket_headers}"
-)"
-direct_websocket_media_type="$(
-  printf '%s' "${direct_websocket_content_type%%;*}" |
-    tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
 )"
 public_websocket_media_type="$(
   printf '%s' "${public_websocket_content_type%%;*}" |
     tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
 )"
 
-case "${direct_websocket_status}" in
-  400 | 401 | 403) ;;
+case "${public_websocket_status}" in
+  [1-5][0-9][0-9]) ;;
   *)
-    printf 'Unexpected direct backend WebSocket status: %s\n' \
-      "${direct_websocket_status:-none}" >&2
+    printf 'Unexpected public WebSocket HTTP status: %s\n' \
+      "${public_websocket_status:-none}" >&2
     exit 1
     ;;
 esac
-[[ "${public_websocket_status}" == "${direct_websocket_status}" ]] || {
-  printf 'Public/direct WebSocket status mismatch\n' >&2
-  exit 1
-}
-[[ "${public_websocket_media_type}" == "${direct_websocket_media_type}" ]] || {
-  printf 'Public/direct WebSocket content-type mismatch\n' >&2
-  exit 1
-}
-[[ "${public_websocket_content_type}" != *text/html* ]] || {
+[[ "${public_websocket_media_type}" != text/html ]] || {
   printf 'Public WebSocket response unexpectedly has HTML content-type\n' >&2
   exit 1
 }

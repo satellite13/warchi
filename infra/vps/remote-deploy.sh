@@ -6,7 +6,7 @@ readonly REMOTE_ROOT="/opt/warchi-deploy"
 readonly NAMESPACE="arch"
 readonly CLUSTER_NAME="warchi"
 AREPOS_VERSION="${AREPOS_VERSION:-0.5.2}"
-WARCHI_VERSION="${WARCHI_VERSION:-0.8.6}"
+WARCHI_VERSION="${WARCHI_VERSION:-0.8.7}"
 SITE_VERSION="${SITE_VERSION:-0.2.1}"
 REUSE_EXISTING_IMAGES="${REUSE_EXISTING_IMAGES:-0}"
 SRC_ROOT="${REMOTE_ROOT}/src"
@@ -240,7 +240,7 @@ list_node_images() {
 
 image_config_digest_matches_all_nodes() {
   local image="$1"
-  local local_digest nodes node images listed_image candidate manifest_digest config_digest
+  local local_digest nodes node images listed_image candidate config_digest
   local records="" node_count=0
   local_digest="$(docker image inspect --format '{{.Id}}' "${image}")" || return 2
   [[ -n "${local_digest}" ]] || return 1
@@ -256,14 +256,7 @@ image_config_digest_matches_all_nodes() {
       fi
     done <<<"${images}"
     [[ -n "${candidate}" ]] || return 2
-    manifest_digest="$(
-      docker exec "${node}" ctr -n k8s.io images info "${candidate}" |
-        jq -er '.target.digest'
-    )" || return 2
-    config_digest="$(
-      docker exec "${node}" ctr -n k8s.io content get "${manifest_digest}" |
-        jq -er '.config.digest'
-    )" || return 2
+    config_digest="$(node_image_config_digest "${node}" "${candidate}")" || return 2
     records="${records}${records:+$'\n'}${node}=${config_digest}"
   done <<<"${nodes}"
   [[ "${node_count}" -gt 0 ]] || return 1

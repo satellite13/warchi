@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scenario="${CTR_FIXTURE_SCENARIO:-index-attestation}"
+image_ref="${CTR_FIXTURE_REF:-docker.io/arch/warchi:0.8.6}"
+index_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+amd64_manifest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+attestation_manifest="sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+direct_manifest="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+config_digest="sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+duplicate_manifest="sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+
+[[ "${1:-}" == "-n" && "${2:-}" == "k8s.io" ]] || exit 64
+shift 2
+
+if [[ "${1:-}" == "images" && "${2:-}" == "list" ]]; then
+  [[ "${scenario}" != "command-error" ]] || exit 42
+  target_digest="${index_digest}"
+  media_type="application/vnd.oci.image.index.v1+json"
+  case "${scenario}" in
+    direct-manifest | wrong-config-type | config-missing)
+      target_digest="${direct_manifest}"
+      media_type="application/vnd.oci.image.manifest.v1+json"
+      ;;
+    docker-direct-manifest)
+      target_digest="${direct_manifest}"
+      media_type="application/vnd.docker.distribution.manifest.v2+json"
+      ;;
+    docker-index)
+      media_type="application/vnd.docker.distribution.manifest.list.v2+json"
+      ;;
+  esac
+  labels="io.cri-containerd.image=managed"
+  [[ "${scenario}" != "glob-field" ]] || labels="*"
+  printf 'REF TYPE DIGEST SIZE PLATFORMS LABELS\n'
+  printf '%s %s %s 24.0MiB linux/amd64 %s\n' \
+    "${image_ref}" "${media_type}" "${target_digest}" "${labels}"
+  exit 0
+fi
+
+[[ "${1:-}" == "content" && "${2:-}" == "get" && -n "${3:-}" ]] || exit 64
+digest="$3"
+
+case "${digest}" in
+  "${index_digest}")
+    case "${scenario}" in
+      index-attestation)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","platform":{"architecture":"amd64","os":"linux"}},{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","annotations":{"vnd.docker.reference.type":"attestation-manifest"},"platform":{"architecture":"unknown","os":"unknown"}}]}\n' \
+          "${amd64_manifest}" "${attestation_manifest}"
+        ;;
+      docker-index)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.list.v2+json","manifests":[{"mediaType":"application/vnd.docker.distribution.manifest.v2+json","digest":"%s","platform":{"architecture":"amd64","os":"linux"}}]}\n' \
+          "${amd64_manifest}"
+        ;;
+      missing-amd64)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","platform":{"architecture":"arm64","os":"linux"}},{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","annotations":{"vnd.docker.reference.type":"attestation-manifest"},"platform":{"architecture":"unknown","os":"unknown"}}]}\n' \
+          "${amd64_manifest}" "${attestation_manifest}"
+        ;;
+      duplicate-amd64)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","platform":{"architecture":"amd64","os":"linux"}},{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","platform":{"architecture":"amd64","os":"linux"}}]}\n' \
+          "${amd64_manifest}" "${duplicate_manifest}"
+        ;;
+      malformed-json)
+        printf '{'
+        ;;
+      wrong-field-types)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":{}}\n'
+        ;;
+      *) exit 65 ;;
+    esac
+    ;;
+  "${direct_manifest}")
+    case "${scenario}" in
+      docker-direct-manifest)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json","config":{"mediaType":"application/vnd.docker.container.image.v1+json","digest":"%s","size":123}}\n' \
+          "${config_digest}"
+        ;;
+      wrong-config-type)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"digest":42}}\n'
+        ;;
+      config-missing)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}\n'
+        ;;
+      *)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"%s","size":123}}\n' \
+          "${config_digest}"
+        ;;
+    esac
+    ;;
+  "${amd64_manifest}" | "${duplicate_manifest}")
+    if [[ "${scenario}" == "docker-index" ]]; then
+      printf '{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json","config":{"mediaType":"application/vnd.docker.container.image.v1+json","digest":"%s","size":123}}\n' \
+        "${config_digest}"
+    else
+      printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"%s","size":123}}\n' \
+        "${config_digest}"
+    fi
+    ;;
+  *) exit 66 ;;
+esac

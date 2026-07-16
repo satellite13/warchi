@@ -234,6 +234,7 @@ scripts=(
   "${VPS_DIR}/verify.sh"
   "${VPS_DIR}/tests/image-recovery-scenario.sh"
   "${VPS_DIR}/tests/mixed-image-recovery-scenario.sh"
+  "${VPS_DIR}/tests/fixtures/ctr"
   "${VPS_DIR}/tests/backup-helper-failure.sh"
   "${VPS_DIR}/tests/backup-lock-exclusion.sh"
   "${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
@@ -320,7 +321,7 @@ assert_contains "${TMP_DIR}/arepos.yaml" 'name: ADMIN_SECRET'
 assert_contains "${TMP_DIR}/arepos.yaml" 'name: MODEL_SYNC_OUTBOX_ENABLED'
 [[ "$(grep -Fc 'storage: 20Gi' "${TMP_DIR}/arepos.yaml")" == "2" ]] ||
   fail "rendered PostgreSQL and MinIO PVC requests must both be 20Gi"
-assert_contains "${TMP_DIR}/warchi.yaml" 'image: "arch/warchi:0.8.6"'
+assert_contains "${TMP_DIR}/warchi.yaml" 'image: "arch/warchi:0.8.7"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'host: "app.warchi.ru"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'secretName: warchi-app-ru-tls'
 assert_contains "${TMP_DIR}/warchi.yaml" 'traefik.ingress.kubernetes.io/router.entrypoints: web,websecure'
@@ -460,9 +461,11 @@ assert_contains "${VPS_DIR}/remote-deploy.sh" 'import_release_images'
 assert_contains "${VPS_DIR}/helpers.sh" 'list_all_k3d_cluster_nodes'
 assert_contains "${VPS_DIR}/helpers.sh" 'list_node_images'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'Image state is UNKNOWN'
-assert_contains "${VPS_DIR}/remote-deploy.sh" 'ctr -n k8s.io images info'
-assert_contains "${VPS_DIR}/remote-deploy.sh" 'ctr -n k8s.io content get'
-assert_contains "${VPS_DIR}/remote-deploy.sh" '.config.digest'
+assert_not_contains "${VPS_DIR}/remote-deploy.sh" 'ctr -n k8s.io images info'
+assert_contains "${VPS_DIR}/helpers.sh" 'ctr -n k8s.io images list'
+assert_contains "${VPS_DIR}/helpers.sh" 'ctr -n k8s.io content get'
+assert_contains "${VPS_DIR}/helpers.sh" '.config.digest'
+assert_contains "${VPS_DIR}/helpers.sh" 'node_image_config_digest'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'is_k3d_workload_node_name'
 assert_contains "${VPS_DIR}/remote-deploy.sh" \
   "docker ps -a --filter \"label=k3d.cluster=\${cluster_name}\""
@@ -616,7 +619,7 @@ assert_contains "${TMP_DIR}/dry-run.out" 'Preflight'
 assert_contains "${TMP_DIR}/dry-run.out" 'Backup'
 assert_contains "${TMP_DIR}/dry-run.out" 'Build immutable images'
 assert_contains "${TMP_DIR}/dry-run.out" 'Deploy arepos-server 0.5.2'
-assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi 0.8.6'
+assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi 0.8.7'
 assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi-site 0.2.1'
 assert_contains "${TMP_DIR}/dry-run.out" 'Verify production'
 assert_not_contains "${TMP_DIR}/dry-run.out" 'dry-jwt-secret-value'

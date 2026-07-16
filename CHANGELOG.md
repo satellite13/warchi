@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-07-16
+
+### Fixed
+- Recovery digest checks support the containerd/OCI format used by the production k3d cluster.
+
 ## [0.8.6] - 2026-07-16
 
 ### Fixed

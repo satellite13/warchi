@@ -144,6 +144,89 @@ image_digest_records_match() {
   [[ "${count}" -gt 0 ]]
 }
 
+is_sha256_digest() {
+  [[ "$1" =~ ^sha256:[[:xdigit:]]{64}$ ]]
+}
+
+node_image_target_digest() {
+  local node="$1"
+  local image_ref="$2"
+  local listing line listed_ref field target_digest=""
+  local row_count=0 digest_count
+  local -a fields=()
+
+  listing="$(docker exec "${node}" ctr -n k8s.io images list)" || return 1
+  while IFS= read -r line; do
+    read -r listed_ref _ <<<"${line}"
+    [[ "${listed_ref}" == "${image_ref}" ]] || continue
+    row_count=$((row_count + 1))
+    digest_count=0
+    read -ra fields <<<"${line}"
+    for field in "${fields[@]}"; do
+      is_sha256_digest "${field}" || continue
+      target_digest="${field}"
+      digest_count=$((digest_count + 1))
+    done
+    [[ "${digest_count}" == "1" ]] || return 1
+  done <<<"${listing}"
+
+  [[ "${row_count}" == "1" ]] || return 1
+  is_sha256_digest "${target_digest}" || return 1
+  printf '%s' "${target_digest}"
+}
+
+node_image_config_digest() {
+  local node="$1"
+  local image_ref="$2"
+  local target_digest target_json media_type manifest_digest manifest_json config_digest
+
+  target_digest="$(node_image_target_digest "${node}" "${image_ref}")" || return 1
+  target_json="$(
+    docker exec "${node}" ctr -n k8s.io content get "${target_digest}"
+  )" || return 1
+  media_type="$(jq -er '.mediaType | select(type == "string")' <<<"${target_json}")" ||
+    return 1
+
+  case "${media_type}" in
+    application/vnd.oci.image.index.v1+json | \
+      application/vnd.docker.distribution.manifest.list.v2+json)
+      manifest_digest="$(
+        jq -er '
+          [.manifests[]
+            | select(
+                (.mediaType == "application/vnd.oci.image.manifest.v1+json"
+                  or .mediaType == "application/vnd.docker.distribution.manifest.v2+json")
+                and .platform.os == "linux"
+                and .platform.architecture == "amd64"
+                and ((.annotations // {})["vnd.docker.reference.type"] // "")
+                  != "attestation-manifest"
+                and (.artifactType // "") == ""
+              )
+            | .digest
+            | select(type == "string")]
+          | if length == 1 then .[0] else error("expected exactly one linux/amd64 manifest") end
+        ' <<<"${target_json}"
+      )" || return 1
+      ;;
+    application/vnd.oci.image.manifest.v1+json | \
+      application/vnd.docker.distribution.manifest.v2+json)
+      manifest_digest="${target_digest}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  is_sha256_digest "${manifest_digest}" || return 1
+
+  manifest_json="$(
+    docker exec "${node}" ctr -n k8s.io content get "${manifest_digest}"
+  )" || return 1
+  config_digest="$(jq -er '.config.digest | select(type == "string")' <<<"${manifest_json}")" ||
+    return 1
+  is_sha256_digest "${config_digest}" || return 1
+  printf '%s' "${config_digest}"
+}
+
 release_image_action() {
   local reuse="$1"
   local local_present="$2"

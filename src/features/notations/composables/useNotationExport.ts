@@ -4,6 +4,7 @@ import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papir
 import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "@/domain/attrs/notationAttrs";
 import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
 import type {NotationData} from "@/types/entities";
+import { sanitizeFileName } from "@/utils/sanitizeFileName";
 import type {
   NotationEditorState,
   EditorDiagramLayer,
@@ -81,14 +82,6 @@ const normalizeDiagramLayer = (value: unknown): EditorDiagramLayer => {
 };
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-
-const sanitizeFileName = (value: string): string =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 
 export function useNotationExport(
   notation: Ref<NotationData | null>,

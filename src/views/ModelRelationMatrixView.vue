@@ -16,6 +16,7 @@ import { exportRelationMatrixPng } from "@/features/models-matrix/utils/relation
 import RelationMatrixFilters from "@/features/models-matrix/components/RelationMatrixFilters.vue"
 import RelationMatrixGrid from "@/features/models-matrix/components/RelationMatrixGrid.vue"
 import RelationMatrixDetailsPanel from "@/features/models-matrix/components/RelationMatrixDetailsPanel.vue"
+import { sanitizeFileName } from "@/utils/sanitizeFileName"
 
 const route = useRoute()
 const router = useRouter()
@@ -278,14 +279,6 @@ const notationOptions = computed(() => {
     })
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
 })
-
-const sanitizeFileName = (value: string): string =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
 
 const exportFilenameBase = computed(() => {
   const modelName = model.value?.name ?? "model"

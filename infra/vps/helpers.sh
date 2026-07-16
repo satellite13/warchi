@@ -56,6 +56,58 @@ bounded_curl() {
     --max-time "${CURL_MAX_TIME:-20}" "$@"
 }
 
+wait_http_success() {
+  local url="$1"
+  local max_attempts="${2:-18}"
+  local delay_seconds="${3:-5}"
+  local attempt=1 status=""
+
+  [[ "${max_attempts}" =~ ^[1-9][0-9]*$ && "${delay_seconds}" =~ ^[0-9]+$ ]] || {
+    printf 'HTTP readiness retry settings must be finite non-negative integers\n' >&2
+    return 1
+  }
+
+  while [[ "${attempt}" -le "${max_attempts}" ]]; do
+    if status="$(
+      CURL_CONNECT_TIMEOUT=3 CURL_MAX_TIME=10 \
+        bounded_curl --silent --output /dev/null --write-out '%{http_code}' "${url}" \
+        2>/dev/null
+    )"; then
+      :
+    else
+      status="000"
+    fi
+
+    if [[ "${status}" =~ ^2[0-9][0-9]$ ]]; then
+      return 0
+    fi
+
+    case "${status}" in
+      000 | 404 | 408 | 425 | 429 | 500 | 502 | 503 | 504)
+        ;;
+      *)
+        printf 'HTTP readiness failed with status %s\n' "${status:-unknown}" >&2
+        return 1
+        ;;
+    esac
+
+    if [[ "${attempt}" -lt "${max_attempts}" ]]; then
+      printf 'HTTP readiness status %s on attempt %d/%d; retrying in %ss\n' \
+        "${status}" "${attempt}" "${max_attempts}" "${delay_seconds}" >&2
+      sleep "${delay_seconds}"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  printf 'HTTP readiness failed with status %s after %d attempts\n' \
+    "${status}" "${max_attempts}" >&2
+  return 1
+}
+
+cutover_readiness_required() {
+  [[ "${1:-0}" != "1" ]]
+}
+
 assert_dns_configuration() {
   local target_ip="$1"
   local root_answers root_aaaa app_cname app_answers app_aaaa

@@ -47,6 +47,12 @@ line_number() {
   grep -nF -- "${pattern}" "${file}" | awk -F: 'NR == 1 { print $1 }'
 }
 
+line_number_last() {
+  local file="$1"
+  local pattern="$2"
+  grep -nF -- "${pattern}" "${file}" | awk -F: 'END { print $1 }'
+}
+
 assert_line_order() {
   local file="$1"
   local first="$2"
@@ -152,6 +158,93 @@ bounded_args="$(bounded_curl https://example.invalid)"
 [[ "${bounded_args}" == *"--connect-timeout 5"* && "${bounded_args}" == *"--max-time 20"* ]] ||
   fail "bounded_curl did not supply both timeouts"
 unset -f curl
+http_statuses_file="${TMP_DIR}/http-statuses"
+http_args_file="${TMP_DIR}/http-args"
+http_attempts_file="${TMP_DIR}/http-attempts"
+set_http_statuses() {
+  printf '%s\n' "$@" >"${http_statuses_file}"
+  printf '0' >"${http_attempts_file}"
+}
+sleep() {
+  :
+}
+curl() {
+  local attempts record status curl_exit remaining
+  attempts="$(<"${http_attempts_file}")"
+  attempts=$((attempts + 1))
+  printf '%s' "${attempts}" >"${http_attempts_file}"
+  printf '%s\n' "$*" >>"${http_args_file}"
+  record="$(awk 'NR == 1 { print; exit }' "${http_statuses_file}")"
+  remaining="$(awk 'NR > 1' "${http_statuses_file}")"
+  printf '%s\n' "${remaining}" >"${http_statuses_file}"
+  status="${record%%:*}"
+  if [[ "${record}" == *:* ]]; then
+    curl_exit="${record#*:}"
+  elif [[ "${status}" == "000" ]]; then
+    curl_exit=28
+  else
+    curl_exit=0
+  fi
+  printf '%s' "${status}"
+  return "${curl_exit}"
+}
+set_http_statuses 000 404 503 200
+wait_http_success https://example.invalid/health 5 0 \
+  >/dev/null 2>"${TMP_DIR}/transient-http.log" ||
+  fail "HTTP readiness did not recover from transient convergence statuses"
+assert_equal "4" "$(<"${http_attempts_file}")" "transient HTTP readiness attempts"
+assert_contains "${http_args_file}" '--connect-timeout 3'
+assert_contains "${http_args_file}" '--max-time 10'
+assert_contains "${http_args_file}" '--output /dev/null'
+assert_not_contains "${http_args_file}" ' -k '
+assert_contains "${TMP_DIR}/transient-http.log" 'status 000'
+assert_contains "${TMP_DIR}/transient-http.log" 'status 404'
+assert_contains "${TMP_DIR}/transient-http.log" 'status 503'
+set_http_statuses '200:28' 200
+wait_http_success https://example.invalid/health 3 0 \
+  >/dev/null 2>"${TMP_DIR}/exit-200-http.log" ||
+  fail "curl exit failure with HTTP 200 was not retried to success"
+assert_equal "2" "$(<"${http_attempts_file}")" \
+  "curl exit failure with HTTP 200 attempts"
+assert_contains "${TMP_DIR}/exit-200-http.log" 'status 000'
+set_http_statuses '503:28' '503:28' '503:28' '503:28' 200
+if wait_http_success https://example.invalid/health 4 0 \
+  >/dev/null 2>"${TMP_DIR}/exit-503-http.log"; then
+  fail "curl exit failures with HTTP 503 exceeded the finite retry bound"
+fi
+assert_equal "4" "$(<"${http_attempts_file}")" \
+  "curl exit failures with HTTP 503 attempts"
+assert_contains "${TMP_DIR}/exit-503-http.log" \
+  'HTTP readiness failed with status 000 after 4 attempts'
+for fatal_status in 401 403 301 2xx; do
+  set_http_statuses "${fatal_status}" 200
+  if wait_http_success 'https://example.invalid/health?token=secret' 4 0 \
+    >/dev/null 2>"${TMP_DIR}/fatal-http-${fatal_status}.log"; then
+    fail "HTTP readiness accepted fatal status ${fatal_status}"
+  fi
+  assert_equal "1" "$(<"${http_attempts_file}")" \
+    "fatal HTTP ${fatal_status} readiness attempts"
+  assert_contains "${TMP_DIR}/fatal-http-${fatal_status}.log" \
+    "HTTP readiness failed with status ${fatal_status}"
+  assert_not_contains "${TMP_DIR}/fatal-http-${fatal_status}.log" 'example.invalid'
+  assert_not_contains "${TMP_DIR}/fatal-http-${fatal_status}.log" 'secret'
+done
+set_http_statuses 503 503 503 503 200
+if wait_http_success 'https://example.invalid/health?token=secret' 4 0 \
+  >/dev/null 2>"${TMP_DIR}/permanent-http.log"; then
+  fail "HTTP readiness accepted a permanent failure"
+fi
+assert_equal "4" "$(<"${http_attempts_file}")" "permanent HTTP readiness attempts"
+assert_contains "${TMP_DIR}/permanent-http.log" \
+  'HTTP readiness failed with status 503 after 4 attempts'
+assert_not_contains "${TMP_DIR}/permanent-http.log" 'example.invalid'
+assert_not_contains "${TMP_DIR}/permanent-http.log" 'secret'
+unset -f curl sleep set_http_statuses
+cutover_readiness_required 0 ||
+  fail "standalone verification must perform readiness waits"
+if cutover_readiness_required 1; then
+  fail "integrated verification repeated confirmed readiness waits"
+fi
 assert_equal "create" "$(auth_secret_action 0 '' '' jwt admin)" \
   "absent auth secret action"
 assert_equal "match" "$(auth_secret_action 1 jwt admin jwt admin)" \
@@ -180,6 +273,56 @@ helm() {
   printf 'helm %s\n' "$*" >>"${scenario_log}"
 }
 rollback_cutover_if_needed 1 1 0 12 7 arch
+assert_contains "${scenario_log}" 'helm rollback warchi 12 -n arch'
+unset -f helm
+run_cutover_scenario() {
+  local statuses="$1"
+  local verify_status="$2"
+  local scenario_statuses_file="${TMP_DIR}/rollback-health-statuses"
+  local CUTOVER_STARTED=1 SITE_HEALTHY=0 status=0
+  printf '%s\n' ${statuses} >"${scenario_statuses_file}"
+  curl() {
+    local http_status remaining
+    http_status="$(awk 'NR == 1 { print; exit }' "${scenario_statuses_file}")"
+    remaining="$(awk 'NR > 1' "${scenario_statuses_file}")"
+    printf '%s\n' "${remaining}" >"${scenario_statuses_file}"
+    printf '%s' "${http_status}"
+    [[ "${http_status}" != "000" ]]
+  }
+  sleep() {
+    :
+  }
+  full_verify() {
+    [[ "${CUTOVER_READINESS_CONFIRMED:-0}" == "1" ]] ||
+      fail "integrated verify did not receive readiness confirmation"
+    printf 'verify\n' >>"${scenario_log}"
+    return "${verify_status}"
+  }
+  if wait_http_success https://app.example.invalid/health 4 0 &&
+    wait_http_success https://site.example.invalid/health 4 0 &&
+    CUTOVER_READINESS_CONFIRMED=1 full_verify; then
+    SITE_HEALTHY=1
+  else
+    status=$?
+  fi
+  rollback_cutover_if_needed "${status}" "${CUTOVER_STARTED}" "${SITE_HEALTHY}" \
+    12 7 arch
+  unset -f curl sleep full_verify
+}
+: >"${scenario_log}"
+helm() {
+  printf 'helm %s\n' "$*" >>"${scenario_log}"
+}
+run_cutover_scenario '503 200 200' 1 2>"${TMP_DIR}/rollback-verify-failure.log"
+assert_contains "${scenario_log}" 'verify'
+assert_contains "${scenario_log}" 'helm rollback warchi 12 -n arch'
+: >"${scenario_log}"
+run_cutover_scenario '503 200 200' 0 2>"${TMP_DIR}/rollback-success.log"
+assert_equal "verify" "$(<"${scenario_log}")" \
+  "complete verification must disable rollback"
+: >"${scenario_log}"
+run_cutover_scenario '503 503 503 503' 0 2>"${TMP_DIR}/rollback-wait-failure.log"
+assert_not_contains "${scenario_log}" 'verify'
 assert_contains "${scenario_log}" 'helm rollback warchi 12 -n arch'
 unset -f helm
 remove_local_image_tag() {
@@ -500,6 +643,28 @@ assert_contains "${VPS_DIR}/remote-deploy.sh" 'SITE_HEALTHY'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'infra/vps/verify.sh'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'kubectl apply -f "${WARCHI_REPO}/infra/vps/k8s/redirect-https.yaml"'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'kubectl delete ingress warchi-app-tls-prestage'
+assert_contains "${VPS_DIR}/remote-deploy.sh" \
+  'wait_http_success https://app.warchi.ru/health'
+assert_contains "${VPS_DIR}/remote-deploy.sh" \
+  'wait_http_success https://warchi.ru/health'
+assert_contains "${VPS_DIR}/remote-deploy.sh" \
+  '"CUTOVER_READINESS_CONFIRMED=1"'
+assert_line_order "${VPS_DIR}/remote-deploy.sh" \
+  'kubectl wait --for=condition=Ready certificate/warchi-app-ru-tls' \
+  'wait_http_success https://app.warchi.ru/health'
+app_health_line="$(
+  line_number "${VPS_DIR}/remote-deploy.sh" \
+    'wait_http_success https://app.warchi.ru/health'
+)"
+prestage_delete_line="$(
+  line_number_last "${VPS_DIR}/remote-deploy.sh" \
+    'kubectl delete ingress warchi-app-tls-prestage'
+)"
+[[ "${app_health_line}" -lt "${prestage_delete_line}" ]] ||
+  fail "app health readiness must precede operational prestage ingress deletion"
+assert_line_order "${VPS_DIR}/remote-deploy.sh" \
+  'wait_http_success https://warchi.ru/health' \
+  'bash "${WARCHI_REPO}/infra/vps/verify.sh"'
 
 assert_contains "${VPS_DIR}/backup.sh" 'sha256sum'
 assert_contains "${VPS_DIR}/backup.sh" 'PGPASSWORD="$POSTGRES_PASSWORD"'
@@ -557,7 +722,16 @@ assert_not_contains "${VPS_DIR}/backup.sh" \
 
 assert_contains "${VPS_DIR}/verify.sh" '400 | 401 | 403'
 assert_contains "${VPS_DIR}/helpers.sh" '--max-time'
+assert_contains "${VPS_DIR}/helpers.sh" 'local max_attempts="${2:-18}"'
+assert_contains "${VPS_DIR}/helpers.sh" 'local delay_seconds="${3:-5}"'
 assert_contains "${VPS_DIR}/verify.sh" 'bounded_curl'
+assert_contains "${VPS_DIR}/verify.sh" 'wait_http_success https://app.warchi.ru/health'
+assert_contains "${VPS_DIR}/verify.sh" 'wait_http_success https://warchi.ru/health'
+assert_contains "${VPS_DIR}/verify.sh" \
+  'if cutover_readiness_required "${CUTOVER_READINESS_CONFIRMED}"; then'
+assert_line_order "${VPS_DIR}/verify.sh" \
+  'wait_http_success https://warchi.ru/health' \
+  'api_payload="$(bounded_curl'
 assert_contains "${VPS_DIR}/verify.sh" 'https://app.warchi.ru/api/v1/auth/me'
 assert_contains "${VPS_DIR}/verify.sh" 'https://warchi.ru/api/v1/auth/me'
 assert_contains "${VPS_DIR}/verify.sh" "grep -F 'SELF-HOSTED' >/dev/null"
@@ -609,6 +783,9 @@ assert_contains "${VPS_DIR}/README.md" 'CSRF'
 assert_contains "${VPS_DIR}/README.md" 'rotation'
 assert_contains "${VPS_DIR}/README.md" 'COMPLETE'
 assert_contains "${VPS_DIR}/README.md" '.failed'
+assert_contains "${VPS_DIR}/README.md" 'ingress convergence'
+assert_contains "${VPS_DIR}/README.md" '18 attempts'
+assert_contains "${VPS_DIR}/README.md" 'two endpoint readiness windows'
 
 if grep -R -Eq '(^|[[:space:]])set[[:space:]]+-x' "${VPS_DIR}"; then
   fail "shell xtrace is forbidden"

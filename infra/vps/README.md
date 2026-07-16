@@ -177,6 +177,22 @@ Cutover order minimizes the root-site gap:
 6. immediately atomically enable `warchi-site` on `warchi.ru`, wait for rollout, TLS, and health;
 7. run full non-mutating production verification inside the rollback guard.
 
+Public health checks allow a bounded ingress convergence window after each host switch. They make
+18 attempts, five seconds apart; every attempt uses a three-second connect timeout and a ten-second
+total timeout. The resulting retry deadline is at most 265 seconds per endpoint. Only transport
+status `000` and convergence statuses `404`, `408`, `425`, `429`, `500`, `502`, `503`, and `504`
+are retried; 2xx succeeds, while all other 3xx/4xx/5xx statuses fail immediately. Certificate
+validation remains enabled, and progress contains only status and attempt numbers, never response
+bodies or URLs.
+
+An integrated deployment has at most two endpoint readiness windows total: one for the app and one
+for the site, for a combined maximum of 530 seconds. The app check runs while the prestage Ingress
+and its already-ready certificate still exist; the prestage Ingress is removed only after public
+app health converges. `remote-deploy.sh` then invokes full verification with readiness explicitly
+confirmed, so those waits are not repeated. Standalone `verify.sh` defaults to both readiness
+waits. In either mode, exact versions, redirects, proxies, health, and all other strict assertions
+still run once and fail without retrying mismatches.
+
 If any step fails after the host switch or during the full verification (including redirects,
 same-origin proxies, `SELF-HOSTED`, images, versions, and WebSocket routing), the exit trap
 automatically rolls the site back to its ingress-disabled prestage revision and rolls `warchi`

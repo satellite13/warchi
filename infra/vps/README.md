@@ -29,7 +29,7 @@ On the operator workstation:
 
 On the VPS:
 
-- Ubuntu x86_64, Docker 29, k3d, kubectl, Helm, curl, jq, tar, flock, dig, rsync,
+- Ubuntu x86_64, Docker 29, k3d, kubectl, Helm, curl, jq, tar, GNU `timeout`, flock, dig, rsync,
   `sha256sum`, `shred`, and at least 10 GiB free disk;
 - cluster nodes able to use the pinned `busybox:1.36` image (it is reused from the node cache when
   present and pulled when absent);
@@ -138,8 +138,11 @@ ten-minute active deadline. Labeled stale helpers are deleted asynchronously at 
 next backup. The exit trap also requests asynchronous helper deletion before immediately restoring
 the original application replicas, so helper cleanup cannot hold the maintenance window open. The
 backup does not require a shell or `tar` in the MinIO image. This creates a short maintenance
-interruption for writes. The finished dump is validated with `pg_restore --list` inside the
-PostgreSQL pod and the MinIO archive with local `tar -tzf` before deployment continues.
+interruption for writes. The finished dump is copied to a unique temporary file in the running
+PostgreSQL pod and validated there with file-based `pg_restore --list`; both the copy and validation
+have GNU `timeout` bounds, and a bounded exit-trap command removes the remote file before helper
+cleanup and application replica restoration. The MinIO archive is validated with local `tar -tzf`
+before deployment continues.
 
 A timestamped backup directory is a valid restore point only when it contains the root-only
 `COMPLETE` marker. The directory starts with a root-only `.failed` marker; any backup, helper-Pod,

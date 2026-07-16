@@ -1,0 +1,70 @@
+replicaCount: 1
+
+image:
+  repository: arch/arepos-server
+  pullPolicy: IfNotPresent
+  tag: "0.5.2"
+
+ingress:
+  enabled: false
+
+postgresql:
+  enabled: true
+  auth:
+    database: arepos
+    username: arepos
+    password: ""
+    postgresPassword: ""
+  persistence:
+    enabled: true
+    size: 20Gi
+
+database:
+  name: arepos
+  username: arepos
+
+minio:
+  enabled: true
+  bucket: arepos-files
+  auth:
+    accessKey: ""
+    secretKey: ""
+  persistence:
+    enabled: true
+    size: 20Gi
+  ingress:
+    enabled: false
+
+cerbos:
+  enabled: true
+  deploy: true
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: prod
+  - name: JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: arepos-server-auth-secret
+        key: JWT_SECRET
+  - name: ADMIN_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: arepos-server-auth-secret
+        key: ADMIN_SECRET
+  - name: AREPOS_AUTH_COOKIE_SECURE
+    value: "true"
+  - name: AREPOS_AUTH_COOKIE_DOMAIN
+    value: .warchi.ru
+  - name: AREPOS_AUTH_CORS_ALLOWED_ORIGINS
+    value: https://warchi.ru,https://app.warchi.ru
+  - name: WEBSOCKET_ALLOWED_ORIGIN_PATTERNS
+    value: https://app.warchi.ru
+  - name: AREPOS_PUBLIC_URL_BASE
+    value: https://app.warchi.ru
+  - name: AREPOS_SWAGGER_ENABLED
+    value: "false"
+  - name: AREPOS_AUTH_REGISTRATION_ENABLED
+    value: "false"
+  - name: MODEL_SYNC_OUTBOX_ENABLED
+    value: "true"

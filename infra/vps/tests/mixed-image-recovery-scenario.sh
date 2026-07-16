@@ -25,6 +25,22 @@ assert_not_contains() {
   fi
 }
 
+target_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+config_digest="sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+other_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
+digest_records=$(
+  printf '%s\n' \
+    "k3d-warchi-server-0|${target_digest}|${config_digest}" \
+    "k3d-warchi-agent-0|${target_digest}|${config_digest}"
+)
+image_digest_records_match "${target_digest}" "${digest_records}" ||
+  fail "mixed recovery rejected the Docker index-ID representation"
+image_digest_records_match "${config_digest}" "${digest_records}" ||
+  fail "mixed recovery rejected the Docker config-ID representation"
+if image_digest_records_match "${other_digest}" "${digest_records}"; then
+  fail "mixed recovery accepted a mismatched Docker image ID"
+fi
+
 decide_release_image_action() {
   local image="$1"
   case "${image}" in

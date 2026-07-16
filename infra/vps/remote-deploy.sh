@@ -238,28 +238,12 @@ list_node_images() {
   docker exec "${node}" ctr -n k8s.io images list -q
 }
 
-image_config_digest_matches_all_nodes() {
+image_digest_matches_all_nodes() {
   local image="$1"
-  local local_digest nodes node images listed_image candidate config_digest
-  local records="" node_count=0
+  local local_digest records
   local_digest="$(docker image inspect --format '{{.Id}}' "${image}")" || return 2
-  [[ -n "${local_digest}" ]] || return 1
-  nodes="$(list_all_k3d_cluster_nodes "${CLUSTER_NAME}")" || return 2
-  while IFS= read -r node; do
-    is_k3d_workload_node_name "${node}" "${CLUSTER_NAME}" || continue
-    node_count=$((node_count + 1))
-    images="$(list_node_images "${node}")" || return 2
-    candidate=""
-    while IFS= read -r listed_image; do
-      if [[ "${listed_image}" == "${image}" || "${listed_image}" == */"${image}" ]]; then
-        candidate="${listed_image}"
-      fi
-    done <<<"${images}"
-    [[ -n "${candidate}" ]] || return 2
-    config_digest="$(node_image_config_digest "${node}" "${candidate}")" || return 2
-    records="${records}${records:+$'\n'}${node}=${config_digest}"
-  done <<<"${nodes}"
-  [[ "${node_count}" -gt 0 ]] || return 1
+  is_sha256_digest "${local_digest}" || return 2
+  records="$(image_cluster_digest_records "${image}" "${CLUSTER_NAME}")" || return 2
   image_digest_records_match "${local_digest}" "${records}"
 }
 
@@ -278,12 +262,12 @@ decide_release_image_action() {
   if [[ "${local_present}" == "1" &&
     "${node_count}" -gt 0 &&
     "${nodes_with_image}" == "${node_count}" ]]; then
-    if image_config_digest_matches_all_nodes "${image}"; then
+    if image_digest_matches_all_nodes "${image}"; then
       digests_match=1
     else
       digest_status=$?
       if [[ "${digest_status}" == "2" ]]; then
-        printf 'Image state is UNKNOWN; config digest inspection failed: %s\n' \
+        printf 'Image state is UNKNOWN; target/config digest inspection failed: %s\n' \
           "${image}" >&2
         return 1
       fi
@@ -297,7 +281,8 @@ decide_release_image_action() {
     if [[ "${REUSE_EXISTING_IMAGES}" == "0" ]]; then
       printf 'Refusing to overwrite immutable image tag %s\n' "${image}" >&2
     else
-      printf 'Recovery image is partial or has a config digest mismatch: %s\n' "${image}" >&2
+      printf 'Recovery image is partial or has a target/config digest mismatch: %s\n' \
+        "${image}" >&2
     fi
     return 1
   }

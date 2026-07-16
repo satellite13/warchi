@@ -7,6 +7,7 @@ readonly TARGET_IP="138.124.14.246"
 AREPOS_VERSION="${AREPOS_VERSION:-0.5.2}"
 WARCHI_VERSION="${WARCHI_VERSION:-0.8.8}"
 SITE_VERSION="${SITE_VERSION:-0.2.1}"
+CUTOVER_READINESS_CONFIRMED="${CUTOVER_READINESS_CONFIRMED:-0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
 source "${SCRIPT_DIR}/helpers.sh"
@@ -79,6 +80,11 @@ kubectl wait --for=condition=Ready certificate/warchi-app-ru-tls \
   -n "${NAMESPACE}" --timeout=3m
 kubectl wait --for=condition=Ready certificate/warchi-site-ru-tls \
   -n "${NAMESPACE}" --timeout=3m
+
+if cutover_readiness_required "${CUTOVER_READINESS_CONFIRMED}"; then
+  wait_http_success https://app.warchi.ru/health
+  wait_http_success https://warchi.ru/health
+fi
 
 api_payload="$(bounded_curl --fail --silent --show-error \
   https://app.warchi.ru/api/v1/system/version)"

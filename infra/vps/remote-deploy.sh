@@ -446,7 +446,7 @@ helm upgrade --install warchi "${WARCHI_REPO}/charts/warchi" \
 kubectl rollout status deployment/warchi -n "${NAMESPACE}" --timeout=5m
 kubectl wait --for=condition=Ready certificate/warchi-app-ru-tls \
   -n "${NAMESPACE}" --timeout=5m
-bounded_curl --fail --silent --show-error https://app.warchi.ru/health >/dev/null
+wait_http_success https://app.warchi.ru/health
 kubectl delete ingress warchi-app-tls-prestage -n "${NAMESPACE}" \
   --ignore-not-found >/dev/null
 
@@ -458,12 +458,13 @@ helm upgrade --install warchi-site "${SITE_REPO}/charts/warchi-site" \
 kubectl rollout status deployment/warchi-site -n "${NAMESPACE}" --timeout=5m
 kubectl wait --for=condition=Ready certificate/warchi-site-ru-tls \
   -n "${NAMESPACE}" --timeout=5m
-bounded_curl --fail --silent --show-error https://warchi.ru/health >/dev/null
+wait_http_success https://warchi.ru/health
 env \
   "NAMESPACE=${NAMESPACE}" \
   "CLUSTER_NAME=${CLUSTER_NAME}" \
   "AREPOS_VERSION=${AREPOS_VERSION}" \
   "WARCHI_VERSION=${WARCHI_VERSION}" \
   "SITE_VERSION=${SITE_VERSION}" \
+  "CUTOVER_READINESS_CONFIRMED=1" \
   bash "${WARCHI_REPO}/infra/vps/verify.sh"
 SITE_HEALTHY=1

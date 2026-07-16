@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.12] - 2026-07-16
+
+### Fixed
+- VPS verification checks the SPA shell instead of searching lazy-loaded landing text in index HTML.
+
 ## [0.8.11] - 2026-07-16
 
 ### Fixed

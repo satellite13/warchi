@@ -108,6 +108,22 @@ HELPERS="${VPS_DIR}/helpers.sh"
 # shellcheck source=../helpers.sh
 source "${HELPERS}"
 
+release_repo="${TMP_DIR}/release-repo"
+git init --quiet --initial-branch=main "${release_repo}"
+git -C "${release_repo}" -c user.name='Bundle Test' -c user.email='bundle@example.invalid' \
+  commit --quiet --allow-empty -m 'fixture'
+git -C "${release_repo}" branch feature/misleading-default
+git -C "${release_repo}" update-ref refs/remotes/origin/feature/misleading-default HEAD
+git -C "${release_repo}" symbolic-ref \
+  refs/remotes/origin/HEAD refs/remotes/origin/feature/misleading-default
+declare -F release_checkout_branch_matches >/dev/null ||
+  fail "missing explicit release-branch validator"
+release_checkout_branch_matches "${release_repo}" main ||
+  fail "misleading origin/HEAD overrode the explicitly allowed release branch"
+assert_equal "refs/remotes/origin/feature/misleading-default" \
+  "$(git -C "${release_repo}" symbolic-ref refs/remotes/origin/HEAD)" \
+  "release branch validation must not mutate origin/HEAD"
+
 assert_equal "warchi.ru" "$(normalize_dns_name 'WARCHI.RU.')" \
   "DNS normalization"
 dns_cname_matches 'warchi.ru.' 'warchi.ru' ||
@@ -377,6 +393,13 @@ assert_not_contains "${VPS_DIR}/values/arepos-server.yaml" 'password: arepos'
 assert_contains "${VPS_DIR}/deploy.sh" 'backup.sh'
 assert_contains "${VPS_DIR}/deploy.sh" '--delete --delete-excluded'
 assert_contains "${VPS_DIR}/deploy.sh" 'assert_dns_configuration'
+assert_contains "${VPS_DIR}/deploy.sh" \
+  'assert_release_checkout "${ROOT_DIR}" master "${WARCHI_VERSION}"'
+assert_contains "${VPS_DIR}/deploy.sh" \
+  'assert_release_checkout "${AREPOS_REPO}" master "${AREPOS_VERSION}"'
+assert_contains "${VPS_DIR}/deploy.sh" \
+  'assert_release_checkout "${SITE_REPO}" main "${SITE_VERSION}"'
+assert_not_contains "${VPS_DIR}/deploy.sh" 'refs/remotes/origin/HEAD'
 assert_contains "${VPS_DIR}/deploy.sh" 'for tool in git node awk tr'
 assert_contains "${VPS_DIR}/deploy.sh" "for tool in awk chmod curl date dig docker grep helm id install jq k3d kubectl mktemp rsync sha256sum shred stat tar tr"
 assert_not_contains "${VPS_DIR}/deploy.sh" 'infra/vps/verify.sh'

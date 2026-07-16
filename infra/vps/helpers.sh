@@ -2,6 +2,12 @@
 
 # Pure, source-safe helpers shared by deployment scripts and unit-like bundle tests.
 
+release_checkout_branch_matches() {
+  local repo="$1"
+  local expected_branch="$2"
+  [[ "$(git -C "${repo}" branch --show-current)" == "${expected_branch}" ]]
+}
+
 normalize_dns_name() {
   local name
   name="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"

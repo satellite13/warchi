@@ -20,7 +20,7 @@ trap cleanup EXIT
 print_dry_run() {
   printf '%s\n' \
     'DRY RUN: no SSH, rsync, image build, backup, or deployment will run' \
-    '1. Preflight local tools, clean default branches, exact release tags, versions, and DNS' \
+    '1. Preflight local tools, pinned release branches, exact release tags, versions, and DNS' \
     '2. Preflight SSH fingerprint, VPS disk/RAM, k3d, release, and health state' \
     '3. Rsync warchi, arepos-server, and warchi-site sources with secret/build exclusions' \
     '4. Backup PostgreSQL, MinIO, and Helm state' \
@@ -67,8 +67,9 @@ assert_version() {
 
 assert_release_checkout() {
   local repo="$1"
-  local expected_version="$2"
-  local default_ref default_branch current_branch exact_tag
+  local expected_branch="$2"
+  local expected_version="$3"
+  local current_branch exact_tag
 
   [[ -d "${repo}/.git" ]] || {
     printf 'Not a Git repository: %s\n' "${repo}" >&2
@@ -81,17 +82,10 @@ assert_release_checkout() {
     exit 1
   }
 
-  default_ref="$(git -C "${repo}" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true)"
-  if [[ -n "${default_ref}" ]]; then
-    default_branch="${default_ref#refs/remotes/origin/}"
-  elif git -C "${repo}" show-ref --verify --quiet refs/heads/main; then
-    default_branch="main"
-  else
-    default_branch="master"
-  fi
   current_branch="$(git -C "${repo}" branch --show-current)"
-  [[ "${current_branch}" == "${default_branch}" ]] || {
-    printf 'Repository %s must be on default branch %s\n' "${repo}" "${default_branch}" >&2
+  release_checkout_branch_matches "${repo}" "${expected_branch}" || {
+    printf 'Repository %s must be on release branch %s (current: %s)\n' \
+      "${repo}" "${expected_branch}" "${current_branch}" >&2
     exit 1
   }
 
@@ -110,9 +104,9 @@ for tool in git node awk tr ssh ssh-keyscan ssh-keygen rsync dig; do
   require_command "${tool}"
 done
 
-assert_release_checkout "${ROOT_DIR}" "${WARCHI_VERSION}"
-assert_release_checkout "${AREPOS_REPO}" "${AREPOS_VERSION}"
-assert_release_checkout "${SITE_REPO}" "${SITE_VERSION}"
+assert_release_checkout "${ROOT_DIR}" master "${WARCHI_VERSION}"
+assert_release_checkout "${AREPOS_REPO}" master "${AREPOS_VERSION}"
+assert_release_checkout "${SITE_REPO}" main "${SITE_VERSION}"
 
 assert_version "warchi package" "$(json_version "${ROOT_DIR}/package.json")" "${WARCHI_VERSION}"
 assert_version "warchi chart" "$(chart_version "${ROOT_DIR}/charts/warchi/Chart.yaml")" "${WARCHI_VERSION}"

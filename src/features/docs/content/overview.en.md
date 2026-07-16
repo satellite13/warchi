@@ -12,7 +12,7 @@
 - **Version comparison** — visual comparison for model versions and diagram versions with highlights and property table
 - **Types** — manage node/link types including custom and system properties
 - **Custom properties** — `string`, `number`, `boolean`, `enum` with defaults and validation
-- **Sharing** — ACL sharing for models, notations, and types with `VIEW`/`EDIT` access levels
+- **Sharing** — ACL sharing for models, notations, types, and shapes with `VIEW`/`EDIT` access levels
 
 ## Application Structure
 
@@ -35,8 +35,7 @@ This section includes focused pages:
 - **System overview** — high-level map of product capabilities and workflows;
 - **Models** — model structure, versioning, and typical operations;
 - **Notations** — components, relations, styles, and relation rules;
-- **Diagrams** — editing flow, navigation, export, and baselines;
-- **Version comparison** — workflows for model and diagram version comparison;
+- **Diagrams** — editing flow, navigation, export, baselines, and version comparison;
 - **Types** — system/custom fields and attribute management;
 - **Shapes** — creation and reuse of custom node outlines;
 - **Hotkeys** — keyboard shortcuts for faster daily work;
@@ -56,9 +55,9 @@ See comparison details in:
 
 The system uses a combination of roles and policy/ACL permissions:
 
-- **ADMIN** — full access to all resources.
+- **ADMIN** — access to the admin panel (`ADMIN_PANEL:VIEW`): users, deleted resources, and force-releasing diagram edit locks. Access to workspace resources is still governed by ownership and sharing (policy/ACL).
 - **USER** — works with their own resources and those shared with them.
-- Sharing of top-level entities (models, notations, types) supports two levels:
+- Sharing of top-level entities (models, notations, types, shapes) supports two levels:
   - **VIEW** — view only;
   - **EDIT** — edit access.
 

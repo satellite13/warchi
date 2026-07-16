@@ -32,6 +32,18 @@ The notation is selected when creating the model. The notation defines available
 
 A model can contain multiple diagrams. Create a new diagram via the context menu in the model tree. Switch between diagrams by clicking them in the tree. When switching with unsaved changes, the system will prompt to save or discard them.
 
+### What should I do on a save conflict?
+
+If another user already saved the same nodes, links, or diagram, a **Save conflict** dialog appears. Choose **Reload from server** (reload the model and save again) or **Overwrite server with my data**. Details: [Models → Save conflict](/docs/models).
+
+### How are changes synced between users?
+
+The open model editor uses live sync (WebSocket + polling). Your local unsaved draft stays in the tab; conflicts with the server go through the save conflict dialog. Concurrent canvas editing on one diagram is limited by an edit lock — see [Diagrams](/docs/diagrams).
+
+### Where are the relation matrix and Open Exchange import?
+
+In the model editor header: **Relation matrix** and **Import Open Exchange (XML)**. See [Models](/docs/models).
+
 ## Notations
 
 ### Why do I need notations?
@@ -59,6 +71,10 @@ Two export formats are available on the toolbar:
 
 Ensure that the model's notation has relation rules configured that allow connecting the selected element types. If rules are not set, links between elements will not be available.
 
+### Why is the diagram read-only?
+
+Another user holds the canvas **edit lock**. Wait for release, or ask an admin to force-release it under [Administration → Diagram locks](/docs/admin).
+
 ### How do I use the grid and snap?
 
 Enable the grid and snap via the toolbar buttons. With snap enabled, elements will align to the nearest grid lines when moving.
@@ -67,7 +83,7 @@ Enable the grid and snap via the toolbar buttons. With snap enabled, elements wi
 
 ### What's the difference between types and notation components?
 
-Types are global entities that define the name and custom properties. Notation components are linked to types and add visual styling: shape, color, icon, line style.
+Types are global entities: the name and **node type properties** (one value per node across the model; in labels — `#{name}`). Notation components add visuals and **component properties** (diagram-scoped values; in labels — `${name}`). See [Models → Properties panel](/docs/models) and [Notations → Label templates](/docs/notations).
 
 ### How do I add a custom property to a type?
 

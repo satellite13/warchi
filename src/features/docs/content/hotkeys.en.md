@@ -21,6 +21,12 @@ Keyboard shortcuts help speed up work with the diagram editor and other wArchi t
 | `Ctrl/Cmd` + `Click` | Add/remove element from selection |
 | `Ctrl/Cmd` + drag on empty space | Marquee selection |
 
+### Connections
+
+| Key | Action |
+|-----|--------|
+| `Shift` + drag from a port/node | Create a connection (see also [Diagrams](/docs/diagrams)) |
+
 ### Editing
 
 | Key | Action |
@@ -28,12 +34,14 @@ Keyboard shortcuts help speed up work with the diagram editor and other wArchi t
 | `Ctrl/Cmd` + `Z` | Undo last action |
 | `Ctrl/Cmd` + `Y` | Redo undone action |
 | `Ctrl/Cmd` + `Shift` + `Z` | Redo undone action (alternative) |
-| `Ctrl/Cmd` + `C` | Copy selected elements |
-| `Ctrl/Cmd` + `V` | Paste copied elements |
+| `Ctrl/Cmd` + `C` | Copy selected **diagram elements** |
+| `Ctrl/Cmd` + `V` | Paste copied **diagram elements** |
 | `Double-click` on node/link label | Inline label editing |
 | `Enter` in label editor | Save label |
 | `Shift` + `Enter` in label editor | New line |
 | `Esc` in label editor | Cancel label editing |
+
+> In the model editor, `Ctrl/Cmd` + `C` / `V` are also used for notes in the notes panel context — that clipboard is separate from canvas element copy/paste.
 
 ### Deletion
 

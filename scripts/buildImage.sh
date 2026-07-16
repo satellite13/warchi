@@ -17,7 +17,7 @@ VERSION=$(node -p "require('./package.json').version")
 # Keep it empty in the cluster: only VITE_SITE_RETURN_ORIGINS is needed to accept a
 # safe return URL from warchi-site after sign-in.
 VITE_SITE_URL="${VITE_SITE_URL:-}"
-VITE_SITE_RETURN_ORIGINS="${VITE_SITE_RETURN_ORIGINS:-http://warchi-site.arch.svc.cluster.local,https://warchi-site.arch.svc.cluster.local}"
+VITE_SITE_RETURN_ORIGINS="${VITE_SITE_RETURN_ORIGINS:-http://warchi-site.arch.svc.cluster.local,https://warchi-site.arch.svc.cluster.local,http://warchi.arch.svc.cluster.local,https://warchi.arch.svc.cluster.local}"
 
 PAPIRUS_DEP=$(node -p "require('./package.json').dependencies['@ngroznykh/papirus'] || ''")
 PAPIRUS_CONTEXT=""

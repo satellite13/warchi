@@ -21,10 +21,18 @@ RUN npm run build
 # production stage
 FROM nginx:1.29-alpine3.22 AS production-stage
 LABEL org.opencontainers.image.authors="Nikolay Groznykh <nikolay@groznykh.ru>"
-RUN apk upgrade --no-cache
+RUN apk upgrade --no-cache \
+  && apk add --no-cache openssl \
+  && mkdir -p /etc/nginx/certs \
+  && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout /etc/nginx/certs/tls.key \
+    -out /etc/nginx/certs/tls.crt \
+    -subj "/CN=warchi.arch.svc.cluster.local" \
+    -addext "subjectAltName=DNS:warchi.arch.svc.cluster.local,DNS:warchi-site.arch.svc.cluster.local,DNS:localhost"
 COPY --from=build-stage /app/dist /usr/share/nginx/html
 COPY config/default.conf /etc/nginx/conf.d/default.conf
-RUN chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /var/run /etc/nginx/conf.d
+# Non-root + readOnlyRootFilesystem: pid/cache live on emptyDir mounts (/var/run, /var/cache/nginx).
+RUN chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /var/run /etc/nginx/conf.d /etc/nginx/certs
 USER 101
-EXPOSE 80
+EXPOSE 80 443
 CMD ["nginx", "-g", "daemon off;"]

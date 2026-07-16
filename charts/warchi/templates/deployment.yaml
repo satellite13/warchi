@@ -45,6 +45,9 @@ template:
           - name: http
             containerPort: {{ $ctx.Values.service.port }}
             protocol: TCP
+          - name: https
+            containerPort: {{ $ctx.Values.service.tlsPort }}
+            protocol: TCP
         {{- if $ctx.Values.configMap.enabled }}
         env:
           - name: API_BASE_URL

@@ -174,4 +174,35 @@ const html = computed(() => {
   border-top: 1px solid var(--border);
   margin: 24px 0;
 }
+
+.docs-content__body :deep(a) {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.docs-content__body :deep(a:hover) {
+  color: var(--primary-hover);
+}
+
+.docs-content__body :deep(img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.docs-content__body :deep(figure) {
+  margin: 16px 0 20px;
+}
+
+.docs-content__body :deep(figcaption) {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
 </style>

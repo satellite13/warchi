@@ -70,6 +70,8 @@ service:
   type: ClusterIP
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 80
+  # TLS (self-signed cert baked into the image; required for browser HTTPS-First on *.cluster.local)
+  tlsPort: 443
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:

@@ -149,6 +149,28 @@ For the active diagram, the **Diagram Info** action is available in the toolbar.
 - notation name and version;
 - notation owner (if metadata is available).
 
+### Relation matrix
+
+The model editor header includes **Relation matrix**. It opens a separate matrix screen for model components:
+
+- filters by notation, axes (rows/columns), and relation types;
+- **Mapped only** mode hides empty rows/columns;
+- clicking a cell opens a details panel with the list of links;
+- export: **CSV long**, **CSV wide**, **PNG**.
+
+Use the matrix to audit relation coverage and produce reports without walking every diagram manually.
+
+### Open Exchange (XML) import
+
+The editor header also offers the **Import Open Exchange (XML)** wizard to load an architecture model from OEF XML:
+
+1. **Analyze** — pick a target notation and XML file; the app parses elements and relationships.
+2. **Mapping** — map file element/relationship types to notation components/relations (filter unmapped types and bulk-apply mappings).
+3. **Preview** — review import volume (nodes, links, diagrams) and warnings.
+4. Click **Import** — entities are created in the current model; a completion report follows.
+
+If required properties are still empty after import, fill them in the properties panel before the next save.
+
 ## Saving
 
 The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply.

@@ -11,7 +11,7 @@ After a successful sign-up, a session is created and the app navigates to the ho
 ## Roles
 
 - **USER** — works with owned resources and shared resources.
-- **ADMIN** — has additional administration capabilities (user management, deleted resources).
+- **ADMIN** — has additional administration capabilities (user management, deleted resources, force-releasing diagram locks).
 
 ## Route protection
 

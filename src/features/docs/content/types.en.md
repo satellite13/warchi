@@ -95,6 +95,7 @@ Supported property types:
 
 - **Text** — string value
 - **Number** — numeric value
+- **Boolean** — yes/no
 - **Enum** — selection from a predefined list of values
 
 For each property you can specify:

@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.8.15] - 2026-07-16
+
 ### Изменено
 - Docker Compose quick-start больше не требует локальный клон papirus: `@ngroznykh/papirus` берётся из npm, а named Docker context — пустой каталог в репозитории.
 

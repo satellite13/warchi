@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-16
+
+### Fixed
+- VPS deployment preflight uses the projects' pinned release branches instead of a potentially stale remote default.
+
 ## [0.8.2] - 2026-07-16
 
 ### Added

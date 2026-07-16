@@ -10,11 +10,12 @@ BACKUP_ROOT="${REMOTE_ROOT}/backups"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
 MINIO_HELPER_POD="warchi-minio-backup-$(date -u +%Y%m%dt%H%M%Sz)-$$"
+POSTGRES_REMOTE_DUMP="/tmp/warchi-backup-${TIMESTAMP}-$$.dump"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
 source "${SCRIPT_DIR}/helpers.sh"
 
-for tool in chmod date flock helm id install k3d kubectl mkdir rm sha256sum sleep tar touch; do
+for tool in awk chmod date flock helm id install k3d kubectl mkdir rm sha256sum sleep tar timeout touch; do
   command -v "${tool}" >/dev/null 2>&1 || {
     printf 'Required backup command unavailable: %s\n' "${tool}" >&2
     exit 1
@@ -41,6 +42,8 @@ chmod 600 "${BACKUP_DIR}/.failed"
 APP_REPLICAS=""
 APP_RESTORE_NEEDED=0
 MINIO_HELPER_DELETE_NEEDED=0
+POSTGRES_POD=""
+POSTGRES_REMOTE_CLEANUP_NEEDED=0
 BACKUP_SUCCEEDED=0
 
 scale_deployment() {
@@ -63,6 +66,10 @@ cleanup_backup() {
   local cleanup_status=0
   set +e
 
+  if [[ "${POSTGRES_REMOTE_CLEANUP_NEEDED}" == "1" ]]; then
+    timeout 30s kubectl exec -n "${NAMESPACE}" -c postgresql "${POSTGRES_POD}" -- \
+      rm -f "${POSTGRES_REMOTE_DUMP}" >/dev/null 2>&1 || cleanup_status=$?
+  fi
   if [[ "${MINIO_HELPER_DELETE_NEEDED}" == "1" ]]; then
     kubectl delete "pod/${MINIO_HELPER_POD}" -n "${NAMESPACE}" \
       --ignore-not-found --wait=false >/dev/null || cleanup_status=$?
@@ -188,8 +195,23 @@ kubectl exec -n "${NAMESPACE}" "pod/${MINIO_HELPER_POD}" \
   printf 'MinIO backup is empty\n' >&2
   exit 1
 }
-kubectl exec -i -n "${NAMESPACE}" deployment/arepos-server-postgresql \
-  -- pg_restore --list >/dev/null <"${BACKUP_DIR}/postgresql.dump"
+postgres_pods="$(
+  kubectl get pods -n "${NAMESPACE}" \
+    -l app.kubernetes.io/instance=arepos-server,app.kubernetes.io/component=postgresql \
+    --field-selector=status.phase=Running \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+)"
+postgres_pod_count="$(printf '%s\n' "${postgres_pods}" | awk 'NF { count++ } END { print count + 0 }')"
+[[ "${postgres_pod_count}" == "1" ]] || {
+  printf 'Expected exactly one running PostgreSQL pod\n' >&2
+  exit 1
+}
+POSTGRES_POD="$(printf '%s\n' "${postgres_pods}" | awk 'NF { print; exit }')"
+POSTGRES_REMOTE_CLEANUP_NEEDED=1
+timeout 120s kubectl cp -n "${NAMESPACE}" -c postgresql \
+  "${BACKUP_DIR}/postgresql.dump" "${POSTGRES_POD}:${POSTGRES_REMOTE_DUMP}"
+timeout 60s kubectl exec -n "${NAMESPACE}" -c postgresql "${POSTGRES_POD}" -- \
+  pg_restore --list "${POSTGRES_REMOTE_DUMP}" >/dev/null
 tar -tzf "${BACKUP_DIR}/minio-data.tar.gz" >/dev/null
 
 backup_helm_release() {

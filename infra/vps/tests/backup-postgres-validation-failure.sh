@@ -73,7 +73,7 @@ EOF
 
 cat >"${stub_bin}/helm" <<'EOF'
 #!/usr/bin/env bash
-printf 'helm must not run after helper tar failure\n' >&2
+printf 'helm must not run after PostgreSQL validation failure\n' >&2
 exit 90
 EOF
 
@@ -82,9 +82,20 @@ cat >"${stub_bin}/sleep" <<'EOF'
 exit 0
 EOF
 
+cat >"${stub_bin}/tar" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+
 cat >"${stub_bin}/timeout" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
+printf 'timeout %s\n' "$*" >>"${SCENARIO_LOG}"
+duration="$1"
 shift
+if [[ "${duration}" == "60s" && "$*" == *"pg_restore --list"* ]]; then
+  exit 42
+fi
 exec "$@"
 EOF
 
@@ -108,12 +119,15 @@ if [[ "${1:-}" == "get" && "${2:-}" == "pod" && "$*" == *"component=minio"* ]]; 
   exit 0
 fi
 
+if [[ "${1:-}" == "get" && "${2:-}" == "pods" &&
+  "$*" == *"component=postgresql"* ]]; then
+  printf 'arepos-server-postgresql-safe-pod\n'
+  exit 0
+fi
+
 case "$*" in
   *"exec "*"deployment/arepos-server-postgresql "*"pg_dump"*)
     printf 'stub-postgresql-dump'
-    ;;
-  *"exec -i "*"deployment/arepos-server-postgresql "*"pg_restore --list"*)
-    while IFS= read -r _line; do :; done
     ;;
   *"apply -f -"*)
     awk '{ print }' >"${APPLIED_YAML}"
@@ -121,10 +135,7 @@ case "$*" in
   *"wait --for=condition=Ready pod/"*)
     ;;
   *"exec "*"pod/"*" -- tar -C /data -czf - ."*)
-    exit 42
-    ;;
-  *"exec "*"deployment/arepos-server-minio "*"tar"*)
-    exit 43
+    printf 'stub-minio-archive'
     ;;
   *)
     ;;
@@ -132,7 +143,7 @@ esac
 EOF
 
 chmod +x "${stub_bin}/id" "${stub_bin}/flock" "${stub_bin}/k3d" "${stub_bin}/helm" \
-  "${stub_bin}/sleep" "${stub_bin}/timeout" "${stub_bin}/kubectl"
+  "${stub_bin}/sleep" "${stub_bin}/tar" "${stub_bin}/timeout" "${stub_bin}/kubectl"
 
 set +e
 PATH="${stub_bin}:${PATH}" SCENARIO_LOG="${scenario_log}" APPLIED_YAML="${applied_yaml}" \
@@ -143,37 +154,34 @@ set -e
 if [[ "${scenario_status}" -ne 42 ]]; then
   printf '%s\n' '--- backup stderr ---' >&2
   awk '{ print }' "${TMP_DIR}/stderr" >&2
-  printf '%s\n' '--- kubectl log ---' >&2
+  printf '%s\n' '--- command log ---' >&2
   awk '{ print }' "${scenario_log}" >&2
-  fail "backup must return helper tar failure status 42, got ${scenario_status}"
+  fail "backup must return PostgreSQL validation failure status 42, got ${scenario_status}"
 fi
-assert_contains "${scenario_log}" 'apply -f -'
-assert_contains "${scenario_log}" 'wait --for=condition=Ready'
-assert_contains "${scenario_log}" 'pod/warchi-minio-backup-'
-assert_contains "${scenario_log}" 'exec -n arch pod/'
+
 assert_contains "${scenario_log}" \
-  'delete pods -n arch -l app.kubernetes.io/name=warchi-minio-backup-helper --ignore-not-found --wait=false'
+  'get pods -n arch -l app.kubernetes.io/instance=arepos-server,app.kubernetes.io/component=postgresql --field-selector=status.phase=Running'
 assert_matches "${scenario_log}" \
-  'delete pod/warchi-minio-backup-[a-z0-9-]+ -n arch --ignore-not-found --wait=false'
+  'timeout 120s kubectl cp -n arch -c postgresql .*/postgresql\.dump arepos-server-postgresql-safe-pod:/tmp/warchi-backup-[0-9]{8}T[0-9]{6}Z-[0-9]+\.dump'
+assert_matches "${scenario_log}" \
+  'timeout 60s kubectl exec -n arch -c postgresql arepos-server-postgresql-safe-pod -- pg_restore --list /tmp/warchi-backup-[0-9]{8}T[0-9]{6}Z-[0-9]+\.dump'
+assert_matches "${scenario_log}" \
+  'timeout [0-9]+s kubectl exec -n arch -c postgresql arepos-server-postgresql-safe-pod -- rm -f /tmp/warchi-backup-[0-9]{8}T[0-9]{6}Z-[0-9]+\.dump'
+assert_contains "${scenario_log}" \
+  'delete pod/warchi-minio-backup-'
 assert_contains "${scenario_log}" 'scale deployment/arepos-server -n arch --replicas=2'
+assert_line_order "${scenario_log}" ' -- rm -f /tmp/warchi-backup-' \
+  'delete pod/warchi-minio-backup-'
 assert_line_order "${scenario_log}" 'delete pod/warchi-minio-backup-' \
   'scale deployment/arepos-server -n arch --replicas=2'
 
-assert_contains "${applied_yaml}" 'name: warchi-minio-backup-'
-assert_contains "${applied_yaml}" 'app.kubernetes.io/name: warchi-minio-backup-helper'
-assert_contains "${applied_yaml}" 'nodeName: k3d-warchi-server-0'
-assert_contains "${applied_yaml}" 'activeDeadlineSeconds: 600'
-assert_contains "${applied_yaml}" 'automountServiceAccountToken: false'
-assert_contains "${applied_yaml}" \
-  'image: busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662'
-assert_contains "${applied_yaml}" 'command: [sh, -c, "sleep 600"]'
-assert_contains "${applied_yaml}" 'mountPath: /data'
-assert_contains "${applied_yaml}" 'readOnly: true'
-assert_contains "${applied_yaml}" 'claimName: arepos-server-minio-data'
-
-if grep -Fq -- 'exec -n arch deployment/arepos-server-minio' "${scenario_log}"; then
-  fail "backup attempted to execute a command inside the MinIO container"
+if grep -Fq -- 'exec -i' "${scenario_log}"; then
+  fail "PostgreSQL validation must not stream the dump over kubectl exec stdin"
 fi
+if grep -Eq -- 'pg_restore --list([[:space:]]*)$' "${scenario_log}"; then
+  fail "pg_restore validation must receive the remote dump filename"
+fi
+
 complete_markers=("${scenario_root}"/backups/*/COMPLETE)
 if [[ -e "${complete_markers[0]}" ]]; then
   fail "failed backup unexpectedly received a COMPLETE marker"
@@ -182,4 +190,4 @@ failed_markers=("${scenario_root}"/backups/*/.failed)
 [[ -e "${failed_markers[0]}" ]] ||
   fail "failed backup is missing the .failed marker"
 
-printf 'PASS: helper pod tar failure cleaned up safely\n'
+printf 'PASS: PostgreSQL validation failure cleaned up and restored replicas\n'

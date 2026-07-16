@@ -59,8 +59,14 @@ cat >"${stub_bin}/helm" <<'EOF'
 exit 99
 EOF
 
+cat >"${stub_bin}/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+
 chmod +x "${stub_bin}/id" "${stub_bin}/flock" "${stub_bin}/kubectl" \
-  "${stub_bin}/k3d" "${stub_bin}/helm"
+  "${stub_bin}/k3d" "${stub_bin}/helm" "${stub_bin}/timeout"
 
 set +e
 PATH="${stub_bin}:${PATH}" FLOCK_LOG="${flock_log}" KUBECTL_MARKER="${kubectl_marker}" \

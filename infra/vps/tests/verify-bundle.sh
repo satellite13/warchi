@@ -234,6 +234,7 @@ scripts=(
   "${VPS_DIR}/verify.sh"
   "${VPS_DIR}/tests/backup-helper-failure.sh"
   "${VPS_DIR}/tests/backup-lock-exclusion.sh"
+  "${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
   "${VPS_DIR}/tests/verify-bundle.sh"
 )
 
@@ -403,7 +404,7 @@ assert_contains "${VPS_DIR}/deploy.sh" \
   'assert_release_checkout "${SITE_REPO}" main "${SITE_VERSION}"'
 assert_not_contains "${VPS_DIR}/deploy.sh" 'refs/remotes/origin/HEAD'
 assert_contains "${VPS_DIR}/deploy.sh" 'for tool in git node awk tr'
-assert_contains "${VPS_DIR}/deploy.sh" "for tool in awk chmod curl date dig docker grep helm id install jq k3d kubectl mktemp rsync sha256sum shred stat tar tr"
+assert_contains "${VPS_DIR}/deploy.sh" "for tool in awk chmod curl date dig docker grep helm id install jq k3d kubectl mktemp rsync sha256sum shred stat tar timeout tr"
 assert_not_contains "${VPS_DIR}/deploy.sh" 'infra/vps/verify.sh'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'helm upgrade --install'
 assert_contains "${VPS_DIR}/remote-deploy.sh" '--wait'
@@ -471,10 +472,16 @@ assert_contains "${VPS_DIR}/backup.sh" '[[ "${replica_status}" =~ ^0?:0?:0?$ ]]'
 assert_contains "${VPS_DIR}/backup.sh" 'trap cleanup_backup EXIT'
 assert_contains "${VPS_DIR}/backup.sh" 'readonly BACKUP_LOCK_PATH="/var/lock/warchi-backup.lock"'
 assert_contains "${VPS_DIR}/backup.sh" 'flock -n'
+assert_matches "${VPS_DIR}/backup.sh" 'for tool in .*timeout'
 assert_matches "${VPS_DIR}/backup.sh" 'for tool in .*flock'
 assert_line_order "${VPS_DIR}/backup.sh" 'flock -n' \
   'kubectl delete pods -n "${NAMESPACE}"'
 assert_contains "${VPS_DIR}/backup.sh" 'pg_restore --list'
+assert_not_contains "${VPS_DIR}/backup.sh" 'kubectl exec -i'
+assert_contains "${VPS_DIR}/backup.sh" 'timeout 120s kubectl cp'
+assert_contains "${VPS_DIR}/backup.sh" 'timeout 60s kubectl exec'
+assert_contains "${VPS_DIR}/backup.sh" 'kubectl cp -n "${NAMESPACE}" -c postgresql'
+assert_contains "${VPS_DIR}/backup.sh" 'kubectl exec -n "${NAMESPACE}" -c postgresql'
 assert_contains "${VPS_DIR}/backup.sh" 'tar -tzf'
 assert_contains "${VPS_DIR}/backup.sh" \
   'busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662'
@@ -500,6 +507,7 @@ assert_not_contains "${VPS_DIR}/backup.sh" \
 
 "${VPS_DIR}/tests/backup-helper-failure.sh"
 "${VPS_DIR}/tests/backup-lock-exclusion.sh"
+"${VPS_DIR}/tests/backup-postgres-validation-failure.sh"
 
 assert_contains "${VPS_DIR}/verify.sh" '400 | 401 | 403'
 assert_contains "${VPS_DIR}/helpers.sh" '--max-time'

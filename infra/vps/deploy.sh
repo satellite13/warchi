@@ -124,7 +124,7 @@ set -euo pipefail
 remote_root="$1"
 cluster_name="$2"
 namespace="$3"
-for tool in awk chmod curl date dig docker grep helm id install jq k3d kubectl mktemp rsync sha256sum shred stat tar tr df mkdir rm sleep; do
+for tool in awk chmod curl date dig docker grep helm id install jq k3d kubectl mktemp rsync sha256sum shred stat tar timeout tr df mkdir rm sleep; do
   command -v "${tool}" >/dev/null 2>&1 || {
     printf 'Remote command unavailable: %s\n' "${tool}" >&2
     exit 1

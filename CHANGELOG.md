@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.13] - 2026-07-16
+
+### Fixed
+- VPS verification validates the active WebSocket proxy route without emulating STOMP through wget.
+
 ## [0.8.12] - 2026-07-16
 
 ### Fixed

@@ -6,9 +6,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
 
-AREPOS_VERSION="${AREPOS_VERSION:-0.5.2}"
-WARCHI_VERSION="${WARCHI_VERSION:-0.8.15}"
-SITE_VERSION="${SITE_VERSION:-0.2.3}"
+AREPOS_VERSION="${AREPOS_VERSION:-0.5.3}"
+WARCHI_VERSION="${WARCHI_VERSION:-0.8.16}"
+SITE_VERSION="${SITE_VERSION:-0.2.4}"
 AREPOS_REPO="${AREPOS_REPO:-${ROOT_DIR}/../arepos-server}"
 SITE_REPO="${SITE_REPO:-${ROOT_DIR}/../warchi-site}"
 

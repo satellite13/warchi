@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.16] - 2026-07-17
+
+### Fixed
+- Login via marketing-site `returnUrl` no longer bounces back when only a stale localStorage profile remains; the session is revalidated with `/auth/me` first.
+- File uploads through the app nginx proxy no longer fail with HTTP 413 for bodies larger than 1 MB (limit raised to match the backend).
+
 ## [0.8.15] - 2026-07-16
 
 ### Changed

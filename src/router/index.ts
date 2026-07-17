@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { canViewAdminPanel } from "../composables/usePermissions";
-import { isSafeSiteReturnUrl } from "../utils/safeRedirect";
+import { resolveLoginRedirect } from "./resolveLoginRedirect";
 import "./types";
 
 const router = createRouter({
@@ -138,17 +138,26 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
-  const { isAuthenticated, currentUser } = useAuth();
+  const { isAuthenticated, currentUser, loadCurrentUser } = useAuth();
 
   if (to.meta.requiresAuth === false) {
-    if (to.name === "login" && isAuthenticated.value) {
+    if (to.name === "login") {
       const returnUrl =
         typeof to.query.returnUrl === "string" ? to.query.returnUrl : null;
-      if (returnUrl && isSafeSiteReturnUrl(returnUrl)) {
-        window.location.replace(returnUrl);
+      const decision = await resolveLoginRedirect({
+        isAuthenticated: isAuthenticated.value,
+        returnUrl,
+        loadCurrentUser,
+        isStillAuthenticated: () => isAuthenticated.value
+      });
+      if (decision.type === "return") {
+        window.location.replace(decision.url);
         return false;
       }
-      return { name: "home" };
+      if (decision.type === "home") {
+        return { name: "home" };
+      }
+      return true;
     }
     return true;
   }

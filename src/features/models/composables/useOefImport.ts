@@ -89,6 +89,8 @@ export function useOefImport(options: {
         return options.t('models.oefImportWarningDiagramConnectionMissingNodeInstance')
       case 'nameTruncated':
         return options.t('models.oefImportWarningNameTruncated')
+      case 'nameDeduplicated':
+        return options.t('models.oefImportWarningNameDeduplicated')
       case 'relationsBranchSkipped':
         return options.t('models.oefImportWarningRelationsBranchSkipped')
       case 'directoryTypeMissing':

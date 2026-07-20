@@ -210,4 +210,31 @@ describe('oefToBatchSave', () => {
     expect(result.request.diagrams.create[0]!.name).toHaveLength(OEF_ENTITY_NAME_MAX_LENGTH)
     expect(result.warnings.filter(item => item.code === 'nameTruncated')).toHaveLength(2)
   })
+
+  it('deduplicates duplicate diagram names within one import', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    draft.diagrams.push({
+      ...structuredClone(draft.diagrams[0]!),
+      sourceViewId: 'view-duplicate-2',
+      name: draft.diagrams[0]!.name,
+    })
+    draft.diagrams.push({
+      ...structuredClone(draft.diagrams[0]!),
+      sourceViewId: 'view-duplicate-3',
+      name: draft.diagrams[0]!.name,
+    })
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+    })
+
+    const names = result.request.diagrams.create.map(item => item.name)
+    expect(new Set(names).size).toBe(names.length)
+    expect(names.filter(name => name === draft.diagrams[0]!.name)).toHaveLength(1)
+    expect(names.some(name => name.endsWith(' (2)'))).toBe(true)
+    expect(names.some(name => name.endsWith(' (3)'))).toBe(true)
+    expect(result.warnings.filter(item => item.code === 'nameDeduplicated')).toHaveLength(2)
+  })
 })

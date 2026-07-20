@@ -112,6 +112,7 @@ export const modelsMessages = {
       oefImportWarningDiagramConnectionMissingNodeInstance:
         'Диаграммная связь пропущена: не найдены инстансы нод',
       oefImportWarningNameTruncated: 'Имя обрезано до 255 символов (лимит API)',
+      oefImportWarningNameDeduplicated: 'Дублирующееся имя диаграммы сделано уникальным',
       oefImportWarningRelationsBranchSkipped: 'Пропущена ветка Relations из organizations',
       oefImportWarningDirectoryTypeMissing: 'Нет типа Directory — папки не созданы',
       oefImportWarningDirectoryTypeCreated: 'Тип Directory создан автоматически',
@@ -539,6 +540,7 @@ export const modelsMessages = {
       oefImportWarningDiagramConnectionMissingNodeInstance:
         'Diagram connection skipped: source/target node instance is missing',
       oefImportWarningNameTruncated: 'Name truncated to 255 characters (API limit)',
+      oefImportWarningNameDeduplicated: 'Duplicate diagram name made unique',
       oefImportWarningRelationsBranchSkipped: 'Skipped Relations organization branch',
       oefImportWarningDirectoryTypeMissing: 'Directory type missing — folders were not created',
       oefImportWarningDirectoryTypeCreated: 'Directory node type was created automatically',

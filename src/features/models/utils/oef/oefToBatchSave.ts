@@ -51,6 +51,7 @@ export type OefImportBuildWarningCode =
   | 'diagramConnectionMissingModelLink'
   | 'diagramConnectionMissingNodeInstance'
   | 'nameTruncated'
+  | 'nameDeduplicated'
   | 'relationsBranchSkipped'
   | 'directoryTypeMissing'
   | 'directoryTypeCreated'
@@ -58,6 +59,36 @@ export type OefImportBuildWarningCode =
 export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
   if (name.length <= maxLength) return name
   return name.slice(0, maxLength)
+}
+
+/**
+ * Ensure unique (name, version) within one import batch.
+ * DB constraint: diagrams_model_name_version_key.
+ */
+export function allocateUniqueEntityName(
+  rawName: string,
+  version: string,
+  usedNameVersions: Set<string>,
+  fallback = 'Untitled',
+  maxLength = OEF_ENTITY_NAME_MAX_LENGTH
+): { name: string; deduplicated: boolean } {
+  const base = truncateOefEntityName((rawName.trim() || fallback), maxLength)
+  const keyFor = (name: string): string => `${name}\0${version}`
+  if (!usedNameVersions.has(keyFor(base))) {
+    usedNameVersions.add(keyFor(base))
+    return { name: base, deduplicated: false }
+  }
+  let index = 2
+  while (true) {
+    const suffix = ` (${index})`
+    const truncatedBase = truncateOefEntityName(base, Math.max(1, maxLength - suffix.length))
+    const candidate = `${truncatedBase}${suffix}`
+    if (!usedNameVersions.has(keyFor(candidate))) {
+      usedNameVersions.add(keyFor(candidate))
+      return { name: candidate, deduplicated: true }
+    }
+    index += 1
+  }
 }
 
 export type OefImportBuildWarning = {
@@ -207,6 +238,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   const nodeTempBySourceElementId = new Map<string, string>()
   const linkTempBySourceRelationshipId = new Map<string, string>()
   const dirTempByKey = new Map<string, string>()
+  const usedDiagramNameVersions = new Set<string>()
 
   const orgPlan = buildOrganizationImportPlan(params.draft.organizations)
   for (const warning of orgPlan.warnings) {
@@ -561,13 +593,26 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       },
     }
 
-    const diagramName = truncateOefEntityName(diagram.name)
-    if (diagramName !== diagram.name) {
+    if (truncateOefEntityName(diagram.name) !== diagram.name) {
       warnings.push({
         code: 'nameTruncated',
         sourceId: diagram.sourceViewId,
         diagramId: diagram.sourceViewId,
         message: `Diagram name truncated to ${OEF_ENTITY_NAME_MAX_LENGTH} characters for "${diagram.sourceViewId}"`,
+      })
+    }
+    const { name: diagramName, deduplicated } = allocateUniqueEntityName(
+      diagram.name,
+      diagramVersion,
+      usedDiagramNameVersions,
+      diagram.sourceViewId
+    )
+    if (deduplicated) {
+      warnings.push({
+        code: 'nameDeduplicated',
+        sourceId: diagram.sourceViewId,
+        diagramId: diagram.sourceViewId,
+        message: `Diagram name deduplicated to "${diagramName}" for "${diagram.sourceViewId}"`,
       })
     }
     const viewOrgKey = orgPlan.viewParentTempKey.get(diagram.sourceViewId)
@@ -577,7 +622,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         : parentNodeId
     request.diagrams.create.push({
       tempId: diagramTempId,
-      name: diagramName || diagram.sourceViewId.slice(0, OEF_ENTITY_NAME_MAX_LENGTH),
+      name: diagramName,
       version: diagramVersion,
       notationId: params.notationId,
       nodeId: diagramParentNodeId,

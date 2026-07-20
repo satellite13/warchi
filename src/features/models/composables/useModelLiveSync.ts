@@ -2,7 +2,7 @@ import { Client } from "@stomp/stompjs"
 import { onBeforeUnmount, watch, type Ref } from "vue"
 import { refreshAccessToken } from "@/api/apiClient"
 import { buildModelSyncWsUrl } from "@/api/modelSyncWs"
-import { listParams, PAGE_SIZE_FULL } from "@/api/queryHelpers"
+import { listParams } from "@/api/queryHelpers"
 import { apiGet } from "@/composables/useApi"
 import {
   AUTH_CLEARED_EVENT,
@@ -31,6 +31,7 @@ import {
   coalesceModelSyncGranularEvents,
   parseGranularSyncEventsFromPayload,
 } from "../utils/modelSyncGranularCoalesce"
+import { fetchAllByModelId } from "./modelEditorLoadModel"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 
 const STOMP_RECONNECT_DELAY_MS = 5000
@@ -165,35 +166,22 @@ export function useModelLiveSync(options: {
       })
     }
     try {
-      const [nodesRes, linksRes, diagramsRes, modelRes] = await Promise.all([
-        apiGet<PaginatedResponse<NodeResponse>>(
-          `/nodes?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
-        ),
-        apiGet<PaginatedResponse<LinkResponse>>(
-          `/links?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
-        ),
-        apiGet<PaginatedResponse<DiagramResponse>>(
-          `/diagrams?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
-        ),
+      // Must page through the full collections — a single size=1000 page drops the rest
+      // via mergeEntityListFromRemote and empties the tree after a large import.
+      const [remoteNodes, remoteLinks, remoteDiagrams, modelRes] = await Promise.all([
+        fetchAllByModelId<NodeResponse>('/nodes', mid),
+        fetchAllByModelId<LinkResponse>('/links', mid),
+        fetchAllByModelId<DiagramResponse>('/diagrams', mid),
         apiGet<ModelData>(`/models/${mid}`),
       ])
 
-      if (
-        !nodesRes.success ||
-        !linksRes.success ||
-        !diagramsRes.success ||
-        !modelRes.success
-      ) {
+      if (!modelRes.success) {
         return
       }
 
       // Guard against stale results: if modelId changed while requests were in flight,
       // discard results to avoid overwriting the newly loaded model's state.
       if (options.modelId.value !== mid) return
-
-      const remoteNodes = nodesRes.data.content ?? []
-      const remoteLinks = linksRes.data.content ?? []
-      const remoteDiagrams = diagramsRes.data.content ?? []
 
       const diagramsBefore = options.state.value.diagrams
       const notationIdsBefore = new Set(collectNotationIds(diagramsBefore))

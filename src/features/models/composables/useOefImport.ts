@@ -4,6 +4,7 @@ import type { ModelEditorState } from '../types'
 import { parseEntityAttrs, parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 import type { ImportMappingState } from '../utils/oef/mappingState'
 import type { ImportDraft } from '../utils/oef/types'
+import { applyOefBatchSaveChunks, type OefChunkProgress } from '../utils/oef/chunkOefBatchSave'
 import { buildOefBatchSaveRequest } from '../utils/oef/oefToBatchSave'
 import { batchSave, hasBatchChanges } from './useModelBatchSave'
 import { isRequiredPropertyFilled } from '../utils/requiredCustomPropertiesValidation'
@@ -49,7 +50,25 @@ export function useOefImport(options: {
 }) {
   const showImportWizard = ref(false)
   const isImportingOef = ref(false)
+  const oefImportProgress = ref<string | null>(null)
   const oefImportReport = ref<OefImportReport | null>(null)
+
+  function formatOefProgress(progress: OefChunkProgress): string {
+    const kindLabel =
+      progress.kind === 'nodes'
+        ? options.t('models.oefImportProgressNodes')
+        : progress.kind === 'links'
+          ? options.t('models.oefImportProgressLinks')
+          : options.t('models.oefImportProgressDiagrams')
+    return options.t('models.oefImportProgress', {
+      kind: kindLabel,
+      index: progress.index,
+      total: progress.totalOfKind,
+      nodes: progress.nodesCreated,
+      links: progress.linksCreated,
+      diagrams: progress.diagramsCreated,
+    })
+  }
 
   function oefWarningLabel(code: string): string {
     switch (code) {
@@ -176,8 +195,17 @@ export function useOefImport(options: {
     }
 
     isImportingOef.value = true
-    const result = await batchSave(modelId, built.request)
+    oefImportProgress.value = options.t('models.oefImportProgressStarting')
+    const result = await applyOefBatchSaveChunks({
+      modelId,
+      request: built.request,
+      batchSave,
+      onProgress: progress => {
+        oefImportProgress.value = formatOefProgress(progress)
+      },
+    })
     isImportingOef.value = false
+    oefImportProgress.value = null
     if (!result.success) {
       options.setUiError(options.t('models.oefImportFailed', { message: result.error.message }))
       return
@@ -203,6 +231,7 @@ export function useOefImport(options: {
   return {
     showImportWizard,
     isImportingOef,
+    oefImportProgress,
     oefImportReport,
     oefWarningLabel,
     handleOefImportSubmit,

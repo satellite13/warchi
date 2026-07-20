@@ -62,7 +62,9 @@ const filteredOptions = computed(() => {
   if (searchBlocked.value) return []
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return props.options
-  return props.options.filter(o => o.label.toLowerCase().includes(query))
+  return props.options.filter(
+    o => o.label.toLowerCase().includes(query) || o.id.toLowerCase().includes(query)
+  )
 })
 
 const selectedOption = computed(() =>

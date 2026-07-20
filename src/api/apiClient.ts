@@ -79,7 +79,11 @@ export const refreshAccessToken = async (): Promise<boolean> => {
 
       const refreshText = await refreshResponse.text()
       if (!refreshResponse.ok || !refreshText.trim()) {
-        clearSession()
+        // Definitive auth failure only — do not logout on 429/5xx (nginx refresh
+        // rate-limit or transient outages would otherwise wipe a valid session).
+        if (refreshResponse.status === 401 || refreshResponse.status === 403) {
+          clearSession()
+        }
         return false
       }
 
@@ -148,6 +152,15 @@ const normalizeApiErrorMessage = (
   }
 
   if (status === 403) {
+    // Keep specific auth/CSRF messages (registration disabled, bad admin secret, CSRF).
+    if (normalized.includes("csrf")) {
+      return "Сессия не установлена (нет CSRF-cookie). Обновите страницу и войдите снова."
+    }
+    if (isPublicAuthPath(path)) {
+      return message.trim().length > 0
+        ? message
+        : "Недостаточно прав для выполнения операции."
+    }
     const editorPathPrefixes = ["/models/", "/notations/", "/node-types/", "/link-types/", "/node-shapes/"]
     const isEditorResourcePath = editorPathPrefixes.some((prefix) => path.startsWith(prefix))
     if (isEditorResourcePath) {

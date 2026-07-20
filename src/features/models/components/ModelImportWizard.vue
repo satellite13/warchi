@@ -13,18 +13,20 @@ import {
   type ImportMappingState,
 } from '../utils/oef/mappingState'
 import { buildImportMappingSuggestions, type ImportMappingSuggestions } from '../utils/oef/mappingSuggestions'
-import { parseOefXml } from '../utils/oef/oefParser'
-import { validateParsedOefModel } from '../utils/oef/oefImportValidation'
-import type { ImportDraft, ImportIssue } from '../utils/oef/types'
+import { groupImportIssues } from '../utils/oef/groupImportIssues'
+import { normalizeOefFile, toOefParsedModel } from '../utils/oef/oefNormalizeApi'
+import type { ImportDraft, ImportIssue, ImportIssueCode } from '../utils/oef/types'
 
 const props = defineProps<{
   visible: boolean
+  modelId: string
   notations: NotationData[]
   nodeTypes: NodeTypeResponse[]
   linkTypes: LinkTypeResponse[]
   components: ComponentResponse[]
   relations: RelationResponse[]
   importBusy?: boolean
+  importProgress?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -39,6 +41,7 @@ const selectedFileName = ref<string>('')
 const draft = ref<ImportDraft | null>(null)
 const issues = ref<ImportIssue[]>([])
 const parseError = ref<string | null>(null)
+const isAnalyzing = ref(false)
 const showOnlyUnmapped = ref(true)
 const mappingState = ref<ImportMappingState>({ elementTypeMap: {}, relationshipTypeMap: {} })
 const suggestions = ref<ImportMappingSuggestions>({
@@ -56,6 +59,30 @@ const relationById = computed(() => new Map(props.relations.map(item => [item.id
 const hasDraft = computed(() => !!draft.value)
 const hasErrors = computed(() => issues.value.some(issue => issue.level === 'error'))
 const warningCount = computed(() => issues.value.filter(issue => issue.level === 'warning').length)
+const groupedIssues = computed(() => groupImportIssues(issues.value))
+const expandedIssueCodes = ref<Set<string>>(new Set())
+
+function issueGroupKey(code: ImportIssueCode, level: string): string {
+  return `${level}:${code}`
+}
+
+function isIssueGroupExpanded(code: ImportIssueCode, level: string): boolean {
+  return expandedIssueCodes.value.has(issueGroupKey(code, level))
+}
+
+function toggleIssueGroup(code: ImportIssueCode, level: string): void {
+  const key = issueGroupKey(code, level)
+  const next = new Set(expandedIssueCodes.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedIssueCodes.value = next
+}
+
+function issueGroupLabel(code: ImportIssueCode, sampleMessage: string): string {
+  const key = `models.oefImportIssue.${code}`
+  const translated = t(key)
+  return translated === key ? sampleMessage : translated
+}
 
 const elementRows = computed(() => {
   const rows = draft.value?.sourceElementTypes ?? []
@@ -100,7 +127,9 @@ const bulkRelationshipOptions = computed(() => {
   return out
 })
 
-const canMoveToMappings = computed(() => hasDraft.value && !!selectedNotationId.value && !hasErrors.value)
+const canMoveToMappings = computed(
+  () => hasDraft.value && !!selectedNotationId.value && !hasErrors.value && !isAnalyzing.value
+)
 const canMoveToPreview = computed(
   () =>
     canMoveToMappings.value &&
@@ -115,11 +144,13 @@ function resetState(): void {
   draft.value = null
   issues.value = []
   parseError.value = null
+  isAnalyzing.value = false
   showOnlyUnmapped.value = true
   bulkElementValue.value = ''
   bulkRelationshipValue.value = ''
   mappingState.value = { elementTypeMap: {}, relationshipTypeMap: {} }
   suggestions.value = { elementBySourceType: {}, relationshipBySourceType: {} }
+  expandedIssueCodes.value = new Set()
 }
 
 watch(
@@ -164,15 +195,26 @@ async function onFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  if (!props.modelId) {
+    parseError.value = t('models.oefImportNormalizeMissingModel')
+    input.value = ''
+    return
+  }
   parseError.value = null
   selectedFileName.value = file.name
+  isAnalyzing.value = true
   try {
-    const xml = await file.text()
-    const parsed = parseOefXml(xml)
-    const validation = validateParsedOefModel(parsed)
+    const result = await normalizeOefFile(props.modelId, file)
+    if (!result.success) {
+      draft.value = null
+      issues.value = []
+      parseError.value = result.error.message || t('models.oefImportReadError')
+      return
+    }
+    const parsed = toOefParsedModel(result.data)
     const nextDraft = buildImportDraft(parsed)
     draft.value = nextDraft
-    issues.value = validation.issues
+    issues.value = (Array.isArray(result.data.issues) ? result.data.issues : []) as ImportIssue[]
     if (!selectedNotationId.value && props.notations.length > 0) {
       selectedNotationId.value = props.notations[0]!.id
     }
@@ -185,6 +227,7 @@ async function onFileChange(event: Event): Promise<void> {
     issues.value = []
     parseError.value = error instanceof Error ? error.message : t('models.oefImportReadError')
   } finally {
+    isAnalyzing.value = false
     input.value = ''
   }
 }
@@ -310,10 +353,17 @@ function submitImport(): void {
 
         <div class="oef-import__row">
           <label class="oef-import__label">{{ t('models.oefImportSourceFile') }}</label>
-          <input class="oef-import__file" type="file" accept=".xml,text/xml,application/xml" @change="onFileChange" />
+          <input
+            class="oef-import__file"
+            type="file"
+            accept=".xml,text/xml,application/xml"
+            :disabled="isAnalyzing || importBusy"
+            @change="onFileChange"
+          />
           <p v-if="selectedFileName" class="oef-import__hint">
             {{ t('models.oefImportSelectedFile', { name: selectedFileName }) }}
           </p>
+          <p v-if="isAnalyzing" class="oef-import__hint">{{ t('models.oefImportAnalyzing') }}</p>
         </div>
 
         <p v-if="parseError" class="oef-import__error">{{ parseError }}</p>
@@ -325,20 +375,44 @@ function submitImport(): void {
             <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
           </div>
           <p v-if="hasErrors" class="oef-import__error">{{ t('models.oefImportIssuesBlocking') }}</p>
-          <div v-if="issues.length > 0" class="oef-import__issues">
-            <h4>{{ t('models.oefImportIssuesTitle') }}</h4>
-            <ul>
+          <div v-if="groupedIssues.length > 0" class="oef-import__issues">
+            <h4>
+              {{ t('models.oefImportIssuesTitle') }}
+              <span class="oef-import__issues-count">{{ issues.length }}</span>
+            </h4>
+            <ul class="oef-import__issue-groups">
               <li
-                v-for="(issue, index) in issues.slice(0, 50)"
-                :key="`step1-${issue.code}-${index}`"
-                :class="issue.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
+                v-for="group in groupedIssues"
+                :key="`step1-${group.level}-${group.code}`"
+                :class="group.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
               >
-                {{ issue.message }}
+                <div class="oef-import__issue-group-row">
+                  <span>
+                    {{ issueGroupLabel(group.code, group.sampleMessage) }}
+                    <span class="oef-import__issue-badge">×{{ group.count }}</span>
+                  </span>
+                  <button
+                    v-if="group.entityIds.length > 0"
+                    type="button"
+                    class="oef-import__issue-toggle"
+                    @click="toggleIssueGroup(group.code, group.level)"
+                  >
+                    {{
+                      isIssueGroupExpanded(group.code, group.level)
+                        ? t('models.oefImportIssuesHideIds')
+                        : t('models.oefImportIssuesShowIds')
+                    }}
+                  </button>
+                </div>
+                <p
+                  v-if="isIssueGroupExpanded(group.code, group.level)"
+                  class="oef-import__issue-ids"
+                >
+                  {{ group.entityIds.join(', ')
+                  }}{{ group.count > group.entityIds.length ? '…' : '' }}
+                </p>
               </li>
             </ul>
-            <p v-if="issues.length > 50" class="oef-import__hint">
-              {{ t('models.oefImportIssuesTruncated', { shown: 50, total: issues.length }) }}
-            </p>
           </div>
         </template>
       </div>
@@ -420,19 +494,48 @@ function submitImport(): void {
         <p class="oef-import__hint">
           {{ t('models.oefImportPreviewMapped', { nodes: mappedElementsCount, links: mappedRelationshipsCount }) }}
         </p>
-        <div v-if="issues.length > 0" class="oef-import__issues">
-          <h4>{{ t('models.oefImportIssuesTitle') }}</h4>
-          <ul>
+        <div v-if="groupedIssues.length > 0" class="oef-import__issues">
+          <h4>
+            {{ t('models.oefImportIssuesTitle') }}
+            <span class="oef-import__issues-count">{{ issues.length }}</span>
+          </h4>
+          <p v-if="warningCount > 0 && !hasErrors" class="oef-import__hint">
+            {{ t('models.oefImportWarningsHint') }}
+          </p>
+          <ul class="oef-import__issue-groups">
             <li
-              v-for="(issue, index) in issues"
-              :key="`${issue.code}-${index}`"
-              :class="issue.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
+              v-for="group in groupedIssues"
+              :key="`step3-${group.level}-${group.code}`"
+              :class="group.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
             >
-              {{ issue.message }}
+              <div class="oef-import__issue-group-row">
+                <span>
+                  {{ issueGroupLabel(group.code, group.sampleMessage) }}
+                  <span class="oef-import__issue-badge">×{{ group.count }}</span>
+                </span>
+                <button
+                  v-if="group.entityIds.length > 0"
+                  type="button"
+                  class="oef-import__issue-toggle"
+                  @click="toggleIssueGroup(group.code, group.level)"
+                >
+                  {{
+                    isIssueGroupExpanded(group.code, group.level)
+                      ? t('models.oefImportIssuesHideIds')
+                      : t('models.oefImportIssuesShowIds')
+                  }}
+                </button>
+              </div>
+              <p
+                v-if="isIssueGroupExpanded(group.code, group.level)"
+                class="oef-import__issue-ids"
+              >
+                {{ group.entityIds.join(', ')
+                }}{{ group.count > group.entityIds.length ? '…' : '' }}
+              </p>
             </li>
           </ul>
         </div>
-        <p v-else-if="warningCount > 0" class="oef-import__hint">{{ t('models.oefImportWarningsHint') }}</p>
       </div>
     </div>
 
@@ -455,6 +558,9 @@ function submitImport(): void {
       <button v-else type="button" class="btn btn--primary" :disabled="!canSubmit" @click="submitImport">
         {{ importBusy ? t('common.loading') : t('models.oefImportRun') }}
       </button>
+      <p v-if="importBusy && importProgress" class="oef-import__footer-progress">
+        {{ importProgress }}
+      </p>
     </template>
   </BaseModal>
 </template>
@@ -464,6 +570,13 @@ function submitImport(): void {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.oef-import__footer-progress {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .oef-import__steps {
@@ -491,6 +604,7 @@ function submitImport(): void {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
 }
 
 .oef-import__row {
@@ -547,6 +661,9 @@ function submitImport(): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: min(280px, 45vh);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .oef-import__bulk {
@@ -569,11 +686,80 @@ function submitImport(): void {
 .oef-import__issues {
   border-top: 1px solid var(--border);
   padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
 }
 
-.oef-import__issues ul {
+.oef-import__issues h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oef-import__issues-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.oef-import__issue-groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(240px, 40vh);
+  overflow-y: auto;
+}
+
+.oef-import__issue-groups > li {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.oef-import__issue-group-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.oef-import__issue-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.oef-import__issue-toggle {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.oef-import__issue-toggle:hover {
+  text-decoration: underline;
+}
+
+.oef-import__issue-ids {
   margin: 6px 0 0;
-  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+  max-height: 72px;
+  overflow-y: auto;
 }
 
 .oef-import__issue-error {

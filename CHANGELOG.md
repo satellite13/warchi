@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Large OEF (Open Exchange) imports: server-side XML normalize (`POST /models/{id}/oef/normalize`) and chunked batch-save apply with progress in the import wizard (requires matching arepos-server).
+
+### Fixed
+- nginx no longer rate-limits general `/api/` traffic (notation import and other SPA bursts hit 429); login/register/refresh limits remain.
+- Transient `/auth/refresh` failures (429/5xx) no longer clear the session; refresh rate limit is relaxed.
+- Re-saving/importing a notation after a partial failure no longer fails with 409: existing components/relations with the same name+version are reused.
+- Notation palette icon picker search works again (spurious lazy-preview `@error` no longer wipes the option list).
+- OEF import no longer fails with nginx 413 on huge batch-save bodies: payload is applied in chunks; normalize upload allows up to 100 MB via a dedicated nginx location.
+
 ## [0.8.18] - 2026-07-20
 
 ### Fixed

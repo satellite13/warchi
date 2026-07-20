@@ -750,6 +750,7 @@ const {
 const {
   showImportWizard,
   isImportingOef,
+  oefImportProgress,
   oefImportReport,
   oefWarningLabel,
   handleOefImportSubmit,
@@ -3091,12 +3092,14 @@ onBeforeUnmount(() => {
   <ModelImportWizard
     v-if="showImportWizard"
     :visible="showImportWizard"
+    :model-id="state.modelId ?? ''"
     :notations="state.notations"
     :node-types="state.nodeTypes"
     :link-types="state.linkTypes"
     :components="state.components"
     :relations="state.relations"
     :import-busy="isImportingOef"
+    :import-progress="oefImportProgress"
     @close="showImportWizard = false"
     @submit="handleOefImportSubmit"
   />
@@ -3124,7 +3127,7 @@ onBeforeUnmount(() => {
     </p>
     <div v-if="oefImportReport.warningGroups.length > 0" class="model-import-report__warnings">
       <p class="leave-text">{{ t('models.oefImportReportWarningsByReason') }}</p>
-      <ul class="model-import-report model-import-report--warnings">
+      <ul class="model-import-report model-import-report--warnings model-import-report--scrollable">
         <li v-for="item in oefImportReport.warningGroups" :key="item.code">
           {{ oefWarningLabel(item.code) }}: {{ item.count }}
         </li>
@@ -3356,6 +3359,11 @@ onBeforeUnmount(() => {
 
 .model-import-report--warnings {
   margin-top: 6px;
+}
+
+.model-import-report--scrollable {
+  max-height: min(220px, 40vh);
+  overflow-y: auto;
 }
 
 .json-viewer {

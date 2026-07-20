@@ -134,17 +134,23 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
   animation: fadeIn 0.15s ease;
 }
 
 .modal {
   width: 100%;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
-  overflow: visible;
-  margin: 16px;
+  overflow: hidden;
+  margin: auto;
   animation: slideUp 0.2s ease;
 }
 
@@ -155,6 +161,7 @@ onUnmounted(() => {
   padding: 20px 24px;
   border-bottom: 1px solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -191,6 +198,10 @@ onUnmounted(() => {
 
 .modal-body {
   padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modal-footer {
@@ -200,6 +211,7 @@ onUnmounted(() => {
   padding: 16px 24px;
   border-top: 1px solid var(--border);
   border-radius: 0 0 var(--radius) var(--radius);
+  flex-shrink: 0;
 }
 
 @keyframes fadeIn {

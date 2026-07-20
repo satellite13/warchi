@@ -236,7 +236,8 @@ SSO and CSRF cannot be honestly verified by a non-mutating script. After deploym
 3. perform one authorized admin mutation in the browser and confirm CSRF succeeds;
 4. confirm the `SELF-HOSTED` visibility in the browser after the SPA loads;
 5. open an authenticated STOMP/WebSocket connection and confirm model live sync;
-6. confirm registration and Swagger are unavailable publicly.
+6. confirm Swagger is unavailable publicly; open registration follows
+   `AREPOS_AUTH_REGISTRATION_ENABLED` in `values/arepos-server.yaml`.
 
 An authenticated STOMP/WebSocket smoke test needs a browser or WebSocket-capable client. `wget`
 is not a valid imitation of that handshake and is deliberately not used by `verify.sh`.

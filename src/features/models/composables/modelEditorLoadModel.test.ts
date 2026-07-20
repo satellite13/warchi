@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiGet } from '@/composables/useApi'
 import { listParams } from '@/api/queryHelpers'
 import { fetchAllRelationRulesByNotationIds } from './modelNotationRelationsApi'
-import { loadModelEditorData } from './modelEditorLoadModel'
+import { fetchAllByModelId, loadModelEditorData } from './modelEditorLoadModel'
 
 vi.mock('@/composables/useApi', () => ({
   apiGet: vi.fn(),
@@ -12,16 +12,43 @@ vi.mock('./modelNotationRelationsApi', () => ({
   fetchAllRelationRulesByNotationIds: vi.fn(),
 }))
 
-vi.mock('@/api/queryHelpers', () => ({
-  listParams: vi.fn(() => new URLSearchParams({ size: '1000' })),
-}))
+vi.mock('@/api/queryHelpers', async () => {
+  const actual = await vi.importActual<typeof import('@/api/queryHelpers')>('@/api/queryHelpers')
+  return {
+    ...actual,
+    listParams: vi.fn(() => new URLSearchParams({ size: '1000' })),
+  }
+})
 
 const ok = <T>(data: T) => ({ success: true as const, data })
 const fail = (status: number, message: string) => ({
   success: false as const,
   error: { status, message },
 })
-const page = <T>(content: T[]) => ({ content })
+const page = <T>(content: T[], meta?: { last?: boolean; totalPages?: number }) => ({
+  content,
+  last: meta?.last ?? true,
+  totalPages: meta?.totalPages ?? 1,
+})
+
+describe('fetchAllByModelId', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('fetches every page until last', async () => {
+    vi.mocked(apiGet)
+      .mockResolvedValueOnce(ok(page([{ id: 'n1' }], { last: false, totalPages: 2 })))
+      .mockResolvedValueOnce(ok(page([{ id: 'n2' }], { last: true, totalPages: 2 })))
+
+    const result = await fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+
+    expect(result.map(item => item.id)).toEqual(['n1', 'n2'])
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(String(apiGet.mock.calls[0]![0])).toContain('page=0')
+    expect(String(apiGet.mock.calls[1]![0])).toContain('page=1')
+  })
+})
 
 describe('loadModelEditorData', () => {
   beforeEach(() => {
@@ -34,17 +61,78 @@ describe('loadModelEditorData', () => {
       .mockResolvedValueOnce(ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }))
       .mockResolvedValueOnce(ok(page([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }])))
       .mockResolvedValueOnce(
-        ok(page([{ id: 'node-1', name: 'Node', modelId: 'model-1', ownerId: 'owner-1', nodeTypeId: 'nt-1', attrs: '{"typeProperties":{"code":"A"}}' }]))
+        ok(
+          page([
+            {
+              id: 'node-1',
+              name: 'Node',
+              modelId: 'model-1',
+              ownerId: 'owner-1',
+              nodeTypeId: 'nt-1',
+              attrs: '{"typeProperties":{"code":"A"}}',
+            },
+          ])
+        )
       )
       .mockResolvedValueOnce(
-        ok(page([{ id: 'link-1', sourceId: 'node-1', targetId: 'node-2', modelId: 'model-1', ownerId: 'owner-1', linkTypeId: 'lt-1', attrs: '{}' }]))
+        ok(
+          page([
+            {
+              id: 'link-1',
+              sourceId: 'node-1',
+              targetId: 'node-2',
+              modelId: 'model-1',
+              ownerId: 'owner-1',
+              linkTypeId: 'lt-1',
+              attrs: '{}',
+            },
+          ])
+        )
       )
       .mockResolvedValueOnce(
-        ok(page([{ id: 'diagram-1', name: 'Diagram', version: '1.0.0', modelId: 'model-1', ownerId: 'owner-1', notationId: 'notation-1', attrs: '{"instances":{"nodes":[],"edges":[]}}' }]))
+        ok(
+          page([
+            {
+              id: 'diagram-1',
+              name: 'Diagram',
+              version: '1.0.0',
+              modelId: 'model-1',
+              ownerId: 'owner-1',
+              notationId: 'notation-1',
+              attrs: '{"instances":{"nodes":[],"edges":[]}}',
+            },
+          ])
+        )
       )
       .mockResolvedValueOnce(ok(page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }])))
-      .mockResolvedValueOnce(ok(page([{ id: 'component-1', name: 'Component', version: '1.0.0', notationId: 'notation-1', ownerId: 'owner-1', nodeTypeId: 'nt-1' }])))
-      .mockResolvedValueOnce(ok(page([{ id: 'relation-1', name: 'Relation', version: '1.0.0', notationId: 'notation-1', ownerId: 'owner-1', linkTypeId: 'lt-1' }])))
+      .mockResolvedValueOnce(
+        ok(
+          page([
+            {
+              id: 'component-1',
+              name: 'Component',
+              version: '1.0.0',
+              notationId: 'notation-1',
+              ownerId: 'owner-1',
+              nodeTypeId: 'nt-1',
+            },
+          ])
+        )
+      )
+      .mockResolvedValueOnce(
+        ok(
+          page([
+            {
+              id: 'relation-1',
+              name: 'Relation',
+              version: '1.0.0',
+              notationId: 'notation-1',
+              ownerId: 'owner-1',
+              linkTypeId: 'lt-1',
+            },
+          ])
+        )
+      )
       .mockResolvedValueOnce(ok(page([{ id: 'nt-1', name: 'NodeType', ownerId: 'owner-1' }])))
       .mockResolvedValueOnce(ok(page([{ id: 'lt-1', name: 'LinkType', ownerId: 'owner-1' }])))
 
@@ -94,6 +182,8 @@ describe('loadModelEditorData', () => {
       .mockResolvedValueOnce(ok(page([])))
       .mockResolvedValueOnce(ok(page([])))
 
-    await expect(loadModelEditorData('forbidden')).rejects.toThrow('Доступ к модели отозван или отсутствует.')
+    await expect(loadModelEditorData('forbidden')).rejects.toThrow(
+      'Доступ к модели отозван или отсутствует.'
+    )
   })
 })

@@ -1,5 +1,5 @@
 import { apiGet, type ApiResult } from "@/composables/useApi"
-import { listParams } from '@/api/queryHelpers'
+import { listParams, PAGE_SIZE_FULL, pagedListParams } from '@/api/queryHelpers'
 import type { ModelData, NotationData, PaginatedResponse } from "@/types/entities"
 import type {
   ComponentResponse,
@@ -11,6 +11,7 @@ import type {
   RelationResponse,
   RelationRuleResponse,
 } from "@/types/api"
+import { paginatedIsLastPage } from "@/utils/paginatedResponse"
 import type { ModelEditorState } from "../types"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllRelationRulesByNotationIds } from "./modelNotationRelationsApi"
@@ -36,18 +37,39 @@ async function mergePagedById<T extends { id: string }>(
   return [...byId.values()]
 }
 
+/** Load every page for a model-scoped collection (nodes/links/diagrams after large OEF import). */
+export async function fetchAllByModelId<T>(
+  path: '/nodes' | '/links' | '/diagrams',
+  modelId: string,
+  pageSize: number = PAGE_SIZE_FULL
+): Promise<T[]> {
+  const collected: T[] = []
+  let page = 0
+  while (true) {
+    const query = pagedListParams(page, pageSize)
+    query.set('modelId', modelId)
+    const result = await apiGet<PaginatedResponse<T>>(`${path}?${query.toString()}`)
+    if (!result.success) {
+      throw new Error(`Ошибка загрузки ${path}: ${result.error.message}`)
+    }
+    const batch = result.data.content ?? []
+    collected.push(...batch)
+    if (paginatedIsLastPage(result.data, page)) break
+    page += 1
+  }
+  return collected
+}
+
 export async function loadModelEditorData(modelId: string): Promise<LoadModelEditorDataResult> {
   const listQuery = listParams()
 
-  const [modelResult, modelsResult, nodesResult, linksResult, diagramsResult, notationsResult] =
+  const [modelResult, modelsResult, nodes, links, diagramResponses, notationsResult] =
     await Promise.all([
       apiGet<ModelData>(`/models/${modelId}`),
       apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
-      apiGet<PaginatedResponse<NodeResponse>>(`/nodes?modelId=${encodeURIComponent(modelId)}&size=1000`),
-      apiGet<PaginatedResponse<LinkResponse>>(`/links?modelId=${encodeURIComponent(modelId)}&size=1000`),
-      apiGet<PaginatedResponse<DiagramResponse>>(
-        `/diagrams?modelId=${encodeURIComponent(modelId)}&size=1000`
-      ),
+      fetchAllByModelId<NodeResponse>('/nodes', modelId),
+      fetchAllByModelId<LinkResponse>('/links', modelId),
+      fetchAllByModelId<DiagramResponse>('/diagrams', modelId),
       apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
     ])
 
@@ -61,7 +83,7 @@ export async function loadModelEditorData(modelId: string): Promise<LoadModelEdi
     throw new Error(modelResult.error.message)
   }
 
-  const diagrams = diagramsResult.success ? (diagramsResult.data.content ?? []).map(toEditorDiagram) : []
+  const diagrams = diagramResponses.map(toEditorDiagram)
   const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
 
   const typesQuery = listParams()
@@ -101,8 +123,8 @@ export async function loadModelEditorData(modelId: string): Promise<LoadModelEdi
   const state: ModelEditorState = {
     modelId,
     ownerId: modelResult.data.ownerId,
-    nodes: nodesResult.success ? (nodesResult.data.content ?? []).map(toEditorNode) : [],
-    links: linksResult.success ? (linksResult.data.content ?? []).map(toEditorLink) : [],
+    nodes: nodes.map(toEditorNode),
+    links: links.map(toEditorLink),
     diagrams,
     notations: notationsResult.success ? (notationsResult.data.content ?? []) : [],
     nodeTypes: nodeTypesResult.success ? (nodeTypesResult.data.content ?? []) : [],

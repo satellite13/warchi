@@ -143,6 +143,67 @@ describe('chunkOefBatchSave', () => {
     expect(attrs.instances.edges[0].modelLinkId).toBe('real-oef-link-0')
   })
 
+  it('remaps parentNodeId for node creates across earlier node chunks', async () => {
+    const calls: BatchSaveRequest[] = []
+    const batchSave = vi.fn(async (_modelId: string, request: BatchSaveRequest) => {
+      calls.push(structuredClone(request))
+      return {
+        success: true as const,
+        data: {
+          nodeIdMap: Object.fromEntries(
+            request.nodes.create.map(n => [n.tempId, `real-${n.tempId}`])
+          ),
+          linkIdMap: {},
+          diagramIdMap: {},
+        },
+      }
+    })
+
+    const request: BatchSaveRequest = {
+      nodes: {
+        create: [
+          {
+            tempId: 'dir-parent',
+            name: 'Parent',
+            nodeTypeId: 'nt-dir',
+            parentNodeId: null,
+            attrs: null,
+          },
+          {
+            tempId: 'dir-child',
+            name: 'Child',
+            nodeTypeId: 'nt-dir',
+            parentNodeId: 'dir-parent',
+            attrs: null,
+          },
+          {
+            tempId: 'oef-node-1',
+            name: 'Leaf',
+            nodeTypeId: 'nt',
+            parentNodeId: 'dir-child',
+            attrs: null,
+          },
+        ],
+        update: [],
+        delete: [],
+      },
+      links: { create: [], update: [], delete: [] },
+      diagrams: { create: [], update: [], delete: [] },
+    }
+
+    const result = await applyOefBatchSaveChunks({
+      modelId: 'model-1',
+      request,
+      batchSave,
+      nodeChunkSize: 1,
+    })
+
+    expect(result.success).toBe(true)
+    expect(calls).toHaveLength(3)
+    expect(calls[1]!.nodes.create[0]!.parentNodeId).toBe('real-dir-parent')
+    expect(calls[2]!.nodes.create[0]!.parentNodeId).toBe('real-dir-child')
+  })
+
   it('stops on first failed chunk and reports progress in message', async () => {
     let call = 0
     const batchSave = vi.fn(async () => {

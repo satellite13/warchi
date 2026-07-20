@@ -234,7 +234,8 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
 
   if (hasOrgFolders && params.directoryNodeTypeId) {
     for (const dir of orgPlan.directories) {
-      const tempId = makeStableTempId('oef-dir', dir.tempKey, usedIds)
+      // dir.tempKey already has a stable unique prefix from the org planner.
+      const tempId = makeStableTempId('dir', dir.tempKey.replace(/^oef-dir-/, ''), usedIds)
       dirTempByKey.set(dir.tempKey, tempId)
       const parentId =
         dir.parentTempKey != null

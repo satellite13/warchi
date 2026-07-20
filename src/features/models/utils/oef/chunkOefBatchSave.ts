@@ -169,6 +169,21 @@ function applyIdMaps(
   }
 }
 
+/** Remap parentNodeId for node creates that depend on earlier node chunks (Directory tree). */
+export function remapNodeCreates(
+  creates: BatchSaveRequest['nodes']['create'],
+  nodeIdMap: Record<string, string>
+): BatchSaveRequest['nodes']['create'] {
+  if (Object.keys(nodeIdMap).length === 0) return creates
+  return creates.map(node => {
+    const parent = node.parentNodeId
+    if (!parent) return node
+    const mapped = nodeIdMap[parent]
+    if (!mapped) return node
+    return { ...node, parentNodeId: mapped }
+  })
+}
+
 function remapLinkCreates(
   creates: BatchSaveRequest['links']['create'],
   nodeIdMap: Record<string, string>
@@ -214,7 +229,15 @@ export async function applyOefBatchSaveChunks(options: {
 
   for (const chunk of planned) {
     let request = chunk.request
-    if (chunk.kind === 'links') {
+    if (chunk.kind === 'nodes') {
+      request = {
+        ...request,
+        nodes: {
+          ...request.nodes,
+          create: remapNodeCreates(request.nodes.create, nodeIdMap),
+        },
+      }
+    } else if (chunk.kind === 'links') {
       request = {
         ...request,
         links: {

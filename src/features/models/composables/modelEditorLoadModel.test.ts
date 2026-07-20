@@ -45,8 +45,9 @@ describe('fetchAllByModelId', () => {
 
     expect(result.map(item => item.id)).toEqual(['n1', 'n2'])
     expect(apiGet).toHaveBeenCalledTimes(2)
-    expect(String(apiGet.mock.calls[0]![0])).toContain('page=0')
-    expect(String(apiGet.mock.calls[1]![0])).toContain('page=1')
+    const calls = vi.mocked(apiGet).mock.calls
+    expect(String(calls[0]![0])).toContain('page=0')
+    expect(String(calls[1]![0])).toContain('page=1')
   })
 })
 

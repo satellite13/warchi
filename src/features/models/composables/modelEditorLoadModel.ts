@@ -1,5 +1,10 @@
 import { apiGet, type ApiResult } from "@/composables/useApi"
-import { listParams, PAGE_SIZE_FULL, pagedListParams } from '@/api/queryHelpers'
+import {
+  listParams,
+  PAGE_SIZE_MODEL_DIAGRAMS,
+  PAGE_SIZE_MODEL_NODES,
+  pagedListParams,
+} from '@/api/queryHelpers'
 import type { ModelData, NotationData, PaginatedResponse } from "@/types/entities"
 import type {
   ComponentResponse,
@@ -11,7 +16,7 @@ import type {
   RelationResponse,
   RelationRuleResponse,
 } from "@/types/api"
-import { paginatedIsLastPage } from "@/utils/paginatedResponse"
+import { paginatedIsLastPage, paginatedTotalPages } from "@/utils/paginatedResponse"
 import type { ModelEditorState } from "../types"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllRelationRulesByNotationIds } from "./modelNotationRelationsApi"
@@ -37,27 +42,54 @@ async function mergePagedById<T extends { id: string }>(
   return [...byId.values()]
 }
 
-/** Load every page for a model-scoped collection (nodes/links/diagrams after large OEF import). */
+async function fetchModelPage<T>(
+  path: '/nodes' | '/links' | '/diagrams',
+  modelId: string,
+  page: number,
+  pageSize: number
+): Promise<PaginatedResponse<T>> {
+  const query = pagedListParams(page, pageSize)
+  query.set('modelId', modelId)
+  const result = await apiGet<PaginatedResponse<T>>(`${path}?${query.toString()}`)
+  if (!result.success) {
+    throw new Error(`Ошибка загрузки ${path}: ${result.error.message}`)
+  }
+  return result.data
+}
+
+/**
+ * Load every page for a model-scoped collection (nodes/links/diagrams).
+ * Fetches page 0 first, then remaining pages in parallel.
+ */
 export async function fetchAllByModelId<T>(
   path: '/nodes' | '/links' | '/diagrams',
   modelId: string,
-  pageSize: number = PAGE_SIZE_FULL
+  pageSize: number = path === '/diagrams' ? PAGE_SIZE_MODEL_DIAGRAMS : PAGE_SIZE_MODEL_NODES
 ): Promise<T[]> {
-  const collected: T[] = []
-  let page = 0
-  while (true) {
-    const query = pagedListParams(page, pageSize)
-    query.set('modelId', modelId)
-    const result = await apiGet<PaginatedResponse<T>>(`${path}?${query.toString()}`)
-    if (!result.success) {
-      throw new Error(`Ошибка загрузки ${path}: ${result.error.message}`)
+  const first = await fetchModelPage<T>(path, modelId, 0, pageSize)
+  const firstBatch = first.content ?? []
+  if (paginatedIsLastPage(first, 0)) return firstBatch
+
+  const totalPages = paginatedTotalPages(first)
+  if (totalPages <= 1) {
+    // Metadata incomplete — fall back to sequential walk.
+    const collected = [...firstBatch]
+    let page = 1
+    while (true) {
+      const data = await fetchModelPage<T>(path, modelId, page, pageSize)
+      collected.push(...(data.content ?? []))
+      if (paginatedIsLastPage(data, page)) break
+      page += 1
     }
-    const batch = result.data.content ?? []
-    collected.push(...batch)
-    if (paginatedIsLastPage(result.data, page)) break
-    page += 1
+    return collected
   }
-  return collected
+
+  const rest = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchModelPage<T>(path, modelId, index + 1, pageSize)
+    )
+  )
+  return firstBatch.concat(...rest.map(page => page.content ?? []))
 }
 
 export async function loadModelEditorData(modelId: string): Promise<LoadModelEditorDataResult> {
@@ -67,9 +99,9 @@ export async function loadModelEditorData(modelId: string): Promise<LoadModelEdi
     await Promise.all([
       apiGet<ModelData>(`/models/${modelId}`),
       apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
-      fetchAllByModelId<NodeResponse>('/nodes', modelId),
-      fetchAllByModelId<LinkResponse>('/links', modelId),
-      fetchAllByModelId<DiagramResponse>('/diagrams', modelId),
+      fetchAllByModelId<NodeResponse>('/nodes', modelId, PAGE_SIZE_MODEL_NODES),
+      fetchAllByModelId<LinkResponse>('/links', modelId, PAGE_SIZE_MODEL_NODES),
+      fetchAllByModelId<DiagramResponse>('/diagrams', modelId, PAGE_SIZE_MODEL_DIAGRAMS),
       apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
     ])
 

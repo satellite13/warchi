@@ -11,6 +11,7 @@ import {
 } from '../types'
 import type { BatchConflictItem } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
+import { markModelEditorSnapshotFresh } from '../utils/modelEditorSnapshotFreshness'
 import { loadModelEditorData } from './modelEditorLoadModel'
 import { executeModelEditorSave } from './modelEditorSaveCoordinator'
 import { useModelBatchConflictResolution } from './useModelBatchConflictResolution'
@@ -126,6 +127,8 @@ export const useModelEditor = (): ModelEditorReturn => {
       modelCatalog.value = loaded.modelCatalog
       resetLoadedNotationIds(loaded.loadedNotationIds)
       state.value = loaded.state
+      // Avoid an immediate duplicate full pull from live sync after this load.
+      markModelEditorSnapshotFresh()
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить модель.'
     } finally {

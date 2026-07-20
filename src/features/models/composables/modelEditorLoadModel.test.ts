@@ -36,18 +36,24 @@ describe('fetchAllByModelId', () => {
     vi.clearAllMocks()
   })
 
-  it('fetches every page until last', async () => {
+  it('fetches page 0 then remaining pages in parallel', async () => {
     vi.mocked(apiGet)
-      .mockResolvedValueOnce(ok(page([{ id: 'n1' }], { last: false, totalPages: 2 })))
-      .mockResolvedValueOnce(ok(page([{ id: 'n2' }], { last: true, totalPages: 2 })))
+      .mockResolvedValueOnce(ok(page([{ id: 'n1' }], { last: false, totalPages: 3 })))
+      .mockResolvedValueOnce(ok(page([{ id: 'n2' }], { last: false, totalPages: 3 })))
+      .mockResolvedValueOnce(ok(page([{ id: 'n3' }], { last: true, totalPages: 3 })))
 
     const result = await fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
 
-    expect(result.map(item => item.id)).toEqual(['n1', 'n2'])
-    expect(apiGet).toHaveBeenCalledTimes(2)
-    const calls = vi.mocked(apiGet).mock.calls
-    expect(String(calls[0]![0])).toContain('page=0')
-    expect(String(calls[1]![0])).toContain('page=1')
+    expect(result.map(item => item.id)).toEqual(['n1', 'n2', 'n3'])
+    expect(apiGet).toHaveBeenCalledTimes(3)
+    const calls = vi.mocked(apiGet).mock.calls.map(call => String(call[0]))
+    expect(calls[0]).toContain('page=0')
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('page=1'),
+        expect.stringContaining('page=2'),
+      ])
+    )
   })
 })
 

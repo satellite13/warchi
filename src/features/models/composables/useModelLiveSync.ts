@@ -22,6 +22,7 @@ import {
   mergeEntityListFromRemote,
   preserveOpenDiagramCanvasAfterRemoteMerge,
 } from "../utils/modelEntityMerge"
+import { isModelEditorSnapshotFresh } from "../utils/modelEditorSnapshotFreshness"
 import { createModelChangedEventIdDeduper } from "../utils/modelLiveSyncEventDedup"
 import {
   emitModelLiveSyncTelemetry,
@@ -156,6 +157,17 @@ export function useModelLiveSync(options: {
     if (!pullOpts?.ignoreSavingGuard && options.isSaving.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
+
+    // After loadModel we already have a full snapshot — skip connect/poll/resync churn.
+    // Real remote changes (STOMP model_changed) must still pull.
+    const reason = pullOpts?.reason
+    const skipWhileFresh =
+      reason === "session_resync" ||
+      reason === "ws_connect" ||
+      reason === "poll_timer" ||
+      reason === "auth_refresh" ||
+      reason === "visibility"
+    if (skipWhileFresh && isModelEditorSnapshotFresh()) return
 
     inFlight = true
     if (pullOpts?.reason) {

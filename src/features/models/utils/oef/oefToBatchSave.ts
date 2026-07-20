@@ -1,16 +1,30 @@
 import type { BatchSaveRequest } from '@/features/models/composables/useModelBatchSave'
-import type { DiagramAttrs, DiagramEdgeInstance, DiagramNodeInstance, ModelLinkAttrs, ModelNodeAttrs } from '@/features/models/modelAttrs'
+import type {
+  DiagramAttrs,
+  DiagramEdgeInstance,
+  DiagramNodeInstance,
+  ModelLinkAttrs,
+  ModelNodeAttrs,
+} from '@/features/models/modelAttrs'
 import {
   parseDiagramAttrs,
   serializeDiagramAttrs,
   serializeLinkAttrs,
   serializeNodeAttrs,
 } from '@/features/models/modelAttrs'
-import type { ImportDraft } from './types'
+import {
+  DEFAULT_CONTAINER_DIAGRAM_STYLE,
+  DEFAULT_DIAGRAM_ONLY_LINK_STYLE,
+  DEFAULT_EDGE_ANCHOR_DIAGRAM_STYLE,
+  DIAGRAM_CONTAINER_NODE_PREFIX,
+  DIAGRAM_EDGE_ANCHOR_NODE_PREFIX,
+  DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
+  DIAGRAM_NOTE_NODE_PREFIX,
+  EDGE_ANCHOR_SIZE,
+} from '../diagramOnlyInstances'
+import { placeEdgeAnchorAtMidpoint } from '../edgeAnchorSync'
 import type { ImportMappingState } from './mappingState'
-
-const NOTE_NODE_PREFIX = '__diagram-note__:'
-const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
+import type { ImportDraft, ImportDraftDiagramConnectionInstance } from './types'
 
 const DEFAULT_NOTE_DIAGRAM_STYLE = {
   nodeShape: 'rectangle',
@@ -22,13 +36,6 @@ const DEFAULT_NOTE_DIAGRAM_STYLE = {
   labelAlign: 'left',
   labelInset: 10,
   labelPlacement: 'center',
-} as const
-
-const DEFAULT_NOTE_LINK_DIAGRAM_STYLE = {
-  edgeType: 'straight',
-  startMarkerType: 'none',
-  endMarkerType: 'none',
-  lineDash: [4, 4],
 } as const
 
 export type OefImportBuildWarningCode =
@@ -127,11 +134,45 @@ function makeLinkAttrs(
   }
 }
 
+function estimateEdgeMidpoint(
+  diagramNodes: DiagramNodeInstance[],
+  hostEdge: DiagramEdgeInstance
+): { x: number; y: number } {
+  const source = diagramNodes.find(node => node.id === hostEdge.sourceInstanceId)
+  const target = diagramNodes.find(node => node.id === hostEdge.targetInstanceId)
+  if (!source || !target) {
+    return { x: 0, y: 0 }
+  }
+  const sx = source.x + (source.width ?? 0) / 2
+  const sy = source.y + (source.height ?? 0) / 2
+  const tx = target.x + (target.width ?? 0) / 2
+  const ty = target.y + (target.height ?? 0) / 2
+  return { x: (sx + tx) / 2, y: (sy + ty) / 2 }
+}
+
+function createDiagramOnlyEdge(
+  edgeInstanceId: string,
+  sourceInstanceId: string,
+  targetInstanceId: string
+): DiagramEdgeInstance {
+  return {
+    id: edgeInstanceId,
+    modelLinkId: `${DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX}${edgeInstanceId}`,
+    sourceInstanceId,
+    targetInstanceId,
+    attrs: {
+      isDiagramOnly: true,
+      diagramStyle: { ...DEFAULT_DIAGRAM_ONLY_LINK_STYLE },
+    },
+  }
+}
+
 export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefImportBuildResult {
   const warnings: OefImportBuildWarning[] = []
   const usedIds = new Set<string>()
   const parentNodeId = params.parentNodeId ?? null
   const diagramVersion = params.diagramVersion ?? '1.0.0'
+  const relationshipIds = new Set(params.draft.links.map(link => link.sourceRelationshipId))
 
   const request: BatchSaveRequest = {
     ...(params.force === true ? { force: true } : {}),
@@ -172,6 +213,13 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   }
 
   for (const link of params.draft.links) {
+    const sourceIsRelationship = relationshipIds.has(link.sourceElementId)
+    const targetIsRelationship = relationshipIds.has(link.targetElementId)
+    if (sourceIsRelationship || targetIsRelationship) {
+      // Rel→rel Association: no model link; diagram-only edges are created from views.
+      continue
+    }
+
     const mapped = params.mapping.relationshipTypeMap[link.sourceType]
     if (!mapped?.linkTypeId || !mapped.relationId) {
       warnings.push({
@@ -207,6 +255,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   for (const diagram of params.draft.diagrams) {
     const diagramTempId = makeStableTempId('oef-diagram', diagram.sourceViewId, usedIds)
     const nodeInstanceIdBySourceNodeId = new Map<string, string>()
+    const edgeInstanceIdBySourceConnectionId = new Map<string, string>()
     const diagramNodes: DiagramAttrs['instances']['nodes'] = []
     const diagramEdges: DiagramAttrs['instances']['edges'] = []
 
@@ -220,7 +269,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         nodeInstanceIdBySourceNodeId.set(instance.sourceNodeId, instanceId)
         const noteInstance: DiagramNodeInstance = {
           id: instanceId,
-          modelNodeId: `${NOTE_NODE_PREFIX}${instanceId}`,
+          modelNodeId: `${DIAGRAM_NOTE_NODE_PREFIX}${instanceId}`,
           x: instance.x,
           y: instance.y,
           width: typeof instance.width === 'number' ? instance.width : 220,
@@ -235,6 +284,29 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         continue
       }
 
+      if (instance.isContainer) {
+        const instanceId = makeStableTempId(
+          'oef-inst-container',
+          `${diagram.sourceViewId}-${instance.sourceNodeId}`,
+          usedIds
+        )
+        nodeInstanceIdBySourceNodeId.set(instance.sourceNodeId, instanceId)
+        diagramNodes.push({
+          id: instanceId,
+          modelNodeId: `${DIAGRAM_CONTAINER_NODE_PREFIX}${instanceId}`,
+          x: instance.x,
+          y: instance.y,
+          width: typeof instance.width === 'number' ? instance.width : 240,
+          height: typeof instance.height === 'number' ? instance.height : 160,
+          attrs: {
+            isContainer: true,
+            containerLabel: instance.containerLabel?.trim() || '',
+            diagramStyle: { ...DEFAULT_CONTAINER_DIAGRAM_STYLE },
+          },
+        })
+        continue
+      }
+
       const modelNodeId = nodeTempBySourceElementId.get(instance.sourceElementId)
       if (!modelNodeId) {
         warnings.push({
@@ -245,7 +317,11 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         })
         continue
       }
-      const instanceId = makeStableTempId('oef-inst-node', `${diagram.sourceViewId}-${instance.sourceNodeId}`, usedIds)
+      const instanceId = makeStableTempId(
+        'oef-inst-node',
+        `${diagram.sourceViewId}-${instance.sourceNodeId}`,
+        usedIds
+      )
       nodeInstanceIdBySourceNodeId.set(instance.sourceNodeId, instanceId)
       diagramNodes.push({
         id: instanceId,
@@ -257,38 +333,17 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       })
     }
 
+    const modelConnections: ImportDraftDiagramConnectionInstance[] = []
+    const diagramOnlyConnections: ImportDraftDiagramConnectionInstance[] = []
     for (const connection of diagram.connectionInstances) {
-      if (connection.isNoteLink) {
-        const sourceInstanceId = nodeInstanceIdBySourceNodeId.get(connection.sourceNodeId)
-        const targetInstanceId = nodeInstanceIdBySourceNodeId.get(connection.targetNodeId)
-        if (!sourceInstanceId || !targetInstanceId) {
-          warnings.push({
-            code: 'diagramConnectionMissingNodeInstance',
-            sourceId: connection.sourceConnectionId,
-            diagramId: diagram.sourceViewId,
-            message: `Diagram note link "${connection.sourceConnectionId}" skipped because source/target node instance is unavailable`,
-          })
-          continue
-        }
-        const edgeInstanceId = makeStableTempId(
-          'oef-inst-note-edge',
-          `${diagram.sourceViewId}-${connection.sourceConnectionId}`,
-          usedIds
-        )
-        const noteEdge: DiagramEdgeInstance = {
-          id: edgeInstanceId,
-          modelLinkId: `${NOTE_EDGE_PREFIX}${edgeInstanceId}`,
-          sourceInstanceId,
-          targetInstanceId,
-          attrs: {
-            isDiagramOnly: true,
-            diagramStyle: { ...DEFAULT_NOTE_LINK_DIAGRAM_STYLE },
-          },
-        }
-        diagramEdges.push(noteEdge)
-        continue
+      if (connection.isDiagramOnlyLink || connection.attachesToConnectionId) {
+        diagramOnlyConnections.push(connection)
+      } else {
+        modelConnections.push(connection)
       }
+    }
 
+    for (const connection of modelConnections) {
       const modelLinkId = linkTempBySourceRelationshipId.get(connection.sourceRelationshipId)
       if (!modelLinkId) {
         warnings.push({
@@ -315,12 +370,95 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         `${diagram.sourceViewId}-${connection.sourceConnectionId}`,
         usedIds
       )
+      edgeInstanceIdBySourceConnectionId.set(connection.sourceConnectionId, edgeInstanceId)
       diagramEdges.push({
         id: edgeInstanceId,
         modelLinkId,
         sourceInstanceId,
         targetInstanceId,
       })
+    }
+
+    for (const connection of diagramOnlyConnections) {
+      if (connection.attachesToConnectionId) {
+        const hostEdgeId = edgeInstanceIdBySourceConnectionId.get(connection.attachesToConnectionId)
+        if (!hostEdgeId) {
+          warnings.push({
+            code: 'diagramConnectionMissingModelLink',
+            sourceId: connection.sourceConnectionId,
+            diagramId: diagram.sourceViewId,
+            message: `Diagram connection "${connection.sourceConnectionId}" skipped because host connection is unavailable`,
+          })
+          continue
+        }
+        const hostEdge = diagramEdges.find(edge => edge.id === hostEdgeId)
+        if (!hostEdge) continue
+
+        const nodeEndSourceId =
+          connection.attachEndpoint === 'source' ? connection.targetNodeId : connection.sourceNodeId
+        const nodeInstanceId = nodeInstanceIdBySourceNodeId.get(nodeEndSourceId)
+        if (!nodeInstanceId) {
+          warnings.push({
+            code: 'diagramConnectionMissingNodeInstance',
+            sourceId: connection.sourceConnectionId,
+            diagramId: diagram.sourceViewId,
+            message: `Diagram connection "${connection.sourceConnectionId}" skipped because node endpoint is unavailable`,
+          })
+          continue
+        }
+
+        const anchorInstanceId = makeStableTempId(
+          'oef-inst-anchor',
+          `${diagram.sourceViewId}-${connection.sourceConnectionId}`,
+          usedIds
+        )
+        const midpoint = estimateEdgeMidpoint(diagramNodes, hostEdge)
+        const anchorBase: DiagramNodeInstance = {
+          id: anchorInstanceId,
+          modelNodeId: `${DIAGRAM_EDGE_ANCHOR_NODE_PREFIX}${anchorInstanceId}`,
+          x: midpoint.x,
+          y: midpoint.y,
+          width: EDGE_ANCHOR_SIZE,
+          height: EDGE_ANCHOR_SIZE,
+          attrs: {
+            isEdgeAnchor: true,
+            hostEdgeInstanceId: hostEdgeId,
+            diagramStyle: { ...DEFAULT_EDGE_ANCHOR_DIAGRAM_STYLE },
+          },
+        }
+        diagramNodes.push(placeEdgeAnchorAtMidpoint(anchorBase, midpoint))
+
+        const edgeInstanceId = makeStableTempId(
+          'oef-inst-note-edge',
+          `${diagram.sourceViewId}-${connection.sourceConnectionId}`,
+          usedIds
+        )
+        const sourceInstanceId =
+          connection.attachEndpoint === 'source' ? anchorInstanceId : nodeInstanceId
+        const targetInstanceId =
+          connection.attachEndpoint === 'source' ? nodeInstanceId : anchorInstanceId
+        diagramEdges.push(createDiagramOnlyEdge(edgeInstanceId, sourceInstanceId, targetInstanceId))
+        continue
+      }
+
+      // Plain diagram-only / note link between two node instances.
+      const sourceInstanceId = nodeInstanceIdBySourceNodeId.get(connection.sourceNodeId)
+      const targetInstanceId = nodeInstanceIdBySourceNodeId.get(connection.targetNodeId)
+      if (!sourceInstanceId || !targetInstanceId) {
+        warnings.push({
+          code: 'diagramConnectionMissingNodeInstance',
+          sourceId: connection.sourceConnectionId,
+          diagramId: diagram.sourceViewId,
+          message: `Diagram note link "${connection.sourceConnectionId}" skipped because source/target node instance is unavailable`,
+        })
+        continue
+      }
+      const edgeInstanceId = makeStableTempId(
+        'oef-inst-note-edge',
+        `${diagram.sourceViewId}-${connection.sourceConnectionId}`,
+        usedIds
+      )
+      diagramEdges.push(createDiagramOnlyEdge(edgeInstanceId, sourceInstanceId, targetInstanceId))
     }
 
     const diagramAttrs: DiagramAttrs = {

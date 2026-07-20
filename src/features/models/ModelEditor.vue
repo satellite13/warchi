@@ -33,6 +33,14 @@ import {
 } from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import {
+  isContainerInstance,
+  isDiagramContainerModelNodeId,
+  isDiagramNoteModelNodeId as isDiagramNoteModelNodeIdHelper,
+  isEdgeAnchorInstance,
+  isEdgeAnchorModelNodeId,
+} from './utils/diagramOnlyInstances'
+import { removeOrphanEdgeAnchors } from './utils/edgeAnchorSync'
+import {
   getDiagramScopedLinkValues,
   getDiagramScopedNodeValues,
   setDiagramScopedLinkValue,
@@ -201,7 +209,6 @@ const activeRightTab = ref('properties')
 const { canShare: canShareModel } = useCanShare(model)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
-const NOTE_NODE_PREFIX = '__diagram-note__:'
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
 const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -782,11 +789,15 @@ const pendingDeleteNodeSingleName = computed(() => {
     )
     if (!instance) return ''
     if (isNoteInstance(instance)) return t('models.noteName')
+    if (isContainerInstance(instance)) return t('models.containerName')
+    if (isEdgeAnchorInstance(instance)) return t('models.edgeAnchorName')
     return state.value.nodes.find(item => item.id === instance.modelNodeId)?.name ?? ''
   }
   const nodeId = pendingDeleteNodeIds.value[0]
   if (!nodeId) return ''
   if (isDiagramNoteModelNodeId(nodeId)) return t('models.noteName')
+  if (isDiagramContainerModelNodeId(nodeId)) return t('models.containerName')
+  if (isEdgeAnchorModelNodeId(nodeId)) return t('models.edgeAnchorName')
   return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
 })
 const pendingDeleteDiagramName = computed(() => {
@@ -869,7 +880,7 @@ const getReuseLinkCustomProperties = (
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
-  modelNodeId.startsWith(NOTE_NODE_PREFIX)
+  isDiagramNoteModelNodeIdHelper(modelNodeId)
 
 const isUntypedModelLinkId = (modelLinkId: string): boolean => {
   const link = state.value.links.find(item => item.id === modelLinkId && !item._isDeleted)
@@ -902,6 +913,7 @@ const {
   addExistingNodeToDiagram,
   createNodeFromPaletteComponent,
   createDiagramNote,
+  createDiagramContainer,
   copySelectedNotesToClipboard,
   pasteCopiedNotes,
 } = useModelDiagramInstances({
@@ -1033,6 +1045,8 @@ const {
   isRelationRulesLoading: isActiveNotationRulesLoading,
   isDiagramReadOnly,
   isDiagramNoteModelNodeId,
+  isDiagramContainerModelNodeId,
+  isEdgeAnchorModelNodeId,
   isDirectoryNode,
   isDirectoryNoteInstanceId,
   executeDiagramHistoryCommand,
@@ -1307,6 +1321,10 @@ const removeLinkFromCurrentDiagram = () => {
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
       edge => !idsToRemove.has(edge.id)
     )
+    const cleaned = removeOrphanEdgeAnchors(diagram.parsedAttrs)
+    if (cleaned.changed) {
+      diagram.parsedAttrs = cleaned.nextAttrs
+    }
     if (selectedModelLinkId.value === linkId) {
       selectedModelLinkId.value = null
       selectedEdgeInstanceId.value = null
@@ -1572,7 +1590,11 @@ const handleCanvasSelectNodes = (modelNodeIds: string[]) => {
   selectedEdgeInstanceId.value = null
   if (!selectionSyncEnabled.value || modelNodeIds.length !== 1) return
   const modelNodeId = modelNodeIds[0]!
-  if (isDiagramNoteModelNodeId(modelNodeId)) {
+  if (
+    isDiagramNoteModelNodeId(modelNodeId) ||
+    isDiagramContainerModelNodeId(modelNodeId) ||
+    isEdgeAnchorModelNodeId(modelNodeId)
+  ) {
     selectedNodeId.value = null
     return
   }
@@ -1603,8 +1625,9 @@ const toggleSelectionSync = () => {
 
 const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
   const node = state.value.nodes.find(item => item.id === modelNodeId)
-  if (!node || node.name === newLabel) return
-  node.name = newLabel
+  const nextName = newLabel.trim()
+  if (!node || !nextName || node.name === nextName) return
+  node.name = nextName
   markNodeDirty(node.id)
 }
 
@@ -2555,6 +2578,7 @@ onBeforeUnmount(() => {
             "
             @create-node-from-component="createNodeFromPaletteComponent"
             @create-note="createDiagramNote"
+            @create-container="createDiagramContainer"
             @add-existing-node="addExistingNodeToDiagram"
             @place-existing-model-link="placeTraceLinkOnDiagram"
             @connect-nodes="startConnectNodes"

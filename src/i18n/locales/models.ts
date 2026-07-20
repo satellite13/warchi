@@ -50,6 +50,7 @@ export const modelsMessages = {
       oefImportPrevStep: 'Назад',
       oefImportNextStep: 'Далее',
       oefImportIssuesBlocking: 'В файле есть ошибки. Исправьте их, прежде чем продолжить импорт.',
+      oefImportIssuesTruncated: 'Показаны первые {shown} из {total} проблем.',
       oefImportPreviewMapped: 'К импорту готово: ноды {nodes}, связи {links}',
       oefImportReportTitle: 'Отчёт об импорте',
       oefImportReportSummary: 'Импорт выполнен. Созданы сущности:',
@@ -330,9 +331,14 @@ export const modelsMessages = {
       diagramSwitchFailed: 'Не удалось открыть выбранную диаграмму после обновления данных.',
       noDiagramSelected: 'Диаграмма не выбрана',
       noteName: 'Заметка',
+      containerName: 'Контейнер',
+      edgeAnchorName: 'Якорь связи',
+      newContainerText: '',
       unknownLinkType: 'Неизвестный тип',
       batchSaveInvalidResponse: 'Некорректный ответ сервера при пакетном сохранении.',
       batchSaveVersionConflict: 'Конфликт версий при сохранении (данные изменены на сервере).',
+      batchSaveBlankNodeName:
+        'Нельзя сохранить: у {count} элемент(ов) пустое имя. Укажите имя и повторите сохранение.',
       validationNodeTypePropRequired:
         'У ноды «{node}» не заполнено обязательное свойство типа «{prop}».',
       validationNodeComponentPropRequired:
@@ -343,6 +349,7 @@ export const modelsMessages = {
       cannotCreateNodeWithoutDirectory: 'Нельзя создать ноду без активной директории диаграммы.',
       directoryTypeRequiredForAutoPath: 'Для автосоздания пути нужен тип узла Directory.',
       newNoteText: 'Новая заметка',
+      deleteContainer: 'Удалить контейнер',
       noComponentsForLink: 'Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.',
       noAllowedRelationRules: 'Для этой пары компонентов нет разрешённых связей по правилам нотации.',
       noAvailableRelations: 'Для этой пары компонентов нет доступных relation по правилам нотации.',
@@ -423,6 +430,7 @@ export const modelsMessages = {
       oefImportPrevStep: 'Back',
       oefImportNextStep: 'Next',
       oefImportIssuesBlocking: 'The file has errors. Fix them before continuing the import.',
+      oefImportIssuesTruncated: 'Showing the first {shown} of {total} issues.',
       oefImportPreviewMapped: 'Ready to import: nodes {nodes}, links {links}',
       oefImportReportTitle: 'Import report',
       oefImportReportSummary: 'Import completed. Created entities:',
@@ -702,9 +710,14 @@ export const modelsMessages = {
       diagramSwitchFailed: 'Failed to open the selected diagram after refreshing data.',
       noDiagramSelected: 'No diagram selected',
       noteName: 'Note',
+      containerName: 'Container',
+      edgeAnchorName: 'Edge anchor',
+      newContainerText: '',
       unknownLinkType: 'Unknown type',
       batchSaveInvalidResponse: 'Invalid server response for batch save.',
       batchSaveVersionConflict: 'Version conflict while saving (data changed on server).',
+      batchSaveBlankNodeName:
+        'Cannot save: {count} element(s) have an empty name. Set a name and try again.',
       validationNodeTypePropRequired:
         'Node "{node}" is missing required type property "{prop}".',
       validationNodeComponentPropRequired:
@@ -715,6 +728,7 @@ export const modelsMessages = {
       cannotCreateNodeWithoutDirectory: 'Cannot create a node without an active diagram directory.',
       directoryTypeRequiredForAutoPath: 'Directory node type is required for auto-path creation.',
       newNoteText: 'New note',
+      deleteContainer: 'Delete container',
       noComponentsForLink: 'Select notation components for both nodes before creating a link.',
       noAllowedRelationRules: 'No allowed relations for this component pair per notation rules.',
       noAvailableRelations: 'No available relations for this component pair per notation rules.',

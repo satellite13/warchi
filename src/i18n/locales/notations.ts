@@ -32,6 +32,8 @@ export const notationsMessages = {
       diagramNotReady: 'Диаграмма еще не готова к экспорту',
       importFormatError: 'Некорректный формат файла импорта',
       importError: 'Ошибка импорта: {message}',
+      typeNameConflict:
+        'Не удалось создать {entity} «{name}»: тип с таким именем уже есть у вас. Переименуйте или переиспользуйте существующий тип.',
       importReadError: 'Ошибка импорта: не удалось прочитать файл',
       defaultNodeTypeName: 'Новый тип узла',
       defaultLinkTypeName: 'Новый тип связи',
@@ -119,6 +121,8 @@ export const notationsMessages = {
       diagramNotReady: 'Diagram is not ready for export',
       importFormatError: 'Invalid import file format',
       importError: 'Import error: {message}',
+      typeNameConflict:
+        'Could not create {entity} "{name}": a type with this name already exists for you. Rename it or reuse the existing type.',
       importReadError: 'Import error: failed to read file',
       defaultNodeTypeName: 'New node type',
       defaultLinkTypeName: 'New link type',

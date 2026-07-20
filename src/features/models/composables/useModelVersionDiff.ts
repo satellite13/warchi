@@ -12,6 +12,7 @@ import {
   computeModelDiff,
   type ModelVersionDiff,
 } from "@/utils/modelDiff"
+import { paginatedContent } from "@/utils/paginatedResponse"
 
 export type ModelVersionDiffState = {
   relatedVersions: ModelData[]
@@ -76,11 +77,11 @@ export function useModelVersionDiff() {
     relatedVersionsLoading.value = true
     relatedVersionsError.value = null
     try {
-      const result = await apiGet<ModelData[]>(
+      const result = await apiGet<PaginatedResponse<ModelData>>(
         `/models/${modelId}/related-versions`
       )
       if (result.success) {
-        relatedVersions.value = result.data
+        relatedVersions.value = paginatedContent(result.data)
       } else {
         relatedVersions.value = []
         relatedVersionsError.value = result.error.message

@@ -134,6 +134,28 @@ describe('useModelDiagramInstances', () => {
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
   })
 
+  it('creates a container with transparent dashed style', () => {
+    const { diagram, instances } = createHarness()
+
+    instances.createDiagramContainer(10, 20)
+
+    const container = diagram.value.parsedAttrs.instances.nodes[0]!
+    expect(container).toMatchObject({
+      x: 10,
+      y: 20,
+      width: 240,
+      height: 160,
+      attrs: {
+        isContainer: true,
+        diagramStyle: {
+          fillColor: 'rgba(0,0,0,0)',
+          lineDash: [6, 4],
+        },
+      },
+    })
+    expect(container.modelNodeId).toMatch(/^__diagram-container__:/)
+  })
+
   it('adds an existing node with its component dimensions', () => {
     const state = createState()
     state.components = [state.components[0]!]

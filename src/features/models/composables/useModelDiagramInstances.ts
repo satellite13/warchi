@@ -3,8 +3,12 @@ import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { createId, parseNodeAttrs, resolveComponentByNodeType } from '../modelAttrs'
 import type { DiagramNodeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorNode, ModelEditorState } from '../types'
+import {
+  DEFAULT_CONTAINER_DIAGRAM_STYLE,
+  DIAGRAM_CONTAINER_NODE_PREFIX,
+  DIAGRAM_NOTE_NODE_PREFIX,
+} from '../utils/diagramOnlyInstances'
 
-const NOTE_NODE_PREFIX = '__diagram-note__:'
 const NOTE_PASTE_STEP = 24
 
 type DiagramHistoryCommand = {
@@ -325,7 +329,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     const diagram = options.activeDiagram.value
     if (!diagram) return
     const instanceId = createId()
-    const modelNodeId = `${NOTE_NODE_PREFIX}${instanceId}`
+    const modelNodeId = `${DIAGRAM_NOTE_NODE_PREFIX}${instanceId}`
     const noteInstance: DiagramNodeInstance = {
       id: instanceId,
       modelNodeId,
@@ -378,6 +382,51 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     })
   }
 
+  const createDiagramContainer = (x: number, y: number): void => {
+    const diagram = options.activeDiagram.value
+    if (!diagram) return
+    const instanceId = createId()
+    const modelNodeId = `${DIAGRAM_CONTAINER_NODE_PREFIX}${instanceId}`
+    const containerInstance: DiagramNodeInstance = {
+      id: instanceId,
+      modelNodeId,
+      x,
+      y,
+      width: 240,
+      height: 160,
+      attrs: {
+        isContainer: true,
+        containerLabel: options.t('models.newContainerText'),
+        diagramStyle: { ...DEFAULT_CONTAINER_DIAGRAM_STYLE },
+      },
+    }
+    options.executeDiagramHistoryCommand({
+      execute: () => {
+        if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === containerInstance.id)) {
+          diagram.parsedAttrs.instances.nodes.push(deepClone(containerInstance))
+        }
+        options.markDiagramDirty(diagram.id)
+      },
+      undo: () => {
+        diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+          item => item.id !== containerInstance.id
+        )
+        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+          edge =>
+            edge.sourceInstanceId !== containerInstance.id &&
+            edge.targetInstanceId !== containerInstance.id
+        )
+        options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(
+          id => id !== modelNodeId
+        )
+        if (options.selectedCanvasElementId.value === `instance-${containerInstance.id}`) {
+          options.selectedCanvasElementId.value = null
+        }
+        options.markDiagramDirty(diagram.id)
+      },
+    })
+  }
+
   const getSelectedDiagramInstances = (): DiagramNodeInstance[] => {
     const diagram = options.activeDiagram.value
     if (!diagram) return []
@@ -417,7 +466,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       return {
         ...deepClone(source),
         id,
-        modelNodeId: isDirectoryNote ? source.modelNodeId : `${NOTE_NODE_PREFIX}${id}`,
+        modelNodeId: isDirectoryNote ? source.modelNodeId : `${DIAGRAM_NOTE_NODE_PREFIX}${id}`,
         x: source.x + pasteOffset,
         y: source.y + pasteOffset,
       } satisfies DiagramNodeInstance
@@ -468,6 +517,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     addExistingNodeToDiagram,
     createNodeFromPaletteComponent,
     createDiagramNote,
+    createDiagramContainer,
     copySelectedNotesToClipboard,
     pasteCopiedNotes,
   }

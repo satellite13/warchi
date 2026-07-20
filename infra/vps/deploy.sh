@@ -6,8 +6,8 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
 
-AREPOS_VERSION="${AREPOS_VERSION:-0.5.3}"
-WARCHI_VERSION="${WARCHI_VERSION:-0.8.16}"
+AREPOS_VERSION="${AREPOS_VERSION:-0.5.4}"
+WARCHI_VERSION="${WARCHI_VERSION:-0.8.17}"
 SITE_VERSION="${SITE_VERSION:-0.2.4}"
 AREPOS_REPO="${AREPOS_REPO:-${ROOT_DIR}/../arepos-server}"
 SITE_REPO="${SITE_REPO:-${ROOT_DIR}/../warchi-site}"
@@ -25,7 +25,7 @@ print_dry_run() {
     '3. Rsync warchi, arepos-server, and warchi-site sources with secret/build exclusions' \
     '4. Backup PostgreSQL, MinIO, and Helm state' \
     '5. Build immutable images after per-image immutable-tag decisions' \
-    "6. Deploy arepos-server ${AREPOS_VERSION}; verify rollout, API version, and migration 042" \
+    "6. Deploy arepos-server ${AREPOS_VERSION}; verify rollout, API version, and migration 043" \
     '7. Pre-issue certificates and preinstall warchi-site with ingress disabled' \
     "8. Deploy warchi ${WARCHI_VERSION} to app.warchi.ru, then Deploy warchi-site ${SITE_VERSION} to warchi.ru" \
     '9. Verify production DNS, TLS, redirects, API, app, site, and WebSocket endpoint'

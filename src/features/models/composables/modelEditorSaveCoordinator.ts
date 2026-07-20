@@ -8,6 +8,7 @@ import {
   applyBatchRemapping,
   batchSave,
   buildBatchSaveRequest,
+  findBlankNamedBatchNodes,
   hasBatchChanges,
   isValidBatchResponse,
   parseBatchSaveConflictDetails,
@@ -63,6 +64,15 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     options.pendingForceBatch.value = false
 
     applyDiagramGarbageSanitizeToState(options.state.value)
+
+    const blankNamedNodes = findBlankNamedBatchNodes(nodes)
+    if (blankNamedNodes.length > 0) {
+      options.saveError.value = t("models.batchSaveBlankNodeName", {
+        count: blankNamedNodes.length,
+      })
+      options.scheduleSaveErrorClear()
+      return false
+    }
 
     // Batch is the primary path for node/link/diagram create/update/delete.
     // Legacy per-entity pipeline remains only as a guarded fallback for unexpected

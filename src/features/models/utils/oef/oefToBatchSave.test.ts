@@ -6,6 +6,7 @@ import { parseOefXml } from './oefParser'
 import { buildOefBatchSaveRequest } from './oefToBatchSave'
 import type { ImportMappingState } from './mappingState'
 import mainXml from './__fixtures__/Main.xml?raw'
+import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
 
 function buildFullMappingState(): ImportMappingState {
   return {
@@ -89,6 +90,47 @@ describe('oefToBatchSave', () => {
     expect(servingLink).toBeTruthy()
     const servingLinkAttrs = parseLinkAttrs(servingLink!.attrs)
     expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe('high')
+  })
+
+  it('imports Container and Association-to-Flow as diagram-only with edge anchor', () => {
+    const draft = buildImportDraft(parseOefXml(containerAssocXml))
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessProcess: { nodeTypeId: 'nt-process', componentId: 'cmp-process' },
+          DataObject: { nodeTypeId: 'nt-data', componentId: 'cmp-data' },
+        },
+        relationshipTypeMap: {
+          Flow: { linkTypeId: 'lt-flow', relationId: 'rel-flow' },
+          Association: { linkTypeId: 'lt-assoc', relationId: 'rel-assoc' },
+        },
+      },
+      notationId: 'notation-1',
+    })
+
+    expect(result.request.nodes.create).toHaveLength(3)
+    expect(result.request.links.create).toHaveLength(1)
+    expect(result.request.links.create[0]?.linkTypeId).toBe('lt-flow')
+
+    const attrs = parseDiagramAttrs(result.request.diagrams.create[0]!.attrs)
+    const containers = attrs.instances.nodes.filter(node => node.attrs?.isContainer === true)
+    const anchors = attrs.instances.nodes.filter(node => node.attrs?.isEdgeAnchor === true)
+    const diagramOnlyEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly === true)
+    const modelEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly !== true)
+
+    expect(containers).toHaveLength(1)
+    expect(containers[0]?.attrs?.containerLabel).toBe('Group')
+    expect(anchors).toHaveLength(1)
+    expect(typeof anchors[0]?.attrs?.hostEdgeInstanceId).toBe('string')
+    expect(modelEdges).toHaveLength(1)
+    expect(diagramOnlyEdges).toHaveLength(1)
+    expect(
+      diagramOnlyEdges.some(
+        edge =>
+          edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
+      )
+    ).toBe(true)
   })
 
   it('skips unmapped entities and reports warnings', () => {

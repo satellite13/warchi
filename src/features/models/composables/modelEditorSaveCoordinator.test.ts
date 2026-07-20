@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   applyBatchRemapping: vi.fn(),
   batchSave: vi.fn(),
   buildBatchSaveRequest: vi.fn(),
+  findBlankNamedBatchNodes: vi.fn(),
   hasBatchChanges: vi.fn(),
   isValidBatchResponse: vi.fn(),
   parseBatchSaveConflictDetails: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("./useModelBatchSave", () => ({
   applyBatchRemapping: mocks.applyBatchRemapping,
   batchSave: mocks.batchSave,
   buildBatchSaveRequest: mocks.buildBatchSaveRequest,
+  findBlankNamedBatchNodes: mocks.findBlankNamedBatchNodes,
   hasBatchChanges: mocks.hasBatchChanges,
   isValidBatchResponse: mocks.isValidBatchResponse,
   parseBatchSaveConflictDetails: mocks.parseBatchSaveConflictDetails,
@@ -124,6 +126,7 @@ function createState(): ModelEditorState {
 describe("executeModelEditorSave", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.findBlankNamedBatchNodes.mockReturnValue([])
     mocks.buildBatchSaveRequest.mockReturnValue({
       nodes: { create: [], update: [], delete: [] },
       links: { create: [], update: [], delete: [] },

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.17] - 2026-07-20
+
+### Added
+- OEF import support for diagram Containers and association/connection attachments to other connections via live edge-midpoint anchors (diagram-only, no model links for rel→rel).
+- Diagram palette item for Containers (transparent fill, dashed stroke).
+- Client-side guard against saving model nodes with blank names, with a clear batch-save error.
+
+### Fixed
+- Composite node selection/transformer frame no longer disappears after resize on the canvas.
+- Tree/canvas renames are no longer overwritten by stale canvas labels during history sync (including names like `$`).
+- Notation import save no longer fails with opaque type-name conflicts when the same type name already exists for another owner; clearer conflict messaging when the name is already taken for the current user.
+
 ## [0.8.16] - 2026-07-17
 
 ### Fixed

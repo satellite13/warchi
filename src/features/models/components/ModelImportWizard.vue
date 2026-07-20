@@ -325,6 +325,21 @@ function submitImport(): void {
             <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
           </div>
           <p v-if="hasErrors" class="oef-import__error">{{ t('models.oefImportIssuesBlocking') }}</p>
+          <div v-if="issues.length > 0" class="oef-import__issues">
+            <h4>{{ t('models.oefImportIssuesTitle') }}</h4>
+            <ul>
+              <li
+                v-for="(issue, index) in issues.slice(0, 50)"
+                :key="`step1-${issue.code}-${index}`"
+                :class="issue.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
+              >
+                {{ issue.message }}
+              </li>
+            </ul>
+            <p v-if="issues.length > 50" class="oef-import__hint">
+              {{ t('models.oefImportIssuesTruncated', { shown: 50, total: issues.length }) }}
+            </p>
+          </div>
         </template>
       </div>
 

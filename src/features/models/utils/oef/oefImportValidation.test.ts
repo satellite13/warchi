@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseOefXml } from './oefParser'
 import { validateParsedOefModel } from './oefImportValidation'
 import mainXml from './__fixtures__/Main.xml?raw'
+import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
 
 describe('oefImportValidation', () => {
   it('returns no errors for Main.xml fixture', () => {
@@ -11,6 +12,19 @@ describe('oefImportValidation', () => {
 
     expect(validation.hasErrors).toBe(false)
     expect(validation.issues).toHaveLength(0)
+  })
+
+  it('accepts Container nodes and relationship-to-relationship endpoints as non-blocking', () => {
+    const parsed = parseOefXml(containerAssocXml)
+    const validation = validateParsedOefModel(parsed)
+    expect(validation.hasErrors).toBe(false)
+    expect(validation.issues.some(issue => issue.code === 'relationshipEndpointIsRelationship')).toBe(
+      true
+    )
+    expect(validation.issues.some(issue => issue.code === 'viewNodeMissingElementRef')).toBe(false)
+    expect(validation.issues.some(issue => issue.code === 'viewConnectionMissingTargetNode')).toBe(
+      false
+    )
   })
 
   it('reports broken relationship and broken diagram refs', () => {

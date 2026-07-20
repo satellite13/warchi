@@ -19,6 +19,7 @@ import AppHeader from "@/components/layout/AppHeader.vue"
 import AppFooter from "@/components/layout/AppFooter.vue"
 import ModelDiagramCanvas from "@/features/models/components/ModelDiagramCanvas.vue"
 import { compareVersions } from "@/utils/version"
+import { paginatedContent } from "@/utils/paginatedResponse"
 import {
   type SelectedElement,
   toEditorDiagram,
@@ -73,12 +74,13 @@ async function loadRelatedVersions(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const res = await apiGet<ModelData[]>(`/models/${id}/related-versions`)
+    const res = await apiGet<PaginatedResponse<ModelData>>(`/models/${id}/related-versions`)
     if (res.success) {
-      relatedVersions.value = res.data
-      if (res.data.length >= 2 && !leftVersionId.value && !rightVersionId.value) {
-        leftVersionId.value = res.data[res.data.length - 1]!.id
-        rightVersionId.value = res.data[0]!.id
+      const versions = paginatedContent(res.data)
+      relatedVersions.value = versions
+      if (versions.length >= 2 && !leftVersionId.value && !rightVersionId.value) {
+        leftVersionId.value = versions[versions.length - 1]!.id
+        rightVersionId.value = versions[0]!.id
       }
     } else {
       relatedVersions.value = []

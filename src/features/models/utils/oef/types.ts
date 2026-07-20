@@ -73,6 +73,8 @@ export type ImportDraftDiagramNodeInstance = {
   height?: number
   isNote?: boolean
   noteText?: string
+  isContainer?: boolean
+  containerLabel?: string
 }
 
 export type ImportDraftDiagramConnectionInstance = {
@@ -81,6 +83,12 @@ export type ImportDraftDiagramConnectionInstance = {
   sourceNodeId: string
   targetNodeId: string
   isNoteLink?: boolean
+  /** One endpoint is another view connection (line-on-line). */
+  attachesToConnectionId?: string
+  /** Which endpoint attaches to the host connection. */
+  attachEndpoint?: 'source' | 'target'
+  /** Skip creating a model link; keep as diagram-only edge (rel→rel Association etc.). */
+  isDiagramOnlyLink?: boolean
 }
 
 export type ImportDraftDiagram = {
@@ -113,6 +121,7 @@ export type ImportIssueCode =
   | 'missingRelationshipType'
   | 'relationshipMissingSource'
   | 'relationshipMissingTarget'
+  | 'relationshipEndpointIsRelationship'
   | 'viewNodeMissingElementRef'
   | 'viewConnectionMissingRelationshipRef'
   | 'viewConnectionMissingSourceNode'

@@ -553,7 +553,7 @@ helm template warchi-site "${SITE_REPO}/charts/warchi-site" \
   --namespace arch -f "${VPS_DIR}/values/warchi-site.yaml" \
   >"${TMP_DIR}/site.yaml"
 
-assert_contains "${TMP_DIR}/arepos.yaml" 'image: "arch/arepos-server:0.5.3"'
+assert_contains "${TMP_DIR}/arepos.yaml" 'image: "arch/arepos-server:0.5.4"'
 arepos_resources="$(
   awk '
     $0 == "kind: Deployment" { in_deployment = 1; next }
@@ -582,7 +582,7 @@ assert_contains "${TMP_DIR}/arepos.yaml" 'name: ADMIN_SECRET'
 assert_contains "${TMP_DIR}/arepos.yaml" 'name: MODEL_SYNC_OUTBOX_ENABLED'
 [[ "$(grep -Fc 'storage: 20Gi' "${TMP_DIR}/arepos.yaml")" == "2" ]] ||
   fail "rendered PostgreSQL and MinIO PVC requests must both be 20Gi"
-assert_contains "${TMP_DIR}/warchi.yaml" 'image: "arch/warchi:0.8.16"'
+assert_contains "${TMP_DIR}/warchi.yaml" 'image: "arch/warchi:0.8.17"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'host: "app.warchi.ru"'
 assert_contains "${TMP_DIR}/warchi.yaml" 'secretName: warchi-app-ru-tls'
 assert_contains "${TMP_DIR}/warchi.yaml" 'traefik.ingress.kubernetes.io/router.entrypoints: web,websecure'
@@ -717,7 +717,7 @@ assert_contains "${VPS_DIR}/remote-deploy.sh" '--atomic'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'k3d kubeconfig write'
 assert_contains "${VPS_DIR}/remote-deploy.sh" '--build-context'
 assert_contains "${VPS_DIR}/remote-deploy.sh" '.placeholder'
-assert_contains "${VPS_DIR}/remote-deploy.sh" 'migration 042'
+assert_contains "${VPS_DIR}/remote-deploy.sh" 'migration 043'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'deployment/warchi --'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'wget -qO- http://arepos-server:8080/api/v1/system/version'
 assert_contains "${VPS_DIR}/remote-deploy.sh" 'arepos-server-auth-secret'
@@ -978,8 +978,8 @@ assert_contains "${TMP_DIR}/dry-run.out" 'DRY RUN'
 assert_contains "${TMP_DIR}/dry-run.out" 'Preflight'
 assert_contains "${TMP_DIR}/dry-run.out" 'Backup'
 assert_contains "${TMP_DIR}/dry-run.out" 'Build immutable images'
-assert_contains "${TMP_DIR}/dry-run.out" 'Deploy arepos-server 0.5.3'
-assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi 0.8.16'
+assert_contains "${TMP_DIR}/dry-run.out" 'Deploy arepos-server 0.5.4'
+assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi 0.8.17'
 assert_contains "${TMP_DIR}/dry-run.out" 'Deploy warchi-site 0.2.4'
 assert_contains "${TMP_DIR}/dry-run.out" 'Verify production'
 assert_not_contains "${TMP_DIR}/dry-run.out" 'dry-jwt-secret-value'

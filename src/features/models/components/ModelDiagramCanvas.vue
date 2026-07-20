@@ -69,6 +69,12 @@ import {
   injectCompositeNameAndIcon,
   resolveCompositeBoundIconName,
 } from '@/features/diagram-style/utils/compositeBindings'
+import {
+  getHostEdgeInstanceId,
+  isContainerInstance,
+  isEdgeAnchorInstance,
+} from '../utils/diagramOnlyInstances'
+import { placeEdgeAnchorAtMidpoint, syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
 
 const props = withDefaults(
   defineProps<{
@@ -172,6 +178,7 @@ const emit = defineEmits<{
   ]
   createNodeFromComponent: [componentId: string, x: number, y: number]
   createNote: [x: number, y: number]
+  createContainer: [x: number, y: number]
   addExistingNode: [modelNodeId: string, x: number, y: number]
   placeExistingModelLink: [modelLinkId: string]
   connectNodes: [
@@ -293,6 +300,8 @@ function safeRestoreViewport(diagramId: string, r: DiagramRenderer): boolean {
 // Maps: papirus element ID → model entity
 const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: string }>()
 const edgeIdToInstance = new Map<string, { modelLinkId: string; edgeId: string }>()
+/** Last display-name we pushed onto a papirus node from syncDiagram (editable label / composite name). */
+const syncedNodeNameByPapId = new Map<string, string>()
 
 // ── Computed ──
 const nodeById = computed(() => new Map(props.nodes.map(node => [node.id, node])))
@@ -735,9 +744,24 @@ const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attr
 const isDirectoryNoteInstance = (instance: DiagramNodeInstance): boolean =>
   instance.attrs?.isDirectoryNote === true
 
+const isDiagramOnlyVisualInstance = (instance: DiagramNodeInstance): boolean =>
+  isNoteInstance(instance) || isContainerInstance(instance) || isEdgeAnchorInstance(instance)
+
 const getNoteText = (instance: DiagramNodeInstance): string => {
   const value = instance.attrs?.noteText
   return typeof value === 'string' && value.trim().length > 0 ? value : t('diagram.newNote')
+}
+
+const getContainerLabel = (instance: DiagramNodeInstance): string => {
+  const value = instance.attrs?.containerLabel
+  return typeof value === 'string' ? value : ''
+}
+
+const getInstanceDisplayName = (instance: DiagramNodeInstance): string => {
+  if (isNoteInstance(instance)) return getNoteText(instance)
+  if (isContainerInstance(instance)) return getContainerLabel(instance)
+  if (isEdgeAnchorInstance(instance)) return ''
+  return nodeById.value.get(instance.modelNodeId)?.name ?? 'Node'
 }
 
 const getInstanceDimensions = (instance: {
@@ -1001,6 +1025,46 @@ function resolveInstanceStyle(instance: DiagramNodeInstance, ds?: DiagramStyle) 
   }
 }
 
+type InstanceCompositeOptions = {
+  content: CContainer
+  stylePatch?: Record<string, unknown>
+}
+
+function resolveInstanceComposite(
+  instance: DiagramNodeInstance,
+  ds: DiagramStyle | undefined,
+  nodeName: string
+): InstanceCompositeOptions | undefined {
+  if (resolveDiagramNodeShape(ds) !== 'composite') return undefined
+
+  const componentProperties = getNodeComponentCustomProperties(instance.modelNodeId)
+  const nodeTypeProperties = getNodeTypeCustomProperties(instance.modelNodeId)
+  const nodeEntry = nodeById.value.get(instance.modelNodeId)
+  const nodeTypeValues = nodeEntry ? { ...nodeEntry.parsedAttrs.typeProperties } : {}
+  const componentValues = getComponentScopedPropertyValuesOnly(instance.modelNodeId, instance.id)
+
+  const baseContent = ds?.compositeContent ?? createDefaultCompositeContent(nodeName)
+  const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
+    displayName: nodeName,
+    notationIconName: ds?.iconName,
+    propertyValues: { ...nodeTypeValues, ...componentValues },
+  })
+  const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
+    componentProperties,
+    componentValues,
+    nodeTypeProperties,
+    nodeTypeValues,
+  })
+  return {
+    content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
+    stylePatch: bindingResult.outerPatch,
+  }
+}
+
+function isCompositeContentEqual(a: CContainer, b: CContainer): boolean {
+  return JSON.stringify(a.serialize()) === JSON.stringify(b.serialize())
+}
+
 // ── Node creation ──
 function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const ds = getEffectiveStyle(instance)
@@ -1008,9 +1072,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const diffState = props.diffStateByModelNodeId?.[instance.modelNodeId]
   if (diffState) applyDiffOverlayToNodeStyle(visual.style, diffState)
   const shape = resolveDiagramNodeShape(ds)
-  const nodeName = isNoteInstance(instance)
-    ? getNoteText(instance)
-    : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
+  const nodeName = getInstanceDisplayName(instance)
   const icon = buildModelNodeIcon(ds)
   let specialRectangleShape: 'sticky-note' | 'folder-tab' | undefined
   if (shape === 'rectangle' && isDirectoryNoteInstance(instance)) {
@@ -1018,37 +1080,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   } else if (shape === 'rectangle' && isNoteInstance(instance)) {
     specialRectangleShape = 'sticky-note'
   }
-  let composite:
-    | {
-        content: CContainer
-        stylePatch?: Record<string, unknown>
-      }
-    | undefined
-
-  if (shape === 'composite') {
-    const componentProperties = getNodeComponentCustomProperties(instance.modelNodeId)
-    const nodeTypeProperties = getNodeTypeCustomProperties(instance.modelNodeId)
-    const nodeEntry = nodeById.value.get(instance.modelNodeId)
-    const nodeTypeValues = nodeEntry ? { ...nodeEntry.parsedAttrs.typeProperties } : {}
-    const componentValues = getComponentScopedPropertyValuesOnly(instance.modelNodeId, instance.id)
-
-    const baseContent = ds?.compositeContent ?? createDefaultCompositeContent(nodeName)
-    const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
-      displayName: nodeName,
-      notationIconName: ds?.iconName,
-      propertyValues: { ...nodeTypeValues, ...componentValues },
-    })
-    const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
-      componentProperties,
-      componentValues,
-      nodeTypeProperties,
-      nodeTypeValues,
-    })
-    composite = {
-      content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
-      stylePatch: bindingResult.outerPatch,
-    }
-  }
+  const composite = resolveInstanceComposite(instance, ds, nodeName)
 
   const node = createDiagramNode({
     id: `instance-${instance.id}`,
@@ -1078,12 +1110,13 @@ function syncDiagram() {
   const currentEdgeIds = new Set<string>()
   nodeIdToInstance.clear()
   edgeIdToInstance.clear()
+  const nextSyncedNames = new Map<string, string>()
   const orderedInstances = sortInstancesByZLayer(instanceNodes.value)
 
   // Sync nodes
   for (const instance of orderedInstances) {
     const modelNode = nodeById.value.get(instance.modelNodeId)
-    if (!isNoteInstance(instance) && (!modelNode || modelNode._isDeleted)) continue
+    if (!isDiagramOnlyVisualInstance(instance) && (!modelNode || modelNode._isDeleted)) continue
 
     const papNodeId = `instance-${instance.id}`
     currentNodeIds.add(papNodeId)
@@ -1091,6 +1124,10 @@ function syncDiagram() {
       modelNodeId: instance.modelNodeId,
       instanceId: instance.id,
     })
+    const nodeName = getInstanceDisplayName(instance)
+    if (!isNoteInstance(instance) && !isEdgeAnchorInstance(instance)) {
+      nextSyncedNames.set(papNodeId, nodeName)
+    }
 
     const existing = renderer.getNode(papNodeId)
     if (existing) {
@@ -1110,25 +1147,34 @@ function syncDiagram() {
         renderer.addNode(createInstanceNode(instance))
         continue
       }
-      if (expectedShape === 'composite') {
-        renderer.removeNode(papNodeId)
-        renderer.addNode(createInstanceNode(instance))
-        continue
+
+      let compositeOptions: InstanceCompositeOptions | undefined
+      // Composite content (name/bindings) may change; rebuild only then so resize keeps selection.
+      if (expectedShape === 'composite' && existing instanceof CompositeNode) {
+        compositeOptions = resolveInstanceComposite(instance, ds, nodeName)
+        if (
+          compositeOptions &&
+          !isCompositeContentEqual(existing.content, compositeOptions.content)
+        ) {
+          renderer.removeNode(papNodeId)
+          renderer.addNode(createInstanceNode(instance))
+          continue
+        }
       }
 
       // Update in-place
       const visual = resolveInstanceStyle(instance, ds)
       const diffState = props.diffStateByModelNodeId?.[instance.modelNodeId]
       if (diffState) applyDiffOverlayToNodeStyle(visual.style, diffState)
-      const nodeName = isNoteInstance(instance)
-        ? getNoteText(instance)
-        : (nodeById.value.get(instance.modelNodeId)?.name ?? 'Node')
+      const nextStyle = compositeOptions?.stylePatch
+        ? { ...visual.style, ...compositeOptions.stylePatch }
+        : visual.style
 
       existing.x = instance.x
       existing.y = instance.y
       existing.width = visual.width
       existing.height = visual.height
-      existing.style = visual.style
+      existing.style = nextStyle
       existing.anchorPoints = resolveComponentAnchorPoints(ds)
       const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id)
       if (typeof newLabel === 'string') {
@@ -1289,8 +1335,75 @@ function syncDiagram() {
   }
 
   reorderRendererNodesBySize(orderedInstances)
+  syncEdgeAnchors({ persist: false, updateRenderer: true })
+  syncedNodeNameByPapId.clear()
+  for (const [papId, name] of nextSyncedNames) {
+    syncedNodeNameByPapId.set(papId, name)
+  }
   renderer.markDirty()
   updateSelection()
+}
+
+function collectHostEdgeMidpoints(): Map<string, { x: number; y: number }> {
+  const midpoints = new Map<string, { x: number; y: number }>()
+  if (!renderer) return midpoints
+  for (const instance of instanceNodes.value) {
+    if (!isEdgeAnchorInstance(instance)) continue
+    const hostEdgeId = getHostEdgeInstanceId(instance)
+    if (!hostEdgeId || midpoints.has(hostEdgeId)) continue
+    const hostEdge = renderer.getEdge(`edge-${hostEdgeId}`)
+    if (!hostEdge) continue
+    const previousLabelPosition = hostEdge.labelPosition
+    const previousLabelOffset = hostEdge.labelOffset
+    hostEdge.labelPosition = 0.5
+    hostEdge.labelOffset = 0
+    const point = hostEdge.getLabelPosition()
+    hostEdge.labelPosition = previousLabelPosition
+    hostEdge.labelOffset = previousLabelOffset
+    if (!point) continue
+    midpoints.set(hostEdgeId, { x: point.x, y: point.y })
+  }
+  return midpoints
+}
+
+/**
+ * Keep edge-anchor instances on the mid-point of their host edges.
+ * @param persist write x/y back into diagram attrs (for dragend / history)
+ * @param updateRenderer move papirus nodes immediately during live drag
+ */
+function syncEdgeAnchors(options: { persist: boolean; updateRenderer: boolean }): void {
+  const diagram = props.activeDiagram
+  if (!diagram || !renderer) return
+  const midpoints = collectHostEdgeMidpoints()
+  if (midpoints.size === 0) return
+
+  if (options.updateRenderer) {
+    for (const instance of instanceNodes.value) {
+      if (!isEdgeAnchorInstance(instance)) continue
+      const hostEdgeId = getHostEdgeInstanceId(instance)
+      if (!hostEdgeId) continue
+      const midpoint = midpoints.get(hostEdgeId)
+      if (!midpoint) continue
+      const placed = placeEdgeAnchorAtMidpoint(instance, midpoint)
+      const papNode = renderer.getNode(`instance-${instance.id}`)
+      if (papNode) {
+        papNode.x = placed.x
+        papNode.y = placed.y
+        papNode.width = placed.width ?? papNode.width
+        papNode.height = placed.height ?? papNode.height
+      }
+    }
+    renderer.markDirty()
+  }
+
+  if (options.persist) {
+    const next = cloneDiagramAttrs()
+    const { nodes, changed } = syncEdgeAnchorPositions(next.instances.nodes, midpoints)
+    if (changed) {
+      next.instances.nodes = nodes
+      emit('updateDiagram', next)
+    }
+  }
 }
 
 // ── Selection sync ──
@@ -1336,9 +1449,15 @@ function updateSelection() {
 
   if (targetPapIds.length > 0) {
     const currentIds = selectionManager.selectedIds
-    const needsSync =
+    const needsIdSync =
       targetPapIds.length !== currentIds.size || targetPapIds.some(id => !currentIds.has(id))
-    if (needsSync) {
+    // After node rebuild (e.g. composite content sync) selectedIds may still match,
+    // but the new element starts in "normal" and needs selection state reapplied.
+    const needsStateRepair = targetPapIds.some(id => {
+      const el = renderer?.getNode(id) ?? renderer?.getEdge(id)
+      return !!el && el.state !== 'selected'
+    })
+    if (needsIdSync || needsStateRepair) {
       suppressSelectionEvent = true
       try {
         selectionManager.selectMultiple(targetPapIds)
@@ -1472,24 +1591,42 @@ function detectLabelChanges() {
     if (papNode instanceof CompositeNode) {
       const compositeName = getCompositeRoleNameText(papNode)
       const modelNode = nodeById.value.get(entity.modelNodeId)
+      const nextName = typeof compositeName === 'string' ? compositeName.trim() : ''
+      const syncedName = syncedNodeNameByPapId.get(papNodeId)
+      // Skip if canvas still shows the name we last synced — model may have been renamed in the tree.
+      if (syncedName !== undefined && nextName === syncedName) continue
       if (
         modelNode &&
         !pendingNodeNameChanges.has(entity.modelNodeId) &&
-        typeof compositeName === 'string' &&
-        compositeName.length > 0 &&
-        compositeName !== modelNode.name
+        nextName.length > 0 &&
+        nextName !== modelNode.name
       ) {
-        pendingNodeNameChanges.set(entity.modelNodeId, compositeName)
+        pendingNodeNameChanges.set(entity.modelNodeId, nextName)
       }
       continue
     }
     const modelNode = nodeById.value.get(entity.modelNodeId)
-    if (modelNode && !pendingNodeNameChanges.has(entity.modelNodeId) && labelText !== modelNode.name) {
-      pendingNodeNameChanges.set(entity.modelNodeId, labelText)
+    const nextName = labelText.trim()
+    const syncedName = syncedNodeNameByPapId.get(papNodeId)
+    // Skip if canvas still shows the name we last synced — model may have been renamed in the tree.
+    if (syncedName !== undefined && nextName === syncedName) continue
+    // Never push blank names — server batch-save rejects @NotBlank name.
+    if (
+      modelNode &&
+      !pendingNodeNameChanges.has(entity.modelNodeId) &&
+      nextName.length > 0 &&
+      nextName !== modelNode.name
+    ) {
+      pendingNodeNameChanges.set(entity.modelNodeId, nextName)
     }
   }
   for (const [modelNodeId, name] of pendingNodeNameChanges) {
     emit('nodeLabelChange', modelNodeId, name)
+    for (const [papId, entity] of nodeIdToInstance) {
+      if (entity.modelNodeId === modelNodeId) {
+        syncedNodeNameByPapId.set(papId, name)
+      }
+    }
   }
   if (notesChanged) {
     emit('updateDiagram', next)
@@ -1784,6 +1921,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   // Drag move → keep followers and inner polyline bends aligned with the leader
   manager.drag.on('drag', () => {
     syncGroupDragFromLeader()
+    syncEdgeAnchors({ persist: false, updateRenderer: true })
   })
 
   // Drag end → persist position changes (include grouped nodes) + auto-link
@@ -1795,6 +1933,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     } else {
       persistNodePositionsWithEditablePolylineControlPoints(_nodeIds)
     }
+    syncEdgeAnchors({ persist: true, updateRenderer: true })
     // Try auto-create link if dragged node is inside container with group relation
     if (_nodeIds.length === 1) {
       tryCreateAutoLink(_nodeIds[0]!)
@@ -1830,6 +1969,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     detectEditablePolylineControlPointChanges()
     detectLabelChanges()
     detectEdgeLabelChanges()
+    syncEdgeAnchors({ persist: true, updateRenderer: true })
   })
 
   // Connection → emit connectNodes
@@ -1876,7 +2016,19 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     nextTick(() => {
       detectEdgePortChanges()
       detectEditablePolylineControlPointChanges()
+      syncEdgeAnchors({ persist: true, updateRenderer: true })
     })
+  })
+
+  const onPointerMoveDuringControlPointDrag = (): void => {
+    syncEdgeAnchors({ persist: false, updateRenderer: true })
+  }
+  manager.connection.on('controlPointDragStart', () => {
+    window.addEventListener('pointermove', onPointerMoveDuringControlPointDrag)
+  })
+  manager.connection.on('controlPointDragEnd', () => {
+    window.removeEventListener('pointermove', onPointerMoveDuringControlPointDrag)
+    syncEdgeAnchors({ persist: true, updateRenderer: true })
   })
 
   if (props.diagramLiveBroadcastEnabled) {
@@ -2026,6 +2178,18 @@ function initRenderer(
               action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
             },
           ]
+        }
+        if (instance && isContainerInstance(instance)) {
+          return [
+            {
+              label: t('diagram.deleteContainer'),
+              icon: 'delete',
+              action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
+            },
+          ]
+        }
+        if (instance && isEdgeAnchorInstance(instance)) {
+          return []
         }
         return [
           {
@@ -2297,6 +2461,8 @@ const isAllowedDropEvent = (event: DragEvent): boolean => {
   if (componentId) return true
   const notePayload = event.dataTransfer?.getData('application/x-model-diagram-note')
   if (notePayload === 'note') return true
+  const containerPayload = event.dataTransfer?.getData('application/x-model-diagram-container')
+  if (containerPayload === 'container') return true
   const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) return canDropModelNodeToDiagram(modelNodeId)
   return false
@@ -2323,8 +2489,15 @@ const onDragOver = (event: DragEvent) => {
   const hasComponentPayload = hasDragType(event, 'application/x-notation-component-id')
   const hasModelNodePayload = hasDragType(event, 'application/x-model-node-id')
   const hasNotePayload = hasDragType(event, 'application/x-model-diagram-note')
+  const hasContainerPayload = hasDragType(event, 'application/x-model-diagram-container')
   const hasModelLinkPayload = hasDragType(event, 'application/x-warchi-model-link-id')
-  if (!hasComponentPayload && !hasModelNodePayload && !hasNotePayload && !hasModelLinkPayload) {
+  if (
+    !hasComponentPayload &&
+    !hasModelNodePayload &&
+    !hasNotePayload &&
+    !hasContainerPayload &&
+    !hasModelLinkPayload
+  ) {
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'none'
     return
   }
@@ -2366,6 +2539,12 @@ const onDrop = (event: DragEvent) => {
     return
   }
 
+  const containerPayload = event.dataTransfer?.getData('application/x-model-diagram-container')
+  if (containerPayload === 'container') {
+    emit('createContainer', x, y)
+    return
+  }
+
   const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) {
     emit('addExistingNode', modelNodeId, x, y)
@@ -2385,8 +2564,16 @@ const onDragComponentStart = (event: DragEvent, componentId: string) => {
 }
 
 const onDragNoteStart = (event: DragEvent) => {
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
   event.dataTransfer?.setData('application/x-model-diagram-note', 'note')
   event.dataTransfer?.setData('text/plain', 'note')
+  event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
+}
+
+const onDragContainerStart = (event: DragEvent) => {
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer?.setData('application/x-model-diagram-container', 'container')
+  event.dataTransfer?.setData('text/plain', 'container')
   event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
 }
 
@@ -2796,6 +2983,15 @@ defineExpose({
           >
             <UiIcon name="note" class="canvas-palette__note-icon" />
           </button>
+          <button
+            type="button"
+            class="canvas-palette__item canvas-palette__item--container"
+            :title="t('diagram.container')"
+            :draggable="!props.readOnly && !props.navigationOnlyMode"
+            @dragstart="onDragContainerStart"
+          >
+            <UiIcon name="crop_free" class="canvas-palette__note-icon" />
+          </button>
           <template
             v-for="(entry, index) in paletteEntries"
             :key="entry.kind === 'item' ? entry.component.id : `divider-${index}`"
@@ -3017,6 +3213,15 @@ defineExpose({
 
 .canvas-palette__item--note {
   --palette-item-fill: #f1c40f;
+}
+
+.canvas-palette__item--container {
+  --palette-item-fill: transparent;
+  border: 1px dashed #8a8a8a;
+}
+
+.canvas-palette__item--container .canvas-palette__note-icon {
+  color: #5c5c5c;
 }
 
 .canvas-palette__note-icon {

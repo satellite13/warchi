@@ -5,6 +5,7 @@ import {
   applyBatchRemapping,
   batchSave,
   buildBatchSaveRequest,
+  findBlankNamedBatchNodes,
   hasBatchChanges,
   parseBatchSaveConflictDetails,
   refreshBatchSavedEntityTimestamps,
@@ -110,6 +111,17 @@ describe('useModelBatchSave', () => {
 
     expect(hasBatchChanges(emptyRequest)).toBe(false)
     expect(hasBatchChanges(changedRequest)).toBe(true)
+  })
+
+  it('finds create/update nodes with blank names that would fail server validation', () => {
+    const blank = findBlankNamedBatchNodes([
+      createNode({ id: 'ok-new', name: 'A', _isNew: true }),
+      createNode({ id: 'blank-new', name: '   ', _isNew: true }),
+      createNode({ id: 'blank-update', name: '', _isDirty: true }),
+      createNode({ id: 'ok-clean', name: '', _isDirty: false }),
+      createNode({ id: 'blank-deleted', name: '', _isDirty: true, _isDeleted: true }),
+    ])
+    expect(blank.map(n => n.id).sort()).toEqual(['blank-new', 'blank-update'])
   })
 
   it('parses valid conflict details and ignores malformed conflict rows', () => {

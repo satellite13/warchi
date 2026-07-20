@@ -4,8 +4,8 @@ set -euo pipefail
 readonly NAMESPACE="arch"
 readonly CLUSTER_NAME="warchi"
 readonly TARGET_IP="138.124.14.246"
-AREPOS_VERSION="${AREPOS_VERSION:-0.5.3}"
-WARCHI_VERSION="${WARCHI_VERSION:-0.8.16}"
+AREPOS_VERSION="${AREPOS_VERSION:-0.5.4}"
+WARCHI_VERSION="${WARCHI_VERSION:-0.8.17}"
 SITE_VERSION="${SITE_VERSION:-0.2.4}"
 CUTOVER_READINESS_CONFIRMED="${CUTOVER_READINESS_CONFIRMED:-0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -108,11 +108,11 @@ assert_status https://warchi.ru/api/v1/auth/me 401
 
 migration_count="$(
   kubectl exec -n "${NAMESPACE}" deployment/arepos-server-postgresql -- \
-    sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM databasechangelog WHERE id = '\''042-site-feedback-moderation'\''"' |
+    sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM databasechangelog WHERE id = '\''043-node-link-types-unique-per-owner'\''"' |
     tr -d '[:space:]'
 )"
 [[ "${migration_count}" == "1" ]] || {
-  printf 'Required migration 042 is not applied\n' >&2
+  printf 'Required migration 043 is not applied\n' >&2
   exit 1
 }
 

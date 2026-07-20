@@ -7,7 +7,7 @@ This bundle deploys the three wArchi services to the existing `warchi` k3d clust
 - `https://app.warchi.ru` — `warchi`, including the same-origin `/api/` and `/ws` proxy;
 - `arepos-server` — cluster-internal only, with PostgreSQL, MinIO, and Cerbos in namespace `arch`.
 
-The fixed default versions are arepos-server `0.5.3`, warchi `0.8.16`, and warchi-site
+The fixed default versions are arepos-server `0.5.4`, warchi `0.8.17`, and warchi-site
 `0.2.4`. The scripts never deploy Papirus source; the warchi release consumes
 `@ngroznykh/papirus@^0.6.5` from npm and receives an empty named `papirus` Docker build context
 only to satisfy the release Dockerfile.
@@ -20,7 +20,7 @@ On the operator workstation:
 - sibling repositories `warchi`, `arepos-server`, and `warchi-site`;
 - each repository clean, with `warchi` and `arepos-server` checked out on `master` and
   `warchi-site` checked out on `main`, at the exact matching annotated or lightweight tag
-  (`v0.8.16`, `v0.5.3`, or `v0.2.4`); these release branches are pinned rather than inferred from
+  (`v0.8.17`, `v0.5.4`, or `v0.2.4`); these release branches are pinned rather than inferred from
   local remote metadata;
 - package, Gradle, and chart versions matching those tags;
 - DNS configured so `warchi.ru A` is the single address `138.124.14.246`,
@@ -164,7 +164,7 @@ validation, cleanup, or replica-restore failure leaves `.failed` in place and ne
 
 Cutover order minimizes the root-site gap:
 
-1. `arepos-server`: atomic Helm upgrade, rollout, API `0.5.3`, Liquibase migration `042`;
+1. `arepos-server`: atomic Helm upgrade, rollout, API `0.5.4`, Liquibase migration `043`;
 2. apply the namespaced Traefik `redirect-https` Middleware before any ingress upgrade;
 3. apply one explicit cert-manager Certificate for each production TLS secret
    (`warchi-app-ru-tls` and `warchi-site-ru-tls`) and wait for both to become Ready;
@@ -220,7 +220,7 @@ are preserved. Old images and timestamped backups are retained.
 ## Verification and manual smoke
 
 `verify.sh` checks DNS, rollouts, exact images, certificates, API and app versions, health,
-migration `042`, exact 301/308 HTTP-to-HTTPS redirects, and that the root response is HTML with
+migration `043`, exact 301/308 HTTP-to-HTTPS redirects, and that the root response is HTML with
 the stable `<div id="app">` SPA mount. It does not inspect lazy-loaded JavaScript chunks.
 It also checks unauthenticated 401 responses from `/api/v1/auth/me` through both public origins,
 the active `nginx -T` output for the exact `/ws` backend proxy and WebSocket upgrade directives,

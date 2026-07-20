@@ -77,6 +77,15 @@ export interface BatchSaveResponse {
   diagramIdMap: Record<string, string>
 }
 
+/** Nodes that would fail server @NotBlank name validation on create/update. */
+export function findBlankNamedBatchNodes(nodes: EditorNode[]): EditorNode[] {
+  return nodes.filter(n => {
+    if (n._isDeleted) return false
+    if (!n._isNew && !n._isDirty) return false
+    return !n.name?.trim()
+  })
+}
+
 export function buildBatchSaveRequest(
   nodes: EditorNode[],
   links: EditorLink[],
@@ -90,7 +99,7 @@ export function buildBatchSaveRequest(
         .filter(n => n._isNew && !n._isDeleted)
         .map(n => ({
           tempId: n.id,
-          name: n.name,
+          name: n.name.trim(),
           nodeTypeId: n.nodeTypeId,
           parentNodeId: n.parentNodeId ?? null,
           attrs: serializeNodeAttrs(n.parsedAttrs),
@@ -99,7 +108,7 @@ export function buildBatchSaveRequest(
         .filter(n => n._isDirty && !n._isDeleted && !n._isNew)
         .map(n => ({
           id: n.id,
-          name: n.name,
+          name: n.name.trim(),
           nodeTypeId: n.nodeTypeId,
           parentNodeId: n.parentNodeId ?? null,
           attrs: serializeNodeAttrs(n.parsedAttrs),

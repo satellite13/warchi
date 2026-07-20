@@ -1,12 +1,18 @@
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import type { DiagramAttrs, DiagramEdgeInstance, DiagramNodeInstance } from '../modelAttrs'
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
-
-/** Как в batchSaveConflictDisplay: ребро заметки на диаграмме. */
-const DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX = '__diagram-note-edge__:'
+import {
+  DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
+  isContainerInstance,
+  isEdgeAnchorInstance,
+} from './diagramOnlyInstances'
 
 function isStickyNoteInstance(inst: DiagramNodeInstance): boolean {
   return inst.attrs?.isNote === true && inst.attrs?.isDirectoryNote !== true
+}
+
+function isDiagramOnlyNodeInstance(inst: DiagramNodeInstance): boolean {
+  return isStickyNoteInstance(inst) || isContainerInstance(inst) || isEdgeAnchorInstance(inst)
 }
 
 function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode | undefined {
@@ -17,11 +23,11 @@ function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode |
 
 /**
  * Экземпляр ноды на холсте согласован с деревом модели: нода есть и не удалена.
- * Заметки (sticky) не привязаны к модельной ноде.
+ * Diagram-only (sticky note / container / edge anchor) не привязаны к модельной ноде.
  */
 function keepInstanceNode(nodes: EditorNode[], inst: DiagramNodeInstance): boolean {
   if (!inst.id || !inst.modelNodeId) return false
-  if (isStickyNoteInstance(inst)) return true
+  if (isDiagramOnlyNodeInstance(inst)) return true
   const n = activeModelNode(nodes, inst.modelNodeId)
   return !!n && !n._isDeleted
 }

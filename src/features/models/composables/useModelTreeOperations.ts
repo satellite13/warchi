@@ -366,8 +366,9 @@ export function useModelTreeOperations(options: {
 
   const handleRenameNode = (nodeId: string, newName: string) => {
     const node = options.state.value.nodes.find(item => item.id === nodeId)
-    if (!node || node.name === newName) return
-    node.name = newName
+    const nextName = newName.trim()
+    if (!node || !nextName || node.name === nextName) return
+    node.name = nextName
     options.markNodeDirty(node.id)
   }
 

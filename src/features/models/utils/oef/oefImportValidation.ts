@@ -4,6 +4,14 @@ function isOefDiagramNoteNode(node: OefViewNode): boolean {
   return node.type === 'Label' || node.type === 'Note'
 }
 
+function isOefDiagramContainerNode(node: OefViewNode): boolean {
+  return node.type === 'Container'
+}
+
+function isOefDiagramOnlyViewNode(node: OefViewNode): boolean {
+  return isOefDiagramNoteNode(node) || isOefDiagramContainerNode(node)
+}
+
 function isOefDiagramNoteConnection(connection: OefViewConnection): boolean {
   return connection.type === 'Line' && !connection.relationshipId
 }
@@ -31,9 +39,10 @@ function validateDuplicates(
 function validateView(view: OefView, relationshipIds: Set<string>): ImportIssue[] {
   const issues: ImportIssue[] = []
   const nodeIds = new Set(view.nodes.map(node => node.id))
+  const connectionIds = new Set(view.connections.map(connection => connection.id))
 
   for (const node of view.nodes) {
-    if (!isOefDiagramNoteNode(node) && !node.elementId) {
+    if (!isOefDiagramOnlyViewNode(node) && !node.elementId) {
       issues.push({
         code: 'viewNodeMissingElementRef',
         level: 'error',
@@ -66,7 +75,9 @@ function validateView(view: OefView, relationshipIds: Set<string>): ImportIssue[
         message: `View connection "${connection.id}" points to missing relationship "${connection.relationshipId}"`,
       })
     }
-    if (!nodeIds.has(connection.sourceNodeId)) {
+    const sourceOk = nodeIds.has(connection.sourceNodeId) || connectionIds.has(connection.sourceNodeId)
+    const targetOk = nodeIds.has(connection.targetNodeId) || connectionIds.has(connection.targetNodeId)
+    if (!sourceOk) {
       issues.push({
         code: 'viewConnectionMissingSourceNode',
         level: 'error',
@@ -75,7 +86,7 @@ function validateView(view: OefView, relationshipIds: Set<string>): ImportIssue[
         message: `View connection "${connection.id}" points to missing source node "${connection.sourceNodeId}"`,
       })
     }
-    if (!nodeIds.has(connection.targetNodeId)) {
+    if (!targetOk) {
       issues.push({
         code: 'viewConnectionMissingTargetNode',
         level: 'error',
@@ -137,7 +148,24 @@ export function validateParsedOefModel(parsed: OefParsedModel): ImportValidation
         message: `Relationship "${relationship.id}" has no xsi:type`,
       })
     }
-    if (!relationship.sourceElementId || !elementIds.has(relationship.sourceElementId)) {
+
+    const sourceIsElement = !!relationship.sourceElementId && elementIds.has(relationship.sourceElementId)
+    const targetIsElement = !!relationship.targetElementId && elementIds.has(relationship.targetElementId)
+    const sourceIsRelationship =
+      !!relationship.sourceElementId && relationshipIds.has(relationship.sourceElementId)
+    const targetIsRelationship =
+      !!relationship.targetElementId && relationshipIds.has(relationship.targetElementId)
+
+    if (sourceIsRelationship || targetIsRelationship) {
+      issues.push({
+        code: 'relationshipEndpointIsRelationship',
+        level: 'warning',
+        entityId: relationship.id,
+        message: `Relationship "${relationship.id}" attaches to another relationship and will be imported as diagram-only`,
+      })
+    }
+
+    if (!sourceIsElement && !sourceIsRelationship) {
       issues.push({
         code: 'relationshipMissingSource',
         level: 'error',
@@ -145,7 +173,7 @@ export function validateParsedOefModel(parsed: OefParsedModel): ImportValidation
         message: `Relationship "${relationship.id}" points to missing source element "${relationship.sourceElementId}"`,
       })
     }
-    if (!relationship.targetElementId || !elementIds.has(relationship.targetElementId)) {
+    if (!targetIsElement && !targetIsRelationship) {
       issues.push({
         code: 'relationshipMissingTarget',
         level: 'error',
@@ -171,7 +199,7 @@ export function validateParsedOefModel(parsed: OefParsedModel): ImportValidation
       ).map(issue => ({ ...issue, viewId: view.id }))
     )
     for (const node of view.nodes) {
-      if (isOefDiagramNoteNode(node)) continue
+      if (isOefDiagramOnlyViewNode(node)) continue
       if (!node.elementId || !elementIds.has(node.elementId)) {
         issues.push({
           code: 'viewNodeMissingElementRef',

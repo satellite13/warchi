@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
 import mainXml from './__fixtures__/Main.xml?raw'
+import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
 
 describe('oefDraftBuilder', () => {
   it('builds import draft from parsed OEF', () => {
@@ -23,5 +24,17 @@ describe('oefDraftBuilder', () => {
     expect(noteInstance?.noteText).toBe('Test note')
     const noteLink = draft.diagrams[0]?.connectionInstances.find(item => item.isNoteLink)
     expect(noteLink?.sourceNodeId).toBe('id-c489773e4ebb464db0ec585c9660f0db')
+  })
+
+  it('marks Container and Association-to-Flow connection for diagram-only import', () => {
+    const draft = buildImportDraft(parseOefXml(containerAssocXml))
+    const diagram = draft.diagrams[0]!
+    const container = diagram.nodeInstances.find(item => item.isContainer)
+    expect(container?.containerLabel).toBe('Group')
+
+    const assoc = diagram.connectionInstances.find(item => item.sourceConnectionId === 'conn-assoc')
+    expect(assoc?.isDiagramOnlyLink).toBe(true)
+    expect(assoc?.attachesToConnectionId).toBe('conn-flow')
+    expect(assoc?.attachEndpoint).toBe('target')
   })
 })

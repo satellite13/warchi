@@ -4,7 +4,9 @@ import type { RelationResponse } from '@/types/api'
 import { createId, parseLinkAttrs } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, ModelEditorState } from '../types'
 
-export const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
+import { DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX } from '../utils/diagramOnlyInstances'
+
+export const NOTE_EDGE_PREFIX = DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX
 export const UNTYPED_EDGE_PREFIX = '__diagram-untyped-edge__:'
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
@@ -41,6 +43,8 @@ export type UseModelDiagramConnectionsOptions = {
   isRelationRulesLoading: ComputedRef<boolean>
   isDiagramReadOnly: ComputedRef<boolean>
   isDiagramNoteModelNodeId: (modelNodeId: string) => boolean
+  isDiagramContainerModelNodeId: (modelNodeId: string) => boolean
+  isEdgeAnchorModelNodeId: (modelNodeId: string) => boolean
   isDirectoryNode: (modelNodeId: string) => boolean
   isDirectoryNoteInstanceId: (instanceId: string) => boolean
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
@@ -73,7 +77,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
   const isUntypedLinkTypeId = (linkTypeId: string): boolean =>
     isUntypedTypeName(options.state.value.linkTypes.find(type => type.id === linkTypeId)?.name)
 
-  const isNoteLikeConnection = (
+  const isDiagramOnlyEndpointConnection = (
     sourceModelNodeId: string,
     targetModelNodeId: string,
     sourceInstanceId: string,
@@ -81,6 +85,10 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
   ): boolean =>
     options.isDiagramNoteModelNodeId(sourceModelNodeId) ||
     options.isDiagramNoteModelNodeId(targetModelNodeId) ||
+    options.isDiagramContainerModelNodeId(sourceModelNodeId) ||
+    options.isDiagramContainerModelNodeId(targetModelNodeId) ||
+    options.isEdgeAnchorModelNodeId(sourceModelNodeId) ||
+    options.isEdgeAnchorModelNodeId(targetModelNodeId) ||
     options.isDirectoryNode(sourceModelNodeId) ||
     options.isDirectoryNode(targetModelNodeId) ||
     options.isDirectoryNoteInstanceId(sourceInstanceId) ||
@@ -236,7 +244,14 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       sourceOutlineParam,
       targetOutlineParam,
     }
-    if (isNoteLikeConnection(sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId)) {
+    if (
+      isDiagramOnlyEndpointConnection(
+        sourceModelNodeId,
+        targetModelNodeId,
+        sourceInstanceId,
+        targetInstanceId
+      )
+    ) {
       createNoteEdge(connection, diagram)
       return
     }
@@ -424,6 +439,10 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     if (
       options.isDiagramNoteModelNodeId(sourceModelNodeId) ||
       options.isDiagramNoteModelNodeId(targetModelNodeId) ||
+      options.isDiagramContainerModelNodeId(sourceModelNodeId) ||
+      options.isDiagramContainerModelNodeId(targetModelNodeId) ||
+      options.isEdgeAnchorModelNodeId(sourceModelNodeId) ||
+      options.isEdgeAnchorModelNodeId(targetModelNodeId) ||
       options.isDirectoryNode(sourceModelNodeId) ||
       options.isDirectoryNode(targetModelNodeId)
     ) {

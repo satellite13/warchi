@@ -81,6 +81,10 @@ function isOefDiagramNoteNode(nodeType: string): boolean {
   return nodeType === 'Label' || nodeType === 'Note'
 }
 
+function isOefDiagramContainerNode(nodeType: string): boolean {
+  return nodeType === 'Container'
+}
+
 function parseViewNodes(view: Element): OefViewNode[] {
   return getDescendantsByLocalName(view, 'node')
     .map(el => {
@@ -98,8 +102,9 @@ function parseViewNodes(view: Element): OefViewNode[] {
       const height = parseNumber(el.getAttribute('h'))
       if (typeof width === 'number') parsed.width = width
       if (typeof height === 'number') parsed.height = height
-      if (isOefDiagramNoteNode(nodeType)) {
-        parsed.labelText = textOfFirstDirectChild(el, 'label')
+      if (isOefDiagramNoteNode(nodeType) || isOefDiagramContainerNode(nodeType)) {
+        parsed.labelText =
+          textOfFirstDirectChild(el, 'label') || textOfFirstDirectChild(el, 'name')
       }
       return parsed
     })

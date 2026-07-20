@@ -63,6 +63,37 @@ describe('sanitizeDiagramInstancesForModel', () => {
     expect(removedNodes).toBe(0)
   })
 
+  it('keeps container and edge-anchor diagram-only instances', () => {
+    const attrs = {
+      instances: {
+        nodes: [
+          {
+            id: 'ic',
+            modelNodeId: '__diagram-container__:c',
+            x: 0,
+            y: 0,
+            width: 10,
+            height: 10,
+            attrs: { isContainer: true },
+          },
+          {
+            id: 'ia',
+            modelNodeId: '__diagram-edge-anchor__:a',
+            x: 1,
+            y: 1,
+            width: 8,
+            height: 8,
+            attrs: { isEdgeAnchor: true, hostEdgeInstanceId: 'e1' },
+          },
+        ],
+        edges: [],
+      },
+    }
+    const { changed, removedNodes } = sanitizeDiagramInstancesForModel(attrs, [], [])
+    expect(changed).toBe(false)
+    expect(removedNodes).toBe(0)
+  })
+
   it('keeps edges with missing link id and removes only explicitly deleted links', () => {
     const attrs = {
       instances: {

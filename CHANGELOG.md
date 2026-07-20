@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.8.18] - 2026-07-20
+
+### Fixed
+- Public diagram SVG share links render inline in the browser (`image/svg+xml`) instead of forcing a download (requires arepos-server 0.5.5).
+
 ## [0.8.17] - 2026-07-20
 
 ### Added

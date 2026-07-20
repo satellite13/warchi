@@ -309,6 +309,149 @@ export const apiPut = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
 export const apiDelete = <T>(path: string): Promise<ApiResult<T>> =>
   apiFetch<T>(path, { method: "DELETE" })
 
+export type ApiUploadProgress = {
+  loaded: number
+  total: number
+  /** 0–100 when total is known; otherwise 0 */
+  percent: number
+}
+
+/**
+ * Multipart/binary upload via XHR so callers can show upload progress.
+ * Mirrors apiFetch auth (cookies + CSRF) and 401 refresh retry.
+ */
+export async function apiUpload<T>(
+  path: string,
+  body: FormData,
+  options?: {
+    onProgress?: (progress: ApiUploadProgress) => void
+    method?: string
+  },
+  canRetryAfterRefresh = true,
+): Promise<ApiResult<T>> {
+  const url = buildApiUrl(path)
+  const method = (options?.method ?? "POST").toUpperCase()
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  }
+
+  if (isMutatingMethod(method) && !isPublicAuthPath(path)) {
+    const csrfToken = getCsrfTokenFromCookie()
+    if (!csrfToken) {
+      return {
+        success: false,
+        error: createApiError(419, "CSRF token is missing."),
+      }
+    }
+    headers[CSRF_HEADER_NAME] = csrfToken
+  }
+
+  const run = (): Promise<ApiResult<T>> =>
+    new Promise(resolve => {
+      const xhr = new XMLHttpRequest()
+      xhr.open(method, url)
+      xhr.withCredentials = true
+      for (const [key, value] of Object.entries(headers)) {
+        xhr.setRequestHeader(key, value)
+      }
+
+      xhr.upload.onprogress = event => {
+        if (!options?.onProgress) return
+        if (event.lengthComputable && event.total > 0) {
+          options.onProgress({
+            loaded: event.loaded,
+            total: event.total,
+            percent: Math.min(100, Math.round((event.loaded / event.total) * 100)),
+          })
+        } else {
+          options.onProgress({
+            loaded: event.loaded,
+            total: 0,
+            percent: 0,
+          })
+        }
+      }
+
+      xhr.upload.onload = () => {
+        // Bytes left the browser; server may still be parsing / responding.
+        options?.onProgress?.({
+          loaded: 0,
+          total: 0,
+          percent: 100,
+        })
+      }
+
+      xhr.onload = () => {
+        void (async () => {
+          const text = xhr.responseText ?? ""
+          const status = xhr.status
+
+          if (status === 401 && canRetryAfterRefresh && !isPublicAuthPath(path)) {
+            const refreshed = await refreshAccessToken()
+            if (refreshed) {
+              resolve(apiUpload<T>(path, body, options, false))
+              return
+            }
+          }
+
+          if (status < 200 || status >= 300) {
+            const rawMessage = extractErrorMessage(status, text)
+            const normalizedMessage = normalizeApiErrorMessage(status, path, rawMessage)
+            const outageKind = resolveOutageKind(status, normalizedMessage)
+            if (outageKind) {
+              reportAvailabilityOutage(outageKind, normalizedMessage)
+            }
+            let errorDetails: unknown
+            try {
+              const parsed = JSON.parse(text) as unknown
+              if (parsed !== null && typeof parsed === "object") {
+                errorDetails = parsed
+              }
+            } catch {
+              /* not JSON */
+            }
+            resolve({
+              success: false,
+              error: createApiError(status, normalizedMessage, errorDetails),
+            })
+            return
+          }
+
+          clearOutage("backend_unavailable")
+          try {
+            const data = (text.length > 0 ? JSON.parse(text) : undefined) as T
+            resolve({ success: true, data })
+          } catch {
+            resolve({
+              success: false,
+              error: createApiError(0, "Invalid JSON response"),
+            })
+          }
+        })()
+      }
+
+      xhr.onerror = () => {
+        const fallbackMessage = "Ошибка подключения"
+        reportAvailabilityOutage("backend_unavailable", fallbackMessage)
+        resolve({
+          success: false,
+          error: createApiError(0, fallbackMessage),
+        })
+      }
+
+      xhr.onabort = () => {
+        resolve({
+          success: false,
+          error: createApiError(0, "Upload aborted"),
+        })
+      }
+
+      xhr.send(body)
+    })
+
+  return run()
+}
+
 /** Upload diagram SVG for preview (raw body, no JSON). */
 export function uploadDiagramSvg(
   diagramId: string,

@@ -14,7 +14,12 @@ import {
 } from '../utils/oef/mappingState'
 import { buildImportMappingSuggestions, type ImportMappingSuggestions } from '../utils/oef/mappingSuggestions'
 import { groupImportIssues } from '../utils/oef/groupImportIssues'
-import { normalizeOefFile, toOefParsedModel } from '../utils/oef/oefNormalizeApi'
+import {
+  formatUploadBytes,
+  normalizeOefFile,
+  toOefParsedModel,
+  type OefNormalizeProgress,
+} from '../utils/oef/oefNormalizeApi'
 import type { ImportDraft, ImportIssue, ImportIssueCode } from '../utils/oef/types'
 
 const props = defineProps<{
@@ -42,6 +47,10 @@ const draft = ref<ImportDraft | null>(null)
 const issues = ref<ImportIssue[]>([])
 const parseError = ref<string | null>(null)
 const isAnalyzing = ref(false)
+const analyzePhase = ref<'uploading' | 'processing'>('uploading')
+const uploadPercent = ref(0)
+const uploadLoaded = ref(0)
+const uploadTotal = ref(0)
 const showOnlyUnmapped = ref(true)
 const mappingState = ref<ImportMappingState>({ elementTypeMap: {}, relationshipTypeMap: {} })
 const suggestions = ref<ImportMappingSuggestions>({
@@ -138,6 +147,41 @@ const canMoveToPreview = computed(
 )
 const canSubmit = computed(() => currentStep.value === 3 && canMoveToPreview.value && !props.importBusy)
 
+const analyzeProgressLabel = computed(() => {
+  if (!isAnalyzing.value) return ''
+  if (analyzePhase.value === 'processing') {
+    return t('models.oefImportProcessing')
+  }
+  if (uploadTotal.value > 0) {
+    return t('models.oefImportUploadingBytes', {
+      loaded: formatUploadBytes(uploadLoaded.value),
+      total: formatUploadBytes(uploadTotal.value),
+      percent: uploadPercent.value,
+    })
+  }
+  return t('models.oefImportUploading', { percent: uploadPercent.value })
+})
+
+const analyzeBarWidth = computed(() => {
+  if (!isAnalyzing.value) return '0%'
+  if (analyzePhase.value === 'processing') return '100%'
+  return `${Math.max(0, Math.min(100, uploadPercent.value))}%`
+})
+
+function resetAnalyzeProgress(): void {
+  analyzePhase.value = 'uploading'
+  uploadPercent.value = 0
+  uploadLoaded.value = 0
+  uploadTotal.value = 0
+}
+
+function onNormalizeProgress(progress: OefNormalizeProgress): void {
+  analyzePhase.value = progress.phase
+  uploadPercent.value = progress.percent
+  uploadLoaded.value = progress.loaded
+  uploadTotal.value = progress.total
+}
+
 function resetState(): void {
   currentStep.value = 1
   selectedFileName.value = ''
@@ -145,6 +189,7 @@ function resetState(): void {
   issues.value = []
   parseError.value = null
   isAnalyzing.value = false
+  resetAnalyzeProgress()
   showOnlyUnmapped.value = true
   bulkElementValue.value = ''
   bulkRelationshipValue.value = ''
@@ -203,8 +248,10 @@ async function onFileChange(event: Event): Promise<void> {
   parseError.value = null
   selectedFileName.value = file.name
   isAnalyzing.value = true
+  resetAnalyzeProgress()
+  uploadTotal.value = file.size
   try {
-    const result = await normalizeOefFile(props.modelId, file)
+    const result = await normalizeOefFile(props.modelId, file, onNormalizeProgress)
     if (!result.success) {
       draft.value = null
       issues.value = []
@@ -228,6 +275,7 @@ async function onFileChange(event: Event): Promise<void> {
     parseError.value = error instanceof Error ? error.message : t('models.oefImportReadError')
   } finally {
     isAnalyzing.value = false
+    resetAnalyzeProgress()
     input.value = ''
   }
 }
@@ -363,7 +411,16 @@ function submitImport(): void {
           <p v-if="selectedFileName" class="oef-import__hint">
             {{ t('models.oefImportSelectedFile', { name: selectedFileName }) }}
           </p>
-          <p v-if="isAnalyzing" class="oef-import__hint">{{ t('models.oefImportAnalyzing') }}</p>
+          <div v-if="isAnalyzing" class="oef-import__upload-progress" aria-live="polite">
+            <div class="oef-import__upload-bar" role="progressbar" :aria-valuenow="uploadPercent" aria-valuemin="0" aria-valuemax="100">
+              <div
+                class="oef-import__upload-fill"
+                :class="{ 'oef-import__upload-fill--processing': analyzePhase === 'processing' }"
+                :style="{ width: analyzeBarWidth }"
+              />
+            </div>
+            <p class="oef-import__hint">{{ analyzeProgressLabel }}</p>
+          </div>
         </div>
 
         <p v-if="parseError" class="oef-import__error">{{ parseError }}</p>
@@ -774,6 +831,44 @@ function submitImport(): void {
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.oef-import__upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.oef-import__upload-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.oef-import__upload-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.15s ease-out;
+}
+
+.oef-import__upload-fill--processing {
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover), var(--primary));
+  background-size: 200% 100%;
+  animation: oef-import-upload-pulse 1.2s linear infinite;
+}
+
+@keyframes oef-import-upload-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .oef-import__error {

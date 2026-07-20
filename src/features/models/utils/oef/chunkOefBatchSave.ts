@@ -195,16 +195,51 @@ function remapLinkCreates(
   }))
 }
 
+/** Temp model-node ids left after remap mean the diagram would save unresolved refs. */
+export function countUnresolvedOefNodeTempIds(attrs: string | null | undefined): number {
+  if (!attrs) return 0
+  let root: unknown
+  try {
+    root = JSON.parse(attrs)
+  } catch {
+    return 0
+  }
+  if (!root || typeof root !== 'object') return 0
+  const rootObj = root as Record<string, unknown>
+  const instances = rootObj.instances
+  const nodes =
+    instances && typeof instances === 'object'
+      ? (instances as Record<string, unknown>).nodes
+      : rootObj.nodes
+  if (!Array.isArray(nodes)) return 0
+  let count = 0
+  for (const item of nodes) {
+    if (!item || typeof item !== 'object') continue
+    const modelNodeId = (item as Record<string, unknown>).modelNodeId
+    if (typeof modelNodeId === 'string' && modelNodeId.startsWith('oef-node-')) count += 1
+  }
+  return count
+}
+
 function remapDiagramCreates(
   creates: BatchSaveRequest['diagrams']['create'],
   nodeIdMap: Record<string, string>,
   linkIdMap: Record<string, string>
 ): BatchSaveRequest['diagrams']['create'] {
-  return creates.map(diagram => ({
-    ...diagram,
-    nodeId: diagram.nodeId ? (nodeIdMap[diagram.nodeId] ?? diagram.nodeId) : diagram.nodeId,
-    attrs: remapDiagramAttrsTempIds(diagram.attrs, nodeIdMap, linkIdMap),
-  }))
+  return creates.map(diagram => {
+    const attrs = remapDiagramAttrsTempIds(diagram.attrs, nodeIdMap, linkIdMap)
+    const unresolved = countUnresolvedOefNodeTempIds(attrs)
+    if (unresolved > 0) {
+      throw new Error(
+        `OEF diagram "${diagram.name}" still has ${unresolved} unresolved oef-node temp id(s) after remap`
+      )
+    }
+    return {
+      ...diagram,
+      nodeId: diagram.nodeId ? (nodeIdMap[diagram.nodeId] ?? diagram.nodeId) : diagram.nodeId,
+      attrs,
+    }
+  })
 }
 
 export async function applyOefBatchSaveChunks(options: {
@@ -246,12 +281,23 @@ export async function applyOefBatchSaveChunks(options: {
         },
       }
     } else if (chunk.kind === 'diagrams') {
-      request = {
-        ...request,
-        diagrams: {
-          ...request.diagrams,
-          create: remapDiagramCreates(request.diagrams.create, nodeIdMap, linkIdMap),
-        },
+      try {
+        request = {
+          ...request,
+          diagrams: {
+            ...request.diagrams,
+            create: remapDiagramCreates(request.diagrams.create, nodeIdMap, linkIdMap),
+          },
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'OEF diagram temp-id remap failed'
+        return {
+          success: false,
+          error: {
+            status: 0,
+            message: `${message} (chunk diagrams ${chunk.index}/${chunk.totalOfKind}; created so far: nodes=${nodesCreated}, links=${linksCreated}, diagrams=${diagramsCreated})`,
+          },
+        }
       }
     }
 

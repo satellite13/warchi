@@ -100,6 +100,59 @@ describe('chunkOefBatchSave', () => {
     })
   })
 
+  it('fails diagram chunk when oef-node temp ids remain after remap', async () => {
+    const batchSave = vi.fn(async () => ({
+      success: true as const,
+      data: {
+        nodeIdMap: {},
+        linkIdMap: {},
+        diagramIdMap: {},
+        nodesCreated: 0,
+        nodesUpdated: 0,
+        nodesDeleted: 0,
+        linksCreated: 0,
+        linksUpdated: 0,
+        linksDeleted: 0,
+        diagramsCreated: 0,
+        diagramsUpdated: 0,
+        diagramsDeleted: 0,
+      },
+    }))
+    const result = await applyOefBatchSaveChunks({
+      modelId: 'm1',
+      batchSave,
+      request: {
+        force: false,
+        nodes: { create: [], update: [], delete: [] },
+        links: { create: [], update: [], delete: [] },
+        diagrams: {
+          create: [
+            {
+              tempId: 'oef-diagram-1',
+              name: 'V',
+              version: '1.0.0',
+              notationId: 'n1',
+              nodeId: null,
+              attrs: JSON.stringify({
+                instances: {
+                  nodes: [{ id: 'i1', modelNodeId: 'oef-node-missing', x: 0, y: 0 }],
+                  edges: [],
+                },
+              }),
+            },
+          ],
+          update: [],
+          delete: [],
+        },
+      },
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.message).toMatch(/unresolved oef-node/)
+    }
+    expect(batchSave).not.toHaveBeenCalled()
+  })
+
   it('applies chunks and remaps link/diagram refs across responses', async () => {
     const calls: BatchSaveRequest[] = []
     const batchSave = vi.fn(async (_modelId: string, request: BatchSaveRequest) => {

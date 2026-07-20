@@ -33,7 +33,11 @@ import {
   parseGranularSyncEventsFromPayload,
 } from "../utils/modelSyncGranularCoalesce"
 import { fetchAllByModelId } from "./modelEditorLoadModel"
-import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
+import {
+  toEditorDiagramPreservingLocalAttrs,
+  toEditorLink,
+  toEditorNode,
+} from "./modelEditorMappers"
 
 const STOMP_RECONNECT_DELAY_MS = 5000
 const STOMP_HEARTBEAT_INCOMING_MS = 15000
@@ -183,7 +187,9 @@ export function useModelLiveSync(options: {
       const [remoteNodes, remoteLinks, remoteDiagrams, modelRes] = await Promise.all([
         fetchAllByModelId<NodeResponse>('/nodes', mid),
         fetchAllByModelId<LinkResponse>('/links', mid),
-        fetchAllByModelId<DiagramResponse>('/diagrams', mid),
+        fetchAllByModelId<DiagramResponse>('/diagrams', mid, undefined, {
+          includeAttrs: 'false',
+        }),
         apiGet<ModelData>(`/models/${mid}`),
       ])
 
@@ -211,7 +217,7 @@ export function useModelLiveSync(options: {
       const mergedDiagrams = mergeEntityListFromRemote(
         options.state.value.diagrams,
         remoteDiagrams,
-        toEditorDiagram
+        row => toEditorDiagramPreservingLocalAttrs(row, diagramsBefore)
       )
       const nextNodes = mergedNodes.items
       const nextLinks = mergedLinks.items

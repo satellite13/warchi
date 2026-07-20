@@ -20,6 +20,7 @@ import {
   toOefParsedModel,
   type OefNormalizeProgress,
 } from '../utils/oef/oefNormalizeApi'
+import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
 import type { ImportDraft, ImportIssue, ImportIssueCode } from '../utils/oef/types'
 
 const props = defineProps<{
@@ -110,6 +111,9 @@ const mappedElementsCount = computed(() =>
 )
 const mappedRelationshipsCount = computed(() =>
   Object.values(mappingState.value.relationshipTypeMap).filter(item => !!item.linkTypeId && !!item.relationId).length
+)
+const plannedFolderCount = computed(() =>
+  buildOrganizationImportPlan(draft.value?.organizations).directories.length
 )
 const bulkElementOptions = computed(() => {
   const out: Array<{ value: string; label: string }> = []
@@ -331,7 +335,10 @@ function elementCandidates(sourceType: string): Array<{ value: string; label: st
       const component = componentById.value.get(row.componentId!)
       return {
         value: `${row.nodeTypeId}::${row.componentId}`,
-        label: `${nodeType?.name ?? row.nodeTypeId} / ${component?.name ?? row.componentId}`,
+        label: t('models.oefImportElementOptionLabel', {
+          nodeType: nodeType?.name ?? row.nodeTypeId,
+          component: component?.name ?? row.componentId,
+        }),
       }
     })
 }
@@ -345,7 +352,10 @@ function relationshipCandidates(sourceType: string): Array<{ value: string; labe
       const relation = relationById.value.get(row.relationId!)
       return {
         value: `${row.linkTypeId}::${row.relationId}`,
-        label: `${linkType?.name ?? row.linkTypeId} / ${relation?.name ?? row.relationId}`,
+        label: t('models.oefImportRelationshipOptionLabel', {
+          linkType: linkType?.name ?? row.linkTypeId,
+          relation: relation?.name ?? row.relationId,
+        }),
       }
     })
 }
@@ -430,6 +440,9 @@ function submitImport(): void {
             <span>{{ t('models.oefImportStatNodes', { count: draft.nodes.length }) }}</span>
             <span>{{ t('models.oefImportStatLinks', { count: draft.links.length }) }}</span>
             <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
+            <span v-if="plannedFolderCount > 0">{{
+              t('models.oefImportStatFolders', { count: plannedFolderCount })
+            }}</span>
           </div>
           <p v-if="hasErrors" class="oef-import__error">{{ t('models.oefImportIssuesBlocking') }}</p>
           <div v-if="groupedIssues.length > 0" class="oef-import__issues">
@@ -487,6 +500,7 @@ function submitImport(): void {
 
         <div class="oef-import__mapping">
           <h4>{{ t('models.oefImportElementMappings') }}</h4>
+          <p class="oef-import__hint">{{ t('models.oefImportElementMappingHint') }}</p>
           <div class="oef-import__bulk">
             <select v-model="bulkElementValue" class="oef-import__select">
               <option value="">{{ t('models.oefImportBulkSelect') }}</option>
@@ -498,11 +512,16 @@ function submitImport(): void {
               {{ t('models.oefImportApplyToVisible') }}
             </button>
           </div>
+          <div class="oef-import__mapping-row oef-import__mapping-row--header" aria-hidden="true">
+            <span>{{ t('models.oefImportColSourceType') }}</span>
+            <span>{{ t('models.oefImportColNodeTypeComponent') }}</span>
+          </div>
           <div v-for="sourceType in elementRows" :key="`e-${sourceType}`" class="oef-import__mapping-row">
             <span class="oef-import__source">{{ sourceType }}</span>
             <select
               :value="elementMappingValue(sourceType)"
               class="oef-import__select"
+              :aria-label="t('models.oefImportColNodeTypeComponent')"
               @change="onSelectElementMapping(sourceType, ($event.target as HTMLSelectElement).value)"
             >
               <option value="">{{ t('common.none') }}</option>
@@ -515,6 +534,7 @@ function submitImport(): void {
 
         <div class="oef-import__mapping">
           <h4>{{ t('models.oefImportRelationshipMappings') }}</h4>
+          <p class="oef-import__hint">{{ t('models.oefImportRelationshipMappingHint') }}</p>
           <div class="oef-import__bulk">
             <select v-model="bulkRelationshipValue" class="oef-import__select">
               <option value="">{{ t('models.oefImportBulkSelect') }}</option>
@@ -526,11 +546,16 @@ function submitImport(): void {
               {{ t('models.oefImportApplyToVisible') }}
             </button>
           </div>
+          <div class="oef-import__mapping-row oef-import__mapping-row--header" aria-hidden="true">
+            <span>{{ t('models.oefImportColSourceType') }}</span>
+            <span>{{ t('models.oefImportColLinkTypeRelation') }}</span>
+          </div>
           <div v-for="sourceType in relationshipRows" :key="`r-${sourceType}`" class="oef-import__mapping-row">
             <span class="oef-import__source">{{ sourceType }}</span>
             <select
               :value="relationshipMappingValue(sourceType)"
               class="oef-import__select"
+              :aria-label="t('models.oefImportColLinkTypeRelation')"
               @change="onSelectRelationshipMapping(sourceType, ($event.target as HTMLSelectElement).value)"
             >
               <option value="">{{ t('common.none') }}</option>
@@ -547,6 +572,9 @@ function submitImport(): void {
           <span>{{ t('models.oefImportStatNodes', { count: draft.nodes.length }) }}</span>
           <span>{{ t('models.oefImportStatLinks', { count: draft.links.length }) }}</span>
           <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
+          <span v-if="plannedFolderCount > 0">{{
+            t('models.oefImportStatFolders', { count: plannedFolderCount })
+          }}</span>
         </div>
         <p class="oef-import__hint">
           {{ t('models.oefImportPreviewMapped', { nodes: mappedElementsCount, links: mappedRelationshipsCount }) }}
@@ -733,6 +761,20 @@ function submitImport(): void {
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+}
+
+.oef-import__mapping-row--header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .oef-import__source {

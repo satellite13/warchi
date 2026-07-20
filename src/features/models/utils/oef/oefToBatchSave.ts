@@ -8,6 +8,7 @@ import type {
 } from '@/features/models/modelAttrs'
 import {
   parseDiagramAttrs,
+  parseNodeAttrs,
   serializeDiagramAttrs,
   serializeLinkAttrs,
   serializeNodeAttrs,
@@ -24,6 +25,7 @@ import {
 } from '../diagramOnlyInstances'
 import { placeEdgeAnchorAtMidpoint } from '../edgeAnchorSync'
 import type { ImportMappingState } from './mappingState'
+import { buildOrganizationImportPlan } from './organizationImport'
 import type { ImportDraft, ImportDraftDiagramConnectionInstance } from './types'
 
 const DEFAULT_NOTE_DIAGRAM_STYLE = {
@@ -38,6 +40,9 @@ const DEFAULT_NOTE_DIAGRAM_STYLE = {
   labelPlacement: 'center',
 } as const
 
+/** Matches arepos BatchNodeCreate/BatchDiagramCreate @Size(max = 255) on name. */
+export const OEF_ENTITY_NAME_MAX_LENGTH = 255
+
 export type OefImportBuildWarningCode =
   | 'nodeTypeNotMapped'
   | 'linkTypeNotMapped'
@@ -45,6 +50,15 @@ export type OefImportBuildWarningCode =
   | 'diagramNodeMissingModelNode'
   | 'diagramConnectionMissingModelLink'
   | 'diagramConnectionMissingNodeInstance'
+  | 'nameTruncated'
+  | 'relationsBranchSkipped'
+  | 'directoryTypeMissing'
+  | 'directoryTypeCreated'
+
+export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
+  if (name.length <= maxLength) return name
+  return name.slice(0, maxLength)
+}
 
 export type OefImportBuildWarning = {
   code: OefImportBuildWarningCode
@@ -70,12 +84,21 @@ export type BuildOefBatchSaveParams = {
   draft: ImportDraft
   mapping: ImportMappingState
   notationId: string
+  /** Directory node type id; required to import organization folders. */
+  directoryNodeTypeId?: string | null
   parentNodeId?: string | null
   diagramVersion?: string
   force?: boolean
   nodeTypePropertyDefaultsById?: Record<string, Record<string, unknown>>
   componentPropertyDefaultsById?: Record<string, Record<string, unknown>>
   relationPropertyDefaultsById?: Record<string, Record<string, unknown>>
+}
+
+function makeDirectoryAttrs(treeOrder: number): string {
+  return serializeNodeAttrs({
+    ...parseNodeAttrs(null),
+    treeOrder,
+  })
 }
 
 function makeStableTempId(prefix: string, sourceId: string, used: Set<string>): string {
@@ -183,8 +206,58 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
 
   const nodeTempBySourceElementId = new Map<string, string>()
   const linkTempBySourceRelationshipId = new Map<string, string>()
+  const dirTempByKey = new Map<string, string>()
 
-  let treeOrder = 0
+  const orgPlan = buildOrganizationImportPlan(params.draft.organizations)
+  for (const warning of orgPlan.warnings) {
+    warnings.push({
+      code: 'relationsBranchSkipped',
+      message: warning.message,
+    })
+  }
+
+  const hasOrgFolders = orgPlan.directories.length > 0
+  if (hasOrgFolders && !params.directoryNodeTypeId) {
+    warnings.push({
+      code: 'directoryTypeMissing',
+      message: 'Directory node type is required to import organization folders',
+    })
+  }
+
+  const treeOrderByParent = new Map<string, number>()
+  const nextTreeOrder = (parentKey: string | null): number => {
+    const key = parentKey ?? '__root__'
+    const current = treeOrderByParent.get(key) ?? 0
+    treeOrderByParent.set(key, current + 1)
+    return current
+  }
+
+  if (hasOrgFolders && params.directoryNodeTypeId) {
+    for (const dir of orgPlan.directories) {
+      const tempId = makeStableTempId('oef-dir', dir.tempKey, usedIds)
+      dirTempByKey.set(dir.tempKey, tempId)
+      const parentId =
+        dir.parentTempKey != null
+          ? (dirTempByKey.get(dir.parentTempKey) ?? parentNodeId)
+          : parentNodeId
+      const name = truncateOefEntityName(dir.name)
+      if (name !== dir.name) {
+        warnings.push({
+          code: 'nameTruncated',
+          sourceId: dir.tempKey,
+          message: `Directory name truncated to ${OEF_ENTITY_NAME_MAX_LENGTH} characters`,
+        })
+      }
+      request.nodes.create.push({
+        tempId,
+        name: name || 'Folder',
+        nodeTypeId: params.directoryNodeTypeId,
+        parentNodeId: parentId,
+        attrs: makeDirectoryAttrs(nextTreeOrder(dir.parentTempKey)),
+      })
+    }
+  }
+
   for (const node of params.draft.nodes) {
     const mapped = params.mapping.elementTypeMap[node.sourceType]
     if (!mapped?.nodeTypeId || !mapped.componentId) {
@@ -197,16 +270,35 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       continue
     }
     const tempId = makeStableTempId('oef-node', node.sourceElementId, usedIds)
-    treeOrder += 1
     const typeDefaults = params.nodeTypePropertyDefaultsById?.[mapped.nodeTypeId] ?? {}
     const componentDefaults = params.componentPropertyDefaultsById?.[mapped.componentId] ?? {}
+    const name = truncateOefEntityName(node.name)
+    if (name !== node.name) {
+      warnings.push({
+        code: 'nameTruncated',
+        sourceType: node.sourceType,
+        sourceId: node.sourceElementId,
+        message: `Node name truncated to ${OEF_ENTITY_NAME_MAX_LENGTH} characters for "${node.sourceElementId}"`,
+      })
+    }
+    const orgParentKey = orgPlan.elementParentTempKey.get(node.sourceElementId)
+    const resolvedParent =
+      orgParentKey != null && params.directoryNodeTypeId
+        ? (dirTempByKey.get(orgParentKey) ?? parentNodeId)
+        : parentNodeId
     request.nodes.create.push({
       tempId,
-      name: node.name,
+      name: name || node.sourceElementId.slice(0, OEF_ENTITY_NAME_MAX_LENGTH),
       nodeTypeId: mapped.nodeTypeId,
-      parentNodeId,
+      parentNodeId: resolvedParent,
       attrs: serializeNodeAttrs(
-        makeNodeAttrs(params.notationId, mapped.componentId, treeOrder, typeDefaults, componentDefaults)
+        makeNodeAttrs(
+          params.notationId,
+          mapped.componentId,
+          nextTreeOrder(orgParentKey ?? null),
+          typeDefaults,
+          componentDefaults
+        )
       ),
     })
     nodeTempBySourceElementId.set(node.sourceElementId, tempId)
@@ -468,12 +560,26 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       },
     }
 
+    const diagramName = truncateOefEntityName(diagram.name)
+    if (diagramName !== diagram.name) {
+      warnings.push({
+        code: 'nameTruncated',
+        sourceId: diagram.sourceViewId,
+        diagramId: diagram.sourceViewId,
+        message: `Diagram name truncated to ${OEF_ENTITY_NAME_MAX_LENGTH} characters for "${diagram.sourceViewId}"`,
+      })
+    }
+    const viewOrgKey = orgPlan.viewParentTempKey.get(diagram.sourceViewId)
+    const diagramParentNodeId =
+      viewOrgKey != null && params.directoryNodeTypeId
+        ? (dirTempByKey.get(viewOrgKey) ?? parentNodeId)
+        : parentNodeId
     request.diagrams.create.push({
       tempId: diagramTempId,
-      name: diagram.name,
+      name: diagramName || diagram.sourceViewId.slice(0, OEF_ENTITY_NAME_MAX_LENGTH),
       version: diagramVersion,
       notationId: params.notationId,
-      nodeId: parentNodeId,
+      nodeId: diagramParentNodeId,
       attrs: serializeDiagramAttrs(diagramAttrs),
     })
   }

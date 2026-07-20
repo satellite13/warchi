@@ -3,6 +3,7 @@ import type { ImportIssue, OefParsedModel } from './types'
 
 export type OefNormalizeResponse = OefParsedModel & {
   issues: ImportIssue[]
+  organizations?: OefParsedModel['organizations']
 }
 
 export type OefNormalizeProgress = ApiUploadProgress & {
@@ -42,6 +43,7 @@ export function toOefParsedModel(response: OefNormalizeResponse): OefParsedModel
     elements: response.elements,
     relationships: response.relationships,
     views: response.views,
+    organizations: Array.isArray(response.organizations) ? response.organizations : [],
   }
 }
 

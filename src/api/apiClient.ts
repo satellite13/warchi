@@ -113,6 +113,24 @@ const extractErrorMessage = (status: number, rawText: string): string => {
     const parsed = JSON.parse(rawText) as unknown
     if (parsed && typeof parsed === "object") {
       const record = parsed as Record<string, unknown>
+      const fieldErrors = record.fieldErrors
+      if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+        const parts = fieldErrors
+          .slice(0, 3)
+          .map(item => {
+            if (!item || typeof item !== "object") return null
+            const row = item as Record<string, unknown>
+            const field = typeof row.field === "string" ? row.field : null
+            const message = typeof row.message === "string" ? row.message : null
+            if (field && message) return `${field}: ${message}`
+            return field || message
+          })
+          .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+        if (parts.length > 0) {
+          const more = fieldErrors.length > parts.length ? ` (+${fieldErrors.length - parts.length})` : ""
+          return `Validation failed: ${parts.join("; ")}${more}`
+        }
+      }
       const preferredKeys = ["message", "detail", "error", "title"]
       for (const key of preferredKeys) {
         const value = record[key]

@@ -30,6 +30,15 @@ export const modelsMessages = {
       oefImportSelectedFile: 'Выбран файл: {name}',
       oefImportElementMappings: 'Маппинг типов элементов',
       oefImportRelationshipMappings: 'Маппинг типов связей',
+      oefImportColSourceType: 'Тип в OEF',
+      oefImportColNodeTypeComponent: 'Тип ноды / Компонент',
+      oefImportColLinkTypeRelation: 'Тип связи / Relation',
+      oefImportElementMappingHint:
+        'В селекте слева направо: тип ноды модели, затем компонент выбранной нотации (имена часто совпадают).',
+      oefImportRelationshipMappingHint:
+        'В селекте слева направо: тип связи модели, затем relation выбранной нотации (имена часто совпадают).',
+      oefImportElementOptionLabel: '{nodeType} / {component}',
+      oefImportRelationshipOptionLabel: '{linkType} / {relation}',
       oefImportIssuesTitle: 'Проблемы входных данных',
       oefImportWarningsHint: 'Импорт выполнится с предупреждениями.',
       oefImportRun: 'Импортировать',
@@ -102,6 +111,13 @@ export const modelsMessages = {
         'Диаграммная связь пропущена: не найдена связь модели',
       oefImportWarningDiagramConnectionMissingNodeInstance:
         'Диаграммная связь пропущена: не найдены инстансы нод',
+      oefImportWarningNameTruncated: 'Имя обрезано до 255 символов (лимит API)',
+      oefImportWarningRelationsBranchSkipped: 'Пропущена ветка Relations из organizations',
+      oefImportWarningDirectoryTypeMissing: 'Нет типа Directory — папки не созданы',
+      oefImportWarningDirectoryTypeCreated: 'Тип Directory создан автоматически',
+      oefImportDirectoryTypeCreateFailed:
+        'Не удалось создать тип Directory для папок импорта: {message}',
+      oefImportStatFolders: 'Папок: {count}',
       showDiagramSettings: 'Показать настройки диаграммы',
       hideDiagramSettings: 'Скрыть настройки',
       enableSelectionSync: 'Включить синхронизацию выбора',
@@ -441,6 +457,15 @@ export const modelsMessages = {
       oefImportSelectedFile: 'Selected file: {name}',
       oefImportElementMappings: 'Element type mapping',
       oefImportRelationshipMappings: 'Relationship type mapping',
+      oefImportColSourceType: 'OEF type',
+      oefImportColNodeTypeComponent: 'Node type / Component',
+      oefImportColLinkTypeRelation: 'Link type / Relation',
+      oefImportElementMappingHint:
+        'In the select, left to right: model node type, then notation component (names often match).',
+      oefImportRelationshipMappingHint:
+        'In the select, left to right: model link type, then notation relation (names often match).',
+      oefImportElementOptionLabel: '{nodeType} / {component}',
+      oefImportRelationshipOptionLabel: '{linkType} / {relation}',
       oefImportIssuesTitle: 'Input issues',
       oefImportWarningsHint: 'Import will proceed with warnings.',
       oefImportRun: 'Import',
@@ -513,6 +538,13 @@ export const modelsMessages = {
         'Diagram connection skipped: model link is missing',
       oefImportWarningDiagramConnectionMissingNodeInstance:
         'Diagram connection skipped: source/target node instance is missing',
+      oefImportWarningNameTruncated: 'Name truncated to 255 characters (API limit)',
+      oefImportWarningRelationsBranchSkipped: 'Skipped Relations organization branch',
+      oefImportWarningDirectoryTypeMissing: 'Directory type missing — folders were not created',
+      oefImportWarningDirectoryTypeCreated: 'Directory node type was created automatically',
+      oefImportDirectoryTypeCreateFailed:
+        'Failed to create Directory type for import folders: {message}',
+      oefImportStatFolders: 'Folders: {count}',
       showDiagramSettings: 'Show diagram settings',
       hideDiagramSettings: 'Hide settings',
       enableSelectionSync: 'Enable selection sync',

@@ -21,7 +21,8 @@ function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name:
   }
 }
 
-function expectTextLabelOptions(value: string | TextLabelOptions): TextLabelOptions {
+function expectTextLabelOptions(value: string | TextLabelOptions | undefined): TextLabelOptions {
+  expect(value).toBeDefined()
   expect(typeof value).toBe('object')
   return value as TextLabelOptions
 }

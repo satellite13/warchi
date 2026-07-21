@@ -49,11 +49,13 @@ export function resolveDiagramEdgeEndpoint(params: {
       pathParam: anchor.pathParam,
     }
   }
+  // Prefer an explicit port over a leftover outline param (e.g. after turning off
+  // attach-to-outline and reconnecting to a side port).
+  if (params.portId) {
+    return { nodeId: params.papNodeId, portId: params.portId }
+  }
   if (params.outlineParam !== undefined) {
     return { nodeId: params.papNodeId, outlineParam: params.outlineParam }
   }
-  return {
-    nodeId: params.papNodeId,
-    ...(params.portId ? { portId: params.portId } : {}),
-  }
+  return { nodeId: params.papNodeId }
 }

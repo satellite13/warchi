@@ -33,4 +33,17 @@ describe('resolveDiagramEdgeEndpoint', () => {
       })
     ).toEqual({ nodeId: 'instance-n1', outlineParam: 0.3 })
   })
+
+  it('prefers portId over stale outlineParam', () => {
+    expect(
+      resolveDiagramEdgeEndpoint({
+        instanceId: 'n1',
+        papNodeId: 'instance-n1',
+        outlineParam: 0.3,
+        portId: 'anchor:right:1',
+        anchorLookup: new Map(),
+        hostEdgeExists: () => true,
+      })
+    ).toEqual({ nodeId: 'instance-n1', portId: 'anchor:right:1' })
+  })
 })

@@ -31,6 +31,7 @@ import {
   useNotationVersionBanner,
   useNoteEditor,
   useOefImport,
+  ensureNotationImportCatalog,
 } from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import {
@@ -94,6 +95,8 @@ const {
   loadModel,
   discardUnsavedChanges,
   saveChanges,
+  startSave,
+  finishSave,
   markNodeDirty,
   markLinkDirty,
   markDiagramDirty,
@@ -812,6 +815,15 @@ const {
   loadModel,
 })
 
+async function ensureImportNotationCatalog(notationId: string): Promise<void> {
+  await ensureNotationImportCatalog({
+    modelId: state.value.modelId,
+    notationId,
+    state: state.value,
+    ensureNotationRelationsAndRules,
+  })
+}
+
 const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
 const pendingDeleteEdgeInstanceId = ref<string | null>(null)
@@ -1242,26 +1254,46 @@ const validateRequiredCustomProperties = (): string | null => {
   return issue ? t(issue.key, issue.params) : null
 }
 
-const saveWithValidation = async (): Promise<boolean> => {
-  const validationError = validateRequiredCustomProperties()
-  if (validationError) {
-    setUiError(validationError)
-    return false
-  }
-  // Проверить, что лок ещё наш, до начала сохранения
-  const lockOk = await verifyLockBeforeSave()
-  if (!lockOk) return false
+/** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
+const yieldToUiPaint = (): Promise<void> =>
+  new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
 
-  diagramCanvasRef.value?.flushCanvasState()
+const saveWithValidation = async (): Promise<boolean> => {
+  if (isSaving.value) return false
+
+  // Show toast immediately — validation/lock/flush can block the main thread for a while.
+  startSave()
+  saveProgress.value = t('common.saving')
   await nextTick()
-  const ok = await saveChanges()
-  if (ok) {
-    diagramInteractionManager.value?.history?.clear?.()
-    if (activeDiagram.value?.id && diagramRenderer.value) {
-      void uploadDiagramPreview()
+  await yieldToUiPaint()
+
+  try {
+    const validationError = validateRequiredCustomProperties()
+    if (validationError) {
+      setUiError(validationError)
+      return false
     }
+    // Проверить, что лок ещё наш, до начала сохранения
+    const lockOk = await verifyLockBeforeSave()
+    if (!lockOk) return false
+
+    diagramCanvasRef.value?.flushCanvasState()
+    await nextTick()
+    const ok = await saveChanges()
+    if (ok) {
+      diagramInteractionManager.value?.history?.clear?.()
+      if (activeDiagram.value?.id && diagramRenderer.value) {
+        void uploadDiagramPreview()
+      }
+    }
+    return ok
+  } finally {
+    if (isSaving.value) finishSave()
   }
-  return ok
 }
 
 const saveAndSwitchDiagram = async () => {
@@ -3183,6 +3215,7 @@ onBeforeUnmount(() => {
     :relations="state.relations"
     :import-busy="isImportingOef"
     :import-progress="oefImportProgress"
+    :ensure-notation-catalog="ensureImportNotationCatalog"
     @close="showImportWizard = false"
     @submit="handleOefImportSubmit"
   />

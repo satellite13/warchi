@@ -33,6 +33,35 @@ describe('notationAttrs composite schema', () => {
     expect(parsed.diagramStyle?.stylePropertyBindings?.[0]?.propertyName).toBe('status')
   })
 
+  it('round-trips showLabel boolean on diagramStyle', () => {
+    const withFalse = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: { showLabel: false, fillColor: '#fff' },
+      })
+    )
+    expect(withFalse.diagramStyle?.showLabel).toBe(false)
+
+    const withTrue = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: { showLabel: true },
+      })
+    )
+    expect(withTrue.diagramStyle?.showLabel).toBe(true)
+
+    const absent = parseEntityAttrs(
+      JSON.stringify({
+        tags: [],
+        customProperties: [],
+        diagramStyle: { fillColor: '#fff' },
+      })
+    )
+    expect(absent.diagramStyle?.showLabel).toBeUndefined()
+  })
+
   it('preserves all compositeShapeType variants on parse', () => {
     for (const compositeShapeType of [
       'rectangle',

@@ -977,7 +977,11 @@ function buildNodeLabel(
   ds?: DiagramStyle,
   modelNodeId?: string,
   nodeInstanceId?: string
-): string | TextLabelOptions {
+): string | TextLabelOptions | undefined {
+  if (ds?.showLabel === false) {
+    return undefined
+  }
+
   const hasTemplate = !!ds?.labelTemplate
   let displayText = name
   if (hasTemplate && modelNodeId) {
@@ -1198,7 +1202,9 @@ function syncDiagram() {
       existing.style = nextStyle
       existing.anchorPoints = resolveComponentAnchorPoints(ds)
       const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id)
-      if (typeof newLabel === 'string') {
+      if (newLabel === undefined) {
+        existing.label = undefined
+      } else if (typeof newLabel === 'string') {
         existing.label = newLabel
       } else {
         existing.label = new TextLabel(newLabel)

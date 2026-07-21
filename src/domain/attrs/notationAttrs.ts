@@ -160,6 +160,8 @@ export type DiagramStyle = {
   customShapeId?: string
   // Label template for composite labels
   labelTemplate?: string
+  /** When false, do not draw the node label on the canvas. Default: true (absent = show). */
+  showLabel?: boolean
   // Composite-only fields
   compositeContent?: CompositeSerializedCComponent
   compositeShapeType?: 'rectangle' | 'beveled-rectangle' | 'diamond' | 'circle' | 'trapezoid' | 'slanted-rectangle' | 'custom'
@@ -412,6 +414,7 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   }
   if (typeof value.customShapeId === 'string') style.customShapeId = value.customShapeId
   if (typeof value.labelTemplate === 'string') style.labelTemplate = value.labelTemplate
+  if (typeof value.showLabel === 'boolean') style.showLabel = value.showLabel
   const compositeContent = normalizeCompositeContent(value.compositeContent)
   if (compositeContent) style.compositeContent = compositeContent
   const allowedCompositeShapes: DiagramStyle['compositeShapeType'][] = [

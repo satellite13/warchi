@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-21
+
+### Added
+- `showLabel` flag in figure style: hide the canvas label while keeping the entity name in trees/panels.
+- OEF import mapping loads the selected notation catalog (components/relations/types) even when the model has no diagrams for that notation yet; mapping dropdowns list all available targets.
+
+### Fixed
+- Toolbar toggles for outline attach / lock anchors / grid extras apply reliably (no skipped side-effect when local state was already synced).
+- After drag, node positions no longer snap back when edge-to-edge links update midpoints.
+- With «Lock link anchors» off, edge ends float to the nearest port toward the other node; turning the toggle off clears stored ports (requires papirus 0.7.1).
+- After turning off «Attach to outline», reconnecting an end to a port no longer snaps back to the old outline point.
+- Save toast appears immediately; validation / canvas flush no longer freeze the UI before «Saving…».
+
 ## [0.9.0] - 2026-07-21
 
 ### Added

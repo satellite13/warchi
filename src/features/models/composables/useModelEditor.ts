@@ -134,7 +134,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
     isLoading.value = true
     errorMessage.value = null
-    let notationIds: string[] = []
+    let notationIds: string[]
     let resolveCatalogReady: () => void = () => undefined
     let resolveBackgroundReady: () => void = () => undefined
     catalogReadyPromise = new Promise<void>(resolve => {

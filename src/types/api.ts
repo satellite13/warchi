@@ -223,6 +223,7 @@ export interface NotationMetaResponse {
   ownerId: string
   ownerEmail: string
   ownerDisplayName: string
+  deleted?: boolean
 }
 
 // ── Node Types ──

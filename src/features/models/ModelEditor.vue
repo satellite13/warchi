@@ -27,6 +27,7 @@ import {
   useModelToolbarState,
   useModelTreeOperations,
   useModelVersionDiff,
+  useDiagramNotationMigration,
   useNotationVersionBanner,
   useNoteEditor,
   useOefImport,
@@ -636,6 +637,27 @@ const {
 })
 
 const {
+  showMigrateModal,
+  migrateTarget,
+  isMigrating,
+  migratePreviewUnmapped,
+  openMigrateModal,
+  closeMigrateModal,
+  confirmMigrateNotation,
+} = useDiagramNotationMigration({
+  state,
+  activeDiagram,
+  isDiagramReadOnly,
+  newerNotationVersions,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  markDiagramDirty,
+  markNodeDirty,
+  markLinkDirty,
+  ensureNotationRelationsAndRules,
+})
+
+const {
   showNoteEditorModal,
   editingNoteInstanceId,
   noteEditorText,
@@ -1027,6 +1049,7 @@ const {
   showReuseLinkModal,
   reuseLinkOptions,
   startConnectNodes,
+  connectNodeToEdge,
   finalizeConnection,
   handleCreateNewLinkFromReuseModal,
   handleRequestAutoLink,
@@ -2432,7 +2455,8 @@ onBeforeUnmount(() => {
         <div
           class="model-canvas-area"
           :class="{
-            'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram,
+            'model-canvas-area--has-newer-banner':
+              newerNotationVersions.length > 0 && !!activeDiagram && !isDiagramReadOnly,
           }"
         >
           <template v-if="activeDiagram && !isDiagramReadOnly">
@@ -2494,16 +2518,25 @@ onBeforeUnmount(() => {
             </div>
           </template>
           <div
-            v-if="newerNotationVersions.length > 0 && activeDiagram"
+            v-if="newerNotationVersions.length > 0 && activeDiagram && !isDiagramReadOnly"
             class="model-canvas-area__newer-notation-banner"
           >
             <span class="material-symbols-outlined model-canvas-area__newer-notation-icon">info</span>
-            {{
-              t('diagram.newerNotationVersionsBanner', {
-                name: newerNotationVersions[0]?.name ?? '',
-                version: newerNotationVersions[0]?.version ?? '',
-              })
-            }}
+            <span class="model-canvas-area__newer-notation-text">
+              {{
+                t('diagram.newerNotationVersionsBanner', {
+                  name: newerNotationVersions[0]?.name ?? '',
+                  version: newerNotationVersions[0]?.version ?? '',
+                })
+              }}
+            </span>
+            <button
+              type="button"
+              class="btn btn--primary btn--sm model-canvas-area__newer-notation-action"
+              @click="openMigrateModal()"
+            >
+              {{ t('diagram.migrateNotationAction') }}
+            </button>
           </div>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
@@ -2583,6 +2616,7 @@ onBeforeUnmount(() => {
             @add-existing-node="addExistingNodeToDiagram"
             @place-existing-model-link="placeTraceLinkOnDiagram"
             @connect-nodes="startConnectNodes"
+            @connect-node-to-edge="connectNodeToEdge"
             @request-auto-link="handleRequestAutoLink"
             @reconnect-edge="handleReconnectEdge"
             @find-in-tree="handleFindInTree"
@@ -2784,6 +2818,55 @@ onBeforeUnmount(() => {
         @click="createNode"
       >
         {{ t('common.create') }}
+      </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showMigrateModal && migrateTarget"
+    :title="t('diagram.migrateNotationTitle')"
+    max-width="520px"
+    @close="closeMigrateModal"
+  >
+    <p class="leave-text">
+      {{
+        t('diagram.migrateNotationConfirm', {
+          name: migrateTarget.name,
+          version: migrateTarget.version,
+        })
+      }}
+    </p>
+    <p class="leave-text">{{ t('diagram.migrateNotationHint') }}</p>
+    <div
+      v-if="migratePreviewUnmapped.components.length || migratePreviewUnmapped.relations.length"
+      class="leave-text leave-text--warning"
+    >
+      <p v-if="migratePreviewUnmapped.components.length">
+        {{
+          t('diagram.migrateNotationUnmappedComponents', {
+            list: migratePreviewUnmapped.components.join(', '),
+          })
+        }}
+      </p>
+      <p v-if="migratePreviewUnmapped.relations.length">
+        {{
+          t('diagram.migrateNotationUnmappedRelations', {
+            list: migratePreviewUnmapped.relations.join(', '),
+          })
+        }}
+      </p>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" :disabled="isMigrating" @click="closeMigrateModal">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        :disabled="isMigrating"
+        @click="confirmMigrateNotation"
+      >
+        {{ isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction') }}
       </button>
     </template>
   </BaseModal>
@@ -3563,7 +3646,7 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3574,13 +3657,38 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 
+.model-canvas-area__newer-notation-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-canvas-area__newer-notation-action {
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
 .model-canvas-area__newer-notation-icon {
   font-size: 18px;
   flex-shrink: 0;
 }
 
+/* Keep overlays below the full-width banner strip */
 .model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
-  top: 42px;
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner .canvas-settings-toggle,
+.model-canvas-area--has-newer-banner .canvas-settings {
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner :deep(.canvas-palette-toggle),
+.model-canvas-area--has-newer-banner :deep(.canvas-palette) {
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner .relation-rules-loading-badge {
+  top: 96px;
 }
 
 .model-canvas-area__toolbar {

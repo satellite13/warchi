@@ -8,7 +8,19 @@ export const diagramMessages = {
       selectElementToEditProperties: 'Выберите элемент на диаграмме',
       selectElement: 'Выберите элемент',
       selectElementHint: 'Нажмите на ноду или связь на диаграмме',
-      newerNotationVersionsBanner: 'Есть новая версия нотации ({name} {version}). Можно перейти.',
+      newerNotationVersionsBanner: 'Есть новая версия нотации ({name} {version}).',
+      migrateNotationAction: 'Перейти',
+      migrateNotationTitle: 'Перейти на новую версию нотации',
+      migrateNotationConfirm:
+        'Диаграмма будет переведена на нотацию «{name}» {version}. Привязки компонентов и отношений сопоставятся по имени.',
+      migrateNotationHint:
+        'Изменения останутся несохранёнными — нажмите «Сохранить», чтобы записать их в модель. Старые привязки к прежней нотации на нодах сохраняются для других диаграмм.',
+      migrateNotationInProgress: 'Переход…',
+      migrateNotationFailed: 'Не удалось перейти на новую версию нотации.',
+      migrateNotationUnmappedError:
+        'Не удалось сопоставить все компоненты или отношения, используемые на диаграмме. Миграция отменена.',
+      migrateNotationUnmappedComponents: 'Не сопоставлены компоненты: {list}',
+      migrateNotationUnmappedRelations: 'Не сопоставлены отношения: {list}',
       link: 'Связь',
       node: 'Нода',
       notationComponent: 'Компонент нотации',
@@ -258,7 +270,19 @@ export const diagramMessages = {
       selectElementToEditProperties: 'Select an element on the diagram',
       selectElement: 'Select an element',
       selectElementHint: 'Click a node or link on the diagram',
-      newerNotationVersionsBanner: 'A newer notation version is available ({name} {version}). You can migrate.',
+      newerNotationVersionsBanner: 'A newer notation version is available ({name} {version}).',
+      migrateNotationAction: 'Migrate',
+      migrateNotationTitle: 'Migrate to a newer notation version',
+      migrateNotationConfirm:
+        'This diagram will switch to notation “{name}” {version}. Component and relation bindings are matched by name.',
+      migrateNotationHint:
+        'Changes stay unsaved until you click Save. Previous notation bindings on model nodes are kept for other diagrams.',
+      migrateNotationInProgress: 'Migrating…',
+      migrateNotationFailed: 'Failed to migrate to the newer notation version.',
+      migrateNotationUnmappedError:
+        'Could not match all components or relations used on this diagram. Migration was cancelled.',
+      migrateNotationUnmappedComponents: 'Unmapped components: {list}',
+      migrateNotationUnmappedRelations: 'Unmapped relations: {list}',
       link: 'Link',
       node: 'Node',
       notationComponent: 'Notation component',

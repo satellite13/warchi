@@ -548,6 +548,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
           attrs: {
             isEdgeAnchor: true,
             hostEdgeInstanceId: hostEdgeId,
+            pathParam: 0.5,
             diagramStyle: { ...DEFAULT_EDGE_ANCHOR_DIAGRAM_STYLE },
           },
         }

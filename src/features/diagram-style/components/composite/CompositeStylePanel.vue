@@ -245,6 +245,7 @@ function emitStyle() {
     labelAlign: props.currentDiagramStyle?.labelAlign,
     labelVerticalAlign: props.currentDiagramStyle?.labelVerticalAlign,
     labelTemplate: props.currentDiagramStyle?.labelTemplate,
+    showLabel: props.currentDiagramStyle?.showLabel,
     // Preserve icon fields from original style
     iconName: props.currentDiagramStyle?.iconName,
     iconPlacement: props.currentDiagramStyle?.iconPlacement,

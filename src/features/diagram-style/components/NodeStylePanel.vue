@@ -194,6 +194,7 @@ function confirmSavePreset() {
       labelInset: insetToPlain(labelInset.value),
       labelAlign: labelAlign.value,
       labelVerticalAlign: labelVerticalAlign.value,
+      showLabel: showLabel.value,
       width: nodeWidth.value,
       height: nodeHeight.value,
       contentInset: insetToPlain(contentInset.value),
@@ -274,6 +275,7 @@ function applyComponentPreset(presetName: string) {
   labelFontSize.value = style.labelFontSize ?? 14;
   labelInset.value = toInsetSides(style.labelInset, 8);
   labelVerticalAlign.value = (style.labelVerticalAlign as "top" | "middle" | "bottom") ?? "middle";
+  showLabel.value = style.showLabel !== false;
   // Only update dimensions if explicitly specified in preset
   if (style.width !== undefined) nodeWidth.value = style.width;
   if (style.height !== undefined) nodeHeight.value = style.height;
@@ -320,7 +322,9 @@ function applyComponentPreset(presetName: string) {
   // Apply label properties and dimensions
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
-    if (node.label) {
+    if (!showLabel.value) {
+      node.label = undefined;
+    } else if (node.label) {
       node.label.style = textStyleWith(node.label.style, {
         color: labelColor.value,
         fontSize: labelFontSize.value,
@@ -517,7 +521,7 @@ function iconConfig() {
 const {
   iconName, iconPlacement, iconWidth, iconHeight, iconInset, iconStrokeColor, iconFillColor,
   nodeShape, label, fillColor, fillOpacity, strokeColor, strokeOpacity, strokeWidth,
-  cornerRadius, opacity, lineStyle, lineDashPattern, labelTemplate, labelColor, labelOpacity,
+  cornerRadius, opacity, lineStyle, lineDashPattern, labelTemplate, showLabel, labelColor, labelOpacity,
   labelFontSize, labelInset, labelAlign, labelVerticalAlign, nodeWidth, nodeHeight, contentInset,
   nodePortsTop, nodePortsBottom, nodePortsLeft, nodePortsRight,
   customOutlineRef, customShapeIdRef,
@@ -586,6 +590,9 @@ watch(() => props.selectedElementId, () => {
 
 watch(() => props.currentDiagramStyle?.labelTemplate, (val) => {
   labelTemplate.value = val ?? "";
+});
+watch(() => props.currentDiagramStyle?.showLabel, (val) => {
+  showLabel.value = val !== false;
 });
 
 watch(
@@ -885,7 +892,7 @@ function applyNodeStyle(updates: Partial<ExtendedNodeStyle>) {
 
 function handleLabelChange(value: string) {
   label.value = value;
-  if (!props.selectedElementId || !props.interactionManager) return;
+  if (!showLabel.value || !props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (value) {
       if (node.label) {
@@ -897,6 +904,35 @@ function handleLabelChange(value: string) {
       node.label = undefined;
     }
   });
+}
+
+function handleShowLabelChange(value: boolean) {
+  showLabel.value = value;
+  resetComponentPreset();
+  if (props.selectedElementId && props.interactionManager) {
+    props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+      if (!value) {
+        node.label = undefined;
+        return;
+      }
+      if (!label.value) {
+        node.label = undefined;
+        return;
+      }
+      node.label = new TextLabel({
+        text: label.value,
+        style: {
+          color: labelColor.value,
+          fontSize: labelFontSize.value,
+          opacity: labelOpacity.value,
+          align: labelAlign.value,
+          verticalAlign: labelVerticalAlign.value,
+        },
+        inset: insetToPlain(labelInset.value),
+      });
+    });
+  }
+  emitNodeStyle();
 }
 
 function handleFillChange(value: string) {
@@ -1764,6 +1800,9 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             :open="nodeSection.label"
             @toggle="toggleSection(nodeSection, 'label')"
           >
+                <LabeledFieldRow :label="t('nodeStyle.showLabel')">
+                  <ToggleSwitch :model-value="showLabel" @update:model-value="handleShowLabelChange" />
+                </LabeledFieldRow>
                 <div class="sp-field">
                   <input class="sp-input sp-input--full" :value="label" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleLabelChange(($event.target as HTMLInputElement).value)">
                 </div>

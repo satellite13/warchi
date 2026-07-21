@@ -62,6 +62,7 @@ export function useNodeStyleState() {
   const lineStyle = ref<'solid' | 'dashed'>('solid')
   const lineDashPattern = ref('8,4')
   const labelTemplate = ref('')
+  const showLabel = ref(true)
   const labelColor = ref('#333333')
   const labelOpacity = ref(1)
   const labelFontSize = ref(14)
@@ -178,6 +179,7 @@ export function useNodeStyleState() {
     labelVerticalAlign.value =
       labelStyle?.verticalAlign ?? 'middle'
     labelTemplate.value = currentDiagramStyle?.labelTemplate ?? ''
+    showLabel.value = currentDiagramStyle?.showLabel !== false
     compositeContentJson.value = currentDiagramStyle?.compositeContent
       ? JSON.stringify(currentDiagramStyle.compositeContent, null, 2)
       : ''
@@ -243,6 +245,7 @@ export function useNodeStyleState() {
       labelInset: insetToPlain(labelInset.value),
       labelAlign: labelAlign.value,
       labelVerticalAlign: labelVerticalAlign.value,
+      showLabel: showLabel.value,
       ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
       ...(nodeShape.value === 'composite' && compositeContent ? { compositeContent } : {}),
       ...(nodeShape.value === 'composite' && stylePropertyBindings
@@ -306,6 +309,7 @@ export function useNodeStyleState() {
     lineStyle,
     lineDashPattern,
     labelTemplate,
+    showLabel,
     labelColor,
     labelOpacity,
     labelFontSize,

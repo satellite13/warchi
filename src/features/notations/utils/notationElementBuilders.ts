@@ -60,7 +60,11 @@ export function buildNodeLabel(
   ds?: DiagramStyle,
   customProperties?: CustomProperty[],
   typeProperties?: CustomProperty[],
-): string | TextLabelOptions {
+): string | TextLabelOptions | undefined {
+  if (ds?.showLabel === false) {
+    return undefined
+  }
+
   const hasTemplate = !!ds?.labelTemplate
   const displayText = hasTemplate
     ? resolveLabelTemplate(

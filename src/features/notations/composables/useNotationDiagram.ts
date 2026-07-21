@@ -278,7 +278,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           component.parsedAttrs.customProperties.filter((p) => !p.system),
           typeCustomPropertiesForComponent(component),
         )
-        if (typeof newLabel === "string") {
+        if (newLabel === undefined) {
+          existing.label = undefined
+        } else if (typeof newLabel === "string") {
           existing.label = newLabel
         } else {
           existing.label = new TextLabel(newLabel)

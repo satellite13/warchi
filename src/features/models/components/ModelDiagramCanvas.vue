@@ -20,6 +20,7 @@ import {
   type EdgePathType,
   type EdgeStyle,
   type CContainer,
+  isNodeEdgeEndpoint,
 } from '@ngroznykh/papirus'
 import {
   createDiagramNode,
@@ -241,15 +242,9 @@ const rulersEnabled = ref(props.rulersEnabled)
 const lockAnchorsEnabled = ref(props.lockAnchorsEnabled)
 const attachToOutlineEnabled = ref(props.attachToOutlineEnabled)
 
-// Sync local refs when parent changes props after mount
-watch(() => props.paletteVisible, (v) => { paletteVisible.value = v })
-watch(() => props.gridVisible, (v) => { gridVisible.value = v })
-watch(() => props.miniMapVisible, (v) => { miniMapVisible.value = v })
-watch(() => props.snapEnabled, (v) => { snapEnabled.value = v })
-watch(() => props.alignEnabled, (v) => { alignEnabled.value = v })
-watch(() => props.rulersEnabled, (v) => { rulersEnabled.value = v })
-watch(() => props.lockAnchorsEnabled, (v) => { lockAnchorsEnabled.value = v })
-watch(() => props.attachToOutlineEnabled, (v) => { attachToOutlineEnabled.value = v })
+// Toolbar props are synced in the side-effect watches below (grid/snap/outline/…).
+// Do not add a second prop→ref watch here: it races those watchers and skips
+// setAttachToOutline / setSnapToGrid / etc. via `if (next === local) return`.
 const canUndo = ref(false)
 const canRedo = ref(false)
 /** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
@@ -977,7 +972,11 @@ function buildNodeLabel(
   ds?: DiagramStyle,
   modelNodeId?: string,
   nodeInstanceId?: string
-): string | TextLabelOptions {
+): string | TextLabelOptions | undefined {
+  if (ds?.showLabel === false) {
+    return undefined
+  }
+
   const hasTemplate = !!ds?.labelTemplate
   let displayText = name
   if (hasTemplate && modelNodeId) {
@@ -1198,7 +1197,9 @@ function syncDiagram() {
       existing.style = nextStyle
       existing.anchorPoints = resolveComponentAnchorPoints(ds)
       const newLabel = buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id)
-      if (typeof newLabel === 'string') {
+      if (newLabel === undefined) {
+        existing.label = undefined
+      } else if (typeof newLabel === 'string') {
         existing.label = newLabel
       } else {
         existing.label = new TextLabel(newLabel)
@@ -1417,9 +1418,14 @@ function syncEdgeAnchors(options: { persist: boolean; updateRenderer: boolean })
 
   if (options.persist) {
     const next = cloneDiagramAttrs()
+    // cloneDiagramAttrs reads props that may still be pre-drag (parent has not flushed a
+    // prior updateDiagram). Re-apply live renderer positions so edge-anchor persistence
+    // cannot snap moved nodes back to their old coordinates.
+    applyNodePositionsToDiagram(next, Array.from(nodeIdToInstance.keys()))
     const { nodes, changed } = syncEdgeAnchorPositions(next.instances.nodes, midpoints)
     if (changed) {
       next.instances.nodes = nodes
+      syncEdgePortIds(next)
       emit('updateDiagram', next)
     }
   }
@@ -1685,6 +1691,64 @@ function detectEdgeLabelChanges() {
   }
 }
 
+/**
+ * Drop fixed outline attachments from live edges when "attach to outline" is turned off.
+ * Stale outlineParam would otherwise win over ports on the next diagram sync.
+ */
+function clearOutlineParamsFromRendererEdges(): void {
+  if (!renderer) return
+  let cleared = false
+  for (const [, edge] of renderer.edges) {
+    if (isNodeEdgeEndpoint(edge.from) && edge.from.outlineParam !== undefined) {
+      edge.from = {
+        nodeId: edge.from.nodeId,
+        ...(edge.from.portId ? { portId: edge.from.portId } : {}),
+      }
+      cleared = true
+    }
+    if (isNodeEdgeEndpoint(edge.to) && edge.to.outlineParam !== undefined) {
+      edge.to = {
+        nodeId: edge.to.nodeId,
+        ...(edge.to.portId ? { portId: edge.to.portId } : {}),
+      }
+      cleared = true
+    }
+  }
+  if (cleared) {
+    detectEdgePortChanges()
+  }
+}
+
+/**
+ * Drop fixed side-port attachments when "lock link anchors" is turned off so ends can float
+ * toward the opposite node. Also clears persisted fromPortId/toPortId via detectEdgePortChanges.
+ */
+function clearLockedPortsFromRendererEdges(): void {
+  if (!renderer) return
+  let cleared = false
+  for (const [, edge] of renderer.edges) {
+    if (isNodeEdgeEndpoint(edge.from) && edge.from.portId) {
+      edge.from = {
+        nodeId: edge.from.nodeId,
+        ...(edge.from.outlineParam !== undefined
+          ? { outlineParam: edge.from.outlineParam }
+          : {}),
+      }
+      cleared = true
+    }
+    if (isNodeEdgeEndpoint(edge.to) && edge.to.portId) {
+      edge.to = {
+        nodeId: edge.to.nodeId,
+        ...(edge.to.outlineParam !== undefined ? { outlineParam: edge.to.outlineParam } : {}),
+      }
+      cleared = true
+    }
+  }
+  if (cleared) {
+    detectEdgePortChanges()
+  }
+}
+
 function detectEdgePortChanges() {
   if (!renderer) return
 
@@ -1734,19 +1798,18 @@ function detectEdgePortChanges() {
       nextFromOutline === currentFromOutline && nextToOutline === currentToOutline
     if (portMatch && outlineMatch) continue
 
+    // Always mirror renderer endpoint state (including clears). Gating by toolbar flags
+    // left stale fromOutlineParam after attach-to-outline was turned off, so reconnect
+    // to a port snapped back to the old outline point on the next sync.
     if (!edgeInst.attrs) edgeInst.attrs = {}
-    if (lockAnchorsEnabled.value) {
-      if (nextFromPortId) edgeInst.attrs.fromPortId = nextFromPortId
-      else delete edgeInst.attrs.fromPortId
-      if (nextToPortId) edgeInst.attrs.toPortId = nextToPortId
-      else delete edgeInst.attrs.toPortId
-    }
-    if (attachToOutlineEnabled.value) {
-      if (nextFromOutline !== undefined) edgeInst.attrs.fromOutlineParam = nextFromOutline
-      else delete edgeInst.attrs.fromOutlineParam
-      if (nextToOutline !== undefined) edgeInst.attrs.toOutlineParam = nextToOutline
-      else delete edgeInst.attrs.toOutlineParam
-    }
+    if (nextFromPortId) edgeInst.attrs.fromPortId = nextFromPortId
+    else delete edgeInst.attrs.fromPortId
+    if (nextToPortId) edgeInst.attrs.toPortId = nextToPortId
+    else delete edgeInst.attrs.toPortId
+    if (nextFromOutline !== undefined) edgeInst.attrs.fromOutlineParam = nextFromOutline
+    else delete edgeInst.attrs.fromOutlineParam
+    if (nextToOutline !== undefined) edgeInst.attrs.toOutlineParam = nextToOutline
+    else delete edgeInst.attrs.toOutlineParam
 
     if (Object.keys(edgeInst.attrs).length === 0) {
       delete edgeInst.attrs
@@ -1813,7 +1876,8 @@ function persistNodePositions(papNodeIds: string[]) {
   }
 }
 
-function persistNodePositionsWithEditablePolylineControlPoints(papNodeIds: string[]) {
+/** Single updateDiagram for drag end: node positions + edge-anchor midpoints together. */
+function persistDragEndState(papNodeIds: string[]) {
   if (props.readOnly || !renderer) return
   const next = cloneDiagramAttrs()
   const { nodeChanged, controlPointsChanged } = applyNodeAndEditablePolylineChangesToDiagramAttrs(
@@ -1824,7 +1888,15 @@ function persistNodePositionsWithEditablePolylineControlPoints(papNodeIds: strin
     papNodeId => renderer?.getNode(papNodeId),
     papEdgeId => renderer?.getEdge(papEdgeId)
   )
-  if (nodeChanged || controlPointsChanged) {
+  const midpoints = collectHostEdgeMidpoints()
+  let anchorsChanged = false
+  if (midpoints.size > 0) {
+    const result = syncEdgeAnchorPositions(next.instances.nodes, midpoints)
+    next.instances.nodes = result.nodes
+    anchorsChanged = result.changed
+    renderer.markContentDirty()
+  }
+  if (nodeChanged || controlPointsChanged || anchorsChanged) {
     syncEdgePortIds(next)
     emit('updateDiagram', next)
   }
@@ -1952,12 +2024,8 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   manager.drag.on('dragend', (_nodeIds: string[]) => {
     if (props.readOnly) return
     const allIds = endGroupDrag()
-    if (allIds.length > 0) {
-      persistNodePositionsWithEditablePolylineControlPoints(allIds)
-    } else {
-      persistNodePositionsWithEditablePolylineControlPoints(_nodeIds)
-    }
-    syncEdgeAnchors({ persist: true, updateRenderer: true })
+    const papNodeIds = allIds.length > 0 ? allIds : _nodeIds
+    persistDragEndState(papNodeIds)
     // Try auto-create link if dragged node is inside container with group relation
     if (_nodeIds.length === 1) {
       tryCreateAutoLink(_nodeIds[0]!)
@@ -2493,6 +2561,10 @@ const toggleLockAnchors = (): boolean => {
     for (const [, edge] of renderer.edges) {
       edge.lockAnchors = lockAnchorsEnabled.value
     }
+    if (!lockAnchorsEnabled.value) {
+      clearLockedPortsFromRendererEdges()
+    }
+    renderer.markDirty()
   }
   return lockAnchorsEnabled.value
 }
@@ -2949,6 +3021,9 @@ watch(
     for (const [, edge] of renderer.edges) {
       edge.lockAnchors = next
     }
+    if (!next) {
+      clearLockedPortsFromRendererEdges()
+    }
     renderer.markDirty()
   }
 )
@@ -2959,6 +3034,9 @@ watch(
     if (next === attachToOutlineEnabled.value) return
     attachToOutlineEnabled.value = next
     interactionManager?.connection.setAttachToOutline(next)
+    if (!next) {
+      clearOutlineParamsFromRendererEdges()
+    }
     renderer?.markDirty()
   }
 )

@@ -43,6 +43,9 @@ type ModelEditorReturn = {
   /** Wait until links and other background model extras finished. */
   whenBackgroundReady: () => Promise<void>
   saveChanges: () => Promise<boolean>
+  /** Show saving toast before heavy pre-save work (flush/validate). */
+  startSave: () => void
+  finishSave: () => void
   markNodeDirty: (id: string) => void
   markLinkDirty: (id: string) => void
   markDiagramDirty: (id: string) => void
@@ -81,6 +84,8 @@ export const useModelEditor = (): ModelEditorReturn => {
   const modelCatalog = ref<ModelData[]>([])
   let catalogReadyPromise: Promise<void> = Promise.resolve()
   let backgroundReadyPromise: Promise<void> = Promise.resolve()
+  /** Guards concurrent save pipeline; separate from isSaving so UI can start early. */
+  let saveOperationActive = false
 
   const {
     ensureNotationRelationsAndRules,
@@ -219,8 +224,9 @@ export const useModelEditor = (): ModelEditorReturn => {
 
   const saveChanges = async (): Promise<boolean> => {
     if (!model.value) return false
-    if (isSaving.value) return false
-    startSave()
+    if (saveOperationActive) return false
+    saveOperationActive = true
+    if (!isSaving.value) startSave()
     batchSaveConflict.value = null
 
     try {
@@ -247,6 +253,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       return true
     } finally {
       finishSave()
+      saveOperationActive = false
     }
   }
 
@@ -308,6 +315,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     whenCatalogReady,
     whenBackgroundReady,
     saveChanges,
+    startSave,
+    finishSave,
     markNodeDirty,
     markLinkDirty,
     markDiagramDirty,

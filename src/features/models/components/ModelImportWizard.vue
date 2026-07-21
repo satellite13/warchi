@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse } from '@/types/api'
@@ -33,6 +33,8 @@ const props = defineProps<{
   relations: RelationResponse[]
   importBusy?: boolean
   importProgress?: string | null
+  /** Loads components/relations/types for a notation not yet used by model diagrams. */
+  ensureNotationCatalog?: (notationId: string) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -60,6 +62,8 @@ const suggestions = ref<ImportMappingSuggestions>({
 })
 const bulkElementValue = ref('')
 const bulkRelationshipValue = ref('')
+const isLoadingCatalog = ref(false)
+const catalogError = ref<string | null>(null)
 
 const nodeTypeById = computed(() => new Map(props.nodeTypes.map(item => [item.id, item])))
 const linkTypeById = computed(() => new Map(props.linkTypes.map(item => [item.id, item])))
@@ -141,7 +145,12 @@ const bulkRelationshipOptions = computed(() => {
 })
 
 const canMoveToMappings = computed(
-  () => hasDraft.value && !!selectedNotationId.value && !hasErrors.value && !isAnalyzing.value
+  () =>
+    hasDraft.value &&
+    !!selectedNotationId.value &&
+    !hasErrors.value &&
+    !isAnalyzing.value &&
+    !isLoadingCatalog.value
 )
 const canMoveToPreview = computed(
   () =>
@@ -197,6 +206,8 @@ function resetState(): void {
   showOnlyUnmapped.value = true
   bulkElementValue.value = ''
   bulkRelationshipValue.value = ''
+  isLoadingCatalog.value = false
+  catalogError.value = null
   mappingState.value = { elementTypeMap: {}, relationshipTypeMap: {} }
   suggestions.value = { elementBySourceType: {}, relationshipBySourceType: {} }
   expandedIssueCodes.value = new Set()
@@ -215,9 +226,9 @@ watch(
 
 watch(
   () => selectedNotationId.value,
-  () => {
-    if (!draft.value || !selectedNotationId.value) return
-    rebuildMappings(draft.value, selectedNotationId.value)
+  async notationId => {
+    if (!draft.value || !notationId) return
+    await ensureCatalogAndRebuild(notationId, draft.value)
   }
 )
 
@@ -238,6 +249,25 @@ function rebuildMappings(nextDraft: ImportDraft, notationId: string): void {
     suggestions: nextSuggestions,
   })
   mappingState.value = mergeImportMappingState(initial, loadCachedImportMappingState(notationId))
+}
+
+async function ensureCatalogAndRebuild(notationId: string, nextDraft: ImportDraft): Promise<void> {
+  isLoadingCatalog.value = true
+  catalogError.value = null
+  try {
+    if (props.ensureNotationCatalog) {
+      await props.ensureNotationCatalog(notationId)
+      await nextTick()
+    }
+    rebuildMappings(nextDraft, notationId)
+  } catch (error) {
+    catalogError.value =
+      error instanceof Error && error.message
+        ? error.message
+        : t('models.oefImportCatalogLoadFailed')
+  } finally {
+    isLoadingCatalog.value = false
+  }
 }
 
 async function onFileChange(event: Event): Promise<void> {
@@ -267,10 +297,10 @@ async function onFileChange(event: Event): Promise<void> {
     draft.value = nextDraft
     issues.value = (Array.isArray(result.data.issues) ? result.data.issues : []) as ImportIssue[]
     if (!selectedNotationId.value && props.notations.length > 0) {
+      // Watch on selectedNotationId will load catalog + rebuild mappings.
       selectedNotationId.value = props.notations[0]!.id
-    }
-    if (selectedNotationId.value) {
-      rebuildMappings(nextDraft, selectedNotationId.value)
+    } else if (selectedNotationId.value) {
+      await ensureCatalogAndRebuild(selectedNotationId.value, nextDraft)
     }
     currentStep.value = 1
   } catch (error) {
@@ -326,38 +356,82 @@ function relationshipMappingValue(sourceType: string): string {
   return `${mapping.linkTypeId}::${mapping.relationId}`
 }
 
-function elementCandidates(sourceType: string): Array<{ value: string; label: string }> {
-  const rows = suggestions.value.elementBySourceType[sourceType] ?? []
-  return rows
-    .filter(row => row.nodeTypeId && row.componentId)
-    .map(row => {
-      const nodeType = nodeTypeById.value.get(row.nodeTypeId!)
-      const component = componentById.value.get(row.componentId!)
-      return {
-        value: `${row.nodeTypeId}::${row.componentId}`,
-        label: t('models.oefImportElementOptionLabel', {
-          nodeType: nodeType?.name ?? row.nodeTypeId,
-          component: component?.name ?? row.componentId,
-        }),
-      }
-    })
+function elementOptionLabel(nodeTypeId: string, componentId: string): string {
+  const nodeType = nodeTypeById.value.get(nodeTypeId)
+  const component = componentById.value.get(componentId)
+  return t('models.oefImportElementOptionLabel', {
+    nodeType: nodeType?.name ?? nodeTypeId,
+    component: component?.name ?? componentId,
+  })
 }
 
-function relationshipCandidates(sourceType: string): Array<{ value: string; label: string }> {
-  const rows = suggestions.value.relationshipBySourceType[sourceType] ?? []
-  return rows
-    .filter(row => row.linkTypeId && row.relationId)
-    .map(row => {
-      const linkType = linkTypeById.value.get(row.linkTypeId!)
-      const relation = relationById.value.get(row.relationId!)
-      return {
-        value: `${row.linkTypeId}::${row.relationId}`,
-        label: t('models.oefImportRelationshipOptionLabel', {
-          linkType: linkType?.name ?? row.linkTypeId,
-          relation: relation?.name ?? row.relationId,
-        }),
-      }
+function relationshipOptionLabel(linkTypeId: string, relationId: string): string {
+  const linkType = linkTypeById.value.get(linkTypeId)
+  const relation = relationById.value.get(relationId)
+  return t('models.oefImportRelationshipOptionLabel', {
+    linkType: linkType?.name ?? linkTypeId,
+    relation: relation?.name ?? relationId,
+  })
+}
+
+/** Suggested matches first, then every component of the selected notation. */
+function elementCandidates(sourceType: string): Array<{ value: string; label: string }> {
+  const notationId = selectedNotationId.value
+  const ordered: string[] = []
+  const seen = new Set<string>()
+
+  for (const row of suggestions.value.elementBySourceType[sourceType] ?? []) {
+    if (!row.nodeTypeId || !row.componentId) continue
+    const value = `${row.nodeTypeId}::${row.componentId}`
+    if (seen.has(value)) continue
+    seen.add(value)
+    ordered.push(value)
+  }
+
+  const rest = props.components
+    .filter(item => item.notationId === notationId)
+    .map(item => `${item.nodeTypeId}::${item.id}`)
+    .filter(value => !seen.has(value))
+    .sort((a, b) => {
+      const [aNt = '', aCmp = ''] = a.split('::')
+      const [bNt = '', bCmp = ''] = b.split('::')
+      return elementOptionLabel(aNt, aCmp).localeCompare(elementOptionLabel(bNt, bCmp))
     })
+
+  return [...ordered, ...rest].map(value => {
+    const [nodeTypeId = '', componentId = ''] = value.split('::')
+    return { value, label: elementOptionLabel(nodeTypeId, componentId) }
+  })
+}
+
+/** Suggested matches first, then every relation of the selected notation. */
+function relationshipCandidates(sourceType: string): Array<{ value: string; label: string }> {
+  const notationId = selectedNotationId.value
+  const ordered: string[] = []
+  const seen = new Set<string>()
+
+  for (const row of suggestions.value.relationshipBySourceType[sourceType] ?? []) {
+    if (!row.linkTypeId || !row.relationId) continue
+    const value = `${row.linkTypeId}::${row.relationId}`
+    if (seen.has(value)) continue
+    seen.add(value)
+    ordered.push(value)
+  }
+
+  const rest = props.relations
+    .filter(item => item.notationId === notationId)
+    .map(item => `${item.linkTypeId}::${item.id}`)
+    .filter(value => !seen.has(value))
+    .sort((a, b) => {
+      const [aLt = '', aRel = ''] = a.split('::')
+      const [bLt = '', bRel = ''] = b.split('::')
+      return relationshipOptionLabel(aLt, aRel).localeCompare(relationshipOptionLabel(bLt, bRel))
+    })
+
+  return [...ordered, ...rest].map(value => {
+    const [linkTypeId = '', relationId = ''] = value.split('::')
+    return { value, label: relationshipOptionLabel(linkTypeId, relationId) }
+  })
 }
 
 function closeWizard(): void {
@@ -369,8 +443,12 @@ function prevStep(): void {
   currentStep.value = Math.max(1, currentStep.value - 1)
 }
 
-function nextStep(): void {
+async function nextStep(): Promise<void> {
   if (currentStep.value === 1 && canMoveToMappings.value) {
+    if (draft.value && selectedNotationId.value) {
+      await ensureCatalogAndRebuild(selectedNotationId.value, draft.value)
+      if (catalogError.value) return
+    }
     currentStep.value = 2
     return
   }
@@ -434,6 +512,8 @@ function submitImport(): void {
         </div>
 
         <p v-if="parseError" class="oef-import__error">{{ parseError }}</p>
+        <p v-if="isLoadingCatalog" class="oef-import__hint">{{ t('models.oefImportCatalogLoading') }}</p>
+        <p v-if="catalogError" class="oef-import__error">{{ catalogError }}</p>
 
         <template v-if="hasDraft && draft">
           <div class="oef-import__stats">
@@ -488,6 +568,8 @@ function submitImport(): void {
       </div>
 
       <div v-if="currentStep === 2 && hasDraft && draft" class="oef-import__panel">
+        <p v-if="isLoadingCatalog" class="oef-import__hint">{{ t('models.oefImportCatalogLoading') }}</p>
+        <p v-if="catalogError" class="oef-import__error">{{ catalogError }}</p>
         <div class="oef-import__toolbar">
           <label class="oef-import__checkbox">
             <input v-model="showOnlyUnmapped" type="checkbox" />

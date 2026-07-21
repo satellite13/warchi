@@ -21,7 +21,8 @@ function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name:
   }
 }
 
-function expectTextLabelOptions(value: string | TextLabelOptions): TextLabelOptions {
+function expectTextLabelOptions(value: string | TextLabelOptions | undefined): TextLabelOptions {
+  expect(value).toBeDefined()
   expect(typeof value).toBe('object')
   return value as TextLabelOptions
 }
@@ -117,6 +118,17 @@ describe('buildNodeLabel', () => {
     const ds: DiagramStyle = { labelInset: 8 }
     const result = expectTextLabelOptions(buildNodeLabel('N', ds))
     expect(result.inset).toBe(8)
+  })
+
+  it('returns undefined when showLabel is false', () => {
+    expect(buildNodeLabel('Node', { showLabel: false })).toBeUndefined()
+    expect(buildNodeLabel('Node', { showLabel: false, labelColor: '#f00' })).toBeUndefined()
+    expect(buildNodeLabel('Node', { showLabel: false, labelTemplate: '${name}' })).toBeUndefined()
+  })
+
+  it('still returns label when showLabel is true or absent', () => {
+    expect(buildNodeLabel('Node', { showLabel: true })).toBe('Node')
+    expect(buildNodeLabel('Node', {})).toBe('Node')
   })
 })
 

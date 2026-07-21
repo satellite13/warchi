@@ -388,7 +388,7 @@ onMounted(() => {
 }
 
 @keyframes wiki-spin {
-  to { transform: rotate(360deg); }
+  to { transform: rotate(-360deg); }
 }
 
 .wiki-view__markdown :deep(h1) { font-size: 28px; font-weight: 700; color: var(--base-text); margin: 0 0 16px; }

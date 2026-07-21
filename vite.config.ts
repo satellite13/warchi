@@ -75,7 +75,19 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": {
           target: env.VITE_API_PROXY_TARGET || "http://localhost:8080",
-          changeOrigin: true
+          changeOrigin: true,
+          // Backend may set Domain=.arch.svc.cluster.local for k8s SSO; browsers
+          // reject those cookies on localhost Vite, so strip Domain for local dev.
+          configure: (proxy) => {
+            proxy.on("proxyRes", (proxyRes) => {
+              const raw = proxyRes.headers["set-cookie"]
+              if (!raw) return
+              const cookies = Array.isArray(raw) ? raw : [raw]
+              proxyRes.headers["set-cookie"] = cookies.map((cookie) =>
+                cookie.replace(/;\s*Domain=[^;]*/gi, "")
+              )
+            })
+          },
         },
         "/ws": {
           target: env.VITE_API_PROXY_TARGET || "http://localhost:8080",

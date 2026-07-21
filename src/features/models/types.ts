@@ -31,6 +31,8 @@ export type EditorLink = Omit<LinkResponse, "attrs"> & {
 
 export type EditorDiagram = Omit<DiagramResponse, "attrs"> & {
   parsedAttrs: DiagramAttrs
+  /** true when list was loaded with includeAttrs=false — hydrate via GET /diagrams/{id}. */
+  _attrsPending?: boolean
   _isNew?: boolean
   _isDirty?: boolean
   _isDeleted?: boolean

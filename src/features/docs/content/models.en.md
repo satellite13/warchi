@@ -164,10 +164,10 @@ Use the matrix to audit relation coverage and produce reports without walking ev
 
 The editor header also offers the **Import Open Exchange (XML)** wizard to load an architecture model from OEF XML:
 
-1. **Analyze** — pick a target notation and XML file; the app parses elements and relationships.
+1. **Analyze** — pick a target notation and XML file; the file is uploaded to the server for parsing (up to ~100 MB), and the client receives compact JSON plus validation issues.
 2. **Mapping** — map file element/relationship types to notation components/relations (filter unmapped types and bulk-apply mappings).
 3. **Preview** — review import volume (nodes, links, diagrams) and warnings.
-4. Click **Import** — entities are created in the current model; a completion report follows.
+4. Click **Import** — entities are created in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically).
 
 If required properties are still empty after import, fill them in the properties panel before the next save.
 

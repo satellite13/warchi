@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '@/features/models/modelAttrs'
 import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
-import { buildOefBatchSaveRequest } from './oefToBatchSave'
+import { buildOefBatchSaveRequest, OEF_ENTITY_NAME_MAX_LENGTH } from './oefToBatchSave'
 import type { ImportMappingState } from './mappingState'
 import mainXml from './__fixtures__/Main.xml?raw'
 import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
@@ -156,5 +156,85 @@ describe('oefToBatchSave', () => {
     expect(result.request.nodes.create.length).toBeLessThan(draft.nodes.length)
     expect(result.warnings.some(item => item.code === 'nodeTypeNotMapped')).toBe(true)
     expect(result.warnings.some(item => item.code === 'linkTypeNotMapped')).toBe(true)
+  })
+
+  it('places elements and diagrams under organization directories', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    draft.organizations = [
+      {
+        label: 'Business',
+        children: draft.nodes.map(node => ({
+          refId: node.sourceElementId,
+          refKind: 'element' as const,
+        })),
+      },
+      {
+        label: 'Views',
+        children: draft.diagrams.map(diagram => ({
+          refId: diagram.sourceViewId,
+          refKind: 'view' as const,
+        })),
+      },
+    ]
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+      directoryNodeTypeId: 'nt-directory',
+      parentNodeId: 'root-node-id',
+    })
+
+    const directories = result.request.nodes.create.filter(item => item.nodeTypeId === 'nt-directory')
+    expect(directories).toHaveLength(2)
+    expect(directories[0]!.parentNodeId).toBe('root-node-id')
+    const businessTempId = directories[0]!.tempId
+    const viewsTempId = directories[1]!.tempId
+    expect(result.request.nodes.create.some(item => item.parentNodeId === businessTempId)).toBe(true)
+    expect(result.request.diagrams.create[0]!.nodeId).toBe(viewsTempId)
+  })
+
+  it('truncates node and diagram names to API max length', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    const longName = 'N'.repeat(OEF_ENTITY_NAME_MAX_LENGTH + 40)
+    draft.nodes[0]!.name = longName
+    draft.diagrams[0]!.name = longName
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+    })
+
+    expect(result.request.nodes.create[0]!.name).toHaveLength(OEF_ENTITY_NAME_MAX_LENGTH)
+    expect(result.request.diagrams.create[0]!.name).toHaveLength(OEF_ENTITY_NAME_MAX_LENGTH)
+    expect(result.warnings.filter(item => item.code === 'nameTruncated')).toHaveLength(2)
+  })
+
+  it('deduplicates duplicate diagram names within one import', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    draft.diagrams.push({
+      ...structuredClone(draft.diagrams[0]!),
+      sourceViewId: 'view-duplicate-2',
+      name: draft.diagrams[0]!.name,
+    })
+    draft.diagrams.push({
+      ...structuredClone(draft.diagrams[0]!),
+      sourceViewId: 'view-duplicate-3',
+      name: draft.diagrams[0]!.name,
+    })
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+    })
+
+    const names = result.request.diagrams.create.map(item => item.name)
+    expect(new Set(names).size).toBe(names.length)
+    expect(names.filter(name => name === draft.diagrams[0]!.name)).toHaveLength(1)
+    expect(names.some(name => name.endsWith(' (2)'))).toBe(true)
+    expect(names.some(name => name.endsWith(' (3)'))).toBe(true)
+    expect(result.warnings.filter(item => item.code === 'nameDeduplicated')).toHaveLength(2)
   })
 })

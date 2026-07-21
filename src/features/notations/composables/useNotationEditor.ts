@@ -35,6 +35,7 @@ import {
   createEmptyEditorState,
 } from '../types'
 import { resolveNewTypes } from '../utils/resolveNewTypes'
+import { resolveNewNotationBoundEntities } from '../utils/resolveNewNotationBoundEntities'
 import { syncRelationRulesViaApi } from './useRelationRulesSync'
 import { parseNotationAttrs, mergeNotationAttrs } from '../utils/notationAttrsJson'
 
@@ -250,36 +251,34 @@ async function saveComponents(
     }
   }
 
-  for (const component of components.filter(c => c._isNew && !c._isDeleted)) {
-    onProgress(`Создание компонента: ${component.name}`)
-    const request: ComponentRequest = {
+  await resolveNewNotationBoundEntities({
+    entities: components.filter(c => c._isNew && !c._isDeleted),
+    notationId,
+    ownerId,
+    apiEndpoint: '/components',
+    entityTypeName: 'компонента',
+    buildCreateRequest: component => ({
       name: component.name,
       version: component.version,
       notationId,
       ownerId,
       nodeTypeId: component.nodeTypeId,
       attrs: serializeEntityAttrs(component.parsedAttrs),
-    }
-    const result = await apiPost<ComponentResponse>('/components', request)
-    if (!result.success) {
-      throw new Error(
-        formatEntitySaveError('нотации','создания', 'компонента', result.error.status, result.error.message)
-      )
-    }
-    const oldComponentId = component.id
-    component.id = result.data.id
-    component._isNew = false
-    for (const rule of relationRules) {
-      if (rule.fromComponentId === oldComponentId) {
-        rule.fromComponentId = component.id
-        rule._isDirty = true
+    }),
+    onRemapId: (oldComponentId, newComponentId) => {
+      for (const rule of relationRules) {
+        if (rule.fromComponentId === oldComponentId) {
+          rule.fromComponentId = newComponentId
+          rule._isDirty = true
+        }
+        if (rule.toComponentId === oldComponentId) {
+          rule.toComponentId = newComponentId
+          rule._isDirty = true
+        }
       }
-      if (rule.toComponentId === oldComponentId) {
-        rule.toComponentId = component.id
-        rule._isDirty = true
-      }
-    }
-  }
+    },
+    onProgress,
+  })
 
   for (const component of components.filter(c => c._isDirty && !c._isNew && !c._isDeleted)) {
     onProgress(`Обновление компонента: ${component.name}`)
@@ -316,31 +315,31 @@ async function saveRelations(
     }
   }
 
-  for (const relation of relations.filter(r => r._isNew && !r._isDeleted)) {
-    onProgress(`Создание отношения: ${relation.name}`)
-    const oldRelationId = relation.id
-    const request: RelationRequest = {
+  await resolveNewNotationBoundEntities({
+    entities: relations.filter(r => r._isNew && !r._isDeleted),
+    notationId,
+    ownerId,
+    apiEndpoint: '/relations',
+    entityTypeName: 'отношения',
+    buildCreateRequest: relation => ({
       name: relation.name,
       version: relation.version,
       notationId,
       ownerId,
       linkTypeId: relation.linkTypeId,
       attrs: serializeEntityAttrs(relation.parsedAttrs),
-    }
-    const result = await apiPost<RelationResponse>('/relations', request)
-    if (!result.success) {
-      throw new Error(`Ошибка создания отношения: ${result.error.message}`)
-    }
-    relation.id = result.data.id
-    relation._isNew = false
-    for (const rule of relationRules) {
-      if (!rule.allowedRelationIds.includes(oldRelationId)) continue
-      rule.allowedRelationIds = rule.allowedRelationIds.map(relationId =>
-        relationId === oldRelationId ? relation.id : relationId
-      )
-      rule._isDirty = true
-    }
-  }
+    }),
+    onRemapId: (oldRelationId, newRelationId) => {
+      for (const rule of relationRules) {
+        if (!rule.allowedRelationIds.includes(oldRelationId)) continue
+        rule.allowedRelationIds = rule.allowedRelationIds.map(relationId =>
+          relationId === oldRelationId ? newRelationId : relationId
+        )
+        rule._isDirty = true
+      }
+    },
+    onProgress,
+  })
 
   for (const relation of relations.filter(r => r._isDirty && !r._isNew && !r._isDeleted)) {
     onProgress(`Обновление отношения: ${relation.name}`)

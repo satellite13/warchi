@@ -303,6 +303,31 @@ describe('apiClient', () => {
       expect(clearAuthStorage).not.toHaveBeenCalled()
       expect(emitAuthCleared).not.toHaveBeenCalled()
     })
+
+    it('does not clear session when refresh is rate-limited (429)', async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/auth/refresh')) {
+          return Promise.resolve({
+            ok: false,
+            status: 429,
+            text: () => Promise.resolve('Too Many Requests'),
+          })
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          text: () => Promise.resolve(JSON.stringify({ message: 'Unauthorized' })),
+        })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiGet('/models')
+
+      expect(result.success).toBe(false)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(clearAuthStorage).not.toHaveBeenCalled()
+      expect(emitAuthCleared).not.toHaveBeenCalled()
+    })
   })
 
   describe('CSRF protection', () => {
@@ -328,6 +353,17 @@ describe('apiClient', () => {
       await apiPost('/auth/login', { email: 'a', password: 'b' })
 
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves specific 403 message for auth register path', async () => {
+      const fetchMock = mockFetchResponse({ message: 'User registration is disabled' }, 403)
+      vi.stubGlobal('fetch', fetchMock)
+
+      const result = await apiPost('/auth/register', { email: 'a', password: 'b' })
+
+      expect(result.success).toBe(false)
+      if (result.success) return
+      expect(result.error.message).toBe('User registration is disabled')
     })
   })
 

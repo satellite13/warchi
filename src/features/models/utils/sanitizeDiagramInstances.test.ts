@@ -13,7 +13,7 @@ const emptyParsed = {
 }
 
 describe('sanitizeDiagramInstancesForModel', () => {
-  it('removes instances whose model node is missing from the tree', () => {
+  it('keeps instances when model node is absent from state (e.g. still loading)', () => {
     const attrs = {
       instances: {
         nodes: [
@@ -32,6 +32,43 @@ describe('sanitizeDiagramInstancesForModel', () => {
         nodeTypeId: 't',
         parentNodeId: null,
         parsedAttrs: emptyParsed,
+      },
+    ]
+    const { nextAttrs, changed, removedNodes } = sanitizeDiagramInstancesForModel(attrs, nodes, [])
+    expect(changed).toBe(false)
+    expect(removedNodes).toBe(0)
+    expect(nextAttrs.instances.nodes).toHaveLength(2)
+  })
+
+  it('removes instances whose model node is explicitly deleted', () => {
+    const attrs = {
+      instances: {
+        nodes: [
+          { id: 'i1', modelNodeId: 'n1', x: 0, y: 0, width: 1, height: 1 },
+          { id: 'i2', modelNodeId: 'n2', x: 0, y: 0, width: 1, height: 1 },
+        ],
+        edges: [],
+      },
+    }
+    const nodes = [
+      {
+        id: 'n1',
+        name: 'A',
+        modelId: 'm',
+        ownerId: 'o',
+        nodeTypeId: 't',
+        parentNodeId: null,
+        parsedAttrs: emptyParsed,
+      },
+      {
+        id: 'n2',
+        name: 'B',
+        modelId: 'm',
+        ownerId: 'o',
+        nodeTypeId: 't',
+        parentNodeId: null,
+        parsedAttrs: emptyParsed,
+        _isDeleted: true,
       },
     ]
     const { nextAttrs, changed, removedNodes } = sanitizeDiagramInstancesForModel(attrs, nodes, [])
@@ -148,6 +185,16 @@ describe('sanitizeDiagramInstancesForModel', () => {
 
   it('applyDiagramGarbageSanitizeToState marks persisted diagram dirty when it changed', () => {
     const st = createEmptyModelEditorState()
+    st.nodes.push({
+      id: 'n1',
+      name: 'A',
+      modelId: 'm',
+      ownerId: 'o',
+      nodeTypeId: 't',
+      parentNodeId: null,
+      parsedAttrs: emptyParsed,
+      _isDeleted: true,
+    })
     st.diagrams.push({
       id: 'd1',
       name: 'D',
@@ -158,7 +205,7 @@ describe('sanitizeDiagramInstancesForModel', () => {
       nodeId: null,
       parsedAttrs: {
         instances: {
-          nodes: [{ id: 'i1', modelNodeId: 'missing', x: 0, y: 0, width: 1, height: 1 }],
+          nodes: [{ id: 'i1', modelNodeId: 'n1', x: 0, y: 0, width: 1, height: 1 }],
           edges: [],
         },
       },

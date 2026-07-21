@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -52,12 +52,13 @@ onBeforeUnmount(disconnectObserver)
 
 watch(
   () => props.iconId,
-  () => {
+  async () => {
     if (props.eager) {
       shouldLoad.value = true
       return
     }
     shouldLoad.value = false
+    await nextTick()
     setupObserver()
   }
 )
@@ -75,17 +76,39 @@ watch(
 const src = computed(() =>
   shouldLoad.value && props.iconId ? `/icons/${props.iconId}.svg` : undefined
 )
+
+function onError(): void {
+  // Browsers fire error for <img> without src; ignore until we intentionally load.
+  if (!src.value) return
+  emit('error', props.iconId)
+}
 </script>
 
 <template>
-  <img
-    v-if="iconId"
+  <!-- Placeholder keeps IntersectionObserver root before src is set (no error event). -->
+  <span
+    v-if="iconId && !src"
     ref="rootEl"
+    :class="imgClass"
+    class="lazy-icon-img__placeholder"
+    aria-hidden="true"
+  />
+  <img
+    v-else-if="iconId && src"
     :class="imgClass"
     :src="src"
     :alt="alt"
     loading="lazy"
     decoding="async"
-    @error="emit('error', iconId)"
+    @error="onError"
   >
 </template>
+
+<style scoped>
+.lazy-icon-img__placeholder {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+</style>

@@ -27,6 +27,7 @@ import {
   useModelToolbarState,
   useModelTreeOperations,
   useModelVersionDiff,
+  useDiagramNotationMigration,
   useNotationVersionBanner,
   useNoteEditor,
   useOefImport,
@@ -73,9 +74,11 @@ import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
+import { ensureDiagramAttrsLoaded } from './composables/ensureDiagramAttrs'
 import {
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
+import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
 
 const {
   model,
@@ -89,6 +92,7 @@ const {
   saveProgress,
   hasUnsavedChanges,
   loadModel,
+  discardUnsavedChanges,
   saveChanges,
   markNodeDirty,
   markLinkDirty,
@@ -98,6 +102,8 @@ const {
   createDiagramBaseline,
   ensureNotationRelationsAndRules,
   isNotationRelationsAndRulesLoading,
+  whenCatalogReady,
+  whenBackgroundReady,
   batchSaveConflict,
   resolveBatchSaveReload,
   resolveBatchSaveOverwrite,
@@ -385,8 +391,27 @@ async function handleCreateBaseline() {
   }
 }
 
-watch(selectedDiagramId, () => {
+const isPreparingDiagram = ref(false)
+watch(selectedDiagramId, async diagramId => {
   baselineError.value = null
+  if (!diagramId) {
+    isPreparingDiagram.value = false
+    return
+  }
+  isPreparingDiagram.value = true
+  try {
+    // Components/relations must be present before canvas resolves shapes.
+    await whenCatalogReady()
+    if (selectedDiagramId.value !== diagramId) return
+    await ensureDiagramAttrsLoaded(() => state.value, diagramId)
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : t('models.diagramLoadError')
+  } finally {
+    if (selectedDiagramId.value === diagramId) {
+      isPreparingDiagram.value = false
+    }
+  }
 })
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
@@ -465,15 +490,18 @@ const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
     .map((d) => ({ id: d.id, label: `${d.name} ${d.version}` }))
 )
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-function isUuid(s: unknown): s is string {
-  return typeof s === 'string' && UUID_REGEX.test(s)
-}
-
 const documentsFromApi = ref<{ fileId: string; label: string }[]>([])
+let documentsFetchTimer: ReturnType<typeof setTimeout> | null = null
+let documentsFetchSeq = 0
+
 async function fetchDocumentsFromApi() {
   const modelId = state.value.modelId
-  if (!modelId) return
+  if (!modelId || isLoading.value) return
+  // Avoid competing with heavy model payload downloads on the HTTP/1.1 pool.
+  await whenBackgroundReady()
+  if (state.value.modelId !== modelId) return
+
+  const seq = ++documentsFetchSeq
   const params = new URLSearchParams()
   params.set('modelId', modelId)
   const notationId = activeNotationId.value
@@ -485,42 +513,43 @@ async function fetchDocumentsFromApi() {
   const nodeId = selectedNode.value?.id ?? null
   if (nodeId) params.set('nodeId', nodeId)
   const res = await apiGet<{ fileId: string; label: string }[]>(`/documents?${params.toString()}`)
+  if (seq !== documentsFetchSeq) return
   if (res.success) documentsFromApi.value = res.data
   else documentsFromApi.value = []
 }
+
+function scheduleFetchDocumentsFromApi() {
+  if (documentsFetchTimer) clearTimeout(documentsFetchTimer)
+  documentsFetchTimer = setTimeout(() => {
+    documentsFetchTimer = null
+    void fetchDocumentsFromApi()
+  }, 400)
+}
+
 watch(
   () => [
     state.value.modelId,
+    isLoading.value,
     activeNotationId.value,
     nodeBindingComponentId.value,
     selectedNode.value?.id,
     selectedNode.value?.nodeTypeId,
   ],
-  () => { fetchDocumentsFromApi() },
-  { immediate: true }
+  () => {
+    scheduleFetchDocumentsFromApi()
+  }
 )
 
+/** Local wiki links from explicit documentFileId only — no deep UUID scan over 10k+ nodes. */
 function modelDocumentsInState(): { fileId: string; label: string }[] {
   const seen = new Set<string>()
   const list: { fileId: string; label: string }[] = []
   for (const node of state.value.nodes) {
+    if (node._isDeleted) continue
     const fileId = node.parsedAttrs.documentFileId
     if (typeof fileId === 'string' && fileId && !seen.has(fileId)) {
       seen.add(fileId)
       list.push({ fileId, label: `${node.name} (${t('diagram.nodeLabel')})` })
-    }
-    const compProps = node.parsedAttrs.componentProperties
-    if (compProps && typeof compProps === 'object') {
-      for (const comp of Object.values(compProps) as Record<string, unknown>[]) {
-        if (comp && typeof comp === 'object') {
-          for (const val of Object.values(comp)) {
-            if (isUuid(val) && !seen.has(val)) {
-              seen.add(val)
-              list.push({ fileId: val, label: t('diagram.documentLabel') })
-            }
-          }
-        }
-      }
     }
   }
   for (const diagram of state.value.diagrams) {
@@ -605,6 +634,27 @@ const {
   t: (key, params) => String(t(key, params ?? {})),
   ensureNotationRelationsAndRules,
   setUiError,
+})
+
+const {
+  showMigrateModal,
+  migrateTarget,
+  isMigrating,
+  migratePreviewUnmapped,
+  openMigrateModal,
+  closeMigrateModal,
+  confirmMigrateNotation,
+} = useDiagramNotationMigration({
+  state,
+  activeDiagram,
+  isDiagramReadOnly,
+  newerNotationVersions,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  markDiagramDirty,
+  markNodeDirty,
+  markLinkDirty,
+  ensureNotationRelationsAndRules,
 })
 
 const {
@@ -750,6 +800,7 @@ const {
 const {
   showImportWizard,
   isImportingOef,
+  oefImportProgress,
   oefImportReport,
   oefWarningLabel,
   handleOefImportSubmit,
@@ -955,47 +1006,14 @@ const applyDefaultCustomValues = (
   }
 }
 
-const syncDefaultsOnLoad = () => {
-  for (const node of state.value.nodes) {
-    for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
-      const componentId = binding.componentId
-      if (!componentId) continue
-      if (!node.parsedAttrs.componentProperties[notationId])
-        node.parsedAttrs.componentProperties[notationId] = {}
-      if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
-        node.parsedAttrs.componentProperties[notationId][componentId] = {}
-      }
-      const component = state.value.components.find(
-        item => item.id === componentId && item.notationId === notationId
-      )
-      if (component) {
-        const target = node.parsedAttrs.componentProperties[notationId][componentId]!
-        const before = JSON.stringify(target)
-        applyDefaultCustomValues(target, component.attrs)
-        if (JSON.stringify(target) !== before) markNodeDirty(node.id)
-      }
-    }
-  }
-  for (const link of state.value.links) {
-    for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
-      const relationId = binding.relationId
-      if (!relationId) continue
-      if (!link.parsedAttrs.relationProperties[notationId])
-        link.parsedAttrs.relationProperties[notationId] = {}
-      if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
-        link.parsedAttrs.relationProperties[notationId][relationId] = {}
-      }
-      const relation = state.value.relations.find(
-        item => item.id === relationId && item.notationId === notationId
-      )
-      if (relation) {
-        const target = link.parsedAttrs.relationProperties[notationId][relationId]!
-        const before = JSON.stringify(target)
-        applyDefaultCustomValues(target, relation.attrs)
-        if (JSON.stringify(target) !== before) markLinkDirty(link.id)
-      }
-    }
-  }
+const scheduleSyncDefaultsOnLoad = (): void => {
+  const modelId = state.value.modelId
+  void whenCatalogReady()
+    .then(() => whenBackgroundReady())
+    .then(async () => {
+      if (state.value.modelId !== modelId) return
+      await syncDefaultsOnLoadChunked(state.value)
+    })
 }
 
 const bindLinkRelation = (
@@ -1031,6 +1049,7 @@ const {
   showReuseLinkModal,
   reuseLinkOptions,
   startConnectNodes,
+  connectNodeToEdge,
   finalizeConnection,
   handleCreateNewLinkFromReuseModal,
   handleRequestAutoLink,
@@ -1187,34 +1206,32 @@ const switchDiagramWithoutSave = async () => {
   const action = pendingDiagramAction.value
   if (!action) return
 
-  await loadModel()
-  syncDefaultsOnLoad()
+  const targetDiagramId = pendingDiagramSwitchId.value
+  // Close the modal immediately so the UI does not feel stuck on large models.
+  cancelDiagramSwitch()
+
+  await discardUnsavedChanges()
+  diagramInteractionManager.value?.history?.clear?.()
+
   if (action === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
     selectedInstanceIds.value = []
     selectedModelLinkId.value = null
     selectedEdgeInstanceId.value = null
-    cancelDiagramSwitch()
     return
   }
 
-  const targetDiagramId = pendingDiagramSwitchId.value
-  if (!targetDiagramId) {
-    cancelDiagramSwitch()
-    return
-  }
+  if (!targetDiagramId) return
   const restoredTarget = state.value.diagrams.find(
     diagram => diagram.id === targetDiagramId && !diagram._isDeleted
   )
   if (!restoredTarget) {
     setUiError(t('models.diagramSwitchFailed'))
-    cancelDiagramSwitch()
     return
   }
 
   applyDiagramSelection(restoredTarget.id)
-  cancelDiagramSwitch()
 }
 
 const validateRequiredCustomProperties = (): string | null => {
@@ -2341,15 +2358,22 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 
 onMounted(async () => {
   await loadModel()
-  syncDefaultsOnLoad()
   applyRouteDiagramSelection()
-  void fetchWikiDocuments()
+  scheduleFetchDocumentsFromApi()
+  scheduleSyncDefaultsOnLoad()
+  // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
+  void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('keydown', onDeleteKeydown)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener('keydown', onDeleteKeydown)
+  if (documentsFetchTimer) {
+    clearTimeout(documentsFetchTimer)
+    documentsFetchTimer = null
+  }
+  documentsFetchSeq += 1
   if (uiErrorTimer) {
     clearTimeout(uiErrorTimer)
     uiErrorTimer = null
@@ -2431,7 +2455,8 @@ onBeforeUnmount(() => {
         <div
           class="model-canvas-area"
           :class="{
-            'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram,
+            'model-canvas-area--has-newer-banner':
+              newerNotationVersions.length > 0 && !!activeDiagram && !isDiagramReadOnly,
           }"
         >
           <template v-if="activeDiagram && !isDiagramReadOnly">
@@ -2493,16 +2518,25 @@ onBeforeUnmount(() => {
             </div>
           </template>
           <div
-            v-if="newerNotationVersions.length > 0 && activeDiagram"
+            v-if="newerNotationVersions.length > 0 && activeDiagram && !isDiagramReadOnly"
             class="model-canvas-area__newer-notation-banner"
           >
             <span class="material-symbols-outlined model-canvas-area__newer-notation-icon">info</span>
-            {{
-              t('diagram.newerNotationVersionsBanner', {
-                name: newerNotationVersions[0]?.name ?? '',
-                version: newerNotationVersions[0]?.version ?? '',
-              })
-            }}
+            <span class="model-canvas-area__newer-notation-text">
+              {{
+                t('diagram.newerNotationVersionsBanner', {
+                  name: newerNotationVersions[0]?.name ?? '',
+                  version: newerNotationVersions[0]?.version ?? '',
+                })
+              }}
+            </span>
+            <button
+              type="button"
+              class="btn btn--primary btn--sm model-canvas-area__newer-notation-action"
+              @click="openMigrateModal()"
+            >
+              {{ t('diagram.migrateNotationAction') }}
+            </button>
           </div>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
@@ -2582,6 +2616,7 @@ onBeforeUnmount(() => {
             @add-existing-node="addExistingNodeToDiagram"
             @place-existing-model-link="placeTraceLinkOnDiagram"
             @connect-nodes="startConnectNodes"
+            @connect-node-to-edge="connectNodeToEdge"
             @request-auto-link="handleRequestAutoLink"
             @reconnect-edge="handleReconnectEdge"
             @find-in-tree="handleFindInTree"
@@ -2783,6 +2818,55 @@ onBeforeUnmount(() => {
         @click="createNode"
       >
         {{ t('common.create') }}
+      </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showMigrateModal && migrateTarget"
+    :title="t('diagram.migrateNotationTitle')"
+    max-width="520px"
+    @close="closeMigrateModal"
+  >
+    <p class="leave-text">
+      {{
+        t('diagram.migrateNotationConfirm', {
+          name: migrateTarget.name,
+          version: migrateTarget.version,
+        })
+      }}
+    </p>
+    <p class="leave-text">{{ t('diagram.migrateNotationHint') }}</p>
+    <div
+      v-if="migratePreviewUnmapped.components.length || migratePreviewUnmapped.relations.length"
+      class="leave-text leave-text--warning"
+    >
+      <p v-if="migratePreviewUnmapped.components.length">
+        {{
+          t('diagram.migrateNotationUnmappedComponents', {
+            list: migratePreviewUnmapped.components.join(', '),
+          })
+        }}
+      </p>
+      <p v-if="migratePreviewUnmapped.relations.length">
+        {{
+          t('diagram.migrateNotationUnmappedRelations', {
+            list: migratePreviewUnmapped.relations.join(', '),
+          })
+        }}
+      </p>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" :disabled="isMigrating" @click="closeMigrateModal">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        :disabled="isMigrating"
+        @click="confirmMigrateNotation"
+      >
+        {{ isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction') }}
       </button>
     </template>
   </BaseModal>
@@ -3091,12 +3175,14 @@ onBeforeUnmount(() => {
   <ModelImportWizard
     v-if="showImportWizard"
     :visible="showImportWizard"
+    :model-id="state.modelId ?? ''"
     :notations="state.notations"
     :node-types="state.nodeTypes"
     :link-types="state.linkTypes"
     :components="state.components"
     :relations="state.relations"
     :import-busy="isImportingOef"
+    :import-progress="oefImportProgress"
     @close="showImportWizard = false"
     @submit="handleOefImportSubmit"
   />
@@ -3124,7 +3210,7 @@ onBeforeUnmount(() => {
     </p>
     <div v-if="oefImportReport.warningGroups.length > 0" class="model-import-report__warnings">
       <p class="leave-text">{{ t('models.oefImportReportWarningsByReason') }}</p>
-      <ul class="model-import-report model-import-report--warnings">
+      <ul class="model-import-report model-import-report--warnings model-import-report--scrollable">
         <li v-for="item in oefImportReport.warningGroups" :key="item.code">
           {{ oefWarningLabel(item.code) }}: {{ item.count }}
         </li>
@@ -3180,6 +3266,10 @@ onBeforeUnmount(() => {
     <UiIcon name="sync" class="overlay-loading__icon spin" />
     <span>{{ t('common.loading') }}</span>
   </div>
+  <div v-else-if="isPreparingDiagram" class="overlay-loading overlay-loading--soft">
+    <UiIcon name="sync" class="overlay-loading__icon spin" />
+    <span>{{ t('models.diagramLoading') }}</span>
+  </div>
   <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">
     <UiIcon name="error" class="overlay-loading__icon" />
     <span>{{ errorMessage }}</span>
@@ -3200,6 +3290,10 @@ onBeforeUnmount(() => {
   z-index: 2000;
   font-size: 14px;
   font-weight: 500;
+}
+
+.overlay-loading--soft {
+  background: color-mix(in srgb, var(--base-bg) 72%, transparent);
 }
 
 .overlay-loading--error {
@@ -3356,6 +3450,11 @@ onBeforeUnmount(() => {
 
 .model-import-report--warnings {
   margin-top: 6px;
+}
+
+.model-import-report--scrollable {
+  max-height: min(220px, 40vh);
+  overflow-y: auto;
 }
 
 .json-viewer {
@@ -3547,7 +3646,7 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3558,13 +3657,38 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 
+.model-canvas-area__newer-notation-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-canvas-area__newer-notation-action {
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
 .model-canvas-area__newer-notation-icon {
   font-size: 18px;
   flex-shrink: 0;
 }
 
+/* Keep overlays below the full-width banner strip */
 .model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
-  top: 42px;
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner .canvas-settings-toggle,
+.model-canvas-area--has-newer-banner .canvas-settings {
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner :deep(.canvas-palette-toggle),
+.model-canvas-area--has-newer-banner :deep(.canvas-palette) {
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner .relation-rules-loading-badge {
+  top: 96px;
 }
 
 .model-canvas-area__toolbar {
@@ -3629,7 +3753,7 @@ onBeforeUnmount(() => {
     transform: rotate(0deg);
   }
   to {
-    transform: rotate(360deg);
+    transform: rotate(-360deg);
   }
 }
 

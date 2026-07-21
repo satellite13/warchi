@@ -261,6 +261,50 @@ describe('useModelDiagramConnections', () => {
     expect(reactiveState.value.links[1]?.id).not.toBe('existing-link')
   })
 
+  it('creates a note edge glued to a host relation via edge-anchor', () => {
+    const { state, diagram, connections } = createHarness()
+    diagram.value.parsedAttrs.instances.edges.push({
+      id: 'host-edge',
+      modelLinkId: 'existing-relation-link',
+      sourceInstanceId: 'source-instance',
+      targetInstanceId: 'target-instance',
+    })
+
+    connections.connectNodeToEdge(
+      '__diagram-note__:note',
+      'note-instance',
+      'host-edge',
+      0.4,
+      true,
+      undefined,
+      0.25
+    )
+
+    expect(state.value.links).toHaveLength(0)
+    const anchor = diagram.value.parsedAttrs.instances.nodes.find(
+      node => node.attrs?.isEdgeAnchor === true
+    )
+    expect(anchor).toMatchObject({
+      attrs: {
+        isEdgeAnchor: true,
+        hostEdgeInstanceId: 'host-edge',
+        pathParam: 0.4,
+      },
+    })
+    const noteEdge = diagram.value.parsedAttrs.instances.edges.find(
+      edge => edge.id !== 'host-edge'
+    )
+    expect(noteEdge).toMatchObject({
+      sourceInstanceId: 'note-instance',
+      targetInstanceId: anchor?.id,
+      attrs: {
+        isDiagramOnly: true,
+        fromOutlineParam: 0.25,
+      },
+    })
+    expect(noteEdge?.modelLinkId).toMatch(/^__diagram-note-edge__:/)
+  })
+
   it('clears note-edge selection when undoing its creation', () => {
     const {
       connections,

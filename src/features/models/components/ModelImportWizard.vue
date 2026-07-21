@@ -13,18 +13,26 @@ import {
   type ImportMappingState,
 } from '../utils/oef/mappingState'
 import { buildImportMappingSuggestions, type ImportMappingSuggestions } from '../utils/oef/mappingSuggestions'
-import { parseOefXml } from '../utils/oef/oefParser'
-import { validateParsedOefModel } from '../utils/oef/oefImportValidation'
-import type { ImportDraft, ImportIssue } from '../utils/oef/types'
+import { groupImportIssues } from '../utils/oef/groupImportIssues'
+import {
+  formatUploadBytes,
+  normalizeOefFile,
+  toOefParsedModel,
+  type OefNormalizeProgress,
+} from '../utils/oef/oefNormalizeApi'
+import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
+import type { ImportDraft, ImportIssue, ImportIssueCode } from '../utils/oef/types'
 
 const props = defineProps<{
   visible: boolean
+  modelId: string
   notations: NotationData[]
   nodeTypes: NodeTypeResponse[]
   linkTypes: LinkTypeResponse[]
   components: ComponentResponse[]
   relations: RelationResponse[]
   importBusy?: boolean
+  importProgress?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -39,6 +47,11 @@ const selectedFileName = ref<string>('')
 const draft = ref<ImportDraft | null>(null)
 const issues = ref<ImportIssue[]>([])
 const parseError = ref<string | null>(null)
+const isAnalyzing = ref(false)
+const analyzePhase = ref<'uploading' | 'processing'>('uploading')
+const uploadPercent = ref(0)
+const uploadLoaded = ref(0)
+const uploadTotal = ref(0)
 const showOnlyUnmapped = ref(true)
 const mappingState = ref<ImportMappingState>({ elementTypeMap: {}, relationshipTypeMap: {} })
 const suggestions = ref<ImportMappingSuggestions>({
@@ -56,6 +69,30 @@ const relationById = computed(() => new Map(props.relations.map(item => [item.id
 const hasDraft = computed(() => !!draft.value)
 const hasErrors = computed(() => issues.value.some(issue => issue.level === 'error'))
 const warningCount = computed(() => issues.value.filter(issue => issue.level === 'warning').length)
+const groupedIssues = computed(() => groupImportIssues(issues.value))
+const expandedIssueCodes = ref<Set<string>>(new Set())
+
+function issueGroupKey(code: ImportIssueCode, level: string): string {
+  return `${level}:${code}`
+}
+
+function isIssueGroupExpanded(code: ImportIssueCode, level: string): boolean {
+  return expandedIssueCodes.value.has(issueGroupKey(code, level))
+}
+
+function toggleIssueGroup(code: ImportIssueCode, level: string): void {
+  const key = issueGroupKey(code, level)
+  const next = new Set(expandedIssueCodes.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedIssueCodes.value = next
+}
+
+function issueGroupLabel(code: ImportIssueCode, sampleMessage: string): string {
+  const key = `models.oefImportIssue.${code}`
+  const translated = t(key)
+  return translated === key ? sampleMessage : translated
+}
 
 const elementRows = computed(() => {
   const rows = draft.value?.sourceElementTypes ?? []
@@ -74,6 +111,9 @@ const mappedElementsCount = computed(() =>
 )
 const mappedRelationshipsCount = computed(() =>
   Object.values(mappingState.value.relationshipTypeMap).filter(item => !!item.linkTypeId && !!item.relationId).length
+)
+const plannedFolderCount = computed(() =>
+  buildOrganizationImportPlan(draft.value?.organizations).directories.length
 )
 const bulkElementOptions = computed(() => {
   const out: Array<{ value: string; label: string }> = []
@@ -100,7 +140,9 @@ const bulkRelationshipOptions = computed(() => {
   return out
 })
 
-const canMoveToMappings = computed(() => hasDraft.value && !!selectedNotationId.value && !hasErrors.value)
+const canMoveToMappings = computed(
+  () => hasDraft.value && !!selectedNotationId.value && !hasErrors.value && !isAnalyzing.value
+)
 const canMoveToPreview = computed(
   () =>
     canMoveToMappings.value &&
@@ -109,17 +151,55 @@ const canMoveToPreview = computed(
 )
 const canSubmit = computed(() => currentStep.value === 3 && canMoveToPreview.value && !props.importBusy)
 
+const analyzeProgressLabel = computed(() => {
+  if (!isAnalyzing.value) return ''
+  if (analyzePhase.value === 'processing') {
+    return t('models.oefImportProcessing')
+  }
+  if (uploadTotal.value > 0) {
+    return t('models.oefImportUploadingBytes', {
+      loaded: formatUploadBytes(uploadLoaded.value),
+      total: formatUploadBytes(uploadTotal.value),
+      percent: uploadPercent.value,
+    })
+  }
+  return t('models.oefImportUploading', { percent: uploadPercent.value })
+})
+
+const analyzeBarWidth = computed(() => {
+  if (!isAnalyzing.value) return '0%'
+  if (analyzePhase.value === 'processing') return '100%'
+  return `${Math.max(0, Math.min(100, uploadPercent.value))}%`
+})
+
+function resetAnalyzeProgress(): void {
+  analyzePhase.value = 'uploading'
+  uploadPercent.value = 0
+  uploadLoaded.value = 0
+  uploadTotal.value = 0
+}
+
+function onNormalizeProgress(progress: OefNormalizeProgress): void {
+  analyzePhase.value = progress.phase
+  uploadPercent.value = progress.percent
+  uploadLoaded.value = progress.loaded
+  uploadTotal.value = progress.total
+}
+
 function resetState(): void {
   currentStep.value = 1
   selectedFileName.value = ''
   draft.value = null
   issues.value = []
   parseError.value = null
+  isAnalyzing.value = false
+  resetAnalyzeProgress()
   showOnlyUnmapped.value = true
   bulkElementValue.value = ''
   bulkRelationshipValue.value = ''
   mappingState.value = { elementTypeMap: {}, relationshipTypeMap: {} }
   suggestions.value = { elementBySourceType: {}, relationshipBySourceType: {} }
+  expandedIssueCodes.value = new Set()
 }
 
 watch(
@@ -164,15 +244,28 @@ async function onFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  if (!props.modelId) {
+    parseError.value = t('models.oefImportNormalizeMissingModel')
+    input.value = ''
+    return
+  }
   parseError.value = null
   selectedFileName.value = file.name
+  isAnalyzing.value = true
+  resetAnalyzeProgress()
+  uploadTotal.value = file.size
   try {
-    const xml = await file.text()
-    const parsed = parseOefXml(xml)
-    const validation = validateParsedOefModel(parsed)
+    const result = await normalizeOefFile(props.modelId, file, onNormalizeProgress)
+    if (!result.success) {
+      draft.value = null
+      issues.value = []
+      parseError.value = result.error.message || t('models.oefImportReadError')
+      return
+    }
+    const parsed = toOefParsedModel(result.data)
     const nextDraft = buildImportDraft(parsed)
     draft.value = nextDraft
-    issues.value = validation.issues
+    issues.value = (Array.isArray(result.data.issues) ? result.data.issues : []) as ImportIssue[]
     if (!selectedNotationId.value && props.notations.length > 0) {
       selectedNotationId.value = props.notations[0]!.id
     }
@@ -185,6 +278,8 @@ async function onFileChange(event: Event): Promise<void> {
     issues.value = []
     parseError.value = error instanceof Error ? error.message : t('models.oefImportReadError')
   } finally {
+    isAnalyzing.value = false
+    resetAnalyzeProgress()
     input.value = ''
   }
 }
@@ -240,7 +335,10 @@ function elementCandidates(sourceType: string): Array<{ value: string; label: st
       const component = componentById.value.get(row.componentId!)
       return {
         value: `${row.nodeTypeId}::${row.componentId}`,
-        label: `${nodeType?.name ?? row.nodeTypeId} / ${component?.name ?? row.componentId}`,
+        label: t('models.oefImportElementOptionLabel', {
+          nodeType: nodeType?.name ?? row.nodeTypeId,
+          component: component?.name ?? row.componentId,
+        }),
       }
     })
 }
@@ -254,7 +352,10 @@ function relationshipCandidates(sourceType: string): Array<{ value: string; labe
       const relation = relationById.value.get(row.relationId!)
       return {
         value: `${row.linkTypeId}::${row.relationId}`,
-        label: `${linkType?.name ?? row.linkTypeId} / ${relation?.name ?? row.relationId}`,
+        label: t('models.oefImportRelationshipOptionLabel', {
+          linkType: linkType?.name ?? row.linkTypeId,
+          relation: relation?.name ?? row.relationId,
+        }),
       }
     })
 }
@@ -310,10 +411,26 @@ function submitImport(): void {
 
         <div class="oef-import__row">
           <label class="oef-import__label">{{ t('models.oefImportSourceFile') }}</label>
-          <input class="oef-import__file" type="file" accept=".xml,text/xml,application/xml" @change="onFileChange" />
+          <input
+            class="oef-import__file"
+            type="file"
+            accept=".xml,text/xml,application/xml"
+            :disabled="isAnalyzing || importBusy"
+            @change="onFileChange"
+          />
           <p v-if="selectedFileName" class="oef-import__hint">
             {{ t('models.oefImportSelectedFile', { name: selectedFileName }) }}
           </p>
+          <div v-if="isAnalyzing" class="oef-import__upload-progress" aria-live="polite">
+            <div class="oef-import__upload-bar" role="progressbar" :aria-valuenow="uploadPercent" aria-valuemin="0" aria-valuemax="100">
+              <div
+                class="oef-import__upload-fill"
+                :class="{ 'oef-import__upload-fill--processing': analyzePhase === 'processing' }"
+                :style="{ width: analyzeBarWidth }"
+              />
+            </div>
+            <p class="oef-import__hint">{{ analyzeProgressLabel }}</p>
+          </div>
         </div>
 
         <p v-if="parseError" class="oef-import__error">{{ parseError }}</p>
@@ -323,22 +440,49 @@ function submitImport(): void {
             <span>{{ t('models.oefImportStatNodes', { count: draft.nodes.length }) }}</span>
             <span>{{ t('models.oefImportStatLinks', { count: draft.links.length }) }}</span>
             <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
+            <span v-if="plannedFolderCount > 0">{{
+              t('models.oefImportStatFolders', { count: plannedFolderCount })
+            }}</span>
           </div>
           <p v-if="hasErrors" class="oef-import__error">{{ t('models.oefImportIssuesBlocking') }}</p>
-          <div v-if="issues.length > 0" class="oef-import__issues">
-            <h4>{{ t('models.oefImportIssuesTitle') }}</h4>
-            <ul>
+          <div v-if="groupedIssues.length > 0" class="oef-import__issues">
+            <h4>
+              {{ t('models.oefImportIssuesTitle') }}
+              <span class="oef-import__issues-count">{{ issues.length }}</span>
+            </h4>
+            <ul class="oef-import__issue-groups">
               <li
-                v-for="(issue, index) in issues.slice(0, 50)"
-                :key="`step1-${issue.code}-${index}`"
-                :class="issue.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
+                v-for="group in groupedIssues"
+                :key="`step1-${group.level}-${group.code}`"
+                :class="group.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
               >
-                {{ issue.message }}
+                <div class="oef-import__issue-group-row">
+                  <span>
+                    {{ issueGroupLabel(group.code, group.sampleMessage) }}
+                    <span class="oef-import__issue-badge">×{{ group.count }}</span>
+                  </span>
+                  <button
+                    v-if="group.entityIds.length > 0"
+                    type="button"
+                    class="oef-import__issue-toggle"
+                    @click="toggleIssueGroup(group.code, group.level)"
+                  >
+                    {{
+                      isIssueGroupExpanded(group.code, group.level)
+                        ? t('models.oefImportIssuesHideIds')
+                        : t('models.oefImportIssuesShowIds')
+                    }}
+                  </button>
+                </div>
+                <p
+                  v-if="isIssueGroupExpanded(group.code, group.level)"
+                  class="oef-import__issue-ids"
+                >
+                  {{ group.entityIds.join(', ')
+                  }}{{ group.count > group.entityIds.length ? '…' : '' }}
+                </p>
               </li>
             </ul>
-            <p v-if="issues.length > 50" class="oef-import__hint">
-              {{ t('models.oefImportIssuesTruncated', { shown: 50, total: issues.length }) }}
-            </p>
           </div>
         </template>
       </div>
@@ -356,6 +500,7 @@ function submitImport(): void {
 
         <div class="oef-import__mapping">
           <h4>{{ t('models.oefImportElementMappings') }}</h4>
+          <p class="oef-import__hint">{{ t('models.oefImportElementMappingHint') }}</p>
           <div class="oef-import__bulk">
             <select v-model="bulkElementValue" class="oef-import__select">
               <option value="">{{ t('models.oefImportBulkSelect') }}</option>
@@ -367,11 +512,16 @@ function submitImport(): void {
               {{ t('models.oefImportApplyToVisible') }}
             </button>
           </div>
+          <div class="oef-import__mapping-row oef-import__mapping-row--header" aria-hidden="true">
+            <span>{{ t('models.oefImportColSourceType') }}</span>
+            <span>{{ t('models.oefImportColNodeTypeComponent') }}</span>
+          </div>
           <div v-for="sourceType in elementRows" :key="`e-${sourceType}`" class="oef-import__mapping-row">
             <span class="oef-import__source">{{ sourceType }}</span>
             <select
               :value="elementMappingValue(sourceType)"
               class="oef-import__select"
+              :aria-label="t('models.oefImportColNodeTypeComponent')"
               @change="onSelectElementMapping(sourceType, ($event.target as HTMLSelectElement).value)"
             >
               <option value="">{{ t('common.none') }}</option>
@@ -384,6 +534,7 @@ function submitImport(): void {
 
         <div class="oef-import__mapping">
           <h4>{{ t('models.oefImportRelationshipMappings') }}</h4>
+          <p class="oef-import__hint">{{ t('models.oefImportRelationshipMappingHint') }}</p>
           <div class="oef-import__bulk">
             <select v-model="bulkRelationshipValue" class="oef-import__select">
               <option value="">{{ t('models.oefImportBulkSelect') }}</option>
@@ -395,11 +546,16 @@ function submitImport(): void {
               {{ t('models.oefImportApplyToVisible') }}
             </button>
           </div>
+          <div class="oef-import__mapping-row oef-import__mapping-row--header" aria-hidden="true">
+            <span>{{ t('models.oefImportColSourceType') }}</span>
+            <span>{{ t('models.oefImportColLinkTypeRelation') }}</span>
+          </div>
           <div v-for="sourceType in relationshipRows" :key="`r-${sourceType}`" class="oef-import__mapping-row">
             <span class="oef-import__source">{{ sourceType }}</span>
             <select
               :value="relationshipMappingValue(sourceType)"
               class="oef-import__select"
+              :aria-label="t('models.oefImportColLinkTypeRelation')"
               @change="onSelectRelationshipMapping(sourceType, ($event.target as HTMLSelectElement).value)"
             >
               <option value="">{{ t('common.none') }}</option>
@@ -416,23 +572,55 @@ function submitImport(): void {
           <span>{{ t('models.oefImportStatNodes', { count: draft.nodes.length }) }}</span>
           <span>{{ t('models.oefImportStatLinks', { count: draft.links.length }) }}</span>
           <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
+          <span v-if="plannedFolderCount > 0">{{
+            t('models.oefImportStatFolders', { count: plannedFolderCount })
+          }}</span>
         </div>
         <p class="oef-import__hint">
           {{ t('models.oefImportPreviewMapped', { nodes: mappedElementsCount, links: mappedRelationshipsCount }) }}
         </p>
-        <div v-if="issues.length > 0" class="oef-import__issues">
-          <h4>{{ t('models.oefImportIssuesTitle') }}</h4>
-          <ul>
+        <div v-if="groupedIssues.length > 0" class="oef-import__issues">
+          <h4>
+            {{ t('models.oefImportIssuesTitle') }}
+            <span class="oef-import__issues-count">{{ issues.length }}</span>
+          </h4>
+          <p v-if="warningCount > 0 && !hasErrors" class="oef-import__hint">
+            {{ t('models.oefImportWarningsHint') }}
+          </p>
+          <ul class="oef-import__issue-groups">
             <li
-              v-for="(issue, index) in issues"
-              :key="`${issue.code}-${index}`"
-              :class="issue.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
+              v-for="group in groupedIssues"
+              :key="`step3-${group.level}-${group.code}`"
+              :class="group.level === 'error' ? 'oef-import__issue-error' : 'oef-import__issue-warning'"
             >
-              {{ issue.message }}
+              <div class="oef-import__issue-group-row">
+                <span>
+                  {{ issueGroupLabel(group.code, group.sampleMessage) }}
+                  <span class="oef-import__issue-badge">×{{ group.count }}</span>
+                </span>
+                <button
+                  v-if="group.entityIds.length > 0"
+                  type="button"
+                  class="oef-import__issue-toggle"
+                  @click="toggleIssueGroup(group.code, group.level)"
+                >
+                  {{
+                    isIssueGroupExpanded(group.code, group.level)
+                      ? t('models.oefImportIssuesHideIds')
+                      : t('models.oefImportIssuesShowIds')
+                  }}
+                </button>
+              </div>
+              <p
+                v-if="isIssueGroupExpanded(group.code, group.level)"
+                class="oef-import__issue-ids"
+              >
+                {{ group.entityIds.join(', ')
+                }}{{ group.count > group.entityIds.length ? '…' : '' }}
+              </p>
             </li>
           </ul>
         </div>
-        <p v-else-if="warningCount > 0" class="oef-import__hint">{{ t('models.oefImportWarningsHint') }}</p>
       </div>
     </div>
 
@@ -455,6 +643,9 @@ function submitImport(): void {
       <button v-else type="button" class="btn btn--primary" :disabled="!canSubmit" @click="submitImport">
         {{ importBusy ? t('common.loading') : t('models.oefImportRun') }}
       </button>
+      <p v-if="importBusy && importProgress" class="oef-import__footer-progress">
+        {{ importProgress }}
+      </p>
     </template>
   </BaseModal>
 </template>
@@ -464,6 +655,13 @@ function submitImport(): void {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.oef-import__footer-progress {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .oef-import__steps {
@@ -491,6 +689,7 @@ function submitImport(): void {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
 }
 
 .oef-import__row {
@@ -547,6 +746,9 @@ function submitImport(): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: min(280px, 45vh);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .oef-import__bulk {
@@ -561,6 +763,20 @@ function submitImport(): void {
   align-items: center;
 }
 
+.oef-import__mapping-row--header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
 .oef-import__source {
   font-size: 13px;
   color: var(--base-text);
@@ -569,11 +785,80 @@ function submitImport(): void {
 .oef-import__issues {
   border-top: 1px solid var(--border);
   padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
 }
 
-.oef-import__issues ul {
+.oef-import__issues h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oef-import__issues-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.oef-import__issue-groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(240px, 40vh);
+  overflow-y: auto;
+}
+
+.oef-import__issue-groups > li {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.oef-import__issue-group-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.oef-import__issue-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.oef-import__issue-toggle {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.oef-import__issue-toggle:hover {
+  text-decoration: underline;
+}
+
+.oef-import__issue-ids {
   margin: 6px 0 0;
-  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+  max-height: 72px;
+  overflow-y: auto;
 }
 
 .oef-import__issue-error {
@@ -588,6 +873,44 @@ function submitImport(): void {
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.oef-import__upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.oef-import__upload-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.oef-import__upload-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.15s ease-out;
+}
+
+.oef-import__upload-fill--processing {
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover), var(--primary));
+  background-size: 200% 100%;
+  animation: oef-import-upload-pulse 1.2s linear infinite;
+}
+
+@keyframes oef-import-upload-pulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .oef-import__error {

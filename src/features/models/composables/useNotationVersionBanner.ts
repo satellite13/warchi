@@ -25,12 +25,26 @@ export function useNotationVersionBanner(options: {
   const fallbackNotationMetaError = ref<string | null>(null)
   const fallbackNotationOwnerDisplayName = ref('')
 
+  const activeDiagramNotationDeleted = computed(() => {
+    const notationId = options.activeDiagram.value?.notationId
+    if (!notationId) return false
+    if (options.state.value.notations.some(item => item.id === notationId)) return false
+    return (
+      fallbackNotationMeta.value?.id === notationId && fallbackNotationMeta.value.deleted === true
+    )
+  })
+
   const activeDiagramNotationName = computed(() => {
     const notationId = options.activeDiagram.value?.notationId
     if (!notationId) return ''
     const notation = options.state.value.notations.find(item => item.id === notationId)
     if (notation) return notation.name
-    if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.name
+    if (fallbackNotationMeta.value?.id === notationId) {
+      const name = fallbackNotationMeta.value.name
+      return fallbackNotationMeta.value.deleted
+        ? options.t('models.notationNameDeleted', { name })
+        : name
+    }
     if (fallbackNotationMetaLoading.value) return options.t('models.notationLoading')
     if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
     return options.t('models.notationUnavailable')
@@ -49,12 +63,17 @@ export function useNotationVersionBanner(options: {
     const notationId = options.activeDiagram.value?.notationId
     if (!notationId) return ''
     if (fallbackNotationMeta.value?.id !== notationId) return ''
-    return fallbackNotationOwnerDisplayName.value || fallbackNotationMeta.value.ownerDisplayName || fallbackNotationMeta.value.ownerEmail
+    return (
+      fallbackNotationOwnerDisplayName.value ||
+      fallbackNotationMeta.value.ownerDisplayName ||
+      fallbackNotationMeta.value.ownerEmail
+    )
   })
 
   const canOpenActiveDiagramNotation = computed(() => {
     const notationId = options.activeDiagram.value?.notationId
     if (!notationId) return false
+    if (activeDiagramNotationDeleted.value) return false
     if (options.state.value.notations.some(item => item.id === notationId)) return true
     return fallbackNotationMeta.value?.id === notationId
   })
@@ -75,7 +94,12 @@ export function useNotationVersionBanner(options: {
             : options.t('models.notationRelationRulesLoadFailed')
         )
       }
-      const result = await apiGet<NotationResponse[]>(`/notations/${notationId}/newer-versions`)
+      const mid = options.state.value.modelId
+      const newerPath =
+        mid.length > 0
+          ? `/notations/${notationId}/newer-versions?modelId=${encodeURIComponent(mid)}`
+          : `/notations/${notationId}/newer-versions`
+      const result = await apiGet<NotationResponse[]>(newerPath)
       if (result.success) {
         newerNotationVersions.value = result.data
       } else {
@@ -148,6 +172,7 @@ export function useNotationVersionBanner(options: {
     activeDiagramNotationName,
     activeDiagramNotationVersion,
     activeDiagramNotationOwnerLabel,
+    activeDiagramNotationDeleted,
     canOpenActiveDiagramNotation,
   }
 }

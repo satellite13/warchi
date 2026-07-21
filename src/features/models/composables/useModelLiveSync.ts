@@ -2,7 +2,7 @@ import { Client } from "@stomp/stompjs"
 import { onBeforeUnmount, watch, type Ref } from "vue"
 import { refreshAccessToken } from "@/api/apiClient"
 import { buildModelSyncWsUrl } from "@/api/modelSyncWs"
-import { listParams, PAGE_SIZE_FULL } from "@/api/queryHelpers"
+import { listParams } from "@/api/queryHelpers"
 import { apiGet } from "@/composables/useApi"
 import {
   AUTH_CLEARED_EVENT,
@@ -22,6 +22,7 @@ import {
   mergeEntityListFromRemote,
   preserveOpenDiagramCanvasAfterRemoteMerge,
 } from "../utils/modelEntityMerge"
+import { isModelEditorSnapshotFresh } from "../utils/modelEditorSnapshotFreshness"
 import { createModelChangedEventIdDeduper } from "../utils/modelLiveSyncEventDedup"
 import {
   emitModelLiveSyncTelemetry,
@@ -31,7 +32,12 @@ import {
   coalesceModelSyncGranularEvents,
   parseGranularSyncEventsFromPayload,
 } from "../utils/modelSyncGranularCoalesce"
-import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
+import { fetchAllByModelId } from "./modelEditorLoadModel"
+import {
+  toEditorDiagramPreservingLocalAttrs,
+  toEditorLink,
+  toEditorNode,
+} from "./modelEditorMappers"
 
 const STOMP_RECONNECT_DELAY_MS = 5000
 const STOMP_HEARTBEAT_INCOMING_MS = 15000
@@ -156,6 +162,17 @@ export function useModelLiveSync(options: {
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
 
+    // After loadModel we already have a full snapshot — skip connect/poll/resync churn.
+    // Real remote changes (STOMP model_changed) must still pull.
+    const reason = pullOpts?.reason
+    const skipWhileFresh =
+      reason === "session_resync" ||
+      reason === "ws_connect" ||
+      reason === "poll_timer" ||
+      reason === "auth_refresh" ||
+      reason === "visibility"
+    if (skipWhileFresh && isModelEditorSnapshotFresh()) return
+
     inFlight = true
     if (pullOpts?.reason) {
       emitModelLiveSyncTelemetry({
@@ -165,35 +182,24 @@ export function useModelLiveSync(options: {
       })
     }
     try {
-      const [nodesRes, linksRes, diagramsRes, modelRes] = await Promise.all([
-        apiGet<PaginatedResponse<NodeResponse>>(
-          `/nodes?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
-        ),
-        apiGet<PaginatedResponse<LinkResponse>>(
-          `/links?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
-        ),
-        apiGet<PaginatedResponse<DiagramResponse>>(
-          `/diagrams?modelId=${encodeURIComponent(mid)}&size=${PAGE_SIZE_FULL}`
-        ),
+      // Must page through the full collections — a single size=1000 page drops the rest
+      // via mergeEntityListFromRemote and empties the tree after a large import.
+      const [remoteNodes, remoteLinks, remoteDiagrams, modelRes] = await Promise.all([
+        fetchAllByModelId<NodeResponse>('/nodes', mid),
+        fetchAllByModelId<LinkResponse>('/links', mid),
+        fetchAllByModelId<DiagramResponse>('/diagrams', mid, undefined, {
+          includeAttrs: 'false',
+        }),
         apiGet<ModelData>(`/models/${mid}`),
       ])
 
-      if (
-        !nodesRes.success ||
-        !linksRes.success ||
-        !diagramsRes.success ||
-        !modelRes.success
-      ) {
+      if (!modelRes.success) {
         return
       }
 
       // Guard against stale results: if modelId changed while requests were in flight,
       // discard results to avoid overwriting the newly loaded model's state.
       if (options.modelId.value !== mid) return
-
-      const remoteNodes = nodesRes.data.content ?? []
-      const remoteLinks = linksRes.data.content ?? []
-      const remoteDiagrams = diagramsRes.data.content ?? []
 
       const diagramsBefore = options.state.value.diagrams
       const notationIdsBefore = new Set(collectNotationIds(diagramsBefore))
@@ -211,7 +217,7 @@ export function useModelLiveSync(options: {
       const mergedDiagrams = mergeEntityListFromRemote(
         options.state.value.diagrams,
         remoteDiagrams,
-        toEditorDiagram
+        row => toEditorDiagramPreservingLocalAttrs(row, diagramsBefore)
       )
       const nextNodes = mergedNodes.items
       const nextLinks = mergedLinks.items

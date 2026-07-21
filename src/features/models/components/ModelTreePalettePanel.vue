@@ -82,41 +82,40 @@ const nodeIndexById = computed(() => {
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
 
-const {
-  expandedNodes,
-  treeSearchQuery,
-  rootNodes,
-  totalNodesCount,
-  filteredRootNodes,
-  filteredChildNodes,
-  childNodes,
-  toggleNode,
-} = useTreeSearch({
-  nodes: toRef(props, 'nodes'),
-  treeRootNodeId: toRef(props, 'treeRootNodeId'),
-  isDirectory,
-  nodeIndexById,
-})
-
-/** Диаграммы узла: по одному на имя (последняя версия), без baseline-дубликатов в списке */
-const nodeDiagrams = (nodeId: string): EditorDiagram[] => {
-  const list = props.diagrams.filter((d) => d.nodeId === nodeId && !d._isDeleted)
-  const byName = new Map<string, EditorDiagram>()
-  for (const d of list) {
-    const key = d.name.trim()
-    const existing = byName.get(key)
-    if (!existing || compareVersions(d.version, existing.version) > 0) {
-      byName.set(key, d)
-    }
-  }
-  return [...byName.values()]
-}
-
 const isRootDiagram = (d: EditorDiagram): boolean => {
   if (d._isDeleted) return false
   if (d.nodeId === null) return true
   return !!props.treeRootNodeId && d.nodeId === props.treeRootNodeId
 }
+
+const latestDiagramsByNodeId = computed(() => {
+  const map = new Map<string, EditorDiagram[]>()
+  for (const diagram of props.diagrams) {
+    if (diagram._isDeleted || !diagram.nodeId) continue
+    if (props.treeRootNodeId && diagram.nodeId === props.treeRootNodeId) continue
+    const key = diagram.nodeId
+    const list = map.get(key)
+    if (list) list.push(diagram)
+    else map.set(key, [diagram])
+  }
+  const result = new Map<string, EditorDiagram[]>()
+  for (const [nodeId, list] of map) {
+    const byName = new Map<string, EditorDiagram>()
+    for (const d of list) {
+      const nameKey = d.name.trim()
+      const existing = byName.get(nameKey)
+      if (!existing || compareVersions(d.version, existing.version) > 0) {
+        byName.set(nameKey, d)
+      }
+    }
+    result.set(nodeId, [...byName.values()])
+  }
+  return result
+})
+
+/** Диаграммы узла: по одному на имя (последняя версия), без baseline-дубликатов в списке */
+const nodeDiagrams = (nodeId: string): EditorDiagram[] =>
+  latestDiagramsByNodeId.value.get(nodeId) ?? []
 
 const rootDiagrams = computed<EditorDiagram[]>(() => {
   const list = props.diagrams.filter(isRootDiagram)
@@ -131,48 +130,56 @@ const rootDiagrams = computed<EditorDiagram[]>(() => {
   return [...byName.values()]
 })
 
-const normalizedTreeQuery = computed(() => treeSearchQuery.value.trim().toLowerCase())
-
-const diagramMatchesSearch = (diagram: EditorDiagram, query: string): boolean =>
-  diagram.name.toLowerCase().includes(query)
-
-const nodeMatchesSearchWithDiagrams = (node: EditorNode, query: string): boolean => {
-  if (node.name.toLowerCase().includes(query)) return true
-  if (nodeDiagrams(node.id).some(diagram => diagramMatchesSearch(diagram, query))) return true
-  return childNodes(node.id).some(child => nodeMatchesSearchWithDiagrams(child, query))
-}
-
-const visibleRootNodes = computed<EditorNode[]>(() => {
-  const query = normalizedTreeQuery.value
-  if (!query) return filteredRootNodes.value
-  return rootNodes.value.filter(node => nodeMatchesSearchWithDiagrams(node, query))
+const {
+  expandedNodes,
+  treeSearchQuery,
+  normalizedQuery,
+  matchingNodeIds,
+  nodeById,
+  totalNodesCount,
+  filteredRootNodes,
+  filteredChildNodes,
+  childNodes,
+  toggleNode,
+} = useTreeSearch({
+  nodes: toRef(props, 'nodes'),
+  treeRootNodeId: toRef(props, 'treeRootNodeId'),
+  isDirectory,
+  nodeIndexById,
+  extraNodeMatches: (node, query) => {
+    const diagrams = latestDiagramsByNodeId.value.get(node.id)
+    return diagrams?.some(diagram => diagram.name.toLowerCase().includes(query)) ?? false
+  },
 })
 
-const visibleChildNodes = (nodeId: string): EditorNode[] => {
-  const query = normalizedTreeQuery.value
-  if (!query) return filteredChildNodes(nodeId)
-  return childNodes(nodeId).filter(child => nodeMatchesSearchWithDiagrams(child, query))
-}
+const visibleRootNodes = computed<EditorNode[]>(() => filteredRootNodes.value)
+
+const visibleChildNodes = (nodeId: string): EditorNode[] => filteredChildNodes(nodeId)
 
 const visibleRootDiagrams = computed<EditorDiagram[]>(() => {
-  const query = normalizedTreeQuery.value
+  const query = normalizedQuery.value
   if (!query) return rootDiagrams.value
-  return rootDiagrams.value.filter(diagram => diagramMatchesSearch(diagram, query))
+  return rootDiagrams.value.filter(diagram => diagram.name.toLowerCase().includes(query))
 })
 
 const visibleNodeDiagrams = (nodeId: string): EditorDiagram[] => {
-  const query = normalizedTreeQuery.value
+  const query = normalizedQuery.value
   const diagrams = nodeDiagrams(nodeId)
   if (!query) return diagrams
-  return diagrams.filter(diagram => diagramMatchesSearch(diagram, query))
+  return diagrams.filter(diagram => diagram.name.toLowerCase().includes(query))
 }
+
+const MAX_SEARCH_TREE_ROWS = 250
 
 // Track which nodes are used in any diagram instance
 const usedNodeIds = computed(() => {
   const used = new Set<string>()
   for (const diagram of props.diagrams) {
     if (diagram._isDeleted) continue
-    for (const instance of diagram.parsedAttrs.instances.nodes) {
+    // Light diagram list may omit attrs — skip until hydrated.
+    const instances = diagram.parsedAttrs?.instances?.nodes
+    if (!instances) continue
+    for (const instance of instances) {
       used.add(instance.modelNodeId)
     }
   }
@@ -386,8 +393,41 @@ type TreeDiagramRow = {
 
 type TreeRow = TreeNodeRow | TreeDiagramRow
 
-const treeRows = computed<TreeRow[]>(() => {
+const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   const rows: TreeRow[] = []
+  const query = normalizedQuery.value
+
+  // Search mode: flat list of direct matches — avoids expanding thousands of folders.
+  if (query) {
+    for (const diagram of visibleRootDiagrams.value) {
+      rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
+      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
+        return { rows, truncated: true }
+      }
+    }
+
+    const byId = nodeById.value
+    const matches: EditorNode[] = []
+    for (const id of matchingNodeIds.value) {
+      const node = byId.get(id)
+      if (node && !node._isDeleted) matches.push(node)
+    }
+    matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+
+    for (const node of matches) {
+      rows.push({ kind: "node", node, depth: 0 })
+      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
+        return { rows, truncated: true }
+      }
+      for (const diagram of visibleNodeDiagrams(node.id)) {
+        rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: 1 })
+        if (rows.length >= MAX_SEARCH_TREE_ROWS) {
+          return { rows, truncated: true }
+        }
+      }
+    }
+    return { rows, truncated: false }
+  }
 
   for (const diagram of visibleRootDiagrams.value) {
     rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
@@ -407,8 +447,11 @@ const treeRows = computed<TreeRow[]>(() => {
   for (const rootNode of visibleRootNodes.value) {
     pushNode(rootNode, 0)
   }
-  return rows
+  return { rows, truncated: false }
 })
+
+const visibleTreeRows = computed(() => treeRows.value.rows)
+const searchResultsTruncated = computed(() => treeRows.value.truncated)
 
 defineExpose({ expandToNode, focusNode })
 </script>
@@ -468,12 +511,17 @@ defineExpose({ expandToNode, focusNode })
       @dragover.self.prevent="onTreeDragOver($event, null)"
       @drop.self.prevent="onTreeDrop($event, null)"
     >
-      <div v-if="treeRows.length === 0" class="tree__empty">
+      <div v-if="visibleTreeRows.length === 0" class="tree__empty">
         <UiIcon name="account_tree" class="tree__empty-icon" />
-        <span class="tree__empty-text">{{ t("models.noNodes") }}</span>
-        <span class="tree__empty-hint">{{ t("models.createFolderOrNodeHint") }}</span>
+        <span class="tree__empty-text">{{
+          normalizedQuery ? t('models.noSearchResults') : t('models.noNodes')
+        }}</span>
+        <span v-if="!normalizedQuery" class="tree__empty-hint">{{ t("models.createFolderOrNodeHint") }}</span>
       </div>
-      <template v-for="row in treeRows" :key="row.kind === 'node' ? row.node.id : row.diagram.id">
+      <div v-if="searchResultsTruncated" class="tree__truncated">
+        {{ t('models.searchResultsTruncated', { count: MAX_SEARCH_TREE_ROWS }) }}
+      </div>
+      <template v-for="row in visibleTreeRows" :key="row.kind === 'node' ? row.node.id : row.diagram.id">
         <div v-if="row.kind === 'node'" class="tree-node">
           <div
             class="tree-node__row tree-node__row--flattened"
@@ -857,6 +905,15 @@ defineExpose({ expandToNode, focusNode })
   font-size: 12px;
   color: var(--text-subtle);
   margin: 0;
+}
+
+.tree__truncated {
+  margin: 0 10px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
 }
 
 .tree-node {

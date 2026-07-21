@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-21
+
+### Added
+- Large OEF (Open Exchange) imports: server-side XML normalize (`POST /models/{id}/oef/normalize`) and chunked batch-save apply with progress in the import wizard (requires arepos-server 0.6.0).
+- OEF Organizations imported as Directory folders in the model tree.
+- Migrate a diagram to a newer notation version from the version banner (in-place remap by component/relation name; save required).
+- Connect a Note to a relation edge on the diagram (diagram-only edge anchor; requires papirus 0.7.0).
+
+### Fixed
+- nginx no longer rate-limits general `/api/` traffic (notation import and other SPA bursts hit 429); login/register/refresh limits remain.
+- Transient `/auth/refresh` failures (429/5xx) no longer clear the session; refresh rate limit is relaxed.
+- Re-saving/importing a notation after a partial failure no longer fails with 409: existing components/relations with the same name+version are reused.
+- Notation palette icon picker search works again (spurious lazy-preview `@error` no longer wipes the option list).
+- OEF import no longer fails with nginx 413 on huge batch-save bodies: payload is applied in chunks; normalize upload allows up to 100 MB via a dedicated nginx location.
+- Large models load all node/link/diagram pages into the editor; live sync pull pages full snapshots.
+- Duplicate OEF diagram names are uniquified on import; `parentNodeId` remaps correctly across node batch-save chunks.
+
 ## [0.8.18] - 2026-07-20
 
 ### Fixed

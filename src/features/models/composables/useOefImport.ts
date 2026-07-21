@@ -1,10 +1,14 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
+import { apiPost } from '@/api/apiClient'
+import type { NodeTypeResponse } from '@/types/api'
+import { parseEntityAttrs, parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
 import type { ModelEditorState } from '../types'
-import { parseEntityAttrs, parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 import type { ImportMappingState } from '../utils/oef/mappingState'
 import type { ImportDraft } from '../utils/oef/types'
+import { applyOefBatchSaveChunks, type OefChunkProgress } from '../utils/oef/chunkOefBatchSave'
 import { buildOefBatchSaveRequest } from '../utils/oef/oefToBatchSave'
+import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
 import { batchSave, hasBatchChanges } from './useModelBatchSave'
 import { isRequiredPropertyFilled } from '../utils/requiredCustomPropertiesValidation'
 
@@ -49,7 +53,25 @@ export function useOefImport(options: {
 }) {
   const showImportWizard = ref(false)
   const isImportingOef = ref(false)
+  const oefImportProgress = ref<string | null>(null)
   const oefImportReport = ref<OefImportReport | null>(null)
+
+  function formatOefProgress(progress: OefChunkProgress): string {
+    const kindLabel =
+      progress.kind === 'nodes'
+        ? options.t('models.oefImportProgressNodes')
+        : progress.kind === 'links'
+          ? options.t('models.oefImportProgressLinks')
+          : options.t('models.oefImportProgressDiagrams')
+    return options.t('models.oefImportProgress', {
+      kind: kindLabel,
+      index: progress.index,
+      total: progress.totalOfKind,
+      nodes: progress.nodesCreated,
+      links: progress.linksCreated,
+      diagrams: progress.diagramsCreated,
+    })
+  }
 
   function oefWarningLabel(code: string): string {
     switch (code) {
@@ -65,9 +87,44 @@ export function useOefImport(options: {
         return options.t('models.oefImportWarningDiagramConnectionMissingModelLink')
       case 'diagramConnectionMissingNodeInstance':
         return options.t('models.oefImportWarningDiagramConnectionMissingNodeInstance')
+      case 'nameTruncated':
+        return options.t('models.oefImportWarningNameTruncated')
+      case 'nameDeduplicated':
+        return options.t('models.oefImportWarningNameDeduplicated')
+      case 'relationsBranchSkipped':
+        return options.t('models.oefImportWarningRelationsBranchSkipped')
+      case 'directoryTypeMissing':
+        return options.t('models.oefImportWarningDirectoryTypeMissing')
+      case 'directoryTypeCreated':
+        return options.t('models.oefImportWarningDirectoryTypeCreated')
       default:
         return code
     }
+  }
+
+  async function ensureDirectoryNodeTypeId(): Promise<{
+    id: string | null
+    created: boolean
+  }> {
+    const existing = options.state.value.nodeTypes.find(
+      type => type.name.trim().toLowerCase() === 'directory'
+    )
+    if (existing) return { id: existing.id, created: false }
+
+    const result = await apiPost<NodeTypeResponse>('/node-types', {
+      name: 'Directory',
+      attrs: null,
+    })
+    if (!result.success) {
+      options.setUiError(
+        options.t('models.oefImportDirectoryTypeCreateFailed', {
+          message: result.error.message,
+        })
+      )
+      return { id: null, created: false }
+    }
+    options.state.value.nodeTypes = [...options.state.value.nodeTypes, result.data]
+    return { id: result.data.id, created: true }
   }
 
   function collectOefMissingRequiredReport(
@@ -143,6 +200,19 @@ export function useOefImport(options: {
   }): Promise<void> {
     const modelId = options.state.value.modelId
     if (!modelId) return
+
+    const orgPlanPreview = buildOrganizationImportPlan(payload.draft.organizations)
+    let directoryNodeTypeId: string | null =
+      options.state.value.nodeTypes.find(type => type.name.trim().toLowerCase() === 'directory')
+        ?.id ?? null
+    let directoryTypeCreated = false
+    if (orgPlanPreview.directories.length > 0 && !directoryNodeTypeId) {
+      const ensured = await ensureDirectoryNodeTypeId()
+      if (!ensured.id) return
+      directoryNodeTypeId = ensured.id
+      directoryTypeCreated = ensured.created
+    }
+
     const nodeTypePropertyDefaultsById = Object.fromEntries(
       options.state.value.nodeTypes.map(nodeType => [
         nodeType.id,
@@ -165,19 +235,35 @@ export function useOefImport(options: {
       draft: payload.draft,
       notationId: payload.notationId,
       mapping: payload.mapping,
+      directoryNodeTypeId,
       parentNodeId: options.treeRootNodeId.value ?? null,
       nodeTypePropertyDefaultsById,
       componentPropertyDefaultsById,
       relationPropertyDefaultsById,
     })
+    if (directoryTypeCreated) {
+      built.warnings.push({
+        code: 'directoryTypeCreated',
+        message: 'Directory node type was created automatically',
+      })
+    }
     if (!hasBatchChanges(built.request)) {
       options.setUiError(options.t('models.oefImportNoChanges'))
       return
     }
 
     isImportingOef.value = true
-    const result = await batchSave(modelId, built.request)
+    oefImportProgress.value = options.t('models.oefImportProgressStarting')
+    const result = await applyOefBatchSaveChunks({
+      modelId,
+      request: built.request,
+      batchSave,
+      onProgress: progress => {
+        oefImportProgress.value = formatOefProgress(progress)
+      },
+    })
     isImportingOef.value = false
+    oefImportProgress.value = null
     if (!result.success) {
       options.setUiError(options.t('models.oefImportFailed', { message: result.error.message }))
       return
@@ -203,6 +289,7 @@ export function useOefImport(options: {
   return {
     showImportWizard,
     isImportingOef,
+    oefImportProgress,
     oefImportReport,
     oefWarningLabel,
     handleOefImportSubmit,

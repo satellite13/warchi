@@ -44,11 +44,19 @@ export type OefView = {
   connections: OefViewConnection[]
 }
 
+export type OefOrganizationNode = {
+  label?: string | null
+  children?: OefOrganizationNode[] | null
+  refId?: string | null
+  refKind?: 'element' | 'relationship' | 'view' | null
+}
+
 export type OefParsedModel = {
   model: OefModel
   elements: OefElement[]
   relationships: OefRelationship[]
   views: OefView[]
+  organizations?: OefOrganizationNode[]
 }
 
 export type ImportDraftNode = {
@@ -105,6 +113,7 @@ export type ImportDraft = {
   nodes: ImportDraftNode[]
   links: ImportDraftLink[]
   diagrams: ImportDraftDiagram[]
+  organizations: OefOrganizationNode[]
   sourceElementTypes: string[]
   sourceRelationshipTypes: string[]
 }

@@ -113,4 +113,18 @@ describe('diagramCanvasBuilders', () => {
     expect(resolveModelEdgeOptions(ds).startMarker).toBeUndefined()
     expect(resolveModelEdgeOptions(ds).endMarker).toEqual(buildMarker('arrow', ds, 'end'))
   })
+
+  it('keeps none markers for diagram-only / note links', () => {
+    const ds = {
+      startMarkerType: 'none',
+      endMarkerType: 'none',
+      lineDash: [4, 4],
+    } as DiagramStyle
+
+    expect(resolveModelEdgeOptions(ds)).toMatchObject({
+      style: { lineDash: [4, 4] },
+      startMarker: { type: 'none' },
+      endMarker: { type: 'none' },
+    })
+  })
 })

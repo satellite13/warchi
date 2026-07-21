@@ -73,6 +73,6 @@ env:
   - name: AREPOS_SWAGGER_ENABLED
     value: "false"
   - name: AREPOS_AUTH_REGISTRATION_ENABLED
-    value: "false"
+    value: "true"
   - name: MODEL_SYNC_OUTBOX_ENABLED
     value: "true"

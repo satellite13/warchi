@@ -223,6 +223,11 @@ describe('buildMarker', () => {
     expect(buildMarker('invalid', {}, 'end')).toBeUndefined()
   })
 
+  it('returns explicit none marker so legacy arrowType heads stay disabled', () => {
+    expect(buildMarker('none', {}, 'start')).toEqual({ type: 'none' })
+    expect(buildMarker('none', {}, 'end')).toEqual({ type: 'none' })
+  })
+
   it('returns marker for arrow type', () => {
     const result = buildMarker('arrow', {}, 'start')!
     expect(result.type).toBe('arrow')

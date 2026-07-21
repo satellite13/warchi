@@ -42,6 +42,7 @@ import {
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import {
+  flushPersistDiagramViewport,
   persistDiagramViewport,
   restoreDiagramViewport,
 } from '../utils/diagramViewportPersistence'
@@ -74,7 +75,8 @@ import {
   isContainerInstance,
   isEdgeAnchorInstance,
 } from '../utils/diagramOnlyInstances'
-import { placeEdgeAnchorAtMidpoint, syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
+import { syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
+import { buildEdgeAnchorLookup, resolveDiagramEdgeEndpoint } from '../utils/resolveDiagramEdgeEndpoint'
 
 const props = withDefaults(
   defineProps<{
@@ -191,6 +193,15 @@ const emit = defineEmits<{
     sourceOutlineParam?: number,
     targetOutlineParam?: number,
   ]
+  connectNodeToEdge: [
+    nodeModelNodeId: string,
+    nodeInstanceId: string,
+    hostEdgeInstanceId: string,
+    pathParam: number,
+    nodeIsSource: boolean,
+    nodePortId?: string,
+    nodeOutlineParam?: number,
+  ]
   reconnectEdge: [
     edgeInstanceId: string,
     endpoint: 'start' | 'end',
@@ -286,6 +297,10 @@ let lastActiveDiagramId: string | null = null
 
 function safePersistViewport(diagramId: string, r: DiagramRenderer) {
   if (!suppressViewportPersistence) persistDiagramViewport(diagramId, r)
+}
+
+function flushViewport(diagramId: string | null) {
+  if (diagramId) flushPersistDiagramViewport(diagramId)
 }
 
 function safeRestoreViewport(diagramId: string, r: DiagramRenderer): boolean {
@@ -487,7 +502,9 @@ const startGroupDrag = (leaderPapNodeId: string) => {
   if (renderer) {
     for (const [, papEdge] of renderer.edges) {
       if (!papEdge.hasEditableControlPoints()) continue
-      if (!groupNodeIds.has(papEdge.from.nodeId) || !groupNodeIds.has(papEdge.to.nodeId)) {
+      const fromId = papEdge.from.nodeId
+      const toId = papEdge.to.nodeId
+      if (!fromId || !toId || !groupNodeIds.has(fromId) || !groupNodeIds.has(toId)) {
         continue
       }
       const cps = papEdge.controlPoints
@@ -1113,8 +1130,12 @@ function syncDiagram() {
   const nextSyncedNames = new Map<string, string>()
   const orderedInstances = sortInstancesByZLayer(instanceNodes.value)
 
-  // Sync nodes
+  const edgeAnchorLookup = buildEdgeAnchorLookup(instanceNodes.value)
+  const edgeInstanceIds = new Set(instanceEdges.value.map(edge => edge.id))
+
+  // Sync nodes (skip invisible edge-anchors — junctions bind to host edges in Papirus)
   for (const instance of orderedInstances) {
+    if (isEdgeAnchorInstance(instance)) continue
     const modelNode = nodeById.value.get(instance.modelNodeId)
     if (!isDiagramOnlyVisualInstance(instance) && (!modelNode || modelNode._isDeleted)) continue
 
@@ -1216,8 +1237,36 @@ function syncDiagram() {
 
     const sourcePapId = `instance-${edge.sourceInstanceId}`
     const targetPapId = `instance-${edge.targetInstanceId}`
+    const hostEdgeExists = (hostEdgeInstanceId: string): boolean =>
+      edgeInstanceIds.has(hostEdgeInstanceId) || !!renderer?.getEdge(`edge-${hostEdgeInstanceId}`)
+    const existing = renderer.getEdge(papEdgeId)
 
-    if (!currentNodeIds.has(sourcePapId) || !currentNodeIds.has(targetPapId)) continue
+    const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
+    const toOutline = edge.attrs?.toOutlineParam as number | undefined
+    const fromEndpoint = resolveDiagramEdgeEndpoint({
+      instanceId: edge.sourceInstanceId,
+      papNodeId: sourcePapId,
+      outlineParam: fromOutline,
+      portId:
+        (edge.attrs?.fromPortId as string | undefined) ??
+        (existing?.from.nodeId ? existing.from.portId : undefined),
+      anchorLookup: edgeAnchorLookup,
+      hostEdgeExists,
+    })
+    const toEndpoint = resolveDiagramEdgeEndpoint({
+      instanceId: edge.targetInstanceId,
+      papNodeId: targetPapId,
+      outlineParam: toOutline,
+      portId:
+        (edge.attrs?.toPortId as string | undefined) ??
+        (existing?.to.nodeId ? existing.to.portId : undefined),
+      anchorLookup: edgeAnchorLookup,
+      hostEdgeExists,
+    })
+    if (!fromEndpoint || !toEndpoint) continue
+    // Node ends must be present on canvas; edge-attached ends use host edge id.
+    if (fromEndpoint.nodeId && !currentNodeIds.has(fromEndpoint.nodeId)) continue
+    if (toEndpoint.nodeId && !currentNodeIds.has(toEndpoint.nodeId)) continue
 
     const ds = getEffectiveEdgeStyle(edge)
     const edgeOpts = resolveModelEdgeOptions(ds)
@@ -1237,26 +1286,15 @@ function syncDiagram() {
     const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
     const controlPoints = readControlPointsFromAttrs(edge.attrs)
 
-    const existing = renderer.getEdge(papEdgeId)
     if (existing) {
-      const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
-      const toOutline = edge.attrs?.toOutlineParam as number | undefined
-      existing.from =
-        fromOutline !== undefined
-          ? { nodeId: sourcePapId, outlineParam: fromOutline }
-          : {
-              nodeId: sourcePapId,
-              portId: (edge.attrs?.fromPortId as string | undefined) ?? existing.from.portId,
-            }
-      existing.to =
-        toOutline !== undefined
-          ? { nodeId: targetPapId, outlineParam: toOutline }
-          : {
-              nodeId: targetPapId,
-              portId: (edge.attrs?.toPortId as string | undefined) ?? existing.to.portId,
-            }
+      existing.from = fromEndpoint
+      existing.to = toEndpoint
       if (edgeOpts.style) existing.style = { ...existing.style, ...edgeOpts.style }
       if (edgeOpts.type) existing.type = edgeOpts.type
+      // Explicit marker types (incl. 'none' for note links) disable legacy arrowType heads.
+      if (ds?.startMarkerType != null || ds?.endMarkerType != null) {
+        existing.arrowType = 'none'
+      }
       if (edgeOpts.startMarker !== undefined) existing.startMarker = edgeOpts.startMarker
       if (edgeOpts.endMarker !== undefined) existing.endMarker = edgeOpts.endMarker
       if (!areControlPointsEqual(readControlPointsFromEdge(existing), controlPoints)) {
@@ -1284,20 +1322,15 @@ function syncDiagram() {
       ;(existing as unknown as { labelBackground?: Record<string, unknown> }).labelBackground =
         edgeLabelBackground
     } else {
-      const fromOutline = edge.attrs?.fromOutlineParam as number | undefined
-      const toOutline = edge.attrs?.toOutlineParam as number | undefined
       const newEdge = new Edge({
         id: papEdgeId,
-        from:
-          fromOutline !== undefined
-            ? { nodeId: sourcePapId, outlineParam: fromOutline }
-            : { nodeId: sourcePapId, portId: edge.attrs?.fromPortId as string | undefined },
-        to:
-          toOutline !== undefined
-            ? { nodeId: targetPapId, outlineParam: toOutline }
-            : { nodeId: targetPapId, portId: edge.attrs?.toPortId as string | undefined },
+        from: fromEndpoint,
+        to: toEndpoint,
         type: edgeOpts.type ?? 'bezier',
-        arrowType: ds?.endMarkerType ? undefined : 'single',
+        // Legacy 'single' only when style has no marker types; 'none' must not fall through
+        // to Edge's default arrowType ('single') — that drew heads on note/diagram-only links.
+        arrowType:
+          ds?.startMarkerType != null || ds?.endMarkerType != null ? 'none' : 'single',
         style: edgeOpts.style,
         startMarker: edgeOpts.startMarker,
         endMarker: edgeOpts.endMarker,
@@ -1378,22 +1411,8 @@ function syncEdgeAnchors(options: { persist: boolean; updateRenderer: boolean })
   if (midpoints.size === 0) return
 
   if (options.updateRenderer) {
-    for (const instance of instanceNodes.value) {
-      if (!isEdgeAnchorInstance(instance)) continue
-      const hostEdgeId = getHostEdgeInstanceId(instance)
-      if (!hostEdgeId) continue
-      const midpoint = midpoints.get(hostEdgeId)
-      if (!midpoint) continue
-      const placed = placeEdgeAnchorAtMidpoint(instance, midpoint)
-      const papNode = renderer.getNode(`instance-${instance.id}`)
-      if (papNode) {
-        papNode.x = placed.x
-        papNode.y = placed.y
-        papNode.width = placed.width ?? papNode.width
-        papNode.height = placed.height ?? papNode.height
-      }
-    }
-    renderer.markDirty()
+    // Junctions bind to host edges in Papirus — resync endpoints instead of moving fake nodes.
+    renderer.markContentDirty()
   }
 
   if (options.persist) {
@@ -1679,12 +1698,17 @@ function detectEdgePortChanges() {
     const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
 
-    const nextFromInstanceId = papEdge.from.nodeId.startsWith('instance-')
-      ? papEdge.from.nodeId.slice('instance-'.length)
-      : edgeInst.sourceInstanceId
-    const nextToInstanceId = papEdge.to.nodeId.startsWith('instance-')
-      ? papEdge.to.nodeId.slice('instance-'.length)
-      : edgeInst.targetInstanceId
+    // Edge-attached ends keep the diagram instance id (anchor); only node ends remapped.
+    const fromNodeId = papEdge.from.nodeId
+    const toNodeId = papEdge.to.nodeId
+    const nextFromInstanceId =
+      fromNodeId && fromNodeId.startsWith('instance-')
+        ? fromNodeId.slice('instance-'.length)
+        : edgeInst.sourceInstanceId
+    const nextToInstanceId =
+      toNodeId && toNodeId.startsWith('instance-')
+        ? toNodeId.slice('instance-'.length)
+        : edgeInst.targetInstanceId
     const nextFromPortId = papEdge.from.portId ?? undefined
     const nextToPortId = papEdge.to.portId ?? undefined
     const nextFromOutline = papEdge.from.outlineParam
@@ -1972,10 +1996,57 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     syncEdgeAnchors({ persist: true, updateRenderer: true })
   })
 
-  // Connection → emit connectNodes
+  // Connection → emit connectNodes / connectNodeToEdge
   manager.connection.on('connect', (edge: Edge) => {
-    const sourceEntity = nodeIdToInstance.get(edge.from.nodeId)
-    const targetEntity = nodeIdToInstance.get(edge.to.nodeId)
+    const fromId = edge.from.nodeId
+    const toId = edge.to.nodeId
+    const toHostEdgeId = edge.to.edgeId
+    const fromHostEdgeId = edge.from.edgeId
+
+    if (fromId && toHostEdgeId) {
+      const sourceEntity = nodeIdToInstance.get(fromId)
+      const hostEntity = edgeIdToInstance.get(toHostEdgeId)
+      if (sourceEntity && hostEntity) {
+        emit(
+          'connectNodeToEdge',
+          sourceEntity.modelNodeId,
+          sourceEntity.instanceId,
+          hostEntity.edgeId,
+          edge.to.pathParam ?? 0.5,
+          true,
+          edge.from.portId ?? undefined,
+          edge.from.outlineParam
+        )
+      }
+      currentRenderer.removeEdge(edge.id)
+      return
+    }
+
+    if (fromHostEdgeId && toId) {
+      const targetEntity = nodeIdToInstance.get(toId)
+      const hostEntity = edgeIdToInstance.get(fromHostEdgeId)
+      if (targetEntity && hostEntity) {
+        emit(
+          'connectNodeToEdge',
+          targetEntity.modelNodeId,
+          targetEntity.instanceId,
+          hostEntity.edgeId,
+          edge.from.pathParam ?? 0.5,
+          false,
+          edge.to.portId ?? undefined,
+          edge.to.outlineParam
+        )
+      }
+      currentRenderer.removeEdge(edge.id)
+      return
+    }
+
+    if (!fromId || !toId) {
+      currentRenderer.removeEdge(edge.id)
+      return
+    }
+    const sourceEntity = nodeIdToInstance.get(fromId)
+    const targetEntity = nodeIdToInstance.get(toId)
     if (sourceEntity && targetEntity) {
       emit(
         'connectNodes',
@@ -1998,6 +2069,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     if (!entity) return
 
     const newPapNodeId = endpoint === 'start' ? edge.from.nodeId : edge.to.nodeId
+    if (!newPapNodeId) return
     const newInstanceId = newPapNodeId.startsWith('instance-')
       ? newPapNodeId.slice('instance-'.length)
       : null
@@ -2671,6 +2743,7 @@ const setPaletteVisible = (visible: boolean) => {
 function cleanupRendererBeforeDestroy(currentRenderer: DiagramRenderer) {
   if (lastActiveDiagramId) {
     safePersistViewport(lastActiveDiagramId, currentRenderer)
+    flushViewport(lastActiveDiagramId)
   }
   currentRenderer.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
   currentRenderer.getCanvas().removeEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
@@ -2756,6 +2829,7 @@ watch(
   (nextId, prevId) => {
     if (renderer && prevId) {
       safePersistViewport(prevId, renderer)
+      flushViewport(prevId)
     }
     if (renderer && nextId) {
       safeRestoreViewport(nextId, renderer)

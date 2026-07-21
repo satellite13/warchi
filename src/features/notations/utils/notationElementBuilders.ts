@@ -1,4 +1,5 @@
 import type {
+  ArrowMarkerConfig,
   TextLabelOptions,
   TextStyle,
   NodeImageOptions,
@@ -157,7 +158,10 @@ export function buildMarker(
   typeStr: string | undefined,
   ds: DiagramStyle | undefined,
   prefix: 'start' | 'end',
-) {
+): ArrowMarkerConfig | undefined {
+  if (typeStr === 'none') {
+    return { type: 'none' }
+  }
   const markerType =
     typeStr === 'arrow' ||
     typeStr === 'open' ||

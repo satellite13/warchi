@@ -50,7 +50,7 @@ const sanitizedOptions = computed(() => {
     const id = option.id?.trim()
     if (!id || seen.has(id)) return false
     seen.add(id)
-    return !invalidImageIds.value.has(id)
+    return true
   })
 })
 
@@ -80,6 +80,7 @@ const requiresSearch = computed(() => iconSelectRequiresMinSearch(sanitizedOptio
             img-class="icon-picker__preview"
             @error="onPreviewError"
           />
+          <span v-else class="icon-picker__preview icon-picker__preview--missing" aria-hidden="true" />
           {{ option.label }}
         </span>
       </template>
@@ -93,6 +94,7 @@ const requiresSearch = computed(() => iconSelectRequiresMinSearch(sanitizedOptio
             eager
             @error="onPreviewError"
           />
+          <span v-else class="icon-picker__preview icon-picker__preview--missing" aria-hidden="true" />
           {{ option.label }}
         </span>
       </template>
@@ -117,5 +119,11 @@ const requiresSearch = computed(() => iconSelectRequiresMinSearch(sanitizedOptio
   height: 20px;
   flex-shrink: 0;
   object-fit: contain;
+}
+
+.icon-picker__preview--missing {
+  display: inline-block;
+  border-radius: 3px;
+  background: var(--surface-strong, #e8e6e3);
 }
 </style>

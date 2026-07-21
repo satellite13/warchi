@@ -22,14 +22,17 @@ function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode |
 }
 
 /**
- * Экземпляр ноды на холсте согласован с деревом модели: нода есть и не удалена.
+ * Экземпляр ноды на холсте: убираем только если модельная нода явно удалена в state.
+ * Если ноды нет в state (progressive load / неполная выборка) — оставляем, как для рёбер
+ * без link в state: иначе save вычищает почти все элементы с диаграмм.
  * Diagram-only (sticky note / container / edge anchor) не привязаны к модельной ноде.
  */
 function keepInstanceNode(nodes: EditorNode[], inst: DiagramNodeInstance): boolean {
   if (!inst.id || !inst.modelNodeId) return false
   if (isDiagramOnlyNodeInstance(inst)) return true
   const n = activeModelNode(nodes, inst.modelNodeId)
-  return !!n && !n._isDeleted
+  if (!n) return true
+  return !n._isDeleted
 }
 
 function keepModelEdge(edge: DiagramEdgeInstance, linkById: Map<string, EditorLink>): boolean {
@@ -52,7 +55,8 @@ export type SanitizeDiagramInstancesResult = {
 
 /**
  * Убирает из attrs диаграммы заведомый мусор относительно текущих нод и связей модели:
- * экземпляры без ноды в дереве, рёбра с битым source/target, рёбра с modelLinkId без живой связи в state.
+ * экземпляры с явно удалённой нодой, рёбра с битым source/target, рёбра с удалённой связью.
+ * Отсутствие ноды/связи в state само по себе не повод удалять экземпляр (данные ещё могут грузиться).
  */
 export function sanitizeDiagramInstancesForModel(
   attrs: DiagramAttrs,

@@ -36,7 +36,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "file:../papirus",
+    "@ngroznykh/papirus": "^0.7.0",
     "@stomp/stompjs": "^7.3.0",
     "dompurify": "^3.4.11",
     "marked": "^18.0.0",

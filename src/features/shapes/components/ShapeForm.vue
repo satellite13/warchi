@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { NodeShapeResponse } from "@/types/api"
 import type { OutlineSegment } from "@/domain/attrs/notationAttrs"
+import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
 import CustomOutlineEditor from "../CustomOutlineEditor.vue"
 
 defineProps<{
@@ -32,67 +32,26 @@ const { t } = useI18n()
 
 <template>
   <div class="shape-form">
-    <div class="shape-form__header">
-      <div class="shape-form__title-row">
-        <div class="shape-form__icon">
-          <UiIcon name="hexagon" />
-        </div>
-        <h2 class="shape-form__title">
-          {{ name || t("shapes.title") }}
-        </h2>
-        <button
-          v-if="canEdit || hasDoc"
-          type="button"
-          class="shape-form__doc-btn"
-          :title="t('notations.documentation')"
-          @click="emit('openDoc')"
-        >
-          <UiIcon name="description" class="shape-form__doc-btn-icon" />
-          <span v-if="hasDoc" class="shape-form__doc-badge">
-            <UiIcon name="check" />
-          </span>
-        </button>
-      </div>
-      <div class="shape-form__actions">
-        <RouterLink
-          :to="{ name: 'docs-section', params: { section: 'shapes' } }"
-          class="shape-form__help-link"
-          :title="t('shapes.editorDescriptionLink')"
-        >
-          <UiIcon name="help" />
-        </RouterLink>
-        <template v-if="canEdit">
-          <button
-            v-if="canShare"
-            type="button"
-            class="btn btn--secondary"
-            :disabled="isSaving || isDeleting"
-            @click="emit('share')"
-          >
-            <UiIcon name="share" />
-            {{ t("common.share") }}
-          </button>
-          <button
-            type="button"
-            class="btn btn--soft-danger"
-            :disabled="isSaving || isDeleting"
-            @click="emit('delete')"
-          >
-            <UiIcon name="delete" />
-            {{ t("common.delete") }}
-          </button>
-          <button
-            type="button"
-            class="btn btn--primary"
-            :disabled="isSaving || !name.trim() || !isDirty"
-            @click="emit('save')"
-          >
-            <UiIcon name="save" />
-            {{ isSaving ? t("common.saving") : t("common.save") }}
-          </button>
-        </template>
-      </div>
-    </div>
+    <EditorFormHeader
+      :title="name || t('shapes.title')"
+      icon="hexagon"
+      help-docs-section="shapes"
+      :help-title="t('shapes.editorDescriptionLink')"
+      :is-dirty="isDirty"
+      :is-saving="isSaving"
+      :is-deleting="isDeleting"
+      :can-edit="canEdit"
+      :can-share="!!canShare"
+      :show-doc-button="canEdit || !!hasDoc"
+      :has-doc="hasDoc"
+      :doc-button-title="t('notations.documentation')"
+      :show-unsaved-badge="false"
+      :save-disabled="isSaving || isDeleting || !name.trim() || !isDirty"
+      @save="emit('save')"
+      @delete="emit('delete')"
+      @share="emit('share')"
+      @open-doc="emit('openDoc')"
+    />
 
     <div class="shape-form__body">
       <p v-if="selectedShape && !canEdit" class="shape-form__no-edit">

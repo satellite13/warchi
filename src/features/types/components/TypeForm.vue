@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue"
-import { RouterLink } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import type { CustomProperty } from "@/domain/attrs/notationAttrs"
 import IconPicker from "@/components/forms/IconPicker.vue"
-import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import PropertyRow from "@/components/properties/PropertyRow.vue"
 
@@ -72,67 +71,25 @@ watch(
 
 <template>
   <div class="type-form">
-    <div class="type-form__header">
-      <div class="type-form__title-row">
-        <div class="type-form__kind-icon">
-          <UiIcon :name="selectedType.kind === 'node' ? DEFAULT_ENTITY_ICONS.nodeType : DEFAULT_ENTITY_ICONS.link" />
-        </div>
-        <h2 class="type-form__title">
-          {{ selectedType.kind === 'node' ? t('types.nodeType') : t('types.linkType') }}
-        </h2>
-        <button
-          v-if="showDocButton"
-          type="button"
-          class="type-form__doc-btn"
-          :title="t('types.documentation')"
-          @click="emit('openDoc')"
-        >
-          <UiIcon name="description" class="type-form__doc-btn-icon" />
-          <span v-if="hasDoc" class="type-form__doc-badge">
-            <UiIcon name="check" />
-          </span>
-        </button>
-        <UnsavedBadge v-if="isDirty" tooltip-key="types.unsavedChangesHint" />
-      </div>
-      <div class="type-form__actions">
-        <RouterLink
-          :to="{ name: 'docs-section', params: { section: 'types' } }"
-          class="type-form__help-link"
-          :title="t('types.helpTitle')"
-        >
-          <UiIcon name="help" />
-        </RouterLink>
-        <button
-          v-if="canShare"
-          type="button"
-          class="btn btn--secondary"
-          :disabled="isSaving"
-          @click="emit('share')"
-        >
-          <UiIcon name="share" />
-          {{ t("common.share") }}
-        </button>
-        <button
-          v-if="!isTypeInUse"
-          type="button"
-          class="btn btn--soft-danger"
-          :disabled="isSaving"
-          @click="emit('delete')"
-        >
-          <UiIcon name="delete" />
-          {{ t("common.delete") }}
-        </button>
-        <button
-          type="button"
-          class="btn btn--primary"
-          :disabled="isSaving || !selectedType.name.trim() || !isDirty"
-          @click="emit('save')"
-        >
-          <UiIcon name="save" />
-          {{ isSaving ? t("common.saving") : t("common.save") }}
-        </button>
-      </div>
-    </div>
+    <EditorFormHeader
+      :title="selectedType.kind === 'node' ? t('types.nodeType') : t('types.linkType')"
+      :icon="selectedType.kind === 'node' ? DEFAULT_ENTITY_ICONS.nodeType : DEFAULT_ENTITY_ICONS.link"
+      help-docs-section="types"
+      :help-title="t('types.helpTitle')"
+      :is-dirty="isDirty"
+      :is-saving="isSaving"
+      :can-share="canShare"
+      :can-delete="!isTypeInUse"
+      :show-doc-button="showDocButton"
+      :has-doc="hasDoc"
+      :doc-button-title="t('types.documentation')"
+      unsaved-tooltip-key="types.unsavedChangesHint"
+      :save-disabled="isSaving || !selectedType.name.trim() || !isDirty"
+      @save="emit('save')"
+      @delete="emit('delete')"
+      @share="emit('share')"
+      @open-doc="emit('openDoc')"
+    />
 
     <div class="type-form__body">
       <!-- Name -->

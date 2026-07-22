@@ -2,17 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/composables/useApi'
 import { useTypeEditor, type TypeItem } from './useTypeEditor'
 
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
-      if (!params) return key
-      return Object.entries(params).reduce(
-        (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-        key
-      )
-    },
-  }),
-}))
+vi.mock('vue-i18n', async importOriginal => {
+  const actual = await importOriginal<typeof import('vue-i18n')>()
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string, params?: Record<string, unknown>) => {
+        if (!params) return key
+        return Object.entries(params).reduce(
+          (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+          key,
+        )
+      },
+    }),
+  }
+})
 
 vi.mock('@/composables/useAuth', () => ({
   useAuth: () => ({

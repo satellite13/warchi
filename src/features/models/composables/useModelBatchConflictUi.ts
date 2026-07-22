@@ -1,9 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { apiGet } from '@/composables/useApi'
-import { pagedListParams } from '@/api/queryHelpers'
+import { fetchAllPages } from '@/api/fetchAllPages'
 import type { LinkResponse } from '@/types/api'
-import type { PaginatedResponse } from '@/types/entities'
-import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import { formatDate } from '@/utils/formatDate'
 import type { BatchConflictItem } from './useModelBatchSave'
 import type { ModelEditorState } from '../types'
@@ -281,24 +279,22 @@ export function useModelBatchConflictUi(options: {
           }
           return
         }
-        const collected: LinkResponse[] = []
-        let page = 0
-        const pageSize = 2000
-        while (true) {
-          const q = pagedListParams(page, pageSize)
-          const r = await apiGet<PaginatedResponse<LinkResponse>>(
-            `/links?modelId=${encodeURIComponent(mid)}&${q.toString()}`
+        let collected: LinkResponse[]
+        try {
+          collected = await fetchAllPages<LinkResponse>(
+            '/links',
+            { modelId: mid },
+            { pageSize: 2000, errorLabel: 'links' },
           )
+        } catch (err) {
           if (gCross !== batchConflictCrossLinkGen) return
-          if (!r.success) {
-            batchConflictServerLinkIds.value = null
-            batchConflictCrossLinkWarnings.value = { loading: false, error: r.error.message, items: [] }
-            return
+          batchConflictServerLinkIds.value = null
+          batchConflictCrossLinkWarnings.value = {
+            loading: false,
+            error: err instanceof Error ? err.message : String(err),
+            items: [],
           }
-          const chunk = r.data.content ?? []
-          collected.push(...chunk)
-          if (paginatedIsLastPage(r.data, page)) break
-          page += 1
+          return
         }
         if (gCross !== batchConflictCrossLinkGen) return
         const serverIds = new Set(collected.map(l => l.id))

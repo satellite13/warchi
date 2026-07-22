@@ -141,6 +141,11 @@ export const typesMessages = {
       outlineHint: 'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
       convertToBezier: 'В кривую Безье',
       convertToLine: 'В линию',
+      unsavedChangesTitle: 'Несохранённые изменения',
+      unsavedChangesText:
+        'Текущая форма имеет несохранённые изменения. Отменить изменения и продолжить?',
+      stay: 'Остаться',
+      discardAndSwitch: 'Отменить и перейти',
     },
   },
   en: {
@@ -284,6 +289,10 @@ export const typesMessages = {
       outlineHint: 'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
       convertToBezier: 'Convert to Bezier',
       convertToLine: 'Convert to line',
+      unsavedChangesTitle: 'Unsaved changes',
+      unsavedChangesText: 'Current shape has unsaved changes. Discard changes and continue?',
+      stay: 'Stay',
+      discardAndSwitch: 'Discard and switch',
     },
   },
 }

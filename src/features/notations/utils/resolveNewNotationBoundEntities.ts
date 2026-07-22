@@ -1,7 +1,9 @@
-import { apiGet, apiPost } from '@/composables/useApi'
-import { listParams, PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
-import { formatEntitySaveError } from '@/utils/formatEntityError'
-import type { PaginatedResponse } from '@/types/entities'
+import { PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
+import {
+  loadExistingByListParams,
+  postCreateEntity,
+  resolveNewEntitiesByKey,
+} from './resolveNewEntities'
 
 type NotationBoundEntityLike = {
   id: string
@@ -31,22 +33,11 @@ function entityKey(name: string, version: string): string {
   return `${name}\u0000${version}`
 }
 
-function indexByNameVersion(
-  content: NotationBoundEntityResponse[] | undefined
-): Map<string, NotationBoundEntityResponse> {
-  const map = new Map<string, NotationBoundEntityResponse>()
-  for (const item of content ?? []) {
-    const key = entityKey(item.name, item.version)
-    if (!map.has(key)) map.set(key, item)
-  }
-  return map
-}
-
 function remapEntityId<T extends NotationBoundEntityLike>(
   entity: T,
   oldId: string,
   newId: string,
-  onRemapId: (oldId: string, newId: string) => void
+  onRemapId: (oldId: string, newId: string) => void,
 ): void {
   entity.id = newId
   entity._isNew = false
@@ -58,7 +49,7 @@ function remapEntityId<T extends NotationBoundEntityLike>(
  * exist for the same notation+name+version (e.g. after a partial failed import).
  */
 export async function resolveNewNotationBoundEntities<T extends NotationBoundEntityLike>(
-  options: ResolveNewNotationBoundEntitiesOptions<T>
+  options: ResolveNewNotationBoundEntitiesOptions<T>,
 ): Promise<void> {
   const {
     entities,
@@ -71,64 +62,34 @@ export async function resolveNewNotationBoundEntities<T extends NotationBoundEnt
     onProgress,
   } = options
 
-  const query = listParams(PAGE_SIZE_NOTATION)
-  query.set('notationId', notationId)
-  const listPath = `${apiEndpoint}?${query.toString()}`
+  const params = { notationId }
 
-  const existingResult = await apiGet<PaginatedResponse<NotationBoundEntityResponse>>(listPath)
-  if (!existingResult.success) {
-    throw new Error(`Ошибка загрузки ${entityTypeName}: ${existingResult.error.message}`)
-  }
-
-  const existingByKey = indexByNameVersion(existingResult.data.content)
-  const resolvedIdByKey = new Map<string, string>()
-  const newEntities = entities.filter(entity => entity._isNew)
-
-  for (const entity of newEntities) {
-    const oldId = entity.id
-    const key = entityKey(entity.name, entity.version)
-
-    const alreadyResolvedId = resolvedIdByKey.get(key)
-    if (alreadyResolvedId) {
-      remapEntityId(entity, oldId, alreadyResolvedId, onRemapId)
-      continue
-    }
-
-    const existing = existingByKey.get(key)
-    if (existing) {
-      remapEntityId(entity, oldId, existing.id, onRemapId)
-      resolvedIdByKey.set(key, existing.id)
-      continue
-    }
-
-    onProgress(`Создание ${entityTypeName}: ${entity.name}`)
-    const result = await apiPost<NotationBoundEntityResponse>(apiEndpoint, buildCreateRequest(entity))
-    if (!result.success) {
-      if (result.error.status === 409) {
-        const refresh = await apiGet<PaginatedResponse<NotationBoundEntityResponse>>(listPath)
-        if (refresh.success) {
-          const refreshed = indexByNameVersion(refresh.data.content).get(key)
-          if (refreshed) {
-            remapEntityId(entity, oldId, refreshed.id, onRemapId)
-            resolvedIdByKey.set(key, refreshed.id)
-            existingByKey.set(key, refreshed)
-            continue
-          }
-        }
-      }
-      throw new Error(
-        formatEntitySaveError(
-          'нотации',
-          'создания',
-          entityTypeName,
-          result.error.status,
-          result.error.message
-        )
-      )
-    }
-
-    remapEntityId(entity, oldId, result.data.id, onRemapId)
-    resolvedIdByKey.set(key, result.data.id)
-    existingByKey.set(key, result.data)
-  }
+  await resolveNewEntitiesByKey<T, NotationBoundEntityResponse>({
+    locals: entities,
+    isNew: entity => Boolean(entity._isNew),
+    keyOfLocal: entity => entityKey(entity.name, entity.version),
+    keyOfRemote: remote => entityKey(remote.name, remote.version),
+    loadExisting: () =>
+      loadExistingByListParams<NotationBoundEntityResponse>(
+        apiEndpoint,
+        params,
+        PAGE_SIZE_NOTATION,
+      ),
+    reloadExisting: () =>
+      loadExistingByListParams<NotationBoundEntityResponse>(
+        apiEndpoint,
+        params,
+        PAGE_SIZE_NOTATION,
+      ),
+    create: async entity => postCreateEntity(apiEndpoint, buildCreateRequest(entity)),
+    onReuse: (entity, remote) => {
+      remapEntityId(entity, entity.id, remote.id, onRemapId)
+    },
+    onCreated: (entity, remote) => {
+      remapEntityId(entity, entity.id, remote.id, onRemapId)
+    },
+    onProgress,
+    progressLabel: entity => `Создание ${entityTypeName}: ${entity.name}`,
+    entityTypeName,
+  })
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useTypeEditor } from './composables/useTypeEditor'
@@ -7,7 +7,10 @@ import { useTypeDocument } from './composables/useTypeDocument'
 import { apiPost } from '@/composables/useApi'
 import { serializeTypeAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
 import { useCanShare } from '@/composables/useCanShare'
-import BaseModal from '@/components/modals/BaseModal.vue'
+import { useDirtySelectionGuard } from '@/composables/useDirtySelectionGuard'
+import { useSaveErrorToast } from '@/composables/useSaveErrorToast'
+import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
+import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import BatchShareModal from '@/components/modals/BatchShareModal.vue'
 import type { BatchShareItem } from '@/components/modals/BatchShareModal.vue'
@@ -165,43 +168,28 @@ function handleIconUpdate(value: string) {
   markTypeDirty(selectedType.value)
 }
 
-// --- Unsaved changes dialog ---
-const pendingSelectId = ref<string | null>(null)
-const showUnsavedDialog = ref(false)
+const {
+  showUnsavedDialog,
+  requestSelect,
+  requestAdd,
+  discardAndContinue,
+  cancelSwitch,
+} = useDirtySelectionGuard({ isDirty })
 
 function handleSelectType(id: string) {
   if (selectedType.value?.id === id) return
-  if (isDirty.value) {
-    pendingSelectId.value = id
-    showUnsavedDialog.value = true
-  } else {
-    selectType(id)
-  }
+  requestSelect(id, selectType)
 }
 
 function handleAddType(kind: 'node' | 'link') {
-  if (isDirty.value) {
-    pendingSelectId.value = `__add_${kind}`
-    showUnsavedDialog.value = true
-  } else {
-    addType(kind)
-  }
+  requestAdd(`__add_${kind}`, () => addType(kind))
 }
 
 function discardAndSwitch() {
-  showUnsavedDialog.value = false
-  const pending = pendingSelectId.value
-  pendingSelectId.value = null
-  if (pending?.startsWith('__add_')) {
-    addType(pending.replace('__add_', '') as 'node' | 'link')
-  } else if (pending) {
-    selectType(pending)
-  }
-}
-
-function cancelSwitch() {
-  showUnsavedDialog.value = false
-  pendingSelectId.value = null
+  discardAndContinue({
+    onSelect: selectType,
+    onAdd: token => addType(token.replace('__add_', '') as 'node' | 'link'),
+  })
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
@@ -212,34 +200,7 @@ const shareResourceType = computed<ShareResourceType>(() =>
 )
 const showShareModal = ref(false)
 
-const toastError = ref<string | null>(null)
-const isToastVisible = ref(false)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(saveError, value => {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-    toastTimer = null
-  }
-
-  if (!value) {
-    isToastVisible.value = false
-    toastError.value = null
-    return
-  }
-
-  toastError.value = value
-  isToastVisible.value = true
-  toastTimer = setTimeout(() => {
-    isToastVisible.value = false
-  }, 5000)
-})
-
-onBeforeUnmount(() => {
-  if (!toastTimer) return
-  clearTimeout(toastTimer)
-  toastTimer = null
-})
+const { isToastVisible, toastError } = useSaveErrorToast(saveError)
 
 // --- JSON preview ---
 const attrsJson = computed(() => {
@@ -303,197 +264,100 @@ function handleBatchShareDone() {
 </script>
 
 <template>
-  <div class="type-editor">
-    <!-- Left panel: type lists -->
-    <TypeSidebar
-      :node-types="nodeTypes"
-      :link-types="linkTypes"
-      :current-user-id="currentUserId"
-      :selected-type-id="selectedType?.id ?? null"
-      :is-loading="isLoading"
-      :selection-mode="selectionMode"
-      :checked-ids="checkedTypeIds"
-      @select-type="handleSelectType"
-      @add-type="handleAddType"
-      @toggle-selection-mode="toggleSelectionMode"
-      @toggle-check="toggleCheck"
-      @batch-share="handleBatchShare"
+  <ListDetailEditorLayout
+    :has-selection="!!selectedType"
+    empty-icon="edit_note"
+    :empty-title="t('types.selectTypeToEdit')"
+    :empty-hint="t('types.orCreateNew')"
+  >
+    <template #sidebar>
+      <TypeSidebar
+        :node-types="nodeTypes"
+        :link-types="linkTypes"
+        :current-user-id="currentUserId"
+        :selected-type-id="selectedType?.id ?? null"
+        :is-loading="isLoading"
+        :selection-mode="selectionMode"
+        :checked-ids="checkedTypeIds"
+        @select-type="handleSelectType"
+        @add-type="handleAddType"
+        @toggle-selection-mode="toggleSelectionMode"
+        @toggle-check="toggleCheck"
+        @batch-share="handleBatchShare"
+      />
+    </template>
+
+    <TypeForm
+      v-if="selectedType"
+      :selected-type="selectedType"
+      :owner-display-name="selectedTypeOwnerName"
+      :is-dirty="isDirty"
+      :is-saving="isSaving"
+      :is-type-in-use="isTypeInUse"
+      :can-share="canShareSelectedType"
+      :has-doc="!!documentFileId"
+      :show-doc-button="showTypeWikiToolbarButton"
+      @save="handleSave"
+      @delete="handleDelete"
+      @open-doc="openDocModal"
+      @update-name="handleTypeNameUpdate"
+      @update-default-directory-path="handleDefaultDirectoryPathUpdate"
+      @update-icon="handleIconUpdate"
+      :on-mutate-property="handleMutateProperty"
+      @add-property="addCustomProperty(selectedType)"
+      @remove-property="removeCustomProperty(selectedType, $event)"
+      @share="showShareModal = true"
     />
 
-    <!-- Center + Right panels -->
-    <main class="type-editor__main">
-      <div v-if="!selectedType" class="type-editor__empty">
-        <div class="empty-state">
-          <UiIcon name="edit_note" class="empty-state__icon" />
-          <p class="empty-state__text">{{ t('types.selectTypeToEdit') }}</p>
-          <p class="empty-state__hint">{{ t('types.orCreateNew') }}</p>
-        </div>
-      </div>
+    <template v-if="selectedType" #aside>
+      <TypeAside
+        :attrs-json="attrsJson"
+        :type-usages="typeUsages"
+        :is-loading-usages="isLoadingUsages"
+        :is-new-type="!!selectedType._isNew"
+        :type-kind="selectedType.kind"
+      />
+    </template>
 
-      <template v-else>
-        <div class="type-editor__content">
-          <div class="type-editor__center">
-            <TypeForm
-              :selected-type="selectedType"
-              :owner-display-name="selectedTypeOwnerName"
-              :is-dirty="isDirty"
-              :is-saving="isSaving"
-              :is-type-in-use="isTypeInUse"
-              :can-share="canShareSelectedType"
-              :has-doc="!!documentFileId"
-              :show-doc-button="showTypeWikiToolbarButton"
-              @save="handleSave"
-              @delete="handleDelete"
-              @open-doc="openDocModal"
-              @update-name="handleTypeNameUpdate"
-              @update-default-directory-path="handleDefaultDirectoryPathUpdate"
-              @update-icon="handleIconUpdate"
-              :on-mutate-property="handleMutateProperty"
-              @add-property="addCustomProperty(selectedType)"
-              @remove-property="removeCustomProperty(selectedType, $event)"
-              @share="showShareModal = true"
-            />
-          </div>
+    <template #modals>
+      <UnsavedChangesModal
+        v-if="showUnsavedDialog"
+        :title="t('types.unsavedChangesTitle')"
+        :message="t('types.unsavedChangesText')"
+        :stay-label="t('types.stay')"
+        :confirm-label="t('types.discardAndSwitch')"
+        @stay="cancelSwitch"
+        @confirm="discardAndSwitch"
+        @close="cancelSwitch"
+      />
 
-          <TypeAside
-            :attrs-json="attrsJson"
-            :type-usages="typeUsages"
-            :is-loading-usages="isLoadingUsages"
-            :is-new-type="!!selectedType._isNew"
-            :type-kind="selectedType.kind"
-          />
-        </div>
-      </template>
-    </main>
+      <ShareAccessModal
+        v-if="showShareModal && selectedType"
+        :title="t('types.accessTitle')"
+        :resource-type="shareResourceType"
+        :resource-id="selectedType.id"
+        @close="showShareModal = false"
+      />
 
-    <!-- Unsaved changes dialog -->
-    <BaseModal
-      v-if="showUnsavedDialog"
-      :title="t('types.unsavedChangesTitle')"
-      max-width="400px"
-      @close="cancelSwitch"
-    >
-      <p class="unsaved-dialog__text">{{ t('types.unsavedChangesText') }}</p>
-      <template #footer>
-        <button type="button" class="btn btn--secondary" @click="cancelSwitch">
-          {{ t('types.stay') }}
-        </button>
-        <button type="button" class="btn btn--danger" @click="discardAndSwitch">
-          {{ t('types.discardAndSwitch') }}
-        </button>
-      </template>
-    </BaseModal>
+      <BatchShareModal
+        v-if="showBatchShareModal && batchShareItems.length > 0"
+        :items="batchShareItems"
+        @close="showBatchShareModal = false"
+        @done="handleBatchShareDone"
+      />
 
-    <SaveToast :error="isToastVisible ? toastError : null" />
+      <DocumentEditorModal
+        v-if="showDocModal && selectedType"
+        :title="selectedType.name"
+        :file-id="documentFileId ?? selectedType.parsedAttrs.documentFileId ?? null"
+        :read-only="isSelectedTypeWikiReadOnly"
+        @close="showDocModal = false"
+        @saved="handleDocumentSavedFromModal"
+      />
+    </template>
 
-    <ShareAccessModal
-      v-if="showShareModal && selectedType"
-      :title="t('types.accessTitle')"
-      :resource-type="shareResourceType"
-      :resource-id="selectedType.id"
-      @close="showShareModal = false"
-    />
-
-    <BatchShareModal
-      v-if="showBatchShareModal && batchShareItems.length > 0"
-      :items="batchShareItems"
-      @close="showBatchShareModal = false"
-      @done="handleBatchShareDone"
-    />
-
-    <DocumentEditorModal
-      v-if="showDocModal && selectedType"
-      :title="selectedType.name"
-      :file-id="documentFileId ?? selectedType.parsedAttrs.documentFileId ?? null"
-      :read-only="isSelectedTypeWikiReadOnly"
-      @close="showDocModal = false"
-      @saved="handleDocumentSavedFromModal"
-    />
-  </div>
+    <template #toast>
+      <SaveToast :error="isToastVisible ? toastError : null" />
+    </template>
+  </ListDetailEditorLayout>
 </template>
-
-<style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Layout */
-.type-editor {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  background: var(--base-bg);
-}
-
-/* Main area */
-.type-editor__main {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 28px 36px;
-}
-
-.type-editor__content {
-  display: flex;
-  gap: 28px;
-  align-items: flex-start;
-  animation: fadeIn 0.25s ease;
-}
-
-.type-editor__center {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Empty state */
-.type-editor__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  animation: fadeIn 0.4s ease;
-}
-
-.empty-state__icon {
-  width: 56px;
-  height: 56px;
-  color: var(--border-strong);
-  margin-bottom: 4px;
-}
-
-.empty-state__text {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.empty-state__hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-subtle);
-}
-
-/* Unsaved dialog */
-.unsaved-dialog__text {
-  margin: 0;
-  font-size: 14px;
-  color: var(--base-text);
-  line-height: 1.55;
-}
-</style>

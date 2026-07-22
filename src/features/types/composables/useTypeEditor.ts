@@ -9,7 +9,10 @@ import {
   resolveOwnerDisplayNames,
   resolveOwnerLabel,
 } from "@/utils/resolveOwnerNames"
-import { parseTypeAttrs, serializeTypeAttrs, createId } from "@/domain/attrs/notationAttrs"
+import { parseTypeAttrs, serializeTypeAttrs } from "@/domain/attrs/notationAttrs"
+import { createEmptyCustomProperty } from "@/domain/attrs/createEmptyCustomProperty"
+import { createId } from "@/utils/createId"
+import { formatTypeOperationError } from "@/utils/formatEntityError"
 import type { TypeParsedAttrs } from "../../notations/types"
 import type {
   NodeTypeResponse,
@@ -56,19 +59,6 @@ export function useTypeEditor() {
   const { t } = useI18n()
   const { currentUser } = useAuth()
   const currentUserId = computed(() => currentUser.value?.id ?? null)
-
-  function formatTypeOperationError(
-    operation: "save" | "delete",
-    status: number,
-    message: string
-  ): string {
-    if (status === 401 || status === 403) {
-      return t("types.errorInsufficientPermissions")
-    }
-    return operation === "save"
-      ? t("types.errorSaveType", { message })
-      : t("types.errorDeleteType", { message })
-  }
 
   const nodeTypes: Ref<TypeItem[]> = ref([])
   const linkTypes: Ref<TypeItem[]> = ref([])
@@ -334,17 +324,7 @@ export function useTypeEditor() {
     if (!item.parsedAttrs.customProperties) {
       item.parsedAttrs.customProperties = []
     }
-    item.parsedAttrs.customProperties.push({
-      id: createId(),
-      name: "",
-      type: "string",
-      required: false,
-      regex: "",
-      min: null,
-      max: null,
-      enumValues: [],
-      defaultValue: undefined
-    })
+    item.parsedAttrs.customProperties.push(createEmptyCustomProperty())
     markTypeDirty(item)
   }
 

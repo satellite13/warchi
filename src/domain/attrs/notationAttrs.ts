@@ -27,6 +27,10 @@ export type CustomProperty = {
 // Custom node shape outline — types live in src/types/shapes.ts to avoid layer violation (utils → features)
 export type { OutlineSegmentLine, OutlineSegmentBezier, OutlineSegment } from '@/types/shapes'
 import type { OutlineSegment } from '@/types/shapes'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
+import { createId } from '@/utils/createId'
+
+export { createId }
 
 export const DEFAULT_RECTANGLE_OUTLINE: OutlineSegment[] = [
   { type: "line", points: [[0, 0], [1, 0]] },
@@ -176,14 +180,6 @@ type RawRecord = Record<string, unknown>
 const isRecord = (value: unknown): value is RawRecord =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
-export const createId = () => {
-  const cryptoApi = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined
-  if (cryptoApi?.randomUUID) {
-    return cryptoApi.randomUUID()
-  }
-  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`
-}
-
 const normalizeTags = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return []
@@ -255,7 +251,7 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
 }
 
 const cloneRecord = (value: Record<string, unknown>): Record<string, unknown> =>
-  JSON.parse(JSON.stringify(value)) as Record<string, unknown>
+  clonePlainDeep(value)
 
 const normalizeCompositeContent = (value: unknown): CompositeSerializedCComponent | undefined => {
   if (!isRecord(value)) return undefined

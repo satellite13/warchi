@@ -1,6 +1,7 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { createId, parseNodeAttrs, resolveComponentByNodeType } from '../modelAttrs'
 import type { DiagramNodeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorNode, ModelEditorState } from '../types'
@@ -48,7 +49,7 @@ export type UseModelDiagramInstancesOptions = {
   t: (key: string) => string
 }
 
-const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const deepClone = clonePlainDeep
 
 export function useModelDiagramInstances(options: UseModelDiagramInstancesOptions) {
   const showComponentChoiceModal = ref(false)

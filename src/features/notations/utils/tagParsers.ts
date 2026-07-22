@@ -1,10 +1,24 @@
 import { createId, type CustomProperty } from '@/domain/attrs/notationAttrs'
 
-export const parseTagsInput = (value: string) =>
-  value
+export const parseTagsInput = (
+  value: string,
+  options?: { unique?: boolean },
+): string[] => {
+  const tags = value
     .split(',')
-    .map((tag) => tag.trim())
+    .map(tag => tag.trim())
     .filter(Boolean)
+  if (!options?.unique) return tags
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const tag of tags) {
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(tag)
+  }
+  return unique
+}
 
 export const getTagQuery = (value: string) => {
   const parts = value.split(',')

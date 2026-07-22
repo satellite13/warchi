@@ -1,4 +1,5 @@
 import type { ComponentResponse, RelationResponse } from '@/types/api'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 
 export type JsonObject = Record<string, unknown>
 
@@ -62,10 +63,7 @@ export type DiagramAttrs = {
   documentFileId?: string
 }
 
-export const createId = (): string =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `id-${Math.random().toString(36).slice(2)}`
+export { createId } from '@/utils/createId'
 
 const parseJson = (raw: string | null | undefined): JsonObject => {
   if (!raw) return {}
@@ -80,7 +78,7 @@ const parseJson = (raw: string | null | undefined): JsonObject => {
   return {}
 }
 
-const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const cloneJson = clonePlainDeep
 
 const toRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)

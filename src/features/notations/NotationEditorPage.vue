@@ -8,6 +8,7 @@ const { t } = useI18n()
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
+import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import { apiGet, apiPost } from '@/composables/useApi'
 import { listParams, PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
@@ -981,25 +982,16 @@ onBeforeUnmount(() => {
     :progress="saveProgress"
   />
 
-  <!-- Unsaved changes confirmation -->
-  <BaseModal
+  <UnsavedChangesModal
     v-if="showLeaveDialog"
     :title="t('notations.unsavedChangesTitle')"
-    max-width="400px"
+    :message="t('notations.unsavedChangesText')"
+    :stay-label="t('notations.stayButton')"
+    :confirm-label="t('notations.leaveButton')"
+    @stay="cancelLeave"
+    @confirm="confirmLeave"
     @close="cancelLeave"
-  >
-    <p class="leave-dialog__text">
-      {{ t('notations.unsavedChangesText') }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLeave">
-        {{ t('notations.stayButton') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmLeave">
-        {{ t('notations.leaveButton') }}
-      </button>
-    </template>
-  </BaseModal>
+  />
 
   <!-- Remove item confirmation -->
   <BaseModal

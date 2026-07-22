@@ -33,3 +33,18 @@ export function formatEntitySaveError(
     }),
   )
 }
+
+/** Type editor save/delete errors (types.* keys). */
+export function formatTypeOperationError(
+  operation: 'save' | 'delete',
+  status: number,
+  message: string,
+): string {
+  const t = i18n.global.t
+  if (status === 401 || status === 403) {
+    return String(t('types.errorInsufficientPermissions'))
+  }
+  return operation === 'save'
+    ? String(t('types.errorSaveType', { message }))
+    : String(t('types.errorDeleteType', { message }))
+}

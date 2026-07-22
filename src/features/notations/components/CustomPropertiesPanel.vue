@@ -8,6 +8,7 @@ import RelationRulesSection from './RelationRulesSection.vue'
 import type { CustomProperty, CustomPropertyType } from '@/domain/attrs/notationAttrs'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 import { useCustomProperties } from '../composables/useCustomProperties'
+import { parseTagsInput as parseTagsInputShared } from '../utils/tagParsers'
 import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
 import IconPicker from '@/components/forms/IconPicker.vue'
 
@@ -41,15 +42,7 @@ const { t } = useI18n()
 const { addCustomProperty, addCustomPropertyFromType, removeCustomProperty, propertyErrors } =
   useCustomProperties(selectedItemComputed, props.onMutateItem)
 
-const parseTagsInput = (value: string) =>
-  Array.from(
-    new Set(
-      value
-        .split(',')
-        .map(tag => tag.trim())
-        .filter(Boolean)
-    )
-  )
+const parseTagsInput = (value: string) => parseTagsInputShared(value, { unique: true })
 
 const sameTags = (a: string[], b: string[]) =>
   a.length === b.length && a.every((tag, idx) => tag === b[idx])

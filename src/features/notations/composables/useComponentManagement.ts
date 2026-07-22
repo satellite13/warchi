@@ -9,8 +9,9 @@ import {
   type ComponentStylePreset,
 } from '@/features/diagram-style/styles/stylePresets'
 import type { SelectedEntity } from './useNotationEntity'
-import { parseTagsInput, getTagQuery, copyTypeProperties } from '../utils/tagParsers'
+import { parseTagsInput, copyTypeProperties } from '../utils/tagParsers'
 import { addType } from '../utils/typeManagement'
+import { useNotationBoundEntityManagement } from './useNotationBoundEntityManagement'
 
 export const NEW_TYPE_VALUE = '__new__'
 export const COMPONENT_WITHOUT_TYPE_VALUE = '__without_type__'
@@ -24,7 +25,6 @@ const createDefaultCompositeContent = (): CompositeSerializedCComponent => ({
   children: [],
 })
 
-
 export interface ComponentManagementOptions {
   state: Ref<NotationEditorState>
   selectedEntity: Ref<SelectedEntity>
@@ -36,64 +36,54 @@ export function useComponentManagement(options: ComponentManagementOptions) {
   const { state, selectedEntity, availableTags, stylePresetsVersion } = options
   const { t } = useI18n()
 
-  const showComponentModal = ref(false)
-  const componentName = ref('')
-  const componentTags = ref('')
-  const componentVersion = ref('1.0.0')
-  const componentTypeSelection = ref(COMPONENT_WITHOUT_TYPE_VALUE)
-  const componentNewTypeName = ref('')
-  const componentKind = ref(COMPONENT_KIND_SIMPLE)
-  const componentStylePreset = ref(getDefaultComponentStylePresetName())
-  const componentFormError = ref<string | null>(null)
-
-  const componentTagSuggestions = computed(() => {
-    const { prefix, query } = getTagQuery(componentTags.value)
-    const lowerQuery = query.toLowerCase()
-    return availableTags.value
-      .filter((tag) => !prefix.includes(tag))
-      .filter((tag) => (lowerQuery ? tag.toLowerCase().includes(lowerQuery) : true))
-      .slice(0, 6)
+  const bound = useNotationBoundEntityManagement<EditorComponent>({
+    kind: 'component',
+    getList: () => state.value.components,
+    setList: items => {
+      state.value.components = items
+    },
+    selectedEntity,
+    availableTags,
+    getDefaultStylePreset: getDefaultComponentStylePresetName,
   })
+
+  const componentKind = ref(COMPONENT_KIND_SIMPLE)
 
   const componentStylePresets = computed<ComponentStylePreset[]>(() => {
     void stylePresetsVersion.value
     return getAllComponentPresets()
   })
 
-  const selectComponent = (id: string) => {
-    selectedEntity.value = { kind: 'component', id }
-  }
-
   const addComponent = () => {
-    componentFormError.value = null
-    const name = componentName.value.trim()
+    bound.formError.value = null
+    const name = bound.name.value.trim()
     if (!name) {
-      componentFormError.value = t('notations.enterComponentName')
+      bound.formError.value = t('notations.enterComponentName')
       return
     }
 
-    const version = componentVersion.value.trim()
+    const version = bound.version.value.trim()
     if (!version) {
-      componentFormError.value = t('notations.enterComponentVersion')
+      bound.formError.value = t('notations.enterComponentVersion')
       return
     }
 
-    let nodeTypeId = componentTypeSelection.value
+    let nodeTypeId = bound.typeSelection.value
     if (nodeTypeId === COMPONENT_WITHOUT_TYPE_VALUE) {
       nodeTypeId = addType(state.value.nodeTypes, UNTYPED_NODE_TYPE_NAME, state.value.ownerId) || ''
     }
     if (nodeTypeId === NEW_TYPE_VALUE) {
       nodeTypeId =
-        addType(state.value.nodeTypes, componentNewTypeName.value, state.value.ownerId) || ''
+        addType(state.value.nodeTypes, bound.newTypeName.value, state.value.ownerId) || ''
       if (!nodeTypeId) {
-        componentFormError.value = t('notations.enterNewNodeTypeName')
+        bound.formError.value = t('notations.enterNewNodeTypeName')
         return
       }
     }
 
-    const nodeType = state.value.nodeTypes.find((t) => t.id === nodeTypeId)
+    const nodeType = state.value.nodeTypes.find(item => item.id === nodeTypeId)
     const typeProps = nodeType?.parsedAttrs.customProperties ?? []
-    const stylePreset = applyComponentStylePreset(componentStylePreset.value)
+    const stylePreset = applyComponentStylePreset(bound.stylePreset.value)
     const initialStyle =
       componentKind.value === COMPONENT_KIND_COMPOSITE
         ? {
@@ -104,7 +94,11 @@ export function useComponentManagement(options: ComponentManagementOptions) {
         : {
             ...stylePreset,
             ...(stylePreset.nodeShape === 'composite'
-              ? { nodeShape: 'rectangle', compositeContent: undefined, stylePropertyBindings: undefined }
+              ? {
+                  nodeShape: 'rectangle',
+                  compositeContent: undefined,
+                  stylePropertyBindings: undefined,
+                }
               : {}),
           }
 
@@ -116,79 +110,42 @@ export function useComponentManagement(options: ComponentManagementOptions) {
       ownerId: state.value.ownerId,
       nodeTypeId,
       parsedAttrs: {
-        tags: parseTagsInput(componentTags.value),
+        tags: parseTagsInput(bound.tags.value),
         customProperties: copyTypeProperties(typeProps),
         diagramStyle: initialStyle,
       },
       _isNew: true,
     }
 
-    state.value.components = [component, ...state.value.components]
-    componentName.value = ''
-    componentTags.value = ''
-    componentVersion.value = '1.0.0'
-    componentNewTypeName.value = ''
+    bound.prependEntity(component)
+    bound.resetFormFields({ typeSelection: COMPONENT_WITHOUT_TYPE_VALUE })
     componentKind.value = COMPONENT_KIND_SIMPLE
-    componentStylePreset.value = getDefaultComponentStylePresetName()
-    componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
-    selectComponent(component.id)
-    showComponentModal.value = false
-  }
-
-  const removeComponent = (id: string) => {
-    const component = state.value.components.find((c) => c.id === id)
-    if (!component) return
-    if (component._isNew) {
-      state.value.components = state.value.components.filter((c) => c.id !== id)
-    } else {
-      component._isDeleted = true
-    }
-    if (selectedEntity.value?.id === id) {
-      selectedEntity.value = null
-    }
-  }
-
-  const markComponentDirty = (id: string) => {
-    const component = state.value.components.find((c) => c.id === id)
-    if (component && !component._isNew) {
-      component._isDirty = true
-    }
+    bound.selectEntity(component.id)
+    bound.showModal.value = false
   }
 
   const openComponentModal = () => {
-    componentFormError.value = null
-    componentName.value = ''
-    componentTags.value = ''
-    componentVersion.value = '1.0.0'
-    componentTypeSelection.value = COMPONENT_WITHOUT_TYPE_VALUE
-    componentNewTypeName.value = ''
+    bound.openModal({ typeSelection: COMPONENT_WITHOUT_TYPE_VALUE })
     componentKind.value = COMPONENT_KIND_SIMPLE
-    componentStylePreset.value = getDefaultComponentStylePresetName()
-    showComponentModal.value = true
-  }
-
-  const closeComponentModal = () => {
-    showComponentModal.value = false
-    componentFormError.value = null
   }
 
   return {
-    showComponentModal,
-    componentName,
-    componentTags,
-    componentVersion,
-    componentTypeSelection,
-    componentNewTypeName,
+    showComponentModal: bound.showModal,
+    componentName: bound.name,
+    componentTags: bound.tags,
+    componentVersion: bound.version,
+    componentTypeSelection: bound.typeSelection,
+    componentNewTypeName: bound.newTypeName,
     componentKind,
-    componentStylePreset,
-    componentFormError,
-    componentTagSuggestions,
+    componentStylePreset: bound.stylePreset,
+    componentFormError: bound.formError,
+    componentTagSuggestions: bound.tagSuggestions,
     componentStylePresets,
-    selectComponent,
+    selectComponent: bound.selectEntity,
     addComponent,
-    removeComponent,
-    markComponentDirty,
+    removeComponent: bound.removeEntity,
+    markComponentDirty: bound.markDirty,
     openComponentModal,
-    closeComponentModal,
+    closeComponentModal: bound.closeModal,
   }
 }

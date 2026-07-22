@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from "vue"
+import { ref, computed, onMounted, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { useNodeShapes } from "@/composables/useNodeShapes"
 import type { NodeShapeResponse } from "@/types/api"
@@ -8,12 +8,16 @@ import type { OutlineSegment } from "@/domain/attrs/notationAttrs"
 import BaseModal from "@/components/modals/BaseModal.vue"
 import DocumentEditorModal from "@/components/modals/DocumentEditorModal.vue"
 import ShareAccessModal from "@/components/modals/ShareAccessModal.vue"
+import UnsavedChangesModal from "@/components/modals/UnsavedChangesModal.vue"
+import ListDetailEditorLayout from "@/components/layout/ListDetailEditorLayout.vue"
 import SaveToast from "@/components/ui/SaveToast.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
 import { apiPost } from "@/composables/useApi"
 import { usePermissions } from "@/composables/usePermissions"
 import { useAuth } from "@/composables/useAuth"
+import { useDirtySelectionGuard } from "@/composables/useDirtySelectionGuard"
+import { useSaveErrorToast } from "@/composables/useSaveErrorToast"
 import { canEditByAccessPermission } from "@/utils/accessPermission"
 import {
   resolveOwnerDisplayNames,
@@ -128,11 +132,19 @@ watch(selectedShapeId, async (id) => {
   }
 })
 
-function handleSelect(id: string) {
+const {
+  showUnsavedDialog,
+  requestSelect,
+  requestAdd,
+  discardAndContinue,
+  cancelSwitch,
+} = useDirtySelectionGuard({ isDirty })
+
+function applySelect(id: string) {
   selectedShapeId.value = id
 }
 
-async function handleAdd() {
+async function createAndSelectShape() {
   saveError.value = null
   const outlineJson = JSON.stringify(DEFAULT_RECTANGLE_OUTLINE)
   const created = await create({
@@ -152,6 +164,26 @@ async function handleAdd() {
   } else {
     saveError.value = t("shapes.errorSave")
   }
+}
+
+function handleSelect(id: string) {
+  if (selectedShapeId.value === id) return
+  requestSelect(id, applySelect)
+}
+
+function handleAdd() {
+  requestAdd('__add_shape', () => {
+    void createAndSelectShape()
+  })
+}
+
+function discardAndSwitch() {
+  discardAndContinue({
+    onSelect: applySelect,
+    onAdd: () => {
+      void createAndSelectShape()
+    },
+  })
 }
 
 async function handleSave() {
@@ -254,230 +286,102 @@ async function confirmDelete() {
   }
 }
 
-// Toast for save/load errors (like TypeEditorPage)
-const isToastVisible = ref(false)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(saveError, (value) => {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-    toastTimer = null
-  }
-  if (!value) {
-    isToastVisible.value = false
-    return
-  }
-  isToastVisible.value = true
-  toastTimer = setTimeout(() => {
-    isToastVisible.value = false
-  }, 5000)
-})
-
-onBeforeUnmount(() => {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-    toastTimer = null
-  }
-})
+const { isToastVisible, toastError } = useSaveErrorToast(saveError)
 </script>
 
 <template>
-  <div class="shape-editor">
-    <ShapeSidebar
-      :shapes="list"
-      :selected-shape-id="selectedShapeId"
-      :is-loading="isLoading"
-      @select-shape="handleSelect"
-      @add-shape="handleAdd"
+  <ListDetailEditorLayout
+    :has-selection="!!selectedDetail"
+    empty-icon="hexagon"
+    :empty-title="t('shapes.selectShape')"
+    :empty-hint="t('shapes.orCreateNew')"
+  >
+    <template #sidebar>
+      <ShapeSidebar
+        :shapes="list"
+        :selected-shape-id="selectedShapeId"
+        :is-loading="isLoading"
+        @select-shape="handleSelect"
+        @add-shape="handleAdd"
+      />
+    </template>
+
+    <ShapeForm
+      v-if="selectedDetail"
+      :selected-shape="selectedDetail"
+      :name="localName"
+      :outline="localOutline"
+      :owner-display-name="selectedShapeOwnerName"
+      :can-edit="canEditSelected"
+      :can-share="canShareSelected"
+      :is-dirty="isDirty"
+      :is-saving="isSaving"
+      :is-deleting="isDeleting"
+      :has-doc="!!getShapeDocFileId()"
+      @save="handleSave"
+      @delete="openDeleteConfirm"
+      @share="showShareModal = true"
+      @open-doc="openDocModal"
+      @update:name="localName = $event"
+      @update:outline="localOutline = $event"
     />
 
-    <main class="shape-editor__main">
-      <div v-if="!selectedDetail" class="shape-editor__empty">
-        <div class="empty-state">
-          <UiIcon name="hexagon" class="empty-state__icon" />
-          <p class="empty-state__text">{{ t("shapes.selectShape") }}</p>
-          <p class="empty-state__hint">{{ t("shapes.orCreateNew") }}</p>
-        </div>
-      </div>
+    <template #modals>
+      <UnsavedChangesModal
+        v-if="showUnsavedDialog"
+        :title="t('shapes.unsavedChangesTitle')"
+        :message="t('shapes.unsavedChangesText')"
+        :stay-label="t('shapes.stay')"
+        :confirm-label="t('shapes.discardAndSwitch')"
+        @stay="cancelSwitch"
+        @confirm="discardAndSwitch"
+        @close="cancelSwitch"
+      />
 
-      <template v-else>
-        <div class="shape-editor__content">
-          <div class="shape-editor__center">
-            <ShapeForm
-              :selected-shape="selectedDetail"
-              :name="localName"
-              :outline="localOutline"
-              :owner-display-name="selectedShapeOwnerName"
-              :can-edit="canEditSelected"
-              :can-share="canShareSelected"
-              :is-dirty="isDirty"
-              :is-saving="isSaving"
-              :is-deleting="isDeleting"
-              :has-doc="!!getShapeDocFileId()"
-              @save="handleSave"
-              @delete="openDeleteConfirm"
-              @share="showShareModal = true"
-              @open-doc="openDocModal"
-              @update:name="localName = $event"
-              @update:outline="localOutline = $event"
-            />
-          </div>
-        </div>
-      </template>
-    </main>
+      <DocumentEditorModal
+        v-if="showDocModal && selectedDetail"
+        :title="selectedDetail.name"
+        :file-id="docModalFileId"
+        :read-only="!canEditSelected"
+        @close="handleDocModalClose"
+        @saved="handleDocSaved"
+      />
 
-    <DocumentEditorModal
-      v-if="showDocModal && selectedDetail"
-      :title="selectedDetail.name"
-      :file-id="docModalFileId"
-      :read-only="!canEditSelected"
-      @close="handleDocModalClose"
-      @saved="handleDocSaved"
-    />
+      <ShareAccessModal
+        v-if="showShareModal && selectedDetail"
+        :title="t('shapes.accessTitle')"
+        resource-type="NODE_SHAPE"
+        :resource-id="selectedDetail.id"
+        @close="showShareModal = false"
+      />
 
-    <ShareAccessModal
-      v-if="showShareModal && selectedDetail"
-      :title="t('shapes.accessTitle')"
-      resource-type="NODE_SHAPE"
-      :resource-id="selectedDetail.id"
-      @close="showShareModal = false"
-    />
+      <BaseModal
+        v-if="showDeleteConfirm"
+        :title="t('shapes.delete')"
+        max-width="400px"
+        @close="showDeleteConfirm = false"
+      >
+        <p class="shape-editor__delete-text">
+          {{ t("shapes.deleteConfirm", { name: selectedDetail?.name ?? "" }) }}
+        </p>
+        <template #footer>
+          <button type="button" class="btn btn--secondary" @click="showDeleteConfirm = false">
+            {{ t("common.cancel") }}
+          </button>
+          <button type="button" class="btn btn--danger" @click="confirmDelete">
+            {{ t("common.delete") }}
+          </button>
+        </template>
+      </BaseModal>
+    </template>
 
-    <BaseModal
-      v-if="showDeleteConfirm"
-      :title="t('shapes.delete')"
-      max-width="400px"
-      @close="showDeleteConfirm = false"
-    >
-      <p class="shape-editor__delete-text">
-        {{ t("shapes.deleteConfirm", { name: selectedDetail?.name ?? "" }) }}
-      </p>
-      <template #footer>
-        <button type="button" class="btn btn--secondary" @click="showDeleteConfirm = false">
-          {{ t("common.cancel") }}
-        </button>
-        <button type="button" class="btn btn--danger" @click="confirmDelete">
-          {{ t("common.delete") }}
-        </button>
-      </template>
-    </BaseModal>
-
-    <SaveToast :error="isToastVisible ? saveError : null" />
-  </div>
+    <template #toast>
+      <SaveToast :error="isToastVisible ? toastError : null" />
+    </template>
+  </ListDetailEditorLayout>
 </template>
 
 <style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.shape-editor {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  background: var(--base-bg);
-}
-
-.shape-editor__main {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 28px 36px;
-}
-
-.shape-editor__content {
-  display: flex;
-  gap: 28px;
-  align-items: flex-start;
-  animation: fadeIn 0.25s ease;
-}
-
-.shape-editor__center {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.shape-editor__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  animation: fadeIn 0.4s ease;
-}
-
-.empty-state__icon {
-  width: 56px;
-  height: 56px;
-  color: var(--border-strong);
-  margin-bottom: 4px;
-}
-
-.empty-state__text {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.empty-state__hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-subtle);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn--secondary {
-  background: var(--surface-strong);
-  color: var(--text-muted);
-}
-
-.btn--secondary:hover:not(:disabled) {
-  background: var(--border);
-  color: var(--base-text);
-}
-
-.btn--danger {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.btn--danger:hover:not(:disabled) {
-  filter: brightness(0.95);
-}
-
 .shape-editor__delete-text {
   margin: 0;
   font-size: 14px;

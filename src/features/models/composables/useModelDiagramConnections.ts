@@ -1,6 +1,7 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import type { RelationResponse } from '@/types/api'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { createId, parseLinkAttrs } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, ModelEditorState } from '../types'
 
@@ -65,7 +66,7 @@ export type UseModelDiagramConnectionsOptions = {
   selectedCanvasElementId: Ref<string | null>
 }
 
-const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const deepClone = clonePlainDeep
 
 export function useModelDiagramConnections(options: UseModelDiagramConnectionsOptions) {
   const showRelationChoiceModal = ref(false)

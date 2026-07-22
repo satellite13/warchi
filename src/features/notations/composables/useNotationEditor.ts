@@ -2,7 +2,8 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/composables/useApi'
-import { listParams, pagedListParams } from '@/api/queryHelpers'
+import { listParams } from '@/api/queryHelpers'
+import { fetchAllPages } from '@/api/fetchAllPages'
 import type { NotationData, PaginatedResponse } from '@/types/entities'
 import type {
   NodeTypeResponse,
@@ -16,7 +17,6 @@ import type {
 } from '@/types/api'
 import { useSaveState } from '@/composables/useSaveState'
 import { formatEntitySaveError } from '@/utils/formatEntityError'
-import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import {
   createId,
   parseEntityAttrs,
@@ -206,31 +206,13 @@ async function runTasksWithConcurrencyLimit(
 }
 
 const fetchAllRelationRulesByNotation = async (
-  notationId: string
-): Promise<RelationRuleResponse[]> => {
-  const collected: RelationRuleResponse[] = []
-  let page = 0
-
-  // Backend returns paginated relation-rules; load all pages to avoid hidden rules.
-  while (true) {
-    const query = pagedListParams(page, RELATION_RULES_FETCH_SIZE)
-    query.set('notationId', notationId)
-    query.set('includeAttrs', 'true')
-    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-      `/relation-rules?${query.toString()}`
-    )
-    if (!result.success) {
-      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
-    }
-
-    const batch = result.data.content ?? []
-    collected.push(...batch)
-    if (paginatedIsLastPage(result.data, page)) break
-    page += 1
-  }
-
-  return collected
-}
+  notationId: string,
+): Promise<RelationRuleResponse[]> =>
+  fetchAllPages<RelationRuleResponse>(
+    '/relation-rules',
+    { notationId, includeAttrs: 'true' },
+    { pageSize: RELATION_RULES_FETCH_SIZE, errorLabel: 'правил связей' },
+  )
 
 
 

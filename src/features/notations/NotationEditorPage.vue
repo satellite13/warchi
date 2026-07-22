@@ -24,6 +24,7 @@ import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.v
 import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
 import TabPanel from '@/components/layout/TabPanel.vue'
 import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
+import SaveToast from '@/components/ui/SaveToast.vue'
 import { useNotationEditor } from '@/features/notations/composables/useNotationEditor'
 import {
   useNotationEntity,
@@ -973,23 +974,12 @@ onBeforeUnmount(() => {
     </template>
   </MainLayout>
 
-  <!-- Save status toast -->
-  <Teleport to="body">
-    <Transition name="toast">
-      <div v-if="isSaving" class="save-toast save-toast--progress">
-        <UiIcon name="sync" class="save-toast__icon spin" />
-        <span>{{ saveProgress || t('common.saving') }}</span>
-      </div>
-      <div v-else-if="saveSuccess" class="save-toast save-toast--success">
-        <UiIcon name="check_circle" class="save-toast__icon" />
-        <span>{{ t('common.saved') }}</span>
-      </div>
-      <div v-else-if="saveError" class="save-toast save-toast--error">
-        <UiIcon name="error" class="save-toast__icon" />
-        <span>{{ saveError }}</span>
-      </div>
-    </Transition>
-  </Teleport>
+  <SaveToast
+    :saving="isSaving"
+    :success="saveSuccess"
+    :error="saveError"
+    :progress="saveProgress"
+  />
 
   <!-- Unsaved changes confirmation -->
   <BaseModal
@@ -1199,72 +1189,6 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-
-.save-toast {
-  position: fixed;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 2000;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  pointer-events: none;
-}
-
-.save-toast--progress {
-  background: var(--surface);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.save-toast--success {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid rgba(43, 184, 150, 0.2);
-}
-
-.save-toast--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid rgba(220, 53, 69, 0.15);
-}
-
-.save-toast__icon {
-  width: 20px;
-  height: 20px;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
-}
 
 .leave-dialog__text {
   margin: 0;

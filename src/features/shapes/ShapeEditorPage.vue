@@ -8,6 +8,7 @@ import type { OutlineSegment } from "@/domain/attrs/notationAttrs"
 import BaseModal from "@/components/modals/BaseModal.vue"
 import DocumentEditorModal from "@/components/modals/DocumentEditorModal.vue"
 import ShareAccessModal from "@/components/modals/ShareAccessModal.vue"
+import SaveToast from "@/components/ui/SaveToast.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
 import { apiPost } from "@/composables/useApi"
@@ -361,14 +362,7 @@ onBeforeUnmount(() => {
       </template>
     </BaseModal>
 
-    <Teleport to="body">
-      <Transition name="toast">
-        <div v-if="isToastVisible && saveError" class="save-toast save-toast--error">
-          <UiIcon name="error" class="save-toast__icon" />
-          <span>{{ saveError }}</span>
-        </div>
-      </Transition>
-    </Teleport>
+    <SaveToast :error="isToastVisible ? saveError : null" />
   </div>
 </template>
 
@@ -489,45 +483,5 @@ onBeforeUnmount(() => {
   font-size: 14px;
   color: var(--base-text);
   line-height: 1.55;
-}
-
-.save-toast {
-  position: fixed;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 2100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-.save-toast--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid var(--danger-soft);
-}
-
-.save-toast__icon {
-  width: 20px;
-  height: 20px;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 </style>

@@ -70,6 +70,7 @@ import TabPanel from '@/components/layout/TabPanel.vue'
 import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
+import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import type { RelationResponse } from '@/types/api'
@@ -2748,22 +2749,12 @@ onBeforeUnmount(() => {
     </template>
   </MainLayout>
 
-  <Teleport to="body">
-    <Transition name="toast">
-      <div v-if="isSaving" class="save-toast save-toast--progress">
-        <UiIcon name="sync" class="save-toast__icon spin" />
-        <span>{{ saveProgress || t('common.saving') }}</span>
-      </div>
-      <div v-else-if="saveSuccess" class="save-toast save-toast--success">
-        <UiIcon name="check_circle" class="save-toast__icon" />
-        <span>{{ t('common.saved') }}</span>
-      </div>
-      <div v-else-if="saveError || uiError" class="save-toast save-toast--error">
-        <UiIcon name="error" class="save-toast__icon" />
-        <span>{{ saveError || uiError }}</span>
-      </div>
-    </Transition>
-  </Teleport>
+  <SaveToast
+    :saving="isSaving"
+    :success="saveSuccess"
+    :error="saveError || uiError"
+    :progress="saveProgress"
+  />
 
   <BatchSaveConflictModal
     v-if="batchSaveConflict && batchSaveConflict.length > 0"
@@ -3735,72 +3726,6 @@ onBeforeUnmount(() => {
 
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
-}
-
-.save-toast {
-  position: fixed;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 2100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-.save-toast--progress {
-  background: var(--surface);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.save-toast--success {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid rgba(43, 184, 150, 0.2);
-}
-
-.save-toast--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid var(--danger-soft);
-}
-
-
-.save-toast__icon {
-  width: 20px;
-  height: 20px;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 
 .node-type-dropdown {

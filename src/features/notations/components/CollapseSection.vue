@@ -1,68 +1,26 @@
 <script setup lang="ts">
+import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
+
 defineProps<{
   label: string
   expanded: boolean
-}>();
+}>()
 
 const emit = defineEmits<{
   toggle: []
-}>();
+}>()
 </script>
 
 <template>
-  <div class="collapse-section">
-    <div
-      class="collapse-section__header"
-      role="button"
-      tabindex="0"
-      @click="emit('toggle')"
-      @keydown.enter.prevent="emit('toggle')"
-      @keydown.space.prevent="emit('toggle')"
-    >
-      <UiIcon name="expand_more" class="collapse-section__chevron" :class="{ 'collapse-section__chevron--collapsed': !expanded }" />
-      <span class="collapse-section__label">{{ label }}</span>
+  <CollapsibleSection
+    variant="panel"
+    :title="label"
+    :open="expanded"
+    @toggle="emit('toggle')"
+  >
+    <template v-if="$slots['header-extra']" #header-extra>
       <slot name="header-extra" />
-    </div>
-    <template v-if="expanded">
-      <slot />
     </template>
-  </div>
+    <slot />
+  </CollapsibleSection>
 </template>
-
-<style scoped>
-.collapse-section {
-  padding: 10px 12px 8px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.collapse-section__header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  user-select: none;
-  cursor: pointer;
-}
-
-.collapse-section__chevron {
-  width: 18px;
-  height: 18px;
-  color: var(--text-subtle);
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-}
-
-.collapse-section__chevron--collapsed {
-  transform: rotate(-90deg);
-}
-
-.collapse-section__label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-subtle);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-</style>

@@ -16,9 +16,9 @@ import { useAuth } from '@/composables/useAuth'
 import { useCanShare } from '@/composables/useCanShare'
 import { usePermissions } from '@/composables/usePermissions'
 import NotationMainPanelLayout from '@/features/notations/layout/NotationMainPanelLayout.vue'
-import NotationAppHeader from '@/features/notations/layout/NotationAppHeader.vue'
+import NotationEditorHeader from '@/features/notations/layout/NotationEditorHeader.vue'
 import NotationComponentList from '@/features/notations/layout/NotationComponentList.vue'
-import NotationDiagram from '@/features/notations/components/NotationDiagram.vue'
+import NotationDiagramCanvas from '@/features/notations/components/NotationDiagramCanvas.vue'
 import NotationEntityModal from '@/features/notations/components/NotationEntityModal.vue'
 import CustomPropertiesPanel from '@/features/notations/components/CustomPropertiesPanel.vue'
 import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
@@ -287,7 +287,7 @@ const userId = computed(() => currentUser.value?.id ?? null)
 const { gridVisible, miniMapVisible, snapEnabled, alignEnabled, rulersEnabled } =
   useNotationToolbarState(userId)
 
-const diagramRef = ref<InstanceType<typeof NotationDiagram> | null>(null)
+const diagramRef = ref<InstanceType<typeof NotationDiagramCanvas> | null>(null)
 const canUndo = ref(false)
 const canRedo = ref(false)
 
@@ -851,7 +851,7 @@ onBeforeUnmount(() => {
   />
   <MainLayout>
     <template #header>
-      <NotationAppHeader
+      <NotationEditorHeader
         hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :notation-name="notation?.name"
@@ -889,7 +889,7 @@ onBeforeUnmount(() => {
           <template #default>
             <div class="notation-canvas-area">
               <div class="notation-canvas-area__toolbar">
-                <NotationAppHeader
+                <NotationEditorHeader
                   canvas-mode
                   :has-unsaved-changes="hasUnsavedChanges"
                   :notation-name="notation?.name"
@@ -908,7 +908,7 @@ onBeforeUnmount(() => {
                   @share="showShareModal = true"
                 />
               </div>
-              <NotationDiagram
+              <NotationDiagramCanvas
                 ref="diagramRef"
                 v-if="!isLoading"
                 :state="state"

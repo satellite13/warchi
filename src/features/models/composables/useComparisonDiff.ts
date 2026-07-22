@@ -10,17 +10,21 @@ import {
   buildDiagramDiffStateMaps,
   buildNodePathMap,
   computeModelDiff,
+  type DiagramDiffStateMaps,
 } from '@/utils/modelDiff'
-import {
-  parseDiagramAttrs,
-  parseLinkAttrs,
-  parseNodeAttrs,
-} from '@/features/models/modelAttrs'
+import { parseLinkAttrs, parseNodeAttrs } from '@/features/models/modelAttrs'
 import type { EditorDiagram, EditorLink, EditorNode } from '@/features/models/types'
 import {
   getDiagramScopedLinkMap,
   getDiagramScopedNodeMap,
 } from '@/features/models/utils/diagramScopedProperties'
+import {
+  toEditorDiagram,
+  toEditorLink,
+  toEditorNode,
+} from './modelEditorMappers'
+
+export { toEditorDiagram, toEditorLink, toEditorNode }
 
 export type ComparisonDataSet = {
   nodes: NodeResponse[]
@@ -56,14 +60,10 @@ export interface ComparisonDiffOptions {
   selectedElement: Ref<SelectedElement | null>
 }
 
-export function toEditorNode(r: NodeResponse): EditorNode {
-  return { ...r, parsedAttrs: parseNodeAttrs(r.attrs ?? null) }
-}
-export function toEditorLink(r: LinkResponse): EditorLink {
-  return { ...r, parsedAttrs: parseLinkAttrs(r.attrs ?? null) }
-}
-export function toEditorDiagram(r: DiagramResponse): EditorDiagram {
-  return { ...r, parsedAttrs: parseDiagramAttrs(r.attrs ?? null) }
+const EMPTY_DIAGRAM_DIFF_STATE: DiagramDiffStateMaps = {
+  diffStateByModelNodeId: {},
+  diffStateByModelLinkId: {},
+  diffStateByEdgeInstanceId: {},
 }
 
 export function useComparisonDiff(options: ComparisonDiffOptions) {
@@ -243,65 +243,103 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
       }>
   }
 
+  function buildSideDiagramDiffState(options: {
+    d: NonNullable<typeof diff.value>
+    diagram: EditorDiagram | null
+    edgeLinks: LinkResponse[]
+    baseLinks: LinkResponse[]
+    targetLinks: LinkResponse[]
+    basePathMap: Map<string, string>
+    targetPathMap: Map<string, string>
+    role: 'base' | 'target'
+    otherSideStableIds: ReturnType<typeof computeDiagramStableIds>
+    currentStableIds: ReturnType<typeof computeCurrentStableIds>
+    otherSideEdgeInstanceIds: Set<string>
+    otherSideEdgeInstanceSignatures: Map<string, string>
+    currentEdgeInstanceSignatures: Map<string, string>
+  }) {
+    const {
+      d,
+      diagram,
+      edgeLinks,
+      baseLinks,
+      targetLinks,
+      basePathMap,
+      targetPathMap,
+      role,
+      otherSideStableIds,
+      currentStableIds,
+      otherSideEdgeInstanceIds,
+      otherSideEdgeInstanceSignatures,
+      currentEdgeInstanceSignatures,
+    } = options
+    const instances = diagram?.parsedAttrs?.instances
+    if (!diagram || !instances) return { ...EMPTY_DIAGRAM_DIFF_STATE }
+    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
+    const edges = buildEdges(edgeLinks)(instances.edges)
+    return buildDiagramDiffStateMaps(
+      d,
+      basePathMap,
+      targetPathMap,
+      baseLinks,
+      targetLinks,
+      nodeIds,
+      edges,
+      role,
+      {
+        otherSideStableIds,
+        currentStableIds,
+        otherSideEdgeInstanceIds,
+        otherSideEdgeInstanceSignatures,
+        currentEdgeInstanceSignatures,
+        useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
+      },
+    )
+  }
+
   // ── Diff state maps (left=base) ──
 
   const leftDiffState = computed(() => {
     const d = diff.value
-    const diagram = leftDiagram.value
     const left = leftData.value
     const right = rightData.value
-    if (!d || !diagram || !left || !right)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const instances = diagram.parsedAttrs?.instances
-    if (!instances)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-    const edges = buildEdges(left.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, leftPathMap.value, rightPathMap.value, left.links, right.links, nodeIds, edges, 'base', {
+    if (!d || !left || !right) return { ...EMPTY_DIAGRAM_DIFF_STATE }
+    return buildSideDiagramDiffState({
+      d,
+      diagram: leftDiagram.value,
+      edgeLinks: left.links,
+      baseLinks: left.links,
+      targetLinks: right.links,
+      basePathMap: leftPathMap.value,
+      targetPathMap: rightPathMap.value,
+      role: 'base',
       otherSideStableIds: rightDiagramStableIds.value,
       currentStableIds: leftCurrentStableIds.value,
       otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
       otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
       currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     })
   })
 
   const rightDiffState = computed(() => {
     const d = diff.value
-    const diagram = rightDiagram.value
     const left = leftData.value
     const right = rightData.value
-    if (!d || !diagram || !left || !right)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const instances = diagram.parsedAttrs?.instances
-    if (!instances)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-    const edges = buildEdges(right.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, leftPathMap.value, rightPathMap.value, left.links, right.links, nodeIds, edges, 'target', {
+    if (!d || !left || !right) return { ...EMPTY_DIAGRAM_DIFF_STATE }
+    return buildSideDiagramDiffState({
+      d,
+      diagram: rightDiagram.value,
+      edgeLinks: right.links,
+      baseLinks: left.links,
+      targetLinks: right.links,
+      basePathMap: leftPathMap.value,
+      targetPathMap: rightPathMap.value,
+      role: 'target',
       otherSideStableIds: leftDiagramStableIds.value,
       currentStableIds: rightCurrentStableIds.value,
       otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
       otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
       currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     })
   })
 
@@ -319,61 +357,45 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
 
   const leftDiffStateWhenRightIsBase = computed(() => {
     const d = diffWhenRightIsBase.value
-    const diagram = leftDiagram.value
     const left = leftData.value
     const right = rightData.value
-    if (!d || !diagram || !left || !right)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const instances = diagram.parsedAttrs?.instances
-    if (!instances)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-    const edges = buildEdges(left.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, rightPathMap.value, leftPathMap.value, right.links, left.links, nodeIds, edges, 'target', {
+    if (!d || !left || !right) return { ...EMPTY_DIAGRAM_DIFF_STATE }
+    return buildSideDiagramDiffState({
+      d,
+      diagram: leftDiagram.value,
+      edgeLinks: left.links,
+      baseLinks: right.links,
+      targetLinks: left.links,
+      basePathMap: rightPathMap.value,
+      targetPathMap: leftPathMap.value,
+      role: 'target',
       otherSideStableIds: rightDiagramStableIds.value,
       currentStableIds: leftCurrentStableIds.value,
       otherSideEdgeInstanceIds: rightDiagramEdgeInstanceIds.value,
       otherSideEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
       currentEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     })
   })
 
   const rightDiffStateWhenRightIsBase = computed(() => {
     const d = diffWhenRightIsBase.value
-    const diagram = rightDiagram.value
     const left = leftData.value
     const right = rightData.value
-    if (!d || !diagram || !left || !right)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const instances = diagram.parsedAttrs?.instances
-    if (!instances)
-      return {
-        diffStateByModelNodeId: {},
-        diffStateByModelLinkId: {},
-        diffStateByEdgeInstanceId: {},
-      }
-    const nodeIds = instances.nodes.map((n) => n.modelNodeId)
-    const edges = buildEdges(right.links)(instances.edges)
-    return buildDiagramDiffStateMaps(d, rightPathMap.value, leftPathMap.value, right.links, left.links, nodeIds, edges, 'base', {
+    if (!d || !left || !right) return { ...EMPTY_DIAGRAM_DIFF_STATE }
+    return buildSideDiagramDiffState({
+      d,
+      diagram: rightDiagram.value,
+      edgeLinks: right.links,
+      baseLinks: right.links,
+      targetLinks: left.links,
+      basePathMap: rightPathMap.value,
+      targetPathMap: leftPathMap.value,
+      role: 'base',
       otherSideStableIds: leftDiagramStableIds.value,
       currentStableIds: rightCurrentStableIds.value,
       otherSideEdgeInstanceIds: leftDiagramEdgeInstanceIds.value,
       otherSideEdgeInstanceSignatures: leftEdgeInstanceSignatures.value,
       currentEdgeInstanceSignatures: rightEdgeInstanceSignatures.value,
-      useEdgeInstanceIdMatching: useEdgeInstanceIdMatching.value,
     })
   })
 

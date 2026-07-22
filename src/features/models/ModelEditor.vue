@@ -81,6 +81,7 @@ import {
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
 import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
+import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
 const {
   model,
@@ -1006,19 +1007,6 @@ const {
   t: key => String(t(key)),
 })
 
-const applyDefaultCustomValues = (
-  target: Record<string, unknown>,
-  attrsRaw: string | null | undefined
-) => {
-  const customProperties = parseEntityAttrs(attrsRaw ?? null).customProperties
-  for (const property of customProperties) {
-    const hasOwnValue = Object.prototype.hasOwnProperty.call(target, property.name)
-    if (hasOwnValue) continue
-    if (property.defaultValue === undefined) continue
-    target[property.name] = property.defaultValue
-  }
-}
-
 const scheduleSyncDefaultsOnLoad = (): void => {
   const modelId = state.value.modelId
   void whenCatalogReady()
@@ -1046,9 +1034,9 @@ const bindLinkRelation = (
     item => item.id === relationId && item.notationId === notationId
   )
   if (relation) {
-    applyDefaultCustomValues(
+    applyDefaultCustomPropertyValuesFromAttrs(
       link.parsedAttrs.relationProperties[notationId][relationId]!,
-      relation.attrs
+      relation.attrs,
     )
   }
   if (options?.markDirty ?? true) {

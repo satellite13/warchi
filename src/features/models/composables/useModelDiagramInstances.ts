@@ -1,4 +1,5 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
+import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { createId, parseNodeAttrs, resolveComponentByNodeType } from '../modelAttrs'
 import type { DiagramNodeInstance } from '../modelAttrs'
@@ -57,17 +58,6 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
   const noteClipboard = ref<DiagramNodeInstance[] | null>(null)
   const notePasteCount = ref(0)
 
-  const applyDefaultCustomValues = (
-    target: Record<string, unknown>,
-    attrsRaw: string | null | undefined
-  ): void => {
-    const customProperties = parseEntityAttrs(attrsRaw ?? null).customProperties
-    for (const property of customProperties) {
-      if (Object.hasOwn(target, property.name) || property.defaultValue === undefined) continue
-      target[property.name] = property.defaultValue
-    }
-  }
-
   const bindNodeComponent = (node: EditorNode, componentId: string): void => {
     const notationId = options.activeNotationId.value
     if (!notationId) return
@@ -82,9 +72,9 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       item => item.id === componentId && item.notationId === notationId
     )
     if (component) {
-      applyDefaultCustomValues(
+      applyDefaultCustomPropertyValuesFromAttrs(
         node.parsedAttrs.componentProperties[notationId][componentId]!,
-        component.attrs
+        component.attrs,
       )
     }
     options.markNodeDirty(node.id)
@@ -280,7 +270,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         if (notationId) {
           parsedAttrs.notationComponents[notationId] = { componentId }
           const scopedDefaults: Record<string, unknown> = {}
-          applyDefaultCustomValues(scopedDefaults, component.attrs)
+          applyDefaultCustomPropertyValuesFromAttrs(scopedDefaults, component.attrs)
           parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
         }
         const newNode: EditorNode = {

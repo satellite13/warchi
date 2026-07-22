@@ -1,4 +1,5 @@
 import type { CustomProperty } from '@/domain/attrs/notationAttrs'
+import { resolveLabelTemplate } from '@/domain/attrs/labelTemplate'
 
 export type DiagramNodeLabelTemplateContext = {
   typeProperties: CustomProperty[]
@@ -16,21 +17,16 @@ export type DiagramNodeLabelTemplateContext = {
 export function resolveDiagramNodeLabelTemplate(
   template: string,
   nodeName: string,
-  ctx: DiagramNodeLabelTemplateContext
+  ctx: DiagramNodeLabelTemplateContext,
 ): string {
-  let out = template
-  out = out.replace(/#\{(\w+)\}/g, (_m, key: string) => {
-    const prop = ctx.typeProperties.find(p => p.name === key)
-    if (!prop) return ''
-    const val = ctx.typeValues[key] ?? prop.defaultValue
-    return val != null ? String(val) : ''
-  })
-  out = out.replace(/\$\{(\w+)\}/g, (_m, key: string) => {
-    if (key === 'name') return nodeName
-    const prop = ctx.componentProperties.find(p => p.name === key)
-    if (!prop) return ''
-    const val = ctx.componentValues[key] ?? prop.defaultValue
-    return val != null ? String(val) : ''
-  })
-  return out.replace(/\\n/g, '\n')
+  return resolveLabelTemplate(
+    template,
+    nodeName,
+    ctx.componentProperties,
+    ctx.typeProperties,
+    {
+      typeValues: ctx.typeValues,
+      componentValues: ctx.componentValues,
+    },
+  )
 }

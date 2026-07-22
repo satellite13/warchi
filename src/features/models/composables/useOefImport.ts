@@ -1,6 +1,10 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
 import { apiPost } from '@/api/apiClient'
 import type { NodeTypeResponse } from '@/types/api'
+import {
+  collectDefaultCustomPropertyValues,
+  isCustomPropertyValueFilled,
+} from '@/domain/attrs/customPropertyValues'
 import { parseEntityAttrs, parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
 import type { ModelEditorState } from '../types'
@@ -10,7 +14,6 @@ import { applyOefBatchSaveChunks, type OefChunkProgress } from '../utils/oef/chu
 import { buildOefBatchSaveRequest } from '../utils/oef/oefToBatchSave'
 import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
 import { batchSave, hasBatchChanges } from './useModelBatchSave'
-import { isRequiredPropertyFilled } from '../utils/requiredCustomPropertiesValidation'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 
@@ -28,20 +31,6 @@ export type OefImportReport = {
     relation: number
     total: number
   }
-}
-
-function collectDefaultCustomPropertyValues(
-  customProperties: { name: string; defaultValue?: string | number | boolean; system?: boolean }[]
-): Record<string, unknown> {
-  const defaults: Record<string, unknown> = {}
-  for (const property of customProperties) {
-    if (property.system) continue
-    if (!property.name) continue
-    if (property.defaultValue !== undefined) {
-      defaults[property.name] = property.defaultValue
-    }
-  }
-  return defaults
 }
 
 export function useOefImport(options: {
@@ -147,7 +136,7 @@ export function useOefImport(options: {
         )
         for (const property of requiredTypeProps) {
           const value = nodeAttrs.typeProperties[property.name]
-          if (!isRequiredPropertyFilled(value, property.type)) {
+          if (!isCustomPropertyValueFilled(value, property.type)) {
             nodeType += 1
           }
         }
@@ -163,7 +152,7 @@ export function useOefImport(options: {
         const scopedValues = nodeAttrs.componentProperties?.[notationId]?.[binding.componentId] ?? {}
         for (const property of requiredProps) {
           const value = scopedValues[property.name]
-          if (!isRequiredPropertyFilled(value, property.type)) {
+          if (!isCustomPropertyValueFilled(value, property.type)) {
             component += 1
           }
         }
@@ -182,7 +171,7 @@ export function useOefImport(options: {
         const scopedValues = linkAttrs.relationProperties?.[notationId]?.[binding.relationId] ?? {}
         for (const property of requiredProps) {
           const value = scopedValues[property.name]
-          if (!isRequiredPropertyFilled(value, property.type)) {
+          if (!isCustomPropertyValueFilled(value, property.type)) {
             relation += 1
           }
         }

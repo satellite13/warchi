@@ -30,6 +30,7 @@ import {
 } from '@/features/diagram/diagramNodeFactory'
 import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
 import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
+import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
 import {
   parseEntityAttrs,
   type CustomProperty,
@@ -936,15 +937,6 @@ function buildInteractiveBadgeIconUrl(materialIconName: string): string {
   return `/icons/${name}.svg`
 }
 
-function isInteractivePropertyValueFilled(prop: CustomProperty, value: unknown): boolean {
-  if (value === undefined || value === null) return false
-  if (prop.type === 'string') return typeof value === 'string' && value.trim().length > 0
-  if (prop.type === 'number') return typeof value === 'number' && Number.isFinite(value)
-  if (prop.type === 'boolean') return typeof value === 'boolean'
-  if (prop.type === 'enum') return typeof value === 'string' && value.length > 0
-  return false
-}
-
 function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{ id: string; iconUrl: string }> {
   const node = nodeById.value.get(instance.modelNodeId)
   const notationId = activeNotationId.value
@@ -958,7 +950,14 @@ function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{
   const result: Array<{ id: string; iconUrl: string }> = []
   for (const prop of customProperties) {
     if (!prop.interactive) continue
-    if (!isInteractivePropertyValueFilled(prop, scopedValues[prop.id] ?? scopedValues[prop.name])) continue
+    if (
+      !isCustomPropertyValueFilled(
+        scopedValues[prop.id] ?? scopedValues[prop.name],
+        prop.type,
+      )
+    ) {
+      continue
+    }
     result.push({
       id: prop.id,
       iconUrl: buildInteractiveBadgeIconUrl(prop.interactiveIcon ?? DEFAULT_INTERACTIVE_BADGE_ICON),

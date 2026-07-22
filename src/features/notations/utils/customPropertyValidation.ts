@@ -1,15 +1,10 @@
 import type { CustomProperty } from '@/domain/attrs/notationAttrs'
+import { hasCustomPropertyDefaultValue as hasDefaultValue } from '@/domain/attrs/customPropertyValues'
 
 export type TranslateFn = (key: string) => string
 
 export function hasCustomPropertyDefaultValue(property: CustomProperty): boolean {
-  if (property.type === 'number') {
-    return typeof property.defaultValue === 'number' && Number.isFinite(property.defaultValue)
-  }
-  if (property.type === 'boolean') {
-    return typeof property.defaultValue === 'boolean'
-  }
-  return typeof property.defaultValue === 'string' && property.defaultValue.trim().length > 0
+  return hasDefaultValue(property)
 }
 
 export function customPropertyValidationErrors(

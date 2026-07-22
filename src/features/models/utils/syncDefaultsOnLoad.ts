@@ -1,4 +1,4 @@
-import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
+import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 import type { ModelEditorState } from '../types'
 
 const CHUNK_SIZE = 200
@@ -7,19 +7,6 @@ function yieldToUi(): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, 0)
   })
-}
-
-function applyMissingDefaults(
-  target: Record<string, unknown>,
-  entityAttrs: string | null | undefined
-): void {
-  const customProperties = parseEntityAttrs(entityAttrs ?? null).customProperties
-  for (const property of customProperties) {
-    if (property.system) continue
-    if (property.defaultValue === undefined) continue
-    if (Object.prototype.hasOwnProperty.call(target, property.name)) continue
-    target[property.name] = property.defaultValue
-  }
 }
 
 /**
@@ -50,9 +37,10 @@ export async function syncDefaultsOnLoadChunked(state: ModelEditorState): Promis
         }
         const component = componentByKey.get(`${notationId}:${componentId}`)
         if (!component) continue
-        applyMissingDefaults(
+        applyDefaultCustomPropertyValuesFromAttrs(
           node.parsedAttrs.componentProperties[notationId][componentId]!,
-          component.attrs
+          component.attrs,
+          { skipSystem: true },
         )
       }
     }
@@ -74,9 +62,10 @@ export async function syncDefaultsOnLoadChunked(state: ModelEditorState): Promis
         }
         const relation = relationByKey.get(`${notationId}:${relationId}`)
         if (!relation) continue
-        applyMissingDefaults(
+        applyDefaultCustomPropertyValuesFromAttrs(
           link.parsedAttrs.relationProperties[notationId][relationId]!,
-          relation.attrs
+          relation.attrs,
+          { skipSystem: true },
         )
       }
     }

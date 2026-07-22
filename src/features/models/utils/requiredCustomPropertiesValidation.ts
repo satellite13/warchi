@@ -1,4 +1,5 @@
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
+import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
 import type { DiagramAttrs } from '../modelAttrs'
 import type { ModelEditorState } from '../types'
 import {
@@ -20,10 +21,7 @@ type ValidateRequiredCustomPropertiesOptions = {
 }
 
 export function isRequiredPropertyFilled(value: unknown, type: string): boolean {
-  if (type === 'boolean') return typeof value === 'boolean'
-  if (type === 'number') return typeof value === 'number' && Number.isFinite(value)
-  if (typeof value === 'string') return value.trim().length > 0
-  return value !== null && value !== undefined
+  return isCustomPropertyValueFilled(value, type)
 }
 
 export function validateRequiredCustomProperties(

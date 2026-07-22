@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import EmptyState from '@/components/list/EmptyState.vue'
+
 withDefaults(
   defineProps<{
     hasSelection?: boolean
@@ -22,9 +24,12 @@ withDefaults(
     <main class="ldel__main">
       <div v-if="!hasSelection" class="ldel__empty">
         <slot name="empty">
-          <UiIcon :name="emptyIcon" class="ldel__empty-icon" />
-          <p v-if="emptyTitle" class="ldel__empty-text">{{ emptyTitle }}</p>
-          <p v-if="emptyHint" class="ldel__empty-hint">{{ emptyHint }}</p>
+          <EmptyState
+            variant="panel"
+            :icon="emptyIcon"
+            :title="emptyTitle"
+            :description="emptyHint"
+          />
         </slot>
       </div>
       <div v-else class="ldel__content">
@@ -77,34 +82,7 @@ withDefaults(
 }
 
 .ldel__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   height: 100%;
   min-height: 320px;
-  gap: 8px;
-  color: var(--text-subtle);
-  animation: fadeIn 0.4s ease;
-}
-
-.ldel__empty-icon {
-  width: 56px;
-  height: 56px;
-  opacity: 0.35;
-  margin-bottom: 4px;
-}
-
-.ldel__empty-text {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.ldel__empty-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-subtle);
 }
 </style>

@@ -7,6 +7,9 @@ import type { PaginatedResponse, User, UserRole } from '../types/entities'
 import { formatDate } from '../utils/formatDate'
 import { paginatedContent } from '../utils/paginatedResponse'
 import { normalizeUserRole } from '../utils/userRole'
+import AdminAlert from '@/components/admin/AdminAlert.vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import { useUserProfileEdit, useUserPasswordEdit } from './composables/useUserAdminForms'
 
 type EditableUser = User & {
@@ -144,47 +147,43 @@ onMounted(() => {
 
 <template>
   <div class="au">
-    <!-- Header row -->
-    <div class="au__header">
-      <div class="au__titles">
-        <h1 class="au__heading">{{ t('adminUsers.title') }}</h1>
-        <p class="au__sub">{{ t('adminUsers.subtitle') }}</p>
-      </div>
-
-      <form class="au-search" @submit.prevent="loadUsers">
-        <div class="au-search__wrap">
-          <svg class="au-search__icon" viewBox="0 0 20 20" fill="none">
-            <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" />
-            <path
-              d="M13 13l4 4"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
-          </svg>
-          <input
-            v-model="searchEmail"
-            class="au-search__input"
-            type="text"
-            :placeholder="t('adminUsers.searchByEmail')"
-            :disabled="isLoading"
-          />
-          <button v-if="searchEmail" type="button" class="au-search__clear" @click="clearSearch">
-            <svg viewBox="0 0 16 16" fill="none">
+    <AdminPageHeader :title="t('adminUsers.title')" :subtitle="t('adminUsers.subtitle')">
+      <template #toolbar>
+        <form class="au-search" @submit.prevent="loadUsers">
+          <div class="au-search__wrap">
+            <svg class="au-search__icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" />
               <path
-                d="M4 4l8 8M12 4l-8 8"
+                d="M13 13l4 4"
                 stroke="currentColor"
                 stroke-width="1.5"
                 stroke-linecap="round"
               />
             </svg>
+            <input
+              v-model="searchEmail"
+              class="au-search__input"
+              type="text"
+              :placeholder="t('adminUsers.searchByEmail')"
+              :disabled="isLoading"
+            />
+            <button v-if="searchEmail" type="button" class="au-search__clear" @click="clearSearch">
+              <svg viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M4 4l8 8M12 4l-8 8"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
+          </div>
+          <button type="submit" class="btn btn--primary btn--sm" :disabled="isLoading">
+            {{ t('common.find') }}
           </button>
-        </div>
-        <button type="submit" class="btn btn--primary btn--sm" :disabled="isLoading">
-          {{ t('common.find') }}
-        </button>
-      </form>
-    </div>
+        </form>
+      </template>
+    </AdminPageHeader>
 
     <!-- Stats strip -->
     <div class="au-stats">
@@ -206,46 +205,17 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Alerts -->
-    <Transition name="au-alert">
-      <div v-if="errorMessage" class="au-alert au-alert--error">
-        <svg class="au-alert__icon" viewBox="0 0 20 20" fill="none">
-          <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" />
-          <path
-            d="M10 6v5M10 13.5v.5"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-        </svg>
-        {{ errorMessage }}
-      </div>
-    </Transition>
-    <Transition name="au-alert">
-      <div v-if="successMessage" class="au-alert au-alert--success">
-        <svg class="au-alert__icon" viewBox="0 0 20 20" fill="none">
-          <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" />
-          <path
-            d="M6.5 10.5l2.3 2.3 4.8-5.3"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-        </svg>
-        {{ successMessage }}
-      </div>
-    </Transition>
+    <AdminAlert v-if="errorMessage" type="error" :message="errorMessage" />
+    <AdminAlert v-if="successMessage" type="success" :message="successMessage" />
 
-    <!-- Table -->
-    <div class="au-table-wrap">
-      <!-- Loading -->
-      <div v-if="isLoading" class="au-empty">
-        <div class="au-spinner"></div>
-        <span>{{ t('adminUsers.loadingUsers') }}</span>
-      </div>
-
-      <!-- Empty -->
-      <div v-else-if="users.length === 0" class="au-empty">
+    <AdminTableShell
+      class="au-table-wrap"
+      :loading="isLoading"
+      :empty="users.length === 0"
+      :loading-text="t('adminUsers.loadingUsers')"
+      :empty-text="t('adminUsers.usersNotFound')"
+    >
+      <template #emptyIcon>
         <svg class="au-empty__icon" viewBox="0 0 48 48" fill="none">
           <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="1.5" opacity="0.3" />
           <circle cx="24" cy="20" r="6" stroke="currentColor" stroke-width="1.5" />
@@ -255,31 +225,27 @@ onMounted(() => {
             stroke-width="1.5"
           />
         </svg>
-        <span>{{ t('adminUsers.usersNotFound') }}</span>
-      </div>
-
-      <!-- Data -->
-      <table v-else class="au-table">
-        <thead>
-          <tr>
-            <th>{{ t('adminUsers.user') }}</th>
-            <th>{{ t('adminUsers.role') }}</th>
-            <th>{{ t('adminUsers.status') }}</th>
-            <th>{{ t('adminUsers.updated') }}</th>
-            <th>{{ t('adminUsers.profile') }}</th>
-            <th>{{ t('adminUsers.password') }}</th>
-          </tr>
-        </thead>
-        <TransitionGroup tag="tbody" name="au-row">
-          <tr
-            v-for="user in users"
-            :key="user.id"
-            class="au-table__row"
-            :class="{
-              'au-table__row--saving': isSavingId === user.id,
-              'au-table__row--off': !user.isActive,
-            }"
-          >
+      </template>
+      <template #head>
+        <tr>
+          <th>{{ t('adminUsers.user') }}</th>
+          <th>{{ t('adminUsers.role') }}</th>
+          <th>{{ t('adminUsers.status') }}</th>
+          <th>{{ t('adminUsers.updated') }}</th>
+          <th>{{ t('adminUsers.profile') }}</th>
+          <th>{{ t('adminUsers.password') }}</th>
+        </tr>
+      </template>
+      <TransitionGroup tag="tbody" name="au-row">
+        <tr
+          v-for="user in users"
+          :key="user.id"
+          class="au-table__row"
+          :class="{
+            'au-table__row--saving': isSavingId === user.id,
+            'au-table__row--off': !user.isActive,
+          }"
+        >
             <!-- User -->
             <td>
               <div class="au-user">
@@ -453,10 +419,9 @@ onMounted(() => {
                 </form>
               </div>
             </td>
-          </tr>
-        </TransitionGroup>
-      </table>
-    </div>
+        </tr>
+      </TransitionGroup>
+    </AdminTableShell>
   </div>
 </template>
 

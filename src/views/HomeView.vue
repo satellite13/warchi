@@ -9,8 +9,9 @@ import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
 import { getUserDisplayName } from "../utils/userDisplay"
-import { getGradient } from "../utils/gradientColors"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
+import CompactEntityRow from "../components/list/CompactEntityRow.vue"
+import EmptyState from "../components/list/EmptyState.vue"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
 
@@ -164,25 +165,22 @@ const releaseNotes = computed(() => {
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 3" :key="i" class="skeleton-item" />
               </div>
-              <div v-else-if="recentModels.length === 0" class="section__empty">
-                <UiIcon name="folder_off" />
-                <span>{{ t("home.sectionNoModels") }}</span>
-              </div>
+              <EmptyState
+                v-else-if="recentModels.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoModels')"
+              />
               <div v-else class="entity-list">
-                <button
+                <CompactEntityRow
                   v-for="item in recentModels"
                   :key="item.id"
-                  type="button"
-                  class="entity-row"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="formatRelativeDate(item.updatedAt)"
                   @click="router.push({ name: 'model-editor', params: { id: item.id } })"
-                >
-                  <div class="entity-row__gradient" :style="{ background: getGradient(item.id) }" />
-                  <div class="entity-row__body">
-                    <span class="entity-row__name">{{ item.name }}</span>
-                    <span class="entity-row__version">v{{ item.version }}</span>
-                  </div>
-                  <span class="entity-row__date">{{ formatRelativeDate(item.updatedAt) }}</span>
-                </button>
+                />
               </div>
             </section>
 
@@ -199,25 +197,22 @@ const releaseNotes = computed(() => {
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 3" :key="i" class="skeleton-item" />
               </div>
-              <div v-else-if="recentNotations.length === 0" class="section__empty">
-                <UiIcon name="folder_off" />
-                <span>{{ t("home.sectionNoNotations") }}</span>
-              </div>
+              <EmptyState
+                v-else-if="recentNotations.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoNotations')"
+              />
               <div v-else class="entity-list">
-                <button
+                <CompactEntityRow
                   v-for="item in recentNotations"
                   :key="item.id"
-                  type="button"
-                  class="entity-row"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="formatRelativeDate(item.updatedAt)"
                   @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
-                >
-                  <div class="entity-row__gradient" :style="{ background: getGradient(item.id) }" />
-                  <div class="entity-row__body">
-                    <span class="entity-row__name">{{ item.name }}</span>
-                    <span class="entity-row__version">v{{ item.version }}</span>
-                  </div>
-                  <span class="entity-row__date">{{ formatRelativeDate(item.updatedAt) }}</span>
-                </button>
+                />
               </div>
             </section>
 
@@ -231,10 +226,13 @@ const releaseNotes = computed(() => {
                   {{ item }}
                 </li>
               </ul>
-              <div v-else class="section__empty section__empty--compact">
-                <UiIcon name="description" />
-                <span>{{ t("home.sectionReleaseNotesEmpty") }}</span>
-              </div>
+              <EmptyState
+                v-else
+                variant="compact"
+                icon="description"
+                :title="t('home.sectionReleaseNotesEmpty')"
+                class="section__empty--compact"
+              />
             </section>
           </div>
 
@@ -270,10 +268,12 @@ const releaseNotes = computed(() => {
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 5" :key="i" class="skeleton-item skeleton-item--sm" />
               </div>
-              <div v-else-if="recentActivity.length === 0" class="section__empty">
-                <UiIcon name="hourglass_empty" />
-                <span>{{ t("home.sectionNoActivity") }}</span>
-              </div>
+              <EmptyState
+                v-else-if="recentActivity.length === 0"
+                variant="compact"
+                icon="hourglass_empty"
+                :title="t('home.sectionNoActivity')"
+              />
               <div v-else class="activity-feed">
                 <div
                   v-for="log in recentActivity"
@@ -578,25 +578,8 @@ const releaseNotes = computed(() => {
   height: 14px;
 }
 
-.section__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 28px 0;
-  color: var(--text-subtle);
-  font-size: 13px;
-}
-
 .section__empty--compact {
   padding: 8px 0 2px;
-}
-
-.section__empty .ui-icon {
-  width: 32px;
-  height: 32px;
-  opacity: 0.5;
 }
 
 .release-notes {
@@ -621,71 +604,6 @@ const releaseNotes = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.entity-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: var(--surface-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.entity-row:hover {
-  background: var(--surface-strong);
-  border-color: var(--border);
-  transform: translateX(2px);
-}
-
-.entity-row__gradient {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.entity-row__gradient::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.12) 100%);
-}
-
-.entity-row__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.entity-row__name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--base-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entity-row__version {
-  font-size: 11px;
-  color: var(--text-subtle);
-  font-variant-numeric: tabular-nums;
-}
-
-.entity-row__date {
-  font-size: 11px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 /* ── Quick Actions ── */

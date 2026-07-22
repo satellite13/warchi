@@ -4,6 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost } from '@/composables/useApi'
 import type { DiagramLockStatusResponse, DiagramResponse } from '@/types/api'
 import type { ModelData, PaginatedResponse } from '@/types/entities'
+import AdminAlert from '@/components/admin/AdminAlert.vue'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import { formatDate } from '@/utils/formatDate'
 import { paginatedContent } from '@/utils/paginatedResponse'
 
@@ -105,29 +108,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="dl">
-    <!-- Header -->
-    <div class="dl__header">
-      <div class="dl__titles">
-        <h1 class="dl__heading">{{ t('adminDiagramLocks.title') }}</h1>
-        <p class="dl__sub">{{ t('adminDiagramLocks.subtitle') }}</p>
-      </div>
-
-      <div class="dl__toolbar">
-        <!-- Live indicator -->
+    <AdminPageHeader
+      :title="t('adminDiagramLocks.title')"
+      :subtitle="t('adminDiagramLocks.subtitle')"
+    >
+      <template #toolbar>
         <div class="dl-live">
           <span class="dl-live__dot"></span>
           <span class="dl-live__text">live</span>
         </div>
-
-        <!-- Lock count -->
-        <div
-          v-if="lockCount > 0"
-          class="dl__count"
-        >
-          {{ lockCount }}
-        </div>
-
-        <!-- Refresh -->
+        <div v-if="lockCount > 0" class="dl__count">{{ lockCount }}</div>
         <button
           type="button"
           class="dl-refresh"
@@ -157,98 +147,91 @@ onBeforeUnmount(() => {
           </svg>
           {{ t('adminDiagramLocks.refresh') }}
         </button>
-      </div>
-    </div>
+      </template>
+    </AdminPageHeader>
 
-    <!-- Error -->
-    <Transition name="dl-msg">
-      <div v-if="errorMessage" class="dl-msg dl-msg--error">
-        <svg class="dl-msg__icon" viewBox="0 0 20 20" fill="none">
-          <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" />
-          <path
-            d="M10 6v5M10 13.5v.5"
+    <AdminAlert v-if="errorMessage" type="error" :message="errorMessage" />
+
+    <AdminTableShell
+      :loading="loading && locks.length === 0"
+      :empty="locks.length === 0"
+      :loading-text="t('adminDiagramLocks.loading')"
+      :empty-text="t('adminDiagramLocks.empty')"
+    >
+      <template #emptyIcon>
+        <svg class="dl-placeholder__icon" viewBox="0 0 48 48" fill="none">
+          <rect
+            x="8"
+            y="20"
+            width="32"
+            height="22"
+            rx="3"
             stroke="currentColor"
             stroke-width="1.5"
-            stroke-linecap="round"
+            opacity="0.25"
           />
+          <path
+            d="M14 20v-6a10 10 0 0120 0v6"
+            stroke="currentColor"
+            stroke-width="1.5"
+            opacity="0.25"
+          />
+          <circle cx="24" cy="31" r="3" stroke="currentColor" stroke-width="1.5" opacity="0.3" />
         </svg>
-        {{ errorMessage }}
-      </div>
-    </Transition>
-
-    <!-- Loading (initial) -->
-    <div v-if="loading && locks.length === 0" class="dl-placeholder">
-      <div class="dl-spinner"></div>
-      <span>{{ t('adminDiagramLocks.loading') }}</span>
-    </div>
-
-    <!-- Empty -->
-    <div v-else-if="locks.length === 0" class="dl-placeholder">
-      <svg class="dl-placeholder__icon" viewBox="0 0 48 48" fill="none">
-        <rect x="8" y="20" width="32" height="22" rx="3" stroke="currentColor" stroke-width="1.5" opacity="0.25" />
-        <path d="M14 20v-6a10 10 0 0120 0v6" stroke="currentColor" stroke-width="1.5" opacity="0.25" />
-        <circle cx="24" cy="31" r="3" stroke="currentColor" stroke-width="1.5" opacity="0.3" />
-      </svg>
-      <span>{{ t('adminDiagramLocks.empty') }}</span>
-    </div>
-
-    <!-- Table -->
-    <div v-else class="dl-card">
-      <table class="dl-table">
-        <thead>
-          <tr>
-            <th>{{ t('adminDiagramLocks.diagram') }}</th>
-            <th>{{ t('adminDiagramLocks.holder') }}</th>
-            <th>{{ t('adminDiagramLocks.expires') }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <TransitionGroup tag="tbody" name="dl-row">
-          <tr
-            v-for="row in locks"
-            :key="row.diagramId"
-            class="dl-table__row"
-            :class="{ 'dl-table__row--busy': releasingId === row.diagramId }"
-          >
-            <td>
-              <div class="dl-diagram-path">
-                <span v-if="diagramPath(row.diagramId)" class="dl-diagram-path__text">
-                  {{ diagramPath(row.diagramId) }}
-                </span>
-                <code class="dl-mono" :class="{ 'dl-mono--secondary': diagramPath(row.diagramId) }">
-                  {{ row.diagramId }}
-                </code>
-              </div>
-            </td>
-            <td class="dl-table__holder">
-              {{ row.lockedByDisplay || row.lockedByUserId || '—' }}
-            </td>
-            <td class="dl-table__date">
-              {{ row.expiresAt ? formatDate(row.expiresAt, locale, false) : '—' }}
-            </td>
-            <td class="dl-table__action">
-              <button
-                type="button"
-                class="dl-btn-release"
-                :disabled="releasingId === row.diagramId"
-                @click="forceRelease(row.diagramId)"
-              >
-                <svg viewBox="0 0 16 16" fill="none" class="dl-btn-release__icon">
-                  <path
-                    d="M4.5 7V5.5a3.5 3.5 0 017 0M3 8h10v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8z"
-                    stroke="currentColor"
-                    stroke-width="1.3"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                {{ t('adminDiagramLocks.forceRelease') }}
-              </button>
-            </td>
-          </tr>
-        </TransitionGroup>
-      </table>
-    </div>
+      </template>
+      <template #head>
+        <tr>
+          <th>{{ t('adminDiagramLocks.diagram') }}</th>
+          <th>{{ t('adminDiagramLocks.holder') }}</th>
+          <th>{{ t('adminDiagramLocks.expires') }}</th>
+          <th></th>
+        </tr>
+      </template>
+      <TransitionGroup tag="tbody" name="dl-row">
+        <tr
+          v-for="row in locks"
+          :key="row.diagramId"
+          class="dl-table__row"
+          :class="{ 'dl-table__row--busy': releasingId === row.diagramId }"
+        >
+          <td>
+            <div class="dl-diagram-path">
+              <span v-if="diagramPath(row.diagramId)" class="dl-diagram-path__text">
+                {{ diagramPath(row.diagramId) }}
+              </span>
+              <code class="dl-mono" :class="{ 'dl-mono--secondary': diagramPath(row.diagramId) }">
+                {{ row.diagramId }}
+              </code>
+            </div>
+          </td>
+          <td class="dl-table__holder">
+            {{ row.lockedByDisplay || row.lockedByUserId || '—' }}
+          </td>
+          <td class="dl-table__date">
+            {{ row.expiresAt ? formatDate(row.expiresAt, locale, false) : '—' }}
+          </td>
+          <td class="dl-table__action">
+            <button
+              type="button"
+              class="dl-btn-release"
+              :disabled="releasingId === row.diagramId"
+              @click="forceRelease(row.diagramId)"
+            >
+              <svg viewBox="0 0 16 16" fill="none" class="dl-btn-release__icon">
+                <path
+                  d="M4.5 7V5.5a3.5 3.5 0 017 0M3 8h10v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8z"
+                  stroke="currentColor"
+                  stroke-width="1.3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              {{ t('adminDiagramLocks.forceRelease') }}
+            </button>
+          </td>
+        </tr>
+      </TransitionGroup>
+    </AdminTableShell>
   </div>
 </template>
 

@@ -6,6 +6,7 @@ import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
 import type { CompositeSerializedCComponent } from "@/domain/attrs/notationAttrs";
 import { resolveCompositeBoundIconName } from "@/features/diagram-style/utils/compositeBindings";
+import EmptyState from "@/components/list/EmptyState.vue";
 
 const { t } = useI18n();
 
@@ -262,10 +263,12 @@ watch(tagsExpanded, (value) => {
         </button>
       </div>
 
-      <div v-if="items.length === 0" class="component-list__empty">
-        <UiIcon :name="searchQuery ? 'search_off' : 'inventory_2'" class="component-list__empty-icon" />
-        <span>{{ searchQuery ? 'Ничего не найдено' : 'Нет элементов' }}</span>
-      </div>
+      <EmptyState
+        v-if="items.length === 0"
+        variant="compact"
+        :icon="searchQuery ? 'search_off' : 'inventory_2'"
+        :title="searchQuery ? t('common.nothingFound') : t('common.noItems')"
+      />
     </div>
   </div>
 </template>

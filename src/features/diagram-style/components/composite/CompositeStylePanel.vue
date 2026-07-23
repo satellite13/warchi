@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LabeledFieldRow from '../LabeledFieldRow.vue'
 import LabeledNumberInput from '../LabeledNumberInput.vue'
@@ -94,8 +94,17 @@ const catalogShapeOptions = computed(() =>
   catalogShapes.value.map((s) => ({ id: s.id, label: s.name })),
 )
 function ensureCatalogShapesLoaded() {
-  if (catalogShapes.value.length === 0) fetchNodeShapes({ size: 200 })
+  void fetchNodeShapes({ size: 200 })
 }
+function handleNodeShapesChanged() {
+  void fetchNodeShapes({ size: 200 })
+}
+onMounted(() => {
+  window.addEventListener('warchi-node-shapes-changed', handleNodeShapesChanged)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('warchi-node-shapes-changed', handleNodeShapesChanged)
+})
 const customShapeId = ref<string | null>(null)
 const customOutline = ref<OutlineSegment[] | undefined>(undefined)
 

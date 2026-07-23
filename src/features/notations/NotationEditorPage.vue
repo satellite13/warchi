@@ -50,6 +50,8 @@ import type {
 } from '@/features/notations/types'
 import type { PaginatedResponse } from '@/types/entities'
 
+const pendingShapes = ref<ExportedNodeShape[]>([])
+
 const {
   notation,
   state,
@@ -62,7 +64,7 @@ const {
   hasUnsavedChanges,
   loadNotation,
   saveChanges,
-} = useNotationEditor()
+} = useNotationEditor(pendingShapes)
 const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const showShareModal = ref(false)
@@ -436,7 +438,6 @@ const selectedStylePanelNodeTypeProperties = computed(() => {
 })
 
 const importNotationInputRef = ref<HTMLInputElement | null>(null)
-const pendingShapes = ref<ExportedNodeShape[]>([])
 
 const {
   showAttrsJson,

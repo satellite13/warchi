@@ -38,6 +38,14 @@ import { resolveNewTypes } from '../utils/resolveNewTypes'
 import { resolveNewNotationBoundEntities } from '../utils/resolveNewNotationBoundEntities'
 import { syncRelationRulesViaApi } from './useRelationRulesSync'
 import { parseNotationAttrs, mergeNotationAttrs } from '../utils/notationAttrsJson'
+import { useNodeShapes } from '@/composables/useNodeShapes'
+import type { NodeShapeResponse } from '@/types/api'
+import type { ExportedNodeShape } from '../utils/exportedNodeShape'
+import {
+  mergeShapePackage,
+  remapComponentCustomShapeIds,
+} from '../utils/notationShapePackage'
+import { persistPendingShapes } from '../utils/persistPendingShapes'
 
 export interface NotationEditorReturn {
   notation: Ref<NotationData | null>
@@ -487,10 +495,13 @@ async function syncRelationRules(
   return activeRules
 }
 
-export function useNotationEditor(): NotationEditorReturn {
+export function useNotationEditor(
+  pendingShapes?: Ref<ExportedNodeShape[]>
+): NotationEditorReturn {
   const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
+  const { create: createShape, remove: removeShape } = useNodeShapes()
 
   const notation = ref<NotationData | null>(null)
   const notationAttrsSnapshot = ref<string | null>(null)
@@ -724,6 +735,38 @@ export function useNotationEditor(): NotationEditorReturn {
         serializeAttrs: serializeTypeAttrs,
         onProgress,
       })
+
+      if (pendingShapes && pendingShapes.value.length > 0) {
+        onProgress(t('notations.saveProgressShapes'))
+        const shapesToPersist = mergeShapePackage(pendingShapes.value, components)
+        try {
+          const existingShapes = await fetchAllPages<NodeShapeResponse>(
+            '/node-shapes',
+            undefined,
+            { pageSize: 200, errorLabel: t('notations.saveProgressShapes') },
+          )
+          const existingNames = existingShapes.map(shape => shape.name)
+          const idMap = await persistPendingShapes({
+            shapes: shapesToPersist,
+            existingNames,
+            create: async request => {
+              const row = await createShape(request)
+              return row ? { id: row.id } : null
+            },
+            remove: async id => removeShape(id),
+          })
+          remapComponentCustomShapeIds(components, idMap)
+          pendingShapes.value = []
+          window.dispatchEvent(new CustomEvent('warchi-node-shapes-changed'))
+        } catch (error) {
+          throw new Error(
+            t('notations.saveErrorShapes', {
+              message: error instanceof Error ? error.message : String(error),
+            })
+          )
+        }
+      }
+
       await saveComponents(components, relationRules, notationId, ownerId, onProgress)
       await saveRelations(relations, relationRules, notationId, ownerId, onProgress)
       state.value.relationRules = await syncRelationRules(

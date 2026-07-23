@@ -75,6 +75,8 @@ export const notationsMessages = {
       documentation: 'Страница в Wiki',
       saveErrorValidation: 'Исправьте ошибки в свойствах перед сохранением',
       saveErrorGeneric: 'Не удалось сохранить изменения.',
+      saveProgressShapes: 'Создание форм…',
+      saveErrorShapes: 'Не удалось создать формы: {message}',
       compositeValidationRootInvalid: 'Корень compositeContent должен быть container',
       compositeValidationNameRoleMissing: 'В composite должен быть ровно один text с role: name',
       compositeValidationNameRoleDuplicate: 'В composite найдено больше одного text с role: name',
@@ -172,6 +174,8 @@ export const notationsMessages = {
       documentation: 'Page in Wiki',
       saveErrorValidation: 'Fix validation errors before saving',
       saveErrorGeneric: 'Failed to save changes.',
+      saveProgressShapes: 'Creating shapes…',
+      saveErrorShapes: 'Failed to create shapes: {message}',
       compositeValidationRootInvalid: 'compositeContent root must be a container',
       compositeValidationNameRoleMissing: 'Composite must contain exactly one text with role: name',
       compositeValidationNameRoleDuplicate:

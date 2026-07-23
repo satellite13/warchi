@@ -1,9 +1,11 @@
 import { PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
+import i18n from '@/i18n'
 import {
   loadExistingByListParams,
   postCreateEntity,
   resolveNewEntitiesByKey,
 } from './resolveNewEntities'
+import { entityNameVersionKey } from './nameVersionUniqueness'
 
 type NotationBoundEntityLike = {
   id: string
@@ -29,10 +31,6 @@ export type ResolveNewNotationBoundEntitiesOptions<T extends NotationBoundEntity
   onProgress: (msg: string) => void
 }
 
-function entityKey(name: string, version: string): string {
-  return `${name}\u0000${version}`
-}
-
 function remapEntityId<T extends NotationBoundEntityLike>(
   entity: T,
   oldId: string,
@@ -44,9 +42,24 @@ function remapEntityId<T extends NotationBoundEntityLike>(
   onRemapId(oldId, newId)
 }
 
+function boundEntityNameVersionConflictMessage(
+  name: string,
+  version: string,
+  entityTypeName: string,
+): string {
+  return String(
+    i18n.global.t('notations.boundEntityNameVersionConflict', {
+      name,
+      version,
+      entity: entityTypeName,
+    }),
+  )
+}
+
 /**
  * Create notation-bound entities (components/relations), reusing rows that already
  * exist for the same notation+name+version (e.g. after a partial failed import).
+ * Two distinct new locals with the same name+version are rejected (not merged).
  */
 export async function resolveNewNotationBoundEntities<T extends NotationBoundEntityLike>(
   options: ResolveNewNotationBoundEntitiesOptions<T>,
@@ -67,8 +80,8 @@ export async function resolveNewNotationBoundEntities<T extends NotationBoundEnt
   await resolveNewEntitiesByKey<T, NotationBoundEntityResponse>({
     locals: entities,
     isNew: entity => Boolean(entity._isNew),
-    keyOfLocal: entity => entityKey(entity.name, entity.version),
-    keyOfRemote: remote => entityKey(remote.name, remote.version),
+    keyOfLocal: entity => entityNameVersionKey(entity.name, entity.version),
+    keyOfRemote: remote => entityNameVersionKey(remote.name, remote.version),
     loadExisting: () =>
       loadExistingByListParams<NotationBoundEntityResponse>(
         apiEndpoint,
@@ -91,5 +104,7 @@ export async function resolveNewNotationBoundEntities<T extends NotationBoundEnt
     onProgress,
     progressLabel: entity => `Создание ${entityTypeName}: ${entity.name}`,
     entityTypeName,
+    conflictMessage: entity =>
+      boundEntityNameVersionConflictMessage(entity.name, entity.version, entityTypeName),
   })
 }

@@ -86,6 +86,27 @@ describe('useComponentManagement', () => {
       expect(options.state.value.components).toHaveLength(0)
     })
 
+    it('shows error when name+version already exists', () => {
+      options.state.value.components = [
+        {
+          id: 'existing',
+          name: 'Actor',
+          version: '1.0.0',
+          notationId: 'notation-1',
+          ownerId: 'owner-1',
+          nodeTypeId: 'type-1',
+          parsedAttrs: { tags: [], customProperties: [] },
+        },
+      ]
+      const cm = useComponentManagement(options)
+      cm.componentName.value = 'Actor'
+      cm.componentVersion.value = '1.0.0'
+      cm.componentTypeSelection.value = 'type-1'
+      cm.addComponent()
+      expect(cm.componentFormError.value).toBe('notations.componentNameVersionConflict')
+      expect(options.state.value.components).toHaveLength(1)
+    })
+
     it('shows error when version is empty', () => {
       const cm = useComponentManagement(options)
       cm.componentName.value = 'MyComponent'

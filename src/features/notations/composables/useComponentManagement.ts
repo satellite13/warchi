@@ -11,6 +11,7 @@ import {
 import type { SelectedEntity } from './useNotationEntity'
 import { parseTagsInput, copyTypeProperties } from '../utils/tagParsers'
 import { addType } from '../utils/typeManagement'
+import { findNameVersionConflict } from '../utils/nameVersionUniqueness'
 import { useNotationBoundEntityManagement } from './useNotationBoundEntityManagement'
 
 export const NEW_TYPE_VALUE = '__new__'
@@ -65,6 +66,11 @@ export function useComponentManagement(options: ComponentManagementOptions) {
     const version = bound.version.value.trim()
     if (!version) {
       bound.formError.value = t('notations.enterComponentVersion')
+      return
+    }
+
+    if (findNameVersionConflict(state.value.components, name, version)) {
+      bound.formError.value = t('notations.componentNameVersionConflict')
       return
     }
 

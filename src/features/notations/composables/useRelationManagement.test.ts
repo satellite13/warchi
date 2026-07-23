@@ -3,6 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { NotationEditorState } from '../types'
 import type { SelectedEntity } from './useNotationEntity'
 
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
 vi.mock('@/features/diagram-style/styles/stylePresets', () => ({
   getAllRelationPresets: () => [],
   applyRelationStylePreset: () => ({}),
@@ -57,7 +63,7 @@ describe('useRelationManagement', () => {
       rm.relationName.value = ''
       rm.relationVersion.value = '1.0.0'
       rm.addRelation()
-      expect(rm.relationFormError.value).toBe('Введите название отношения')
+      expect(rm.relationFormError.value).toBe('notations.enterRelationName')
       expect(options.state.value.relations).toHaveLength(0)
     })
 
@@ -66,8 +72,29 @@ describe('useRelationManagement', () => {
       rm.relationName.value = 'MyRelation'
       rm.relationVersion.value = ''
       rm.addRelation()
-      expect(rm.relationFormError.value).toBe('Введите версию отношения')
+      expect(rm.relationFormError.value).toBe('notations.enterRelationVersion')
       expect(options.state.value.relations).toHaveLength(0)
+    })
+
+    it('shows error when name+version already exists', () => {
+      options.state.value.relations = [
+        {
+          id: 'existing',
+          name: 'Flow',
+          version: '1.0.0',
+          notationId: 'notation-1',
+          ownerId: 'owner-1',
+          linkTypeId: 'ltype-1',
+          parsedAttrs: { tags: [], customProperties: [] },
+        },
+      ]
+      const rm = useRelationManagement(options)
+      rm.relationName.value = 'Flow'
+      rm.relationVersion.value = '1.0.0'
+      rm.relationTypeSelection.value = 'ltype-1'
+      rm.addRelation()
+      expect(rm.relationFormError.value).toBe('notations.relationNameVersionConflict')
+      expect(options.state.value.relations).toHaveLength(1)
     })
 
     it('shows error when new type name is empty and new type is selected', () => {
@@ -77,7 +104,7 @@ describe('useRelationManagement', () => {
       rm.relationTypeSelection.value = '__new__'
       rm.relationNewTypeName.value = ''
       rm.addRelation()
-      expect(rm.relationFormError.value).toBe('Введите название нового типа связи')
+      expect(rm.relationFormError.value).toBe('notations.enterNewLinkTypeName')
       expect(options.state.value.relations).toHaveLength(0)
     })
 

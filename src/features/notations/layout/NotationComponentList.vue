@@ -6,6 +6,7 @@ import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
 import type { CompositeSerializedCComponent } from "@/domain/attrs/notationAttrs";
 import { resolveCompositeBoundIconName } from "@/features/diagram-style/utils/compositeBindings";
+import { findNameVersionConflict } from "../utils/nameVersionUniqueness";
 import EmptyState from "@/components/list/EmptyState.vue";
 
 const { t } = useI18n();
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   "create-component": [];
   "create-relation": [];
   "remove-item": [kind: "component" | "relation", id: string];
+  "rename-item": [kind: "component" | "relation", id: string, name: string];
   "toggle-sync-selection": [];
 }>();
 
@@ -32,11 +34,16 @@ const sortMode = ref<SortMode>("alpha-asc");
 const TAGS_EXPANDED_STORAGE_KEY = "warchi:notation-editor:component-list:tags-expanded";
 
 const tagsExpanded = ref(loadString(TAGS_EXPANDED_STORAGE_KEY, "1") !== "0");
+const renamingId = ref<string | null>(null);
+const renamingName = ref("");
+const renameError = ref<string | null>(null);
+const renameInputRef = ref<HTMLInputElement | null>(null);
 
 type ListItem = {
   id: string;
   kind: "component" | "relation";
   name: string;
+  version: string;
   typeLabel: string;
   tags: string[];
   /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
@@ -85,6 +92,7 @@ const items = computed<ListItem[]>(() => {
       id: c.id,
       kind: "component" as const,
       name: c.name,
+      version: c.version,
       typeLabel: props.state.nodeTypes.find(t => t.id === c.nodeTypeId)?.name || "",
       tags: c.parsedAttrs.tags,
       paletteIcon: getPaletteIcon(c.parsedAttrs)
@@ -96,6 +104,7 @@ const items = computed<ListItem[]>(() => {
       id: r.id,
       kind: "relation" as const,
       name: r.name,
+      version: r.version,
       typeLabel: props.state.linkTypes.find(t => t.id === r.linkTypeId)?.name || "",
       tags: r.parsedAttrs.tags,
       paletteIcon: getPaletteIcon(r.parsedAttrs)
@@ -144,6 +153,47 @@ watch(() => props.selectedId, (id) => {
 watch(tagsExpanded, (value) => {
   saveString(TAGS_EXPANDED_STORAGE_KEY, value ? "1" : "0");
 });
+
+const startRename = (item: ListItem) => {
+  renamingId.value = item.id;
+  renamingName.value = item.name;
+  renameError.value = null;
+  nextTick(() => {
+    renameInputRef.value?.focus();
+    renameInputRef.value?.select();
+  });
+};
+
+const cancelRename = () => {
+  renamingId.value = null;
+  renamingName.value = "";
+  renameError.value = null;
+};
+
+const commitRename = (item: ListItem) => {
+  if (renamingId.value !== item.id) return;
+  const nextName = renamingName.value.trim();
+  if (!nextName) {
+    cancelRename();
+    return;
+  }
+  if (nextName === item.name.trim()) {
+    cancelRename();
+    return;
+  }
+  const siblings =
+    item.kind === "component" ? props.state.components : props.state.relations;
+  if (findNameVersionConflict(siblings, nextName, item.version, item.id)) {
+    renameError.value =
+      item.kind === "component"
+        ? t("notations.componentNameVersionConflict")
+        : t("notations.relationNameVersionConflict");
+    nextTick(() => renameInputRef.value?.focus());
+    return;
+  }
+  emit("rename-item", item.kind, item.id, nextName);
+  cancelRename();
+};
 </script>
 
 <template>
@@ -232,11 +282,12 @@ watch(tagsExpanded, (value) => {
         tabindex="0"
         :class="{
           'component-item--active': selectedId === item.id,
-          'component-item--relation': item.kind === 'relation'
+          'component-item--relation': item.kind === 'relation',
+          'component-item--renaming': renamingId === item.id
         }"
-        @click="emit('select', item.kind, item.id)"
-        @keydown.enter.prevent="emit('select', item.kind, item.id)"
-        @keydown.space.prevent="emit('select', item.kind, item.id)"
+        @click="renamingId !== item.id && emit('select', item.kind, item.id)"
+        @keydown.enter.prevent="renamingId !== item.id && emit('select', item.kind, item.id)"
+        @keydown.space.prevent="renamingId !== item.id && emit('select', item.kind, item.id)"
       >
         <UiIcon
           v-if="item.kind === 'relation'"
@@ -250,17 +301,45 @@ watch(tagsExpanded, (value) => {
           class="component-item__icon-img"
         >
         <div class="component-item__info">
-          <span class="component-item__name">{{ item.name }}</span>
-          <span v-if="item.typeLabel" class="component-item__type">{{ item.typeLabel }}</span>
+          <template v-if="renamingId === item.id">
+            <input
+              ref="renameInputRef"
+              v-model="renamingName"
+              type="text"
+              class="component-item__rename-input"
+              :class="{ 'component-item__rename-input--error': renameError }"
+              :aria-label="t('common.rename')"
+              @click.stop
+              @keydown.enter.prevent="commitRename(item)"
+              @keydown.esc.prevent="cancelRename"
+              @blur="commitRename(item)"
+            >
+            <span v-if="renameError" class="component-item__rename-error">{{ renameError }}</span>
+          </template>
+          <template v-else>
+            <span class="component-item__name">{{ item.name }}</span>
+            <span v-if="item.typeLabel" class="component-item__type">{{ item.typeLabel }}</span>
+          </template>
         </div>
-        <button
-          type="button"
-          class="component-item__remove"
-          :title="t('common.delete')"
-          @click.stop="emit('remove-item', item.kind, item.id)"
-        >
-          <UiIcon name="delete" />
-        </button>
+        <div class="component-item__actions">
+          <button
+            v-if="renamingId !== item.id"
+            type="button"
+            class="component-item__action"
+            :title="t('common.rename')"
+            @click.stop="startRename(item)"
+          >
+            <UiIcon name="edit" />
+          </button>
+          <button
+            type="button"
+            class="component-item__action component-item__action--danger"
+            :title="t('common.delete')"
+            @click.stop="emit('remove-item', item.kind, item.id)"
+          >
+            <UiIcon name="delete" />
+          </button>
+        </div>
       </div>
 
       <EmptyState
@@ -625,6 +704,7 @@ watch(tagsExpanded, (value) => {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  flex: 1;
 }
 
 .component-item__name {
@@ -644,8 +724,50 @@ watch(tagsExpanded, (value) => {
   white-space: nowrap;
 }
 
-/* Кнопка удаления в стиле редактора модели (mini-btn mini-btn--danger) */
-.component-item__remove {
+.component-item__rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--base-text);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
+}
+
+.component-item__rename-input--error {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.component-item__rename-error {
+  font-size: 11px;
+  color: var(--danger);
+  line-height: 1.3;
+}
+
+.component-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.component-item:hover .component-item__actions,
+.component-item--active .component-item__actions,
+.component-item--renaming .component-item__actions {
+  opacity: 1;
+}
+
+.component-item__action {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -657,22 +779,21 @@ watch(tagsExpanded, (value) => {
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
-  flex-shrink: 0;
-  margin-left: auto;
-  opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.component-item__remove .ui-icon {
+.component-item__action .ui-icon {
   width: 16px;
   height: 16px;
 }
 
-.component-item:hover .component-item__remove {
-  opacity: 1;
+.component-item__action:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
-.component-item__remove:hover {
+.component-item__action--danger:hover {
   color: var(--danger);
   border-color: var(--danger);
   background: var(--danger-soft);

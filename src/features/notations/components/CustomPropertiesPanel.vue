@@ -9,6 +9,7 @@ import type { CustomProperty, CustomPropertyType } from '@/domain/attrs/notation
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 import { useCustomProperties } from '../composables/useCustomProperties'
 import { parseTagsInput as parseTagsInputShared } from '../utils/tagParsers'
+import { findNameVersionConflict } from '../utils/nameVersionUniqueness'
 import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
 import IconPicker from '@/components/forms/IconPicker.vue'
 
@@ -49,6 +50,7 @@ const sameTags = (a: string[], b: string[]) =>
 
 const tagsDraft = ref('')
 const nameDraft = ref('')
+const nameError = ref<string | null>(null)
 const nameExpanded = ref(true)
 const tagsExpanded = ref(false)
 const paletteGroupExpanded = ref(false)
@@ -61,6 +63,7 @@ watch(
   () => [props.selectedItem?.id, props.selectedItem?.name ?? ''],
   () => {
     nameDraft.value = props.selectedItem?.name ?? ''
+    nameError.value = null
   },
   { immediate: true }
 )
@@ -79,11 +82,17 @@ const handleTagsInput = (value: string) => {
 
 const handleNameInput = (value: string) => {
   nameDraft.value = value
+  nameError.value = null
 }
 
 const nameLabel = computed(() =>
   isComponent.value ? t('notations.componentNameLabel') : t('notations.relationNameLabel')
 )
+
+const siblingEntities = computed(() => {
+  if (!props.selectedItem) return []
+  return isComponent.value ? (props.allComponents ?? []) : (props.allRelations ?? [])
+})
 
 const applyNameDraft = () => {
   if (!props.selectedItem) return
@@ -91,16 +100,33 @@ const applyNameDraft = () => {
   const currentName = props.selectedItem.name.trim()
   if (!nextName) {
     nameDraft.value = props.selectedItem.name
+    nameError.value = null
     return
   }
   if (nextName === currentName) {
     nameDraft.value = props.selectedItem.name
+    nameError.value = null
+    return
+  }
+  if (
+    findNameVersionConflict(
+      siblingEntities.value,
+      nextName,
+      props.selectedItem.version,
+      props.selectedItem.id,
+    )
+  ) {
+    nameDraft.value = props.selectedItem.name
+    nameError.value = isComponent.value
+      ? t('notations.componentNameVersionConflict')
+      : t('notations.relationNameVersionConflict')
     return
   }
   props.onMutateItem?.(props.selectedItem.id, item => {
     item.name = nextName
   })
   nameDraft.value = nextName
+  nameError.value = null
 }
 
 const labelTemplateValue = computed(() => {
@@ -329,12 +355,14 @@ onBeforeUnmount(() => {
         <input
           id="entity-name-input"
           class="properties-panel__name-input"
+          :class="{ 'properties-panel__name-input--error': nameError }"
           :value="nameDraft"
           :placeholder="nameLabel"
           @input="handleNameInput(($event.target as HTMLInputElement).value)"
           @blur="applyNameDraft"
           @keydown.enter.prevent="applyNameDraft"
         />
+        <p v-if="nameError" class="properties-panel__name-error">{{ nameError }}</p>
       </CollapseSection>
 
       <!-- Документация компонента: при шаре VIEW — только если файл уже есть (просмотр) -->
@@ -751,6 +779,17 @@ onBeforeUnmount(() => {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
   background: var(--surface);
+}
+
+.properties-panel__name-input--error {
+  border-color: var(--danger);
+}
+
+.properties-panel__name-error {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .properties-panel__tags-list {

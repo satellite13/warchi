@@ -40,6 +40,7 @@ import {
   validateCompositeDiagramStyle,
   type ValidationIssue,
 } from '@/features/notations/utils/validationIssues'
+import { findDuplicateNameVersionGroups } from '@/features/notations/utils/nameVersionUniqueness'
 import type { NodeResponse, LinkResponse } from '@/types/api'
 import type {
   EditorComponent,
@@ -124,10 +125,32 @@ const compositeValidationIssues = computed<ValidationIssue[]>(() => {
   return issues
 })
 
+const nameVersionValidationIssues = computed<ValidationIssue[]>(() => {
+  const issues: ValidationIssue[] = []
+  for (const group of findDuplicateNameVersionGroups(state.value.components)) {
+    issues.push({
+      code: 'COMPONENT_NAME_VERSION_DUPLICATE',
+      message: t('notations.componentNameVersionConflict'),
+      path: `components.${group.ids[0]}.name`,
+      severity: 'error',
+    })
+  }
+  for (const group of findDuplicateNameVersionGroups(state.value.relations)) {
+    issues.push({
+      code: 'RELATION_NAME_VERSION_DUPLICATE',
+      message: t('notations.relationNameVersionConflict'),
+      path: `relations.${group.ids[0]}.name`,
+      severity: 'error',
+    })
+  }
+  return issues
+})
+
 const hasAnyValidationErrors = computed(
   () =>
     customPropertyValidationIssues.value.some((issue) => issue.severity === 'error') ||
-    compositeValidationIssues.value.some((issue) => issue.severity === 'error')
+    compositeValidationIssues.value.some((issue) => issue.severity === 'error') ||
+    nameVersionValidationIssues.value.some((issue) => issue.severity === 'error')
 )
 
 // Document modal state
@@ -666,6 +689,24 @@ const handleRemoveItem = (kind: 'component' | 'relation', id: string) => {
   showRemoveDialog.value = true
 }
 
+const handleRenameItem = (kind: 'component' | 'relation', id: string, name: string) => {
+  const nextName = name.trim()
+  if (!nextName) return
+
+  if (kind === 'component') {
+    const item = state.value.components.find(c => c.id === id)
+    if (!item || item.name === nextName) return
+    item.name = nextName
+    markComponentDirty(id)
+    return
+  }
+
+  const item = state.value.relations.find(r => r.id === id)
+  if (!item || item.name === nextName) return
+  item.name = nextName
+  markRelationDirty(id)
+}
+
 const confirmRemove = () => {
   if (pendingRemove.value) {
     const { kind, id } = pendingRemove.value
@@ -884,6 +925,7 @@ onBeforeUnmount(() => {
               @create-component="openComponentModal"
               @create-relation="openRelationModal"
               @remove-item="handleRemoveItem"
+              @rename-item="handleRenameItem"
             />
           </template>
           <template #default>

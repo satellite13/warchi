@@ -86,6 +86,15 @@ export const notationsMessages = {
       enterComponentName: 'Введите название компонента',
       enterComponentVersion: 'Введите версию компонента',
       enterNewNodeTypeName: 'Введите название нового типа узла',
+      enterRelationName: 'Введите название отношения',
+      enterRelationVersion: 'Введите версию отношения',
+      enterNewLinkTypeName: 'Введите название нового типа связи',
+      componentNameVersionConflict:
+        'Компонент с таким именем и версией уже есть в этой нотации',
+      relationNameVersionConflict:
+        'Отношение с таким именем и версией уже есть в этой нотации',
+      boundEntityNameVersionConflict:
+        'В нотации уже есть {entity} «{name}» версии {version}. Задайте уникальное имя или версию.',
     },
   },
   en: {
@@ -175,6 +184,15 @@ export const notationsMessages = {
       enterComponentName: 'Enter component name',
       enterComponentVersion: 'Enter component version',
       enterNewNodeTypeName: 'Enter new node type name',
+      enterRelationName: 'Enter relation name',
+      enterRelationVersion: 'Enter relation version',
+      enterNewLinkTypeName: 'Enter new link type name',
+      componentNameVersionConflict:
+        'A component with this name and version already exists in this notation',
+      relationNameVersionConflict:
+        'A relation with this name and version already exists in this notation',
+      boundEntityNameVersionConflict:
+        'This notation already has {entity} "{name}" version {version}. Use a unique name or version.',
     },
   },
 }

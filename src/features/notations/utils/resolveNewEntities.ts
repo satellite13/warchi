@@ -41,9 +41,12 @@ export async function resolveNewEntitiesByKey<TLocal, TRemote extends { id: stri
 
     const alreadyResolvedId = key ? resolvedIdByKey.get(key) : undefined
     if (alreadyResolvedId) {
-      const stub = { id: alreadyResolvedId } as TRemote
-      options.onReuse(local, stub)
-      continue
+      // Two distinct local entities share one uniqueness key in this batch —
+      // never collapse them onto one remote id (silent merge breaks the editor).
+      if (options.conflictMessage) {
+        throw new Error(options.conflictMessage(local))
+      }
+      throw new Error(`Duplicate ${options.entityTypeName} key in save batch`)
     }
 
     const existingRemote = key ? existingByKey.get(key) : undefined

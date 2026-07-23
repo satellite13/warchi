@@ -1,4 +1,5 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createId } from '@/domain/attrs/notationAttrs'
 import type { EditorRelation, NotationEditorState } from '../types'
 import {
@@ -10,6 +11,7 @@ import {
 import type { SelectedEntity } from './useNotationEntity'
 import { parseTagsInput, copyTypeProperties } from '../utils/tagParsers'
 import { addType } from '../utils/typeManagement'
+import { findNameVersionConflict } from '../utils/nameVersionUniqueness'
 import { useNotationBoundEntityManagement } from './useNotationBoundEntityManagement'
 
 export const NEW_TYPE_VALUE = '__new__'
@@ -25,6 +27,7 @@ export interface RelationManagementOptions {
 
 export function useRelationManagement(options: RelationManagementOptions) {
   const { state, selectedEntity, availableTags, stylePresetsVersion } = options
+  const { t } = useI18n()
 
   const bound = useNotationBoundEntityManagement<EditorRelation>({
     kind: 'relation',
@@ -46,13 +49,18 @@ export function useRelationManagement(options: RelationManagementOptions) {
     bound.formError.value = null
     const name = bound.name.value.trim()
     if (!name) {
-      bound.formError.value = 'Введите название отношения'
+      bound.formError.value = t('notations.enterRelationName')
       return
     }
 
     const version = bound.version.value.trim()
     if (!version) {
-      bound.formError.value = 'Введите версию отношения'
+      bound.formError.value = t('notations.enterRelationVersion')
+      return
+    }
+
+    if (findNameVersionConflict(state.value.relations, name, version)) {
+      bound.formError.value = t('notations.relationNameVersionConflict')
       return
     }
 
@@ -65,7 +73,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
       linkTypeId =
         addType(state.value.linkTypes, bound.newTypeName.value, state.value.ownerId) || ''
       if (!linkTypeId) {
-        bound.formError.value = 'Введите название нового типа связи'
+        bound.formError.value = t('notations.enterNewLinkTypeName')
         return
       }
     }

@@ -1,22 +1,14 @@
 import {ref, type Ref} from "vue";
 import {useI18n} from "vue-i18n";
 import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
-import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "@/domain/attrs/notationAttrs";
+import { serializeEntityAttrs, serializeTypeAttrs } from "@/domain/attrs/notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { buildExportShapes } from "@/features/notations/utils/buildExportShapes";
 import type { ExportedNodeShape } from "@/features/notations/utils/exportedNodeShape";
-import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
+import { normalizeNotationImport } from "@/features/notations/utils/normalizeNotationImport";
 import type {NotationData} from "@/types/entities";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
-import type {
-  NotationEditorState,
-  EditorDiagramLayer,
-  EditorNodeType,
-  EditorLinkType,
-  EditorComponent,
-  EditorRelation,
-  EditorRelationRule
-} from "../types";
+import type { NotationEditorState } from "../types";
 
 type NotationExportPayloadV2 = {
   format: "warchi-notation-export";
@@ -29,60 +21,6 @@ type NotationExportPayloadV2 = {
   };
   state: NotationEditorState;
   shapes: ExportedNodeShape[];
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const toStringOr = (value: unknown, fallback: string): string =>
-  typeof value === "string" && value.trim().length > 0 ? value : fallback;
-
-const toObjectArray = (value: unknown): Record<string, unknown>[] =>
-  Array.isArray(value) ? value.filter(isRecord) : [];
-
-const normalizeDiagramLayer = (value: unknown): EditorDiagramLayer => {
-  if (!isRecord(value)) return { version: 1, nodes: [], edges: [] };
-  const nodes: EditorDiagramLayer['nodes'] = [];
-  if (Array.isArray(value.nodes)) {
-    for (const node of value.nodes) {
-      if (!isRecord(node)) continue;
-      if (
-        typeof node.id === 'string' &&
-        typeof node.x === 'number' &&
-        typeof node.y === 'number' &&
-        typeof node.width === 'number' &&
-        typeof node.height === 'number'
-      ) {
-        nodes.push({
-          id: node.id,
-          x: node.x,
-          y: node.y,
-          width: node.width,
-          height: node.height,
-          attrs: isRecord(node.attrs) ? node.attrs : undefined,
-        });
-      }
-    }
-  }
-  const edges: EditorDiagramLayer['edges'] = [];
-  if (Array.isArray(value.edges)) {
-    for (const edge of value.edges) {
-      if (!isRecord(edge)) continue;
-      if (
-        typeof edge.id === 'string' &&
-        typeof edge.sourceNodeId === 'string' &&
-        typeof edge.targetNodeId === 'string'
-      ) {
-        edges.push({
-          id: edge.id,
-          sourceNodeId: edge.sourceNodeId,
-          targetNodeId: edge.targetNodeId,
-          attrs: isRecord(edge.attrs) ? edge.attrs : undefined,
-        });
-      }
-    }
-  }
-  return { version: 1, nodes, edges };
 };
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -217,184 +155,6 @@ export function useNotationExport(
     });
   };
 
-  const normalizeImportedState = (raw: unknown): NotationEditorState => {
-    const source = isRecord(raw) && isRecord(raw.state) ? raw.state : raw;
-    if (!isRecord(source)) {
-      throw new Error(t("notations.importFormatError"));
-    }
-
-    const baseOwnerId = state.value.ownerId;
-    const baseNotationId = state.value.notationId;
-
-    const nodeTypeIdMap = new Map<string, string>();
-    const linkTypeIdMap = new Map<string, string>();
-    const componentIdMap = new Map<string, string>();
-    const relationIdMap = new Map<string, string>();
-
-    const nodeTypes: EditorNodeType[] = toObjectArray(source.nodeTypes).map((item) => {
-      const importedId = toStringOr(item.id, createId());
-      const id = createId();
-      nodeTypeIdMap.set(importedId, id);
-      const parsedAttrs = parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {}));
-      delete parsedAttrs.documentFileId;
-      return {
-        id,
-        name: toStringOr(item.name, t("notations.defaultNodeTypeName")),
-        ownerId: toStringOr(item.ownerId, baseOwnerId),
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs,
-        _isNew: true
-      };
-    });
-
-    const linkTypes: EditorLinkType[] = toObjectArray(source.linkTypes).map((item) => {
-      const importedId = toStringOr(item.id, createId());
-      const id = createId();
-      linkTypeIdMap.set(importedId, id);
-      const parsedAttrs = parseTypeAttrs(JSON.stringify(item.parsedAttrs ?? {}));
-      delete parsedAttrs.documentFileId;
-      return {
-        id,
-        name: toStringOr(item.name, t("notations.defaultLinkTypeName")),
-        ownerId: toStringOr(item.ownerId, baseOwnerId),
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs,
-        _isNew: true
-      };
-    });
-
-    if (nodeTypes.length === 0) {
-      nodeTypes.push({
-        id: createId(),
-        name: t("notations.defaultNodeTypeName"),
-        ownerId: baseOwnerId,
-        parsedAttrs: {},
-        _isNew: true
-      });
-    }
-    if (linkTypes.length === 0) {
-      linkTypes.push({
-        id: createId(),
-        name: t("notations.defaultLinkTypeName"),
-        ownerId: baseOwnerId,
-        parsedAttrs: {},
-        _isNew: true
-      });
-    }
-
-    const nodeTypeIds = new Set(nodeTypes.map((item) => item.id));
-    const linkTypeIds = new Set(linkTypes.map((item) => item.id));
-    const defaultNodeTypeId = nodeTypes[0]!.id;
-    const defaultLinkTypeId = linkTypes[0]!.id;
-
-    const components: EditorComponent[] = toObjectArray(source.components).map((item) => {
-      const importedComponentId = toStringOr(item.id, createId());
-      const importedNodeTypeId = toStringOr(item.nodeTypeId, defaultNodeTypeId);
-      const mappedNodeTypeId = nodeTypeIdMap.get(importedNodeTypeId) ?? importedNodeTypeId;
-      const id = createId();
-      componentIdMap.set(importedComponentId, id);
-      const parsedAttrs = parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {}));
-      delete parsedAttrs.documentFileId;
-      const issues = validateCompositeDiagramStyle(parsedAttrs.diagramStyle, t);
-      const integrityError = issues.find((issue) => issue.code === "A5_TARGET_NOT_FOUND");
-      if (integrityError) {
-        throw new Error(integrityError.message);
-      }
-      return {
-        id,
-        name: toStringOr(item.name, t("notations.newComponentTitle")),
-        version: toStringOr(item.version, "1.0.0"),
-        notationId: baseNotationId,
-        ownerId: toStringOr(item.ownerId, baseOwnerId),
-        nodeTypeId: nodeTypeIds.has(mappedNodeTypeId) ? mappedNodeTypeId : defaultNodeTypeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs,
-        _isNew: true,
-        _isDirty: false,
-        _isDeleted: false
-      };
-    });
-
-    const relations: EditorRelation[] = toObjectArray(source.relations).map((item) => {
-      const importedRelationId = toStringOr(item.id, createId());
-      const importedLinkTypeId = toStringOr(item.linkTypeId, defaultLinkTypeId);
-      const mappedLinkTypeId = linkTypeIdMap.get(importedLinkTypeId) ?? importedLinkTypeId;
-      const id = createId();
-      relationIdMap.set(importedRelationId, id);
-      const parsedAttrs = parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {}));
-      delete parsedAttrs.documentFileId;
-      return {
-        id,
-        name: toStringOr(item.name, t("notations.defaultRelationName")),
-        version: toStringOr(item.version, "1.0.0"),
-        notationId: baseNotationId,
-        ownerId: toStringOr(item.ownerId, baseOwnerId),
-        linkTypeId: linkTypeIds.has(mappedLinkTypeId) ? mappedLinkTypeId : defaultLinkTypeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs,
-        _isNew: true,
-        _isDirty: false,
-        _isDeleted: false
-      };
-    });
-
-    const relationRules: EditorRelationRule[] = toObjectArray(source.relationRules).reduce<EditorRelationRule[]>(
-      (acc, item) => {
-        const importedFromId = toStringOr(item.fromComponentId, "");
-        const importedToId = toStringOr(item.toComponentId, "");
-        const fromComponentId = componentIdMap.get(importedFromId);
-        const toComponentId = componentIdMap.get(importedToId);
-        if (!fromComponentId || !toComponentId) return acc;
-
-        const rawRelationIds = Array.isArray(item.allowedRelationIds)
-          ? item.allowedRelationIds
-          : Array.isArray(item.allowedLinkTypeIds)
-            ? item.allowedLinkTypeIds
-            : [];
-
-        const allowedRelationIds = Array.from(
-          new Set(
-            rawRelationIds
-              .filter((relationId): relationId is string => typeof relationId === "string")
-              .map((relationId) => relationIdMap.get(relationId) ?? relationId)
-              .filter((relationId) => relations.some((relation) => relation.id === relationId))
-          )
-        );
-
-        acc.push({
-          id: createId(),
-          fromComponentId,
-          toComponentId,
-          allowedRelationIds,
-          _isNew: true,
-          _isDirty: false,
-          _isDeleted: false
-        });
-        return acc;
-      },
-      []
-    );
-
-    const importedLayerRaw =
-      (isRecord(source.diagramLayer) ? source.diagramLayer : null) ??
-      (isRecord(source.editorDiagramLayer) ? source.editorDiagramLayer : null);
-
-    return {
-      notationId: baseNotationId,
-      ownerId: baseOwnerId,
-      nodeTypes,
-      linkTypes,
-      components,
-      relations,
-      relationRules,
-      diagramLayer: normalizeDiagramLayer(importedLayerRaw),
-    };
-  };
-
   const triggerNotationImport = () => {
     const input = importNotationInputRef.value;
     if (!input) return;
@@ -420,7 +180,13 @@ export function useNotationExport(
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
-      state.value = normalizeImportedState(parsed);
+      const { state: nextState, pendingShapes: nextShapes } = normalizeNotationImport(parsed, {
+        baseOwnerId: state.value.ownerId,
+        baseNotationId: state.value.notationId,
+        t,
+      })
+      state.value = nextState
+      pendingShapes.value = nextShapes
       saveError.value = null;
       saveSuccess.value = false;
     } catch (error) {

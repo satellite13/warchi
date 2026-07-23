@@ -33,6 +33,7 @@ import {
 } from '@/features/notations/composables/useNotationEntity'
 import { useNotationToolbarState } from '@/features/notations/composables/useNotationToolbarState'
 import { useNotationExport } from '@/features/notations/composables/useNotationExport'
+import type { ExportedNodeShape } from '@/features/notations/utils/exportedNodeShape'
 import type { DiagramStyle } from '@/domain/attrs/notationAttrs'
 import { createId } from '@/domain/attrs/notationAttrs'
 import {
@@ -435,6 +436,7 @@ const selectedStylePanelNodeTypeProperties = computed(() => {
 })
 
 const importNotationInputRef = ref<HTMLInputElement | null>(null)
+const pendingShapes = ref<ExportedNodeShape[]>([])
 
 const {
   showAttrsJson,
@@ -449,6 +451,7 @@ const {
 } = useNotationExport(
   notation,
   state,
+  pendingShapes,
   selectedEntity,
   diagramRenderer,
   saveError,
@@ -811,7 +814,7 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     case 'export-notation':
-      exportNotation()
+      await exportNotation()
       break
     case 'export-diagram-png':
       await exportDiagramAsPng()

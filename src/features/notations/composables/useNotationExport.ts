@@ -2,6 +2,9 @@ import {ref, type Ref} from "vue";
 import {useI18n} from "vue-i18n";
 import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
 import {createId, parseEntityAttrs, parseTypeAttrs, serializeEntityAttrs, serializeTypeAttrs} from "@/domain/attrs/notationAttrs";
+import { useNodeShapes } from "@/composables/useNodeShapes";
+import { buildExportShapes } from "@/features/notations/utils/buildExportShapes";
+import type { ExportedNodeShape } from "@/features/notations/utils/exportedNodeShape";
 import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
 import type {NotationData} from "@/types/entities";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
@@ -15,9 +18,9 @@ import type {
   EditorRelationRule
 } from "../types";
 
-type NotationExportPayloadV1 = {
+type NotationExportPayloadV2 = {
   format: "warchi-notation-export";
-  version: 1;
+  version: 2;
   exportedAt: string;
   notation: {
     id: string;
@@ -25,6 +28,7 @@ type NotationExportPayloadV1 = {
     version: string;
   };
   state: NotationEditorState;
+  shapes: ExportedNodeShape[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -86,6 +90,7 @@ const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 export function useNotationExport(
   notation: Ref<NotationData | null>,
   state: Ref<NotationEditorState>,
+  pendingShapes: Ref<ExportedNodeShape[]>,
   selectedEntity: Ref<{ kind: "component" | "relation"; id: string } | null>,
   diagramRenderer: Ref<DiagramRenderer | null>,
   saveError: Ref<string | null>,
@@ -93,6 +98,7 @@ export function useNotationExport(
   importNotationInputRef: Ref<HTMLInputElement | null>
 ) {
   const {t} = useI18n();
+  const { fetchById } = useNodeShapes();
 
   const showAttrsJson = ref(false);
   const attrsJsonContent = ref("");
@@ -132,20 +138,27 @@ export function useNotationExport(
     };
   };
 
-  const exportNotation = () => {
+  const exportNotation = async () => {
     const currentNotation = notation.value;
     const fallbackNotationId = state.value.notationId || "notation";
+    const exportState = buildExportState();
+    const shapes = await buildExportShapes({
+      components: exportState.components,
+      pendingShapes: pendingShapes.value,
+      fetchById,
+    });
 
-    const payload: NotationExportPayloadV1 = {
+    const payload: NotationExportPayloadV2 = {
       format: "warchi-notation-export",
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       notation: {
         id: currentNotation?.id ?? fallbackNotationId,
         name: currentNotation?.name ?? "Notation",
         version: currentNotation?.version ?? "1.0.0"
       },
-      state: buildExportState()
+      state: exportState,
+      shapes,
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], {

@@ -22,6 +22,7 @@ import { executeModelEditorSave } from './modelEditorSaveCoordinator'
 import { useModelBatchConflictResolution } from './useModelBatchConflictResolution'
 import { useModelEditorStateHelpers } from './useModelEditorStateHelpers'
 import { useNotationRelationsAndRulesLoader } from './useNotationRelationsAndRulesLoader'
+import { resetLoadedNotationCatalogIds } from './ensureNotationImportCatalog'
 
 type ModelEditorReturn = {
   model: Ref<ModelData | null>
@@ -165,6 +166,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       notationIds = shell.loadedNotationIds
       // Relations/rules are not loaded yet — do not mark notations as ready.
       resetLoadedNotationIds([])
+      resetLoadedNotationCatalogIds([])
       state.value = shell.state
       // Avoid an immediate duplicate full pull from live sync after this load.
       markModelEditorSnapshotFresh()
@@ -199,6 +201,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         relationRules: catalog.relationRules,
       }
       resetLoadedNotationIds(notationIds)
+      resetLoadedNotationCatalogIds(notationIds)
       markModelEditorSnapshotFresh()
       resolveCatalogReady()
 

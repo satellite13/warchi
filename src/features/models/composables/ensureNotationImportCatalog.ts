@@ -5,10 +5,20 @@ import type { PaginatedResponse } from '@/types/entities'
 import type { ModelEditorState } from '../types'
 import { fetchAllComponentsByNotationId } from './modelNotationComponentsApi'
 
+/** Notations whose components/types were already merged into editor state for this model load. */
+const loadedCatalogNotationIds = new Set<string>()
+
+export function resetLoadedNotationCatalogIds(notationIds: string[] = []): void {
+  loadedCatalogNotationIds.clear()
+  for (const notationId of notationIds) {
+    loadedCatalogNotationIds.add(notationId)
+  }
+}
+
 /**
  * Loads components / node-types / link-types for a notation into model-editor state,
- * and ensures relations (+ rules) are loaded. Used by OEF import when the target
- * notation is not yet referenced by any diagram in the model.
+ * and ensures relations (+ rules) are loaded. Used when opening/creating a diagram whose
+ * notation was not part of the initial model catalog (e.g. first diagram with that notation).
  */
 export async function ensureNotationImportCatalog(params: {
   modelId: string
@@ -18,9 +28,15 @@ export async function ensureNotationImportCatalog(params: {
     notationId: string,
     options?: { force?: boolean }
   ) => Promise<void>
+  force?: boolean
 }): Promise<void> {
-  const { modelId, notationId, state } = params
+  const { modelId, notationId, state, force = false } = params
   if (!modelId || !notationId) return
+
+  if (!force && loadedCatalogNotationIds.has(notationId)) {
+    await params.ensureNotationRelationsAndRules(notationId)
+    return
+  }
 
   const typesQuery = listParams()
   typesQuery.set('modelId', modelId)
@@ -54,4 +70,6 @@ export async function ensureNotationImportCatalog(params: {
     }
     state.linkTypes = [...byId.values()]
   }
+
+  loadedCatalogNotationIds.add(notationId)
 }

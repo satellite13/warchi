@@ -4,6 +4,7 @@ import { getUserDisplayName } from '@/utils/userDisplay'
 import type { NotationMetaResponse, NotationResponse } from '@/types/api'
 import type { UserInfo } from '@/types/entities'
 import type { EditorDiagram, ModelEditorState } from '../types'
+import { ensureNotationImportCatalog } from './ensureNotationImportCatalog'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 
@@ -86,7 +87,14 @@ export function useNotationVersionBanner(options: {
         return
       }
       try {
-        await options.ensureNotationRelationsAndRules(notationId)
+        // Load components/types too — creating a diagram with a notation not yet in the
+        // model catalog previously left the palette empty until the model was reloaded.
+        await ensureNotationImportCatalog({
+          modelId: options.state.value.modelId,
+          notationId,
+          state: options.state.value,
+          ensureNotationRelationsAndRules: options.ensureNotationRelationsAndRules,
+        })
       } catch (error) {
         options.setUiError(
           error instanceof Error

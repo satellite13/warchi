@@ -42,6 +42,7 @@ import {
   getInteractiveBadgeIconIds,
 } from '@/config/interactiveBadgeIcons'
 import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
+import { resolveInstanceComponentId } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import {
   flushPersistDiagramViewport,
@@ -425,7 +426,12 @@ const isNodeGroupingEnabled = (papNodeId: string): boolean => {
   if (!notationId) return false
   const node = nodeById.value.get(entity.modelNodeId)
   if (!node) return false
-  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
+  const componentId = resolveInstanceComponentId({
+    instance: instance ?? null,
+    node,
+    notationId,
+  })
   if (!componentId) return false
   const component = props.components.find(c => c.id === componentId)
   if (!component) return false
@@ -583,13 +589,22 @@ const findDirectContainer = (innerPapNodeId: string): string | null => {
   }, allContainers[0]!)
 }
 
-const getComponentIdByModelNodeId = (modelNodeId: string): string | undefined => {
+const getComponentIdForInstance = (
+  modelNodeId: string,
+  instanceId?: string,
+): string | undefined => {
   const notationId = activeNotationId.value
   if (!notationId) return undefined
   const node = nodeById.value.get(modelNodeId)
   if (!node) return undefined
-  return node.parsedAttrs.notationComponents[notationId]?.componentId
+  const instance = instanceId
+    ? (instanceNodes.value.find(item => item.id === instanceId) ?? null)
+    : null
+  return resolveInstanceComponentId({ instance, node, notationId }) ?? undefined
 }
+
+const getComponentIdByModelNodeId = (modelNodeId: string): string | undefined =>
+  getComponentIdForInstance(modelNodeId)
 
 const findGroupRelations = (
   sourceComponentId: string,
@@ -660,14 +675,17 @@ const tryCreateAutoLink = (draggedPapNodeId: string) => {
   if (!directContainerPapNodeId) return
 
   const targetModelNodeId = entity.modelNodeId
-  const targetComponentId = getComponentIdByModelNodeId(targetModelNodeId)
+  const targetComponentId = getComponentIdForInstance(targetModelNodeId, entity.instanceId)
   if (!targetComponentId) return
 
   const containerEntity = nodeIdToInstance.get(directContainerPapNodeId)
   if (!containerEntity) return
 
   const sourceModelNodeId = containerEntity.modelNodeId
-  const sourceComponentId = getComponentIdByModelNodeId(sourceModelNodeId)
+  const sourceComponentId = getComponentIdForInstance(
+    sourceModelNodeId,
+    containerEntity.instanceId,
+  )
   if (!sourceComponentId) return
 
   // Find all relations with group=true between these component types
@@ -732,17 +750,17 @@ const getPapEdgeLabelText = (edge: Edge): string =>
     : (edge.label?.editableText ?? edge.label?.text ?? '')
 
 // ── Style resolution ──
-const getBoundComponentStyle = (modelNodeId: string): DiagramStyle | undefined => {
-  const node = nodeById.value.get(modelNodeId)
+const getBoundComponentStyle = (instance: DiagramNodeInstance): DiagramStyle | undefined => {
+  const node = nodeById.value.get(instance.modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return undefined
-  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  const componentId = resolveInstanceComponentId({ instance, node, notationId })
   if (!componentId) return undefined
   return componentDiagramStyleById.value.get(componentId)
 }
 
 const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefined => {
-  const bound = getBoundComponentStyle(instance.modelNodeId)
+  const bound = getBoundComponentStyle(instance)
   if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
     return {
       ...(bound ?? {}),
@@ -783,28 +801,29 @@ const getInstanceDimensions = (instance: {
   height?: number
   attrs?: Record<string, unknown>
 }) => {
-  const ds = (instance as DiagramNodeInstance).attrs?.diagramStyle
-    ? getEffectiveStyle(instance as DiagramNodeInstance)
-    : getBoundComponentStyle(instance.modelNodeId)
+  const full = instance as DiagramNodeInstance
+  const ds = full.attrs?.diagramStyle
+    ? getEffectiveStyle(full)
+    : getBoundComponentStyle(full)
   return {
     width: instance.width ?? (typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH),
     height: instance.height ?? (typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT),
   }
 }
 
-const getComponentMinDimensions = (modelNodeId: string) => {
-  const ds = getBoundComponentStyle(modelNodeId)
+const getComponentMinDimensions = (instance: DiagramNodeInstance) => {
+  const ds = getBoundComponentStyle(instance)
   return {
     width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
     height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
   }
 }
 
-function applyMinSizeConstraint(node: DiagramNode, modelNodeId: string) {
+function applyMinSizeConstraint(node: DiagramNode, instance: DiagramNodeInstance) {
   const original = node.getContentMinSize.bind(node)
   node.getContentMinSize = (ctx: CanvasRenderingContext2D) => {
     const contentMin = original(ctx)
-    const compMin = getComponentMinDimensions(modelNodeId)
+    const compMin = getComponentMinDimensions(instance)
     return {
       width: Math.max(contentMin.width, compMin.width),
       height: Math.max(contentMin.height, compMin.height),
@@ -879,7 +898,7 @@ function getNodeScopedPropertyValues(
   const notationId = activeNotationId.value
   const typeProps = node ? { ...node.parsedAttrs.typeProperties } : {}
   if (!node || !notationId) return typeProps
-  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  const componentId = getComponentIdForInstance(modelNodeId, nodeInstanceId)
   if (!componentId) return typeProps
   const diagramScoped = getDiagramScopedNodeValues({
     diagram: props.activeDiagram?.parsedAttrs,
@@ -900,7 +919,7 @@ function getComponentScopedPropertyValuesOnly(
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return {}
-  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  const componentId = getComponentIdForInstance(modelNodeId, nodeInstanceId)
   if (!componentId) return {}
   return getDiagramScopedNodeValues({
     diagram: props.activeDiagram?.parsedAttrs,
@@ -920,11 +939,14 @@ function getNodeTypeCustomProperties(modelNodeId: string): CustomProperty[] {
   return parseEntityAttrs(nodeType.attrs ?? null).customProperties.filter(p => !p.system)
 }
 
-function getNodeComponentCustomProperties(modelNodeId: string): CustomProperty[] {
+function getNodeComponentCustomProperties(
+  modelNodeId: string,
+  nodeInstanceId?: string,
+): CustomProperty[] {
   const node = nodeById.value.get(modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return []
-  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  const componentId = getComponentIdForInstance(modelNodeId, nodeInstanceId)
   if (!componentId) return []
   const component = props.components.find(c => c.id === componentId)
   if (!component) return []
@@ -941,7 +963,7 @@ function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{
   const node = nodeById.value.get(instance.modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return []
-  const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+  const componentId = resolveInstanceComponentId({ instance, node, notationId })
   if (!componentId) return []
   const component = props.components.find(c => c.id === componentId)
   if (!component) return []
@@ -981,7 +1003,7 @@ function buildNodeLabel(
   if (hasTemplate && modelNodeId) {
     const node = nodeById.value.get(modelNodeId)
     const typeProps = getNodeTypeCustomProperties(modelNodeId)
-    const compProps = getNodeComponentCustomProperties(modelNodeId)
+    const compProps = getNodeComponentCustomProperties(modelNodeId, nodeInstanceId)
     const typeValues = node ? { ...node.parsedAttrs.typeProperties } : {}
     const componentValues = getComponentScopedPropertyValuesOnly(modelNodeId, nodeInstanceId)
     displayText = resolveDiagramNodeLabelTemplate(ds!.labelTemplate!, name, {
@@ -1052,7 +1074,7 @@ function resolveInstanceComposite(
 ): InstanceCompositeOptions | undefined {
   if (resolveDiagramNodeShape(ds) !== 'composite') return undefined
 
-  const componentProperties = getNodeComponentCustomProperties(instance.modelNodeId)
+  const componentProperties = getNodeComponentCustomProperties(instance.modelNodeId, instance.id)
   const nodeTypeProperties = getNodeTypeCustomProperties(instance.modelNodeId)
   const nodeEntry = nodeById.value.get(instance.modelNodeId)
   const nodeTypeValues = nodeEntry ? { ...nodeEntry.parsedAttrs.typeProperties } : {}
@@ -1114,7 +1136,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     composite,
     specialRectangleShape,
   })
-  applyMinSizeConstraint(node, instance.modelNodeId)
+  applyMinSizeConstraint(node, instance)
   return node
 }
 
@@ -1213,7 +1235,7 @@ function syncDiagram() {
       if (ds?.labelPlacement) {
         ;(existing as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
       }
-      applyMinSizeConstraint(existing, instance.modelNodeId)
+      applyMinSizeConstraint(existing, instance)
     } else {
       renderer.addNode(createInstanceNode(instance))
     }
@@ -2272,7 +2294,7 @@ function initRenderer(
     const node = nodeById.value.get(entity.modelNodeId)
     const notationId = activeNotationId.value
     if (!node || !notationId) return
-    const componentId = node.parsedAttrs.notationComponents[notationId]?.componentId
+    const componentId = getComponentIdForInstance(entity.modelNodeId, entity.instanceId)
     if (!componentId) return
     const component = props.components.find(c => c.id === componentId)
     if (!component) return

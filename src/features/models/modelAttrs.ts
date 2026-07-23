@@ -30,6 +30,8 @@ export type ScopedCustomValues = Record<string, Record<string, Record<string, un
 
 export type DiagramNodeInstanceAttrs = JsonObject & {
   componentProperties?: ScopedCustomValues
+  /** Visual (notation component) for this diagram instance; falls back to node binding. */
+  notationComponentId?: string
 }
 
 export type DiagramEdgeInstanceAttrs = JsonObject & {
@@ -133,6 +135,13 @@ const toDiagramNodeAttrs = (value: unknown): DiagramNodeInstanceAttrs => {
   if ('componentProperties' in attrs) {
     attrs.componentProperties = toScopedMap(attrs.componentProperties)
   }
+  if (typeof attrs.notationComponentId === 'string') {
+    const trimmed = attrs.notationComponentId.trim()
+    if (trimmed) attrs.notationComponentId = trimmed
+    else delete attrs.notationComponentId
+  } else if ('notationComponentId' in attrs) {
+    delete attrs.notationComponentId
+  }
   return attrs
 }
 
@@ -234,6 +243,25 @@ export const resolveComponentByNodeType = (
   nodeTypeId: string
 ): ComponentResponse[] =>
   components.filter(item => item.notationId === notationId && item.nodeTypeId === nodeTypeId)
+
+export type ResolveInstanceComponentIdInput = {
+  instance?: DiagramNodeInstance | null
+  node?: { parsedAttrs: ModelNodeAttrs } | null
+  notationId: string | null | undefined
+}
+
+/** Prefer per-instance visual binding, then node-level default for the notation. */
+export const resolveInstanceComponentId = (
+  input: ResolveInstanceComponentIdInput,
+): string | null => {
+  const fromInstance = input.instance?.attrs?.notationComponentId
+  if (typeof fromInstance === 'string' && fromInstance.trim().length > 0) {
+    return fromInstance.trim()
+  }
+  const notationId = input.notationId
+  if (!notationId || !input.node) return null
+  return input.node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+}
 
 export const resolveRelationByLinkType = (
   relations: RelationResponse[],

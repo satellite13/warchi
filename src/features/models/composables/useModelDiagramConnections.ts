@@ -2,7 +2,7 @@ import { ref, type ComputedRef, type Ref } from 'vue'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import type { RelationResponse } from '@/types/api'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
-import { createId, parseLinkAttrs } from '../modelAttrs'
+import { createId, parseLinkAttrs, resolveInstanceComponentId } from '../modelAttrs'
 import type { EditorDiagram, EditorLink, ModelEditorState } from '../types'
 
 import {
@@ -105,7 +105,9 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
   const allowedRelationsForConnection = (
     sourceModelNodeId: string,
     targetModelNodeId: string,
-    reportErrors = true
+    reportErrors = true,
+    sourceInstanceId?: string,
+    targetInstanceId?: string,
   ): { relations: RelationResponse[]; sourceIsUntyped: boolean } | null => {
     const notationId = options.activeNotationId.value
     if (!notationId) return null
@@ -113,8 +115,23 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     const targetNode = options.state.value.nodes.find(item => item.id === targetModelNodeId)
     if (!sourceNode || !targetNode) return null
 
-    const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
-    const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
+    const diagram = options.activeDiagram.value
+    const sourceInstance = sourceInstanceId
+      ? (diagram?.parsedAttrs.instances.nodes.find(item => item.id === sourceInstanceId) ?? null)
+      : null
+    const targetInstance = targetInstanceId
+      ? (diagram?.parsedAttrs.instances.nodes.find(item => item.id === targetInstanceId) ?? null)
+      : null
+    const sourceComponentId = resolveInstanceComponentId({
+      instance: sourceInstance,
+      node: sourceNode,
+      notationId,
+    })
+    const targetComponentId = resolveInstanceComponentId({
+      instance: targetInstance,
+      node: targetNode,
+      notationId,
+    })
     if (!sourceComponentId || !targetComponentId) {
       if (reportErrors) setTranslatedUiError('models.noComponentsForLink')
       return null
@@ -348,7 +365,13 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       return
     }
 
-    const allowed = allowedRelationsForConnection(sourceModelNodeId, targetModelNodeId)
+    const allowed = allowedRelationsForConnection(
+      sourceModelNodeId,
+      targetModelNodeId,
+      true,
+      sourceInstanceId,
+      targetInstanceId,
+    )
     if (!allowed) return
     if (allowed.relations.length === 0) {
       setTranslatedUiError('models.noAvailableRelations')

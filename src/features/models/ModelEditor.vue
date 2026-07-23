@@ -11,6 +11,7 @@ import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
   resolveComponentByNodeType,
+  resolveInstanceComponentId,
   resolveRelationByLinkType,
   type DiagramAttrs,
 } from './modelAttrs'
@@ -430,14 +431,17 @@ const availableNodeComponents = computed(() => {
   return resolveComponentByNodeType(state.value.components, notationId, node.nodeTypeId)
 })
 
-/** Только нотация открытой диаграммы: свойства компонента привязаны к экземпляру на диаграмме, без fallback по «первой» нотации из attrs ноды. */
+/** Visual binding for the selected diagram instance (fallback: node default for active notation). */
 const nodeBindingComponentId = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
   if (!notationId || !node) return null
-  return node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+  const instanceId = selectedNodeInstanceId.value
+  const instance = instanceId
+    ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ?? null)
+    : null
+  return resolveInstanceComponentId({ instance, node, notationId })
 })
-
 const selectedNodeComponent = computed(() => {
   const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
@@ -975,6 +979,7 @@ const {
   handleComponentChoiceModalClose,
   finalizeComponentChoiceForDiagram,
   bindNodeComponent,
+  bindInstanceComponent,
   addExistingNodeToDiagram,
   createNodeFromPaletteComponent,
   createDiagramNote,
@@ -1006,6 +1011,18 @@ const {
   setUiError,
   t: key => String(t(key)),
 })
+
+const handleBindNodeComponent = (componentId: string): void => {
+  if (isDiagramReadOnly.value) return
+  const instanceId = selectedNodeInstanceId.value
+  if (instanceId) {
+    bindInstanceComponent(instanceId, componentId)
+    return
+  }
+  if (selectedNode.value) {
+    bindNodeComponent(selectedNode.value, componentId)
+  }
+}
 
 const scheduleSyncDefaultsOnLoad = (): void => {
   const modelId = state.value.modelId
@@ -2187,9 +2204,13 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
       return instance.attrs.diagramStyle as DiagramStyle
     }
     const notationId = activeNotationId.value
-    if (!notationId) return undefined
-    const modelNode = state.value.nodes.find(item => item.id === instance?.modelNodeId)
-    const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
+    if (!notationId || !instance) return undefined
+    const modelNode = state.value.nodes.find(item => item.id === instance.modelNodeId)
+    const componentId = resolveInstanceComponentId({
+      instance,
+      node: modelNode ?? null,
+      notationId,
+    })
     if (!componentId) return undefined
     const component = state.value.components.find(item => item.id === componentId)
     if (!component) return undefined
@@ -2259,7 +2280,11 @@ const restoreStyleFromNotation = () => {
     const modelNode = state.value.nodes.find(
       item => item.id === instance.modelNodeId && !item._isDeleted
     )
-    const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
+    const componentId = resolveInstanceComponentId({
+      instance,
+      node: modelNode ?? null,
+      notationId,
+    })
     const component = componentId
       ? state.value.components.find(
           item => item.id === componentId && item.notationId === notationId
@@ -2683,7 +2708,7 @@ onBeforeUnmount(() => {
               :model-documents="modelDocuments"
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
-              @bind-node-component="(id) => selectedNode && !isDiagramReadOnly && bindNodeComponent(selectedNode, id)"
+              @bind-node-component="handleBindNodeComponent"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
               @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"

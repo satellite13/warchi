@@ -169,6 +169,7 @@ describe('useModelDiagramInstances', () => {
       y: 25,
       width: 200,
       height: 80,
+      attrs: { notationComponentId: 'component-1' },
     })
     expect(markNodeDirty).toHaveBeenCalledWith('existing-node')
   })
@@ -188,7 +189,11 @@ describe('useModelDiagramInstances', () => {
         notationComponents: { 'notation-1': { componentId: 'component-1' } },
       },
     })
-    expect(diagram.value.parsedAttrs.instances.nodes[0]).toMatchObject({ x: 75, y: 95 })
+    expect(diagram.value.parsedAttrs.instances.nodes[0]).toMatchObject({
+      x: 75,
+      y: 95,
+      attrs: { notationComponentId: 'component-1' },
+    })
 
     historyCommands[0]!.undo()
     expect(state.value.nodes).toHaveLength(1)
@@ -208,6 +213,68 @@ describe('useModelDiagramInstances', () => {
     expect(instances.showComponentChoiceModal.value).toBe(false)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(1)
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.modelNodeId).toBe('existing-node')
+    expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
+      'component-2',
+    )
+  })
+
+  it('asks again on second drop so two instances can use different visuals', () => {
+    const { state, diagram, instances } = createHarness()
+    state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1'] = {
+      componentId: 'component-1',
+    }
+
+    instances.addExistingNodeToDiagram('existing-node', 10, 20)
+    expect(instances.showComponentChoiceModal.value).toBe(true)
+    instances.finalizeComponentChoiceForDiagram('component-1')
+
+    instances.addExistingNodeToDiagram('existing-node', 40, 50)
+    expect(instances.showComponentChoiceModal.value).toBe(true)
+    instances.finalizeComponentChoiceForDiagram('component-2')
+
+    expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(2)
+    expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
+      'component-1',
+    )
+    expect(diagram.value.parsedAttrs.instances.nodes[1]?.attrs?.notationComponentId).toBe(
+      'component-2',
+    )
+  })
+
+  it('bindInstanceComponent changes only the selected instance visual', () => {
+    const { state, diagram, instances, markDiagramDirty } = createHarness()
+    state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1'] = {
+      componentId: 'component-1',
+    }
+    diagram.value.parsedAttrs.instances.nodes.push(
+      {
+        id: 'inst-a',
+        modelNodeId: 'existing-node',
+        x: 0,
+        y: 0,
+        attrs: { notationComponentId: 'component-1' },
+      },
+      {
+        id: 'inst-b',
+        modelNodeId: 'existing-node',
+        x: 20,
+        y: 20,
+        attrs: { notationComponentId: 'component-1' },
+      },
+    )
+
+    instances.bindInstanceComponent('inst-b', 'component-2')
+
+    expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
+      'component-1',
+    )
+    expect(diagram.value.parsedAttrs.instances.nodes[1]?.attrs?.notationComponentId).toBe(
+      'component-2',
+    )
+    expect(state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1']?.componentId).toBe(
+      'component-1',
+    )
+    expect(markDiagramDirty).toHaveBeenCalledWith('diagram-1')
   })
 
   it('copies selected notes and pastes independent offset instances', () => {

@@ -81,6 +81,47 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     options.markNodeDirty(node.id)
   }
 
+  const ensureNodeDefaultBinding = (node: EditorNode, componentId: string): void => {
+    const notationId = options.activeNotationId.value
+    if (!notationId) return
+    if (node.parsedAttrs.notationComponents[notationId]?.componentId) return
+    bindNodeComponent(node, componentId)
+  }
+
+  const getComponentDiagramStyle = (componentId: string) => {
+    const notationId = options.activeNotationId.value
+    const component = options.state.value.components.find(
+      item => item.id === componentId && (!notationId || item.notationId === notationId),
+    )
+    return component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
+  }
+
+  const bindInstanceComponent = (instanceId: string, componentId: string): void => {
+    const diagram = options.activeDiagram.value
+    const notationId = options.activeNotationId.value
+    if (!diagram || !notationId) return
+    const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+    if (!instance) return
+    const node = options.state.value.nodes.find(
+      item => item.id === instance.modelNodeId && !item._isDeleted,
+    )
+    if (!node) return
+
+    ensureNodeDefaultBinding(node, componentId)
+
+    if (!instance.attrs) instance.attrs = {}
+    instance.attrs.notationComponentId = componentId
+    const diagramStyle = getComponentDiagramStyle(componentId)
+    if (diagramStyle) {
+      instance.attrs.diagramStyle = deepClone(diagramStyle)
+      if (typeof diagramStyle.width === 'number') instance.width = diagramStyle.width
+      if (typeof diagramStyle.height === 'number') instance.height = diagramStyle.height
+    } else {
+      delete instance.attrs.diagramStyle
+    }
+    options.markDiagramDirty(diagram.id)
+  }
+
   const handleComponentChoiceModalClose = (): void => {
     showComponentChoiceModal.value = false
     pendingTreeNodeDiagramDrop.value = null
@@ -88,6 +129,45 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     componentChoiceOptions.value = []
   }
 
+  const placeExistingNodeInstance = (
+    node: EditorNode,
+    x: number,
+    y: number,
+    componentId: string,
+  ): void => {
+    const diagram = options.activeDiagram.value
+    if (!diagram) return
+    ensureNodeDefaultBinding(node, componentId)
+    const diagramStyle = getComponentDiagramStyle(componentId)
+    const nodeInstance: DiagramNodeInstance = {
+      id: createId(),
+      modelNodeId: node.id,
+      x,
+      y,
+      width: typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160,
+      height: typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56,
+      attrs: {
+        notationComponentId: componentId,
+        ...(diagramStyle ? { diagramStyle: deepClone(diagramStyle) } : {}),
+      },
+    }
+    options.executeDiagramHistoryCommand({
+      execute: () => {
+        if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === nodeInstance.id)) {
+          diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
+        }
+        options.markDiagramDirty(diagram.id)
+      },
+      undo: () => {
+        diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+          item => item.id !== nodeInstance.id,
+        )
+        options.markDiagramDirty(diagram.id)
+      },
+    })
+  }
+
+  /** Ensures node has a default binding when there is exactly one matching component. */
   const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
     const notationId = options.activeNotationId.value
     if (!notationId) return false
@@ -96,7 +176,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     const matchingComponents = resolveComponentByNodeType(
       options.state.value.components,
       notationId,
-      node.nodeTypeId
+      node.nodeTypeId,
     )
     if (matchingComponents.length === 1) {
       bindNodeComponent(node, matchingComponents[0]!.id)
@@ -104,7 +184,10 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     }
     if (matchingComponents.length > 1) {
       componentChoiceNodeId.value = node.id
-      componentChoiceOptions.value = matchingComponents.map(item => ({ id: item.id, name: item.name }))
+      componentChoiceOptions.value = matchingComponents.map(item => ({
+        id: item.id,
+        name: item.name,
+      }))
       showComponentChoiceModal.value = true
       return false
     }
@@ -152,12 +235,12 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         },
         undo: () => {
           diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-            item => item.id !== directoryNoteInstance.id
+            item => item.id !== directoryNoteInstance.id,
           )
           diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
             edge =>
               edge.sourceInstanceId !== directoryNoteInstance.id &&
-              edge.targetInstanceId !== directoryNoteInstance.id
+              edge.targetInstanceId !== directoryNoteInstance.id,
           )
           options.markDiagramDirty(diagram.id)
         },
@@ -166,46 +249,31 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     }
 
     const notationId = options.activeNotationId.value
-    const matchingComponents = notationId
-      ? resolveComponentByNodeType(options.state.value.components, notationId, node.nodeTypeId)
-      : []
-    const opensChoice = !node.parsedAttrs.notationComponents[notationId ?? '']?.componentId &&
-      matchingComponents.length > 1
-    if (!ensureNodeBindingByNodeType(node)) {
-      if (opensChoice) pendingTreeNodeDiagramDrop.value = { modelNodeId, x, y }
+    if (!notationId) {
+      options.setUiError(options.t('models.noMatchingComponent'))
+      return
+    }
+    const matchingComponents = resolveComponentByNodeType(
+      options.state.value.components,
+      notationId,
+      node.nodeTypeId,
+    )
+    if (matchingComponents.length === 0) {
+      options.setUiError(options.t('models.noMatchingComponent'))
+      return
+    }
+    if (matchingComponents.length > 1) {
+      componentChoiceNodeId.value = node.id
+      componentChoiceOptions.value = matchingComponents.map(item => ({
+        id: item.id,
+        name: item.name,
+      }))
+      pendingTreeNodeDiagramDrop.value = { modelNodeId, x, y }
+      showComponentChoiceModal.value = true
       return
     }
 
-    const componentId = notationId
-      ? (node.parsedAttrs.notationComponents[notationId]?.componentId ?? null)
-      : null
-    const component = componentId
-      ? options.state.value.components.find(item => item.id === componentId && item.notationId === notationId)
-      : null
-    const diagramStyle = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
-    const nodeInstance: DiagramNodeInstance = {
-      id: createId(),
-      modelNodeId,
-      x,
-      y,
-      width: typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160,
-      height: typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56,
-      attrs: diagramStyle ? { diagramStyle: deepClone(diagramStyle) } : undefined,
-    }
-    options.executeDiagramHistoryCommand({
-      execute: () => {
-        if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === nodeInstance.id)) {
-          diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
-        }
-        options.markDiagramDirty(diagram.id)
-      },
-      undo: () => {
-        diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-          item => item.id !== nodeInstance.id
-        )
-        options.markDiagramDirty(diagram.id)
-      },
-    })
+    placeExistingNodeInstance(node, x, y, matchingComponents[0]!.id)
   }
 
   const finalizeComponentChoiceForDiagram = (componentId: string): void => {
@@ -215,13 +283,14 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       nodeId !== null
         ? options.state.value.nodes.find(item => item.id === nodeId && !item._isDeleted)
         : undefined
-    if (node) bindNodeComponent(node, componentId)
     showComponentChoiceModal.value = false
     componentChoiceNodeId.value = null
     componentChoiceOptions.value = []
     pendingTreeNodeDiagramDrop.value = null
     if (pending && pending.modelNodeId === nodeId && node) {
-      addExistingNodeToDiagram(pending.modelNodeId, pending.x, pending.y)
+      placeExistingNodeInstance(node, pending.x, pending.y, componentId)
+    } else if (node) {
+      ensureNodeDefaultBinding(node, componentId)
     }
   }
 
@@ -252,7 +321,10 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       y,
       width: typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160,
       height: typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56,
-      attrs: diagramStyle ? { diagramStyle: deepClone(diagramStyle) } : undefined,
+      attrs: {
+        notationComponentId: componentId,
+        ...(diagramStyle ? { diagramStyle: deepClone(diagramStyle) } : {}),
+      },
     }
     let createdDirectoryIds: string[] = []
 
@@ -504,6 +576,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     handleComponentChoiceModalClose,
     finalizeComponentChoiceForDiagram,
     bindNodeComponent,
+    bindInstanceComponent,
     ensureNodeBindingByNodeType,
     addExistingNodeToDiagram,
     createNodeFromPaletteComponent,

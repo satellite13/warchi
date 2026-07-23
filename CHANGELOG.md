@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-07-23
+
+### Fixed
+- Creating a diagram with a notation not yet used in the model no longer leaves an empty palette until reload.
+
 ## [0.10.0] - 2026-07-23
 
 ### Added

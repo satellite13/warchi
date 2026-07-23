@@ -630,6 +630,6 @@ nginx_ws_block_is_valid() {
   block="$(extract_nginx_location_block "$1")" || return 1
   grep -Eq '^[[:space:]]*location[[:space:]]+\^~[[:space:]]+/ws[[:space:]]*\{' \
     <<<"${block}" &&
-    grep -Eq '^[[:space:]]*proxy_pass[[:space:]]+http://arepos-server\.arch\.svc\.cluster\.local:8080;[[:space:]]*$' \
+    grep -Eq '^[[:space:]]*proxy_pass[[:space:]]+http://\$arepos_upstream:8080;[[:space:]]*$' \
       <<<"${block}"
 }

@@ -456,14 +456,14 @@ valid_nginx_config='server {
     if ($request_method = OPTIONS) {
       add_header X-Test nested;
     }
-    proxy_pass http://arepos-server.arch.svc.cluster.local:8080;
+    proxy_pass http://$arepos_upstream:8080;
   }
 }'
 nginx_ws_block_is_valid "${valid_nginx_config}" ||
   fail "brace-aware WebSocket block validator rejected nested directives"
 wrong_nginx_config='server {
   location /api/ {
-    proxy_pass http://arepos-server.arch.svc.cluster.local:8080;
+    proxy_pass http://$arepos_upstream:8080;
   }
   location ^~ /ws {
     return 403;
@@ -916,10 +916,16 @@ assert_contains "${VPS_DIR}/verify.sh" 'deployment/warchi'
 assert_contains "${VPS_DIR}/verify.sh" 'nginx -T'
 assert_contains "${VPS_DIR}/verify.sh" 'extract_nginx_location_block'
 assert_contains "${VPS_DIR}/verify.sh" 'nginx_websocket_block'
-assert_contains "${VPS_DIR}/verify.sh" 'proxy_pass[[:space:]]+http://arepos-server\.arch\.svc\.cluster\.local:8080;'
+assert_contains "${VPS_DIR}/verify.sh" 'proxy_pass[[:space:]]+http://\$arepos_upstream:8080;'
+assert_contains "${VPS_DIR}/verify.sh" 'resolver[[:space:]]+kube-dns\.kube-system\.svc\.cluster\.local'
+assert_contains "${VPS_DIR}/verify.sh" 'set[[:space:]]+\$arepos_upstream[[:space:]]+arepos-server\.arch\.svc\.cluster\.local;'
 assert_contains "${VPS_DIR}/verify.sh" 'proxy_http_version[[:space:]]+1\.1;'
 assert_contains "${VPS_DIR}/verify.sh" 'proxy_set_header[[:space:]]+Upgrade[[:space:]]+\$http_upgrade;'
 assert_contains "${VPS_DIR}/verify.sh" 'proxy_set_header[[:space:]]+Connection[[:space:]]+\$connection_upgrade;'
+assert_contains "${ROOT_DIR}/config/default.conf" 'resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;'
+assert_contains "${ROOT_DIR}/config/default.conf" 'set $arepos_upstream arepos-server.arch.svc.cluster.local;'
+assert_contains "${SITE_REPO}/config/default.conf" 'resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;'
+assert_contains "${SITE_REPO}/config/default.conf" 'set $arepos_upstream arepos-server.arch.svc.cluster.local;'
 if grep -Eq '^[[:space:]]*curl[[:space:]]' \
   "${VPS_DIR}/remote-deploy.sh" "${VPS_DIR}/verify.sh"; then
   fail "production network calls must use bounded_curl"

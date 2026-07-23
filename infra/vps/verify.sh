@@ -130,7 +130,7 @@ nginx_websocket_block="$(
 }
 grep -Eq '^[[:space:]]*location[[:space:]]+\^~[[:space:]]+/ws[[:space:]]*\{' \
   <<<"${nginx_websocket_block}" &&
-  grep -Eq '^[[:space:]]*proxy_pass[[:space:]]+http://arepos-server\.arch\.svc\.cluster\.local:8080;[[:space:]]*$' \
+  grep -Eq '^[[:space:]]*proxy_pass[[:space:]]+http://\$arepos_upstream:8080;[[:space:]]*$' \
     <<<"${nginx_websocket_block}" &&
   grep -Eq '^[[:space:]]*proxy_http_version[[:space:]]+1\.1;[[:space:]]*$' \
     <<<"${nginx_websocket_block}" &&
@@ -139,6 +139,13 @@ grep -Eq '^[[:space:]]*location[[:space:]]+\^~[[:space:]]+/ws[[:space:]]*\{' \
   grep -Eq '^[[:space:]]*proxy_set_header[[:space:]]+Connection[[:space:]]+\$connection_upgrade;[[:space:]]*$' \
     <<<"${nginx_websocket_block}" || {
   printf 'Active warchi nginx config lacks the required WebSocket proxy route\n' >&2
+  exit 1
+}
+grep -Eq '^[[:space:]]*resolver[[:space:]]+kube-dns\.kube-system\.svc\.cluster\.local[[:space:]]+valid=10s[[:space:]]+ipv6=off;' \
+  <<<"${nginx_runtime_config}" &&
+  grep -Eq '^[[:space:]]*set[[:space:]]+\$arepos_upstream[[:space:]]+arepos-server\.arch\.svc\.cluster\.local;' \
+    <<<"${nginx_runtime_config}" || {
+  printf 'Active warchi nginx config lacks dynamic arepos upstream DNS re-resolution\n' >&2
   exit 1
 }
 

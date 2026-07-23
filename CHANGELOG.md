@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-23
+
+### Added
+- Notation export/import packages used custom shapes into the catalog on the target instance (select works after transfer; requires arepos-server 0.6.1 for API import).
+- Notation visuals on model diagrams are bound per diagram instance instead of per model node.
+
+### Fixed
+- Creating a notation component/relation no longer collides on name+version; tree rename supported.
+- nginx re-resolves the arepos upstream via kube-dns so `/api` and `/ws` keep working after backend pod IP changes.
+
 ## [0.9.1] - 2026-07-21
 
 ### Added

@@ -762,7 +762,8 @@ export function useNotationEditor(
           throw new Error(
             t('notations.saveErrorShapes', {
               message: error instanceof Error ? error.message : String(error),
-            })
+            }),
+            { cause: error },
           )
         }
       }

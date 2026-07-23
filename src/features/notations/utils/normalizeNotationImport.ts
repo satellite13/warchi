@@ -1,3 +1,4 @@
+import type { ComposerTranslation } from 'vue-i18n'
 import {
   createId,
   parseEntityAttrs,
@@ -27,7 +28,7 @@ export type NotationImportResult = {
 export type NormalizeNotationImportContext = {
   baseOwnerId: string
   baseNotationId: string
-  t: (key: string, params?: Record<string, unknown>) => string
+  t: ComposerTranslation
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -39,7 +40,12 @@ const toStringOr = (value: unknown, fallback: string): string =>
 const toObjectArray = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter(isRecord) : []
 
-const hasExportWrapper = (raw: unknown): boolean =>
+type NotationExportWrapper = Record<string, unknown> & {
+  format: string
+  state: Record<string, unknown>
+}
+
+const hasExportWrapper = (raw: unknown): raw is NotationExportWrapper =>
   isRecord(raw) && typeof raw.format === 'string' && isRecord(raw.state)
 
 const normalizeDiagramLayer = (value: unknown): EditorDiagramLayer => {

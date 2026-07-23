@@ -20,12 +20,12 @@ export function entityNameVersionKey(name: string, version: string): string {
  * Returns an existing non-deleted entity that already uses the same name+version,
  * optionally excluding one id (e.g. the entity being renamed).
  */
-export function findNameVersionConflict<T extends NamedVersionedEntity>(
-  entities: T[],
+export function findNameVersionConflict(
+  entities: NamedVersionedEntity[],
   name: string,
   version: string,
   excludeId?: string,
-): T | undefined {
+): NamedVersionedEntity | undefined {
   const key = entityNameVersionKey(name, version)
   if (!key.replace('\u0000', '')) return undefined
   return entities.find(

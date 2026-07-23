@@ -603,9 +603,6 @@ const getComponentIdForInstance = (
   return resolveInstanceComponentId({ instance, node, notationId }) ?? undefined
 }
 
-const getComponentIdByModelNodeId = (modelNodeId: string): string | undefined =>
-  getComponentIdForInstance(modelNodeId)
-
 const findGroupRelations = (
   sourceComponentId: string,
   targetComponentId: string

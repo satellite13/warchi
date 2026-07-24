@@ -151,10 +151,11 @@ For the active diagram, the **Diagram Info** action is available in the toolbar.
 
 ### Relation matrix
 
-The model editor header includes **Relation matrix**. It opens a separate matrix screen for links between the model's node types:
+The model editor header includes **Relation matrix**. It opens a separate matrix screen for links between the model's node types (this is **not** the notation editor **Rules matrix**: that one edits allowed component pairs; this one audits links already present in the model).
 
 - **Without notation (types)** — the vertical and horizontal axes use **node types**; the Relations axis lists **link types** in the model.
-- With a **notation** selected, the vertical and horizontal axes still use **node types**, while Relations lists **link types** used by that notation's relations. Links are placed by source/target node types and link type; `notationComponents` / `notationRelations` attrs bindings are **ignored**. There is no "Unmapped" row or column in this mode.
+- With a **notation** selected, the vertical and horizontal axes still use **node types**, while Relations lists **link types** used by that notation's relations. A link is placed by source/target **node types** and by **link type** id — not by relation name and not by per-instance component/relation bindings. Names such as `relationship` and `flow` are not matched to each other by themselves.
+- Links whose link type is **not used** by any relation of the selected notation are **excluded** from the matrix (outside that notation's vocabulary).
 - Cells **allowed by the selected notation's relation rules** are visually highlighted.
 - **Allowed by rules only** (when a notation is selected) keeps only those cells; **Hide empty rows and columns** removes axes with no links.
 - Filters for axes and link types, plus a heatmap by link count per cell.

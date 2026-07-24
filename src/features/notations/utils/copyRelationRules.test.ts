@@ -8,6 +8,16 @@ const rule = (
 ): EditorRelationRule => ({ ...partial })
 
 describe('copyRelationRulesFromComponent', () => {
+  it('returns changed:false when source and target are the same', () => {
+    const rules: EditorRelationRule[] = [
+      rule({ id: '1', fromComponentId: 'A', toComponentId: 'C', allowedRelationIds: ['r1'] }),
+    ]
+    const before = structuredClone(rules)
+    const result = copyRelationRulesFromComponent(rules, 'A', 'A', 'merge', () => 'new')
+    expect(result).toEqual({ changed: false })
+    expect(rules).toEqual(before)
+  })
+
   it('returns changed:false and does not mutate when source has no outbound rules', () => {
     const rules: EditorRelationRule[] = [
       rule({ id: '1', fromComponentId: 'B', toComponentId: 'C', allowedRelationIds: ['r1'] }),

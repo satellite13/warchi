@@ -131,11 +131,20 @@ async function mapInChunks<T, R>(items: T[], mapFn: (item: T) => R): Promise<R[]
   return mapped
 }
 
+export type LoadModelEditorShellOptions = {
+  /** Default false for editor tree; matrix needs true to read instance-scoped props. */
+  diagramIncludeAttrs?: boolean
+}
+
 /** Critical path for the tree: model + nodes + light diagrams (no attrs) + node types. */
-export async function loadModelEditorShell(modelId: string): Promise<LoadModelEditorDataResult> {
+export async function loadModelEditorShell(
+  modelId: string,
+  options?: LoadModelEditorShellOptions
+): Promise<LoadModelEditorDataResult> {
   const listQuery = listParams()
   const nodeTypesQuery = listParams()
   nodeTypesQuery.set('modelId', modelId)
+  const diagramIncludeAttrs = options?.diagramIncludeAttrs === true
 
   const [modelResult, modelsResult, nodes, diagramResponses, notationsResult, nodeTypesResult] =
     await Promise.all([
@@ -143,7 +152,7 @@ export async function loadModelEditorShell(modelId: string): Promise<LoadModelEd
       apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
       fetchAllByModelId<NodeResponse>('/nodes', modelId, PAGE_SIZE_MODEL_NODES),
       fetchAllByModelId<DiagramResponse>('/diagrams', modelId, PAGE_SIZE_MODEL_DIAGRAMS, {
-        includeAttrs: 'false',
+        includeAttrs: diagramIncludeAttrs ? 'true' : 'false',
       }),
       apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
       // Needed immediately so Directory folders show expand toggles before catalog finishes.
@@ -152,7 +161,9 @@ export async function loadModelEditorShell(modelId: string): Promise<LoadModelEd
 
   const model = requireModel(modelResult)
   // includeAttrs=false → attrs null → _attrsPending; hydrate on open via GET /diagrams/{id}
-  const diagrams = diagramResponses.map(row => toEditorDiagram(row))
+  const diagrams = diagramResponses.map(row =>
+    toEditorDiagram(row, diagramIncludeAttrs ? { attrsPending: false } : undefined)
+  )
   const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
   // Attrs parse is CPU-heavy on large models — yield so the first paint stays responsive.
   const editorNodes = await mapInChunks(nodes, toEditorNode)
@@ -243,8 +254,11 @@ export async function loadModelEditorExtras(
 }
 
 /** Full blocking load (tests / callers that need everything at once). */
-export async function loadModelEditorData(modelId: string): Promise<LoadModelEditorDataResult> {
-  const shell = await loadModelEditorShell(modelId)
+export async function loadModelEditorData(
+  modelId: string,
+  options?: LoadModelEditorShellOptions
+): Promise<LoadModelEditorDataResult> {
+  const shell = await loadModelEditorShell(modelId, options)
   const extras = await loadModelEditorExtras(modelId, shell.loadedNotationIds)
   return {
     ...shell,

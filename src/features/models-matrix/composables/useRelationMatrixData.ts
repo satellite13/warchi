@@ -3,6 +3,10 @@ import type { ModelData } from "@/types/entities"
 import type { ModelEditorState } from "@/features/models/types"
 import { loadModelEditorData } from "@/features/models/composables/modelEditorLoadModel"
 
+/**
+ * Relation matrix needs diagram instance snapshots for component/relation
+ * custom properties (editor writes there, not to legacy node/link attrs).
+ */
 export function useRelationMatrixData() {
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -14,7 +18,7 @@ export function useRelationMatrixData() {
     loading.value = true
     error.value = null
     try {
-      const result = await loadModelEditorData(modelId)
+      const result = await loadModelEditorData(modelId, { diagramIncludeAttrs: true })
       model.value = result.model
       state.value = result.state
     } catch (err) {
@@ -34,4 +38,3 @@ export function useRelationMatrixData() {
     load,
   }
 }
-

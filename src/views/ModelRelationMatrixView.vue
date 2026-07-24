@@ -11,6 +11,10 @@ import { useRelationMatrixData } from "@/features/models-matrix/composables/useR
 import { UNMAPPED_ENTITY_ID, type RelationMatrixFilters as RelationMatrixFilterState } from "@/features/models-matrix/types"
 import type { NotationMetaResponse } from "@/types/api"
 import { buildRelationMatrix, relationMatrixCellKey } from "@/features/models-matrix/utils/buildRelationMatrix"
+import {
+  resolveMatrixLinkRelationProperties,
+  resolveMatrixNodeComponentProperties,
+} from "@/features/models-matrix/utils/resolveMatrixScopedProperties"
 import { downloadRelationMatrixCsv } from "@/features/models-matrix/utils/relationMatrixCsv"
 import { exportRelationMatrixPng } from "@/features/models-matrix/utils/relationMatrixPng"
 import RelationMatrixFilters from "@/features/models-matrix/components/RelationMatrixFilters.vue"
@@ -152,7 +156,12 @@ const verticalInfo = computed(() => {
     const node = currentState.nodes.find(item => item.id === nodeId)
     if (!node) return {}
     if (notationId && rowId !== UNMAPPED_ENTITY_ID) {
-      return node.parsedAttrs.componentProperties[notationId]?.[rowId] ?? {}
+      return resolveMatrixNodeComponentProperties({
+        node,
+        notationId,
+        componentId: rowId,
+        diagrams: currentState.diagrams,
+      })
     }
     return node.parsedAttrs.typeProperties ?? {}
   })
@@ -185,7 +194,12 @@ const horizontalInfo = computed(() => {
     const node = currentState.nodes.find(item => item.id === nodeId)
     if (!node) return {}
     if (notationId && columnId !== UNMAPPED_ENTITY_ID) {
-      return node.parsedAttrs.componentProperties[notationId]?.[columnId] ?? {}
+      return resolveMatrixNodeComponentProperties({
+        node,
+        notationId,
+        componentId: columnId,
+        diagrams: currentState.diagrams,
+      })
     }
     return node.parsedAttrs.typeProperties ?? {}
   })
@@ -226,8 +240,13 @@ const selectedLinkDetails = computed(() => {
   return cell.items.map(item => {
     const link = linkById.get(item.linkId)
     const customPropertiesRaw =
-      notationId && link
-        ? (link.parsedAttrs.relationProperties[notationId]?.[item.relationId] ?? {})
+      notationId && link && item.relationId !== UNMAPPED_ENTITY_ID
+        ? resolveMatrixLinkRelationProperties({
+            link,
+            notationId,
+            relationId: item.relationId,
+            diagrams: currentState.diagrams,
+          })
         : {}
     const customProperties = Object.entries(customPropertiesRaw).map(([key, value]) => ({
       key,

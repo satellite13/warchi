@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-07-24
+
+### Fixed
+- Diagram palette Container inline label is persisted on save (was lost after reload).
+
 ## [0.10.2] - 2026-07-24
 
 ### Added

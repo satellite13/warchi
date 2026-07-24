@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-07-24
+
+### Added
+- Notation editor relation-rules matrix: edit allowed relations by component pair (filters, heatmap, copy/paste, keyboard navigation).
+
 ## [0.10.1] - 2026-07-23
 
 ### Fixed

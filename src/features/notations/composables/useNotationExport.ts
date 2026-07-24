@@ -62,6 +62,7 @@ export function useNotationExport(
   const importShapeResolutions = ref<ShapeImportResolution[]>([]);
   const importCatalogShapes = ref<NodeShapeResponse[]>([]);
   const pendingImportRaw = ref<unknown>(null);
+  const importInFlight = ref(false);
 
   const buildExportState = (): NotationEditorState => {
     const source = cloneJson(state.value);
@@ -178,6 +179,7 @@ export function useNotationExport(
   };
 
   const triggerNotationImport = () => {
+    if (importInFlight.value) return;
     const input = importNotationInputRef.value;
     if (!input) return;
     input.value = "";
@@ -254,7 +256,15 @@ export function useNotationExport(
   const confirmImportShapeResolve = () => {
     const raw = pendingImportRaw.value;
     if (raw === null) return;
-    continueAfterShapeResolve(raw, importShapeResolutions.value);
+    try {
+      continueAfterShapeResolve(raw, importShapeResolutions.value);
+    } catch (error) {
+      clearPendingImport();
+      saveError.value =
+        error instanceof Error
+          ? t("notations.importError", {message: error.message})
+          : t("notations.importReadError");
+    }
   };
 
   const cancelImportShapeResolve = () => {
@@ -265,6 +275,8 @@ export function useNotationExport(
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    if (importInFlight.value) return;
+    importInFlight.value = true;
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
@@ -312,6 +324,7 @@ export function useNotationExport(
           ? t("notations.importError", {message: error.message})
           : t("notations.importReadError");
     } finally {
+      importInFlight.value = false;
       resetImportInput();
     }
   };

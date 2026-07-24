@@ -60,6 +60,23 @@ export function isContainerInstance(instance: DiagramNodeInstance): boolean {
   return instance.attrs?.isContainer === true
 }
 
+export function getContainerLabel(instance: DiagramNodeInstance): string {
+  const value = instance.attrs?.containerLabel
+  return typeof value === 'string' ? value : ''
+}
+
+/** Persist inline-edited canvas text onto a diagram-only container instance. */
+export function applyContainerInlineLabel(
+  instance: DiagramNodeInstance,
+  labelText: string
+): boolean {
+  if (!isContainerInstance(instance)) return false
+  if (labelText === getContainerLabel(instance)) return false
+  if (!instance.attrs) instance.attrs = {}
+  instance.attrs.containerLabel = labelText
+  return true
+}
+
 export function isEdgeAnchorInstance(instance: DiagramNodeInstance): boolean {
   return instance.attrs?.isEdgeAnchor === true
 }

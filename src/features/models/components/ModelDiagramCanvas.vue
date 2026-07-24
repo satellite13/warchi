@@ -74,6 +74,8 @@ import {
   resolveCompositeBoundIconName,
 } from '@/features/diagram-style/utils/compositeBindings'
 import {
+  applyContainerInlineLabel,
+  getContainerLabel,
   getHostEdgeInstanceId,
   isContainerInstance,
   isEdgeAnchorInstance,
@@ -780,11 +782,6 @@ const getNoteText = (instance: DiagramNodeInstance): string => {
   return typeof value === 'string' && value.trim().length > 0 ? value : t('diagram.newNote')
 }
 
-const getContainerLabel = (instance: DiagramNodeInstance): string => {
-  const value = instance.attrs?.containerLabel
-  return typeof value === 'string' ? value : ''
-}
-
 const getInstanceDisplayName = (instance: DiagramNodeInstance): string => {
   if (isNoteInstance(instance)) return getNoteText(instance)
   if (isContainerInstance(instance)) return getContainerLabel(instance)
@@ -1163,7 +1160,11 @@ function syncDiagram() {
       instanceId: instance.id,
     })
     const nodeName = getInstanceDisplayName(instance)
-    if (!isNoteInstance(instance) && !isEdgeAnchorInstance(instance)) {
+    if (
+      !isNoteInstance(instance) &&
+      !isContainerInstance(instance) &&
+      !isEdgeAnchorInstance(instance)
+    ) {
       nextSyncedNames.set(papNodeId, nodeName)
     }
 
@@ -1613,7 +1614,7 @@ function getCompositeRoleNameText(node: CompositeNode): string | null {
 function detectLabelChanges() {
   if (!renderer) return
   const next = cloneDiagramAttrs()
-  let notesChanged = false
+  let diagramOnlyLabelsChanged = false
   const pendingNodeNameChanges = new Map<string, string>()
   for (const [papNodeId, entity] of nodeIdToInstance) {
     const papNode = renderer.getNode(papNodeId)
@@ -1627,7 +1628,13 @@ function detectLabelChanges() {
       if (labelText !== getNoteText(instance)) {
         if (!instance.attrs) instance.attrs = {}
         instance.attrs.noteText = labelText
-        notesChanged = true
+        diagramOnlyLabelsChanged = true
+      }
+      continue
+    }
+    if (instance && isContainerInstance(instance)) {
+      if (applyContainerInlineLabel(instance, labelText)) {
+        diagramOnlyLabelsChanged = true
       }
       continue
     }
@@ -1671,7 +1678,7 @@ function detectLabelChanges() {
       }
     }
   }
-  if (notesChanged) {
+  if (diagramOnlyLabelsChanged) {
     emit('updateDiagram', next)
   }
 }

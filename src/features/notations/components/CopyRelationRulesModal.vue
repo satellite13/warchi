@@ -9,6 +9,7 @@ const props = defineProps<{
   componentOptions: Array<{ id: string; label: string }>
   componentIconMap?: Map<string, string>
   buildIconUrl?: (iconName: string) => string
+  error?: string
 }>()
 
 const emit = defineEmits<{
@@ -20,7 +21,9 @@ const { t } = useI18n()
 
 const sourceComponentId = ref('')
 const mode = ref<CopyRelationRulesMode>('merge')
-const error = ref('')
+const localError = ref('')
+
+const displayError = computed(() => props.error || localError.value)
 
 watch(
   () => props.componentOptions,
@@ -32,12 +35,23 @@ watch(
   { immediate: true },
 )
 
+watch([sourceComponentId, mode], () => {
+  localError.value = ''
+})
+
+watch(
+  () => props.error,
+  parentError => {
+    if (parentError) localError.value = ''
+  },
+)
+
 const canConfirm = computed(() => Boolean(sourceComponentId.value))
 
 const submit = () => {
-  error.value = ''
+  localError.value = ''
   if (!sourceComponentId.value) {
-    error.value = t('diagram.copyLinkRulesSelectSource')
+    localError.value = t('diagram.copyLinkRulesSelectSource')
     return
   }
   emit('confirm', { sourceComponentId: sourceComponentId.value, mode: mode.value })
@@ -99,7 +113,7 @@ const iconUrlFor = (id: string): string | undefined => {
         </label>
       </fieldset>
 
-      <div v-if="error" class="copy-rules-modal__error">{{ error }}</div>
+      <div v-if="displayError" class="copy-rules-modal__error">{{ displayError }}</div>
     </div>
 
     <template #footer>

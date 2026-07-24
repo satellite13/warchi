@@ -2,9 +2,12 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CollapseSection from './CollapseSection.vue'
+import CopyRelationRulesModal from './CopyRelationRulesModal.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import MultiSelect from '@/components/forms/MultiSelect.vue'
 import { createId } from '@/domain/attrs/notationAttrs'
+import { copyRelationRulesFromComponent } from '../utils/copyRelationRules'
+import type { CopyRelationRulesMode } from '../utils/copyRelationRules'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
 
 const props = defineProps<{
@@ -20,6 +23,48 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const relationRulesExpanded = ref(false)
+const showCopyModal = ref(false)
+const copyError = ref('')
+
+const copySourceOptions = computed(() =>
+  componentOptions.value.filter(o => o.id !== props.selectedItem?.id),
+)
+
+const openCopyModal = () => {
+  copyError.value = ''
+  showCopyModal.value = true
+}
+
+const closeCopyModal = () => {
+  showCopyModal.value = false
+  copyError.value = ''
+}
+
+const applyCopyFrom = (payload: {
+  sourceComponentId: string
+  mode: CopyRelationRulesMode
+}) => {
+  if (!props.selectedItem || 'linkTypeId' in props.selectedItem) return
+  const targetId = props.selectedItem.id
+  let changed = false
+  props.onMutateRelationRules?.(rules => {
+    const result = copyRelationRulesFromComponent(
+      rules,
+      payload.sourceComponentId,
+      targetId,
+      payload.mode,
+      createId,
+    )
+    changed = result.changed
+  })
+  if (!changed) {
+    copyError.value = t('diagram.copyLinkRulesEmpty')
+    return
+  }
+  closeCopyModal()
+  relationRulesExpanded.value = true
+}
+
 const UNTYPED_NAMES = new Set(['diagram only'])
 
 const normalizeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -159,15 +204,27 @@ const removeRelationRule = (rule: EditorRelationRule) => {
     @toggle="toggleRelationRulesCollapse"
   >
     <template #header-extra>
-      <button
-        type="button"
-        class="link-btn link-btn--icon"
-        :title="t('diagram.addLinkRule')"
-        :aria-label="t('diagram.addLinkRule')"
-        @click.stop="addRelationRule"
-      >
-        <UiIcon name="add" />
-      </button>
+      <div class="rules-section__header-actions">
+        <button
+          type="button"
+          class="link-btn link-btn--icon"
+          :title="t('diagram.copyLinkRules')"
+          :aria-label="t('diagram.copyLinkRules')"
+          :disabled="copySourceOptions.length === 0"
+          @click.stop="openCopyModal"
+        >
+          <UiIcon name="content_copy" />
+        </button>
+        <button
+          type="button"
+          class="link-btn link-btn--icon"
+          :title="t('diagram.addLinkRule')"
+          :aria-label="t('diagram.addLinkRule')"
+          @click.stop="addRelationRule"
+        >
+          <UiIcon name="add" />
+        </button>
+      </div>
     </template>
 
     <div v-if="selectedComponentRelationRules.length === 0" class="rules-section__empty">
@@ -227,6 +284,16 @@ const removeRelationRule = (rule: EditorRelationRule) => {
       </div>
     </div>
   </CollapseSection>
+
+  <CopyRelationRulesModal
+    v-if="showCopyModal"
+    :component-options="copySourceOptions"
+    :component-icon-map="componentIconMap"
+    :build-icon-url="buildIconUrl"
+    :error="copyError"
+    @close="closeCopyModal"
+    @confirm="applyCopyFrom"
+  />
 </template>
 
 <style scoped>
@@ -324,6 +391,17 @@ const removeRelationRule = (rule: EditorRelationRule) => {
   background: var(--primary-soft);
   border-color: var(--primary);
   color: var(--primary);
+}
+
+.rules-section__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.link-btn--icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Compact overrides for SearchableSelect inside rows */

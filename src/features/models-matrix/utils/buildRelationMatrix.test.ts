@@ -171,7 +171,7 @@ describe('buildRelationMatrix', () => {
       linkTypes,
       components,
       relations,
-      notations: [] as const,
+      notations: [],
     }
 
     const withoutRule = buildRelationMatrix({ ...input, relationRules: [] })

@@ -1,7 +1,7 @@
 # Model relation matrix — notation mode by types/rules — Design Spec
 
 Date: 2026-07-25  
-Status: approved (pending user review of this file)  
+Status: approved  
 Repos: warchi  
 Related:
 

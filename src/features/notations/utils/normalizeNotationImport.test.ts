@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { OutlineSegment } from '@/domain/attrs/notationAttrs'
 import {
   analyzeNotationImportLocalOnly,
+  collectImportShapesFromRaw,
   normalizeNotationImport,
 } from './normalizeNotationImport'
 import type { NotationEditorState } from '../types'
@@ -108,6 +109,53 @@ describe('normalizeNotationImport', () => {
     expect(pendingShapes.map((shape) => shape.id).sort()).toEqual(['s1', 's2'])
     expect(pendingShapes.find((shape) => shape.id === 's1')?.name).toBe('Pack shape')
     expect(pendingShapes.find((shape) => shape.id === 's2')?.name).toBe('Imported shape')
+  })
+
+  it('collectImportShapesFromRaw matches normalize pendingShapes', () => {
+    const raw = {
+      format: 'warchi-notation-export',
+      version: 2,
+      exportedAt: '2026-07-23T00:00:00.000Z',
+      notation: { id: 'file-notation', name: 'File', version: '1.0.0' },
+      state: {
+        notationId: 'file-notation',
+        ownerId: 'file-owner',
+        nodeTypes: [{ id: 'nt1', name: 'Node type', parsedAttrs: {} }],
+        linkTypes: [{ id: 'lt1', name: 'Link type', parsedAttrs: {} }],
+        components: [
+          {
+            id: 'c1',
+            name: 'Component',
+            nodeTypeId: 'nt1',
+            parsedAttrs: {
+              tags: [],
+              customProperties: [],
+              diagramStyle: { customShapeId: 's1', customOutline: rectOutline },
+            },
+          },
+          {
+            id: 'c2',
+            name: 'Other',
+            nodeTypeId: 'nt1',
+            parsedAttrs: {
+              tags: [],
+              customProperties: [],
+              diagramStyle: { customShapeId: 's2', customOutline: otherOutline },
+            },
+          },
+        ],
+        relations: [],
+        relationRules: [],
+        diagramLayer: { version: 1, nodes: [], edges: [] },
+      },
+      shapes: [
+        { id: 's1', name: 'Pack shape', outline: JSON.stringify(rectOutline) },
+      ],
+    }
+
+    const fromHelper = collectImportShapesFromRaw(raw, context.t)
+    const { pendingShapes } = normalizeNotationImport(raw, context)
+    expect(fromHelper.map((s) => s.id).sort()).toEqual(pendingShapes.map((s) => s.id).sort())
   })
 
   it('synthesizes pending shapes for v1 bare state with customOutline only', () => {

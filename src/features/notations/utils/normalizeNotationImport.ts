@@ -162,6 +162,29 @@ function parseExportedShapesFromRaw(raw: unknown): ExportedNodeShape[] {
   return shapes
 }
 
+export function collectImportShapes(
+  raw: unknown,
+  components: EditorComponent[]
+): ExportedNodeShape[] {
+  const parsedShapes = parseExportedShapesFromRaw(raw)
+  const activeComponents = components.filter((c) => !c._isDeleted)
+  return mergeShapePackage(parsedShapes.map(stripShapeDocumentFileId), activeComponents)
+}
+
+export function collectImportShapesFromRaw(
+  raw: unknown,
+  t: ComposerTranslation
+): ExportedNodeShape[] {
+  const { pendingShapes } = normalizeNotationImport(raw, {
+    baseOwnerId: 'preview',
+    baseNotationId: 'preview',
+    t,
+    baseState: createEmptyEditorState(),
+    localOnlyPolicy: 'keep',
+  })
+  return pendingShapes
+}
+
 function claimByName<T extends { id: string; name: string; _isDeleted?: boolean }>(
   pool: T[],
   claimed: Set<string>,
@@ -539,12 +562,7 @@ export function normalizeNotationImport(
   // Remap diagram element ids that refer to imported component ids.
   const diagramIdRemap = new Map(componentIdMap)
 
-  const parsedShapes = parseExportedShapesFromRaw(raw)
-  const activeComponents = components.filter((c) => !c._isDeleted)
-  const pendingShapes = mergeShapePackage(
-    parsedShapes.map(stripShapeDocumentFileId),
-    activeComponents
-  )
+  const pendingShapes = collectImportShapes(raw, components)
 
   return {
     state: {

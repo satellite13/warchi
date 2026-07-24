@@ -5,77 +5,66 @@ import {
   type RelationMatrixLinkItem,
   type RelationMatrixMode,
   type RelationMatrixResult,
-  UNMAPPED_ENTITY_ID,
-} from "../types"
+  type RelationMatrixRuleInput,
+} from '../types'
+import { isPairAllowedByNotationRules } from './isPairAllowedByNotationRules'
 
 const toCellKey = (rowId: string, columnId: string): string => `${rowId}:::${columnId}`
 
 const sortOptions = (items: RelationMatrixEntityOption[]): RelationMatrixEntityOption[] =>
-  [...items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+  [...items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 
 function resolveMode(notationId: string | null): RelationMatrixMode {
-  return notationId ? "notation" : "types"
+  return notationId ? 'notation' : 'types'
 }
 
-function buildRowAndColumnOptions(input: BuildRelationMatrixInput, mode: RelationMatrixMode): RelationMatrixEntityOption[] {
-  const unmappedLabel = input.labels?.unmapped ?? "Unmapped"
-  if (mode === "notation") {
-    const notationId = input.filters.notationId
-    const options = input.components
-      .filter(component => component.notationId === notationId)
-      .map<RelationMatrixEntityOption>(component => ({
-        id: component.id,
-        name: component.name,
-        kind: "row",
-      }))
-    return sortOptions([
-      ...options,
-      {
-        id: UNMAPPED_ENTITY_ID,
-        name: unmappedLabel,
-        kind: "row",
-        isUnmapped: true,
-      },
-    ])
-  }
-
-  const options = input.nodeTypes.map<RelationMatrixEntityOption>(nodeType => ({
-    id: nodeType.id,
-    name: nodeType.name,
-    kind: "row",
-  }))
-  return sortOptions(options)
+function buildRowAndColumnOptions(input: BuildRelationMatrixInput): RelationMatrixEntityOption[] {
+  return sortOptions(
+    input.nodeTypes.map<RelationMatrixEntityOption>(nodeType => ({
+      id: nodeType.id,
+      name: nodeType.name,
+      kind: 'row',
+    }))
+  )
 }
 
-function buildRelationOptions(input: BuildRelationMatrixInput, mode: RelationMatrixMode): RelationMatrixEntityOption[] {
-  const unmappedLabel = input.labels?.unmapped ?? "Unmapped"
-  if (mode === "notation") {
-    const notationId = input.filters.notationId
-    const options = input.relations
-      .filter(relation => relation.notationId === notationId)
-      .map<RelationMatrixEntityOption>(relation => ({
-        id: relation.id,
-        name: relation.name,
-        kind: "relation",
-      }))
-    return sortOptions([
-      ...options,
-      {
-        id: UNMAPPED_ENTITY_ID,
-        name: unmappedLabel,
-        kind: "relation",
-        isUnmapped: true,
-      },
-    ])
+function buildRelationOptions(
+  input: BuildRelationMatrixInput,
+  mode: RelationMatrixMode
+): RelationMatrixEntityOption[] {
+  if (mode === 'notation') {
+    const notationId = input.filters.notationId!
+    const linkTypeIds = new Set(
+      input.relations.filter(relation => relation.notationId === notationId).map(relation => relation.linkTypeId)
+    )
+    return sortOptions(
+      input.linkTypes
+        .filter(linkType => linkTypeIds.has(linkType.id))
+        .map<RelationMatrixEntityOption>(linkType => ({
+          id: linkType.id,
+          name: linkType.name,
+          kind: 'relation',
+        }))
+    )
   }
 
   return sortOptions(
     input.linkTypes.map<RelationMatrixEntityOption>(linkType => ({
       id: linkType.id,
       name: linkType.name,
-      kind: "relation",
+      kind: 'relation',
     }))
   )
+}
+
+function notationLinkTypeIds(input: BuildRelationMatrixInput, notationId: string): Set<string> {
+  return new Set(
+    input.relations.filter(relation => relation.notationId === notationId).map(relation => relation.linkTypeId)
+  )
+}
+
+function activeRelationRules(rules: RelationMatrixRuleInput[]): RelationMatrixRuleInput[] {
+  return rules.filter(rule => !rule._isDeleted)
 }
 
 function optionNameById(options: RelationMatrixEntityOption[]): Map<string, string> {
@@ -83,43 +72,27 @@ function optionNameById(options: RelationMatrixEntityOption[]): Map<string, stri
 }
 
 function toColumnOptions(rows: RelationMatrixEntityOption[]): RelationMatrixEntityOption[] {
-  return rows.map(item => ({ ...item, kind: "column" }))
+  return rows.map(item => ({ ...item, kind: 'column' }))
 }
 
-function resolveRowOrColumnId(
-  mode: RelationMatrixMode,
-  notationId: string | null,
-  node: BuildRelationMatrixInput["nodes"][number]
-): string {
-  if (mode === "types") return node.nodeTypeId
-  if (!notationId) return UNMAPPED_ENTITY_ID
-  return node.parsedAttrs.notationComponents[notationId]?.componentId ?? UNMAPPED_ENTITY_ID
-}
-
-function resolveRelationId(
-  mode: RelationMatrixMode,
-  notationId: string | null,
-  link: BuildRelationMatrixInput["links"][number]
-): string {
-  if (mode === "types") return link.linkTypeId
-  if (!notationId) return UNMAPPED_ENTITY_ID
-  return link.parsedAttrs.notationRelations[notationId]?.relationId ?? UNMAPPED_ENTITY_ID
-}
-
-function pushCellItem(cell: RelationMatrixCell, item: RelationMatrixLinkItem): void {
+function pushCellItem(
+  cell: RelationMatrixCell,
+  item: RelationMatrixLinkItem,
+  allowedByNotationRules: boolean
+): void {
   cell.total += item.relationCount
   cell.items.push(item)
   cell.relationCounts[item.relationId] = (cell.relationCounts[item.relationId] ?? 0) + item.relationCount
-  cell.hasUnmapped = cell.hasUnmapped || item.isUnmapped
+  cell.allowedByNotationRules = cell.allowedByNotationRules || allowedByNotationRules
   if (!cell.relationIds.includes(item.relationId)) {
     cell.relationIds.push(item.relationId)
   }
 }
 
 export function buildRelationMatrix(input: BuildRelationMatrixInput): RelationMatrixResult {
-  const unknownRelationLabel = input.labels?.unknownRelation ?? "Unknown relation"
+  const unknownRelationLabel = input.labels?.unknownRelation ?? 'Unknown relation'
   const mode = resolveMode(input.filters.notationId)
-  const rowOptions = buildRowAndColumnOptions(input, mode)
+  const rowOptions = buildRowAndColumnOptions(input)
   const columnOptions = toColumnOptions(rowOptions)
   const relationOptions = buildRelationOptions(input, mode)
 
@@ -135,6 +108,11 @@ export function buildRelationMatrix(input: BuildRelationMatrixInput): RelationMa
     : new Set(columnOptions.map(item => item.id))
   const allowedRelationIds = new Set(input.filters.selectedRelationIds)
 
+  const notationId = input.filters.notationId
+  const notationVocabulary =
+    mode === 'notation' && notationId ? notationLinkTypeIds(input, notationId) : null
+  const rules = activeRelationRules(input.relationRules)
+
   const cells = new Map<string, RelationMatrixCell>()
   let maxCellTotal = 0
 
@@ -143,14 +121,28 @@ export function buildRelationMatrix(input: BuildRelationMatrixInput): RelationMa
     const targetNode = nodeById.get(link.targetId)
     if (!sourceNode || !targetNode) continue
 
-    const rowId = resolveRowOrColumnId(mode, input.filters.notationId, sourceNode)
-    const columnId = resolveRowOrColumnId(mode, input.filters.notationId, targetNode)
-    const relationId = resolveRelationId(mode, input.filters.notationId, link)
+    if (mode === 'notation' && notationVocabulary && !notationVocabulary.has(link.linkTypeId)) {
+      continue
+    }
 
-    const isUnmapped =
-      rowId === UNMAPPED_ENTITY_ID || columnId === UNMAPPED_ENTITY_ID || relationId === UNMAPPED_ENTITY_ID
+    const rowId = sourceNode.nodeTypeId
+    const columnId = targetNode.nodeTypeId
+    const relationId = link.linkTypeId
 
-    if (input.filters.mappedOnly && isUnmapped) continue
+    let allowedByNotationRules = false
+    if (mode === 'notation' && notationId) {
+      allowedByNotationRules = isPairAllowedByNotationRules({
+        notationId,
+        fromNodeTypeId: sourceNode.nodeTypeId,
+        toNodeTypeId: targetNode.nodeTypeId,
+        linkTypeId: link.linkTypeId,
+        components: input.components,
+        relations: input.relations,
+        relationRules: rules,
+      })
+      if (input.filters.allowedOnly && !allowedByNotationRules) continue
+    }
+
     if (!allowedRowIds.has(rowId) || !allowedColumnIds.has(columnId)) continue
     if (!allowedRelationIds.has(relationId)) continue
 
@@ -162,22 +154,25 @@ export function buildRelationMatrix(input: BuildRelationMatrixInput): RelationMa
       relationCounts: {},
       relationIds: [],
       items: [],
-      hasUnmapped: false,
+      allowedByNotationRules: false,
     }
 
-    pushCellItem(current, {
-      linkId: link.id,
-      sourceNodeId: sourceNode.id,
-      sourceNodeName: sourceNode.name,
-      targetNodeId: targetNode.id,
-      targetNodeName: targetNode.name,
-      sourceCustomProperties: {},
-      targetCustomProperties: {},
-      relationId,
-      relationName: relationNameById.get(relationId) ?? unknownRelationLabel,
-      relationCount: 1,
-      isUnmapped,
-    })
+    pushCellItem(
+      current,
+      {
+        linkId: link.id,
+        sourceNodeId: sourceNode.id,
+        sourceNodeName: sourceNode.name,
+        targetNodeId: targetNode.id,
+        targetNodeName: targetNode.name,
+        sourceCustomProperties: {},
+        targetCustomProperties: {},
+        relationId,
+        relationName: relationNameById.get(relationId) ?? unknownRelationLabel,
+        relationCount: 1,
+      },
+      allowedByNotationRules
+    )
 
     cells.set(key, current)
     maxCellTotal = Math.max(maxCellTotal, current.total)
@@ -197,14 +192,14 @@ export function buildRelationMatrix(input: BuildRelationMatrixInput): RelationMa
       relationIds: [...cell.relationIds].sort((a, b) => {
         const aName = relationNameById.get(a) ?? a
         const bName = relationNameById.get(b) ?? b
-        return aName.localeCompare(bName, undefined, { sensitivity: "base" })
+        return aName.localeCompare(bName, undefined, { sensitivity: 'base' })
       }),
       items: [...cell.items].sort((a, b) => {
-        const sourceCmp = a.sourceNodeName.localeCompare(b.sourceNodeName, undefined, { sensitivity: "base" })
+        const sourceCmp = a.sourceNodeName.localeCompare(b.sourceNodeName, undefined, { sensitivity: 'base' })
         if (sourceCmp !== 0) return sourceCmp
-        const targetCmp = a.targetNodeName.localeCompare(b.targetNodeName, undefined, { sensitivity: "base" })
+        const targetCmp = a.targetNodeName.localeCompare(b.targetNodeName, undefined, { sensitivity: 'base' })
         if (targetCmp !== 0) return targetCmp
-        const relationCmp = a.relationName.localeCompare(b.relationName, undefined, { sensitivity: "base" })
+        const relationCmp = a.relationName.localeCompare(b.relationName, undefined, { sensitivity: 'base' })
         if (relationCmp !== 0) return relationCmp
         return a.linkId.localeCompare(b.linkId)
       }),

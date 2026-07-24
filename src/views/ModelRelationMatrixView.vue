@@ -36,7 +36,7 @@ const matrixFilters = ref<RelationMatrixFilterState>({
   selectedRowIds: [],
   selectedColumnIds: [],
   selectedRelationIds: [],
-  mappedOnly: false,
+  allowedOnly: false,
   heatmapEnabled: true,
   hideEmptyAxes: false,
 })
@@ -57,6 +57,7 @@ const matrix = computed(() => {
     linkTypes: currentState.linkTypes,
     components: currentState.components,
     relations: currentState.relations,
+    relationRules: currentState.relationRules,
     notations: currentState.notations,
     labels: {
       unmapped: t("models.relationMatrixUnmapped"),
@@ -533,14 +534,14 @@ watch(
                 :selected-row-ids="matrixFilters.selectedRowIds"
                 :selected-column-ids="matrixFilters.selectedColumnIds"
                 :selected-relation-ids="matrixFilters.selectedRelationIds"
-                :mapped-only="matrixFilters.mappedOnly"
+                :allowed-only="matrixFilters.allowedOnly"
                 :heatmap-enabled="matrixFilters.heatmapEnabled"
                 :hide-empty-axes="matrixFilters.hideEmptyAxes"
                 @update:notation-id="matrixFilters.notationId = $event"
                 @update:selected-row-ids="matrixFilters.selectedRowIds = $event"
                 @update:selected-column-ids="matrixFilters.selectedColumnIds = $event"
                 @update:selected-relation-ids="matrixFilters.selectedRelationIds = $event"
-                @update:mapped-only="matrixFilters.mappedOnly = $event"
+                @update:allowed-only="matrixFilters.allowedOnly = $event"
                 @update:heatmap-enabled="matrixFilters.heatmapEnabled = $event"
                 @update:hide-empty-axes="matrixFilters.hideEmptyAxes = $event"
               />

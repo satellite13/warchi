@@ -39,7 +39,7 @@ function buildLongCsv(matrix: RelationMatrixResult, context: CsvContext): string
     "relationName",
     "relationCount",
     "cellTotal",
-    "isUnmapped",
+    "allowedByNotationRules",
   ]
 
   const lines: string[] = [header.join(CSV_DELIMITER)]
@@ -68,7 +68,7 @@ function buildLongCsv(matrix: RelationMatrixResult, context: CsvContext): string
             relationName,
             relationCount,
             cell.total,
-            cell.hasUnmapped,
+            cell.allowedByNotationRules,
           ]
             .map(escapeCsv)
             .join(CSV_DELIMITER)

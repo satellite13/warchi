@@ -17,7 +17,7 @@ const props = defineProps<{
   selectedRowIds: string[]
   selectedColumnIds: string[]
   selectedRelationIds: string[]
-  mappedOnly: boolean
+  allowedOnly: boolean
   heatmapEnabled: boolean
   hideEmptyAxes: boolean
 }>()
@@ -27,7 +27,7 @@ const emit = defineEmits<{
   "update:selectedRowIds": [value: string[]]
   "update:selectedColumnIds": [value: string[]]
   "update:selectedRelationIds": [value: string[]]
-  "update:mappedOnly": [value: boolean]
+  "update:allowedOnly": [value: boolean]
   "update:heatmapEnabled": [value: boolean]
   "update:hideEmptyAxes": [value: boolean]
 }>()
@@ -106,7 +106,7 @@ const relationMultiOptions = computed(() =>
     </div>
 
     <div class="matrix-filters__toggles">
-      <ToggleSwitch :model-value="mappedOnly" @update:model-value="emit('update:mappedOnly', $event)">
+      <ToggleSwitch :model-value="allowedOnly" @update:model-value="emit('update:allowedOnly', $event)">
         {{ t("models.relationMatrixMappedOnly") }}
       </ToggleSwitch>
       <ToggleSwitch :model-value="heatmapEnabled" @update:model-value="emit('update:heatmapEnabled', $event)">

@@ -1,17 +1,16 @@
-import type { ComponentResponse, LinkTypeResponse, RelationResponse } from "@/types/api"
-import type { NotationData } from "@/types/entities"
-import type { EditorLink, EditorNode } from "@/features/models/types"
+import type { ComponentResponse, LinkTypeResponse, RelationResponse } from '@/types/api'
+import type { NotationData } from '@/types/entities'
+import type { EditorLink, EditorNode } from '@/features/models/types'
 
-export const UNMAPPED_ENTITY_ID = "__unmapped__"
+export const UNMAPPED_ENTITY_ID = '__unmapped__'
 
-export type RelationMatrixMode = "types" | "notation"
-export type RelationMatrixCsvFormat = "long" | "wide"
+export type RelationMatrixMode = 'types' | 'notation'
+export type RelationMatrixCsvFormat = 'long' | 'wide'
 
 export type RelationMatrixEntityOption = {
   id: string
   name: string
-  kind: "row" | "column" | "relation"
-  isUnmapped?: boolean
+  kind: 'row' | 'column' | 'relation'
 }
 
 export type RelationMatrixFilters = {
@@ -19,7 +18,7 @@ export type RelationMatrixFilters = {
   selectedRowIds: string[]
   selectedColumnIds: string[]
   selectedRelationIds: string[]
-  mappedOnly: boolean
+  allowedOnly: boolean
   heatmapEnabled: boolean
   hideEmptyAxes: boolean
 }
@@ -35,7 +34,6 @@ export type RelationMatrixLinkItem = {
   relationId: string
   relationName: string
   relationCount: number
-  isUnmapped: boolean
 }
 
 export type RelationMatrixCell = {
@@ -45,7 +43,7 @@ export type RelationMatrixCell = {
   relationCounts: Record<string, number>
   relationIds: string[]
   items: RelationMatrixLinkItem[]
-  hasUnmapped: boolean
+  allowedByNotationRules: boolean
 }
 
 export type RelationMatrixResult = {
@@ -59,6 +57,13 @@ export type RelationMatrixResult = {
   maxCellTotal: number
 }
 
+export type RelationMatrixRuleInput = {
+  relationId: string
+  fromComponentId: string
+  toComponentId: string
+  _isDeleted?: boolean
+}
+
 export type BuildRelationMatrixInput = {
   filters: RelationMatrixFilters
   nodes: EditorNode[]
@@ -67,9 +72,10 @@ export type BuildRelationMatrixInput = {
   linkTypes: LinkTypeResponse[]
   components: ComponentResponse[]
   relations: RelationResponse[]
+  relationRules: RelationMatrixRuleInput[]
   notations: NotationData[]
   labels?: {
-    unmapped: string
-    unknownRelation: string
+    unmapped?: string
+    unknownRelation?: string
   }
 }

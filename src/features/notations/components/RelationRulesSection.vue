@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CollapseSection from './CollapseSection.vue'
 import CopyRelationRulesModal from './CopyRelationRulesModal.vue'
@@ -39,6 +39,13 @@ const closeCopyModal = () => {
   showCopyModal.value = false
   copyError.value = ''
 }
+
+watch(
+  () => props.selectedItem?.id,
+  () => {
+    if (showCopyModal.value) closeCopyModal()
+  },
+)
 
 const applyCopyFrom = (payload: {
   sourceComponentId: string

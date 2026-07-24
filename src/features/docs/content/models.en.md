@@ -151,12 +151,15 @@ For the active diagram, the **Diagram Info** action is available in the toolbar.
 
 ### Relation matrix
 
-The model editor header includes **Relation matrix**. It opens a separate matrix screen for model components:
+The model editor header includes **Relation matrix**. It opens a separate matrix screen for links between the model's node types:
 
-- filters by notation, axes (rows/columns), and relation types;
-- **Mapped only** mode hides empty rows/columns;
-- clicking a cell opens a details panel with the list of links;
-- export: **CSV long**, **CSV wide**, **PNG**.
+- **Without notation (types)** — the vertical and horizontal axes use **node types**; the Relations axis lists **link types** in the model.
+- With a **notation** selected, the vertical and horizontal axes still use **node types**, while Relations lists **link types** used by that notation's relations. Links are placed by source/target node types and link type; `notationComponents` / `notationRelations` attrs bindings are **ignored**. There is no "Unmapped" row or column in this mode.
+- Cells **allowed by the selected notation's relation rules** are visually highlighted.
+- **Allowed by rules only** (when a notation is selected) keeps only those cells; **Hide empty rows and columns** removes axes with no links.
+- Filters for axes and link types, plus a heatmap by link count per cell.
+- Clicking a cell opens a details panel with the list of links.
+- Export: **CSV long**, **CSV wide**, **PNG**.
 
 Use the matrix to audit relation coverage and produce reports without walking every diagram manually.
 

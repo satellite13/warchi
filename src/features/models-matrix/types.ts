@@ -2,8 +2,6 @@ import type { ComponentResponse, LinkTypeResponse, RelationResponse } from '@/ty
 import type { NotationData } from '@/types/entities'
 import type { EditorLink, EditorNode } from '@/features/models/types'
 
-export const UNMAPPED_ENTITY_ID = '__unmapped__'
-
 export type RelationMatrixMode = 'types' | 'notation'
 export type RelationMatrixCsvFormat = 'long' | 'wide'
 
@@ -75,7 +73,6 @@ export type BuildRelationMatrixInput = {
   relationRules: RelationMatrixRuleInput[]
   notations: NotationData[]
   labels?: {
-    unmapped?: string
     unknownRelation?: string
   }
 }

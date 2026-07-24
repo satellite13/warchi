@@ -106,9 +106,11 @@ const relationMultiOptions = computed(() =>
     </div>
 
     <div class="matrix-filters__toggles">
-      <ToggleSwitch :model-value="allowedOnly" @update:model-value="emit('update:allowedOnly', $event)">
-        {{ t("models.relationMatrixAllowedOnly") }}
-      </ToggleSwitch>
+      <span :title="t('models.relationMatrixAllowedHint')">
+        <ToggleSwitch :model-value="allowedOnly" @update:model-value="emit('update:allowedOnly', $event)">
+          {{ t("models.relationMatrixAllowedOnly") }}
+        </ToggleSwitch>
+      </span>
       <ToggleSwitch :model-value="heatmapEnabled" @update:model-value="emit('update:heatmapEnabled', $event)">
         {{ t("models.relationMatrixHeatmapToggle") }}
       </ToggleSwitch>

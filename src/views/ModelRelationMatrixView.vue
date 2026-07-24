@@ -61,7 +61,6 @@ const matrix = computed(() => {
     relationRules: currentState.relationRules,
     notations: currentState.notations,
     labels: {
-      unmapped: t("models.relationMatrixUnmapped"),
       unknownRelation: t("models.relationMatrixUnknownRelation"),
     },
   })

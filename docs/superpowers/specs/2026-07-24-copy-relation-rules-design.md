@@ -58,7 +58,9 @@ copyRelationRulesFromComponent(
   targetComponentId: string,
   mode: CopyMode,
   createId: () => string,
-): void // mutates rules in place, or returns next array — match local editor mutate style
+): { changed: boolean }
+// Mutates `rules` in place (same style as RelationRulesSection onMutateRelationRules).
+// `changed === false` when source has no outbound rules.
 ```
 
 Steps:

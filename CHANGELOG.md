@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-07-25
+
+### Fixed
+- Relation matrix now shows component and relation custom properties from diagram instance snapshots (same values as on the diagram), not stale model-node defaults.
+
 ## [0.10.4] - 2026-07-24
 
 ### Fixed

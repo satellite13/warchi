@@ -22,6 +22,7 @@ import NotationDiagramCanvas from '@/features/notations/components/NotationDiagr
 import NotationEntityModal from '@/features/notations/components/NotationEntityModal.vue'
 import NotationImportShapeResolveDialog from '@/features/notations/components/NotationImportShapeResolveDialog.vue'
 import CustomPropertiesPanel from '@/features/notations/components/CustomPropertiesPanel.vue'
+import RelationRulesMatrixOverlay from '@/features/notations/components/RelationRulesMatrixOverlay.vue'
 import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
 import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
 import TabPanel from '@/components/layout/TabPanel.vue'
@@ -69,6 +70,7 @@ const {
 const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const showShareModal = ref(false)
+const showRelationRulesMatrix = ref(false)
 const { canShare: canShareNotation } = useCanShare(notation)
 const canInspectAttrsJson = computed(() => {
   const permission = notation.value?.accessPermission ?? null
@@ -837,6 +839,9 @@ const handleToolbarAction = async (event: string) => {
     case 'import-notation':
       triggerNotationImport()
       break
+    case 'open-relation-rules-matrix':
+      showRelationRulesMatrix.value = true
+      break
     case 'open-notation-doc': {
       const hasNotationDoc = !!getNotationDocFileId()
       if (!canInspectAttrsJson.value && !hasNotationDoc) break
@@ -1204,6 +1209,17 @@ onBeforeUnmount(() => {
     resource-type="NOTATION"
     :resource-id="notation.id"
     @close="showShareModal = false"
+  />
+
+  <RelationRulesMatrixOverlay
+    v-if="showRelationRulesMatrix"
+    :components="state.components"
+    :relations="state.relations"
+    :relation-rules="state.relationRules"
+    :node-types="state.nodeTypes"
+    :link-types="state.linkTypes"
+    :on-mutate-relation-rules="handleMutateRelationRules"
+    @close="showRelationRulesMatrix = false"
   />
 
   <DocumentEditorModal

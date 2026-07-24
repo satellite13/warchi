@@ -35,7 +35,7 @@ A notation consists of the following elements:
 
 - **Node types** — visual templates for components (rectangles, circles, etc.)
 - **Link types** — visual templates for connections (arrows, lines)
-- **Relation rules** — define which element types can be connected
+- **Relation rules** — define which element types can be connected. Edit them in the component properties panel or via the **Rules matrix** in the editor toolbar (click a from→to cell).
 
 ### Style Configuration
 

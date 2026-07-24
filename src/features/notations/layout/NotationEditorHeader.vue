@@ -87,6 +87,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     active: props.rulersEnabled,
   },
   { icon: 'separator', event: 'sep3', separator: true },
+  {
+    icon: 'grid_view',
+    event: 'open-relation-rules-matrix',
+    title: t('diagram.relationRulesMatrixOpen'),
+  },
+  { icon: 'separator', event: 'sep3b', separator: true },
   { icon: 'image', event: 'export-diagram-png', title: t('toolbar.exportDiagramPng') },
   { icon: 'description', event: 'export-diagram-svg', title: t('toolbar.exportDiagramSvg') },
   { icon: 'separator', event: 'sep4', separator: true },

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.6] - 2026-07-25
+
+### Changed
+- Model relation matrix with a selected notation groups by node types and that notation’s link types, highlights pairs allowed by relation rules, and offers “Allowed by rules only” instead of binding-based “Unmapped”.
+
 ## [0.10.5] - 2026-07-25
 
 ### Fixed

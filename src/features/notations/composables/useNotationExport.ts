@@ -1,16 +1,26 @@
 import {ref, type Ref} from "vue";
 import {useI18n} from "vue-i18n";
 import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
+import { fetchAllPages } from "@/api/fetchAllPages";
 import { serializeEntityAttrs, serializeTypeAttrs } from "@/domain/attrs/notationAttrs";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { buildExportShapes } from "@/features/notations/utils/buildExportShapes";
 import type { ExportedNodeShape } from "@/features/notations/utils/exportedNodeShape";
+import { applyShapeImportResolutions } from "@/features/notations/utils/applyShapeImportResolutions";
+import {
+  analyzeImportShapeConflicts,
+  defaultShapeImportResolutions,
+  type ShapeImportConflict,
+  type ShapeImportResolution,
+} from "@/features/notations/utils/importShapeConflicts";
 import {
   analyzeNotationImportLocalOnly,
+  collectImportShapesFromRaw,
   normalizeNotationImport,
   type LocalOnlyPolicy,
   type NotationImportLocalOnlySummary,
 } from "@/features/notations/utils/normalizeNotationImport";
+import type { NodeShapeResponse } from "@/types/api";
 import type {NotationData} from "@/types/entities";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 import type { NotationEditorState } from "../types";
@@ -46,7 +56,11 @@ export function useNotationExport(
   const showAttrsJson = ref(false);
   const attrsJsonContent = ref("");
   const showImportMergeDialog = ref(false);
+  const showImportShapeResolveDialog = ref(false);
   const importMergeSummary = ref<NotationImportLocalOnlySummary | null>(null);
+  const importShapeConflicts = ref<ShapeImportConflict[]>([]);
+  const importShapeResolutions = ref<ShapeImportResolution[]>([]);
+  const importCatalogShapes = ref<NodeShapeResponse[]>([]);
   const pendingImportRaw = ref<unknown>(null);
 
   const buildExportState = (): NotationEditorState => {
@@ -185,9 +199,22 @@ export function useNotationExport(
     pendingImportRaw.value = null;
     importMergeSummary.value = null;
     showImportMergeDialog.value = false;
+    showImportShapeResolveDialog.value = false;
+    importShapeConflicts.value = [];
+    importShapeResolutions.value = [];
+    importCatalogShapes.value = [];
   };
 
-  const applyNotationImport = (raw: unknown, localOnlyPolicy: LocalOnlyPolicy) => {
+  const hideShapeResolveKeepPending = () => {
+    showImportShapeResolveDialog.value = false;
+    importShapeConflicts.value = [];
+  };
+
+  const applyNotationImport = (
+    raw: unknown,
+    localOnlyPolicy: LocalOnlyPolicy,
+    resolutions: ShapeImportResolution[] = []
+  ) => {
     const { state: nextState, pendingShapes: nextShapes } = normalizeNotationImport(raw, {
       baseOwnerId: state.value.ownerId,
       baseNotationId: state.value.notationId,
@@ -195,10 +222,42 @@ export function useNotationExport(
       localOnlyPolicy,
       t,
     });
+
+    const catalogById = new Map(importCatalogShapes.value.map((shape) => [shape.id, shape]));
+    const resolvedPending = applyShapeImportResolutions({
+      components: nextState.components,
+      pendingShapes: nextShapes,
+      resolutions,
+      catalogById,
+    });
+
     state.value = nextState;
-    pendingShapes.value = nextShapes;
+    pendingShapes.value = resolvedPending;
     saveError.value = null;
     saveSuccess.value = false;
+    clearPendingImport();
+  };
+
+  const continueAfterShapeResolve = (raw: unknown, resolutions: ShapeImportResolution[]) => {
+    const summary = analyzeNotationImportLocalOnly(raw, state.value, t);
+    if (summary.total > 0) {
+      pendingImportRaw.value = raw;
+      importMergeSummary.value = summary;
+      hideShapeResolveKeepPending();
+      importShapeResolutions.value = resolutions;
+      showImportMergeDialog.value = true;
+      return;
+    }
+    applyNotationImport(raw, "keep", resolutions);
+  };
+
+  const confirmImportShapeResolve = () => {
+    const raw = pendingImportRaw.value;
+    if (raw === null) return;
+    continueAfterShapeResolve(raw, importShapeResolutions.value);
+  };
+
+  const cancelImportShapeResolve = () => {
     clearPendingImport();
   };
 
@@ -209,6 +268,35 @@ export function useNotationExport(
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
+
+      let catalog: NodeShapeResponse[];
+      try {
+        catalog = await fetchAllPages<NodeShapeResponse>(
+          "/node-shapes",
+          undefined,
+          { pageSize: 200, errorLabel: t("notations.importShapeResolveCatalogError") }
+        );
+      } catch (error) {
+        clearPendingImport();
+        saveError.value =
+          error instanceof Error
+            ? t("notations.importError", { message: error.message })
+            : t("notations.importShapeResolveCatalogError");
+        return;
+      }
+
+      importCatalogShapes.value = catalog;
+      const importedShapes = collectImportShapesFromRaw(parsed, t);
+      const conflicts = analyzeImportShapeConflicts(importedShapes, catalog);
+
+      if (conflicts.length > 0) {
+        pendingImportRaw.value = parsed;
+        importShapeConflicts.value = conflicts;
+        importShapeResolutions.value = defaultShapeImportResolutions(conflicts);
+        showImportShapeResolveDialog.value = true;
+        return;
+      }
+
       const summary = analyzeNotationImportLocalOnly(parsed, state.value, t);
       if (summary.total > 0) {
         pendingImportRaw.value = parsed;
@@ -216,7 +304,7 @@ export function useNotationExport(
         showImportMergeDialog.value = true;
         return;
       }
-      applyNotationImport(parsed, "keep");
+      applyNotationImport(parsed, "keep", []);
     } catch (error) {
       clearPendingImport();
       saveError.value =
@@ -232,7 +320,7 @@ export function useNotationExport(
     const raw = pendingImportRaw.value;
     if (raw === null) return;
     try {
-      applyNotationImport(raw, "keep");
+      applyNotationImport(raw, "keep", importShapeResolutions.value);
     } catch (error) {
       clearPendingImport();
       saveError.value =
@@ -246,7 +334,7 @@ export function useNotationExport(
     const raw = pendingImportRaw.value;
     if (raw === null) return;
     try {
-      applyNotationImport(raw, "delete");
+      applyNotationImport(raw, "delete", importShapeResolutions.value);
     } catch (error) {
       clearPendingImport();
       saveError.value =
@@ -304,7 +392,10 @@ export function useNotationExport(
     showAttrsJson,
     attrsJsonContent,
     showImportMergeDialog,
+    showImportShapeResolveDialog,
     importMergeSummary,
+    importShapeConflicts,
+    importShapeResolutions,
     exportNotation,
     exportDiagramAsPng,
     exportDiagramAsSvg,
@@ -313,6 +404,8 @@ export function useNotationExport(
     confirmImportMergeKeep,
     confirmImportMergeDelete,
     cancelImportMerge,
+    confirmImportShapeResolve,
+    cancelImportShapeResolve,
     openAttrsJson,
     copyAttrsJson
   };

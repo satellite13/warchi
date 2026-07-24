@@ -20,6 +20,7 @@ import NotationEditorHeader from '@/features/notations/layout/NotationEditorHead
 import NotationComponentList from '@/features/notations/layout/NotationComponentList.vue'
 import NotationDiagramCanvas from '@/features/notations/components/NotationDiagramCanvas.vue'
 import NotationEntityModal from '@/features/notations/components/NotationEntityModal.vue'
+import NotationImportShapeResolveDialog from '@/features/notations/components/NotationImportShapeResolveDialog.vue'
 import CustomPropertiesPanel from '@/features/notations/components/CustomPropertiesPanel.vue'
 import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
 import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
@@ -443,7 +444,10 @@ const {
   showAttrsJson,
   attrsJsonContent,
   showImportMergeDialog,
+  showImportShapeResolveDialog,
   importMergeSummary,
+  importShapeConflicts,
+  importShapeResolutions,
   exportNotation,
   exportDiagramAsPng,
   exportDiagramAsSvg,
@@ -452,6 +456,8 @@ const {
   confirmImportMergeKeep,
   confirmImportMergeDelete,
   cancelImportMerge,
+  confirmImportShapeResolve,
+  cancelImportShapeResolve,
   openAttrsJson,
   copyAttrsJson,
 } = useNotationExport(
@@ -1071,6 +1077,14 @@ onBeforeUnmount(() => {
       </button>
     </template>
   </BaseModal>
+
+  <NotationImportShapeResolveDialog
+    v-if="showImportShapeResolveDialog"
+    v-model="importShapeResolutions"
+    :conflicts="importShapeConflicts"
+    @confirm="confirmImportShapeResolve"
+    @cancel="cancelImportShapeResolve"
+  />
 
   <BaseModal
     v-if="showImportMergeDialog && importMergeSummary"

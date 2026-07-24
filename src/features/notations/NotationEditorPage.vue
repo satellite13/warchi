@@ -442,11 +442,16 @@ const importNotationInputRef = ref<HTMLInputElement | null>(null)
 const {
   showAttrsJson,
   attrsJsonContent,
+  showImportMergeDialog,
+  importMergeSummary,
   exportNotation,
   exportDiagramAsPng,
   exportDiagramAsSvg,
   triggerNotationImport,
   handleNotationImportChange,
+  confirmImportMergeKeep,
+  confirmImportMergeDelete,
+  cancelImportMerge,
   openAttrsJson,
   copyAttrsJson,
 } = useNotationExport(
@@ -1063,6 +1068,33 @@ onBeforeUnmount(() => {
       </button>
       <button type="button" class="btn btn--danger" @click="confirmRemove">
         {{ t('common.delete') }}
+      </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showImportMergeDialog && importMergeSummary"
+    :title="t('notations.importMergeTitle')"
+    max-width="480px"
+    @close="cancelImportMerge"
+  >
+    <p class="leave-dialog__text">
+      {{
+        t('notations.importMergeLocalOnlyText', {
+          components: importMergeSummary.componentNames.length,
+          relations: importMergeSummary.relationNames.length,
+        })
+      }}
+    </p>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="cancelImportMerge">
+        {{ t('notations.importMergeCancel') }}
+      </button>
+      <button type="button" class="btn btn--soft-danger" @click="confirmImportMergeDelete">
+        {{ t('notations.importMergeDeleteLocal') }}
+      </button>
+      <button type="button" class="btn btn--primary" @click="confirmImportMergeKeep">
+        {{ t('notations.importMergeKeepLocal') }}
       </button>
     </template>
   </BaseModal>

@@ -5,7 +5,12 @@ import { serializeEntityAttrs, serializeTypeAttrs } from "@/domain/attrs/notatio
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { buildExportShapes } from "@/features/notations/utils/buildExportShapes";
 import type { ExportedNodeShape } from "@/features/notations/utils/exportedNodeShape";
-import { normalizeNotationImport } from "@/features/notations/utils/normalizeNotationImport";
+import {
+  analyzeNotationImportLocalOnly,
+  normalizeNotationImport,
+  type LocalOnlyPolicy,
+  type NotationImportLocalOnlySummary,
+} from "@/features/notations/utils/normalizeNotationImport";
 import type {NotationData} from "@/types/entities";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 import type { NotationEditorState } from "../types";
@@ -40,6 +45,9 @@ export function useNotationExport(
 
   const showAttrsJson = ref(false);
   const attrsJsonContent = ref("");
+  const showImportMergeDialog = ref(false);
+  const importMergeSummary = ref<NotationImportLocalOnlySummary | null>(null);
+  const pendingImportRaw = ref<unknown>(null);
 
   const buildExportState = (): NotationEditorState => {
     const source = cloneJson(state.value);
@@ -173,6 +181,27 @@ export function useNotationExport(
     }
   };
 
+  const clearPendingImport = () => {
+    pendingImportRaw.value = null;
+    importMergeSummary.value = null;
+    showImportMergeDialog.value = false;
+  };
+
+  const applyNotationImport = (raw: unknown, localOnlyPolicy: LocalOnlyPolicy) => {
+    const { state: nextState, pendingShapes: nextShapes } = normalizeNotationImport(raw, {
+      baseOwnerId: state.value.ownerId,
+      baseNotationId: state.value.notationId,
+      baseState: state.value,
+      localOnlyPolicy,
+      t,
+    });
+    state.value = nextState;
+    pendingShapes.value = nextShapes;
+    saveError.value = null;
+    saveSuccess.value = false;
+    clearPendingImport();
+  };
+
   const handleNotationImportChange = async (event: Event) => {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -180,16 +209,16 @@ export function useNotationExport(
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
-      const { state: nextState, pendingShapes: nextShapes } = normalizeNotationImport(parsed, {
-        baseOwnerId: state.value.ownerId,
-        baseNotationId: state.value.notationId,
-        t,
-      })
-      state.value = nextState
-      pendingShapes.value = nextShapes
-      saveError.value = null;
-      saveSuccess.value = false;
+      const summary = analyzeNotationImportLocalOnly(parsed, state.value, t);
+      if (summary.total > 0) {
+        pendingImportRaw.value = parsed;
+        importMergeSummary.value = summary;
+        showImportMergeDialog.value = true;
+        return;
+      }
+      applyNotationImport(parsed, "keep");
     } catch (error) {
+      clearPendingImport();
       saveError.value =
         error instanceof Error
           ? t("notations.importError", {message: error.message})
@@ -197,6 +226,38 @@ export function useNotationExport(
     } finally {
       resetImportInput();
     }
+  };
+
+  const confirmImportMergeKeep = () => {
+    const raw = pendingImportRaw.value;
+    if (raw === null) return;
+    try {
+      applyNotationImport(raw, "keep");
+    } catch (error) {
+      clearPendingImport();
+      saveError.value =
+        error instanceof Error
+          ? t("notations.importError", {message: error.message})
+          : t("notations.importReadError");
+    }
+  };
+
+  const confirmImportMergeDelete = () => {
+    const raw = pendingImportRaw.value;
+    if (raw === null) return;
+    try {
+      applyNotationImport(raw, "delete");
+    } catch (error) {
+      clearPendingImport();
+      saveError.value =
+        error instanceof Error
+          ? t("notations.importError", {message: error.message})
+          : t("notations.importReadError");
+    }
+  };
+
+  const cancelImportMerge = () => {
+    clearPendingImport();
   };
 
   const openAttrsJson = () => {
@@ -242,11 +303,16 @@ export function useNotationExport(
   return {
     showAttrsJson,
     attrsJsonContent,
+    showImportMergeDialog,
+    importMergeSummary,
     exportNotation,
     exportDiagramAsPng,
     exportDiagramAsSvg,
     triggerNotationImport,
     handleNotationImportChange,
+    confirmImportMergeKeep,
+    confirmImportMergeDelete,
+    cancelImportMerge,
     openAttrsJson,
     copyAttrsJson
   };

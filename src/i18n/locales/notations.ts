@@ -35,6 +35,12 @@ export const notationsMessages = {
       typeNameConflict:
         'Не удалось создать {entity} «{name}»: тип с таким именем уже есть у вас. Переименуйте или переиспользуйте существующий тип.',
       importReadError: 'Ошибка импорта: не удалось прочитать файл',
+      importMergeTitle: 'Импорт нотации',
+      importMergeLocalOnlyText:
+        'В текущей нотации есть сущности, которых нет в файле: компонентов — {components}, отношений — {relations}. Что с ними сделать?',
+      importMergeKeepLocal: 'Оставить',
+      importMergeDeleteLocal: 'Удалить',
+      importMergeCancel: 'Отмена',
       defaultNodeTypeName: 'Новый тип узла',
       defaultLinkTypeName: 'Новый тип связи',
       defaultRelationName: 'Новая связь',
@@ -135,6 +141,12 @@ export const notationsMessages = {
       typeNameConflict:
         'Could not create {entity} "{name}": a type with this name already exists for you. Rename it or reuse the existing type.',
       importReadError: 'Import error: failed to read file',
+      importMergeTitle: 'Import notation',
+      importMergeLocalOnlyText:
+        'The current notation has entities missing from the file: components — {components}, relations — {relations}. What should we do with them?',
+      importMergeKeepLocal: 'Keep',
+      importMergeDeleteLocal: 'Delete',
+      importMergeCancel: 'Cancel',
       defaultNodeTypeName: 'New node type',
       defaultLinkTypeName: 'New link type',
       defaultRelationName: 'New relation',

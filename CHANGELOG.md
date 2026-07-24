@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-07-24
+
+### Fixed
+- Interactive custom-property icons now appear on composite notation components (requires papirus 0.7.2).
+
 ## [0.10.3] - 2026-07-24
 
 ### Fixed

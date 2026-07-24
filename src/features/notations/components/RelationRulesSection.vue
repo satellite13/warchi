@@ -45,6 +45,7 @@ const applyCopyFrom = (payload: {
   mode: CopyRelationRulesMode
 }) => {
   if (!props.selectedItem || 'linkTypeId' in props.selectedItem) return
+  copyError.value = ''
   const targetId = props.selectedItem.id
   let changed = false
   props.onMutateRelationRules?.(rules => {
@@ -292,6 +293,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
     :build-icon-url="buildIconUrl"
     :error="copyError"
     @close="closeCopyModal"
+    @clear-error="copyError = ''"
     @confirm="applyCopyFrom"
   />
 </template>

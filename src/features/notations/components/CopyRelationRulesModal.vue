@@ -15,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   confirm: [payload: { sourceComponentId: string; mode: CopyRelationRulesMode }]
+  clearError: []
 }>()
 
 const { t } = useI18n()
@@ -37,6 +38,7 @@ watch(
 
 watch([sourceComponentId, mode], () => {
   localError.value = ''
+  emit('clearError')
 })
 
 watch(

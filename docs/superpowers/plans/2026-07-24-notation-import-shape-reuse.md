@@ -521,7 +521,6 @@ npx vitest run src/features/notations/utils/applyShapeImportResolutions.test.ts
 - [ ] **Step 3: Implement**
 
 ```ts
-import type { OutlineSegment } from '@/domain/attrs/notationAttrs'
 import type { NodeShapeResponse } from '@/types/api'
 import type { EditorComponent } from '../types'
 import type { ExportedNodeShape } from './exportedNodeShape'
@@ -542,59 +541,31 @@ export function applyShapeImportResolutions(params: {
     if (resolution.action !== 'reuse') continue
     const catalogId = resolution.catalogShapeId
     if (!catalogId) continue
-    const catalogShape = params.catalogById.get(catalogId)
-    if (!catalogShape) continue
-
+    if (!params.catalogById.has(catalogId)) continue
     reusedImportedIds.add(resolution.importedId)
     reuseIdMap.set(resolution.importedId, catalogId)
+  }
 
+  remapComponentCustomShapeIds(params.components, reuseIdMap)
+
+  for (const resolution of params.resolutions) {
+    if (resolution.action !== 'reuse' || !resolution.catalogShapeId) continue
+    const catalogShape = params.catalogById.get(resolution.catalogShapeId)
+    if (!catalogShape) continue
     const outline = parseOutlineSegmentsOrEmpty(catalogShape.outline)
+    if (outline.length === 0) continue
     for (const component of params.components) {
       if (component._isDeleted) continue
       const style = component.parsedAttrs.diagramStyle
-      if (!style || style.customShapeId !== resolution.importedId) continue
-      const nextOutline: OutlineSegment[] | undefined =
-        outline.length > 0 ? outline : style.customOutline
-      component.parsedAttrs.diagramStyle = {
-        ...style,
-        customShapeId: catalogId,
-        ...(nextOutline ? { customOutline: nextOutline } : {}),
-      }
+      if (style?.customShapeId !== resolution.catalogShapeId) continue
+      component.parsedAttrs.diagramStyle = { ...style, customOutline: outline }
       if (!component._isNew) component._isDirty = true
     }
   }
 
-  // Safety: remap any remaining references via shared helper (ids already updated above for matches)
-  remapComponentCustomShapeIds(params.components, reuseIdMap)
-
   return params.pendingShapes.filter((shape) => !reusedImportedIds.has(shape.id))
 }
 ```
-
-Note: the loop already sets `customShapeId`; calling `remapComponentCustomShapeIds` afterward is a no-op for those rows (map old→new but style already new). Keep the helper call only if you skip inline remap — pick **one** approach. Prefer: build `reuseIdMap`, call `remapComponentCustomShapeIds`, then a second pass to sync outlines for components whose `customShapeId` is now a reused catalog id:
-
-```ts
-remapComponentCustomShapeIds(params.components, reuseIdMap)
-
-for (const resolution of params.resolutions) {
-  if (resolution.action !== 'reuse' || !resolution.catalogShapeId) continue
-  const catalogShape = params.catalogById.get(resolution.catalogShapeId)
-  if (!catalogShape) continue
-  const outline = parseOutlineSegmentsOrEmpty(catalogShape.outline)
-  if (outline.length === 0) continue
-  for (const component of params.components) {
-    if (component._isDeleted) continue
-    const style = component.parsedAttrs.diagramStyle
-    if (style?.customShapeId !== resolution.catalogShapeId) continue
-    component.parsedAttrs.diagramStyle = { ...style, customOutline: outline }
-    if (!component._isNew) component._isDirty = true
-  }
-}
-
-return params.pendingShapes.filter((shape) => !reusedImportedIds.has(shape.id))
-```
-
-Use this second variant in the real implementation (clearer, reuses remap helper).
 
 - [ ] **Step 4: Run — expect PASS**
 
@@ -625,61 +596,55 @@ Goal: pre-dialog analysis must see the **same** shape list normalize would put i
 
 - [ ] **Step 1: Add failing test**
 
-In `normalizeNotationImport.test.ts`, add:
+In `normalizeNotationImport.test.ts`, reuse the existing fixture that expects `pendingShapes` ids `['s1','s2']` (the “package + synthesize” test). Append:
 
 ```ts
-import { collectImportShapes } from './normalizeNotationImport'
-
-it('collectImportShapes matches pendingShapes before resolutions', () => {
-  const raw = {
-    format: 'warchi-notation-export',
-    version: 2,
-    state: {
-      // minimal state with one component customOutline only (no top-level shapes) — reuse fixture from existing synthesize test
-    },
-    shapes: [{ id: 'top', name: 'Top', outline: '[]' }],
-  }
-  // Prefer asserting against an existing fixture already in the file that produces pendingShapes.
-  // Concrete: take the same `raw` used in the test that expects pending ids ['s1','s2'] and:
-  const shapes = collectImportShapes(raw)
+it('collectImportShapesFromRaw matches normalize pendingShapes', () => {
+  // `raw` and `context` = same objects as in the neighboring package+synthesize test
+  const fromHelper = collectImportShapesFromRaw(raw, context.t)
   const { pendingShapes } = normalizeNotationImport(raw, context)
-  expect(shapes.map((s) => s.id).sort()).toEqual(pendingShapes.map((s) => s.id).sort())
+  expect(fromHelper.map((s) => s.id).sort()).toEqual(pendingShapes.map((s) => s.id).sort())
 })
 ```
-
-Adapt `raw`/`context` to the existing “package + synthesize” test fixture in that file (do not invent empty outline if tests require valid outline strings).
 
 - [ ] **Step 2: Run — expect FAIL**
 
 ```bash
-npx vitest run src/features/notations/utils/normalizeNotationImport.test.ts -t collectImportShapes
+npx vitest run src/features/notations/utils/normalizeNotationImport.test.ts -t collectImportShapesFromRaw
 ```
 
 - [ ] **Step 3: Implement**
 
-Refactor the end of `normalizeNotationImport` so shape collection is:
+Refactor the end of `normalizeNotationImport` to use a shared builder:
 
 ```ts
-export function collectImportShapes(raw: unknown, components: EditorComponent[]): ExportedNodeShape[] {
+export function collectImportShapes(
+  raw: unknown,
+  components: EditorComponent[]
+): ExportedNodeShape[] {
   const parsedShapes = parseExportedShapesFromRaw(raw)
   const activeComponents = components.filter((c) => !c._isDeleted)
   return mergeShapePackage(parsedShapes.map(stripShapeDocumentFileId), activeComponents)
 }
 ```
 
-Inside `normalizeNotationImport`, replace the inline merge with `collectImportShapes(raw, components)`.
-
-For **pre-dialog** use without a full normalize, also export a convenience that builds a temporary component list from the import source enough for synthesis:
+Inside `normalizeNotationImport`, replace the inline `parseExportedShapesFromRaw` + `mergeShapePackage` block with:
 
 ```ts
-export function collectImportShapesFromRaw(raw: unknown, t: ComposerTranslation): ExportedNodeShape[] {
-  // Lightweight path: if top-level shapes exist, prefer analyzing those + still merge synthesize.
-  // Simplest correct approach used by the import composable:
-  const empty = createEmptyEditorState()
+const pendingShapes = collectImportShapes(raw, components)
+```
+
+Add the pre-dialog convenience (full normalize against empty base — once per file pick):
+
+```ts
+export function collectImportShapesFromRaw(
+  raw: unknown,
+  t: ComposerTranslation
+): ExportedNodeShape[] {
   const { pendingShapes } = normalizeNotationImport(raw, {
     baseOwnerId: 'preview',
     baseNotationId: 'preview',
-    baseState: empty,
+    baseState: createEmptyEditorState(),
     localOnlyPolicy: 'keep',
     t,
   })
@@ -687,7 +652,7 @@ export function collectImportShapesFromRaw(raw: unknown, t: ComposerTranslation)
 }
 ```
 
-**Prefer the convenience `collectImportShapesFromRaw` for the dialog path** (DRY, guaranteed parity). Keep `collectImportShapes` as the internal shared builder if you still want to avoid double-normalize on apply — on apply, call normalize once then `applyShapeImportResolutions`. For the dialog, calling `collectImportShapesFromRaw` (full normalize discard) is acceptable once per file pick; if slow in practice, switch to exporting `parseExportedShapesFromRaw` + a minimal component walk. Start with `collectImportShapesFromRaw`.
+On apply, call `normalizeNotationImport` once, then `applyShapeImportResolutions` — do not call `collectImportShapesFromRaw` again at apply time.
 
 - [ ] **Step 4: Run tests**
 

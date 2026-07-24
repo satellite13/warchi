@@ -335,11 +335,6 @@ const { t } = useI18n()
   margin-top: 8px;
 }
 
-.matrix-details__badge {
-  color: var(--warning);
-  font-weight: 600;
-}
-
 .matrix-details__empty {
   margin: 0;
   padding: 12px;

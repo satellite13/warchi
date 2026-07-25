@@ -89,6 +89,8 @@ const bulkRelationshipValue = ref('')
 const isLoadingCatalog = ref(false)
 const catalogError = ref<string | null>(null)
 const ruleDecisions = ref<Record<string, OefRelationRuleDecision>>({})
+const isStepBusy = ref(false)
+const stepBusyMessage = ref('')
 
 const nodeTypeById = computed(() => new Map(props.nodeTypes.map(item => [item.id, item])))
 const linkTypeById = computed(() => new Map(props.linkTypes.map(item => [item.id, item])))
@@ -239,6 +241,20 @@ const canMoveToPreview = computed(
 )
 const canSubmit = computed(() => currentStep.value === 3 && canMoveToPreview.value && !props.importBusy)
 
+const showBusyOverlay = computed(
+  () => isStepBusy.value || isLoadingCatalog.value || !!props.importBusy
+)
+const busyOverlayMessage = computed(() => {
+  if (props.importBusy) {
+    return props.importProgress || t('models.oefImportProgressPreparing')
+  }
+  if (isStepBusy.value && stepBusyMessage.value) return stepBusyMessage.value
+  if (isLoadingCatalog.value) return t('models.oefImportCatalogLoading')
+  return stepBusyMessage.value
+})
+
+const footerBusy = computed(() => isStepBusy.value || !!props.importBusy)
+
 const analyzeProgressLabel = computed(() => {
   if (!isAnalyzing.value) return ''
   if (analyzePhase.value === 'processing') {
@@ -287,6 +303,8 @@ function resetState(): void {
   bulkRelationshipValue.value = ''
   isLoadingCatalog.value = false
   catalogError.value = null
+  isStepBusy.value = false
+  stepBusyMessage.value = ''
   mappingState.value = { elementTypeMap: {}, relationshipTypeMap: {} }
   suggestions.value = { elementBySourceType: {}, relationshipBySourceType: {} }
   expandedIssueCodes.value = new Set()
@@ -529,30 +547,74 @@ function relationshipCandidates(sourceType: string): Array<{ value: string; labe
 }
 
 function closeWizard(): void {
+  if (isStepBusy.value || props.importBusy) return
   emit('close')
   resetState()
 }
 
-function prevStep(): void {
-  currentStep.value = Math.max(1, currentStep.value - 1)
+function yieldToPaint(): Promise<void> {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+}
+
+async function runStepTransition(
+  message: string,
+  work: () => void | Promise<void>
+): Promise<void> {
+  if (isStepBusy.value) return
+  isStepBusy.value = true
+  stepBusyMessage.value = message
+  await nextTick()
+  await yieldToPaint()
+  try {
+    await work()
+    await nextTick()
+    await yieldToPaint()
+  } finally {
+    isStepBusy.value = false
+    stepBusyMessage.value = ''
+  }
+}
+
+async function prevStep(): Promise<void> {
+  if (isStepBusy.value || props.importBusy) return
+  const target = Math.max(1, currentStep.value - 1)
+  if (target === currentStep.value) return
+  if (target === 2) {
+    await runStepTransition(t('models.oefImportPreparingMapping'), () => {
+      currentStep.value = target
+    })
+    return
+  }
+  currentStep.value = target
 }
 
 async function nextStep(): Promise<void> {
+  if (isStepBusy.value || props.importBusy) return
   if (currentStep.value === 1 && canMoveToMappings.value) {
-    if (draft.value && selectedNotationId.value) {
-      await ensureCatalogAndRebuild(selectedNotationId.value, draft.value)
-      if (catalogError.value) return
-    }
-    currentStep.value = 2
+    await runStepTransition(t('models.oefImportPreparingMapping'), async () => {
+      if (draft.value && selectedNotationId.value) {
+        await ensureCatalogAndRebuild(selectedNotationId.value, draft.value)
+        if (catalogError.value) return
+      }
+      // Switch step under the busy overlay so footer buttons do not flicker/overlap.
+      currentStep.value = 2
+    })
     return
   }
   if (currentStep.value === 2 && canMoveToPreview.value) {
-    currentStep.value = 3
+    await runStepTransition(t('models.oefImportPreparingPreview'), () => {
+      currentStep.value = 3
+    })
   }
 }
 
-function submitImport(): void {
+async function submitImport(): Promise<void> {
   if (!draft.value || !selectedNotationId.value || !canSubmit.value) return
+  if (isStepBusy.value || props.importBusy) return
   saveCachedImportMappingState(selectedNotationId.value, mappingState.value)
   emit('submit', {
     draft: draft.value,
@@ -565,7 +627,11 @@ function submitImport(): void {
 
 <template>
   <BaseModal v-if="visible" :title="t('models.oefImportTitle')" max-width="980px" @close="closeWizard">
-    <div class="oef-import">
+    <div class="oef-import" :aria-busy="showBusyOverlay || isAnalyzing || !!importBusy">
+      <div v-if="showBusyOverlay" class="oef-import__busy" aria-live="polite">
+        <div class="oef-import__busy-spinner" aria-hidden="true" />
+        <p class="oef-import__busy-text">{{ busyOverlayMessage }}</p>
+      </div>
       <div class="oef-import__steps">
         <div class="oef-import__step" :class="{ 'oef-import__step--active': currentStep === 1 }">1. {{ t('models.oefImportStepAnalyze') }}</div>
         <div class="oef-import__step" :class="{ 'oef-import__step--active': currentStep === 2 }">2. {{ t('models.oefImportStepMapping') }}</div>
@@ -850,46 +916,111 @@ function submitImport(): void {
           </ul>
         </div>
       </div>
-    </div>
 
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="closeWizard">
-        {{ t('common.cancel') }}
-      </button>
-      <button v-if="currentStep > 1" type="button" class="btn btn--secondary" @click="prevStep">
-        {{ t('models.oefImportPrevStep') }}
-      </button>
-      <button
-        v-if="currentStep < 3"
-        type="button"
-        class="btn btn--primary"
-        :disabled="(currentStep === 1 && !canMoveToMappings) || (currentStep === 2 && !canMoveToPreview)"
-        @click="nextStep"
-      >
-        {{ t('models.oefImportNextStep') }}
-      </button>
-      <button v-else type="button" class="btn btn--primary" :disabled="!canSubmit" @click="submitImport">
-        {{ importBusy ? t('common.loading') : t('models.oefImportRun') }}
-      </button>
-      <p v-if="importBusy && importProgress" class="oef-import__footer-progress">
-        {{ importProgress }}
-      </p>
-    </template>
+      <div class="oef-import__footer">
+        <button type="button" class="btn btn--secondary" :disabled="footerBusy" @click="closeWizard">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          type="button"
+          class="btn btn--secondary"
+          :class="{ 'oef-import__footer-btn--placeholder': currentStep <= 1 }"
+          :disabled="currentStep <= 1 || footerBusy"
+          :tabindex="currentStep <= 1 ? -1 : 0"
+          :aria-hidden="currentStep <= 1"
+          @click="prevStep"
+        >
+          {{ t('models.oefImportPrevStep') }}
+        </button>
+        <button
+          v-if="currentStep < 3"
+          type="button"
+          class="btn btn--primary"
+          :disabled="
+            footerBusy ||
+            (currentStep === 1 && !canMoveToMappings) ||
+            (currentStep === 2 && !canMoveToPreview)
+          "
+          @click="nextStep"
+        >
+          {{ isStepBusy ? t('common.loading') : t('models.oefImportNextStep') }}
+        </button>
+        <button
+          v-else
+          type="button"
+          class="btn btn--primary"
+          :disabled="!canSubmit || footerBusy"
+          @click="submitImport"
+        >
+          {{ importBusy ? t('common.loading') : t('models.oefImportRun') }}
+        </button>
+      </div>
+    </div>
   </BaseModal>
 </template>
 
 <style scoped>
 .oef-import {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 240px;
 }
 
-.oef-import__footer-progress {
-  flex: 1 1 100%;
+.oef-import__busy {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(1px);
+  cursor: wait;
+}
+
+.oef-import__busy-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: oef-import-busy-spin 0.8s linear infinite;
+}
+
+.oef-import__busy-text {
   margin: 0;
-  font-size: 12px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
+}
+
+@keyframes oef-import-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.oef-import__footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+.oef-import__footer-btn--placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .oef-import__steps {

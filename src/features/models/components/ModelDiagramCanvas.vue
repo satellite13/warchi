@@ -407,6 +407,9 @@ const isTargetInsideSource = (
 }
 
 const shouldSkipEdgeRendering = (edge: DiagramEdgeInstance): boolean => {
+  // Self-loops are never "nested containment" — keep Aggregation/Composition visible
+  // even when the relation has group=true (bounds equality would otherwise hide them).
+  if (edge.sourceInstanceId === edge.targetInstanceId) return false
   const relation = getBoundRelation(edge.modelLinkId)
   if (!hasGroupProperty(relation)) return false
   return isTargetInsideSource(edge.sourceInstanceId, edge.targetInstanceId)

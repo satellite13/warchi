@@ -14,6 +14,7 @@ export const DEFAULT_CONTAINER_DIAGRAM_STYLE = {
   labelColor: '#5c5c5c',
   labelFontSize: 12,
   labelAlign: 'left',
+  labelVerticalAlign: 'top',
   labelInset: 8,
   labelPlacement: 'top',
 } as const

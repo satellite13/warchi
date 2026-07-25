@@ -247,6 +247,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
 
   const nodeTempBySourceElementId = new Map<string, string>()
   const linkTempBySourceRelationshipId = new Map<string, string>()
+  const linkNameBySourceRelationshipId = new Map<string, string>()
   const dirTempByKey = new Map<string, string>()
   const usedDiagramNameVersions = new Set<string>()
   const elementTypeByElementId = new Map(
@@ -357,6 +358,11 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     if (sourceIsRelationship || targetIsRelationship) {
       // Rel→rel Association: no model link; diagram-only edges are created from views.
       continue
+    }
+
+    const trimmedName = link.name?.trim()
+    if (trimmedName) {
+      linkNameBySourceRelationshipId.set(link.sourceRelationshipId, trimmedName)
     }
 
     const mapped = params.mapping.relationshipTypeMap[link.sourceType]
@@ -561,11 +567,13 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         usedIds
       )
       edgeInstanceIdBySourceConnectionId.set(connection.sourceConnectionId, edgeInstanceId)
+      const edgeLabel = linkNameBySourceRelationshipId.get(connection.sourceRelationshipId)
       diagramEdges.push({
         id: edgeInstanceId,
         modelLinkId,
         sourceInstanceId,
         targetInstanceId,
+        ...(edgeLabel ? { attrs: { label: edgeLabel } } : {}),
       })
     }
 

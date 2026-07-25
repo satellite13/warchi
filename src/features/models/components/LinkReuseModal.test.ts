@@ -28,7 +28,10 @@ function mountModal() {
   return mount(LinkReuseModal, {
     props: { options },
     global: {
-      stubs: { BaseModal: modalStub },
+      stubs: {
+        BaseModal: modalStub,
+        UiIcon: { template: '<span class="ui-icon" />' },
+      },
     },
   })
 }
@@ -41,6 +44,9 @@ describe('LinkReuseModal', () => {
     expect(wrapper.text()).toContain('weight: high')
     expect(wrapper.text()).toContain('Depends on')
     expect(wrapper.text()).toContain('models.reuseLinkNoCustomProperties')
+    expect(wrapper.text()).toContain('models.reuseLinkSelectHint')
+    expect(wrapper.findAll('.link-reuse-modal__option')).toHaveLength(2)
+    expect(wrapper.find('.link-reuse-modal__action').text()).toContain('models.reuseLinkSelectAction')
   })
 
   it('emits the selected existing link', async () => {

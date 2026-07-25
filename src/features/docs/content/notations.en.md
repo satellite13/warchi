@@ -151,7 +151,7 @@ If a component type has the `group=true` system property, that component can act
 
 If a link type has the `group=true` system property, that link is treated as a grouping relation:
 
-- when `target` is fully inside `source`, the link may be hidden on the diagram (the structural relation still exists, visual noise is reduced);
+- when `target` is fully inside `source`, the link may be hidden on the diagram (the structural relation still exists, visual noise is reduced); self-loops (`source === target`) are still shown;
 - when dropping one component inside another, if a `group=true` relation is allowed, the editor suggests reusing an existing relation or creating a new one;
 - if multiple relation types are possible, the relation type chooser is shown.
 

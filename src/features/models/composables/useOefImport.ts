@@ -187,6 +187,14 @@ export function useOefImport(options: {
     return { nodeType, component, relation, total }
   }
 
+  function yieldToPaint(): Promise<void> {
+    return new Promise(resolve => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve())
+      })
+    })
+  }
+
   async function handleOefImportSubmit(payload: {
     draft: ImportDraft
     notationId: string
@@ -194,92 +202,107 @@ export function useOefImport(options: {
     ruleDecisions: Record<string, OefRelationRuleDecision>
   }): Promise<void> {
     const modelId = options.state.value.modelId
-    if (!modelId) return
+    if (!modelId || isImportingOef.value) return
 
-    const orgPlanPreview = buildOrganizationImportPlan(payload.draft.organizations)
-    let directoryNodeTypeId: string | null =
-      options.state.value.nodeTypes.find(type => type.name.trim().toLowerCase() === 'directory')
-        ?.id ?? null
-    let directoryTypeCreated = false
-    if (orgPlanPreview.directories.length > 0 && !directoryNodeTypeId) {
-      const ensured = await ensureDirectoryNodeTypeId()
-      if (!ensured.id) return
-      directoryNodeTypeId = ensured.id
-      directoryTypeCreated = ensured.created
-    }
-
-    const nodeTypePropertyDefaultsById = Object.fromEntries(
-      options.state.value.nodeTypes.map(nodeType => [
-        nodeType.id,
-        collectDefaultCustomPropertyValues(parseTypeAttrs(nodeType.attrs ?? null).customProperties ?? []),
-      ])
-    )
-    const componentPropertyDefaultsById = Object.fromEntries(
-      options.state.value.components.map(component => [
-        component.id,
-        collectDefaultCustomPropertyValues(parseEntityAttrs(component.attrs ?? null).customProperties),
-      ])
-    )
-    const relationPropertyDefaultsById = Object.fromEntries(
-      options.state.value.relations.map(relation => [
-        relation.id,
-        collectDefaultCustomPropertyValues(parseEntityAttrs(relation.attrs ?? null).customProperties),
-      ])
-    )
-    const built = buildOefBatchSaveRequest({
-      draft: payload.draft,
-      notationId: payload.notationId,
-      mapping: payload.mapping,
-      directoryNodeTypeId,
-      parentNodeId: options.treeRootNodeId.value ?? null,
-      nodeTypePropertyDefaultsById,
-      componentPropertyDefaultsById,
-      relationPropertyDefaultsById,
-      relationRules: options.state.value.relationRules,
-      ruleDecisions: payload.ruleDecisions,
-    })
-    if (directoryTypeCreated) {
-      built.warnings.push({
-        code: 'directoryTypeCreated',
-        message: 'Directory node type was created automatically',
-      })
-    }
-    if (!hasBatchChanges(built.request)) {
-      options.setUiError(options.t('models.oefImportNoChanges'))
-      return
-    }
-
+    // Show busy UI before any heavy sync work so the wizard does not freeze blank.
     isImportingOef.value = true
-    oefImportProgress.value = options.t('models.oefImportProgressStarting')
-    const result = await applyOefBatchSaveChunks({
-      modelId,
-      request: built.request,
-      batchSave,
-      onProgress: progress => {
-        oefImportProgress.value = formatOefProgress(progress)
-      },
-    })
-    isImportingOef.value = false
-    oefImportProgress.value = null
-    if (!result.success) {
-      options.setUiError(options.t('models.oefImportFailed', { message: result.error.message }))
-      return
-    }
-    await options.loadModel()
-    const warningCounts = new Map<string, number>()
-    for (const warning of built.warnings) {
-      warningCounts.set(warning.code, (warningCounts.get(warning.code) ?? 0) + 1)
-    }
-    const warningGroups = [...warningCounts.entries()]
-      .map(([code, count]) => ({ code, count }))
-      .sort((a, b) => b.count - a.count)
-    const missingRequired = collectOefMissingRequiredReport(built.request)
-    showImportWizard.value = false
-    oefImportReport.value = {
-      ...built.createdCounts,
-      warningsCount: built.warnings.length,
-      warningGroups,
-      missingRequired,
+    oefImportProgress.value = options.t('models.oefImportProgressPreparing')
+    await Promise.resolve()
+    await yieldToPaint()
+
+    try {
+      const orgPlanPreview = buildOrganizationImportPlan(payload.draft.organizations)
+      let directoryNodeTypeId: string | null =
+        options.state.value.nodeTypes.find(type => type.name.trim().toLowerCase() === 'directory')
+          ?.id ?? null
+      let directoryTypeCreated = false
+      if (orgPlanPreview.directories.length > 0 && !directoryNodeTypeId) {
+        const ensured = await ensureDirectoryNodeTypeId()
+        if (!ensured.id) return
+        directoryNodeTypeId = ensured.id
+        directoryTypeCreated = ensured.created
+      }
+
+      const nodeTypePropertyDefaultsById = Object.fromEntries(
+        options.state.value.nodeTypes.map(nodeType => [
+          nodeType.id,
+          collectDefaultCustomPropertyValues(
+            parseTypeAttrs(nodeType.attrs ?? null).customProperties ?? []
+          ),
+        ])
+      )
+      const componentPropertyDefaultsById = Object.fromEntries(
+        options.state.value.components.map(component => [
+          component.id,
+          collectDefaultCustomPropertyValues(
+            parseEntityAttrs(component.attrs ?? null).customProperties
+          ),
+        ])
+      )
+      const relationPropertyDefaultsById = Object.fromEntries(
+        options.state.value.relations.map(relation => [
+          relation.id,
+          collectDefaultCustomPropertyValues(
+            parseEntityAttrs(relation.attrs ?? null).customProperties
+          ),
+        ])
+      )
+      const built = buildOefBatchSaveRequest({
+        draft: payload.draft,
+        notationId: payload.notationId,
+        mapping: payload.mapping,
+        directoryNodeTypeId,
+        parentNodeId: options.treeRootNodeId.value ?? null,
+        nodeTypePropertyDefaultsById,
+        componentPropertyDefaultsById,
+        relationPropertyDefaultsById,
+        relationRules: options.state.value.relationRules,
+        ruleDecisions: payload.ruleDecisions,
+      })
+      if (directoryTypeCreated) {
+        built.warnings.push({
+          code: 'directoryTypeCreated',
+          message: 'Directory node type was created automatically',
+        })
+      }
+      if (!hasBatchChanges(built.request)) {
+        options.setUiError(options.t('models.oefImportNoChanges'))
+        return
+      }
+
+      oefImportProgress.value = options.t('models.oefImportProgressStarting')
+      await yieldToPaint()
+      const result = await applyOefBatchSaveChunks({
+        modelId,
+        request: built.request,
+        batchSave,
+        onProgress: progress => {
+          oefImportProgress.value = formatOefProgress(progress)
+        },
+      })
+      if (!result.success) {
+        options.setUiError(options.t('models.oefImportFailed', { message: result.error.message }))
+        return
+      }
+      await options.loadModel()
+      const warningCounts = new Map<string, number>()
+      for (const warning of built.warnings) {
+        warningCounts.set(warning.code, (warningCounts.get(warning.code) ?? 0) + 1)
+      }
+      const warningGroups = [...warningCounts.entries()]
+        .map(([code, count]) => ({ code, count }))
+        .sort((a, b) => b.count - a.count)
+      const missingRequired = collectOefMissingRequiredReport(built.request)
+      showImportWizard.value = false
+      oefImportReport.value = {
+        ...built.createdCounts,
+        warningsCount: built.warnings.length,
+        warningGroups,
+        missingRequired,
+      }
+    } finally {
+      isImportingOef.value = false
+      oefImportProgress.value = null
     }
   }
 

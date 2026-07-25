@@ -8,6 +8,7 @@ import type { ImportMappingState } from './mappingState'
 import { collectDisallowedOefLinkGroups } from './oefRelationRuleValidation'
 import mainXml from './__fixtures__/Main.xml?raw'
 import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
+import namedRelationshipXml from './__fixtures__/named-relationship.xml?raw'
 
 function buildFullMappingState(): ImportMappingState {
   return {
@@ -122,6 +123,11 @@ describe('oefToBatchSave', () => {
 
     expect(containers).toHaveLength(1)
     expect(containers[0]?.attrs?.containerLabel).toBe('Group')
+    const containerStyle = containers[0]?.attrs?.diagramStyle as
+      | { labelAlign?: string; labelVerticalAlign?: string }
+      | undefined
+    expect(containerStyle?.labelVerticalAlign).toBe('top')
+    expect(containerStyle?.labelAlign).toBe('left')
     expect(anchors).toHaveLength(1)
     expect(typeof anchors[0]?.attrs?.hostEdgeInstanceId).toBe('string')
     expect(modelEdges).toHaveLength(1)
@@ -132,6 +138,28 @@ describe('oefToBatchSave', () => {
           edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
       )
     ).toBe(true)
+  })
+
+  it('copies OEF relationship name onto diagram edge label', () => {
+    const draft = buildImportDraft(parseOefXml(namedRelationshipXml))
+    expect(draft.links[0]?.name).toBe('Payload flow')
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessProcess: { nodeTypeId: 'nt-process', componentId: 'cmp-process' },
+        },
+        relationshipTypeMap: {
+          Flow: { linkTypeId: 'lt-flow', relationId: 'rel-flow' },
+        },
+      },
+      notationId: 'notation-1',
+    })
+
+    const attrs = parseDiagramAttrs(result.request.diagrams.create[0]!.attrs)
+    expect(attrs.instances.edges).toHaveLength(1)
+    expect(attrs.instances.edges[0]?.attrs?.label).toBe('Payload flow')
   })
 
   it('skips unmapped entities and reports warnings', () => {

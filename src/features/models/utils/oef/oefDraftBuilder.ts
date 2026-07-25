@@ -114,12 +114,16 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
       sourceType: element.type,
       name: element.name || `Element ${element.id}`,
     })),
-    links: parsed.relationships.map(relationship => ({
-      sourceRelationshipId: relationship.id,
-      sourceType: relationship.type,
-      sourceElementId: relationship.sourceElementId,
-      targetElementId: relationship.targetElementId,
-    })),
+    links: parsed.relationships.map(relationship => {
+      const name = (relationship.name ?? '').trim()
+      return {
+        sourceRelationshipId: relationship.id,
+        sourceType: relationship.type,
+        sourceElementId: relationship.sourceElementId,
+        targetElementId: relationship.targetElementId,
+        ...(name ? { name } : {}),
+      }
+    }),
     diagrams,
     organizations: Array.isArray(parsed.organizations) ? parsed.organizations : [],
     sourceElementTypes: toUniqueSorted(parsed.elements.map(element => element.type)),

@@ -22,6 +22,26 @@ describe('oefParser', () => {
     )
   })
 
+  it('parses relationship name', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="m1">
+  <name>Named</name>
+  <elements>
+    <element identifier="el-a" xsi:type="BusinessProcess"><name>A</name></element>
+    <element identifier="el-b" xsi:type="BusinessProcess"><name>B</name></element>
+  </elements>
+  <relationships>
+    <relationship identifier="rel-1" source="el-a" target="el-b" xsi:type="Flow">
+      <name>My flow</name>
+    </relationship>
+  </relationships>
+  <views><diagrams /></views>
+</model>`
+    const parsed = parseOefXml(xml)
+    expect(parsed.relationships).toHaveLength(1)
+    expect(parsed.relationships[0]?.name).toBe('My flow')
+  })
+
   it('throws on malformed xml', () => {
     expect(() => parseOefXml('<model><elements></model>')).toThrow(/Invalid OEF XML/)
   })

@@ -70,6 +70,7 @@ function parseRelationships(model: Element): OefRelationship[] {
       return {
         id,
         type: typeOf(el),
+        name: textOfFirstDirectChild(el, 'name'),
         sourceElementId: (el.getAttribute('source') ?? '').trim(),
         targetElementId: (el.getAttribute('target') ?? '').trim(),
       } satisfies OefRelationship

@@ -41,7 +41,10 @@ export function toOefParsedModel(response: OefNormalizeResponse): OefParsedModel
   return {
     model: response.model,
     elements: response.elements,
-    relationships: response.relationships,
+    relationships: response.relationships.map(relationship => ({
+      ...relationship,
+      name: typeof relationship.name === 'string' ? relationship.name : '',
+    })),
     views: response.views,
     organizations: Array.isArray(response.organizations) ? response.organizations : [],
   }

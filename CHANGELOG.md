@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.7] - 2026-07-25
+
+### Fixed
+- OEF import keeps Aggregation/Composition self-loops visible on diagrams (group relations no longer hide loops).
+- OEF relationship names are applied to diagram edge labels (requires arepos-server 0.6.4 for server normalize).
+- Diagram Container default label placement is top-left.
+- OEF import wizard no longer freezes before progress appears; footer buttons no longer overlap on step transitions.
+- "Existing links found" dialog options are styled as clear interactive choices.
+
 ## [0.10.6] - 2026-07-25
 
 ### Changed

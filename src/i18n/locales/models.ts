@@ -107,6 +107,19 @@ export const modelsMessages = {
       oefImportWarningNodeTypeNotMapped: 'Не смэпплен тип элемента',
       oefImportWarningLinkTypeNotMapped: 'Не смэпплен тип связи',
       oefImportWarningLinkMissingNode: 'Связь пропущена: не найдены ноды',
+      oefImportRelationRulesTitle: 'Связи вне правил нотации',
+      oefImportRelationRulesHint:
+        'Для каждой группы выберите: пропустить или импортировать вопреки правилам. Без выбора дальше нельзя.',
+      oefImportRelationRulesSkip: 'Пропустить',
+      oefImportRelationRulesImport: 'Импортировать всё равно',
+      oefImportRelationRulesNeedDecision: 'Нужен выбор для всех групп недопустимых связей',
+      oefImportRelationRulesGroupLabel:
+        '{relationshipType}: {sourceType} → {targetType} ({relationName}) — {count}',
+      oefImportStatLinksPlanned: 'Связей к созданию: {count}',
+      oefImportWarningLinkNotAllowedByRelationRules:
+        'Связь пропущена: не допускается правилами нотации',
+      oefImportWarningLinkImportedAgainstRelationRules:
+        'Связь импортирована вопреки правилам нотации',
       oefImportWarningDiagramNodeMissingModelNode:
         'Диаграммный инстанс ноды пропущен: не найдена нода модели',
       oefImportWarningDiagramConnectionMissingModelLink:
@@ -543,6 +556,19 @@ export const modelsMessages = {
       oefImportWarningNodeTypeNotMapped: 'Element type is not mapped',
       oefImportWarningLinkTypeNotMapped: 'Relationship type is not mapped',
       oefImportWarningLinkMissingNode: 'Link skipped: source/target node is missing',
+      oefImportRelationRulesTitle: 'Links outside notation rules',
+      oefImportRelationRulesHint:
+        'For each group choose skip or import anyway. You cannot continue until every group has a choice.',
+      oefImportRelationRulesSkip: 'Skip',
+      oefImportRelationRulesImport: 'Import anyway',
+      oefImportRelationRulesNeedDecision: 'Choose an action for every disallowed link group',
+      oefImportRelationRulesGroupLabel:
+        '{relationshipType}: {sourceType} → {targetType} ({relationName}) — {count}',
+      oefImportStatLinksPlanned: 'Links to create: {count}',
+      oefImportWarningLinkNotAllowedByRelationRules:
+        'Link skipped: not allowed by notation relation rules',
+      oefImportWarningLinkImportedAgainstRelationRules:
+        'Link imported against notation relation rules',
       oefImportWarningDiagramNodeMissingModelNode:
         'Diagram node instance skipped: model node is missing',
       oefImportWarningDiagramConnectionMissingModelLink:

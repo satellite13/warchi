@@ -3217,6 +3217,7 @@ onBeforeUnmount(() => {
     :link-types="state.linkTypes"
     :components="state.components"
     :relations="state.relations"
+    :relation-rules="state.relationRules"
     :import-busy="isImportingOef"
     :import-progress="oefImportProgress"
     :ensure-notation-catalog="ensureImportNotationCatalog"

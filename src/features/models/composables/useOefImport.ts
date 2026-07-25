@@ -11,6 +11,7 @@ import type { ModelEditorState } from '../types'
 import type { ImportMappingState } from '../utils/oef/mappingState'
 import type { ImportDraft } from '../utils/oef/types'
 import { applyOefBatchSaveChunks, type OefChunkProgress } from '../utils/oef/chunkOefBatchSave'
+import type { OefRelationRuleDecision } from '../utils/oef/oefRelationRuleValidation'
 import { buildOefBatchSaveRequest } from '../utils/oef/oefToBatchSave'
 import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
 import { batchSave, hasBatchChanges } from './useModelBatchSave'
@@ -86,6 +87,10 @@ export function useOefImport(options: {
         return options.t('models.oefImportWarningDirectoryTypeMissing')
       case 'directoryTypeCreated':
         return options.t('models.oefImportWarningDirectoryTypeCreated')
+      case 'linkNotAllowedByRelationRules':
+        return options.t('models.oefImportWarningLinkNotAllowedByRelationRules')
+      case 'linkImportedAgainstRelationRules':
+        return options.t('models.oefImportWarningLinkImportedAgainstRelationRules')
       default:
         return code
     }
@@ -186,6 +191,7 @@ export function useOefImport(options: {
     draft: ImportDraft
     notationId: string
     mapping: ImportMappingState
+    ruleDecisions: Record<string, OefRelationRuleDecision>
   }): Promise<void> {
     const modelId = options.state.value.modelId
     if (!modelId) return
@@ -229,6 +235,8 @@ export function useOefImport(options: {
       nodeTypePropertyDefaultsById,
       componentPropertyDefaultsById,
       relationPropertyDefaultsById,
+      relationRules: options.state.value.relationRules,
+      ruleDecisions: payload.ruleDecisions,
     })
     if (directoryTypeCreated) {
       built.warnings.push({

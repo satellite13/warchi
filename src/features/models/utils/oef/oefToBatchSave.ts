@@ -26,6 +26,12 @@ import {
 import { placeEdgeAnchorAtMidpoint } from '../edgeAnchorSync'
 import type { ImportMappingState } from './mappingState'
 import { buildOrganizationImportPlan } from './organizationImport'
+import {
+  buildDisallowedOefLinkGroupKey,
+  isOefLinkAllowedByRelationRules,
+  type OefRelationRuleDecision,
+  type OefRelationRuleRef,
+} from './oefRelationRuleValidation'
 import type { ImportDraft, ImportDraftDiagramConnectionInstance } from './types'
 
 const DEFAULT_NOTE_DIAGRAM_STYLE = {
@@ -55,6 +61,8 @@ export type OefImportBuildWarningCode =
   | 'relationsBranchSkipped'
   | 'directoryTypeMissing'
   | 'directoryTypeCreated'
+  | 'linkNotAllowedByRelationRules'
+  | 'linkImportedAgainstRelationRules'
 
 export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
   if (name.length <= maxLength) return name
@@ -123,6 +131,8 @@ export type BuildOefBatchSaveParams = {
   nodeTypePropertyDefaultsById?: Record<string, Record<string, unknown>>
   componentPropertyDefaultsById?: Record<string, Record<string, unknown>>
   relationPropertyDefaultsById?: Record<string, Record<string, unknown>>
+  relationRules?: OefRelationRuleRef[]
+  ruleDecisions?: Record<string, OefRelationRuleDecision>
 }
 
 function makeDirectoryAttrs(treeOrder: number): string {
@@ -239,6 +249,10 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   const linkTempBySourceRelationshipId = new Map<string, string>()
   const dirTempByKey = new Map<string, string>()
   const usedDiagramNameVersions = new Set<string>()
+  const elementTypeByElementId = new Map(
+    params.draft.nodes.map(node => [node.sourceElementId, node.sourceType])
+  )
+  const skippedByRelationRules = new Set<string>()
 
   const orgPlan = buildOrganizationImportPlan(params.draft.organizations)
   for (const warning of orgPlan.warnings) {
@@ -365,6 +379,54 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       })
       continue
     }
+    if (params.relationRules !== undefined) {
+      const sourceElementType = elementTypeByElementId.get(link.sourceElementId)
+      const targetElementType = elementTypeByElementId.get(link.targetElementId)
+      const sourceMapped = sourceElementType
+        ? params.mapping.elementTypeMap[sourceElementType]
+        : undefined
+      const targetMapped = targetElementType
+        ? params.mapping.elementTypeMap[targetElementType]
+        : undefined
+      if (
+        sourceElementType &&
+        targetElementType &&
+        sourceMapped?.componentId &&
+        targetMapped?.componentId
+      ) {
+        const allowed = isOefLinkAllowedByRelationRules({
+          fromComponentId: sourceMapped.componentId,
+          toComponentId: targetMapped.componentId,
+          relationId: mapped.relationId,
+          relationRules: params.relationRules,
+        })
+        if (!allowed) {
+          const groupKey = buildDisallowedOefLinkGroupKey({
+            sourceElementType,
+            targetElementType,
+            relationshipType: link.sourceType,
+            relationId: mapped.relationId,
+            fromComponentId: sourceMapped.componentId,
+            toComponentId: targetMapped.componentId,
+          })
+          const decision = params.ruleDecisions?.[groupKey] ?? 'skip'
+          if (decision === 'skip') {
+            warnings.push({
+              code: 'linkNotAllowedByRelationRules',
+              sourceId: link.sourceRelationshipId,
+              message: `Link "${link.sourceRelationshipId}" skipped because it is not allowed by relation rules`,
+            })
+            skippedByRelationRules.add(link.sourceRelationshipId)
+            continue
+          }
+          warnings.push({
+            code: 'linkImportedAgainstRelationRules',
+            sourceId: link.sourceRelationshipId,
+            message: `Link "${link.sourceRelationshipId}" imported despite relation rule restrictions`,
+          })
+        }
+      }
+    }
     const tempId = makeStableTempId('oef-link', link.sourceRelationshipId, usedIds)
     const relationDefaults = params.relationPropertyDefaultsById?.[mapped.relationId] ?? {}
     request.links.create.push({
@@ -471,6 +533,9 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     for (const connection of modelConnections) {
       const modelLinkId = linkTempBySourceRelationshipId.get(connection.sourceRelationshipId)
       if (!modelLinkId) {
+        if (skippedByRelationRules.has(connection.sourceRelationshipId)) {
+          continue
+        }
         warnings.push({
           code: 'diagramConnectionMissingModelLink',
           sourceId: connection.sourceConnectionId,

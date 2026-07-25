@@ -2,7 +2,13 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
-import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse } from '@/types/api'
+import type {
+  ComponentResponse,
+  LinkTypeResponse,
+  NodeTypeResponse,
+  RelationResponse,
+  RelationRuleResponse,
+} from '@/types/api'
 import type { NotationData } from '@/types/entities'
 import { buildImportDraft } from '../utils/oef/oefDraftBuilder'
 import {
@@ -21,25 +27,43 @@ import {
   type OefNormalizeProgress,
 } from '../utils/oef/oefNormalizeApi'
 import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
+import {
+  collectDisallowedOefLinkGroups,
+  type DisallowedOefLinkGroup,
+  type OefRelationRuleDecision,
+} from '../utils/oef/oefRelationRuleValidation'
 import type { ImportDraft, ImportIssue, ImportIssueCode } from '../utils/oef/types'
 
-const props = defineProps<{
-  visible: boolean
-  modelId: string
-  notations: NotationData[]
-  nodeTypes: NodeTypeResponse[]
-  linkTypes: LinkTypeResponse[]
-  components: ComponentResponse[]
-  relations: RelationResponse[]
-  importBusy?: boolean
-  importProgress?: string | null
-  /** Loads components/relations/types for a notation not yet used by model diagrams. */
-  ensureNotationCatalog?: (notationId: string) => Promise<void>
-}>()
+const props = withDefaults(
+  defineProps<{
+    visible: boolean
+    modelId: string
+    notations: NotationData[]
+    nodeTypes: NodeTypeResponse[]
+    linkTypes: LinkTypeResponse[]
+    components: ComponentResponse[]
+    relations: RelationResponse[]
+    relationRules?: RelationRuleResponse[]
+    importBusy?: boolean
+    importProgress?: string | null
+    /** Loads components/relations/types for a notation not yet used by model diagrams. */
+    ensureNotationCatalog?: (notationId: string) => Promise<void>
+  }>(),
+  {
+    relationRules: () => [],
+  }
+)
 
 const emit = defineEmits<{
   close: []
-  submit: [{ draft: ImportDraft; notationId: string; mapping: ImportMappingState }]
+  submit: [
+    {
+      draft: ImportDraft
+      notationId: string
+      mapping: ImportMappingState
+      ruleDecisions: Record<string, OefRelationRuleDecision>
+    },
+  ]
 }>()
 
 const { t } = useI18n()
@@ -64,6 +88,7 @@ const bulkElementValue = ref('')
 const bulkRelationshipValue = ref('')
 const isLoadingCatalog = ref(false)
 const catalogError = ref<string | null>(null)
+const ruleDecisions = ref<Record<string, OefRelationRuleDecision>>({})
 
 const nodeTypeById = computed(() => new Map(props.nodeTypes.map(item => [item.id, item])))
 const linkTypeById = computed(() => new Map(props.linkTypes.map(item => [item.id, item])))
@@ -152,11 +177,65 @@ const canMoveToMappings = computed(
     !isAnalyzing.value &&
     !isLoadingCatalog.value
 )
+const disallowedLinkGroups = computed((): DisallowedOefLinkGroup[] => {
+  if (!draft.value || !selectedNotationId.value) return []
+  return collectDisallowedOefLinkGroups({
+    draft: draft.value,
+    mapping: mappingState.value,
+    relationRules: props.relationRules,
+  })
+})
+
+const allRelationRuleDecisionsMade = computed(() =>
+  disallowedLinkGroups.value.every(group => {
+    const decision = ruleDecisions.value[group.key]
+    return decision === 'skip' || decision === 'import'
+  })
+)
+
+const plannedLinksCount = computed(() => {
+  if (!draft.value) return 0
+  const skipped = new Set<string>()
+  for (const group of disallowedLinkGroups.value) {
+    if (ruleDecisions.value[group.key] === 'skip') {
+      for (const id of group.sourceRelationshipIds) skipped.add(id)
+    }
+  }
+  let count = 0
+  const relationshipIds = new Set(draft.value.links.map(link => link.sourceRelationshipId))
+  const nodeTypeByElementId = new Map(
+    draft.value.nodes.map(node => [node.sourceElementId, node.sourceType])
+  )
+  for (const link of draft.value.links) {
+    if (relationshipIds.has(link.sourceElementId) || relationshipIds.has(link.targetElementId)) {
+      continue
+    }
+    const sourceElementType = nodeTypeByElementId.get(link.sourceElementId)
+    const targetElementType = nodeTypeByElementId.get(link.targetElementId)
+    if (!sourceElementType || !targetElementType) continue
+    const sourceMapped = mappingState.value.elementTypeMap[sourceElementType]
+    const targetMapped = mappingState.value.elementTypeMap[targetElementType]
+    const relMapped = mappingState.value.relationshipTypeMap[link.sourceType]
+    if (
+      !sourceMapped?.componentId ||
+      !targetMapped?.componentId ||
+      !relMapped?.relationId ||
+      !relMapped.linkTypeId
+    ) {
+      continue
+    }
+    if (skipped.has(link.sourceRelationshipId)) continue
+    count += 1
+  }
+  return count
+})
+
 const canMoveToPreview = computed(
   () =>
     canMoveToMappings.value &&
     mappedElementsCount.value === (draft.value?.sourceElementTypes.length ?? 0) &&
-    mappedRelationshipsCount.value === (draft.value?.sourceRelationshipTypes.length ?? 0)
+    mappedRelationshipsCount.value === (draft.value?.sourceRelationshipTypes.length ?? 0) &&
+    allRelationRuleDecisionsMade.value
 )
 const canSubmit = computed(() => currentStep.value === 3 && canMoveToPreview.value && !props.importBusy)
 
@@ -211,7 +290,21 @@ function resetState(): void {
   mappingState.value = { elementTypeMap: {}, relationshipTypeMap: {} }
   suggestions.value = { elementBySourceType: {}, relationshipBySourceType: {} }
   expandedIssueCodes.value = new Set()
+  ruleDecisions.value = {}
 }
+
+function setRuleDecision(key: string, decision: OefRelationRuleDecision): void {
+  ruleDecisions.value = { ...ruleDecisions.value, [key]: decision }
+}
+
+watch(disallowedLinkGroups, groups => {
+  const alive = new Set(groups.map(group => group.key))
+  const next: Record<string, OefRelationRuleDecision> = {}
+  for (const [key, value] of Object.entries(ruleDecisions.value)) {
+    if (alive.has(key)) next[key] = value
+  }
+  ruleDecisions.value = next
+})
 
 watch(
   () => props.visible,
@@ -249,6 +342,7 @@ function rebuildMappings(nextDraft: ImportDraft, notationId: string): void {
     suggestions: nextSuggestions,
   })
   mappingState.value = mergeImportMappingState(initial, loadCachedImportMappingState(notationId))
+  ruleDecisions.value = {}
 }
 
 async function ensureCatalogAndRebuild(notationId: string, nextDraft: ImportDraft): Promise<void> {
@@ -464,6 +558,7 @@ function submitImport(): void {
     draft: draft.value,
     notationId: selectedNotationId.value,
     mapping: mappingState.value,
+    ruleDecisions: { ...ruleDecisions.value },
   })
 }
 </script>
@@ -647,12 +742,63 @@ function submitImport(): void {
             </select>
           </div>
         </div>
+
+        <div
+          v-if="disallowedLinkGroups.length > 0"
+          class="oef-import__mapping oef-import__relation-rules"
+        >
+          <h4>{{ t('models.oefImportRelationRulesTitle') }}</h4>
+          <p class="oef-import__hint">{{ t('models.oefImportRelationRulesHint') }}</p>
+          <p
+            v-if="!allRelationRuleDecisionsMade"
+            class="oef-import__hint oef-import__hint--warn"
+          >
+            {{ t('models.oefImportRelationRulesNeedDecision') }}
+          </p>
+          <div
+            v-for="group in disallowedLinkGroups"
+            :key="group.key"
+            class="oef-import__rule-group"
+          >
+            <span class="oef-import__source">
+              {{
+                t('models.oefImportRelationRulesGroupLabel', {
+                  relationshipType: group.relationshipType,
+                  sourceType: group.sourceElementType,
+                  targetType: group.targetElementType,
+                  relationName: relationById.get(group.relationId)?.name ?? group.relationId,
+                  count: group.count,
+                })
+              }}
+            </span>
+            <div class="oef-import__rule-actions">
+              <label>
+                <input
+                  type="radio"
+                  :name="`rule-${group.key}`"
+                  :checked="ruleDecisions[group.key] === 'skip'"
+                  @change="setRuleDecision(group.key, 'skip')"
+                />
+                {{ t('models.oefImportRelationRulesSkip') }}
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  :name="`rule-${group.key}`"
+                  :checked="ruleDecisions[group.key] === 'import'"
+                  @change="setRuleDecision(group.key, 'import')"
+                />
+                {{ t('models.oefImportRelationRulesImport') }}
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-if="currentStep === 3 && hasDraft && draft" class="oef-import__panel">
         <div class="oef-import__stats">
           <span>{{ t('models.oefImportStatNodes', { count: draft.nodes.length }) }}</span>
-          <span>{{ t('models.oefImportStatLinks', { count: draft.links.length }) }}</span>
+          <span>{{ t('models.oefImportStatLinksPlanned', { count: plannedLinksCount }) }}</span>
           <span>{{ t('models.oefImportStatDiagrams', { count: draft.diagrams.length }) }}</span>
           <span v-if="plannedFolderCount > 0">{{
             t('models.oefImportStatFolders', { count: plannedFolderCount })
@@ -999,5 +1145,24 @@ function submitImport(): void {
   margin: 0;
   font-size: 13px;
   color: var(--danger);
+}
+
+.oef-import__rule-group {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.oef-import__rule-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.oef-import__hint--warn {
+  color: var(--warning, #e67e22);
 }
 </style>

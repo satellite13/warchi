@@ -5,6 +5,7 @@ import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
 import { buildOefBatchSaveRequest, OEF_ENTITY_NAME_MAX_LENGTH } from './oefToBatchSave'
 import type { ImportMappingState } from './mappingState'
+import { collectDisallowedOefLinkGroups } from './oefRelationRuleValidation'
 import mainXml from './__fixtures__/Main.xml?raw'
 import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
 
@@ -236,5 +237,55 @@ describe('oefToBatchSave', () => {
     expect(names.some(name => name.endsWith(' (2)'))).toBe(true)
     expect(names.some(name => name.endsWith(' (3)'))).toBe(true)
     expect(result.warnings.filter(item => item.code === 'nameDeduplicated')).toHaveLength(2)
+  })
+
+  it('skips links disallowed by empty relation rules when decisions are skip', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    const mapping = buildFullMappingState()
+    const groups = collectDisallowedOefLinkGroups({
+      draft,
+      mapping,
+      relationRules: [],
+    })
+    const ruleDecisions = Object.fromEntries(groups.map(group => [group.key, 'skip' as const]))
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping,
+      notationId: 'notation-1',
+      relationRules: [],
+      ruleDecisions,
+    })
+
+    expect(result.request.links.create).toHaveLength(0)
+    expect(result.warnings.length).toBeGreaterThan(0)
+    expect(result.warnings.every(item => item.code === 'linkNotAllowedByRelationRules')).toBe(true)
+    expect(result.warnings.some(item => item.code === 'diagramConnectionMissingModelLink')).toBe(
+      false
+    )
+  })
+
+  it('imports links disallowed by empty relation rules when decisions are import', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    const mapping = buildFullMappingState()
+    const groups = collectDisallowedOefLinkGroups({
+      draft,
+      mapping,
+      relationRules: [],
+    })
+    const ruleDecisions = Object.fromEntries(groups.map(group => [group.key, 'import' as const]))
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping,
+      notationId: 'notation-1',
+      relationRules: [],
+      ruleDecisions,
+    })
+
+    expect(result.request.links.create).toHaveLength(5)
+    expect(result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')).toHaveLength(
+      5
+    )
   })
 })

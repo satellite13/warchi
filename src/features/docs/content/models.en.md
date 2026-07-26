@@ -132,10 +132,12 @@ Compact fields use short labels:
 
 - `W/H/R` — width, height, radius;
 - `PT/PB/PL/PR` — number of top/bottom/left/right ports;
-- `T/R/B/L` — top/right/bottom/left insets.
+- `T/R/B/L` — top/right/bottom/left insets (content inset and label inset).
 
 When hovering these fields, a tooltip shows the full parameter name.
 Inset blocks also support sync modes **Pair** (paired sides) and **All** (all sides), and button captions are localized according to the current UI language.
+
+The three node style insets (**content**, **label**, **icon**) nest and are not interchangeable: first the shape’s content area shrinks, then text and the icon zone sit inside it. Details: [Notations → Content, label, and icon insets](/docs/notations).
 
 The left and right panels can be resized and collapsed.
 

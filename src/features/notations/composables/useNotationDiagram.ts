@@ -3,6 +3,7 @@ import {
   DiagramRenderer,
   RectangleNode,
   CircleNode,
+  CustomShapeNode,
   deserializeCComponent,
   Node as DiagramNode,
   Edge,
@@ -18,8 +19,16 @@ import {
 import {
   createDiagramNode,
   getDiagramNodeShape,
+  resolveCornerCutPx,
   resolveDiagramNodeShape,
 } from "@/features/diagram/diagramNodeFactory"
+import { customOutlineToPath2D, customOutlineToSvgPath } from "@/utils/customOutlinePath"
+import { diagramShapeFactories } from "@/utils/diagramShapes"
+import { applyContentInsetFromStyle } from "@/features/diagram-style/utils/applyContentInsetFromStyle"
+import {
+  ensureNodeShapeScaleSliceCatalog,
+  withResolvedScaleSlice,
+} from "@/utils/resolveCustomScaleSlice"
 import type { CustomProperty, DiagramStyle } from "@/domain/attrs/notationAttrs"
 import type {
   NotationEditorState,
@@ -153,7 +162,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     y: number
   ): DiagramNode {
     const visual = resolveComponentStyle(item)
-    const ds = item.parsedAttrs.diagramStyle
+    const ds = withResolvedScaleSlice(item.parsedAttrs.diagramStyle)
     const shape = resolveDiagramNodeShape(ds)
     const componentProperties = item.parsedAttrs.customProperties.filter((p) => !p.system)
     const nodeTypeProperties = typeCustomPropertiesForComponent(item)
@@ -254,7 +263,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
       const existing = renderer.getNode(nodeId)
       if (existing) {
-        const ds = component.parsedAttrs.diagramStyle
+        const ds = withResolvedScaleSlice(component.parsedAttrs.diagramStyle)
         const expectedShape = resolveDiagramNodeShape(ds)
         const existingShape = getDiagramNodeShape(existing)
         if (expectedShape !== existingShape) {
@@ -298,8 +307,24 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         if (existing instanceof RectangleNode) {
           existing.cornerRadius = visual.cornerRadius
         }
+        if (
+          expectedShape === "custom" &&
+          existing instanceof CustomShapeNode &&
+          ds?.customOutline?.length
+        ) {
+          const segments = ds.customOutline
+          const slice = ds.customScaleSlice
+          existing.setPathFactory((w, h) => customOutlineToPath2D(segments, w, h, slice))
+          existing.setSvgPath((w, h) => customOutlineToSvgPath(segments, w, h, slice))
+        }
+        if (expectedShape === "beveled-rectangle" && existing instanceof CustomShapeNode) {
+          const cut = resolveCornerCutPx(ds)
+          const factory = diagramShapeFactories["beveled-rectangle"]
+          existing.setPathFactory((w, h) => factory.path(w, h, cut))
+          existing.setSvgPath((w, h) => factory.svgPath(w, h, cut))
+        }
         existing.icon = buildNodeIcon(ds)
-        existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
+        applyContentInsetFromStyle(existing, ds)
         if (ds?.labelPlacement) {
           ;(existing as DiagramNode & { labelPlacement?: string }).labelPlacement = ds.labelPlacement
         }
@@ -773,6 +798,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
     syncNodes(renderer)
     updateSelection(renderer)
+
+    void ensureNodeShapeScaleSliceCatalog().then((ok) => {
+      if (!ok || rendererRef.value !== renderer) return
+      // Re-apply path factories once catalog scaleSlice attrs are available.
+      syncNodes(renderer)
+      updateSelection(renderer)
+    })
 
     watch(
       () => [state.value.components, state.value.relations, state.value.diagramLayer],

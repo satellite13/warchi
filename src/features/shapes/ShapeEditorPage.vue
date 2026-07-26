@@ -3,8 +3,13 @@ import { ref, computed, onMounted, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { useNodeShapes } from "@/composables/useNodeShapes"
 import type { NodeShapeResponse } from "@/types/api"
-import { DEFAULT_RECTANGLE_OUTLINE } from "@/domain/attrs/notationAttrs"
-import type { OutlineSegment } from "@/domain/attrs/notationAttrs"
+import { DEFAULT_RECTANGLE_OUTLINE, createDefaultScaleSlice } from "@/domain/attrs/notationAttrs"
+import type { OutlineSegment, ScaleSlice } from "@/domain/attrs/notationAttrs"
+import {
+  hasEffectiveScaleSlice,
+  mergeScaleSliceIntoAttrs,
+  parseScaleSliceFromAttrs,
+} from "@/types/shapes"
 import BaseModal from "@/components/modals/BaseModal.vue"
 import DocumentEditorModal from "@/components/modals/DocumentEditorModal.vue"
 import ShareAccessModal from "@/components/modals/ShareAccessModal.vue"
@@ -42,6 +47,8 @@ const isDeleting = ref(false)
 const saveError = ref<string | null>(null)
 const localName = ref("")
 const localOutline = ref<OutlineSegment[]>([])
+const localScaleSlice = ref<ScaleSlice | null>(null)
+const scaleSliceEnabled = ref(false)
 const showDeleteConfirm = ref(false)
 const showShareModal = ref(false)
 const { checkPermission } = usePermissions()
@@ -95,8 +102,40 @@ const isDirty = computed(() => {
   const savedName = detail.name ?? ""
   const savedOutline = parseOutlineJson(detail.outline)
   if (localName.value !== savedName) return true
-  return JSON.stringify(localOutline.value) !== JSON.stringify(savedOutline)
+  if (JSON.stringify(localOutline.value) !== JSON.stringify(savedOutline)) return true
+  const savedSlice = parseScaleSliceFromAttrs(detail.attrs) ?? null
+  const localSlice = scaleSliceEnabled.value ? localScaleSlice.value : null
+  return JSON.stringify(normalizeSliceForCompare(localSlice)) !==
+    JSON.stringify(normalizeSliceForCompare(savedSlice))
 })
+
+function normalizeSliceForCompare(slice: ScaleSlice | null): ScaleSlice | null {
+  if (!slice || !hasEffectiveScaleSlice(slice)) return null
+  return {
+    left: slice.left,
+    right: slice.right,
+    top: slice.top,
+    bottom: slice.bottom,
+    refWidth: slice.refWidth,
+    refHeight: slice.refHeight,
+  }
+}
+
+function loadScaleSliceFromDetail(detail: NodeShapeResponse | null) {
+  const slice = parseScaleSliceFromAttrs(detail?.attrs) ?? null
+  if (slice) {
+    localScaleSlice.value = slice
+    scaleSliceEnabled.value = true
+  } else {
+    localScaleSlice.value = createDefaultScaleSlice({
+      left: 24,
+      right: 24,
+      top: 24,
+      bottom: 24,
+    })
+    scaleSliceEnabled.value = false
+  }
+}
 
 onMounted(() => {
   fetchList({ size: 200 }).then(async (ok) => {
@@ -112,6 +151,7 @@ watch(selectedShapeId, async (id) => {
   selectedDetail.value = null
   localName.value = ""
   localOutline.value = []
+  loadScaleSliceFromDetail(null)
   canShareSelected.value = false
   if (!id) return
   const detail = await fetchById(id)
@@ -121,6 +161,7 @@ watch(selectedShapeId, async (id) => {
     localOutline.value = parseOutlineJson(detail.outline).length
       ? parseOutlineJson(detail.outline)
       : [...DEFAULT_RECTANGLE_OUTLINE]
+    loadScaleSliceFromDetail(detail)
     await loadOwnerDisplayNames([detail.ownerId])
     canShareSelected.value = await checkPermission({
       resourceType: 'NODE_SHAPE',
@@ -161,6 +202,7 @@ async function createAndSelectShape() {
       parseOutlineJson(created.outline).length > 0
         ? parseOutlineJson(created.outline)
         : [...DEFAULT_RECTANGLE_OUTLINE]
+    loadScaleSliceFromDetail(created)
   } else {
     saveError.value = t("shapes.errorSave")
   }
@@ -190,14 +232,17 @@ async function handleSave() {
   if (!selectedDetail.value || !canEditSelected.value) return
   saveError.value = null
   isSaving.value = true
+  const sliceToSave = scaleSliceEnabled.value ? localScaleSlice.value : null
+  const nextAttrs = mergeScaleSliceIntoAttrs(selectedDetail.value.attrs, sliceToSave)
   const updated = await update(selectedDetail.value.id, {
     name: localName.value.trim() || selectedDetail.value.name,
     outline: JSON.stringify(localOutline.value),
-    attrs: selectedDetail.value.attrs ?? undefined
+    attrs: nextAttrs
   })
   isSaving.value = false
   if (updated) {
     selectedDetail.value = updated
+    loadScaleSliceFromDetail(updated)
     const idx = list.value.findIndex((s) => s.id === updated.id)
     if (idx >= 0) {
       list.value = [
@@ -208,6 +253,18 @@ async function handleSave() {
     }
   } else {
     saveError.value = t("shapes.errorSave")
+  }
+}
+
+function handleScaleSliceEnabled(enabled: boolean) {
+  scaleSliceEnabled.value = enabled
+  if (enabled && !localScaleSlice.value) {
+    localScaleSlice.value = createDefaultScaleSlice({
+      left: 24,
+      right: 24,
+      top: 24,
+      bottom: 24,
+    })
   }
 }
 
@@ -311,6 +368,8 @@ const { isToastVisible, toastError } = useSaveErrorToast(saveError)
       :selected-shape="selectedDetail"
       :name="localName"
       :outline="localOutline"
+      :scale-slice="localScaleSlice"
+      :scale-slice-enabled="scaleSliceEnabled"
       :owner-display-name="selectedShapeOwnerName"
       :can-edit="canEditSelected"
       :can-share="canShareSelected"
@@ -324,6 +383,8 @@ const { isToastVisible, toastError } = useSaveErrorToast(saveError)
       @open-doc="openDocModal"
       @update:name="localName = $event"
       @update:outline="localOutline = $event"
+      @update:scale-slice="localScaleSlice = $event"
+      @update:scale-slice-enabled="handleScaleSliceEnabled"
     />
 
     <template #modals>

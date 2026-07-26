@@ -65,6 +65,10 @@ import {
   type CustomProperty,
   type DiagramStyle,
 } from '@/domain/attrs/notationAttrs'
+import {
+  applyDiagramStyleToNodeInstance,
+  withInstanceDimensions,
+} from './utils/applyDiagramStyleToNodeInstance'
 import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
 import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
 import TabPanel from '@/components/layout/TabPanel.vue'
@@ -2165,10 +2169,7 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   }
 
   if (targetNodeInstance) {
-    if (!targetNodeInstance.attrs) targetNodeInstance.attrs = {}
-    targetNodeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
-    if (typeof style.width === 'number') targetNodeInstance.width = style.width
-    if (typeof style.height === 'number') targetNodeInstance.height = style.height
+    applyDiagramStyleToNodeInstance(targetNodeInstance, style)
     markDiagramDirty(diagram.id)
     return
   }
@@ -2200,21 +2201,26 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
   if (selectedElementId.startsWith('instance-')) {
     const instanceId = selectedElementId.slice('instance-'.length)
     const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
-    if (instance?.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
-      return instance.attrs.diagramStyle as DiagramStyle
+    if (!instance) return undefined
+
+    if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
+      return withInstanceDimensions(instance.attrs.diagramStyle as DiagramStyle, instance)
     }
     const notationId = activeNotationId.value
-    if (!notationId || !instance) return undefined
+    if (!notationId) return withInstanceDimensions(undefined, instance)
     const modelNode = state.value.nodes.find(item => item.id === instance.modelNodeId)
     const componentId = resolveInstanceComponentId({
       instance,
       node: modelNode ?? null,
       notationId,
     })
-    if (!componentId) return undefined
+    if (!componentId) return withInstanceDimensions(undefined, instance)
     const component = state.value.components.find(item => item.id === componentId)
-    if (!component) return undefined
-    return parseEntityAttrs(component.attrs ?? null).diagramStyle
+    if (!component) return withInstanceDimensions(undefined, instance)
+    return withInstanceDimensions(
+      parseEntityAttrs(component.attrs ?? null).diagramStyle,
+      instance
+    )
   }
 
   if (selectedElementId.startsWith('edge-')) {

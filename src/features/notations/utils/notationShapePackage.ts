@@ -1,5 +1,6 @@
 import type { EditorComponent } from '../types'
 import type { ExportedNodeShape } from './exportedNodeShape'
+import { mergeScaleSliceIntoAttrs } from '@/types/shapes'
 
 const IMPORTED_SHAPE_NAME = 'Imported shape'
 
@@ -17,6 +18,12 @@ function getCustomOutline(component: EditorComponent) {
   const outline = component.parsedAttrs.diagramStyle?.customOutline
   if (!Array.isArray(outline) || outline.length === 0) return undefined
   return outline
+}
+
+function getCustomScaleSliceAttrs(component: EditorComponent): string | undefined {
+  const slice = component.parsedAttrs.diagramStyle?.customScaleSlice
+  if (!slice) return undefined
+  return mergeScaleSliceIntoAttrs(null, slice)
 }
 
 export function collectCustomShapeIds(components: EditorComponent[]): Set<string> {
@@ -47,10 +54,12 @@ export function synthesizeShapesFromComponents(
     const id = customShapeId ?? JSON.stringify(customOutline)
     if (alreadyHaveIds.has(id) || byId.has(id)) continue
 
+    const attrs = getCustomScaleSliceAttrs(component)
     byId.set(id, {
       id,
       name: IMPORTED_SHAPE_NAME,
       outline: JSON.stringify(customOutline),
+      ...(attrs ? { attrs } : {}),
     })
   }
 

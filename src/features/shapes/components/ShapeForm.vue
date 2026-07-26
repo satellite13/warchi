@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import type { NodeShapeResponse } from "@/types/api"
-import type { OutlineSegment } from "@/domain/attrs/notationAttrs"
+import type { OutlineSegment, ScaleSlice } from "@/domain/attrs/notationAttrs"
 import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
 import CustomOutlineEditor from "../CustomOutlineEditor.vue"
+import ShapeScalePreview from "./ShapeScalePreview.vue"
 
 defineProps<{
   selectedShape: NodeShapeResponse | null
   name: string
   outline: OutlineSegment[]
+  scaleSlice: ScaleSlice | null
+  scaleSliceEnabled: boolean
   ownerDisplayName: string
   canEdit: boolean
   canShare?: boolean
@@ -25,6 +28,8 @@ const emit = defineEmits<{
   openDoc: []
   "update:name": [value: string]
   "update:outline": [value: OutlineSegment[]]
+  "update:scaleSlice": [value: ScaleSlice | null]
+  "update:scaleSliceEnabled": [value: boolean]
 }>()
 
 const { t } = useI18n()
@@ -74,16 +79,45 @@ const { t } = useI18n()
           <label class="form-label">{{ t("common.author") }}</label>
           <div class="form-input form-input--readonly">{{ ownerDisplayName }}</div>
         </div>
+        <div class="form-row form-row--toggle">
+          <label class="form-label" for="shape-scale-slice-toggle">{{ t("shapes.scaleSliceToggle") }}</label>
+          <input
+            id="shape-scale-slice-toggle"
+            type="checkbox"
+            class="form-checkbox"
+            :checked="scaleSliceEnabled"
+            :disabled="!canEdit"
+            @change="emit('update:scaleSliceEnabled', ($event.target as HTMLInputElement).checked)"
+          />
+        </div>
+        <p v-if="scaleSliceEnabled" class="form-hint">{{ t("shapes.scaleSliceHint") }}</p>
       </div>
 
       <div class="form-section">
         <h3 class="form-section__title">{{ t("shapes.outlineLabel") }}</h3>
-        <CustomOutlineEditor
-          v-if="outline.length > 0"
-          :model-value="outline"
-          :disabled="!canEdit"
-          @update:model-value="emit('update:outline', $event)"
-        />
+        <div v-if="outline.length > 0" class="shape-form__outline-workspace shape-form__outline-workspace--split">
+          <div class="shape-form__outline-pane">
+            <p class="shape-form__pane-label">{{ t("shapes.scaleSliceTemplate") }}</p>
+            <CustomOutlineEditor
+              :model-value="outline"
+              :disabled="!canEdit"
+              :scale-slice="scaleSlice"
+              :show-scale-guides="scaleSliceEnabled"
+              @update:model-value="emit('update:outline', $event)"
+              @update:scale-slice="emit('update:scaleSlice', $event)"
+            />
+          </div>
+          <div class="shape-form__preview-pane">
+            <p class="shape-form__pane-label">{{ t("shapes.scaleSlicePreview") }}</p>
+            <ShapeScalePreview
+              :outline="outline"
+              :scale-slice="scaleSliceEnabled ? scaleSlice : null"
+              :disabled="!canEdit"
+              :initial-width="scaleSlice?.refWidth ?? 180"
+              :initial-height="scaleSlice?.refHeight ?? 120"
+            />
+          </div>
+        </div>
         <p v-else class="form-section__empty">{{ t("shapes.outlinePlaceholder") }}</p>
       </div>
     </div>
@@ -107,129 +141,6 @@ const { t } = useI18n()
   min-width: 0;
 }
 
-.shape-form__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  gap: 12px;
-}
-
-.shape-form__title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.shape-form__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--primary-soft);
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.shape-form__icon .ui-icon {
-  font-size: 20px;
-}
-
-.shape-form__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--base-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: -0.01em;
-}
-
-.shape-form__doc-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
-  flex-shrink: 0;
-}
-
-.shape-form__doc-btn:hover {
-  color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.shape-form__doc-btn-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.shape-form__doc-badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--success);
-  color: #fff;
-  font-size: 10px;
-}
-
-.shape-form__doc-badge .ui-icon {
-  width: 10px;
-  height: 10px;
-}
-
-.shape-form__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.shape-form__help-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--btn-height);
-  padding: 0 20px;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 14px;
-  font-family: inherit;
-  font-weight: 500;
-  transition: color 0.15s ease, background 0.15s ease;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-
-.shape-form__help-link:hover {
-  color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.shape-form__help-link .ui-icon {
-  width: 18px;
-  height: 18px;
-}
-
 .shape-form__body {
   display: flex;
   flex-direction: column;
@@ -246,6 +157,41 @@ const { t } = useI18n()
   border: 1px solid var(--border);
 }
 
+.shape-form__outline-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 280px;
+}
+
+.shape-form__outline-workspace--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .shape-form__outline-workspace--split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shape-form__outline-pane,
+.shape-form__preview-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shape-form__pane-label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .form-section {
   background: var(--surface);
   border-radius: 12px;
@@ -256,14 +202,6 @@ const { t } = useI18n()
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
   animation: fadeSlideIn 0.3s ease both;
-}
-
-.form-section:nth-child(3) {
-  animation-delay: 40ms;
-}
-
-.form-section:nth-child(4) {
-  animation-delay: 80ms;
 }
 
 .form-section__title {
@@ -287,6 +225,29 @@ const { t } = useI18n()
   gap: 10px;
 }
 
+.form-row--toggle {
+  justify-content: flex-start;
+}
+
+.form-label {
+  flex: 0 0 120px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.form-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.form-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.45;
+}
+
 .form-input {
   flex: 1;
   min-width: 0;
@@ -301,6 +262,11 @@ const { t } = useI18n()
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.form-input--readonly {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
 .form-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
@@ -311,5 +277,4 @@ const { t } = useI18n()
   color: var(--text-subtle);
   cursor: not-allowed;
 }
-
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
-import { TextLabel } from "@ngroznykh/papirus";
+import { TextLabel, CustomShapeNode } from "@ngroznykh/papirus";
 import type {
   ArrowMarkerConfig,
   InteractionManager,
@@ -26,7 +26,15 @@ import type {
   CustomProperty,
   CompositeSerializedCComponent,
   StylePropertyBindingGroup,
+  InsetScaleSides,
 } from "@/domain/attrs/notationAttrs";
+import { applyContentInsetFromStyle } from "@/features/diagram-style/utils/applyContentInsetFromStyle";
+import { parseScaleSliceFromAttrs } from "@/types/shapes";
+import {
+  invalidateNodeShapeScaleSliceCatalog,
+  rememberNodeShapeAttrs,
+  resolveCustomScaleSlice,
+} from "@/utils/resolveCustomScaleSlice";
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import {
   COMBINED_ICON_OPTIONS,
@@ -65,6 +73,7 @@ import CompositeTreeEditor from "./composite/CompositeTreeEditor.vue";
 import CompositeLivePreview from "./composite/CompositeLivePreview.vue";
 import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
 import { createDefaultCompositeContent } from "@/features/diagram-style/utils/compositeBindings";
+import { diagramShapeFactories, DEFAULT_CORNER_CUT_PX } from "@/utils/diagramShapes";
 
 const props = defineProps<{
   selectedElementId: string | null;
@@ -187,6 +196,10 @@ function confirmSavePreset() {
       strokeOpacity: strokeOpacity.value,
       strokeWidth: strokeWidth.value,
       cornerRadius: cornerRadius.value,
+      ...(nodeShape.value === "beveled-rectangle" ||
+      (nodeShape.value === "composite" && compositeShapeType.value === "beveled-rectangle")
+        ? { cornerCut: cornerCut.value }
+        : {}),
       opacity: opacity.value,
       labelColor: labelColor.value,
       labelOpacity: labelOpacity.value,
@@ -198,6 +211,12 @@ function confirmSavePreset() {
       width: nodeWidth.value,
       height: nodeHeight.value,
       contentInset: insetToPlain(contentInset.value),
+      ...(contentInsetScale.value.top ||
+      contentInsetScale.value.right ||
+      contentInsetScale.value.bottom ||
+      contentInsetScale.value.left
+        ? { contentInsetScale: { ...contentInsetScale.value } }
+        : {}),
       portsTop: nodePortsTop.value,
       portsBottom: nodePortsBottom.value,
       portsLeft: nodePortsLeft.value,
@@ -259,9 +278,12 @@ function applyComponentPreset(presetName: string) {
   if (nodeShape.value === "custom") {
     customOutlineRef.value = style.customOutline ?? undefined;
     customShapeIdRef.value = style.customShapeId ?? null;
+    customScaleSliceRef.value =
+      style.customScaleSlice ?? resolveCustomScaleSlice(style) ?? undefined;
   } else {
     customOutlineRef.value = undefined;
     customShapeIdRef.value = null;
+    customScaleSliceRef.value = undefined;
   }
   fillColor.value = style.fillColor ?? "#ffffff";
   fillOpacity.value = style.fillOpacity ?? 1;
@@ -269,6 +291,7 @@ function applyComponentPreset(presetName: string) {
   strokeOpacity.value = style.strokeOpacity ?? 1;
   strokeWidth.value = style.strokeWidth ?? 2;
   cornerRadius.value = style.cornerRadius ?? 0;
+  cornerCut.value = style.cornerCut ?? DEFAULT_CORNER_CUT_PX;
   opacity.value = style.opacity ?? 1;
   labelColor.value = style.labelColor ?? "#333333";
   labelOpacity.value = style.labelOpacity ?? 1;
@@ -280,6 +303,7 @@ function applyComponentPreset(presetName: string) {
   if (style.width !== undefined) nodeWidth.value = style.width;
   if (style.height !== undefined) nodeHeight.value = style.height;
   contentInset.value = toInsetSides(style.contentInset, 0);
+  contentInsetScale.value = { ...(style.contentInsetScale ?? {}) };
   nodePortsTop.value = style.portsTop ?? 3;
   nodePortsBottom.value = style.portsBottom ?? 3;
   nodePortsLeft.value = style.portsLeft ?? 1;
@@ -334,7 +358,12 @@ function applyComponentPreset(presetName: string) {
       setLabelSpacing(node.label, { inset: insetToPlain(labelInset.value) });
     }
     const nodeRuntime = node as unknown as ExtendedNodeProps;
-    nodeRuntime.contentInset = insetToPlain(contentInset.value);
+    applyContentInsetFromStyle(nodeRuntime, {
+      contentInset: insetToPlain(contentInset.value),
+      contentInsetScale: contentInsetScale.value,
+      width: nodeWidth.value,
+      height: nodeHeight.value,
+    });
     
     // Apply dimensions and corner radius
     node.width = nodeWidth.value;
@@ -464,6 +493,7 @@ function ensureCatalogShapesLoaded() {
   void fetchNodeShapes({ size: 200 });
 }
 function handleNodeShapesChanged() {
+  invalidateNodeShapeScaleSliceCatalog()
   void fetchNodeShapes({ size: 200 });
 }
 onMounted(() => {
@@ -475,7 +505,29 @@ onBeforeUnmount(() => {
 });
 const catalogShapeOptions = computed(() =>
   catalogShapes.value.map((s) => ({ id: s.id, label: s.name }))
-);
+)
+
+watch(
+  catalogShapes,
+  (shapes) => {
+    rememberNodeShapeAttrs(shapes)
+    if (
+      customShapeIdRef.value &&
+      !customScaleSliceRef.value &&
+      (nodeShape.value === "custom" ||
+        (nodeShape.value === "composite" && compositeShapeType.value === "custom"))
+    ) {
+      const resolved = resolveCustomScaleSlice({
+        customShapeId: customShapeIdRef.value,
+      })
+      if (resolved) {
+        customScaleSliceRef.value = resolved
+        emitNodeStyle()
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 const EDGE_TYPE_OPTIONS = computed(() => ([
   { v: "straight", l: t("diagram.linkTypeStraight"), icon: "remove" },
@@ -528,10 +580,11 @@ function iconConfig() {
 const {
   iconName, iconPlacement, iconWidth, iconHeight, iconInset, iconStrokeColor, iconFillColor,
   nodeShape, label, fillColor, fillOpacity, strokeColor, strokeOpacity, strokeWidth,
-  cornerRadius, opacity, lineStyle, lineDashPattern, labelTemplate, showLabel, labelColor, labelOpacity,
+  cornerRadius, cornerCut, opacity, lineStyle, lineDashPattern, labelTemplate, showLabel, labelColor, labelOpacity,
   labelFontSize, labelInset, labelAlign, labelVerticalAlign, nodeWidth, nodeHeight, contentInset,
+  contentInsetScale,
   nodePortsTop, nodePortsBottom, nodePortsLeft, nodePortsRight,
-  customOutlineRef, customShapeIdRef,
+  customOutlineRef, customShapeIdRef, customScaleSliceRef,
   compositeContentJson, styleBindingsJson, compositeJsonError, styleBindingsJsonError,
   compositeEditorMode, compositeTreeTargets, compositeContentDraft, styleBindingsDraft,
   compositeShapeType, compositeAutoSize, compositeMinWidth, compositeMinHeight,
@@ -617,10 +670,23 @@ watch(
       nodeShape.value = "custom";
       customOutlineRef.value = style.customOutline ?? undefined;
       customShapeIdRef.value = style.customShapeId ?? null;
+      customScaleSliceRef.value =
+        style.customScaleSlice ?? resolveCustomScaleSlice(style) ?? undefined;
+    } else if (
+      style.nodeShape === "composite" &&
+      style.compositeShapeType === "custom"
+    ) {
+      customOutlineRef.value = style.customOutline ?? undefined;
+      customShapeIdRef.value = style.customShapeId ?? null;
+      customScaleSliceRef.value =
+        style.customScaleSlice ?? resolveCustomScaleSlice(style) ?? undefined;
     } else if (NODE_SHAPE_OPTIONS.some((o) => o.value === style.nodeShape)) {
       nodeShape.value = style.nodeShape as NodeShape;
-      customOutlineRef.value = undefined;
-      customShapeIdRef.value = null;
+      if (style.nodeShape !== "composite") {
+        customOutlineRef.value = undefined;
+        customShapeIdRef.value = null;
+        customScaleSliceRef.value = undefined;
+      }
     }
   },
   { deep: true }
@@ -736,6 +802,7 @@ function handleNodeShapeChange(value: string) {
   if (next !== "custom") {
     customOutlineRef.value = undefined;
     customShapeIdRef.value = null;
+    customScaleSliceRef.value = undefined;
   } else {
     ensureCatalogShapesLoaded();
   }
@@ -800,8 +867,15 @@ function handleA5BindingsUpdate(next: StylePropertyBindingGroup[]) {
   emitNodeStyle();
 }
 
-function handleCustomShapeSelect(shape: { id: string; name: string; outline: string | null }) {
-  nodeShape.value = "custom";
+function handleCustomShapeSelect(shape: {
+  id: string
+  name: string
+  outline: string | null
+  attrs?: string | null
+}) {
+  if (nodeShape.value !== "composite") {
+    nodeShape.value = "custom";
+  }
   if (shape.outline) {
     try {
       const parsed = JSON.parse(shape.outline) as unknown;
@@ -813,6 +887,10 @@ function handleCustomShapeSelect(shape: { id: string; name: string; outline: str
     customOutlineRef.value = undefined;
   }
   customShapeIdRef.value = shape.id;
+  customScaleSliceRef.value = parseScaleSliceFromAttrs(shape.attrs) ?? undefined;
+  if (nodeShape.value === "composite") {
+    compositeShapeType.value = "custom";
+  }
   resetComponentPreset();
   emitNodeStyle();
 }
@@ -821,6 +899,7 @@ function handleCustomShapeSelectByValue(id: string) {
   if (!id) {
     customOutlineRef.value = undefined;
     customShapeIdRef.value = null;
+    customScaleSliceRef.value = undefined;
     if (nodeShape.value === "custom") emitNodeStyle();
     return;
   }
@@ -998,6 +1077,21 @@ function handleCornerRadiusChange(value: string) {
   emitNodeStyle();
 }
 
+function handleCornerCutChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0 || !props.selectedElementId || !props.interactionManager) return;
+  cornerCut.value = v;
+  resetComponentPreset();
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    if (node instanceof CustomShapeNode && nodeShape.value === "beveled-rectangle") {
+      const factory = diagramShapeFactories["beveled-rectangle"];
+      node.setPathFactory((w, h) => factory.path(w, h, v));
+      node.setSvgPath((w, h) => factory.svgPath(w, h, v));
+    }
+  });
+  emitNodeStyle();
+}
+
 function handleLineStyleChange(value: string) {
   lineStyle.value = value as "solid" | "dashed";
   resetComponentPreset();
@@ -1124,12 +1218,28 @@ function handleHeightChange(value: string) {
 function handleContentInsetChange(value: InsetSides) {
   contentInset.value = value;
   resetComponentPreset();
+  applyContentInsetLive();
+  emitNodeStyle();
+}
+
+function handleContentInsetScaleChange(value: InsetScaleSides) {
+  contentInsetScale.value = value;
+  resetComponentPreset();
+  applyContentInsetLive();
+  emitNodeStyle();
+}
+
+function applyContentInsetLive() {
   if (!props.selectedElementId || !props.interactionManager) return;
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     const nodeRuntime = node as unknown as ExtendedNodeProps;
-    nodeRuntime.contentInset = insetToPlain(contentInset.value);
+    applyContentInsetFromStyle(nodeRuntime, {
+      contentInset: insetToPlain(contentInset.value),
+      contentInsetScale: contentInsetScale.value,
+      width: nodeWidth.value,
+      height: nodeHeight.value,
+    });
   });
-  emitNodeStyle();
 }
 
 function handlePortsTopChange(value: string) {
@@ -1898,7 +2008,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </button>
                 </div>
                 <LabeledFieldRow
-                  v-if="panelMode === 'default' && nodeShape === 'custom'"
+                  v-if="panelMode === 'default' && (nodeShape === 'custom' || (nodeShape === 'composite' && compositeShapeType === 'custom'))"
                   :label="t('nodeStyle.customShape')"
                   class="sp-field--custom-shapes"
                 >
@@ -1921,12 +2031,29 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       <select
                         class="sp-select sp-select--flex"
                         :value="compositeShapeType"
-                        @change="compositeShapeType = ($event.target as HTMLSelectElement).value as 'rectangle' | 'circle' | 'diamond' | 'custom'; emitNodeStyle()"
+                        @change="compositeShapeType = ($event.target as HTMLSelectElement).value as 'rectangle' | 'circle' | 'diamond' | 'custom'; if (compositeShapeType === 'custom') ensureCatalogShapesLoaded(); emitNodeStyle()"
                       >
                         <option value="rectangle">rectangle</option>
                         <option value="circle">circle</option>
                         <option value="diamond">diamond</option>
                         <option value="custom">custom</option>
+                      </select>
+                    </LabeledFieldRow>
+                    <LabeledFieldRow
+                      v-if="compositeShapeType === 'custom'"
+                      :label="t('nodeStyle.customShape')"
+                    >
+                      <select
+                        class="sp-select sp-select--flex"
+                        :value="customShapeIdRef ?? ''"
+                        @change="handleCustomShapeSelectByValue(($event.target as HTMLSelectElement).value)"
+                      >
+                        <option value="">{{ t("common.none") }}</option>
+                        <option
+                          v-for="opt in catalogShapeOptions"
+                          :key="opt.id"
+                          :value="opt.id"
+                        >{{ opt.label }}</option>
                       </select>
                     </LabeledFieldRow>
                     <LabeledFieldRow :label="t('nodeStyle.compositeAutoSize')">
@@ -2017,7 +2144,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     </div>
                   </div>
                 </template>
-                <div class="sp-field-grid" :class="nodeShape === 'rectangle' ? 'sp-field-grid--3' : 'sp-field-grid--2'">
+                <div class="sp-field-grid" :class="nodeShape === 'rectangle' || nodeShape === 'beveled-rectangle' ? 'sp-field-grid--3' : 'sp-field-grid--2'">
                   <LabeledNumberInput
                     label="W"
                     :model-value="nodeWidth"
@@ -2043,13 +2170,24 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     :step="1"
                     @update:model-value="handleCornerRadiusChange"
                   />
+                  <LabeledNumberInput
+                    v-if="nodeShape === 'beveled-rectangle'"
+                    :label="t('nodeStyle.cornerCut')"
+                    :model-value="cornerCut"
+                    :min="0"
+                    :max="80"
+                    :step="1"
+                    @update:model-value="handleCornerCutChange"
+                  />
                 </div>
                 <InsetSidesInput
                   :model-value="contentInset"
+                  :scale-value="contentInsetScale"
                   :min="0"
                   :max="100"
                   :step="1"
                   @update:model-value="handleContentInsetChange"
+                  @update:scale-value="handleContentInsetScaleChange"
                 />
                 <div class="sp-field-grid sp-field-grid--4">
                   <LabeledNumberInput

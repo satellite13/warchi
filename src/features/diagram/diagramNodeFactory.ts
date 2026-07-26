@@ -11,7 +11,8 @@ import {
 } from '@ngroznykh/papirus'
 import type { DiagramStyle } from '@/domain/attrs/notationAttrs'
 import { customOutlineToPath2D, customOutlineToSvgPath } from '@/utils/customOutlinePath'
-import { diagramShapeFactories } from '@/utils/diagramShapes'
+import { DEFAULT_CORNER_CUT_PX, diagramShapeFactories } from '@/utils/diagramShapes'
+import { applyContentInsetFromStyle } from '@/features/diagram-style/utils/applyContentInsetFromStyle'
 
 export type DiagramNodeShape =
   | 'rectangle'
@@ -43,7 +44,9 @@ export interface CreateDiagramNodeOptions {
   label?: string | TextLabelOptions
   icon?: NodeImageOptions
   anchorPoints?: { top: number; right: number; bottom: number; left: number }
-  contentInset?: number
+  contentInset?: number | { top?: number; right?: number; bottom?: number; left?: number }
+  /** Optional override; when omitted, taken from diagramStyle */
+  contentInsetBaseStyle?: DiagramStyle
   badges?: Array<{ id: string; iconUrl: string }>
   cornerRadius?: number
   composite?: DiagramNodeCompositeOptions
@@ -91,6 +94,11 @@ export function hasSpecialRectangleShape(
   return specialShape === 'sticky-note' ? marked.noteShape === true : marked.folderShape === true
 }
 
+export function resolveCornerCutPx(ds?: DiagramStyle): number {
+  const v = ds?.cornerCut
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : DEFAULT_CORNER_CUT_PX
+}
+
 export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNode {
   const ds = options.diagramStyle
   const shape = resolveDiagramNodeShape(ds)
@@ -102,7 +110,6 @@ export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNod
     height: options.height,
     style: options.style,
     ...(options.anchorPoints ? { anchorPoints: options.anchorPoints } : {}),
-    ...(options.contentInset != null ? { contentInset: options.contentInset } : {}),
     ...(options.badges ? { badges: options.badges } : {}),
   }
   const commonOptions = {
@@ -133,17 +140,24 @@ export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNod
   } else if (shape === 'circle') {
     node = new CircleNode(commonOptions)
   } else if (shape === 'beveled-rectangle') {
-    node = createFactoryBackedCustomNode(commonOptions, shape)
+    const cut = resolveCornerCutPx(ds)
+    const factory = diagramShapeFactories['beveled-rectangle']
+    node = new CustomShapeNode({
+      ...commonOptions,
+      path: (w, h) => factory.path(w, h, cut),
+      svgPath: (w, h) => factory.svgPath(w, h, cut),
+    })
   } else if (shape === 'trapezoid') {
     node = createFactoryBackedCustomNode(commonOptions, shape)
   } else if (shape === 'slanted-rectangle') {
     node = createFactoryBackedCustomNode(commonOptions, shape)
   } else if (shape === 'custom' && ds?.customOutline?.length) {
     const segments = ds.customOutline
+    const slice = ds.customScaleSlice
     node = new CustomShapeNode({
       ...commonOptions,
-      path: (w, h) => customOutlineToPath2D(segments, w, h),
-      svgPath: (w, h) => customOutlineToSvgPath(segments, w, h),
+      path: (w, h) => customOutlineToPath2D(segments, w, h, slice),
+      svgPath: (w, h) => customOutlineToSvgPath(segments, w, h, slice),
     })
   } else {
     node = new RectangleNode({
@@ -158,12 +172,17 @@ export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNod
   if (ds?.labelPlacement) {
     ;(node as NodeWithLabelPlacement).labelPlacement = ds.labelPlacement
   }
+  const insetStyle: DiagramStyle = {
+    ...(ds ?? {}),
+    ...(options.contentInset != null ? { contentInset: options.contentInset } : {}),
+  }
+  applyContentInsetFromStyle(node, insetStyle, options.contentInsetBaseStyle ?? ds)
   return node
 }
 
 function createFactoryBackedCustomNode(
   options: Omit<ConstructorParameters<typeof CustomShapeNode>[0], 'path' | 'svgPath'>,
-  shape: 'beveled-rectangle' | 'trapezoid' | 'slanted-rectangle'
+  shape: 'trapezoid' | 'slanted-rectangle'
 ): CustomShapeNode {
   const factory = diagramShapeFactories[shape]
   return new CustomShapeNode({
@@ -182,7 +201,7 @@ function createCompositeDiagramNode(
     height: number
     style: DiagramNodeStyle
     anchorPoints?: { top: number; right: number; bottom: number; left: number }
-    contentInset?: number
+    contentInset?: number | { top?: number; right?: number; bottom?: number; left?: number }
     badges?: Array<{ id: string; iconUrl: string }>
   },
   options: CreateDiagramNodeOptions,
@@ -196,13 +215,19 @@ function createCompositeDiagramNode(
     rawCompositeShape === 'slanted-rectangle'
   let compositePathFactory: ((w: number, h: number) => Path2D) | undefined
   let compositeSvgPathFactory: ((w: number, h: number) => string) | undefined
-  if (compositeShapeMappedToCustom) {
+  if (rawCompositeShape === 'beveled-rectangle') {
+    const cut = resolveCornerCutPx(ds)
+    const factory = diagramShapeFactories['beveled-rectangle']
+    compositePathFactory = (w, h) => factory.path(w, h, cut)
+    compositeSvgPathFactory = (w, h) => factory.svgPath(w, h, cut)
+  } else if (rawCompositeShape === 'trapezoid' || rawCompositeShape === 'slanted-rectangle') {
     compositePathFactory = diagramShapeFactories[rawCompositeShape]?.path
     compositeSvgPathFactory = diagramShapeFactories[rawCompositeShape]?.svgPath
   } else if (rawCompositeShape === 'custom' && ds?.customOutline?.length) {
     const segments = ds.customOutline
-    compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h)
-    compositeSvgPathFactory = (w, h) => customOutlineToSvgPath(segments, w, h)
+    const slice = ds.customScaleSlice
+    compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h, slice)
+    compositeSvgPathFactory = (w, h) => customOutlineToSvgPath(segments, w, h, slice)
   }
 
   return new CompositeNode({

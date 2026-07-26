@@ -49,33 +49,68 @@ describe('diagramShapeFactories', () => {
   })
 
   describe('beveled-rectangle', () => {
-    it('uses 16% cut from min dimension', () => {
+    it('uses default 12px cut when cutPx omitted', () => {
       const svg = diagramShapeFactories['beveled-rectangle'].svgPath(200, 100)
-      const cut = 100 * 0.16
-      expect(svg).toContain(`M ${cut} 0`)
+      expect(svg).toContain('M 12 0')
+    })
+
+    it('keeps cut px when width grows', () => {
+      const narrow = diagramShapeFactories['beveled-rectangle'].svgPath(120, 80, 14)
+      const wide = diagramShapeFactories['beveled-rectangle'].svgPath(300, 80, 14)
+      expect(narrow).toContain('M 14 0')
+      expect(wide).toContain('M 14 0')
+    })
+
+    it('clamps cut to half min dimension', () => {
+      const svg = diagramShapeFactories['beveled-rectangle'].svgPath(20, 20, 50)
+      expect(svg).toContain('M 10 0')
     })
   })
 
   describe('trapezoid', () => {
-    it('uses 18% top inset from width', () => {
+    it('uses fixed 24px top inset', () => {
       const svg = diagramShapeFactories['trapezoid'].svgPath(200, 100)
-      const inset = 200 * 0.18
-      expect(svg).toContain(`M ${inset} 0`)
+      expect(svg).toContain('M 24 0')
+    })
+
+    it('keeps inset when width grows', () => {
+      const narrow = diagramShapeFactories['trapezoid'].svgPath(120, 80)
+      const wide = diagramShapeFactories['trapezoid'].svgPath(300, 80)
+      expect(narrow).toContain('M 24 0')
+      expect(wide).toContain('M 24 0')
+    })
+
+    it('clamps inset on tiny width', () => {
+      const svg = diagramShapeFactories['trapezoid'].svgPath(30, 40)
+      expect(svg).toContain('M 15 0')
+    })
+  })
+
+  describe('slanted-rectangle', () => {
+    it('uses fixed 24px skew', () => {
+      const svg = diagramShapeFactories['slanted-rectangle'].svgPath(200, 100)
+      expect(svg).toContain('M 24 0')
+      expect(svg).toContain('L 176 100') // 200 - 24
+    })
+
+    it('keeps skew when width grows', () => {
+      const narrow = diagramShapeFactories['slanted-rectangle'].svgPath(120, 80)
+      const wide = diagramShapeFactories['slanted-rectangle'].svgPath(300, 80)
+      expect(narrow).toContain('M 24 0')
+      expect(wide).toContain('M 24 0')
+      expect(wide).toContain('L 276 80')
     })
   })
 
   describe('sticky-note', () => {
-    it('cut is at least 10', () => {
-      const svg = diagramShapeFactories['sticky-note'].svgPath(20, 20)
-      // min(20,20)*0.2 = 4, max(10, 4) = 10
-      const cut = 10
-      expect(svg).toContain(`L ${20 - cut} 0`)
+    it('uses fixed 16px cut on large note', () => {
+      const svg = diagramShapeFactories['sticky-note'].svgPath(200, 100)
+      expect(svg).toContain('L 184 0') // 200 - 16
     })
 
-    it('cut scales with dimension for larger shapes', () => {
-      const svg = diagramShapeFactories['sticky-note'].svgPath(200, 100)
-      const cut = Math.min(200, 100) * 0.2
-      expect(svg).toContain(`L ${200 - cut} 0`)
+    it('clamps cut on tiny note', () => {
+      const svg = diagramShapeFactories['sticky-note'].svgPath(20, 20)
+      expect(svg).toContain('L 10 0') // min(16, 10)
     })
   })
 })

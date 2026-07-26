@@ -25,8 +25,23 @@ export type CustomProperty = {
 }
 
 // Custom node shape outline — types live in src/types/shapes.ts to avoid layer violation (utils → features)
-export type { OutlineSegmentLine, OutlineSegmentBezier, OutlineSegment } from '@/types/shapes'
-import type { OutlineSegment } from '@/types/shapes'
+export type {
+  OutlineSegmentLine,
+  OutlineSegmentBezier,
+  OutlineSegment,
+  ScaleSlice,
+} from '@/types/shapes'
+export {
+  DEFAULT_SCALE_SLICE_REF_WIDTH,
+  DEFAULT_SCALE_SLICE_REF_HEIGHT,
+  createDefaultScaleSlice,
+  hasEffectiveScaleSlice,
+  normalizeScaleSlice,
+  parseScaleSliceFromAttrs,
+  mergeScaleSliceIntoAttrs,
+} from '@/types/shapes'
+import type { OutlineSegment, ScaleSlice } from '@/types/shapes'
+import { normalizeScaleSlice } from '@/types/shapes'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { createId } from '@/utils/createId'
 
@@ -58,6 +73,14 @@ export type InsetSides = {
   right?: number
   bottom?: number
   left?: number
+}
+
+/** Per-side: true = contentInset side scales with node size vs style default width/height. */
+export type InsetScaleSides = {
+  top?: boolean
+  right?: boolean
+  bottom?: boolean
+  left?: boolean
 }
 
 export type StyleBindingValueSource = 'component' | 'nodeType'
@@ -117,6 +140,11 @@ export type DiagramStyle = {
   labelAlign?: string
   labelVerticalAlign?: string
   contentInset?: number | InsetSides
+  /**
+   * Opt-in proportional sides for contentInset (reference px at style width/height).
+   * Only `true` keys are persisted.
+   */
+  contentInsetScale?: InsetScaleSides
   // Edge label background
   labelBgColor?: string
   labelBgOpacity?: number
@@ -162,6 +190,10 @@ export type DiagramStyle = {
   // Custom shape: copy of outline stored in component (for render); catalog reference optional
   customOutline?: OutlineSegment[]
   customShapeId?: string
+  /** Snapshot of catalog 9-slice insets for custom outline scaling */
+  customScaleSlice?: ScaleSlice
+  /** Chamfer size in px for beveled-rectangle (like cornerRadius for rounded rect). */
+  cornerCut?: number
   // Label template for composite labels
   labelTemplate?: string
   /** When false, do not draw the node label on the canvas. Default: true (absent = show). */
@@ -345,6 +377,9 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.strokeOpacity === 'number') style.strokeOpacity = value.strokeOpacity
   if (typeof value.strokeWidth === 'number') style.strokeWidth = value.strokeWidth
   if (typeof value.cornerRadius === 'number') style.cornerRadius = value.cornerRadius
+  if (typeof value.cornerCut === 'number' && Number.isFinite(value.cornerCut) && value.cornerCut >= 0) {
+    style.cornerCut = value.cornerCut
+  }
   if (typeof value.opacity === 'number') style.opacity = value.opacity
   if (Array.isArray(value.lineDash)) {
     const arr = value.lineDash.filter((n: unknown) => typeof n === 'number') as number[]
@@ -364,6 +399,10 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.contentInset === 'number') style.contentInset = value.contentInset
   else if (isInsetSides(value.contentInset))
     style.contentInset = normalizeInsetSides(value.contentInset)
+  {
+    const scale = normalizeInsetScaleSides(value.contentInsetScale)
+    if (scale) style.contentInsetScale = scale
+  }
   if (typeof value.labelBgColor === 'string') style.labelBgColor = value.labelBgColor
   if (typeof value.labelBgOpacity === 'number') style.labelBgOpacity = value.labelBgOpacity
   if (typeof value.labelBgPadding === 'number') style.labelBgPadding = value.labelBgPadding
@@ -409,6 +448,8 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
     if (segments.length > 0) style.customOutline = segments
   }
   if (typeof value.customShapeId === 'string') style.customShapeId = value.customShapeId
+  const customScaleSlice = normalizeScaleSlice(value.customScaleSlice)
+  if (customScaleSlice) style.customScaleSlice = customScaleSlice
   if (typeof value.labelTemplate === 'string') style.labelTemplate = value.labelTemplate
   if (typeof value.showLabel === 'boolean') style.showLabel = value.showLabel
   const compositeContent = normalizeCompositeContent(value.compositeContent)
@@ -450,6 +491,16 @@ const normalizeInsetSides = (value: InsetSides): InsetSides => {
   if (typeof value.bottom === 'number') result.bottom = value.bottom
   if (typeof value.left === 'number') result.left = value.left
   return result
+}
+
+const normalizeInsetScaleSides = (value: unknown): InsetScaleSides | undefined => {
+  if (!isRecord(value)) return undefined
+  const result: InsetScaleSides = {}
+  if (value.top === true) result.top = true
+  if (value.right === true) result.right = true
+  if (value.bottom === true) result.bottom = true
+  if (value.left === true) result.left = true
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function normalizeOutlineSegments(arr: unknown[]): OutlineSegment[] {

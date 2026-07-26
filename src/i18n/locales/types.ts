@@ -146,6 +146,15 @@ export const typesMessages = {
         'Текущая форма имеет несохранённые изменения. Отменить изменения и продолжить?',
       stay: 'Остаться',
       discardAndSwitch: 'Отменить и перейти',
+      scaleSliceToggle: 'Фиксированные края (9-slice)',
+      scaleSliceHint:
+        'Перетащите оранжевые направляющие, чтобы задать зоны, которые не растягиваются. Превью справа показывает поведение при ресайзе.',
+      scaleSliceTemplate: 'Контур',
+      scaleSlicePreview: 'Превью',
+      scalePreviewSize: '{w} × {h} px',
+      scalePreviewResizeE: 'Изменить ширину',
+      scalePreviewResizeS: 'Изменить высоту',
+      scalePreviewResizeSe: 'Изменить размер',
     },
   },
   en: {
@@ -293,6 +302,15 @@ export const typesMessages = {
       unsavedChangesText: 'Current shape has unsaved changes. Discard changes and continue?',
       stay: 'Stay',
       discardAndSwitch: 'Discard and switch',
+      scaleSliceToggle: 'Fixed edges (9-slice)',
+      scaleSliceHint:
+        'Drag the orange guides to mark regions that should not stretch. The preview on the right shows resize behavior.',
+      scaleSliceTemplate: 'Outline',
+      scaleSlicePreview: 'Preview',
+      scalePreviewSize: '{w} × {h} px',
+      scalePreviewResizeE: 'Resize width',
+      scalePreviewResizeS: 'Resize height',
+      scalePreviewResizeSe: 'Resize',
     },
   },
 }

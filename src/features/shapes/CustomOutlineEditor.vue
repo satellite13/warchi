@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from "vue"
-import type { OutlineSegment, OutlineSegmentLine } from "@/domain/attrs/notationAttrs"
-import { DEFAULT_RECTANGLE_OUTLINE } from "@/domain/attrs/notationAttrs"
+import type {
+  OutlineSegment,
+  OutlineSegmentLine,
+  ScaleSlice,
+} from "@/domain/attrs/notationAttrs"
+import {
+  DEFAULT_RECTANGLE_OUTLINE,
+  createDefaultScaleSlice,
+} from "@/domain/attrs/notationAttrs"
 import {
   cloneSegments,
   segmentStart,
@@ -19,16 +26,24 @@ import {
   type DragTarget,
 } from "./outlineGeometry"
 
+const SLICE_GUIDE_HIT = 0.025
+const SLICE_MIN_MIDDLE = 0.04
+
+type SliceGuide = "left" | "right" | "top" | "bottom"
+
 const props = withDefaults(
   defineProps<{
     modelValue: OutlineSegment[]
     disabled?: boolean
+    scaleSlice?: ScaleSlice | null
+    showScaleGuides?: boolean
   }>(),
-  { disabled: false }
+  { disabled: false, scaleSlice: null, showScaleGuides: false }
 )
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: OutlineSegment[]): void
+  (e: "update:scaleSlice", value: ScaleSlice): void
 }>()
 
 const segments = ref<OutlineSegment[]>(cloneSegments(DEFAULT_RECTANGLE_OUTLINE))
@@ -50,11 +65,45 @@ watch(
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const dragging = ref<DragTarget | null>(null)
+const draggingGuide = ref<SliceGuide | null>(null)
 
 /** Индекс подсвечиваемого отрезка (клик по ребру) */
 const selectedSegmentIndex = ref<number | null>(null)
 
 const zoomFactor = ref(1)
+
+function activeSlice(): ScaleSlice {
+  return props.scaleSlice ?? createDefaultScaleSlice()
+}
+
+function sliceGuidePositions(slice: ScaleSlice): Record<SliceGuide, number> {
+  return {
+    left: slice.left / slice.refWidth,
+    right: 1 - slice.right / slice.refWidth,
+    top: slice.top / slice.refHeight,
+    bottom: 1 - slice.bottom / slice.refHeight,
+  }
+}
+
+function hitScaleGuide(coord: [number, number]): SliceGuide | null {
+  if (!props.showScaleGuides) return null
+  const slice = activeSlice()
+  const pos = sliceGuidePositions(slice)
+  const [x, y] = coord
+  const candidates: Array<{ guide: SliceGuide; dist: number }> = [
+    { guide: "left", dist: Math.abs(x - pos.left) },
+    { guide: "right", dist: Math.abs(x - pos.right) },
+    { guide: "top", dist: Math.abs(y - pos.top) },
+    { guide: "bottom", dist: Math.abs(y - pos.bottom) },
+  ]
+  candidates.sort((a, b) => a.dist - b.dist)
+  const best = candidates[0]
+  return best && best.dist <= SLICE_GUIDE_HIT ? best.guide : null
+}
+
+function emitSliceUpdate(next: ScaleSlice) {
+  emit("update:scaleSlice", next)
+}
 
 function getEventPoint(e: MouseEvent): [number, number] | null {
   const canvas = canvasRef.value
@@ -74,6 +123,7 @@ function getCanvasStyles(): {
   baseText: string
   border: string
   primary: string
+  warning: string
   textSubtle: string
   textMuted: string
 } {
@@ -85,6 +135,7 @@ function getCanvasStyles(): {
       baseText: "#1a1a1a",
       border: "#e0e0e0",
       primary: "#7c5cfc",
+      warning: "#e67e22",
       textSubtle: "#9a9a9a",
       textMuted: "#5c5c5c"
     }
@@ -96,6 +147,7 @@ function getCanvasStyles(): {
     baseText: s.getPropertyValue("--base-text").trim() || "#1a1a1a",
     border: s.getPropertyValue("--border").trim() || "#e0e0e0",
     primary: s.getPropertyValue("--primary").trim() || "#7c5cfc",
+    warning: s.getPropertyValue("--warning").trim() || "#e67e22",
     textSubtle: s.getPropertyValue("--text-subtle").trim() || "#9a9a9a",
     textMuted: s.getPropertyValue("--text-muted").trim() || "#5c5c5c"
   }
@@ -222,6 +274,41 @@ function draw() {
   ctx.stroke()
   ctx.setLineDash([])
 
+  // 9-slice guides (when enabled) — warning color, distinct from outline/handles
+  if (props.showScaleGuides) {
+    const slice = activeSlice()
+    const pos = sliceGuidePositions(slice)
+    ctx.strokeStyle = styles.warning
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([6, 4])
+    ctx.beginPath()
+    ctx.moveTo(pos.left * W, 0)
+    ctx.lineTo(pos.left * W, H)
+    ctx.moveTo(pos.right * W, 0)
+    ctx.lineTo(pos.right * W, H)
+    ctx.moveTo(0, pos.top * H)
+    ctx.lineTo(W, pos.top * H)
+    ctx.moveTo(0, pos.bottom * H)
+    ctx.lineTo(W, pos.bottom * H)
+    ctx.stroke()
+    ctx.setLineDash([])
+    const grip = 5
+    ctx.fillStyle = styles.warning
+    ctx.strokeStyle = styles.surface
+    ctx.lineWidth = 1.5
+    for (const [gx, gy] of [
+      [pos.left * W, H * 0.5],
+      [pos.right * W, H * 0.5],
+      [W * 0.5, pos.top * H],
+      [W * 0.5, pos.bottom * H],
+    ] as const) {
+      ctx.beginPath()
+      ctx.rect(gx - grip, gy - grip, grip * 2, grip * 2)
+      ctx.fill()
+      ctx.stroke()
+    }
+  }
+
   // Узлы и усики Bezier
   const handleRadiusPx = 8
   const cpRadiusPx = 6
@@ -291,8 +378,15 @@ function onPointerDown(e: MouseEvent) {
   if (props.disabled) return
   const coord = getEventPoint(e)
   if (!coord) return
-  const target = hitTest(segments.value, coord)
   if (e.button === 0) {
+    const guide = hitScaleGuide(coord)
+    if (guide) {
+      draggingGuide.value = guide
+      dragging.value = null
+      selectedSegmentIndex.value = null
+      return
+    }
+    const target = hitTest(segments.value, coord)
     if (target && (target.type === "vertex" || target.type === "cp")) {
       dragging.value = target
       selectedSegmentIndex.value = null
@@ -398,10 +492,36 @@ function convertSegmentToLine(segmentIndex: number) {
 }
 
 function onPointerMove(e: MouseEvent) {
-  const d = dragging.value
-  if (!d) return
   const coord = getEventPoint(e)
   if (!coord) return
+
+  const guide = draggingGuide.value
+  if (guide) {
+    const slice = { ...activeSlice() }
+    const [x, y] = coord
+    if (guide === "left") {
+      const max = 1 - slice.right / slice.refWidth - SLICE_MIN_MIDDLE
+      const nx = Math.max(0, Math.min(max, x))
+      slice.left = Math.round(nx * slice.refWidth)
+    } else if (guide === "right") {
+      const min = slice.left / slice.refWidth + SLICE_MIN_MIDDLE
+      const nx = Math.max(min, Math.min(1, x))
+      slice.right = Math.round((1 - nx) * slice.refWidth)
+    } else if (guide === "top") {
+      const max = 1 - slice.bottom / slice.refHeight - SLICE_MIN_MIDDLE
+      const ny = Math.max(0, Math.min(max, y))
+      slice.top = Math.round(ny * slice.refHeight)
+    } else {
+      const min = slice.top / slice.refHeight + SLICE_MIN_MIDDLE
+      const ny = Math.max(min, Math.min(1, y))
+      slice.bottom = Math.round((1 - ny) * slice.refHeight)
+    }
+    emitSliceUpdate(slice)
+    return
+  }
+
+  const d = dragging.value
+  if (!d) return
   const snapped = snapCoord(
     segments.value,
     coord,
@@ -430,9 +550,14 @@ function onPointerMove(e: MouseEvent) {
 
 function onPointerUp() {
   dragging.value = null
+  draggingGuide.value = null
 }
 
-watch([segments, selectedSegmentIndex, () => props.disabled, zoomFactor], () => draw(), { deep: true })
+watch(
+  [segments, selectedSegmentIndex, () => props.disabled, zoomFactor, () => props.scaleSlice, () => props.showScaleGuides],
+  () => draw(),
+  { deep: true }
+)
 
 let resizeObserver: ResizeObserver | null = null
 onMounted(() => {

@@ -18,13 +18,21 @@ import {
   insetToPlain,
   type InsetSides,
 } from '../../utils/styleHelpers'
-import type { OutlineSegment } from '@/domain/attrs/notationAttrs'
+import type { OutlineSegment, ScaleSlice } from '@/domain/attrs/notationAttrs'
 import type {
   DiagramStyle,
   CustomProperty,
   CompositeSerializedCComponent,
   StylePropertyBindingGroup,
+  InsetScaleSides,
 } from '@/domain/attrs/notationAttrs'
+import { parseScaleSliceFromAttrs } from '@/types/shapes'
+import {
+  invalidateNodeShapeScaleSliceCatalog,
+  rememberNodeShapeAttrs,
+  resolveCustomScaleSlice,
+} from '@/utils/resolveCustomScaleSlice'
+import { DEFAULT_CORNER_CUT_PX } from '@/utils/diagramShapes'
 
 const props = defineProps<{
   currentDiagramStyle?: DiagramStyle
@@ -60,7 +68,9 @@ const compositeMinHeight = ref(0)
 const nodeWidth = ref(140)
 const nodeHeight = ref(80)
 const cornerRadius = ref(0)
+const cornerCut = ref(DEFAULT_CORNER_CUT_PX)
 const contentInset = ref<InsetSides>({ top: 0, right: 0, bottom: 0, left: 0 })
+const contentInsetScale = ref<InsetScaleSides>({})
 
 // Fill & Stroke
 const fillColor = ref('#ffffff')
@@ -93,10 +103,25 @@ const { list: catalogShapes, fetchList: fetchNodeShapes } = useNodeShapes()
 const catalogShapeOptions = computed(() =>
   catalogShapes.value.map((s) => ({ id: s.id, label: s.name })),
 )
+watch(
+  catalogShapes,
+  (shapes) => {
+    rememberNodeShapeAttrs(shapes)
+    if (customShapeId.value && !customScaleSlice.value && compositeShapeType.value === 'custom') {
+      const resolved = resolveCustomScaleSlice({ customShapeId: customShapeId.value })
+      if (resolved) {
+        customScaleSlice.value = resolved
+        emitStyle()
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 function ensureCatalogShapesLoaded() {
   void fetchNodeShapes({ size: 200 })
 }
 function handleNodeShapesChanged() {
+  invalidateNodeShapeScaleSliceCatalog()
   void fetchNodeShapes({ size: 200 })
 }
 onMounted(() => {
@@ -107,6 +132,7 @@ onBeforeUnmount(() => {
 })
 const customShapeId = ref<string | null>(null)
 const customOutline = ref<OutlineSegment[] | undefined>(undefined)
+const customScaleSlice = ref<ScaleSlice | undefined>(undefined)
 
 function handleCustomShapeSelect(shapeId: string) {
   const shape = catalogShapes.value.find((s) => s.id === shapeId)
@@ -117,6 +143,7 @@ function handleCustomShapeSelect(shapeId: string) {
   } catch {
     customOutline.value = undefined
   }
+  customScaleSlice.value = parseScaleSliceFromAttrs(shape.attrs) ?? undefined
   emitStyle()
 }
 
@@ -182,7 +209,9 @@ function loadFromStyle() {
   nodeWidth.value = ds.width ?? 140
   nodeHeight.value = ds.height ?? 80
   cornerRadius.value = ds.cornerRadius ?? 0
+  cornerCut.value = ds.cornerCut ?? DEFAULT_CORNER_CUT_PX
   contentInset.value = toInsetSides(ds.contentInset, 0)
+  contentInsetScale.value = { ...(ds.contentInsetScale ?? {}) }
 
   fillColor.value = ds.fillColor ?? '#ffffff'
   fillOpacity.value = ds.fillOpacity ?? 1
@@ -198,6 +227,8 @@ function loadFromStyle() {
 
   customShapeId.value = ds.customShapeId ?? null
   customOutline.value = ds.customOutline ?? undefined
+  customScaleSlice.value =
+    ds.customScaleSlice ?? resolveCustomScaleSlice(ds) ?? undefined
   if (compositeShapeType.value === 'custom') ensureCatalogShapesLoaded()
 
   compositeContentDraft.value = ds.compositeContent
@@ -227,7 +258,11 @@ function emitStyle() {
       : {}),
     compositeShapeType: compositeShapeType.value,
     ...(compositeShapeType.value === 'custom' && customShapeId.value
-      ? { customShapeId: customShapeId.value, customOutline: customOutline.value }
+      ? {
+          customShapeId: customShapeId.value,
+          customOutline: customOutline.value,
+          ...(customScaleSlice.value ? { customScaleSlice: customScaleSlice.value } : {}),
+        }
       : {}),
     compositeAutoSize: compositeAutoSize.value,
     compositeMinWidth: compositeMinWidth.value,
@@ -238,10 +273,19 @@ function emitStyle() {
     strokeOpacity: strokeOpacity.value,
     strokeWidth: strokeWidth.value,
     cornerRadius: cornerRadius.value,
+    ...(compositeShapeType.value === 'beveled-rectangle'
+      ? { cornerCut: cornerCut.value }
+      : {}),
     opacity: opacity.value,
     width: nodeWidth.value,
     height: nodeHeight.value,
     contentInset: insetToPlain(contentInset.value),
+    ...(contentInsetScale.value.top ||
+    contentInsetScale.value.right ||
+    contentInsetScale.value.bottom ||
+    contentInsetScale.value.left
+      ? { contentInsetScale: { ...contentInsetScale.value } }
+      : {}),
     portsTop: portsTop.value,
     portsBottom: portsBottom.value,
     portsLeft: portsLeft.value,
@@ -408,6 +452,7 @@ function applyStyleBindingsJson() {
           "
         />
         <LabeledNumberInput
+          v-if="compositeShapeType === 'rectangle'"
           label="R"
           :model-value="cornerRadius"
           :min="0"
@@ -415,6 +460,18 @@ function applyStyleBindingsJson() {
           :step="1"
           @update:model-value="
             cornerRadius = Number($event);
+            emitStyle()
+          "
+        />
+        <LabeledNumberInput
+          v-if="compositeShapeType === 'beveled-rectangle'"
+          :label="t('nodeStyle.cornerCut')"
+          :model-value="cornerCut"
+          :min="0"
+          :max="80"
+          :step="1"
+          @update:model-value="
+            cornerCut = Number($event);
             emitStyle()
           "
         />
@@ -445,11 +502,16 @@ function applyStyleBindingsJson() {
       </div>
       <InsetSidesInput
         :model-value="contentInset"
+        :scale-value="contentInsetScale"
         :min="0"
         :max="100"
         :step="1"
         @update:model-value="
           contentInset = $event;
+          emitStyle()
+        "
+        @update:scale-value="
+          contentInsetScale = $event;
           emitStyle()
         "
       />

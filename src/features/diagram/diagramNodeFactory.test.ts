@@ -83,6 +83,13 @@ describe('diagramNodeFactory', () => {
     })
     expect(custom).toBeInstanceOf(CustomShapeNode)
     expect(getDiagramNodeShape(custom)).toBe('beveled-rectangle')
+
+    const beveledWithCut = createDiagramNode({
+      ...baseNodeOptions,
+      diagramStyle: { nodeShape: 'beveled-rectangle', cornerCut: 14 },
+    })
+    expect(beveledWithCut).toBeInstanceOf(CustomShapeNode)
+    expect(getDiagramNodeShape(beveledWithCut)).toBe('beveled-rectangle')
   })
 
   it('uses a special rectangle outline for note and folder variants', () => {

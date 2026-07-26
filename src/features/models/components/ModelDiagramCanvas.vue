@@ -5,6 +5,7 @@ import {
   DiagramRenderer,
   RectangleNode,
   CompositeNode,
+  CustomShapeNode,
   deserializeCComponent,
   Node as DiagramNode,
   Edge,
@@ -26,8 +27,16 @@ import {
   createDiagramNode,
   getDiagramNodeShape,
   hasSpecialRectangleShape,
+  resolveCornerCutPx,
   resolveDiagramNodeShape,
 } from '@/features/diagram/diagramNodeFactory'
+import { customOutlineToPath2D, customOutlineToSvgPath } from '@/utils/customOutlinePath'
+import { diagramShapeFactories } from '@/utils/diagramShapes'
+import { applyContentInsetFromStyle } from '@/features/diagram-style/utils/applyContentInsetFromStyle'
+import {
+  ensureNodeShapeScaleSliceCatalog,
+  withResolvedScaleSlice,
+} from '@/utils/resolveCustomScaleSlice'
 import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
 import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
@@ -316,6 +325,8 @@ const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: stri
 const edgeIdToInstance = new Map<string, { modelLinkId: string; edgeId: string }>()
 /** Last display-name we pushed onto a papirus node from syncDiagram (editable label / composite name). */
 const syncedNodeNameByPapId = new Map<string, string>()
+/** Outer composite shape fingerprint last applied (shapeType / outline / slice / radius). */
+const compositeOuterShapeKeyByPapId = new Map<string, string>()
 
 // ── Computed ──
 const nodeById = computed(() => new Map(props.nodes.map(node => [node.id, node])))
@@ -763,13 +774,16 @@ const getBoundComponentStyle = (instance: DiagramNodeInstance): DiagramStyle | u
 
 const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefined => {
   const bound = getBoundComponentStyle(instance)
+  let merged: DiagramStyle | undefined
   if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
-    return {
+    merged = {
       ...(bound ?? {}),
       ...(instance.attrs.diagramStyle as DiagramStyle),
     }
+  } else {
+    merged = bound
   }
-  return bound
+  return withResolvedScaleSlice(merged)
 }
 
 const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attrs?.isNote === true
@@ -1099,6 +1113,18 @@ function isCompositeContentEqual(a: CContainer, b: CContainer): boolean {
   return JSON.stringify(a.serialize()) === JSON.stringify(b.serialize())
 }
 
+/** Fingerprint of composite outer geometry (not inner content tree). */
+function getCompositeOuterShapeKey(ds?: DiagramStyle): string {
+  return JSON.stringify({
+    compositeShapeType: ds?.compositeShapeType ?? 'rectangle',
+    customShapeId: ds?.customShapeId ?? null,
+    customOutline: ds?.customOutline ?? null,
+    customScaleSlice: ds?.customScaleSlice ?? null,
+    cornerRadius: ds?.cornerRadius ?? 0,
+    cornerCut: ds?.cornerCut ?? null,
+  })
+}
+
 // ── Node creation ──
 function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   const ds = getEffectiveStyle(instance)
@@ -1126,6 +1152,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     diagramStyle: ds,
     anchorPoints: resolveComponentAnchorPoints(ds),
     contentInset: (ds?.contentInset ?? 0) as unknown as number,
+    contentInsetBaseStyle: getBoundComponentStyle(instance),
     badges: getInteractiveBadgesForInstance(instance),
     label: buildNodeLabel(nodeName, ds, instance.modelNodeId, instance.id),
     ...(icon ? { icon } : {}),
@@ -1187,19 +1214,26 @@ function syncDiagram() {
       if (expectedShape !== existingShape || needsFolderTabRebuild || needsStickyNoteRebuild) {
         renderer.removeNode(papNodeId)
         renderer.addNode(createInstanceNode(instance))
+        if (expectedShape === 'composite') {
+          compositeOuterShapeKeyByPapId.set(papNodeId, getCompositeOuterShapeKey(ds))
+        } else {
+          compositeOuterShapeKeyByPapId.delete(papNodeId)
+        }
         continue
       }
 
       let compositeOptions: InstanceCompositeOptions | undefined
-      // Composite content (name/bindings) may change; rebuild only then so resize keeps selection.
+      // Composite content or outer shape may change; rebuild then so resize still keeps selection otherwise.
       if (expectedShape === 'composite' && existing instanceof CompositeNode) {
         compositeOptions = resolveInstanceComposite(instance, ds, nodeName)
-        if (
-          compositeOptions &&
-          !isCompositeContentEqual(existing.content, compositeOptions.content)
-        ) {
+        const outerKey = getCompositeOuterShapeKey(ds)
+        const contentChanged =
+          !!compositeOptions && !isCompositeContentEqual(existing.content, compositeOptions.content)
+        const outerChanged = compositeOuterShapeKeyByPapId.get(papNodeId) !== outerKey
+        if (contentChanged || outerChanged) {
           renderer.removeNode(papNodeId)
           renderer.addNode(createInstanceNode(instance))
+          compositeOuterShapeKeyByPapId.set(papNodeId, outerKey)
           continue
         }
       }
@@ -1229,16 +1263,38 @@ function syncDiagram() {
       if (existing instanceof RectangleNode) {
         existing.cornerRadius = visual.cornerRadius
       }
+      if (
+        expectedShape === 'custom' &&
+        existing instanceof CustomShapeNode &&
+        ds?.customOutline?.length
+      ) {
+        const segments = ds.customOutline
+        const slice = ds.customScaleSlice
+        existing.setPathFactory((w, h) => customOutlineToPath2D(segments, w, h, slice))
+        existing.setSvgPath((w, h) => customOutlineToSvgPath(segments, w, h, slice))
+      }
+      if (expectedShape === 'beveled-rectangle' && existing instanceof CustomShapeNode) {
+        const cut = resolveCornerCutPx(ds)
+        const factory = diagramShapeFactories['beveled-rectangle']
+        existing.setPathFactory((w, h) => factory.path(w, h, cut))
+        existing.setSvgPath((w, h) => factory.svgPath(w, h, cut))
+      }
       existing.icon = buildModelNodeIcon(ds)
       ;(existing as DiagramNode & { badges: Array<{ id: string; iconUrl: string }> }).badges =
         getInteractiveBadgesForInstance(instance)
-      existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
+      applyContentInsetFromStyle(existing, ds, getBoundComponentStyle(instance))
       if (ds?.labelPlacement) {
         ;(existing as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
       }
       applyMinSizeConstraint(existing, instance)
     } else {
       renderer.addNode(createInstanceNode(instance))
+      if (resolveDiagramNodeShape(getEffectiveStyle(instance)) === 'composite') {
+        compositeOuterShapeKeyByPapId.set(
+          papNodeId,
+          getCompositeOuterShapeKey(getEffectiveStyle(instance))
+        )
+      }
     }
   }
 
@@ -1384,7 +1440,10 @@ function syncDiagram() {
 
   // Remove stale nodes and edges
   for (const [id] of renderer.nodes) {
-    if (!currentNodeIds.has(id)) renderer.removeNode(id)
+    if (!currentNodeIds.has(id)) {
+      renderer.removeNode(id)
+      compositeOuterShapeKeyByPapId.delete(id)
+    }
   }
   for (const [id] of renderer.edges) {
     if (!currentEdgeIds.has(id)) renderer.removeEdge(id)
@@ -1395,6 +1454,9 @@ function syncDiagram() {
   syncedNodeNameByPapId.clear()
   for (const [papId, name] of nextSyncedNames) {
     syncedNodeNameByPapId.set(papId, name)
+  }
+  for (const papId of [...compositeOuterShapeKeyByPapId.keys()]) {
+    if (!currentNodeIds.has(papId)) compositeOuterShapeKeyByPapId.delete(papId)
   }
   renderer.markDirty()
   updateSelection()
@@ -2439,6 +2501,11 @@ function initRenderer(
   }
 
   syncDiagram()
+  void ensureNodeShapeScaleSliceCatalog().then((ok) => {
+    if (!ok || renderer !== r) return
+    // Re-apply custom path factories once catalog scaleSlice attrs are available.
+    syncDiagram()
+  })
   if (lastActiveDiagramId) {
     safeRestoreViewport(lastActiveDiagramId, r)
   }

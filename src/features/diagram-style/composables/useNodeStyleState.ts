@@ -4,6 +4,7 @@ import type {
   DiagramStyle,
   CompositeSerializedCComponent,
   StylePropertyBindingGroup,
+  InsetScaleSides,
 } from '@/domain/attrs/notationAttrs'
 import type {
   ExtendedIconConfig,
@@ -21,6 +22,8 @@ import {
   type InsetSides,
 } from '../utils/styleHelpers'
 import { createDefaultCompositeContent } from '@/features/diagram-style/utils/compositeBindings'
+import { resolveCustomScaleSlice } from '@/utils/resolveCustomScaleSlice'
+import { DEFAULT_CORNER_CUT_PX } from '@/utils/diagramShapes'
 
 export type NodeShape =
   | 'rectangle'
@@ -58,6 +61,7 @@ export function useNodeStyleState() {
   const strokeOpacity = ref(1)
   const strokeWidth = ref(2)
   const cornerRadius = ref(0)
+  const cornerCut = ref(DEFAULT_CORNER_CUT_PX)
   const opacity = ref(1)
   const lineStyle = ref<'solid' | 'dashed'>('solid')
   const lineDashPattern = ref('8,4')
@@ -72,12 +76,14 @@ export function useNodeStyleState() {
   const nodeWidth = ref(140)
   const nodeHeight = ref(50)
   const contentInset = ref<InsetSides>({ top: 0, right: 0, bottom: 0, left: 0 })
+  const contentInsetScale = ref<InsetScaleSides>({})
   const nodePortsTop = ref(3)
   const nodePortsBottom = ref(3)
   const nodePortsLeft = ref(1)
   const nodePortsRight = ref(1)
   const customOutlineRef = ref<DiagramStyle['customOutline']>(undefined)
   const customShapeIdRef = ref<string | null>(null)
+  const customScaleSliceRef = ref<DiagramStyle['customScaleSlice']>(undefined)
   const compositeContentJson = ref('')
   const styleBindingsJson = ref('')
   const compositeJsonError = ref<string | null>(null)
@@ -86,7 +92,9 @@ export function useNodeStyleState() {
   const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([])
   const compositeContentDraft = ref<CompositeSerializedCComponent>(createDefaultCompositeContent('Name'))
   const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([])
-  const compositeShapeType = ref<'rectangle' | 'circle' | 'diamond' | 'custom'>('rectangle')
+  const compositeShapeType = ref<
+    'rectangle' | 'beveled-rectangle' | 'circle' | 'diamond' | 'custom'
+  >('rectangle')
   const compositeAutoSize = ref(false)
   const compositeMinWidth = ref(0)
   const compositeMinHeight = ref(0)
@@ -137,10 +145,26 @@ export function useNodeStyleState() {
       if (rawShape === 'custom') {
         customOutlineRef.value = currentDiagramStyle?.customOutline ?? undefined
         customShapeIdRef.value = currentDiagramStyle?.customShapeId ?? null
+        customScaleSliceRef.value =
+          currentDiagramStyle?.customScaleSlice ??
+          resolveCustomScaleSlice(currentDiagramStyle) ??
+          undefined
+        needsCatalogShapes = true
+      } else if (
+        rawShape === 'composite' &&
+        currentDiagramStyle?.compositeShapeType === 'custom'
+      ) {
+        customOutlineRef.value = currentDiagramStyle?.customOutline ?? undefined
+        customShapeIdRef.value = currentDiagramStyle?.customShapeId ?? null
+        customScaleSliceRef.value =
+          currentDiagramStyle?.customScaleSlice ??
+          resolveCustomScaleSlice(currentDiagramStyle) ??
+          undefined
         needsCatalogShapes = true
       } else {
         customOutlineRef.value = undefined
         customShapeIdRef.value = null
+        customScaleSliceRef.value = undefined
       }
     } else {
       const typeName = nodeRuntime.typeName
@@ -148,6 +172,7 @@ export function useNodeStyleState() {
         typeName === 'diamond' ? 'diamond' : typeName === 'circle' ? 'circle' : 'rectangle'
       customOutlineRef.value = undefined
       customShapeIdRef.value = null
+      customScaleSliceRef.value = undefined
     }
 
     label.value = node.label?.text ?? ''
@@ -168,6 +193,7 @@ export function useNodeStyleState() {
     } else {
       cornerRadius.value = 0
     }
+    cornerCut.value = currentDiagramStyle?.cornerCut ?? DEFAULT_CORNER_CUT_PX
 
     const labelStyle = node.label?.style as ExtendedTextStyle | undefined
     labelColor.value = labelStyle?.color || '#333333'
@@ -207,6 +233,7 @@ export function useNodeStyleState() {
       nodeRuntime.contentInset ?? currentDiagramStyle?.contentInset,
       0,
     )
+    contentInsetScale.value = { ...(currentDiagramStyle?.contentInsetScale ?? {}) }
     const anchorPoints = nodeRuntime.anchorPoints || {}
     nodePortsTop.value = Math.max(0, Math.round(Number(anchorPoints.top ?? 3)))
     nodePortsBottom.value = Math.max(0, Math.round(Number(anchorPoints.bottom ?? 3)))
@@ -230,6 +257,9 @@ export function useNodeStyleState() {
         ? {
             customOutline: customOutlineRef.value,
             customShapeId: customShapeIdRef.value ?? undefined,
+            ...(customScaleSliceRef.value
+              ? { customScaleSlice: customScaleSliceRef.value }
+              : {}),
           }
         : {}),
       fillColor: fillColor.value,
@@ -238,6 +268,10 @@ export function useNodeStyleState() {
       strokeOpacity: strokeOpacity.value,
       strokeWidth: strokeWidth.value,
       cornerRadius: cornerRadius.value,
+      ...(nodeShape.value === 'beveled-rectangle' ||
+      (nodeShape.value === 'composite' && compositeShapeType.value === 'beveled-rectangle')
+        ? { cornerCut: cornerCut.value }
+        : {}),
       opacity: opacity.value,
       labelColor: labelColor.value,
       labelOpacity: labelOpacity.value,
@@ -257,11 +291,26 @@ export function useNodeStyleState() {
             compositeAutoSize: compositeAutoSize.value,
             compositeMinWidth: compositeMinWidth.value,
             compositeMinHeight: compositeMinHeight.value,
+            ...(compositeShapeType.value === 'custom'
+              ? {
+                  customOutline: customOutlineRef.value,
+                  customShapeId: customShapeIdRef.value ?? undefined,
+                  ...(customScaleSliceRef.value
+                    ? { customScaleSlice: customScaleSliceRef.value }
+                    : {}),
+                }
+              : {}),
           }
         : {}),
       width: nodeWidth.value,
       height: nodeHeight.value,
       contentInset: insetToPlain(contentInset.value),
+      ...(contentInsetScale.value.top ||
+      contentInsetScale.value.right ||
+      contentInsetScale.value.bottom ||
+      contentInsetScale.value.left
+        ? { contentInsetScale: { ...contentInsetScale.value } }
+        : {}),
       portsTop: nodePortsTop.value,
       portsBottom: nodePortsBottom.value,
       portsLeft: nodePortsLeft.value,
@@ -305,6 +354,7 @@ export function useNodeStyleState() {
     strokeOpacity,
     strokeWidth,
     cornerRadius,
+    cornerCut,
     opacity,
     lineStyle,
     lineDashPattern,
@@ -319,12 +369,14 @@ export function useNodeStyleState() {
     nodeWidth,
     nodeHeight,
     contentInset,
+    contentInsetScale,
     nodePortsTop,
     nodePortsBottom,
     nodePortsLeft,
     nodePortsRight,
     customOutlineRef,
     customShapeIdRef,
+    customScaleSliceRef,
     compositeContentJson,
     styleBindingsJson,
     compositeJsonError,

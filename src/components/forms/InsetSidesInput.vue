@@ -3,11 +3,20 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 type InsetSides = { top: number; right: number; bottom: number; left: number };
+type InsetScaleSides = {
+  top?: boolean;
+  right?: boolean;
+  bottom?: boolean;
+  left?: boolean;
+};
 type InsetSyncMode = "none" | "paired" | "all";
+type InsetSide = keyof InsetSides;
 
 const props = withDefaults(
   defineProps<{
     modelValue: InsetSides;
+    /** When provided, shows ∝ checkboxes (content inset only). */
+    scaleValue?: InsetScaleSides;
     min?: number;
     max?: number;
     step?: number;
@@ -19,6 +28,7 @@ const props = withDefaults(
     leftTitle?: string;
   }>(),
   {
+    scaleValue: undefined,
     min: 0,
     max: 100,
     step: 1,
@@ -33,16 +43,19 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: InsetSides): void;
+  (e: "update:scaleValue", value: InsetScaleSides): void;
 }>();
 const { t } = useI18n();
 
 const syncMode = ref<InsetSyncMode>("none");
+const showScale = computed(() => props.scaleValue !== undefined);
 const resolvedPairedLabel = computed<string>(() => props.pairedLabel ?? t("nodeStyle.syncPair"));
 const resolvedAllLabel = computed<string>(() => props.allLabel ?? t("nodeStyle.syncAll"));
 const resolvedTopTitle = computed<string>(() => props.topTitle ?? t("nodeStyle.tooltipInsetTop"));
 const resolvedRightTitle = computed<string>(() => props.rightTitle ?? t("nodeStyle.tooltipInsetRight"));
 const resolvedBottomTitle = computed<string>(() => props.bottomTitle ?? t("nodeStyle.tooltipInsetBottom"));
 const resolvedLeftTitle = computed<string>(() => props.leftTitle ?? t("nodeStyle.tooltipInsetLeft"));
+const scaleHint = computed<string>(() => t("nodeStyle.contentInsetScaleHint"));
 
 function toggleSyncMode(mode: Exclude<InsetSyncMode, "none">): void {
   syncMode.value = syncMode.value === mode ? "none" : mode;
@@ -50,7 +63,7 @@ function toggleSyncMode(mode: Exclude<InsetSyncMode, "none">): void {
 
 function withSync(
   value: InsetSides,
-  side: keyof InsetSides,
+  side: InsetSide,
   next: number,
   mode: InsetSyncMode
 ): InsetSides {
@@ -62,11 +75,23 @@ function withSync(
   return { ...value, [side]: next };
 }
 
-function handleSideInput(side: keyof InsetSides, raw: string): void {
+function handleSideInput(side: InsetSide, raw: string): void {
   const parsed = Number.parseFloat(raw);
   if (!Number.isFinite(parsed)) return;
   const next = withSync(props.modelValue, side, parsed, syncMode.value);
   emit("update:modelValue", next);
+}
+
+function isScaleOn(side: InsetSide): boolean {
+  return props.scaleValue?.[side] === true;
+}
+
+function handleScaleToggle(side: InsetSide, checked: boolean): void {
+  const current = props.scaleValue ?? {};
+  const next: InsetScaleSides = { ...current };
+  if (checked) next[side] = true;
+  else delete next[side];
+  emit("update:scaleValue", next);
 }
 </script>
 
@@ -86,8 +111,9 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
         @click="toggleSyncMode('all')"
       >{{ resolvedAllLabel }}</button>
     </div>
-    <div class="isides__grid">
-      <label class="isides__field" :title="resolvedTopTitle">
+    <p v-if="showScale" class="isides__hint">{{ scaleHint }}</p>
+    <div class="isides__grid" :class="{ 'isides__grid--scale': showScale }">
+      <div class="isides__field" :title="resolvedTopTitle">
         <span class="isides__label" :title="resolvedTopTitle">T</span>
         <input
           class="isides__input"
@@ -99,8 +125,20 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :title="resolvedTopTitle"
           @input="handleSideInput('top', ($event.target as HTMLInputElement).value)"
         />
-      </label>
-      <label class="isides__field" :title="resolvedRightTitle">
+        <label
+          v-if="showScale"
+          class="isides__scale"
+          :title="t('nodeStyle.contentInsetScale')"
+        >
+          <input
+            type="checkbox"
+            :checked="isScaleOn('top')"
+            @change="handleScaleToggle('top', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ t("nodeStyle.contentInsetScaleShort") }}</span>
+        </label>
+      </div>
+      <div class="isides__field" :title="resolvedRightTitle">
         <span class="isides__label" :title="resolvedRightTitle">R</span>
         <input
           class="isides__input"
@@ -112,8 +150,20 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :title="resolvedRightTitle"
           @input="handleSideInput('right', ($event.target as HTMLInputElement).value)"
         />
-      </label>
-      <label class="isides__field" :title="resolvedBottomTitle">
+        <label
+          v-if="showScale"
+          class="isides__scale"
+          :title="t('nodeStyle.contentInsetScale')"
+        >
+          <input
+            type="checkbox"
+            :checked="isScaleOn('right')"
+            @change="handleScaleToggle('right', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ t("nodeStyle.contentInsetScaleShort") }}</span>
+        </label>
+      </div>
+      <div class="isides__field" :title="resolvedBottomTitle">
         <span class="isides__label" :title="resolvedBottomTitle">B</span>
         <input
           class="isides__input"
@@ -125,8 +175,20 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :title="resolvedBottomTitle"
           @input="handleSideInput('bottom', ($event.target as HTMLInputElement).value)"
         />
-      </label>
-      <label class="isides__field" :title="resolvedLeftTitle">
+        <label
+          v-if="showScale"
+          class="isides__scale"
+          :title="t('nodeStyle.contentInsetScale')"
+        >
+          <input
+            type="checkbox"
+            :checked="isScaleOn('bottom')"
+            @change="handleScaleToggle('bottom', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ t("nodeStyle.contentInsetScaleShort") }}</span>
+        </label>
+      </div>
+      <div class="isides__field" :title="resolvedLeftTitle">
         <span class="isides__label" :title="resolvedLeftTitle">L</span>
         <input
           class="isides__input"
@@ -138,76 +200,98 @@ function handleSideInput(side: keyof InsetSides, raw: string): void {
           :title="resolvedLeftTitle"
           @input="handleSideInput('left', ($event.target as HTMLInputElement).value)"
         />
-      </label>
+        <label
+          v-if="showScale"
+          class="isides__scale"
+          :title="t('nodeStyle.contentInsetScale')"
+        >
+          <input
+            type="checkbox"
+            :checked="isScaleOn('left')"
+            @change="handleScaleToggle('left', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ t("nodeStyle.contentInsetScaleShort") }}</span>
+        </label>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .isides {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .isides__sync {
   display: flex;
-  justify-content: flex-end;
   gap: 4px;
 }
 
 .isides__sync-btn {
-  height: 20px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--text-subtle);
-  font-size: 10px;
-  line-height: 1;
+  border: 1px solid var(--border, #ddd);
+  background: var(--surface, #fff);
+  color: var(--text-muted, #5c5c5c);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
   cursor: pointer;
 }
 
 .isides__sync-btn--active {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary);
+  border-color: var(--primary, #7c5cfc);
+  color: var(--primary, #7c5cfc);
+}
+
+.isides__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-subtle, #9a9a9a);
+  line-height: 1.3;
 }
 
 .isides__grid {
   display: grid;
-  gap: 6px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .isides__field {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .isides__label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-subtle);
-  padding-left: 2px;
+  font-size: 11px;
+  color: var(--text-muted, #5c5c5c);
 }
 
 .isides__input {
   width: 100%;
-  height: var(--sp-h, 28px);
-  padding: 0 7px;
-  font-size: 12px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  outline: none;
+  min-width: 0;
   box-sizing: border-box;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--surface, #fff);
+  color: var(--base-text, #1a1a1a);
 }
 
-.isides__input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-soft);
+.isides__scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted, #5c5c5c);
+  cursor: pointer;
+  user-select: none;
+}
+
+.isides__scale input {
+  margin: 0;
 }
 </style>

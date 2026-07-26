@@ -4,6 +4,7 @@ import type { ExportedNodeShape } from './exportedNodeShape'
 import type { ShapeImportResolution } from './importShapeConflicts'
 import { parseOutlineSegmentsOrEmpty } from './outlinesEquivalent'
 import { remapComponentCustomShapeIds } from './notationShapePackage'
+import { parseScaleSliceFromAttrs } from '@/types/shapes'
 
 export function applyShapeImportResolutions(params: {
   components: EditorComponent[]
@@ -31,11 +32,15 @@ export function applyShapeImportResolutions(params: {
     if (!catalogShape) continue
     const outline = parseOutlineSegmentsOrEmpty(catalogShape.outline)
     if (outline.length === 0) continue
+    const scaleSlice = parseScaleSliceFromAttrs(catalogShape.attrs)
     for (const component of params.components) {
       if (component._isDeleted) continue
       const style = component.parsedAttrs.diagramStyle
       if (style?.customShapeId !== resolution.catalogShapeId) continue
-      component.parsedAttrs.diagramStyle = { ...style, customOutline: outline }
+      const nextStyle = { ...style, customOutline: outline }
+      if (scaleSlice) nextStyle.customScaleSlice = scaleSlice
+      else delete nextStyle.customScaleSlice
+      component.parsedAttrs.diagramStyle = nextStyle
       if (!component._isNew) component._isDirty = true
     }
   }

@@ -33,6 +33,43 @@ describe('notationAttrs composite schema', () => {
     expect(parsed.diagramStyle?.stylePropertyBindings?.[0]?.propertyName).toBe('status')
   })
 
+  it('round-trips cornerCut on diagramStyle', () => {
+    const parsed = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: { nodeShape: 'beveled-rectangle', cornerCut: 12 },
+      })
+    )
+    expect(parsed.diagramStyle?.cornerCut).toBe(12)
+  })
+
+  it('round-trips contentInsetScale keeping only true sides', () => {
+    const parsed = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: {
+          contentInset: { top: 48, left: 8, right: 8, bottom: 8 },
+          contentInsetScale: { top: true, left: true, right: false, bottom: false },
+        },
+      })
+    )
+    expect(parsed.diagramStyle?.contentInsetScale).toEqual({ top: true, left: true })
+
+    const empty = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: {
+          contentInset: 0,
+          contentInsetScale: { top: false, left: false },
+        },
+      })
+    )
+    expect(empty.diagramStyle?.contentInsetScale).toBeUndefined()
+  })
+
   it('round-trips showLabel boolean on diagramStyle', () => {
     const withFalse = parseEntityAttrs(
       serializeEntityAttrs({

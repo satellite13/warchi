@@ -8,6 +8,10 @@ import type {
   NodeShapeRequest,
   NodeShapeUpdateRequest
 } from "../types/api"
+import {
+  invalidateNodeShapeScaleSliceCatalog,
+  rememberNodeShapeAttrs,
+} from "@/utils/resolveCustomScaleSlice"
 
 const nodeShapesPath = "/node-shapes"
 
@@ -34,6 +38,7 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
     }
     list.value = paginatedContent(result.data)
     totalElements.value = paginatedTotalElements(result.data)
+    rememberNodeShapeAttrs(list.value)
     return true
   }
 
@@ -54,6 +59,8 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
       error.value = result.error.message
       return null
     }
+    invalidateNodeShapeScaleSliceCatalog()
+    if (result.data) rememberNodeShapeAttrs([result.data])
     return result.data
   }
 
@@ -64,6 +71,8 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
       error.value = result.error.message
       return null
     }
+    invalidateNodeShapeScaleSliceCatalog()
+    if (result.data) rememberNodeShapeAttrs([result.data])
     return result.data
   }
 
@@ -74,6 +83,7 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
       error.value = result.error.message
       return false
     }
+    invalidateNodeShapeScaleSliceCatalog()
     return true
   }
 

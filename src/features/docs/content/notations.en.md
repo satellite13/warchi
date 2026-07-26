@@ -111,16 +111,47 @@ You can add diagram-only nodes and edges directly on notation preview canvas:
 - they are stored in `editorDiagramLayer` inside notation attrs,
 - they are imported/exported with notation data.
 
+### Content, label, and icon insets
+
+The node style panel has three different inset controls. They nest and are **not interchangeable**. Values are authored in **pixels**.
+
+For **content inset**, any side can be marked **proportional (∝)**: the number stays reference px at the style default W×H and is recalculated when the node is resized. Unchecked sides stay fixed px.
+
+Placement chain:
+
+```
+shape (node outer bounds)
+  └─ content inset (T/R/B/L)
+        → content area
+           ├─ icon: placement zone → icon inset (single number) → image
+           └─ label: full content area → label inset (T/R/B/L) → text
+```
+
+| Style field | What it constrains | How it is set |
+|-------------|--------------------|---------------|
+| **Content inset** (`contentInset`) | Shared rectangle inside the shape for label and icon | Sides `T/R/B/L` |
+| **Label inset** (`labelInset`) | Padding around text **inside** the content area (before line alignment) | Sides `T/R/B/L` |
+| **Icon inset** (`iconInset`) | Gap from the **icon zone** edge to the image | Single number (not per side) |
+
+Practical notes:
+
+- for tall silhouettes (for example an actor with a head on top), increase the **top content inset** and enable **∝** on that side so the label stays in the “body” when the shape is scaled;
+- **label inset** is useful when you only need to nudge glyphs inside an already chosen content area without moving the icon;
+- **icon inset** does not replace content inset: it applies only inside the icon zone;
+- badges (for example interactive properties) also use the content area and have no separate style inset fields;
+- **Pair** / **All** on `T/R/B/L` blocks sync sides in pairs or all at once; button labels follow the UI language.
+
+See [Label alignment](#label-alignment) below for label position vs text alignment.
+
 #### Short field label hints
 
 For compact layout, the style panel uses abbreviated labels:
 
 - `W/H/R` — width, height, radius;
 - `PT/PB/PL/PR` — top/bottom/left/right ports;
-- `T/R/B/L` — top/right/bottom/left insets.
+- `T/R/B/L` — top/right/bottom/left insets (content inset and label inset).
 
 Hovering a field shows a tooltip with the full meaning.
-Inset sync buttons **Pair**/**All** are localized automatically according to the active UI language.
 
 ### Custom Properties
 

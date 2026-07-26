@@ -24,6 +24,13 @@ export type ExtendedIconConfig = {
 /** Extra runtime-accessible properties on Node, used via `node as unknown as ExtendedNodeProps`. */
 export interface ExtendedNodeProps {
   contentInset?: InsetInput
+  contentInsetScale?: {
+    top?: boolean
+    right?: boolean
+    bottom?: boolean
+    left?: boolean
+  }
+  contentInsetBaseSize?: { width: number; height: number }
   cornerRadius?: number
   anchorPoints?: { top?: number; right?: number; bottom?: number; left?: number }
   icon?: { options?: ExtendedIconConfig } | ExtendedIconConfig | undefined

@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.8] - 2026-07-26
+
+### Added
+- Custom shapes: optional fixed-edge (9-slice) scaling so corners stay stable when resizing.
+- Beveled rectangle: editable chamfer size (`cornerCut`) in px, like corner radius.
+- Content inset: per-side proportional (∝) scaling relative to the style default size (papirus 0.7.3).
+- In-app docs for content / label / icon insets and proportional content inset.
+
+### Changed
+- Trapezoid and parallelogram keep a fixed side slant in px when width changes.
+- Sticky-note fold cut is fixed at 16px.
+
+### Fixed
+- Applying style-panel inset changes no longer resets a canvas-resized node back to style default size.
+
 ## [0.10.7] - 2026-07-25
 
 ### Fixed

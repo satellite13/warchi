@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.10] - 2026-07-26
+
+### Fixed
+- Helm chart `version` / `appVersion` / image tag aligned with the package release (were still 0.10.7 on 0.10.8–0.10.9 tags).
+
 ## [0.10.9] - 2026-07-26
 
 ### Changed

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.9] - 2026-07-26
+
+### Changed
+- Notation and Shapes help now describe custom-shape fixed edges (9-slice) and link to the shape editor workflow.
+
 ## [0.10.8] - 2026-07-26
 
 ### Added

@@ -73,9 +73,12 @@ Practical guidance:
 - circle is useful for compact role/event-like nodes;
 - custom shape is useful when built-in options are not enough and a custom contour is required.
 
+For a **custom shape**, the outline comes from the [Shapes](/docs/shapes) catalog. If corners or cuts stretch when the node is resized, enable **Fixed edges (9-slice)** in the shape editor and set non-scaling zones with the guides. Details: [Shapes → Fixed edges](/docs/shapes).
+
 Additional notes:
 
 - corner radius (`R`) applies to rectangular forms where radius is supported;
+- for **beveled rectangle**, chamfer size is set separately (`cornerCut`, in px), similar to radius on a rounded rectangle;
 - after changing shape, review content inset (`T/R/B/L`) and label position.
 
 ### Composite UI Editor

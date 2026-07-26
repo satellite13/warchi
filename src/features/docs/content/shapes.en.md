@@ -74,4 +74,6 @@ After saving, the shape can be selected in component style settings:
 3. In shape settings, set type to **Custom shape**.
 4. Select the required shape from the list.
 
+If corners or decorative cuts stretch when the node is resized on a diagram, return to the shape editor and configure **Fixed edges (9-slice)** (see above).
+
 After picking the outline, review the component **content inset** (`T/R/B/L`): for silhouettes (for example an actor) you often need a larger top inset so the label does not overlap the “head”. How content, label, and icon insets nest is described under [Notations → Insets](/docs/notations).

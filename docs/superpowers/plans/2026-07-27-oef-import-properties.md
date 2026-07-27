@@ -1,6 +1,6 @@
 # OEF Import Properties → Custom Properties — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** При OEF-импорте парсить properties элементов/relationships и записывать значения в совпадающие по имени кастомные свойства (type/component/relation), с конвертацией text → typed value и warnings.
 
@@ -42,7 +42,7 @@
 
 **Repos:** warchi, arepos-server
 
-- [ ] **Step 1: Create matching branches**
+- [x] **Step 1: Create matching branches**
 
 ```bash
 cd /Users/nikolaygroznyh/Work/warchi && git checkout -b feat/oef-import-properties
@@ -59,7 +59,7 @@ Expected: both on `feat/oef-import-properties`.
 - Create: `src/features/models/utils/oef/oefPropertyConversion.test.ts`
 - Create: `src/features/models/utils/oef/oefPropertyConversion.ts` (after red)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -186,7 +186,7 @@ describe('mergeOefPropertiesIntoBuckets', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 ```bash
 cd /Users/nikolaygroznyh/Work/warchi && npx vitest run src/features/models/utils/oef/oefPropertyConversion.test.ts
@@ -194,7 +194,7 @@ cd /Users/nikolaygroznyh/Work/warchi && npx vitest run src/features/models/utils
 
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `oefPropertyConversion.ts`**
+- [x] **Step 3: Implement `oefPropertyConversion.ts`**
 
 ```ts
 import type { CustomProperty, CustomPropertyType } from '@/domain/attrs/notationAttrs'
@@ -364,13 +364,13 @@ export function aggregateUnmatchedPropertyNames(
 }
 ```
 
-- [ ] **Step 4: Run tests — expect PASS**
+- [x] **Step 4: Run tests — expect PASS**
 
 ```bash
 npx vitest run src/features/models/utils/oef/oefPropertyConversion.test.ts
 ```
 
-- [ ] **Step 5: Commit (warchi)**
+- [x] **Step 5: Commit (warchi)**
 
 ```bash
 git add src/features/models/utils/oef/oefPropertyConversion.ts \
@@ -394,7 +394,7 @@ EOF
 - Modify: `src/features/models/utils/oef/oefDraftBuilder.test.ts` (if present)
 - Create: `src/features/models/utils/oef/__fixtures__/element-properties.xml`
 
-- [ ] **Step 1: Extend types**
+- [x] **Step 1: Extend types**
 
 ```ts
 export type OefElement = {
@@ -431,7 +431,7 @@ export type ImportDraftLink = {
 }
 ```
 
-- [ ] **Step 2: Add fixture `element-properties.xml`**
+- [x] **Step 2: Add fixture `element-properties.xml`**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -481,7 +481,7 @@ export type ImportDraftLink = {
 
 Note: `propertyDefinitions` after elements — DOM parser should read definitions first (query), then resolve refs.
 
-- [ ] **Step 3: Parser helpers**
+- [x] **Step 3: Parser helpers**
 
 ```ts
 function parsePropertyDefinitions(model: Element): Map<string, string> {
@@ -516,7 +516,7 @@ function parseEntityProperties(
 
 In `parseOefXml`: `const definitions = parsePropertyDefinitions(model)`, pass into element/relationship parsers. Attach `...(properties ? { properties } : {})`.
 
-- [ ] **Step 4: Draft builder passthrough**
+- [x] **Step 4: Draft builder passthrough**
 
 ```ts
 nodes: parsed.elements.map(element => ({
@@ -542,7 +542,7 @@ links: parsed.relationships.map(relationship => {
 }),
 ```
 
-- [ ] **Step 5: Tests**
+- [x] **Step 5: Tests**
 
 ```ts
 import propsXml from './__fixtures__/element-properties.xml?raw'
@@ -560,13 +560,13 @@ it('resolves element and relationship properties by definition name', () => {
 
 Also assert draft carries the same maps.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 ```bash
 npx vitest run src/features/models/utils/oef/oefParser.test.ts src/features/models/utils/oef/oefDraftBuilder.test.ts
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/models/utils/oef/types.ts \
@@ -590,7 +590,7 @@ EOF
 - Modify: `src/features/models/utils/oef/oefToBatchSave.ts`
 - Modify: `src/features/models/utils/oef/oefToBatchSave.test.ts`
 
-- [ ] **Step 1: Extend warning codes and params**
+- [x] **Step 1: Extend warning codes and params**
 
 ```ts
 export type OefImportBuildWarningCode =
@@ -608,7 +608,7 @@ export type BuildOefBatchSaveParams = {
 
 Import `CustomProperty` from `@/domain/attrs/notationAttrs` and helpers from `./oefPropertyConversion`.
 
-- [ ] **Step 2: Merge in node/link loops**
+- [x] **Step 2: Merge in node/link loops**
 
 Collect `allUnmatched: string[]`. For each node:
 
@@ -645,7 +645,7 @@ for (const { propertyName, count } of aggregateUnmatchedPropertyNames(allUnmatch
 }
 ```
 
-- [ ] **Step 3: Test**
+- [x] **Step 3: Test**
 
 ```ts
 it('merges OEF properties into type and component values by name', () => {
@@ -696,13 +696,13 @@ it('merges OEF properties into type and component values by name', () => {
 })
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 npx vitest run src/features/models/utils/oef/oefToBatchSave.test.ts
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/models/utils/oef/oefToBatchSave.ts \
@@ -722,7 +722,7 @@ EOF
 - Modify: `src/features/models/composables/useOefImport.ts`
 - Modify: `src/i18n/locales/models.ts`
 
-- [ ] **Step 1: Pass schemas**
+- [x] **Step 1: Pass schemas**
 
 ```ts
 const nodeTypeCustomPropertiesById = Object.fromEntries(
@@ -747,7 +747,7 @@ const relationCustomPropertiesById = Object.fromEntries(
 
 Pass into `buildOefBatchSaveRequest`.
 
-- [ ] **Step 2: Warning labels**
+- [x] **Step 2: Warning labels**
 
 ```ts
 case 'propertyConversionFailed':
@@ -756,7 +756,7 @@ case 'propertyUnmatched':
   return options.t('models.oefImportWarningPropertyUnmatched')
 ```
 
-- [ ] **Step 3: i18n ru + en**
+- [x] **Step 3: i18n ru + en**
 
 ```ts
 // ru
@@ -772,7 +772,7 @@ oefImportWarningPropertyUnmatched:
   'OEF property did not match any custom property',
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/models/composables/useOefImport.ts src/i18n/locales/models.ts
@@ -789,7 +789,7 @@ EOF
 
 **Repo:** arepos-server
 
-- [ ] **Step 1: DTO fields**
+- [x] **Step 1: DTO fields**
 
 ```kotlin
 data class OefElementDto(
@@ -809,7 +809,7 @@ data class OefRelationshipDto(
 )
 ```
 
-- [ ] **Step 2: Streaming parse strategy**
+- [x] **Step 2: Streaming parse strategy**
 
 ArchiMate places `propertyDefinitions` **after** elements/relationships. Therefore:
 
@@ -837,7 +837,7 @@ StAX paths:
 
 Ignore model-level and view-level properties (out of scope).
 
-- [ ] **Step 3: Fixture + test**
+- [x] **Step 3: Fixture + test**
 
 Copy `element-properties.xml` to `src/test/resources/oef/element-properties.xml`.
 
@@ -855,13 +855,13 @@ fun `resolves element and relationship properties by definition name`() {
 }
 ```
 
-- [ ] **Step 4: Run server tests**
+- [x] **Step 4: Run server tests**
 
 ```bash
 cd /Users/nikolaygroznyh/Work/arepos-server && ./gradlew test --tests "OefParseServiceTest"
 ```
 
-- [ ] **Step 5: Commit (arepos-server)**
+- [x] **Step 5: Commit (arepos-server)**
 
 ```bash
 git add src/main/kotlin/ru/kavader/arepos/dto/oef/OefNormalizeDtos.kt \
@@ -879,7 +879,7 @@ EOF
 
 ### Task 6: Client normalize passthrough + regression
 
-- [ ] **Step 1: Preserve properties in `toOefParsedModel`**
+- [x] **Step 1: Preserve properties in `toOefParsedModel`**
 
 ```ts
 export function toOefParsedModel(response: OefNormalizeResponse): OefParsedModel {
@@ -908,7 +908,7 @@ export function toOefParsedModel(response: OefNormalizeResponse): OefParsedModel
 
 Add/adjust unit test with a fake normalize response containing properties.
 
-- [ ] **Step 2: Regression suite**
+- [x] **Step 2: Regression suite**
 
 ```bash
 cd /Users/nikolaygroznyh/Work/warchi && npx vitest run src/features/models/utils/oef/
@@ -916,7 +916,7 @@ cd /Users/nikolaygroznyh/Work/warchi && npx vitest run src/features/models/utils
 
 Expected: all PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/models/utils/oef/oefNormalizeApi.ts \
@@ -932,20 +932,20 @@ EOF
 
 ### Task 7: Spec status + plan commit
 
-- [ ] **Step 1: Update design status**
+- [x] **Step 1: Update design status**
 
 In `docs/superpowers/specs/2026-07-27-oef-import-properties-design.md`:
 
 `Status: approved design; plan ready`
 
-- [ ] **Step 2: Final verification**
+- [x] **Step 2: Final verification**
 
 ```bash
 cd /Users/nikolaygroznyh/Work/warchi && npx vitest run src/features/models/utils/oef/
 cd /Users/nikolaygroznyh/Work/arepos-server && ./gradlew test --tests "OefParseServiceTest"
 ```
 
-- [ ] **Step 3: Commit docs in warchi**
+- [x] **Step 3: Commit docs in warchi**
 
 ```bash
 git add docs/superpowers/specs/2026-07-27-oef-import-properties-design.md \

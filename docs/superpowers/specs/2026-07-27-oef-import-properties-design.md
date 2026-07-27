@@ -1,7 +1,7 @@
 # OEF import: properties → custom properties
 
 Date: 2026-07-27  
-Status: approved design; plan ready
+Status: implemented (feat/oef-import-properties)
 
 ## Goal
 

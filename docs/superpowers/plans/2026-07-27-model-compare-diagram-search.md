@@ -28,13 +28,13 @@
 **Files:**
 - Create: `src/views/ModelVisualCompareView.test.ts`
 
-- [ ] **Step 1: Create branch**
+- [x] **Step 1: Create branch**
 
 ```bash
 cd /Users/nikolaygroznyh/Work/warchi && git checkout -b feat/model-compare-diagram-search
 ```
 
-- [ ] **Step 2: Write failing test**
+- [x] **Step 2: Write failing test**
 
 Stub heavy deps; assert `#topbar-extra` uses SearchableSelect (or that component is imported and options prop maps names). Prefer asserting on stub props:
 
@@ -162,7 +162,7 @@ describe('ModelVisualCompareView diagram select', () => {
 
 Adapt mocks if `apiGet` typing / `paginatedContent` shape differs — inspect existing compare tests or `paginatedResponse` helpers. If related-versions response shape needs `page` fields, match what `paginatedContent` expects.
 
-- [ ] **Step 3: Run — expect FAIL** (SearchableSelect not wired yet, or stub not found)
+- [x] **Step 3: Run — expect FAIL** (SearchableSelect not wired yet, or stub not found)
 
 ```bash
 npx vitest run src/views/ModelVisualCompareView.test.ts
@@ -177,7 +177,7 @@ Expected: FAIL (no searchable select in topbar / options count 0 / stub missing 
 **Files:**
 - Modify: `src/views/ModelVisualCompareView.vue`
 
-- [ ] **Step 1: Import + computed options**
+- [x] **Step 1: Import + computed options**
 
 ```ts
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
@@ -189,7 +189,7 @@ const diagramOptions = computed(() =>
 
 Place `diagramOptions` after existing `diagramNames` computed.
 
-- [ ] **Step 2: Replace template select in `#topbar-extra`**
+- [x] **Step 2: Replace template select in `#topbar-extra`**
 
 ```vue
 <template #topbar-extra>
@@ -210,7 +210,7 @@ Place `diagramOptions` after existing `diagramNames` computed.
 
 Leave `#before-swap` / `#after-swap` native `<select>` unchanged.
 
-- [ ] **Step 3: Compact styles in the same SFC** (unscoped sibling block is fine, or scoped + `:deep`)
+- [x] **Step 3: Compact styles in the same SFC** (unscoped sibling block is fine, or scoped + `:deep`)
 
 Add after template (scoped or unscoped — prefer unscoped next to existing `.ddc-pick` pattern, or scoped with `:deep`):
 
@@ -241,13 +241,13 @@ Add after template (scoped or unscoped — prefer unscoped next to existing `.dd
 
 Tune if control class names differ — inspect `SearchableSelect.vue` for exact BEM classes.
 
-- [ ] **Step 4: Run test — expect PASS**
+- [x] **Step 4: Run test — expect PASS**
 
 ```bash
 npx vitest run src/views/ModelVisualCompareView.test.ts
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/views/ModelVisualCompareView.vue src/views/ModelVisualCompareView.test.ts
@@ -262,11 +262,11 @@ EOF
 
 ### Task 3: Spec status + smoke
 
-- [ ] **Step 1:** In design spec set `Status: implemented (feat/model-compare-diagram-search)`
+- [x] **Step 1:** In design spec set `Status: implemented (feat/model-compare-diagram-search)`
 
-- [ ] **Step 2:** Manual smoke on local app: open `/models/<id>/compare`, type substring in Diagram field, select match, canvases update.
+- [ ] **Step 2:** Manual smoke on local app: open `/models/<id>/compare`, type substring in Diagram field, select match, canvases update. *(deferred — unit test is verification for this task)*
 
-- [ ] **Step 3:** Commit docs if changed
+- [x] **Step 3:** Commit docs if changed
 
 ```bash
 git add docs/superpowers/specs/2026-07-27-model-compare-diagram-search-design.md \

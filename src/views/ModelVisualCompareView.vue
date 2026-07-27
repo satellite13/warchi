@@ -13,6 +13,7 @@ import type {
   NodeTypeResponse,
 } from '@/types/api'
 import { type CompareSharedData, loadCompareSharedData } from '@/api/loadCompareSharedData'
+import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import DualDiagramCompareView from '@/features/models/components/DualDiagramCompareView.vue'
 import { compareVersions } from '@/utils/version'
 import { paginatedContent } from '@/utils/paginatedResponse'
@@ -156,6 +157,8 @@ const diagramNames = computed(() => {
   return Array.from(names).sort()
 })
 
+const diagramOptions = computed(() => diagramNames.value.map(name => ({ id: name, label: name })))
+
 const leftDiagram = computed(() => {
   const list = leftData.value?.diagrams ?? []
   const d = getLatestDiagramByName(list, diagramName.value)
@@ -241,10 +244,39 @@ watch(
     <template #topbar-extra>
       <div class="ddc-pick">
         <span class="ddc-pick__label">{{ t('models.compareDiagramName') }}</span>
-        <select v-model="diagramName" class="ddc-pick__select">
-          <option v-for="name in diagramNames" :key="name" :value="name">{{ name }}</option>
-        </select>
+        <SearchableSelect
+          v-model="diagramName"
+          class="ddc-pick__searchable"
+          :options="diagramOptions"
+          :disabled="loading"
+          :placeholder="t('models.compareDiagramName')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </div>
     </template>
   </DualDiagramCompareView>
 </template>
+
+<style scoped>
+.ddc-pick__searchable {
+  min-width: 220px;
+}
+.ddc-pick__searchable :deep(.searchable-select__control) {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.ddc-pick__searchable :deep(.searchable-select__control:hover) {
+  border-color: var(--border-strong);
+}
+.ddc-pick__searchable :deep(.searchable-select__control:focus-within) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+</style>

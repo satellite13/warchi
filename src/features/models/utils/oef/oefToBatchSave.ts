@@ -1,3 +1,4 @@
+import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { BatchSaveRequest } from '@/features/models/composables/useModelBatchSave'
 import type {
   DiagramAttrs,
@@ -32,6 +33,11 @@ import {
   type OefRelationRuleDecision,
   type OefRelationRuleRef,
 } from './oefRelationRuleValidation'
+import {
+  aggregateUnmatchedPropertyNames,
+  mergeOefPropertiesIntoBuckets,
+  mergeOefPropertiesIntoRelationValues,
+} from './oefPropertyConversion'
 import type { ImportDraft, ImportDraftDiagramConnectionInstance } from './types'
 
 const DEFAULT_NOTE_DIAGRAM_STYLE = {
@@ -63,6 +69,8 @@ export type OefImportBuildWarningCode =
   | 'directoryTypeCreated'
   | 'linkNotAllowedByRelationRules'
   | 'linkImportedAgainstRelationRules'
+  | 'propertyConversionFailed'
+  | 'propertyUnmatched'
 
 export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
   if (name.length <= maxLength) return name
@@ -131,6 +139,9 @@ export type BuildOefBatchSaveParams = {
   nodeTypePropertyDefaultsById?: Record<string, Record<string, unknown>>
   componentPropertyDefaultsById?: Record<string, Record<string, unknown>>
   relationPropertyDefaultsById?: Record<string, Record<string, unknown>>
+  nodeTypeCustomPropertiesById?: Record<string, CustomProperty[]>
+  componentCustomPropertiesById?: Record<string, CustomProperty[]>
+  relationCustomPropertiesById?: Record<string, CustomProperty[]>
   relationRules?: OefRelationRuleRef[]
   ruleDecisions?: Record<string, OefRelationRuleDecision>
 }
@@ -254,6 +265,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     params.draft.nodes.map(node => [node.sourceElementId, node.sourceType])
   )
   const skippedByRelationRules = new Set<string>()
+  const allUnmatchedPropertyNames: string[] = []
 
   const orgPlan = buildOrganizationImportPlan(params.draft.organizations)
   for (const warning of orgPlan.warnings) {
@@ -320,6 +332,24 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     const tempId = makeStableTempId('oef-node', node.sourceElementId, usedIds)
     const typeDefaults = params.nodeTypePropertyDefaultsById?.[mapped.nodeTypeId] ?? {}
     const componentDefaults = params.componentPropertyDefaultsById?.[mapped.componentId] ?? {}
+    const merged = mergeOefPropertiesIntoBuckets({
+      oefProperties: node.properties ?? {},
+      typeDefaults,
+      componentDefaults,
+      typeSchema: params.nodeTypeCustomPropertiesById?.[mapped.nodeTypeId] ?? [],
+      componentSchema: params.componentCustomPropertiesById?.[mapped.componentId] ?? [],
+      entityId: node.sourceElementId,
+      entityKind: 'node',
+    })
+    allUnmatchedPropertyNames.push(...merged.unmatchedNames)
+    for (const failure of merged.conversionFailures) {
+      warnings.push({
+        code: 'propertyConversionFailed',
+        sourceType: node.sourceType,
+        sourceId: failure.entityId,
+        message: `Property "${failure.propertyName}" value "${failure.rawValue}" is not a valid ${failure.targetType}`,
+      })
+    }
     const name = truncateOefEntityName(node.name)
     if (name !== node.name) {
       warnings.push({
@@ -344,8 +374,8 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
           params.notationId,
           mapped.componentId,
           nextTreeOrder(orgParentKey ?? null),
-          typeDefaults,
-          componentDefaults
+          merged.typeValues,
+          merged.componentValues
         )
       ),
     })
@@ -435,14 +465,38 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     }
     const tempId = makeStableTempId('oef-link', link.sourceRelationshipId, usedIds)
     const relationDefaults = params.relationPropertyDefaultsById?.[mapped.relationId] ?? {}
+    const merged = mergeOefPropertiesIntoRelationValues({
+      oefProperties: link.properties ?? {},
+      relationDefaults,
+      relationSchema: params.relationCustomPropertiesById?.[mapped.relationId] ?? [],
+      entityId: link.sourceRelationshipId,
+    })
+    allUnmatchedPropertyNames.push(...merged.unmatchedNames)
+    for (const failure of merged.conversionFailures) {
+      warnings.push({
+        code: 'propertyConversionFailed',
+        sourceType: link.sourceType,
+        sourceId: failure.entityId,
+        message: `Property "${failure.propertyName}" value "${failure.rawValue}" is not a valid ${failure.targetType}`,
+      })
+    }
     request.links.create.push({
       tempId,
       sourceId,
       targetId,
       linkTypeId: mapped.linkTypeId,
-      attrs: serializeLinkAttrs(makeLinkAttrs(params.notationId, mapped.relationId, relationDefaults)),
+      attrs: serializeLinkAttrs(
+        makeLinkAttrs(params.notationId, mapped.relationId, merged.relationValues)
+      ),
     })
     linkTempBySourceRelationshipId.set(link.sourceRelationshipId, tempId)
+  }
+
+  for (const { propertyName, count } of aggregateUnmatchedPropertyNames(allUnmatchedPropertyNames)) {
+    warnings.push({
+      code: 'propertyUnmatched',
+      message: `OEF property "${propertyName}" did not match any custom property (${count})`,
+    })
   }
 
   for (const diagram of params.draft.diagrams) {

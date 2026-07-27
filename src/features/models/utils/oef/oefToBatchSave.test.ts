@@ -9,6 +9,7 @@ import { collectDisallowedOefLinkGroups } from './oefRelationRuleValidation'
 import mainXml from './__fixtures__/Main.xml?raw'
 import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
 import namedRelationshipXml from './__fixtures__/named-relationship.xml?raw'
+import propsXml from './__fixtures__/element-properties.xml?raw'
 
 function buildFullMappingState(): ImportMappingState {
   return {
@@ -315,5 +316,52 @@ describe('oefToBatchSave', () => {
     expect(result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')).toHaveLength(
       5
     )
+  })
+
+  it('merges OEF properties into type and component values by name', () => {
+    const draft = buildImportDraft(parseOefXml(propsXml))
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessService: { nodeTypeId: 'nt-1', componentId: 'cmp-1' },
+        },
+        relationshipTypeMap: {
+          Association: { linkTypeId: 'lt-1', relationId: 'rel-1' },
+        },
+      },
+      notationId: 'notation-1',
+      nodeTypePropertyDefaultsById: { 'nt-1': { Owner: 'Default', Count: 1 } },
+      componentPropertyDefaultsById: { 'cmp-1': {} },
+      relationPropertyDefaultsById: { 'rel-1': {} },
+      nodeTypeCustomPropertiesById: {
+        'nt-1': [
+          { id: '1', name: 'Owner', type: 'string', required: false, min: null, max: null },
+          { id: '2', name: 'Count', type: 'number', required: false, min: null, max: null },
+        ],
+      },
+      componentCustomPropertiesById: {
+        'cmp-1': [
+          { id: '3', name: 'Owner', type: 'string', required: false, min: null, max: null },
+        ],
+      },
+      relationCustomPropertiesById: {
+        'rel-1': [
+          { id: '4', name: 'Owner', type: 'string', required: false, min: null, max: null },
+        ],
+      },
+    })
+
+    const nodeAttrs = parseNodeAttrs(result.request.nodes.create[0]!.attrs)
+    expect(nodeAttrs.typeProperties.Owner).toBe('Team A')
+    expect(nodeAttrs.typeProperties.Count).toBe(7)
+    expect(nodeAttrs.componentProperties['notation-1']?.['cmp-1']?.Owner).toBe('Team A')
+
+    const linkAttrs = parseLinkAttrs(result.request.links.create[0]!.attrs)
+    expect(linkAttrs.relationProperties['notation-1']?.['rel-1']?.Owner).toBe('Link Owner')
+
+    expect(
+      result.warnings.some(w => w.code === 'propertyUnmatched' && w.message.includes('OrphanProp'))
+    ).toBe(true)
   })
 })

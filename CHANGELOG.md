@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.13] - 2026-07-28
+
+### Fixed
+- Orthogonal links inside containers and stacks no longer cut through siblings or lick the source side on same-side elbows; intentional wraps (`top→top`, `bottom→bottom`, `left→left`, …) stay on the chosen anchors (papirus 0.8.2).
+
 ## [0.10.12] - 2026-07-28
 
 ### Fixed

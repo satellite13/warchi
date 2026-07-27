@@ -7,6 +7,7 @@ export type OefElement = {
   id: string
   type: string
   name: string
+  properties?: Record<string, string>
 }
 
 export type OefRelationship = {
@@ -15,6 +16,7 @@ export type OefRelationship = {
   name: string
   sourceElementId: string
   targetElementId: string
+  properties?: Record<string, string>
 }
 
 export type OefViewNode = {
@@ -64,6 +66,7 @@ export type ImportDraftNode = {
   sourceElementId: string
   sourceType: string
   name: string
+  properties?: Record<string, string>
 }
 
 export type ImportDraftLink = {
@@ -72,6 +75,7 @@ export type ImportDraftLink = {
   sourceElementId: string
   targetElementId: string
   name?: string
+  properties?: Record<string, string>
 }
 
 export type ImportDraftDiagramNodeInstance = {

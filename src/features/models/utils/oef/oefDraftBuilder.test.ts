@@ -4,6 +4,7 @@ import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
 import mainXml from './__fixtures__/Main.xml?raw'
 import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
+import propsXml from './__fixtures__/element-properties.xml?raw'
 
 describe('oefDraftBuilder', () => {
   it('builds import draft from parsed OEF', () => {
@@ -36,5 +37,17 @@ describe('oefDraftBuilder', () => {
     expect(assoc?.isDiagramOnlyLink).toBe(true)
     expect(assoc?.attachesToConnectionId).toBe('conn-flow')
     expect(assoc?.attachEndpoint).toBe('target')
+  })
+
+  it('copies element and relationship properties into draft', () => {
+    const parsed = parseOefXml(propsXml)
+    const draft = buildImportDraft(parsed)
+
+    expect(draft.nodes[0]?.properties).toEqual({
+      Owner: 'Team A',
+      Count: '7',
+      OrphanProp: 'x',
+    })
+    expect(draft.links[0]?.properties).toEqual({ Owner: 'Link Owner' })
   })
 })

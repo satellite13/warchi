@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseOefXml } from './oefParser'
 import mainXml from './__fixtures__/Main.xml?raw'
+import propsXml from './__fixtures__/element-properties.xml?raw'
 
 describe('oefParser', () => {
   it('parses archimate Main.xml fixture', () => {
@@ -48,5 +49,15 @@ describe('oefParser', () => {
 
   it('throws when model root is missing', () => {
     expect(() => parseOefXml('<root />')).toThrow('Invalid OEF XML: missing <model>')
+  })
+
+  it('resolves element and relationship properties by definition name', () => {
+    const parsed = parseOefXml(propsXml)
+    expect(parsed.elements[0]?.properties).toEqual({
+      Owner: 'Team A',
+      Count: '7',
+      OrphanProp: 'x',
+    })
+    expect(parsed.relationships[0]?.properties).toEqual({ Owner: 'Link Owner' })
   })
 })

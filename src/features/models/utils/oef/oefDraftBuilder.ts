@@ -113,6 +113,7 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
       sourceElementId: element.id,
       sourceType: element.type,
       name: element.name || `Element ${element.id}`,
+      ...(element.properties ? { properties: element.properties } : {}),
     })),
     links: parsed.relationships.map(relationship => {
       const name = (relationship.name ?? '').trim()
@@ -122,6 +123,7 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
         sourceElementId: relationship.sourceElementId,
         targetElementId: relationship.targetElementId,
         ...(name ? { name } : {}),
+        ...(relationship.properties ? { properties: relationship.properties } : {}),
       }
     }),
     diagrams,

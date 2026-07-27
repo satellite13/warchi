@@ -91,6 +91,10 @@ export function useOefImport(options: {
         return options.t('models.oefImportWarningLinkNotAllowedByRelationRules')
       case 'linkImportedAgainstRelationRules':
         return options.t('models.oefImportWarningLinkImportedAgainstRelationRules')
+      case 'propertyConversionFailed':
+        return options.t('models.oefImportWarningPropertyConversionFailed')
+      case 'propertyUnmatched':
+        return options.t('models.oefImportWarningPropertyUnmatched')
       default:
         return code
     }
@@ -247,6 +251,24 @@ export function useOefImport(options: {
           ),
         ])
       )
+      const nodeTypeCustomPropertiesById = Object.fromEntries(
+        options.state.value.nodeTypes.map(nodeType => [
+          nodeType.id,
+          parseTypeAttrs(nodeType.attrs ?? null).customProperties ?? [],
+        ])
+      )
+      const componentCustomPropertiesById = Object.fromEntries(
+        options.state.value.components.map(component => [
+          component.id,
+          parseEntityAttrs(component.attrs ?? null).customProperties,
+        ])
+      )
+      const relationCustomPropertiesById = Object.fromEntries(
+        options.state.value.relations.map(relation => [
+          relation.id,
+          parseEntityAttrs(relation.attrs ?? null).customProperties,
+        ])
+      )
       const built = buildOefBatchSaveRequest({
         draft: payload.draft,
         notationId: payload.notationId,
@@ -256,6 +278,9 @@ export function useOefImport(options: {
         nodeTypePropertyDefaultsById,
         componentPropertyDefaultsById,
         relationPropertyDefaultsById,
+        nodeTypeCustomPropertiesById,
+        componentCustomPropertiesById,
+        relationCustomPropertiesById,
         relationRules: options.state.value.relationRules,
         ruleDecisions: payload.ruleDecisions,
       })

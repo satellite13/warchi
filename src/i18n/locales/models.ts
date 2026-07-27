@@ -134,6 +134,10 @@ export const modelsMessages = {
       oefImportWarningRelationsBranchSkipped: 'Пропущена ветка Relations из organizations',
       oefImportWarningDirectoryTypeMissing: 'Нет типа Directory — папки не созданы',
       oefImportWarningDirectoryTypeCreated: 'Тип Directory создан автоматически',
+      oefImportWarningPropertyConversionFailed:
+        'Значение свойства OEF не удалось привести к типу',
+      oefImportWarningPropertyUnmatched:
+        'Свойство OEF не совпало ни с одним кастомным свойством',
       oefImportDirectoryTypeCreateFailed:
         'Не удалось создать тип Directory для папок импорта: {message}',
       oefImportStatFolders: 'Папок: {count}',
@@ -589,6 +593,10 @@ export const modelsMessages = {
       oefImportWarningRelationsBranchSkipped: 'Skipped Relations organization branch',
       oefImportWarningDirectoryTypeMissing: 'Directory type missing — folders were not created',
       oefImportWarningDirectoryTypeCreated: 'Directory node type was created automatically',
+      oefImportWarningPropertyConversionFailed:
+        'OEF property value could not be converted to the target type',
+      oefImportWarningPropertyUnmatched:
+        'OEF property did not match any custom property',
       oefImportDirectoryTypeCreateFailed:
         'Failed to create Directory type for import folders: {message}',
       oefImportStatFolders: 'Folders: {count}',

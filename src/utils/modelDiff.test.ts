@@ -303,6 +303,101 @@ describe('compareDiagrams', () => {
     expect(diff[0].kind).toBe('modified')
   })
 
+  it('ignores remapped modelNodeId/modelLinkId when stableIds match (model copy)', () => {
+    const base = makeDiagram({
+      name: 'Main',
+      attrs: JSON.stringify({
+        instances: {
+          nodes: [
+            { id: 'ni-a', modelNodeId: 'node-old-a', x: 10, y: 20 },
+            { id: 'ni-b', modelNodeId: 'node-old-b', x: 100, y: 20 },
+          ],
+          edges: [
+            {
+              id: 'ei-1',
+              modelLinkId: 'link-old',
+              sourceInstanceId: 'ni-a',
+              targetInstanceId: 'ni-b',
+            },
+          ],
+        },
+      }),
+    })
+    const target = makeDiagram({
+      name: 'Main',
+      attrs: JSON.stringify({
+        instances: {
+          edges: [
+            {
+              id: 'ei-1',
+              modelLinkId: 'link-new',
+              sourceInstanceId: 'ni-a',
+              targetInstanceId: 'ni-b',
+            },
+          ],
+          nodes: [
+            { y: 20, id: 'ni-b', modelNodeId: 'node-new-b', x: 100 },
+            { y: 20, id: 'ni-a', modelNodeId: 'node-new-a', x: 10 },
+          ],
+        },
+      }),
+    })
+
+    const baseNodeStable = new Map([
+      ['node-old-a', 'stable-a'],
+      ['node-old-b', 'stable-b'],
+    ])
+    const targetNodeStable = new Map([
+      ['node-new-a', 'stable-a'],
+      ['node-new-b', 'stable-b'],
+    ])
+    const baseLinkStable = new Map([['link-old', 'stable-link']])
+    const targetLinkStable = new Map([['link-new', 'stable-link']])
+
+    expect(
+      compareDiagrams(
+        [base],
+        [target],
+        baseNodeStable,
+        baseLinkStable,
+        targetNodeStable,
+        targetLinkStable,
+      ),
+    ).toEqual([])
+  })
+
+  it('still detects real instance geometry change after stableId remap', () => {
+    const base = makeDiagram({
+      name: 'Main',
+      attrs: JSON.stringify({
+        instances: {
+          nodes: [{ id: 'ni-a', modelNodeId: 'node-old-a', x: 10, y: 20 }],
+          edges: [],
+        },
+      }),
+    })
+    const target = makeDiagram({
+      name: 'Main',
+      attrs: JSON.stringify({
+        instances: {
+          nodes: [{ id: 'ni-a', modelNodeId: 'node-new-a', x: 99, y: 20 }],
+          edges: [],
+        },
+      }),
+    })
+
+    const diff = compareDiagrams(
+      [base],
+      [target],
+      new Map([['node-old-a', 'stable-a']]),
+      new Map(),
+      new Map([['node-new-a', 'stable-a']]),
+      new Map(),
+    )
+    expect(diff).toHaveLength(1)
+    expect(diff[0].kind).toBe('modified')
+  })
+
   it('detects modified diagram (notationId change)', () => {
     const base = makeDiagram({ name: 'Main', notationId: 'n1' })
     const target = { ...base, notationId: 'n2' }

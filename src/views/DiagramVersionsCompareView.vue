@@ -14,6 +14,7 @@ import type {
 } from '@/types/api'
 import { type CompareSharedData, loadCompareSharedData } from '@/api/loadCompareSharedData'
 import DualDiagramCompareView from '@/features/models/components/DualDiagramCompareView.vue'
+import { fetchAllByModelId } from '@/features/models/composables/modelEditorLoadModel'
 import { compareVersions } from '@/utils/version'
 import {
   toEditorDiagram,
@@ -49,32 +50,22 @@ async function loadVersionData(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const listQuery = listParams()
-    const [nodesRes, linksRes, diagramsRes, nodeTypesRes, linkTypesRes] = await Promise.all([
-      apiGet<PaginatedResponse<NodeResponse>>(
-        `/nodes?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`,
-      ),
-      apiGet<PaginatedResponse<LinkResponse>>(
-        `/links?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`,
-      ),
-      apiGet<PaginatedResponse<DiagramResponse>>(
-        `/diagrams?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`,
-      ),
+    const typesQuery = listParams()
+    const [nodes, links, diagrams, nodeTypesRes, linkTypesRes] = await Promise.all([
+      fetchAllByModelId<NodeResponse>('/nodes', id),
+      fetchAllByModelId<LinkResponse>('/links', id),
+      fetchAllByModelId<DiagramResponse>('/diagrams', id),
       apiGet<PaginatedResponse<NodeTypeResponse>>(
-        `/node-types?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`,
+        `/node-types?modelId=${encodeURIComponent(id)}&${typesQuery.toString()}`,
       ),
       apiGet<PaginatedResponse<LinkTypeResponse>>(
-        `/link-types?modelId=${encodeURIComponent(id)}&${listQuery.toString()}`,
+        `/link-types?modelId=${encodeURIComponent(id)}&${typesQuery.toString()}`,
       ),
     ])
-    if (!nodesRes.success || !linksRes.success || !diagramsRes.success) {
-      versionData.value = null
-      return
-    }
     versionData.value = {
-      nodes: nodesRes.data.content ?? [],
-      links: linksRes.data.content ?? [],
-      diagrams: diagramsRes.data.content ?? [],
+      nodes,
+      links,
+      diagrams,
       nodeTypes: nodeTypesRes.success ? (nodeTypesRes.data.content ?? []) : [],
       linkTypes: linkTypesRes.success ? (linkTypesRes.data.content ?? []) : [],
     }

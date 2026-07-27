@@ -15,6 +15,7 @@ import type {
 import { type CompareSharedData, loadCompareSharedData } from '@/api/loadCompareSharedData'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import DualDiagramCompareView from '@/features/models/components/DualDiagramCompareView.vue'
+import { fetchAllByModelId } from '@/features/models/composables/modelEditorLoadModel'
 import { compareVersions } from '@/utils/version'
 import { paginatedContent } from '@/utils/paginatedResponse'
 import {
@@ -84,31 +85,30 @@ async function loadVersionData(versionId: string): Promise<{
   nodeTypes: NodeTypeResponse[]
   linkTypes: LinkTypeResponse[]
 } | null> {
-  const listQuery = listParams()
-  const [nodesRes, linksRes, diagramsRes, nodeTypesRes, linkTypesRes] = await Promise.all([
-    apiGet<PaginatedResponse<NodeResponse>>(
-      `/nodes?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`,
-    ),
-    apiGet<PaginatedResponse<LinkResponse>>(
-      `/links?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`,
-    ),
-    apiGet<PaginatedResponse<DiagramResponse>>(
-      `/diagrams?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`,
-    ),
-    apiGet<PaginatedResponse<NodeTypeResponse>>(
-      `/node-types?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`,
-    ),
-    apiGet<PaginatedResponse<LinkTypeResponse>>(
-      `/link-types?modelId=${encodeURIComponent(versionId)}&${listQuery.toString()}`,
-    ),
-  ])
-  if (!nodesRes.success || !linksRes.success || !diagramsRes.success) return null
-  return {
-    nodes: nodesRes.data.content ?? [],
-    links: linksRes.data.content ?? [],
-    diagrams: diagramsRes.data.content ?? [],
-    nodeTypes: nodeTypesRes.success ? (nodeTypesRes.data.content ?? []) : [],
-    linkTypes: linkTypesRes.success ? (linkTypesRes.data.content ?? []) : [],
+  // Same pagination as model editor: a single listParams page (1000) drops
+  // diagram-referenced nodes/links on large models, so only notes/containers render.
+  const typesQuery = listParams()
+  try {
+    const [nodes, links, diagrams, nodeTypesRes, linkTypesRes] = await Promise.all([
+      fetchAllByModelId<NodeResponse>('/nodes', versionId),
+      fetchAllByModelId<LinkResponse>('/links', versionId),
+      fetchAllByModelId<DiagramResponse>('/diagrams', versionId),
+      apiGet<PaginatedResponse<NodeTypeResponse>>(
+        `/node-types?modelId=${encodeURIComponent(versionId)}&${typesQuery.toString()}`,
+      ),
+      apiGet<PaginatedResponse<LinkTypeResponse>>(
+        `/link-types?modelId=${encodeURIComponent(versionId)}&${typesQuery.toString()}`,
+      ),
+    ])
+    return {
+      nodes,
+      links,
+      diagrams,
+      nodeTypes: nodeTypesRes.success ? (nodeTypesRes.data.content ?? []) : [],
+      linkTypes: linkTypesRes.success ? (linkTypesRes.data.content ?? []) : [],
+    }
+  } catch {
+    return null
   }
 }
 

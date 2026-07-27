@@ -79,10 +79,12 @@ describe('ModelVisualCompareView diagram select', () => {
               { id: 'd1', name: 'Architecture Overview', version: '1.0.0' },
               { id: 'd2', name: 'Business Process', version: '1.0.0' },
             ],
+            last: true,
+            totalPages: 1,
           },
         }
       }
-      return { success: true, data: { content: [] } }
+      return { success: true, data: { content: [], last: true, totalPages: 1 } }
     })
 
     const i18n = createI18n({

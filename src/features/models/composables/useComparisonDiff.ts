@@ -171,8 +171,17 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
     return new Set((instances?.edges ?? []).map((e) => e.id))
   })
 
-  function computeEdgeInstanceSignatures(diagram: EditorDiagram | null) {
+  /**
+   * Attachment signature for an edge instance.
+   * Uses link stableId (not modelLinkId): model copy remaps link UUIDs but keeps
+   * edge/node instance ids, so modelLinkId would false-positive every edge as modified.
+   */
+  function computeEdgeInstanceSignatures(
+    diagram: EditorDiagram | null,
+    editorLinks: EditorLink[],
+  ) {
     const instances = diagram?.parsedAttrs?.instances
+    const linkById = new Map(editorLinks.map((l) => [l.id, l]))
     const byId = new Map<string, string>()
     for (const e of instances?.edges ?? []) {
       const attrs = (e.attrs ?? {}) as Record<string, unknown>
@@ -181,20 +190,22 @@ export function useComparisonDiff(options: ComparisonDiffOptions) {
       const fromOutline =
         typeof attrs.fromOutlineParam === 'number' ? attrs.fromOutlineParam : ''
       const toOutline = typeof attrs.toOutlineParam === 'number' ? attrs.toOutlineParam : ''
+      const link = linkById.get(e.modelLinkId)
+      const linkKey = link?.stableId ?? e.modelLinkId
       byId.set(
         e.id,
-        `${e.modelLinkId}|${e.sourceInstanceId}|${e.targetInstanceId}|${fromPort}|${toPort}|${fromOutline}|${toOutline}`,
+        `${linkKey}|${e.sourceInstanceId}|${e.targetInstanceId}|${fromPort}|${toPort}|${fromOutline}|${toOutline}`,
       )
     }
     return byId
   }
 
   const leftEdgeInstanceSignatures = computed(() =>
-    computeEdgeInstanceSignatures(leftDiagram.value),
+    computeEdgeInstanceSignatures(leftDiagram.value, leftEditorLinks.value),
   )
 
   const rightEdgeInstanceSignatures = computed(() =>
-    computeEdgeInstanceSignatures(rightDiagram.value),
+    computeEdgeInstanceSignatures(rightDiagram.value, rightEditorLinks.value),
   )
 
   const useEdgeInstanceIdMatching = computed(() => {

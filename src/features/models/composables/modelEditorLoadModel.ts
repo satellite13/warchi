@@ -65,7 +65,7 @@ async function fetchModelPage<T>(
  * Load every page for a model-scoped collection (nodes/links/diagrams).
  * Fetches page 0 first, then remaining pages in parallel.
  */
-export async function fetchAllByModelId<T>(
+export async function fetchAllByModelId<T extends { id?: string }>(
   path: '/nodes' | '/links' | '/diagrams',
   modelId: string,
   pageSize: number = path === '/diagrams' ? PAGE_SIZE_MODEL_DIAGRAMS : PAGE_SIZE_MODEL_NODES,
@@ -73,27 +73,44 @@ export async function fetchAllByModelId<T>(
 ): Promise<T[]> {
   const first = await fetchModelPage<T>(path, modelId, 0, pageSize, extraParams)
   const firstBatch = first.content ?? []
-  if (paginatedIsLastPage(first, 0)) return firstBatch
-
-  const totalPages = paginatedTotalPages(first)
-  if (totalPages <= 1) {
-    const collected = [...firstBatch]
-    let page = 1
-    while (true) {
-      const data = await fetchModelPage<T>(path, modelId, page, pageSize, extraParams)
-      collected.push(...(data.content ?? []))
-      if (paginatedIsLastPage(data, page)) break
-      page += 1
+  let collected: T[]
+  if (paginatedIsLastPage(first, 0)) {
+    collected = firstBatch
+  } else {
+    const totalPages = paginatedTotalPages(first)
+    if (totalPages <= 1) {
+      collected = [...firstBatch]
+      let page = 1
+      while (true) {
+        const data = await fetchModelPage<T>(path, modelId, page, pageSize, extraParams)
+        collected.push(...(data.content ?? []))
+        if (paginatedIsLastPage(data, page)) break
+        page += 1
+      }
+    } else {
+      const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+          fetchModelPage<T>(path, modelId, index + 1, pageSize, extraParams)
+        )
+      )
+      collected = firstBatch.concat(...rest.map(page => page.content ?? []))
     }
-    return collected
   }
 
-  const rest = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, index) =>
-      fetchModelPage<T>(path, modelId, index + 1, pageSize, extraParams)
-    )
-  )
-  return firstBatch.concat(...rest.map(page => page.content ?? []))
+  // Guard against unstable server ordering (duplicate rows across pages).
+  const seen = new Set<string>()
+  const unique: T[] = []
+  for (const item of collected) {
+    const id = typeof item.id === 'string' ? item.id : null
+    if (id == null) {
+      unique.push(item)
+      continue
+    }
+    if (seen.has(id)) continue
+    seen.add(id)
+    unique.push(item)
+  }
+  return unique
 }
 
 function requireModel(modelResult: ApiResult<ModelData>): ModelData {

@@ -72,6 +72,16 @@ describe('fetchAllByModelId', () => {
 
     expect(String(vi.mocked(apiGet).mock.calls[0]?.[0])).toContain('includeAttrs=false')
   })
+
+  it('dedupes entities that appear on multiple pages', async () => {
+    vi.mocked(apiGet)
+      .mockResolvedValueOnce(ok(page([{ id: 'n1' }, { id: 'n2' }], { last: false, totalPages: 2 })))
+      .mockResolvedValueOnce(ok(page([{ id: 'n2' }, { id: 'n3' }], { last: true, totalPages: 2 })))
+
+    const result = await fetchAllByModelId<{ id: string }>('/links', 'model-1', 1000)
+
+    expect(result.map(item => item.id)).toEqual(['n1', 'n2', 'n3'])
+  })
 })
 
 describe('loadModelEditorData', () => {

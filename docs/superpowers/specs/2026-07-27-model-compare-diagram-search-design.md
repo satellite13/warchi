@@ -1,7 +1,7 @@
 # Model compare: searchable diagram select
 
 Date: 2026-07-27  
-Status: approved design (pending implementation plan)
+Status: approved design; plan ready
 
 ## Goal
 

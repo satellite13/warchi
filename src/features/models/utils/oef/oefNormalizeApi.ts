@@ -40,10 +40,20 @@ export async function normalizeOefFile(
 export function toOefParsedModel(response: OefNormalizeResponse): OefParsedModel {
   return {
     model: response.model,
-    elements: response.elements,
+    elements: response.elements.map(element => ({
+      ...element,
+      properties:
+        element.properties && typeof element.properties === 'object'
+          ? element.properties
+          : undefined,
+    })),
     relationships: response.relationships.map(relationship => ({
       ...relationship,
       name: typeof relationship.name === 'string' ? relationship.name : '',
+      properties:
+        relationship.properties && typeof relationship.properties === 'object'
+          ? relationship.properties
+          : undefined,
     })),
     views: response.views,
     organizations: Array.isArray(response.organizations) ? response.organizations : [],

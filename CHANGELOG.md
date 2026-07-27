@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.11] - 2026-07-27
+
+### Added
+- OEF import maps element and relationship properties into custom property attrs, with mismatch warnings in the wizard.
+- Model compare: searchable diagram select.
+
+### Fixed
+- Model/diagram compare loads all paginated nodes and links (with id dedupe) so large models render and diff completely.
+- Compare no longer marks copied links or remapped diagram attrs as modified when content is the same (stableId / canonicalize).
+
 ## [0.10.10] - 2026-07-26
 
 ### Fixed

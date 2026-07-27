@@ -46,6 +46,7 @@ import {
   buildEdgeLabelBackground,
   buildNodeIcon,
   buildMarker,
+  mergeEdgeLabelStyleFromDiagramStyle,
 } from "../utils/notationElementBuilders"
 import {
   applyStylePropertyBindings,
@@ -402,13 +403,23 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         disableTransformerFrame(existingSrc)
         if (existingTgt) disableTransformerFrame(existingTgt)
         const ds = relation.parsedAttrs.diagramStyle
-        // Set label as string first (setter creates proper TextLabel), then apply style
-        existingEdge.label = relation.name
-        if (existingEdge.label && (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)) {
-          existingEdge.label.style = {
-            ...(ds.labelColor ? { color: ds.labelColor } : {}),
-            ...(ds.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-            ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {})
+        // Update label in place — assigning a string recreates TextLabel and drops styles
+        // (then a delayed history flush can persist the wipe after edgeType changes).
+        if (existingEdge.label) {
+          existingEdge.label.text = relation.name
+          existingEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+            existingEdge.label.styleOverrides,
+            ds
+          )
+        } else {
+          const labelConfig = buildEdgeLabel(relation.name, ds)
+          existingEdge.label =
+            typeof labelConfig === 'string' ? labelConfig : new TextLabel(labelConfig)
+          if (existingEdge.label) {
+            existingEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+              existingEdge.label.styleOverrides,
+              ds
+            )
           }
         }
         setTextLabelSpacing(existingEdge.label, {

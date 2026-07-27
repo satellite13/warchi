@@ -74,7 +74,7 @@ import {
   buildModelNodeIcon,
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
-import { resolveComponentAnchorPoints } from '../../notations/utils/notationElementBuilders'
+import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
 import {
   applyStylePropertyBindings,
   BIND_TO_NAME,
@@ -1360,8 +1360,6 @@ function syncDiagram() {
     const edgeLabelConfigRaw = buildModelEdgeLabelConfig(edgeLabel, ds)
     const edgeLabelText =
       typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw?.text
-    const edgeLabelConfig =
-      typeof edgeLabelConfigRaw === 'object' ? new TextLabel(edgeLabelConfigRaw) : edgeLabelConfigRaw
     const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
     const controlPoints = readControlPointsFromAttrs(edge.attrs)
 
@@ -1384,13 +1382,29 @@ function syncDiagram() {
       if (edgeOpts.labelPosition != null) existing.labelPosition = edgeOpts.labelPosition
       if (edgeOpts.labelFollowPath != null) existing.labelFollowPath = edgeOpts.labelFollowPath
       if (edgeOpts.labelLineGap !== undefined) existing.labelLineGap = edgeOpts.labelLineGap
-      existing.label = edgeLabelConfig
-      if (existing.label) {
-        existing.label.style = {
-          ...(existing.label.style || {}),
-          ...(ds?.labelColor ? { color: ds.labelColor } : {}),
-          ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
+      // Update label in place — assigning a string recreates TextLabel and drops styles.
+      if (edgeLabelConfigRaw === undefined) {
+        existing.label = undefined
+      } else if (existing.label) {
+        const nextText =
+          typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw.text
+        existing.label.text = nextText
+        if (typeof edgeLabelConfigRaw === 'object' && edgeLabelConfigRaw.editableText !== undefined) {
+          existing.label.editableText = edgeLabelConfigRaw.editableText
+        }
+        existing.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+          existing.label.styleOverrides,
+          ds
+        )
+      } else if (typeof edgeLabelConfigRaw === 'object') {
+        existing.label = new TextLabel(edgeLabelConfigRaw)
+      } else {
+        existing.label = edgeLabelConfigRaw
+        if (existing.label) {
+          existing.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+            existing.label.styleOverrides,
+            ds
+          )
         }
       }
       const inset = ds?.labelInset
@@ -1423,12 +1437,10 @@ function syncDiagram() {
         lockAnchors: lockAnchorsEnabled.value,
       })
       if (newEdge.label) {
-        newEdge.label.style = {
-          ...(newEdge.label.style || {}),
-          ...(ds?.labelColor ? { color: ds.labelColor } : {}),
-          ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-          ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
-        }
+        newEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+          newEdge.label.styleOverrides,
+          ds
+        )
         const newInset = ds?.labelInset
         if (newInset != null) {
           ;(newEdge.label as unknown as { inset?: unknown }).inset = newInset

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.12] - 2026-07-28
+
+### Fixed
+- Orthogonal polylines no longer crawl along wide target edges when reconnecting or dragging attachments (papirus 0.8.1).
+- Edge label color/size/background are kept when changing link type or syncing the diagram (no longer dropped on label recreate).
+
 ## [0.10.11] - 2026-07-27
 
 ### Added

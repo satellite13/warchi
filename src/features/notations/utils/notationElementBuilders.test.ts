@@ -7,6 +7,7 @@ import {
   buildEdgeLabelBackground,
   buildNodeIcon,
   buildMarker,
+  mergeEdgeLabelStyleFromDiagramStyle,
 } from '@/features/notations/utils/notationElementBuilders'
 import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
@@ -149,6 +150,26 @@ describe('buildEdgeLabel', () => {
     const ds: DiagramStyle = { labelInset: 4 }
     const result = expectTextLabelOptions(buildEdgeLabel('E', ds))
     expect(result.inset).toBe(4)
+  })
+})
+
+describe('mergeEdgeLabelStyleFromDiagramStyle', () => {
+  it('preserves existing overrides when diagramStyle omits label fields', () => {
+    expect(
+      mergeEdgeLabelStyleFromDiagramStyle(
+        { color: '#ff0000', fontSize: 18 },
+        { edgeType: 'bezier' }
+      )
+    ).toEqual({ color: '#ff0000', fontSize: 18 })
+  })
+
+  it('overlays diagramStyle label fields on existing overrides', () => {
+    expect(
+      mergeEdgeLabelStyleFromDiagramStyle(
+        { color: '#ff0000', fontSize: 18, opacity: 0.9 },
+        { labelColor: '#00ff00', labelFontSize: 12 }
+      )
+    ).toEqual({ color: '#00ff00', fontSize: 12, opacity: 0.9 })
   })
 })
 

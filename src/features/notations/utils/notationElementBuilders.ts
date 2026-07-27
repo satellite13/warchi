@@ -99,6 +99,19 @@ export function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLa
   return opts
 }
 
+/** Merge diagramStyle label fields into an existing TextLabel without dropping prior overrides. */
+export function mergeEdgeLabelStyleFromDiagramStyle(
+  currentOverrides: TextStyle | undefined,
+  ds?: DiagramStyle
+): TextStyle {
+  return {
+    ...(currentOverrides ?? {}),
+    ...(ds?.labelColor ? { color: ds.labelColor } : {}),
+    ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
+    ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
+  }
+}
+
 export function buildEdgeLabelBackground(ds?: DiagramStyle) {
   return {
     color: ds?.labelBgColor || 'transparent',

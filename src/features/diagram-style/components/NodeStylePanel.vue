@@ -1383,8 +1383,28 @@ function handleEdgeTypeChange(value: string) {
   edgeType.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
+  // Re-apply label styles in the same property change so:
+  // 1) canvas keeps color/size immediately
+  // 2) debounced history snapshot includes them (sync may recreate label as a bare string)
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     edge.type = v;
+    if (edge.label) {
+      edge.label.style = textStyleWith(edge.label.style, {
+        color: edgeLabelColor.value,
+        fontSize: edgeLabelFontSize.value,
+        opacity: edgeLabelOpacity.value,
+      });
+      setLabelSpacing(edge.label, { inset: insetToPlain(edgeLabelInset.value) });
+    }
+    ;(edge as unknown as ExtendedEdgeProps).labelBackground = {
+      color: edgeLabelBgColor.value,
+      opacity: edgeLabelBgOpacity.value,
+      borderRadius: edgeLabelBgBorderRadius.value,
+    };
+    edge.labelOffset = edgeLabelOffset.value;
+    edge.labelPosition = edgeLabelPosition.value;
+    edge.labelFollowPath = edgeLabelFollowPath.value;
+    edge.labelLineGap = edgeLabelLineGap.value;
   });
   emitEdgeStyle();
 }

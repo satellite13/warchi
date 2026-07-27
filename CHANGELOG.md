@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.14] - 2026-07-28
+
+### Fixed
+- With outline attach off, reconnecting an edge end to a side port no longer snaps back to the top/bottom facing side (papirus 0.8.3).
+
 ## [0.10.13] - 2026-07-28
 
 ### Fixed

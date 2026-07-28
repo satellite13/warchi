@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockCreateId = vi.fn(() => `mock-id-${Math.random().toString(36).slice(2)}`)
 
-vi.mock('../notationAttrs', () => ({
+vi.mock('@/domain/attrs/notationAttrs', () => ({
   createId: () => mockCreateId(),
   CustomProperty: undefined,
 }))
 
 import { parseTagsInput, getTagQuery, copyTypeProperties } from './tagParsers'
-import type { CustomProperty } from '../notationAttrs'
+import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 
 describe('parseTagsInput', () => {
   it('splits comma-separated tags', () => {

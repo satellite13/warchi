@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.15] - 2026-07-28
+
+### Added
+- Diagram auto-layout (ELK): layered and remove-overlaps modes with a settings preview before apply.
+
+### Fixed
+- After auto-layout, links use orthogonal polyline routing instead of slanted ELK bend segments.
+- Edge labels and relation styles are kept when layout or the style panel / context menu only change `edgeType`.
+- Stale layout preview no longer inserts a banner that shifts the sketch; refresh is signaled on the Update button.
+
 ## [0.10.14] - 2026-07-28
 
 ### Fixed

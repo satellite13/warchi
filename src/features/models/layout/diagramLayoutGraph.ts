@@ -214,20 +214,16 @@ export function applyElkLayout(
     if (!elkEdge) continue
     if (!scopeIds.has(edge.sourceInstanceId) || !scopeIds.has(edge.targetInstanceId)) continue
 
-    const bendPoints = elkEdge.sections?.flatMap(s => s.bendPoints ?? []) ?? []
+    // Do not copy ELK bendPoints into editable-polyline: papirus anchors differ from
+    // ELK start/end, so middle bends produce slanted first/last segments. Use papirus
+    // orthogonal `polyline` routing instead (straight when aligned, right-angle bends otherwise).
     if (!edge.attrs) edge.attrs = {}
     const existingStyle =
       edge.attrs.diagramStyle && typeof edge.attrs.diagramStyle === 'object'
         ? (edge.attrs.diagramStyle as Record<string, unknown>)
         : {}
-
-    if (bendPoints.length > 0) {
-      edge.attrs.controlPoints = bendPoints.map(p => ({ x: p.x, y: p.y }))
-      edge.attrs.diagramStyle = { ...existingStyle, edgeType: 'editable-polyline' }
-    } else {
-      delete edge.attrs.controlPoints
-      edge.attrs.diagramStyle = { ...existingStyle, edgeType: 'straight' }
-    }
+    delete edge.attrs.controlPoints
+    edge.attrs.diagramStyle = { ...existingStyle, edgeType: 'polyline' }
   }
 
   return next

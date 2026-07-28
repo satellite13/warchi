@@ -87,7 +87,7 @@ describe('buildElkGraph', () => {
 })
 
 describe('applyElkLayout', () => {
-  it('writes node positions and edge controlPoints for scoped elements only', () => {
+  it('writes node positions and uses papirus orthogonal polyline for scoped edges', () => {
     const diagram: DiagramAttrs = {
       instances: {
         nodes: [
@@ -130,14 +130,14 @@ describe('applyElkLayout', () => {
     expect(next.instances.nodes.find(n => n.id === 'a')).toMatchObject({ x: 10, y: 20 })
     expect(next.instances.nodes.find(n => n.id === 'c')).toMatchObject({ x: 900, y: 900 })
     const e1 = next.instances.edges.find(e => e.id === 'e1')
-    expect(e1?.attrs?.controlPoints).toEqual([{ x: 140, y: 40 }])
-    expect(e1?.attrs?.diagramStyle).toEqual({ edgeType: 'editable-polyline' })
+    expect(e1?.attrs?.controlPoints).toBeUndefined()
+    expect(e1?.attrs?.diagramStyle).toEqual({ edgeType: 'polyline' })
     expect(next.instances.edges.find(e => e.id === 'e2')?.attrs?.controlPoints).toEqual([
       { x: 1, y: 1 },
     ])
   })
 
-  it('sets editable-polyline edgeType when applying bend points', () => {
+  it('sets polyline and clears controlPoints even when ELK returns bend points', () => {
     const diagram: DiagramAttrs = {
       instances: {
         nodes: [
@@ -179,8 +179,8 @@ describe('applyElkLayout', () => {
       new Set(['a', 'b'])
     )
     const edge = next.instances.edges[0]
-    expect(edge?.attrs?.controlPoints).toEqual([{ x: 140, y: 40 }])
-    expect(edge?.attrs?.diagramStyle).toEqual({ edgeType: 'editable-polyline' })
+    expect(edge?.attrs?.controlPoints).toBeUndefined()
+    expect(edge?.attrs?.diagramStyle).toEqual({ edgeType: 'polyline' })
   })
 
   it('maps nested ELK coords to absolute world positions', () => {
@@ -258,7 +258,7 @@ describe('applyElkLayout', () => {
     expect(diagram).toEqual(snapshot)
   })
 
-  it('sets straight and clears controlPoints when ELK has no bend points', () => {
+  it('sets polyline and clears controlPoints when ELK has no bend points', () => {
     const diagram: DiagramAttrs = {
       instances: {
         nodes: [
@@ -295,10 +295,10 @@ describe('applyElkLayout', () => {
     const next = applyElkLayout(diagram, elkResult, new Set(['a', 'b']))
     const edge = next.instances.edges[0]!
     expect(edge.attrs?.controlPoints).toBeUndefined()
-    expect(edge.attrs?.diagramStyle).toMatchObject({ edgeType: 'straight' })
+    expect(edge.attrs?.diagramStyle).toMatchObject({ edgeType: 'polyline' })
   })
 
-  it('forces editable-polyline even when previous type was polyline', () => {
+  it('forces polyline even when previous type was editable-polyline', () => {
     const diagram: DiagramAttrs = {
       instances: {
         nodes: [
@@ -311,7 +311,10 @@ describe('applyElkLayout', () => {
             modelLinkId: 'l1',
             sourceInstanceId: 'a',
             targetInstanceId: 'b',
-            attrs: { diagramStyle: { edgeType: 'polyline' } },
+            attrs: {
+              controlPoints: [{ x: 50, y: 10 }],
+              diagramStyle: { edgeType: 'editable-polyline' },
+            },
           },
         ],
       },
@@ -340,7 +343,7 @@ describe('applyElkLayout', () => {
       new Set(['a', 'b'])
     )
     const edge = next.instances.edges[0]!
-    expect(edge.attrs?.controlPoints).toEqual([{ x: 140, y: 40 }])
-    expect(edge.attrs?.diagramStyle).toMatchObject({ edgeType: 'editable-polyline' })
+    expect(edge.attrs?.controlPoints).toBeUndefined()
+    expect(edge.attrs?.diagramStyle).toMatchObject({ edgeType: 'polyline' })
   })
 })

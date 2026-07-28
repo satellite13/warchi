@@ -14,19 +14,13 @@ vi.mock('../utils/userRole', () => ({
   normalizeUser: vi.fn((user: unknown) => user),
 }))
 
-const mockSetAccessToken = vi.fn()
-const mockSetRefreshToken = vi.fn()
 const mockSaveStoredUser = vi.fn()
 const mockEmitAuthUpdated = vi.fn()
 
 vi.mock('./authStorage', () => ({
-  setAccessToken: (...args: unknown[]) => mockSetAccessToken(...args),
-  setRefreshToken: (...args: unknown[]) => mockSetRefreshToken(...args),
   saveStoredUser: (...args: unknown[]) => mockSaveStoredUser(...args),
   emitAuthUpdated: (...args: unknown[]) => mockEmitAuthUpdated(...args),
   emitAuthCleared: vi.fn(),
-  getAccessToken: vi.fn(() => null),
-  getRefreshToken: vi.fn(() => null),
   clearAuthStorage: vi.fn(),
   loadStoredUser: vi.fn(() => null),
 }))
@@ -72,7 +66,7 @@ describe('useOidcAuth', () => {
         data: { url: 'https://sso.example.com/authorize' },
       })
 
-      await expect(useOidcAuth().ssoLogin()).rejects.toThrow()
+      await useOidcAuth().ssoLogin()
 
       expect(mockApiGet).toHaveBeenCalledWith('/auth/sso/authorize')
       expect(globalThis.location.href).toBe('https://sso.example.com/authorize')
@@ -116,10 +110,9 @@ describe('useOidcAuth', () => {
         code: 'auth-code',
         state: 'auth-state',
       })
-      expect(mockSetAccessToken).toHaveBeenCalledWith('at-123')
-      expect(mockSetRefreshToken).toHaveBeenCalledWith('rt-456')
-      expect(mockSaveStoredUser).toHaveBeenCalled()
-      expect(mockEmitAuthUpdated).toHaveBeenCalled()
+      // Cookies are set by the API; frontend only persists the user profile.
+      expect(mockSaveStoredUser).toHaveBeenCalledWith(resp.user)
+      expect(mockEmitAuthUpdated).toHaveBeenCalledWith(resp.user)
     })
 
     it('returns false when apiPost fails', async () => {
@@ -132,7 +125,8 @@ describe('useOidcAuth', () => {
       const result = await processCallback('bad-code', 'state')
 
       expect(result).toBe(false)
-      expect(mockSetAccessToken).not.toHaveBeenCalled()
+      expect(mockSaveStoredUser).not.toHaveBeenCalled()
+      expect(mockEmitAuthUpdated).not.toHaveBeenCalled()
     })
 
     it('returns false when response data is missing', async () => {
@@ -192,9 +186,8 @@ describe('useOidcAuth', () => {
         code: 'link-code',
         state: 'link-state',
       })
-      expect(mockSetAccessToken).toHaveBeenCalledWith('link-at')
-      expect(mockSetRefreshToken).toHaveBeenCalledWith('link-rt')
-      expect(mockEmitAuthUpdated).toHaveBeenCalled()
+      expect(mockSaveStoredUser).toHaveBeenCalledWith(resp.user)
+      expect(mockEmitAuthUpdated).toHaveBeenCalledWith(resp.user)
     })
 
     it('returns false when apiPost fails', async () => {

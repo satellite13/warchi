@@ -1,4 +1,5 @@
 import type { ComponentResponse, RelationResponse } from '@/types/api'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 
 export type JsonObject = Record<string, unknown>
 
@@ -29,6 +30,8 @@ export type ScopedCustomValues = Record<string, Record<string, Record<string, un
 
 export type DiagramNodeInstanceAttrs = JsonObject & {
   componentProperties?: ScopedCustomValues
+  /** Visual (notation component) for this diagram instance; falls back to node binding. */
+  notationComponentId?: string
 }
 
 export type DiagramEdgeInstanceAttrs = JsonObject & {
@@ -62,10 +65,7 @@ export type DiagramAttrs = {
   documentFileId?: string
 }
 
-export const createId = (): string =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `id-${Math.random().toString(36).slice(2)}`
+export { createId } from '@/utils/createId'
 
 const parseJson = (raw: string | null | undefined): JsonObject => {
   if (!raw) return {}
@@ -80,7 +80,7 @@ const parseJson = (raw: string | null | undefined): JsonObject => {
   return {}
 }
 
-const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const cloneJson = clonePlainDeep
 
 const toRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -134,6 +134,13 @@ const toDiagramNodeAttrs = (value: unknown): DiagramNodeInstanceAttrs => {
   const attrs = toClonedRecord(value) as DiagramNodeInstanceAttrs
   if ('componentProperties' in attrs) {
     attrs.componentProperties = toScopedMap(attrs.componentProperties)
+  }
+  if (typeof attrs.notationComponentId === 'string') {
+    const trimmed = attrs.notationComponentId.trim()
+    if (trimmed) attrs.notationComponentId = trimmed
+    else delete attrs.notationComponentId
+  } else if ('notationComponentId' in attrs) {
+    delete attrs.notationComponentId
   }
   return attrs
 }
@@ -236,6 +243,25 @@ export const resolveComponentByNodeType = (
   nodeTypeId: string
 ): ComponentResponse[] =>
   components.filter(item => item.notationId === notationId && item.nodeTypeId === nodeTypeId)
+
+export type ResolveInstanceComponentIdInput = {
+  instance?: DiagramNodeInstance | null
+  node?: { parsedAttrs: ModelNodeAttrs } | null
+  notationId: string | null | undefined
+}
+
+/** Prefer per-instance visual binding, then node-level default for the notation. */
+export const resolveInstanceComponentId = (
+  input: ResolveInstanceComponentIdInput,
+): string | null => {
+  const fromInstance = input.instance?.attrs?.notationComponentId
+  if (typeof fromInstance === 'string' && fromInstance.trim().length > 0) {
+    return fromInstance.trim()
+  }
+  const notationId = input.notationId
+  if (!notationId || !input.node) return null
+  return input.node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+}
 
 export const resolveRelationByLinkType = (
   relations: RelationResponse[],

@@ -118,7 +118,6 @@ const { t } = useI18n()
           </div>
           <div class="matrix-details__meta">
             <span>{{ item.relationName }}</span>
-            <span v-if="item.isUnmapped" class="matrix-details__badge">{{ t("models.relationMatrixUnmapped") }}</span>
           </div>
           <div class="matrix-details__link-extra">
             <p class="matrix-details__props-title">{{ t("models.relationMatrixLinkCustomPropertiesTitle") }}</p>
@@ -334,11 +333,6 @@ const { t } = useI18n()
 
 .matrix-details__link-extra {
   margin-top: 8px;
-}
-
-.matrix-details__badge {
-  color: var(--warning);
-  font-weight: 600;
 }
 
 .matrix-details__empty {

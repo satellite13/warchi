@@ -13,8 +13,6 @@ vi.mock('@/composables/useApi', () => ({
 vi.mock('@/composables/authStorage', () => ({
   loadStoredUser: vi.fn(() => null),
   saveStoredUser: vi.fn(),
-  setAccessToken: vi.fn(),
-  setRefreshToken: vi.fn(),
   clearAuthStorage: vi.fn(),
   emitAuthUpdated: vi.fn(),
   emitAuthCleared: vi.fn(),
@@ -32,8 +30,6 @@ import {
   emitAuthCleared,
   emitAuthUpdated,
   saveStoredUser,
-  setAccessToken,
-  setRefreshToken,
 } from '@/composables/authStorage'
 
 const fakeUser = {
@@ -45,17 +41,15 @@ const fakeUser = {
 }
 
 const fakeAuthResponse = {
-  accessToken: 'acc-token',
-  refreshToken: 'ref-token',
   user: fakeUser,
 }
 
 describe('useAuth', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
-    // Reset currentUser state by calling logout
+    mockApiPost.mockResolvedValue({ success: true, data: undefined })
     const { logout } = useAuth()
-    logout()
+    await logout()
     vi.clearAllMocks()
   })
 
@@ -81,14 +75,12 @@ describe('useAuth', () => {
       expect(result).toEqual({ success: true })
     })
 
-    it('stores tokens and user on successful login', async () => {
+    it('stores user on successful login', async () => {
       mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
 
       const { login } = useAuth()
       await login('test@example.com', 'password123')
 
-      expect(setAccessToken).toHaveBeenCalledWith('acc-token')
-      expect(setRefreshToken).toHaveBeenCalledWith('ref-token')
       expect(saveStoredUser).toHaveBeenCalledWith(fakeUser)
       expect(emitAuthUpdated).toHaveBeenCalledWith(fakeUser)
     })
@@ -109,18 +101,38 @@ describe('useAuth', () => {
   // Register and registerAdmin removed — auth now via Keycloak SSO
 
   describe('logout', () => {
-    it('clears tokens, user, and emits cleared event', async () => {
-      // Login first to set user
+    it('calls logout API and clears user', async () => {
       mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
       const { login, logout, currentUser } = useAuth()
       await login('test@example.com', 'pass')
       vi.clearAllMocks()
+      mockApiPost.mockResolvedValue({ success: true, data: undefined })
 
-      logout()
+      const result = await logout()
 
+      expect(result).toEqual({ success: true })
+      expect(mockApiPost).toHaveBeenCalledWith('/auth/logout', {})
       expect(clearAuthStorage).toHaveBeenCalled()
       expect(emitAuthCleared).toHaveBeenCalled()
       expect(currentUser.value).toBeNull()
+    })
+
+    it('returns an error and keeps local session when logout API fails', async () => {
+      mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
+      const { login, logout, currentUser } = useAuth()
+      await login('test@example.com', 'pass')
+      vi.clearAllMocks()
+      mockApiPost.mockResolvedValue({
+        success: false,
+        error: { status: 503, message: 'Service unavailable' },
+      })
+
+      const result = await logout()
+
+      expect(result).toEqual({ success: false, error: 'Service unavailable' })
+      expect(clearAuthStorage).not.toHaveBeenCalled()
+      expect(emitAuthCleared).not.toHaveBeenCalled()
+      expect(currentUser.value).toEqual(fakeUser)
     })
   })
 
@@ -136,16 +148,38 @@ describe('useAuth', () => {
       expect(saveStoredUser).toHaveBeenCalledWith(fakeUser)
     })
 
-    it('does nothing on failed request', async () => {
+    it('clears stale local session when /auth/me returns 401', async () => {
+      mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
+      const { login, loadCurrentUser, currentUser } = useAuth()
+      await login('test@example.com', 'pass')
+      vi.clearAllMocks()
       mockApiGet.mockResolvedValue({
         success: false,
         error: { status: 401, message: 'Unauthorized' },
       })
 
-      const { loadCurrentUser, currentUser } = useAuth()
       await loadCurrentUser()
 
       expect(currentUser.value).toBeNull()
+      expect(clearAuthStorage).toHaveBeenCalled()
+      expect(emitAuthCleared).toHaveBeenCalled()
+    })
+
+    it('keeps local session when /auth/me fails because of a network error', async () => {
+      mockApiPost.mockResolvedValue({ success: true, data: fakeAuthResponse })
+      const { login, loadCurrentUser, currentUser } = useAuth()
+      await login('test@example.com', 'pass')
+      vi.clearAllMocks()
+      mockApiGet.mockResolvedValue({
+        success: false,
+        error: { status: 0, message: 'Network failure' },
+      })
+
+      await loadCurrentUser()
+
+      expect(currentUser.value).toEqual(fakeUser)
+      expect(clearAuthStorage).not.toHaveBeenCalled()
+      expect(emitAuthCleared).not.toHaveBeenCalled()
     })
   })
 

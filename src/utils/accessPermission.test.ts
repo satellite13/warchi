@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { toAccessLabel } from '@/utils/accessPermission'
+import { canEditByAccessPermission, toAccessLabel } from '@/utils/accessPermission'
+
+describe('canEditByAccessPermission', () => {
+  it('allows OWNER, EDIT and ADMIN', () => {
+    expect(canEditByAccessPermission('OWNER')).toBe(true)
+    expect(canEditByAccessPermission('EDIT')).toBe(true)
+    expect(canEditByAccessPermission('ADMIN')).toBe(true)
+  })
+
+  it('denies VIEW and missing permission', () => {
+    expect(canEditByAccessPermission('VIEW')).toBe(false)
+    expect(canEditByAccessPermission(null)).toBe(false)
+    expect(canEditByAccessPermission(undefined)).toBe(false)
+  })
+})
 
 describe('toAccessLabel', () => {
   describe('Russian locale (default)', () => {
@@ -21,24 +35,6 @@ describe('toAccessLabel', () => {
 
     it('returns "Мой" for OWNER with explicit ru locale', () => {
       expect(toAccessLabel('OWNER', 'ru')).toBe('Мой')
-    })
-  })
-
-  describe('French locale', () => {
-    it('returns "À moi" for OWNER', () => {
-      expect(toAccessLabel('OWNER', 'fr')).toBe('À moi')
-    })
-
-    it('returns "Partagé : édition" for EDIT', () => {
-      expect(toAccessLabel('EDIT', 'fr')).toBe('Partagé : édition')
-    })
-
-    it('returns "Partagé : lecture" for VIEW', () => {
-      expect(toAccessLabel('VIEW', 'fr')).toBe('Partagé : lecture')
-    })
-
-    it('returns "Accès administrateur" for ADMIN', () => {
-      expect(toAccessLabel('ADMIN', 'fr')).toBe('Accès administrateur')
     })
   })
 

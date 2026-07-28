@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
 import { useTreeSearch } from '@/features/models/composables'
 import type { EditorNode } from '@/features/models/types'
@@ -33,7 +33,7 @@ function setup(nodeList: EditorNode[], treeRootNodeId: string | null = null) {
   return useTreeSearch({
     nodes,
     treeRootNodeId: rootId,
-    isDirectory: node => node.nodeTypeId === 'dir',
+    isDirectory: (node) => node.nodeTypeId === 'dir',
     nodeIndexById,
   })
 }
@@ -45,7 +45,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'a', name: 'A' }),
         makeNode({ id: 'b', name: 'B', parentNodeId: 'a' }),
       ])
-      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['a'])
+      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a'])
     })
 
     it('excludes deleted nodes', () => {
@@ -53,7 +53,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'a', name: 'A', _isDeleted: true }),
         makeNode({ id: 'b', name: 'B' }),
       ])
-      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['b'])
+      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['b'])
     })
 
     it('excludes the tree root node itself', () => {
@@ -62,9 +62,9 @@ describe('useTreeSearch', () => {
           makeNode({ id: 'root', name: 'Root' }),
           makeNode({ id: 'a', name: 'A', parentNodeId: 'root' }),
         ],
-        'root'
+        'root',
       )
-      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['a'])
+      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a'])
     })
 
     it('sorts by treeOrder then by index', () => {
@@ -100,7 +100,7 @@ describe('useTreeSearch', () => {
           },
         }),
       ])
-      expect(tree.rootNodes.value.map(n => n.id)).toEqual(['a', 'b', 'c'])
+      expect(tree.rootNodes.value.map((n) => n.id)).toEqual(['a', 'b', 'c'])
     })
   })
 
@@ -113,7 +113,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'd', name: 'D', parentNodeId: 'b' }),
       ])
       const children = tree.childNodes('a')
-      expect(children.map(n => n.id)).toEqual(['b', 'c'])
+      expect(children.map((n) => n.id)).toEqual(['b', 'c'])
     })
 
     it('excludes deleted children', () => {
@@ -122,7 +122,7 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'b', name: 'B', parentNodeId: 'a', _isDeleted: true }),
         makeNode({ id: 'c', name: 'C', parentNodeId: 'a' }),
       ])
-      expect(tree.childNodes('a').map(n => n.id)).toEqual(['c'])
+      expect(tree.childNodes('a').map((n) => n.id)).toEqual(['c'])
     })
   })
 
@@ -135,7 +135,7 @@ describe('useTreeSearch', () => {
           makeNode({ id: 'b', name: 'B', parentNodeId: 'root', _isDeleted: true }),
           makeNode({ id: 'c', name: 'C', parentNodeId: 'a' }),
         ],
-        'root'
+        'root',
       )
       // a and c are counted (root is excluded, b is deleted)
       expect(tree.totalNodesCount.value).toBe(2)
@@ -158,12 +158,27 @@ describe('useTreeSearch', () => {
   })
 
   describe('search filtering', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    function applySearch(
+      tree: ReturnType<typeof setup>,
+      query: string
+    ): void {
+      tree.treeSearchQuery.value = query
+      vi.advanceTimersByTime(200)
+    }
+
     it('filteredRootNodes returns all when query empty', () => {
       const tree = setup([
         makeNode({ id: 'a', name: 'Alpha' }),
         makeNode({ id: 'b', name: 'Beta' }),
       ])
-      tree.treeSearchQuery.value = ''
+      applySearch(tree, '')
       expect(tree.filteredRootNodes.value.length).toBe(2)
     })
 
@@ -172,8 +187,8 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'a', name: 'Alpha' }),
         makeNode({ id: 'b', name: 'Beta' }),
       ])
-      tree.treeSearchQuery.value = 'alph'
-      expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a'])
+      applySearch(tree, 'alph')
+      expect(tree.filteredRootNodes.value.map((n) => n.id)).toEqual(['a'])
     })
 
     it('filteredRootNodes includes parent when child matches', () => {
@@ -181,8 +196,8 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'a', name: 'Parent' }),
         makeNode({ id: 'b', name: 'SpecialChild', parentNodeId: 'a' }),
       ])
-      tree.treeSearchQuery.value = 'special'
-      expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a'])
+      applySearch(tree, 'special')
+      expect(tree.filteredRootNodes.value.map((n) => n.id)).toEqual(['a'])
     })
 
     it('filteredChildNodes filters children by query', () => {
@@ -191,9 +206,9 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'b', name: 'Alpha', parentNodeId: 'a' }),
         makeNode({ id: 'c', name: 'Beta', parentNodeId: 'a' }),
       ])
-      tree.treeSearchQuery.value = 'beta'
+      applySearch(tree, 'beta')
       const filtered = tree.filteredChildNodes('a')
-      expect(filtered.map(n => n.id)).toEqual(['c'])
+      expect(filtered.map((n) => n.id)).toEqual(['c'])
     })
 
     it('filteredChildNodes returns all children when query empty', () => {
@@ -202,8 +217,19 @@ describe('useTreeSearch', () => {
         makeNode({ id: 'b', name: 'Alpha', parentNodeId: 'a' }),
         makeNode({ id: 'c', name: 'Beta', parentNodeId: 'a' }),
       ])
-      tree.treeSearchQuery.value = ''
+      applySearch(tree, '')
       expect(tree.filteredChildNodes('a').length).toBe(2)
+    })
+
+    it('does not apply filter until debounce elapses', () => {
+      const tree = setup([
+        makeNode({ id: 'a', name: 'Alpha' }),
+        makeNode({ id: 'b', name: 'Beta' }),
+      ])
+      tree.treeSearchQuery.value = 'alph'
+      expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a', 'b'])
+      vi.advanceTimersByTime(200)
+      expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a'])
     })
   })
 })

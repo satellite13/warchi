@@ -10,7 +10,7 @@ const { t } = useI18n();
 
 <template>
   <div :class="['logo', `logo--${size || 'md'}`]">
-    <object class="logo__icon" data="/warchi.svg" type="image/svg+xml"/>
+    <img class="logo__icon" src="/warchi.svg" alt="" />
     <div class="logo__text">
       <span class="logo__title">wArchi</span>
       <span v-if="size != 'sm'" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>

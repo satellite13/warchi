@@ -1,19 +1,32 @@
-export { useDiagramEditLock } from './useDiagramEditLock'
-export { useDiagramRealtimeCollab } from './useDiagramRealtimeCollab'
-export { useDocumentModal } from './useDocumentModal'
-export * from './useModelBatchSave'
-export { useModelDiagramExport } from './useModelDiagramExport'
-export { useModelEditor } from './useModelEditor'
-export { useModelLiveSync } from './useModelLiveSync'
-export { useModelToolbarState } from './useModelToolbarState'
-export { useModelVersionDiff } from './useModelVersionDiff'
-export { useNoteEditor } from './useNoteEditor'
-export { useTreeSearch } from './useTreeSearch'
-export * from './modelEditorMappers'
-export * from './modelEditorLoadModel'
-export * from './modelEditorSaveCoordinator'
-export * from './modelNotationRelationsApi'
-export * from './modelEditorSavePipeline'
-export * from './useModelBatchConflictResolution'
-export * from './useModelEditorStateHelpers'
-export * from './useNotationRelationsAndRulesLoader'
+export { useDiagramEditLock } from "./useDiagramEditLock"
+export { useDiagramRealtimeCollab } from "./useDiagramRealtimeCollab"
+export { useDocumentModal } from "./useDocumentModal"
+export * from "./useModelBatchSave"
+export { useModelDiagramExport } from "./useModelDiagramExport"
+export {
+  isDiagramOnlyEdgeModelLinkId,
+  useModelDiagramConnections,
+} from "./useModelDiagramConnections"
+export { useModelDiagramInstances } from "./useModelDiagramInstances"
+export { useModelEditor } from "./useModelEditor"
+export { useModelEditorSync } from "./useModelEditorSync"
+export { useModelLiveSync } from "./useModelLiveSync"
+export { useModelBatchConflictUi } from "./useModelBatchConflictUi"
+export { useModelSelection } from "./useModelSelection"
+export { useModelToolbarState } from "./useModelToolbarState"
+export { useModelTreeOperations } from "./useModelTreeOperations"
+export { useModelVersionDiff } from "./useModelVersionDiff"
+export { useDiagramNotationMigration } from "./useDiagramNotationMigration"
+export { useNotationVersionBanner } from "./useNotationVersionBanner"
+export { useNoteEditor } from "./useNoteEditor"
+export { useOefImport } from "./useOefImport"
+export { useTreeSearch } from "./useTreeSearch"
+export * from "./modelEditorMappers"
+export * from "./modelEditorLoadModel"
+export * from "./modelEditorSaveCoordinator"
+export * from "./modelNotationRelationsApi"
+export * from "./modelEditorSavePipeline"
+export * from "./useModelBatchConflictResolution"
+export * from "./useModelEditorStateHelpers"
+export * from "./useNotationRelationsAndRulesLoader"
+export { ensureNotationImportCatalog, resetLoadedNotationCatalogIds } from "./ensureNotationImportCatalog"

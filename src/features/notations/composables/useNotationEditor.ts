@@ -2,7 +2,8 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/composables/useApi'
-import { listParams, pagedListParams } from '@/api/queryHelpers'
+import { listParams } from '@/api/queryHelpers'
+import { fetchAllPages } from '@/api/fetchAllPages'
 import type { NotationData, PaginatedResponse } from '@/types/entities'
 import type {
   NodeTypeResponse,
@@ -16,14 +17,13 @@ import type {
 } from '@/types/api'
 import { useSaveState } from '@/composables/useSaveState'
 import { formatEntitySaveError } from '@/utils/formatEntityError'
-import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import {
   createId,
   parseEntityAttrs,
   serializeEntityAttrs,
   parseTypeAttrs,
   serializeTypeAttrs,
-} from '../notationAttrs'
+} from '@/domain/attrs/notationAttrs'
 import {
   type NotationEditorState,
   type EditorNodeType,
@@ -35,8 +35,17 @@ import {
   createEmptyEditorState,
 } from '../types'
 import { resolveNewTypes } from '../utils/resolveNewTypes'
+import { resolveNewNotationBoundEntities } from '../utils/resolveNewNotationBoundEntities'
 import { syncRelationRulesViaApi } from './useRelationRulesSync'
 import { parseNotationAttrs, mergeNotationAttrs } from '../utils/notationAttrsJson'
+import { useNodeShapes } from '@/composables/useNodeShapes'
+import type { NodeShapeResponse } from '@/types/api'
+import type { ExportedNodeShape } from '../utils/exportedNodeShape'
+import {
+  mergeShapePackage,
+  remapComponentCustomShapeIds,
+} from '../utils/notationShapePackage'
+import { persistPendingShapes } from '../utils/persistPendingShapes'
 
 export interface NotationEditorReturn {
   notation: Ref<NotationData | null>
@@ -205,31 +214,15 @@ async function runTasksWithConcurrencyLimit(
 }
 
 const fetchAllRelationRulesByNotation = async (
-  notationId: string
-): Promise<RelationRuleResponse[]> => {
-  const collected: RelationRuleResponse[] = []
-  let page = 0
+  notationId: string,
+): Promise<RelationRuleResponse[]> =>
+  fetchAllPages<RelationRuleResponse>(
+    '/relation-rules',
+    { notationId, includeAttrs: 'true' },
+    { pageSize: RELATION_RULES_FETCH_SIZE, errorLabel: 'правил связей' },
+  )
 
-  // Backend returns paginated relation-rules; load all pages to avoid hidden rules.
-  while (true) {
-    const query = pagedListParams(page, RELATION_RULES_FETCH_SIZE)
-    query.set('notationId', notationId)
-    query.set('includeAttrs', 'true')
-    const result = await apiGet<PaginatedResponse<RelationRuleResponse>>(
-      `/relation-rules?${query.toString()}`
-    )
-    if (!result.success) {
-      throw new Error(`Ошибка загрузки правил связей: ${result.error.message}`)
-    }
 
-    const batch = result.data.content ?? []
-    collected.push(...batch)
-    if (paginatedIsLastPage(result.data, page)) break
-    page += 1
-  }
-
-  return collected
-}
 
 async function saveComponents(
   components: EditorComponent[],
@@ -243,53 +236,39 @@ async function saveComponents(
     const result = await apiDelete<void>(`/components/${component.id}`)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError(
-          'нотации',
-          'удаления',
-          'компонента',
-          result.error.status,
-          result.error.message
-        )
+        formatEntitySaveError('нотации','удаления', 'компонента', result.error.status, result.error.message)
       )
     }
   }
 
-  for (const component of components.filter(c => c._isNew && !c._isDeleted)) {
-    onProgress(`Создание компонента: ${component.name}`)
-    const request: ComponentRequest = {
+  await resolveNewNotationBoundEntities({
+    entities: components.filter(c => c._isNew && !c._isDeleted),
+    notationId,
+    ownerId,
+    apiEndpoint: '/components',
+    entityTypeName: 'компонента',
+    buildCreateRequest: component => ({
       name: component.name,
       version: component.version,
       notationId,
       ownerId,
       nodeTypeId: component.nodeTypeId,
       attrs: serializeEntityAttrs(component.parsedAttrs),
-    }
-    const result = await apiPost<ComponentResponse>('/components', request)
-    if (!result.success) {
-      throw new Error(
-        formatEntitySaveError(
-          'нотации',
-          'создания',
-          'компонента',
-          result.error.status,
-          result.error.message
-        )
-      )
-    }
-    const oldComponentId = component.id
-    component.id = result.data.id
-    component._isNew = false
-    for (const rule of relationRules) {
-      if (rule.fromComponentId === oldComponentId) {
-        rule.fromComponentId = component.id
-        rule._isDirty = true
+    }),
+    onRemapId: (oldComponentId, newComponentId) => {
+      for (const rule of relationRules) {
+        if (rule.fromComponentId === oldComponentId) {
+          rule.fromComponentId = newComponentId
+          rule._isDirty = true
+        }
+        if (rule.toComponentId === oldComponentId) {
+          rule.toComponentId = newComponentId
+          rule._isDirty = true
+        }
       }
-      if (rule.toComponentId === oldComponentId) {
-        rule.toComponentId = component.id
-        rule._isDirty = true
-      }
-    }
-  }
+    },
+    onProgress,
+  })
 
   for (const component of components.filter(c => c._isDirty && !c._isNew && !c._isDeleted)) {
     onProgress(`Обновление компонента: ${component.name}`)
@@ -304,13 +283,7 @@ async function saveComponents(
     const result = await apiPut<ComponentResponse>(`/components/${component.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError(
-          'нотации',
-          'обновления',
-          'компонента',
-          result.error.status,
-          result.error.message
-        )
+        formatEntitySaveError('нотации','обновления', 'компонента', result.error.status, result.error.message)
       )
     }
     component._isDirty = false
@@ -332,31 +305,31 @@ async function saveRelations(
     }
   }
 
-  for (const relation of relations.filter(r => r._isNew && !r._isDeleted)) {
-    onProgress(`Создание отношения: ${relation.name}`)
-    const oldRelationId = relation.id
-    const request: RelationRequest = {
+  await resolveNewNotationBoundEntities({
+    entities: relations.filter(r => r._isNew && !r._isDeleted),
+    notationId,
+    ownerId,
+    apiEndpoint: '/relations',
+    entityTypeName: 'отношения',
+    buildCreateRequest: relation => ({
       name: relation.name,
       version: relation.version,
       notationId,
       ownerId,
       linkTypeId: relation.linkTypeId,
       attrs: serializeEntityAttrs(relation.parsedAttrs),
-    }
-    const result = await apiPost<RelationResponse>('/relations', request)
-    if (!result.success) {
-      throw new Error(`Ошибка создания отношения: ${result.error.message}`)
-    }
-    relation.id = result.data.id
-    relation._isNew = false
-    for (const rule of relationRules) {
-      if (!rule.allowedRelationIds.includes(oldRelationId)) continue
-      rule.allowedRelationIds = rule.allowedRelationIds.map(relationId =>
-        relationId === oldRelationId ? relation.id : relationId
-      )
-      rule._isDirty = true
-    }
-  }
+    }),
+    onRemapId: (oldRelationId, newRelationId) => {
+      for (const rule of relationRules) {
+        if (!rule.allowedRelationIds.includes(oldRelationId)) continue
+        rule.allowedRelationIds = rule.allowedRelationIds.map(relationId =>
+          relationId === oldRelationId ? newRelationId : relationId
+        )
+        rule._isDirty = true
+      }
+    },
+    onProgress,
+  })
 
   for (const relation of relations.filter(r => r._isDirty && !r._isNew && !r._isDeleted)) {
     onProgress(`Обновление отношения: ${relation.name}`)
@@ -435,7 +408,8 @@ async function syncRelationRules(
   const REQUEST_CONCURRENCY = 8
   const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
     rule =>
-      currentComponentIds.has(rule.fromComponentId) && currentComponentIds.has(rule.toComponentId)
+      currentComponentIds.has(rule.fromComponentId) &&
+      currentComponentIds.has(rule.toComponentId)
   )
   const desiredKeys = new Set<string>()
   const existingRuleIdsByKey = new Map<string, string[]>()
@@ -521,10 +495,13 @@ async function syncRelationRules(
   return activeRules
 }
 
-export function useNotationEditor(): NotationEditorReturn {
+export function useNotationEditor(
+  pendingShapes?: Ref<ExportedNodeShape[]>
+): NotationEditorReturn {
   const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
+  const { create: createShape, remove: removeShape } = useNodeShapes()
 
   const notation = ref<NotationData | null>(null)
   const notationAttrsSnapshot = ref<string | null>(null)
@@ -532,16 +509,7 @@ export function useNotationEditor(): NotationEditorReturn {
 
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const {
-    isSaving,
-    saveError,
-    saveSuccess,
-    saveProgress,
-    startSave,
-    completeSave,
-    failSave,
-    finishSave,
-  } = useSaveState()
+  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, failSave, finishSave } = useSaveState()
 
   const notationAttrsDirty = computed(() => {
     const currentAttrs = notation.value?.attrs ?? null
@@ -572,7 +540,7 @@ export function useNotationEditor(): NotationEditorReturn {
 
   watch(
     () => state.value.diagramLayer,
-    layer => {
+    (layer) => {
       if (!notation.value || isLoading.value) return
       notation.value.attrs = mergeNotationAttrs(notation.value.attrs ?? null, {
         editorDiagramLayer: layer,
@@ -608,23 +576,24 @@ export function useNotationEditor(): NotationEditorReturn {
         allLinkTypesResult,
         componentsResult,
         relationsResult,
-      ] = await Promise.all([
-        apiGet<NotationData>(`/notations/${notationId}`),
-        apiGet<PaginatedResponse<NodeTypeResponse>>(
-          `/node-types?${listQueryWithNotation.toString()}`
-        ),
-        apiGet<PaginatedResponse<LinkTypeResponse>>(
-          `/link-types?${listQueryWithNotation.toString()}`
-        ),
-        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
-        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
-        apiGet<PaginatedResponse<ComponentResponse>>(
-          `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-        ),
-        apiGet<PaginatedResponse<RelationResponse>>(
-          `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-        ),
-      ])
+      ] =
+        await Promise.all([
+          apiGet<NotationData>(`/notations/${notationId}`),
+          apiGet<PaginatedResponse<NodeTypeResponse>>(
+            `/node-types?${listQueryWithNotation.toString()}`
+          ),
+          apiGet<PaginatedResponse<LinkTypeResponse>>(
+            `/link-types?${listQueryWithNotation.toString()}`
+          ),
+          apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
+          apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
+          apiGet<PaginatedResponse<ComponentResponse>>(
+            `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
+          ),
+          apiGet<PaginatedResponse<RelationResponse>>(
+            `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
+          ),
+        ])
 
       if (!notationResult.success) {
         if (notationResult.error.status === 404) {
@@ -673,7 +642,7 @@ export function useNotationEditor(): NotationEditorReturn {
       }
 
       const diagramLayer = normalizeDiagramLayer(
-        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer
+        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer,
       )
       state.value = {
         notationId,
@@ -718,9 +687,7 @@ export function useNotationEditor(): NotationEditorReturn {
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
       const typeOwnerId = ownerId
-      const onProgress = (msg: string) => {
-        saveProgress.value = msg
-      }
+      const onProgress = (msg: string) => { saveProgress.value = msg }
 
       if (notationAttrsDirty.value && notation.value) {
         onProgress('Обновление атрибутов нотации')
@@ -729,8 +696,7 @@ export function useNotationEditor(): NotationEditorReturn {
         })
         if (!updateResult.success) {
           throw new Error(
-            formatEntitySaveError(
-              'нотации',
+            formatEntitySaveError('нотации',
               'обновления',
               'нотации',
               updateResult.error.status ?? 0,
@@ -747,7 +713,7 @@ export function useNotationEditor(): NotationEditorReturn {
         typeOwnerId,
         apiEndpoint: '/node-types',
         entityTypeName: 'типа узла',
-        getTypeId: c => c.nodeTypeId,
+        getTypeId: (c) => c.nodeTypeId,
         setTypeId: (c, id) => {
           c.nodeTypeId = id
         },
@@ -761,7 +727,7 @@ export function useNotationEditor(): NotationEditorReturn {
         typeOwnerId,
         apiEndpoint: '/link-types',
         entityTypeName: 'типа связи',
-        getTypeId: r => r.linkTypeId,
+        getTypeId: (r) => r.linkTypeId,
         setTypeId: (r, id) => {
           r.linkTypeId = id
         },
@@ -769,17 +735,45 @@ export function useNotationEditor(): NotationEditorReturn {
         serializeAttrs: serializeTypeAttrs,
         onProgress,
       })
+
+      if (pendingShapes && pendingShapes.value.length > 0) {
+        onProgress(t('notations.saveProgressShapes'))
+        const shapesToPersist = mergeShapePackage(pendingShapes.value, components)
+        try {
+          const existingShapes = await fetchAllPages<NodeShapeResponse>(
+            '/node-shapes',
+            undefined,
+            { pageSize: 200, errorLabel: t('notations.saveProgressShapes') },
+          )
+          const existingNames = existingShapes.map(shape => shape.name)
+          const idMap = await persistPendingShapes({
+            shapes: shapesToPersist,
+            existingNames,
+            create: async request => {
+              const row = await createShape(request)
+              return row ? { id: row.id } : null
+            },
+            remove: async id => removeShape(id),
+          })
+          remapComponentCustomShapeIds(components, idMap)
+          pendingShapes.value = []
+          window.dispatchEvent(new CustomEvent('warchi-node-shapes-changed'))
+        } catch (error) {
+          throw new Error(
+            t('notations.saveErrorShapes', {
+              message: error instanceof Error ? error.message : String(error),
+            }),
+            { cause: error },
+          )
+        }
+      }
+
       await saveComponents(components, relationRules, notationId, ownerId, onProgress)
       await saveRelations(relations, relationRules, notationId, ownerId, onProgress)
       state.value.relationRules = await syncRelationRules(
         nodeTypes,
         linkTypes,
-        components,
-        relations,
-        relationRules,
-        notationId,
-        ownerId,
-        onProgress
+        components, relations, relationRules, notationId, ownerId, onProgress
       )
 
       state.value.components = components.filter(c => !c._isDeleted)

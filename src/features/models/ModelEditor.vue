@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
-import { pagedListParams } from '@/api/queryHelpers'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
@@ -11,36 +10,39 @@ import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
-  createId,
-  parseLinkAttrs,
-  parseNodeAttrs,
   resolveComponentByNodeType,
+  resolveInstanceComponentId,
   resolveRelationByLinkType,
   type DiagramAttrs,
-  type DiagramNodeInstance,
 } from './modelAttrs'
-import type { BatchConflictItem } from './composables'
+import type { EditorLink } from './types'
 import {
-  batchConflictCompareKey,
-  buildConflictCompareRows,
-  type ConflictTranslateFn,
-  computeMissingServerLinksOnCanvas,
-  type MissingServerLinkOnCanvasRow,
-  fetchServerConflictEntity,
-  filterConflictCompareRowsForUi,
-} from './utils/batchSaveConflictDisplay'
-import type { EditorLink, EditorNode } from './types'
-import {
-  useDiagramEditLock,
-  useDiagramRealtimeCollab,
+  useModelBatchConflictUi,
+  isDiagramOnlyEdgeModelLinkId,
+  useModelDiagramConnections,
+  useModelDiagramInstances,
   useModelDiagramExport,
   useModelEditor,
-  useModelLiveSync,
+  useModelEditorSync,
+  useModelSelection,
   useModelToolbarState,
+  useModelTreeOperations,
   useModelVersionDiff,
+  useDiagramNotationMigration,
+  useNotationVersionBanner,
   useNoteEditor,
+  useOefImport,
+  ensureNotationImportCatalog,
 } from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
+import {
+  isContainerInstance,
+  isDiagramContainerModelNodeId,
+  isDiagramNoteModelNodeId as isDiagramNoteModelNodeIdHelper,
+  isEdgeAnchorInstance,
+  isEdgeAnchorModelNodeId,
+} from './utils/diagramOnlyInstances'
+import { removeOrphanEdgeAnchors } from './utils/edgeAnchorSync'
 import {
   getDiagramScopedLinkValues,
   getDiagramScopedNodeValues,
@@ -49,43 +51,42 @@ import {
 } from './utils/diagramScopedProperties'
 import { useAuth } from '@/composables/useAuth'
 import { usePermissions } from '@/composables/usePermissions'
-import { getUserDisplayName } from '@/utils/userDisplay'
-import type { PaginatedResponse, UserInfo } from '@/types/entities'
-import { paginatedIsLastPage } from '@/utils/paginatedResponse'
 import { useCanShare } from '@/composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
 import {
   parseEntityAttrs,
-  parseTypeAttrs,
   type CustomProperty,
   type DiagramStyle,
-} from '../notations/notationAttrs'
-import type { ImportMappingState } from './utils/oef/mappingState'
-import type { ImportDraft } from './utils/oef/types'
-import { buildOefBatchSaveRequest } from './utils/oef/oefToBatchSave'
-import NodeStylePanel from '../notations/components/NodeStylePanel.vue'
-import CompositeStylePanel from '../notations/components/composite/CompositeStylePanel.vue'
+} from '@/domain/attrs/notationAttrs'
+import {
+  applyDiagramStyleToNodeInstance,
+  withInstanceDimensions,
+} from './utils/applyDiagramStyleToNodeInstance'
+import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
+import CompositeStylePanel from '@/features/diagram-style/components/composite/CompositeStylePanel.vue'
 import TabPanel from '@/components/layout/TabPanel.vue'
 import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
-import { bumpMinor, compareVersions } from '@/utils/version'
+import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
+import SaveToast from '@/components/ui/SaveToast.vue'
+import { compareVersions } from '@/utils/version'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
-import type {
-  LinkResponse,
-  NotationMetaResponse,
-  NotationResponse,
-  RelationResponse,
-} from '@/types/api'
+import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
-import { formatDate } from '@/utils/formatDate'
-import { batchSave, hasBatchChanges } from './composables/useModelBatchSave'
+import { ensureDiagramAttrsLoaded } from './composables/ensureDiagramAttrs'
+import {
+  validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
+} from './utils/requiredCustomPropertiesValidation'
+import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
+import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
 const {
   model,
@@ -99,7 +100,10 @@ const {
   saveProgress,
   hasUnsavedChanges,
   loadModel,
+  discardUnsavedChanges,
   saveChanges,
+  startSave,
+  finishSave,
   markNodeDirty,
   markLinkDirty,
   markDiagramDirty,
@@ -108,6 +112,8 @@ const {
   createDiagramBaseline,
   ensureNotationRelationsAndRules,
   isNotationRelationsAndRulesLoading,
+  whenCatalogReady,
+  whenBackgroundReady,
   batchSaveConflict,
   resolveBatchSaveReload,
   resolveBatchSaveOverwrite,
@@ -122,12 +128,6 @@ const { currentUser } = useAuth()
 const { checkPermission } = usePermissions()
 const { t, locale } = useI18n()
 
-const batchConflictFieldT: ConflictTranslateFn = (key, params) =>
-  String(t(key, (params ?? {}) as Record<string, unknown>))
-
-function formatBatchCrossLinkDiagramNames(names: readonly string[]): string {
-  return names.map(n => `«${n}»`).join(', ')
-}
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
 /** Правка содержимого модели (диаграмма, узлы, документы), не только просмотр по шаре VIEW */
 const canInspectDiagramJson = computed(() => {
@@ -153,92 +153,22 @@ const showModelWikiHeaderButton = computed(
   () => canInspectDiagramJson.value || !!modelRootDocumentFileId.value
 )
 
-const selectedNodeId = ref<string | null>(null)
-const selectedDiagramId = ref<string | null>(null)
-/** `updatedAt` диаграммы с сервера на момент последнего переключения на её вкладку (для текста «только метка времени с момента открытия»). */
-const diagramConflictOpenBaselineUpdatedAt = ref<Record<string, string>>({})
-
-watch(
-  () => state.value.modelId,
-  () => {
-    diagramConflictOpenBaselineUpdatedAt.value = {}
-  }
-)
-
-watch(
-  () => selectedDiagramId.value,
-  id => {
-    if (!id) return
-    const d = state.value.diagrams.find(x => x.id === id && !x._isDeleted)
-    const u = d?.updatedAt
-    if (typeof u === 'string' && u.length > 0) {
-      diagramConflictOpenBaselineUpdatedAt.value = {
-        ...diagramConflictOpenBaselineUpdatedAt.value,
-        [id]: u,
-      }
-    }
-  },
-  { flush: 'post', immediate: true }
-)
-
-/** После сохранения `updatedAt` обновляется, вкладка та же — синхронизируем baseline для подсказок в модалке конфликта. */
-watch(
-  () => {
-    const id = selectedDiagramId.value
-    if (!id) return null
-    const d = state.value.diagrams.find(x => x.id === id && !x._isDeleted)
-    if (!d || d._isDirty) return null
-    const u = d.updatedAt
-    if (typeof u !== 'string' || !u.length) return null
-    return { id, u }
-  },
-  v => {
-    if (!v) return
-    diagramConflictOpenBaselineUpdatedAt.value = {
-      ...diagramConflictOpenBaselineUpdatedAt.value,
-      [v.id]: v.u,
-    }
-  },
-  { flush: 'post' }
-)
+const {
+  selectedNodeId,
+  selectedDiagramId,
+  selectedModelNodeIds,
+  selectedInstanceIds,
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+  selectedNode,
+  selectedLink,
+  selectedNodeInstanceId,
+  selectedLinkEdgeInstanceId,
+  applyDiagramSelection,
+} = useModelSelection({ state })
 const showShareModal = ref(false)
 const showCompareModal = ref(false)
-const showImportWizard = ref(false)
-const isImportingOef = ref(false)
-const oefImportReport = ref<{
-  nodes: number
-  links: number
-  diagrams: number
-  diagramNodeInstances: number
-  diagramConnectionInstances: number
-  warningsCount: number
-  warningGroups: Array<{ code: string; count: number }>
-  missingRequired: {
-    nodeType: number
-    component: number
-    relation: number
-    total: number
-  }
-} | null>(null)
-
-function oefWarningLabel(code: string): string {
-  switch (code) {
-    case 'nodeTypeNotMapped':
-      return t('models.oefImportWarningNodeTypeNotMapped')
-    case 'linkTypeNotMapped':
-      return t('models.oefImportWarningLinkTypeNotMapped')
-    case 'linkMissingNode':
-      return t('models.oefImportWarningLinkMissingNode')
-    case 'diagramNodeMissingModelNode':
-      return t('models.oefImportWarningDiagramNodeMissingModelNode')
-    case 'diagramConnectionMissingModelLink':
-      return t('models.oefImportWarningDiagramConnectionMissingModelLink')
-    case 'diagramConnectionMissingNodeInstance':
-      return t('models.oefImportWarningDiagramConnectionMissingNodeInstance')
-    default:
-      return code
-  }
-}
 
 const versionDiff = useModelVersionDiff()
 
@@ -266,283 +196,19 @@ function handleCompareModalClose() {
   versionDiff.clearCompare()
 }
 
-function batchConflictKindLabel(kind: string): string {
-  switch (kind) {
-    case 'node':
-      return t('models.batchSaveConflictKindNode')
-    case 'link':
-      return t('models.batchSaveConflictKindLink')
-    case 'diagram':
-      return t('models.batchSaveConflictKindDiagram')
-    default:
-      return kind
-  }
-}
-
-function conflictShortId(id: string): string {
-  if (id.length <= 13) return id
-  return `${id.slice(0, 8)}…`
-}
-
-function batchConflictNodeContextLine(c: BatchConflictItem): string | null {
-  if (c.kind !== 'node') return null
-  const { nodes, nodeTypes } = state.value
-  const n =
-    nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
-  if (!n) return null
-  const typeName = nodeTypes.find(nt => nt.id === n.nodeTypeId)?.name?.trim()
-  const typePart = typeName
-    ? t('models.batchSaveConflictNodeTypeLabel', { name: typeName })
-    : t('models.batchSaveConflictNodeTypeUnknown')
-  let parentPart: string
-  if (!n.parentNodeId) {
-    parentPart = t('models.batchSaveConflictNodeRootParent')
-  } else {
-    const p = nodes.find(x => x.id === n.parentNodeId)
-    const parentName = p?.name?.trim()
-    parentPart = parentName
-      ? t('models.batchSaveConflictNodeParentLabel', { name: parentName })
-      : t('models.batchSaveConflictNodeParentMissing')
-  }
-  return `${typePart} · ${parentPart}`
-}
-
-function batchConflictPrimaryLine(c: BatchConflictItem): string {
-  const { nodes, links, diagrams, linkTypes } = state.value
-  if (c.kind === 'node') {
-    const n =
-      nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
-    const name = n?.name?.trim()
-    if (name) return name
-    if (n) return t('models.batchSaveConflictUnnamedNode')
-    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('node') })
-  }
-  if (c.kind === 'link') {
-    const l =
-      links.find(x => x.id === c.id && !x._isDeleted) ?? links.find(x => x.id === c.id)
-    if (l) {
-      const src = nodes.find(x => x.id === l.sourceId)
-      const tgt = nodes.find(x => x.id === l.targetId)
-      const srcName = src?.name?.trim() || conflictShortId(l.sourceId)
-      const tgtName = tgt?.name?.trim() || conflictShortId(l.targetId)
-      const lt = linkTypes.find(x => x.id === l.linkTypeId)
-      const typeName = lt?.name?.trim()
-      if (typeName) {
-        return t('models.batchSaveConflictLinkWithType', { type: typeName, from: srcName, to: tgtName })
-      }
-      return t('models.batchSaveConflictLinkLine', { from: srcName, to: tgtName })
-    }
-    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('link') })
-  }
-  if (c.kind === 'diagram') {
-    const d =
-      diagrams.find(x => x.id === c.id && !x._isDeleted) ??
-      diagrams.find(x => x.id === c.id)
-    if (d) {
-      return t('models.batchSaveConflictDiagramLine', { name: d.name, version: d.version })
-    }
-    return t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('diagram') })
-  }
-  return conflictShortId(c.id)
-}
-
-function batchConflictDetailLine(c: BatchConflictItem): string | null {
-  const loc = locale.value === 'ru' ? undefined : locale.value === 'fr' ? 'fr' : 'en'
-  const your = c.clientBaseUpdatedAt
-    ? t('models.batchSaveConflictYourBaseTime', {
-        time: formatDate(c.clientBaseUpdatedAt, loc),
-      })
-    : null
-  const server = c.serverUpdatedAt
-    ? t('models.batchSaveConflictServerTime', {
-        time: formatDate(c.serverUpdatedAt, loc),
-      })
-    : null
-  if (your && server) return `${your} · ${server}`
-  return server ?? your
-}
-
-async function handleBatchConflictReload(): Promise<void> {
-  await resolveBatchSaveReload()
-}
-
-async function handleBatchConflictOverwrite(): Promise<void> {
-  await resolveBatchSaveOverwrite()
-}
-
-const batchConflictCompare = ref<
-  Record<
-    string,
-    {
-      rows: ReturnType<typeof buildConflictCompareRows>
-      serverLoading: boolean
-      serverError: string | null
-    }
-  >
->({})
-
-let batchConflictFetchGen = 0
-let batchConflictCrossLinkGen = 0
-
-const batchConflictCrossLinkWarnings = ref<{
-  loading: boolean
-  error: string | null
-  items: MissingServerLinkOnCanvasRow[]
-}>({ loading: false, error: null, items: [] })
-
-/** Id связей на сервере после последнего опроса при открытой модалке конфликта (для пересчёта предупреждений при смене диаграммы). */
-const batchConflictServerLinkIds = ref<ReadonlySet<string> | null>(null)
-
-function recomputeBatchCrossLinkWarningItems(): void {
-  const ids = batchConflictServerLinkIds.value
-  if (!ids) return
-  const sid = selectedDiagramId.value
-  const activeDiag = sid
-    ? state.value.diagrams.find(d => d.id === sid && !d._isDeleted)
-    : undefined
-  const onlyDiagramId = activeDiag?.id
-  const items = computeMissingServerLinksOnCanvas(
-    state.value,
-    ids,
-    batchConflictFieldT,
-    onlyDiagramId
-  )
-  batchConflictCrossLinkWarnings.value = {
-    ...batchConflictCrossLinkWarnings.value,
-    items,
-  }
-}
-
-watch(
-  () => batchSaveConflict.value,
-  list => {
-    batchConflictFetchGen += 1
-    const gen = batchConflictFetchGen
-    if (!list?.length) {
-      batchConflictCompare.value = {}
-      batchConflictCrossLinkGen += 1
-      batchConflictServerLinkIds.value = null
-      batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
-      return
-    }
-    const next: Record<
-      string,
-      {
-        rows: ReturnType<typeof buildConflictCompareRows>
-        serverLoading: boolean
-        serverError: string | null
-      }
-    > = {}
-    for (const c of list) {
-      const key = batchConflictCompareKey(c)
-      next[key] = {
-        rows: buildConflictCompareRows(c, state.value, null, true, null, batchConflictFieldT),
-        serverLoading: true,
-        serverError: null,
-      }
-    }
-    batchConflictCompare.value = next
-
-    batchConflictCrossLinkGen += 1
-    const gCross = batchConflictCrossLinkGen
-    batchConflictServerLinkIds.value = null
-    batchConflictCrossLinkWarnings.value = { loading: true, error: null, items: [] }
-    void (async () => {
-      const mid = state.value.modelId
-      if (!mid) {
-        if (gCross === batchConflictCrossLinkGen) {
-          batchConflictServerLinkIds.value = null
-          batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
-        }
-        return
-      }
-      const collected: LinkResponse[] = []
-      let page = 0
-      const pageSize = 2000
-      while (true) {
-        const q = pagedListParams(page, pageSize)
-        const r = await apiGet<PaginatedResponse<LinkResponse>>(
-          `/links?modelId=${encodeURIComponent(mid)}&${q.toString()}`
-        )
-        if (gCross !== batchConflictCrossLinkGen) return
-        if (!r.success) {
-          batchConflictServerLinkIds.value = null
-          batchConflictCrossLinkWarnings.value = { loading: false, error: r.error.message, items: [] }
-          return
-        }
-        const chunk = r.data.content ?? []
-        collected.push(...chunk)
-        if (paginatedIsLastPage(r.data, page)) break
-        page += 1
-      }
-      if (gCross !== batchConflictCrossLinkGen) return
-      const serverIds = new Set(collected.map(l => l.id))
-      batchConflictServerLinkIds.value = serverIds
-      batchConflictCrossLinkWarnings.value = { loading: false, error: null, items: [] }
-      recomputeBatchCrossLinkWarningItems()
-    })()
-
-    void Promise.all(
-      list.map(async c => {
-        const key = batchConflictCompareKey(c)
-        const res = await fetchServerConflictEntity(c, apiGet)
-        if (gen !== batchConflictFetchGen) return
-        if (!batchConflictCompare.value[key]) return
-        batchConflictCompare.value = {
-          ...batchConflictCompare.value,
-          [key]: {
-            serverLoading: false,
-            serverError: res.ok ? null : res.error,
-            rows: buildConflictCompareRows(
-              c,
-              state.value,
-              res.ok ? res.data : null,
-              false,
-              res.ok ? null : res.error,
-              batchConflictFieldT
-            ),
-          },
-        }
-      })
-    )
-  }
-)
-
-const batchSaveConflictRows = computed(() => {
-  const list = batchSaveConflict.value
-  if (!list?.length) return []
-  return list.map((c, idx) => {
-    const key = batchConflictCompareKey(c)
-    const cmp = batchConflictCompare.value[key]
-    const rawRows = cmp?.rows ?? []
-    const compareServerLoading = cmp?.serverLoading ?? true
-    const compareServerError = cmp?.serverError ?? null
-    const compareRows = compareServerLoading
-      ? []
-      : filterConflictCompareRowsForUi(rawRows)
-    const compareOnlyTimestampDiff =
-      !compareServerLoading &&
-      compareRows.length === 0 &&
-      rawRows.some(r => r.differs)
-    const openBaseline = diagramConflictOpenBaselineUpdatedAt.value[c.id]
-    const compareTimestampOnlySinceDiagramOpen =
-      compareOnlyTimestampDiff &&
-      c.kind === 'diagram' &&
-      c.clientBaseUpdatedAt != null &&
-      openBaseline === c.clientBaseUpdatedAt
-    return {
-      key: `${c.kind}-${c.id}-${idx}`,
-      kindLabel: batchConflictKindLabel(c.kind),
-      primary: batchConflictPrimaryLine(c),
-      context: batchConflictNodeContextLine(c),
-      detail: batchConflictDetailLine(c),
-      compareRows,
-      compareServerLoading,
-      compareServerError,
-      compareOnlyTimestampDiff,
-      compareTimestampOnlySinceDiagramOpen,
-    }
-  })
+const {
+  batchSaveConflictRows,
+  batchConflictCrossLinkWarningRows,
+  handleBatchConflictReload,
+  handleBatchConflictOverwrite,
+} = useModelBatchConflictUi({
+  state,
+  batchSaveConflict,
+  selectedDiagramId,
+  locale,
+  t: (key, params) => String(t(key, params ?? {})),
+  resolveBatchSaveReload,
+  resolveBatchSaveOverwrite,
 })
 
 const compareModalState = computed(() => ({
@@ -553,21 +219,12 @@ const compareModalState = computed(() => ({
   compareTargetError: versionDiff.compareTargetError.value,
   diff: versionDiff.diff.value,
 }))
-const selectedModelNodeIds = ref<string[]>([])
-const selectedInstanceIds = ref<string[]>([])
-const selectedModelLinkId = ref<string | null>(null)
-const selectedEdgeInstanceId = ref<string | null>(null)
-const selectedCanvasElementId = ref<string | null>(null)
 const diagramRenderer = shallowRef<DiagramRenderer | null>(null)
 const diagramInteractionManager = shallowRef<InteractionManager | null>(null)
 const activeRightTab = ref('properties')
 const { canShare: canShareModel } = useCanShare(model)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
-const NOTE_NODE_PREFIX = '__diagram-note__:'
-const NOTE_EDGE_PREFIX = '__diagram-note-edge__:'
-const UNTYPED_EDGE_PREFIX = '__diagram-untyped-edge__:'
-const NOTE_PASTE_STEP = 24
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
 const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -652,79 +309,24 @@ const isSelectedDiagramPersistedOnServer = computed(() => {
   return !!d && !d._isNew
 })
 
-const diagramEditLock = useDiagramEditLock({
-  modelId: computed(() => state.value.modelId ?? null),
-  selectedDiagramId,
-  isActiveDiagramLatest: computed(
-    () =>
-      !!activeDiagram.value &&
-      !!latestDiagramVersion.value &&
-      activeDiagram.value.id === latestDiagramVersion.value.id
-  ),
-  canEditModel: canInspectDiagramJson,
-  isSelectedDiagramPersistedOnServer,
-})
-
-const isDiagramReadOnly = computed(
-  () =>
-    !canInspectDiagramJson.value ||
-    isDiagramReadOnlyBaseline.value ||
-    diagramEditLock.isBlockedByOther.value
-)
-
-watch(
-  [
-    () => diagramEditLock.isBlockedByOther.value,
-    () => activeDiagram.value?.updatedAt,
-    () => diagramEditLock.remoteDiagramUpdatedAt.value,
-  ],
-  () => {
-    if (diagramEditLock.isBlockedByOther.value) {
-      diagramEditLock.evaluateServerNewer(activeDiagram.value?.updatedAt ?? null)
-    }
-  }
-)
-
-async function handleReloadModelForDiagramLock() {
-  await diagramEditLock.reloadAfterRemoteChange(loadModel)
-}
-
-/** Разворачиваем ref из useDiagramEditLock для шаблона (вложенные ref в объекте не разворачиваются) */
-const diagramLocksForTree = computed(() => diagramEditLock.locksList.value)
-const diagramLockBlockedByOther = computed(() => diagramEditLock.isBlockedByOther.value)
-const diagramLockHolderName = computed(() => diagramEditLock.lockHolderDisplay.value ?? '—')
-const diagramLockServerNewerWhileBlocked = computed(
-  () => diagramEditLock.serverNewerWhileBlocked.value
-)
-
-const isDiagramLockHolder = computed(
-  () =>
-    canInspectDiagramJson.value &&
-    !!activeDiagram.value &&
-    !!latestDiagramVersion.value &&
-    activeDiagram.value.id === latestDiagramVersion.value.id &&
-    isSelectedDiagramPersistedOnServer.value &&
-    !diagramEditLock.isBlockedByOther.value
-)
-
 const {
+  diagramEditLock,
+  diagramLocksForTree,
+  diagramLockBlockedByOther,
+  diagramLockHolderName,
+  diagramLockServerNewerWhileBlocked,
+  isDiagramLockHolder,
+  isDiagramReadOnly,
   remoteEditorPointer,
   diagramSpectators,
   onLiveCollaborationGesture,
   scheduleDebouncedLivePush,
-  handleModelTopicBroadcast,
   onCanvasMouseMoveForPointer,
   onCanvasMouseLeaveForPointer,
-} = useDiagramRealtimeCollab({
-  state,
-  selectedDiagramId,
-  currentUserId: computed(() => currentUser.value?.id ?? null),
-  getDiagramRenderer: () => diagramRenderer.value,
-  isLockHolder: isDiagramLockHolder,
-  isSpectator: diagramLockBlockedByOther,
-})
-
-useModelLiveSync({
+  handleReloadModelForDiagramLock: reloadModelForDiagramLock,
+  verifyLockBeforeSave,
+  dismissForceRevoked,
+} = useModelEditorSync({
   modelId: computed(() => state.value.modelId || null),
   state,
   model,
@@ -732,12 +334,26 @@ useModelLiveSync({
   isLoading,
   isSaving,
   modelDirty,
-  ensureNotationRelationsAndRules,
-  openDiagramId: selectedDiagramId,
+  selectedDiagramId,
+  activeDiagramUpdatedAt: computed(() => activeDiagram.value?.updatedAt ?? null),
+  isActiveDiagramLatest: computed(
+    () =>
+      !!activeDiagram.value &&
+      !!latestDiagramVersion.value &&
+      activeDiagram.value.id === latestDiagramVersion.value.id
+  ),
+  isDiagramReadOnlyBaseline,
+  canEditModel: canInspectDiagramJson,
+  canInspectDiagramJson,
+  isSelectedDiagramPersistedOnServer,
   currentUserId: computed(() => currentUser.value?.id ?? null),
-  preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),
-  onModelTopicBroadcast: handleModelTopicBroadcast,
+  getDiagramRenderer: () => diagramRenderer.value,
+  ensureNotationRelationsAndRules,
 })
+
+async function handleReloadModelForDiagramLock() {
+  await reloadModelForDiagramLock(loadModel)
+}
 
 watch(
   () => activeDiagram.value?.parsedAttrs.instances,
@@ -785,179 +401,33 @@ async function handleCreateBaseline() {
   }
 }
 
-watch(selectedDiagramId, () => {
+const isPreparingDiagram = ref(false)
+watch(selectedDiagramId, async diagramId => {
   baselineError.value = null
+  if (!diagramId) {
+    isPreparingDiagram.value = false
+    return
+  }
+  isPreparingDiagram.value = true
+  try {
+    // Components/relations must be present before canvas resolves shapes.
+    await whenCatalogReady()
+    if (selectedDiagramId.value !== diagramId) return
+    await ensureDiagramAttrsLoaded(() => state.value, diagramId)
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : t('models.diagramLoadError')
+  } finally {
+    if (selectedDiagramId.value === diagramId) {
+      isPreparingDiagram.value = false
+    }
+  }
 })
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const isActiveNotationRulesLoading = computed(() =>
   isNotationRelationsAndRulesLoading(activeNotationId.value)
 )
-const newerNotationVersions = ref<NotationResponse[]>([])
-const fallbackNotationMeta = ref<NotationMetaResponse | null>(null)
-const fallbackNotationMetaLoading = ref(false)
-const fallbackNotationMetaError = ref<string | null>(null)
-const fallbackNotationOwnerDisplayName = ref('')
-const activeDiagramNotationName = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ''
-  const notation = state.value.notations.find(item => item.id === notationId)
-  if (notation) return notation.name
-  if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.name
-  if (fallbackNotationMetaLoading.value) return t('models.notationLoading')
-  if (fallbackNotationMetaError.value) return fallbackNotationMetaError.value
-  return t('models.notationUnavailable')
-})
-const activeDiagramNotationVersion = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ''
-  const notation = state.value.notations.find(item => item.id === notationId)
-  if (notation) return notation.version
-  if (fallbackNotationMeta.value?.id === notationId) return fallbackNotationMeta.value.version
-  return ''
-})
-const activeDiagramNotationOwnerLabel = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return ''
-  if (fallbackNotationMeta.value?.id !== notationId) return ''
-  return fallbackNotationOwnerDisplayName.value || fallbackNotationMeta.value.ownerEmail
-})
-const canOpenActiveDiagramNotation = computed(() => {
-  const notationId = activeDiagram.value?.notationId
-  if (!notationId) return false
-  if (state.value.notations.some(item => item.id === notationId)) return true
-  return fallbackNotationMeta.value?.id === notationId
-})
-
-watch(
-  activeNotationId,
-  async (notationId) => {
-    if (!notationId) {
-      newerNotationVersions.value = []
-      return
-    }
-    try {
-      await ensureNotationRelationsAndRules(notationId)
-    } catch (error) {
-      setUiError(
-        error instanceof Error
-          ? error.message
-          : t('models.notationRelationRulesLoadFailed')
-      )
-    }
-    const result = await apiGet<NotationResponse[]>(`/notations/${notationId}/newer-versions`)
-    if (result.success) {
-      newerNotationVersions.value = result.data
-    } else {
-      newerNotationVersions.value = []
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  selectedDiagramId,
-  async () => {
-    const notationId = activeNotationId.value
-    if (!notationId) return
-    try {
-      await ensureNotationRelationsAndRules(notationId, { force: true })
-    } catch (error) {
-      setUiError(
-        error instanceof Error
-          ? error.message
-          : t('models.notationRelationRulesRefreshFailed')
-      )
-    }
-  }
-)
-
-
-watch(
-  () => activeDiagram.value?.notationId ?? null,
-  async notationId => {
-    fallbackNotationMeta.value = null
-    fallbackNotationMetaError.value = null
-    fallbackNotationMetaLoading.value = false
-    if (!notationId) return
-    const hasNotationInState = state.value.notations.some(item => item.id === notationId)
-    if (hasNotationInState) return
-
-    fallbackNotationMetaLoading.value = true
-    const mid = state.value.modelId
-    const metaPath =
-      mid.length > 0
-        ? `/notations/${notationId}/meta?modelId=${encodeURIComponent(mid)}`
-        : `/notations/${notationId}/meta`
-    const result = await apiGet<NotationMetaResponse>(metaPath)
-    if (activeDiagram.value?.notationId !== notationId) return
-    fallbackNotationMetaLoading.value = false
-    if (!result.success) {
-      fallbackNotationMetaError.value =
-        result.error.status === 404
-          ? t('models.notationMetaUnavailable')
-          : result.error.status === 403
-            ? t('models.notationAccessDenied')
-            : t('models.notationLoadFailed')
-      return
-    }
-    fallbackNotationMeta.value = result.data
-    // Resolve owner display name
-    fallbackNotationOwnerDisplayName.value = ''
-    const ownerResult = await apiGet<UserInfo>(`/users/${result.data.ownerId}/public`)
-    if (ownerResult.success) {
-      fallbackNotationOwnerDisplayName.value = getUserDisplayName(
-        ownerResult.data,
-        result.data.ownerEmail
-      )
-    }
-  }
-)
-
-const selectedTreeNode = computed(() =>
-  selectedNodeId.value
-    ? (state.value.nodes.find(node => node.id === selectedNodeId.value && !node._isDeleted) ?? null)
-    : null
-)
-const selectedDiagramNode = computed(() =>
-  selectedModelNodeIds.value.length === 1
-    ? (state.value.nodes.find(
-        node => node.id === selectedModelNodeIds.value[0] && !node._isDeleted
-      ) ?? null)
-    : null
-)
-const selectedNode = computed(() => selectedDiagramNode.value ?? selectedTreeNode.value)
-
-const selectedLink = computed(() =>
-  selectedModelLinkId.value
-    ? (state.value.links.find(link => link.id === selectedModelLinkId.value && !link._isDeleted) ??
-      null)
-    : null
-)
-
-const selectedNodeInstanceId = computed<string | null>(() => {
-  const selectedElementId = selectedCanvasElementId.value
-  if (selectedElementId?.startsWith('instance-')) {
-    return selectedElementId.slice('instance-'.length)
-  }
-  if (selectedInstanceIds.value.length === 1) {
-    return selectedInstanceIds.value[0] ?? null
-  }
-  const diagram = activeDiagram.value
-  const modelNodeId = selectedNode.value?.id
-  if (!diagram || !modelNodeId) return null
-  return diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
-})
-
-const selectedLinkEdgeInstanceId = computed<string | null>(() => {
-  if (selectedEdgeInstanceId.value) return selectedEdgeInstanceId.value
-  const selectedElementId = selectedCanvasElementId.value
-  if (selectedElementId?.startsWith('edge-')) {
-    return selectedElementId.slice('edge-'.length)
-  }
-  return null
-})
-
 const availableNodeComponents = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
@@ -965,14 +435,17 @@ const availableNodeComponents = computed(() => {
   return resolveComponentByNodeType(state.value.components, notationId, node.nodeTypeId)
 })
 
-/** Только нотация открытой диаграммы: свойства компонента привязаны к экземпляру на диаграмме, без fallback по «первой» нотации из attrs ноды. */
+/** Visual binding for the selected diagram instance (fallback: node default for active notation). */
 const nodeBindingComponentId = computed(() => {
   const notationId = activeNotationId.value
   const node = selectedNode.value
   if (!notationId || !node) return null
-  return node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+  const instanceId = selectedNodeInstanceId.value
+  const instance = instanceId
+    ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ?? null)
+    : null
+  return resolveInstanceComponentId({ instance, node, notationId })
 })
-
 const selectedNodeComponent = computed(() => {
   const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
@@ -1030,15 +503,18 @@ const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
     .map((d) => ({ id: d.id, label: `${d.name} ${d.version}` }))
 )
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-function isUuid(s: unknown): s is string {
-  return typeof s === 'string' && UUID_REGEX.test(s)
-}
-
 const documentsFromApi = ref<{ fileId: string; label: string }[]>([])
+let documentsFetchTimer: ReturnType<typeof setTimeout> | null = null
+let documentsFetchSeq = 0
+
 async function fetchDocumentsFromApi() {
   const modelId = state.value.modelId
-  if (!modelId) return
+  if (!modelId || isLoading.value) return
+  // Avoid competing with heavy model payload downloads on the HTTP/1.1 pool.
+  await whenBackgroundReady()
+  if (state.value.modelId !== modelId) return
+
+  const seq = ++documentsFetchSeq
   const params = new URLSearchParams()
   params.set('modelId', modelId)
   const notationId = activeNotationId.value
@@ -1050,42 +526,43 @@ async function fetchDocumentsFromApi() {
   const nodeId = selectedNode.value?.id ?? null
   if (nodeId) params.set('nodeId', nodeId)
   const res = await apiGet<{ fileId: string; label: string }[]>(`/documents?${params.toString()}`)
+  if (seq !== documentsFetchSeq) return
   if (res.success) documentsFromApi.value = res.data
   else documentsFromApi.value = []
 }
+
+function scheduleFetchDocumentsFromApi() {
+  if (documentsFetchTimer) clearTimeout(documentsFetchTimer)
+  documentsFetchTimer = setTimeout(() => {
+    documentsFetchTimer = null
+    void fetchDocumentsFromApi()
+  }, 400)
+}
+
 watch(
   () => [
     state.value.modelId,
+    isLoading.value,
     activeNotationId.value,
     nodeBindingComponentId.value,
     selectedNode.value?.id,
     selectedNode.value?.nodeTypeId,
   ],
-  () => { fetchDocumentsFromApi() },
-  { immediate: true }
+  () => {
+    scheduleFetchDocumentsFromApi()
+  }
 )
 
+/** Local wiki links from explicit documentFileId only — no deep UUID scan over 10k+ nodes. */
 function modelDocumentsInState(): { fileId: string; label: string }[] {
   const seen = new Set<string>()
   const list: { fileId: string; label: string }[] = []
   for (const node of state.value.nodes) {
+    if (node._isDeleted) continue
     const fileId = node.parsedAttrs.documentFileId
     if (typeof fileId === 'string' && fileId && !seen.has(fileId)) {
       seen.add(fileId)
       list.push({ fileId, label: `${node.name} (${t('diagram.nodeLabel')})` })
-    }
-    const compProps = node.parsedAttrs.componentProperties
-    if (compProps && typeof compProps === 'object') {
-      for (const comp of Object.values(compProps) as Record<string, unknown>[]) {
-        if (comp && typeof comp === 'object') {
-          for (const val of Object.values(comp)) {
-            if (isUuid(val) && !seen.has(val)) {
-              seen.add(val)
-              list.push({ fileId: val, label: t('diagram.documentLabel') })
-            }
-          }
-        }
-      }
     }
   }
   for (const diagram of state.value.diagrams) {
@@ -1155,6 +632,43 @@ const setUiError = (msg: string) => {
     uiErrorTimer = null
   }, 5000)
 }
+
+const {
+  newerNotationVersions,
+  activeDiagramNotationName,
+  activeDiagramNotationVersion,
+  activeDiagramNotationOwnerLabel,
+  canOpenActiveDiagramNotation,
+} = useNotationVersionBanner({
+  state,
+  activeDiagram,
+  activeNotationId,
+  selectedDiagramId,
+  t: (key, params) => String(t(key, params ?? {})),
+  ensureNotationRelationsAndRules,
+  setUiError,
+})
+
+const {
+  showMigrateModal,
+  migrateTarget,
+  isMigrating,
+  migratePreviewUnmapped,
+  openMigrateModal,
+  closeMigrateModal,
+  confirmMigrateNotation,
+} = useDiagramNotationMigration({
+  state,
+  activeDiagram,
+  isDiagramReadOnly,
+  newerNotationVersions,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  markDiagramDirty,
+  markNodeDirty,
+  markLinkDirty,
+  ensureNotationRelationsAndRules,
+})
 
 const {
   showNoteEditorModal,
@@ -1252,71 +766,74 @@ const handleRenameModel = (nextName: string) => {
 const handleOpenNotationEditor = (notationId: string) => {
   router.push({ name: 'notation-editor', params: { id: notationId } })
 }
-const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
-  parentNodeId: null,
-  kind: 'node',
+const {
+  createNodeModal,
+  showCreateNodeModal,
+  newNodeName,
+  newNodeTypeId,
+  showCreateDiagramModal,
+  newDiagramName,
+  newDiagramVersion,
+  newDiagramNotationId,
+  hasDiagramNameVersionConflict,
+  directoryNodeType,
+  nodeTypeDefaultDirectoryById,
+  createNodeModalTitle,
+  nodeTypeSearchQuery,
+  nodeTypeDropdownOpen,
+  filteredNodeTypes,
+  selectedNodeTypeName,
+  treeRootNodeId,
+  canCreateNodeFromModal,
+  getNextTreeOrderForParent,
+  ensureDirectoryPath,
+  openCreateFolder,
+  openCreateRegularNode,
+  createNode,
+  openCreateDiagram,
+  createDiagram,
+  isDirectoryNode,
+  handleMoveNode,
+  handleMoveDiagram,
+  handleRenameNode,
+  handleRenameDiagram,
+} = useModelTreeOperations({
+  state,
+  model,
+  selectedDiagramId,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  clearUiError: () => {
+    uiError.value = null
+  },
+  markNodeDirty,
+  markDiagramDirty,
 })
-const showCreateNodeModal = ref(false)
-const newNodeName = ref('')
-const newNodeTypeId = ref('')
 
-const showCreateDiagramModal = ref(false)
-const createDiagramNodeId = ref<string | null>(null)
-const newDiagramName = ref('')
-const newDiagramVersion = ref('1.0.0')
-const newDiagramNotationId = ref('')
+const {
+  showImportWizard,
+  isImportingOef,
+  oefImportProgress,
+  oefImportReport,
+  oefWarningLabel,
+  handleOefImportSubmit,
+} = useOefImport({
+  state,
+  treeRootNodeId,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  loadModel,
+})
 
-const normalizedNewDiagramName = computed(() => newDiagramName.value.trim().toLowerCase())
-const normalizedNewDiagramVersion = computed(() => (newDiagramVersion.value || '1.0.0').trim())
-const hasDiagramNameVersionConflict = computed(() => {
-  if (!normalizedNewDiagramName.value || !normalizedNewDiagramVersion.value) return false
-  return state.value.diagrams.some(diagram => {
-    if (diagram._isDeleted) return false
-    return (
-      diagram.name.trim().toLowerCase() === normalizedNewDiagramName.value &&
-      diagram.version.trim() === normalizedNewDiagramVersion.value
-    )
+async function ensureImportNotationCatalog(notationId: string): Promise<void> {
+  await ensureNotationImportCatalog({
+    modelId: state.value.modelId,
+    notationId,
+    state: state.value,
+    ensureNotationRelationsAndRules,
   })
-})
+}
 
-watch([normalizedNewDiagramName, () => newDiagramNotationId.value], () => {
-  const name = normalizedNewDiagramName.value
-  const notationId = newDiagramNotationId.value
-  if (!name || !notationId) return
-  const matching = state.value.diagrams.filter(
-    d => !d._isDeleted && d.name.trim().toLowerCase() === name && d.notationId === notationId
-  )
-  if (matching.length === 0) return
-  const maxVersion = matching.reduce(
-    (max, d) => (compareVersions(d.version, max) > 0 ? d.version : max),
-    matching[0]!.version
-  )
-  const bumped = bumpMinor(maxVersion)
-  if (bumped) newDiagramVersion.value = bumped
-})
-
-const showComponentChoiceModal = ref(false)
-const componentChoiceOptions = ref<{ id: string; name: string }[]>([])
-const componentChoiceNodeId = ref<string | null>(null)
-/** Drop узла с дерева на диаграмму, отложенный пока открыта модалка выбора компонента нотации */
-const pendingTreeNodeDiagramDrop = ref<{ modelNodeId: string; x: number; y: number } | null>(null)
-
-const showRelationChoiceModal = ref(false)
-const relationChoiceOptions = ref<{ id: string; name: string; linkTypeId: string }[]>([])
-const pendingConnection = ref<{
-  sourceModelNodeId: string
-  targetModelNodeId: string
-  sourceInstanceId: string
-  targetInstanceId: string
-  sourcePortId?: string
-  targetPortId?: string
-  sourceOutlineParam?: number
-  targetOutlineParam?: number
-} | null>(null)
-
-const showReuseLinkModal = ref(false)
-const reuseLinkOptions = ref<EditorLink[]>([])
-const pendingRelationId = ref<string | null>(null)
 const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
 const pendingDeleteEdgeInstanceId = ref<string | null>(null)
@@ -1345,11 +862,15 @@ const pendingDeleteNodeSingleName = computed(() => {
     )
     if (!instance) return ''
     if (isNoteInstance(instance)) return t('models.noteName')
+    if (isContainerInstance(instance)) return t('models.containerName')
+    if (isEdgeAnchorInstance(instance)) return t('models.edgeAnchorName')
     return state.value.nodes.find(item => item.id === instance.modelNodeId)?.name ?? ''
   }
   const nodeId = pendingDeleteNodeIds.value[0]
   if (!nodeId) return ''
   if (isDiagramNoteModelNodeId(nodeId)) return t('models.noteName')
+  if (isDiagramContainerModelNodeId(nodeId)) return t('models.containerName')
+  if (isEdgeAnchorModelNodeId(nodeId)) return t('models.edgeAnchorName')
   return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
 })
 const pendingDeleteDiagramName = computed(() => {
@@ -1365,8 +886,7 @@ const resolveRelationForLink = (link: EditorLink): RelationResponse | null => {
   const notationId = activeNotationId.value
   if (!notationId) return null
 
-  const explicitRelationId =
-    link.parsedAttrs.notationRelations[notationId]?.relationId ?? pendingRelationId.value
+  const explicitRelationId = link.parsedAttrs.notationRelations[notationId]?.relationId
   if (explicitRelationId) {
     const explicitRelation = state.value.relations.find(
       item => item.id === explicitRelationId && item.notationId === notationId
@@ -1430,150 +950,10 @@ const getReuseLinkCustomProperties = (
   return result
 }
 
-const directoryNodeType = computed(
-  () =>
-    state.value.nodeTypes.find(typeItem => typeItem.name.trim().toLowerCase() === 'directory') ??
-    null
-)
-const nonDirectoryNodeTypes = computed(() =>
-  state.value.nodeTypes.filter(typeItem => typeItem.name.trim().toLowerCase() !== 'directory')
-)
-const nodeTypeDefaultDirectoryById = computed(() => {
-  const map = new Map<string, string>()
-  for (const nodeType of state.value.nodeTypes) {
-    const defaultDirectoryPath = parseTypeAttrs(nodeType.attrs ?? null).defaultDirectoryPath?.trim()
-    if (defaultDirectoryPath) {
-      map.set(nodeType.id, defaultDirectoryPath)
-    }
-  }
-  return map
-})
-const createNodeModalTitle = computed(() =>
-  createNodeModal.value.kind === 'folder'
-    ? t('models.createFolderTitle')
-    : t('models.createNodeTitle')
-)
-const nodeTypeSearchQuery = ref('')
-const nodeTypeDropdownOpen = ref(false)
-const filteredNodeTypes = computed(() => {
-  const query = nodeTypeSearchQuery.value.trim().toLowerCase()
-  if (!query) return nonDirectoryNodeTypes.value
-  return nonDirectoryNodeTypes.value.filter(t => t.name.toLowerCase().includes(query))
-})
-const selectedNodeTypeName = computed(() => {
-  if (!newNodeTypeId.value) return ''
-  return nonDirectoryNodeTypes.value.find(t => t.id === newNodeTypeId.value)?.name ?? ''
-})
-
-const treeRootNodeId = computed<string | null>(() => {
-  const raw = model.value?.attrs
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const rootId = parsed.treeRootNodeId
-    return typeof rootId === 'string' && rootId.trim().length > 0 ? rootId : null
-  } catch {
-    return null
-  }
-})
-
-const resolveTreeParentId = (parentNodeId: string | null): string | null =>
-  parentNodeId ?? treeRootNodeId.value ?? null
-
-
-const canCreateNodeFromModal = computed(() => {
-  if (!newNodeName.value.trim()) return false
-  if (createNodeModal.value.kind === 'folder') return !!directoryNodeType.value
-  return !!newNodeTypeId.value
-})
-
-const getNextTreeOrderForParent = (parentNodeId: string | null): number => {
-  const siblingOrders = state.value.nodes
-    .filter(node => !node._isDeleted && node.parentNodeId === parentNodeId)
-    .map(node => node.parsedAttrs.treeOrder ?? 0)
-  if (siblingOrders.length === 0) return 0
-  return Math.max(...siblingOrders) + 1
-}
-
-const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
-  rawPath
-    .split(/[\\/]+/)
-    .map(segment => segment.trim())
-    .filter(segment => segment.length > 0)
-
-const ensureDirectoryPath = (
-  rawPath: string
-): { parentNodeId: string | null; createdDirectoryIds: string[] } => {
-  const directoryTypeId = directoryNodeType.value?.id
-  if (!directoryTypeId) return { parentNodeId: null, createdDirectoryIds: [] }
-
-  const segments = normalizeDirectoryPathSegments(rawPath)
-  if (segments.length === 0)
-    return { parentNodeId: resolveTreeParentId(null), createdDirectoryIds: [] }
-
-  let currentParentNodeId = resolveTreeParentId(null)
-  const createdDirectoryIds: string[] = []
-
-  for (const segment of segments) {
-    const normalizedSegment = segment.toLowerCase()
-    const existingDirectory = state.value.nodes.find(node => {
-      if (node._isDeleted) return false
-      if (node.nodeTypeId !== directoryTypeId) return false
-      if ((node.parentNodeId ?? null) !== (currentParentNodeId ?? null)) return false
-      return node.name.trim().toLowerCase() === normalizedSegment
-    })
-
-    if (existingDirectory) {
-      currentParentNodeId = existingDirectory.id
-      continue
-    }
-
-    const createdDirectoryId = createId()
-    state.value.nodes.push({
-      id: createdDirectoryId,
-      name: segment,
-      modelId: state.value.modelId,
-      ownerId: state.value.ownerId,
-      nodeTypeId: directoryTypeId,
-      parentNodeId: currentParentNodeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: {
-        ...parseNodeAttrs(null),
-        treeOrder: getNextTreeOrderForParent(currentParentNodeId),
-      },
-      _isNew: true,
-    })
-    createdDirectoryIds.push(createdDirectoryId)
-    currentParentNodeId = createdDirectoryId
-  }
-
-  return { parentNodeId: currentParentNodeId, createdDirectoryIds }
-}
-
-const reindexTreeOrders = () => {
-  const counters = new Map<string, number>()
-  for (const node of state.value.nodes) {
-    if (node._isDeleted) continue
-    const parentKey = node.parentNodeId ?? '__root__'
-    const nextOrder = counters.get(parentKey) ?? 0
-    counters.set(parentKey, nextOrder + 1)
-    if (node.parsedAttrs.treeOrder !== nextOrder) {
-      node.parsedAttrs.treeOrder = nextOrder
-      markNodeDirty(node.id)
-    }
-  }
-}
-
 const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
-const noteClipboard = ref<DiagramNodeInstance[] | null>(null)
-const notePasteCount = ref(0)
 
 const isDiagramNoteModelNodeId = (modelNodeId: string): boolean =>
-  modelNodeId.startsWith(NOTE_NODE_PREFIX)
-
-const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
-  modelLinkId.startsWith(NOTE_EDGE_PREFIX) || modelLinkId.startsWith(UNTYPED_EDGE_PREFIX)
+  isDiagramNoteModelNodeIdHelper(modelNodeId)
 
 const isUntypedModelLinkId = (modelLinkId: string): boolean => {
   const link = state.value.links.find(item => item.id === modelLinkId && !item._isDeleted)
@@ -1588,24 +968,6 @@ const isDirectoryNoteInstanceId = (instanceId: string): boolean => {
   return instance?.attrs?.isDirectoryNote === true
 }
 
-const isNoteLikeConnection = (
-  sourceModelNodeId: string,
-  targetModelNodeId: string,
-  sourceInstanceId: string,
-  targetInstanceId: string
-): boolean => {
-  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
-    return true
-  }
-  if (isDirectoryNode(sourceModelNodeId) || isDirectoryNode(targetModelNodeId)) {
-    return true
-  }
-  if (isDirectoryNoteInstanceId(sourceInstanceId) || isDirectoryNoteInstanceId(targetInstanceId)) {
-    return true
-  }
-  return false
-}
-
 const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
   if (history && typeof history.execute === 'function') {
@@ -1615,105 +977,65 @@ const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () =
   command.execute()
 }
 
-const applyDefaultCustomValues = (
-  target: Record<string, unknown>,
-  attrsRaw: string | null | undefined
-) => {
-  const customProperties = parseEntityAttrs(attrsRaw ?? null).customProperties
-  for (const property of customProperties) {
-    const hasOwnValue = Object.prototype.hasOwnProperty.call(target, property.name)
-    if (hasOwnValue) continue
-    if (property.defaultValue === undefined) continue
-    target[property.name] = property.defaultValue
+const {
+  showComponentChoiceModal,
+  componentChoiceOptions,
+  handleComponentChoiceModalClose,
+  finalizeComponentChoiceForDiagram,
+  bindNodeComponent,
+  bindInstanceComponent,
+  addExistingNodeToDiagram,
+  createNodeFromPaletteComponent,
+  createDiagramNote,
+  createDiagramContainer,
+  copySelectedNotesToClipboard,
+  pasteCopiedNotes,
+} = useModelDiagramInstances({
+  state,
+  activeDiagram,
+  activeNotationId,
+  isDiagramReadOnly,
+  directoryNodeType,
+  nodeTypeDefaultDirectoryById,
+  selectedModelNodeIds,
+  selectedInstanceIds,
+  selectedNodeId,
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+  editingNoteInstanceId,
+  showNoteEditorModal,
+  isDirectoryNode,
+  isNoteInstance,
+  ensureDirectoryPath,
+  getNextTreeOrderForParent,
+  executeDiagramHistoryCommand,
+  markDiagramDirty,
+  markNodeDirty,
+  setUiError,
+  t: key => String(t(key)),
+})
+
+const handleBindNodeComponent = (componentId: string): void => {
+  if (isDiagramReadOnly.value) return
+  const instanceId = selectedNodeInstanceId.value
+  if (instanceId) {
+    bindInstanceComponent(instanceId, componentId)
+    return
+  }
+  if (selectedNode.value) {
+    bindNodeComponent(selectedNode.value, componentId)
   }
 }
 
-const syncDefaultsOnLoad = () => {
-  for (const node of state.value.nodes) {
-    for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
-      const componentId = binding.componentId
-      if (!componentId) continue
-      if (!node.parsedAttrs.componentProperties[notationId])
-        node.parsedAttrs.componentProperties[notationId] = {}
-      if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
-        node.parsedAttrs.componentProperties[notationId][componentId] = {}
-      }
-      const component = state.value.components.find(
-        item => item.id === componentId && item.notationId === notationId
-      )
-      if (component) {
-        const target = node.parsedAttrs.componentProperties[notationId][componentId]!
-        const before = JSON.stringify(target)
-        applyDefaultCustomValues(target, component.attrs)
-        if (JSON.stringify(target) !== before) markNodeDirty(node.id)
-      }
-    }
-  }
-  for (const link of state.value.links) {
-    for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
-      const relationId = binding.relationId
-      if (!relationId) continue
-      if (!link.parsedAttrs.relationProperties[notationId])
-        link.parsedAttrs.relationProperties[notationId] = {}
-      if (!link.parsedAttrs.relationProperties[notationId][relationId]) {
-        link.parsedAttrs.relationProperties[notationId][relationId] = {}
-      }
-      const relation = state.value.relations.find(
-        item => item.id === relationId && item.notationId === notationId
-      )
-      if (relation) {
-        const target = link.parsedAttrs.relationProperties[notationId][relationId]!
-        const before = JSON.stringify(target)
-        applyDefaultCustomValues(target, relation.attrs)
-        if (JSON.stringify(target) !== before) markLinkDirty(link.id)
-      }
-    }
-  }
-}
-
-function handleComponentChoiceModalClose() {
-  showComponentChoiceModal.value = false
-  pendingTreeNodeDiagramDrop.value = null
-  componentChoiceNodeId.value = null
-  componentChoiceOptions.value = []
-}
-
-function finalizeComponentChoiceForDiagram(componentId: string) {
-  const nodeId = componentChoiceNodeId.value
-  const pending = pendingTreeNodeDiagramDrop.value
-  const node =
-    nodeId != null
-      ? state.value.nodes.find(n => n.id === nodeId && !n._isDeleted)
-      : undefined
-  if (node) bindNodeComponent(node, componentId)
-  showComponentChoiceModal.value = false
-  componentChoiceNodeId.value = null
-  componentChoiceOptions.value = []
-  pendingTreeNodeDiagramDrop.value = null
-  if (pending && pending.modelNodeId === nodeId && node) {
-    addExistingNodeToDiagram(pending.modelNodeId, pending.x, pending.y)
-  }
-}
-
-const bindNodeComponent = (node: EditorNode, componentId: string) => {
-  const notationId = activeNotationId.value
-  if (!notationId) return
-  node.parsedAttrs.notationComponents[notationId] = { componentId }
-  if (!node.parsedAttrs.componentProperties[notationId])
-    node.parsedAttrs.componentProperties[notationId] = {}
-  if (!node.parsedAttrs.componentProperties[notationId][componentId]) {
-    node.parsedAttrs.componentProperties[notationId][componentId] = {}
-  }
-  const component = state.value.components.find(
-    item => item.id === componentId && item.notationId === notationId
-  )
-  if (component) {
-    applyDefaultCustomValues(
-      node.parsedAttrs.componentProperties[notationId][componentId]!,
-      component.attrs
-    )
-  }
-  markNodeDirty(node.id)
+const scheduleSyncDefaultsOnLoad = (): void => {
+  const modelId = state.value.modelId
+  void whenCatalogReady()
+    .then(() => whenBackgroundReady())
+    .then(async () => {
+      if (state.value.modelId !== modelId) return
+      await syncDefaultsOnLoadChunked(state.value)
+    })
 }
 
 const bindLinkRelation = (
@@ -1733,9 +1055,9 @@ const bindLinkRelation = (
     item => item.id === relationId && item.notationId === notationId
   )
   if (relation) {
-    applyDefaultCustomValues(
+    applyDefaultCustomPropertyValuesFromAttrs(
       link.parsedAttrs.relationProperties[notationId][relationId]!,
-      relation.attrs
+      relation.attrs,
     )
   }
   if (options?.markDirty ?? true) {
@@ -1743,91 +1065,49 @@ const bindLinkRelation = (
   }
 }
 
-const openCreateFolder = (parentNodeId: string | null) => {
-  if (!directoryNodeType.value) {
-    setUiError(t('models.directoryTypeNotFound'))
-    return
-  }
-  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'folder' }
-  newNodeName.value = ''
-  newNodeTypeId.value = directoryNodeType.value.id
-  uiError.value = null
-  showCreateNodeModal.value = true
-}
+const {
+  showRelationChoiceModal,
+  relationChoiceOptions,
+  showReuseLinkModal,
+  reuseLinkOptions,
+  startConnectNodes,
+  connectNodeToEdge,
+  finalizeConnection,
+  handleCreateNewLinkFromReuseModal,
+  handleRequestAutoLink,
+  handleSelectExistingLink,
+  placeTraceLinkOnDiagram,
+  canConnect,
+} = useModelDiagramConnections({
+  state,
+  activeDiagram,
+  activeNotationId,
+  defaultEdgeType,
+  isRelationRulesLoading: isActiveNotationRulesLoading,
+  isDiagramReadOnly,
+  isDiagramNoteModelNodeId,
+  isDiagramContainerModelNodeId,
+  isEdgeAnchorModelNodeId,
+  isDirectoryNode,
+  isDirectoryNoteInstanceId,
+  executeDiagramHistoryCommand,
+  markDiagramDirty,
+  markLinkDirty,
+  bindLinkRelation,
+  setUiError,
+  t: key => String(t(key)),
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+})
 
-const openCreateRegularNode = (parentNodeId: string | null) => {
-  if (nonDirectoryNodeTypes.value.length === 0) {
-    setUiError(t('models.noAvailableNodeTypes'))
-    return
-  }
-  createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'node' }
-  newNodeName.value = ''
-  newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ''
-  nodeTypeSearchQuery.value = ''
-  nodeTypeDropdownOpen.value = false
-  uiError.value = null
-  showCreateNodeModal.value = true
-}
-
-const createNode = () => {
-  if (!newNodeName.value.trim()) return
-  const nodeTypeId =
-    createNodeModal.value.kind === 'folder'
-      ? (directoryNodeType.value?.id ?? '')
-      : newNodeTypeId.value
-  if (!nodeTypeId) return
-  const parentNodeId = createNodeModal.value.parentNodeId ?? null
-  state.value.nodes.push({
-    id: createId(),
-    name: newNodeName.value.trim(),
-    modelId: state.value.modelId,
-    ownerId: state.value.ownerId,
-    nodeTypeId,
-    parentNodeId,
-    createdAt: null,
-    updatedAt: null,
-    parsedAttrs: {
-      ...parseNodeAttrs(null),
-      treeOrder: getNextTreeOrderForParent(parentNodeId),
-    },
-    _isNew: true,
-  })
-  showCreateNodeModal.value = false
-}
-
-const openCreateDiagram = (nodeId: string | null) => {
-  createDiagramNodeId.value = nodeId ?? treeRootNodeId.value ?? null
-  newDiagramName.value = ''
-  newDiagramVersion.value = '1.0.0'
-  newDiagramNotationId.value = state.value.notations[0]?.id ?? ''
-  uiError.value = null
-  showCreateDiagramModal.value = true
-}
-
-const createDiagram = () => {
-  if (!newDiagramName.value.trim() || !newDiagramNotationId.value) return
-  if (hasDiagramNameVersionConflict.value) {
-    setUiError(t('models.diagramConflictMessage'))
-    return
-  }
-  uiError.value = null
-  const id = createId()
-  state.value.diagrams.push({
-    id,
-    name: newDiagramName.value.trim(),
-    version: newDiagramVersion.value || '1.0.0',
-    ownerId: state.value.ownerId,
-    modelId: state.value.modelId,
-    nodeId: createDiagramNodeId.value ?? treeRootNodeId.value ?? null,
-    notationId: newDiagramNotationId.value,
-    createdAt: null,
-    updatedAt: null,
-    parsedAttrs: { instances: { nodes: [], edges: [] } },
-    _isNew: true,
-  })
-  selectedDiagramId.value = id
-  showCreateDiagramModal.value = false
-}
+const reuseLinkModalOptions = computed(() =>
+  reuseLinkOptions.value.map(link => ({
+    id: link.id,
+    linkTypeName: getLinkTypeName(link.linkTypeId),
+    customProperties: getReuseLinkCustomProperties(link),
+  }))
+)
 
 const markNodeDeleted = (nodeId: string) => {
   const node = state.value.nodes.find(item => item.id === nodeId)
@@ -1938,14 +1218,6 @@ const markLinkDeleted = (linkId: string) => {
   if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
 }
 
-const applyDiagramSelection = (diagramId: string) => {
-  selectedDiagramId.value = diagramId
-  selectedModelNodeIds.value = []
-  selectedInstanceIds.value = []
-  selectedModelLinkId.value = null
-  selectedEdgeInstanceId.value = null
-}
-
 const cancelDiagramSwitch = () => {
   pendingDiagramSwitchId.value = null
   pendingDiagramAction.value = null
@@ -1956,140 +1228,82 @@ const switchDiagramWithoutSave = async () => {
   const action = pendingDiagramAction.value
   if (!action) return
 
-  await loadModel()
-  syncDefaultsOnLoad()
+  const targetDiagramId = pendingDiagramSwitchId.value
+  // Close the modal immediately so the UI does not feel stuck on large models.
+  cancelDiagramSwitch()
+
+  await discardUnsavedChanges()
+  diagramInteractionManager.value?.history?.clear?.()
+
   if (action === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
     selectedInstanceIds.value = []
     selectedModelLinkId.value = null
     selectedEdgeInstanceId.value = null
-    cancelDiagramSwitch()
     return
   }
 
-  const targetDiagramId = pendingDiagramSwitchId.value
-  if (!targetDiagramId) {
-    cancelDiagramSwitch()
-    return
-  }
+  if (!targetDiagramId) return
   const restoredTarget = state.value.diagrams.find(
     diagram => diagram.id === targetDiagramId && !diagram._isDeleted
   )
   if (!restoredTarget) {
     setUiError(t('models.diagramSwitchFailed'))
-    cancelDiagramSwitch()
     return
   }
 
   applyDiagramSelection(restoredTarget.id)
-  cancelDiagramSwitch()
-}
-
-const isRequiredPropertyFilled = (value: unknown, type: string): boolean => {
-  if (type === 'boolean') return typeof value === 'boolean'
-  if (type === 'number') return typeof value === 'number' && Number.isFinite(value)
-  if (typeof value === 'string') return value.trim().length > 0
-  return value !== null && value !== undefined
 }
 
 const validateRequiredCustomProperties = (): string | null => {
-  const componentById = new Map(state.value.components.map(component => [component.id, component]))
-  const relationById = new Map(state.value.relations.map(relation => [relation.id, relation]))
-  const nodeTypeById = new Map(state.value.nodeTypes.map(nt => [nt.id, nt]))
-
-  for (const node of state.value.nodes) {
-    if (node._isDeleted) continue
-
-    const nodeType = nodeTypeById.get(node.nodeTypeId)
-    if (nodeType) {
-      const requiredTypeProps = parseEntityAttrs(nodeType.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      for (const property of requiredTypeProps) {
-        const value = node.parsedAttrs.typeProperties[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          return t('models.validationNodeTypePropRequired', { node: node.name, prop: property.name })
-        }
-      }
-    }
-
-    for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
-      const component = componentById.get(binding.componentId)
-      if (!component || component.notationId !== notationId) continue
-
-      const requiredProperties = parseEntityAttrs(component.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      if (requiredProperties.length === 0) continue
-
-      const scopedValues = getDiagramScopedNodeValues({
-        diagram: activeDiagram.value?.parsedAttrs,
-        modelNodeId: node.id,
-        notationId,
-        componentId: binding.componentId,
-        nodeAttrsFallback: node.parsedAttrs,
-      })
-      for (const property of requiredProperties) {
-        const value = scopedValues[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          return t('models.validationNodeComponentPropRequired', { node: node.name, prop: property.name, diagram: component.name })
-        }
-      }
-    }
-  }
-
-  for (const link of state.value.links) {
-    if (link._isDeleted) continue
-
-    for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
-      const relation = relationById.get(binding.relationId)
-      if (!relation || relation.notationId !== notationId) continue
-
-      const requiredProperties = parseEntityAttrs(relation.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      if (requiredProperties.length === 0) continue
-
-      const scopedValues = getDiagramScopedLinkValues({
-        diagram: activeDiagram.value?.parsedAttrs,
-        modelLinkId: link.id,
-        notationId,
-        relationId: binding.relationId,
-        linkAttrsFallback: link.parsedAttrs,
-      })
-      for (const property of requiredProperties) {
-        const value = scopedValues[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          return t('models.validationLinkPropRequired', { link: relation.name, prop: property.name })
-        }
-      }
-    }
-  }
-
-  return null
+  const issue = validateRequiredCustomPropertiesState({
+    state: state.value,
+    activeDiagram: activeDiagram.value?.parsedAttrs,
+  })
+  return issue ? t(issue.key, issue.params) : null
 }
 
-const saveWithValidation = async (): Promise<boolean> => {
-  const validationError = validateRequiredCustomProperties()
-  if (validationError) {
-    setUiError(validationError)
-    return false
-  }
-  // Проверить, что лок ещё наш, до начала сохранения
-  const lockOk = await diagramEditLock.verifyLockBeforeSave()
-  if (!lockOk) return false
+/** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
+const yieldToUiPaint = (): Promise<void> =>
+  new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
 
-  diagramCanvasRef.value?.flushCanvasState()
+const saveWithValidation = async (): Promise<boolean> => {
+  if (isSaving.value) return false
+
+  // Show toast immediately — validation/lock/flush can block the main thread for a while.
+  startSave()
+  saveProgress.value = t('common.saving')
   await nextTick()
-  const ok = await saveChanges()
-  if (ok) {
-    diagramInteractionManager.value?.history?.clear?.()
-    if (activeDiagram.value?.id && diagramRenderer.value) {
-      void uploadDiagramPreview()
+  await yieldToUiPaint()
+
+  try {
+    const validationError = validateRequiredCustomProperties()
+    if (validationError) {
+      setUiError(validationError)
+      return false
     }
+    // Проверить, что лок ещё наш, до начала сохранения
+    const lockOk = await verifyLockBeforeSave()
+    if (!lockOk) return false
+
+    diagramCanvasRef.value?.flushCanvasState()
+    await nextTick()
+    const ok = await saveChanges()
+    if (ok) {
+      diagramInteractionManager.value?.history?.clear?.()
+      if (activeDiagram.value?.id && diagramRenderer.value) {
+        void uploadDiagramPreview()
+      }
+    }
+    return ok
+  } finally {
+    if (isSaving.value) finishSave()
   }
-  return ok
 }
 
 const saveAndSwitchDiagram = async () => {
@@ -2166,6 +1380,10 @@ const removeLinkFromCurrentDiagram = () => {
     diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
       edge => !idsToRemove.has(edge.id)
     )
+    const cleaned = removeOrphanEdgeAnchors(diagram.parsedAttrs)
+    if (cleaned.changed) {
+      diagram.parsedAttrs = cleaned.nextAttrs
+    }
     if (selectedModelLinkId.value === linkId) {
       selectedModelLinkId.value = null
       selectedEdgeInstanceId.value = null
@@ -2278,103 +1496,6 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
   )
 }
 
-const getSelectedDiagramInstances = (): DiagramNodeInstance[] => {
-  const diagram = activeDiagram.value
-  if (!diagram) return []
-
-  const byId = new Map<string, DiagramNodeInstance>()
-
-  if (selectedInstanceIds.value.length > 0) {
-    const selectedSet = new Set(selectedInstanceIds.value)
-    for (const instance of diagram.parsedAttrs.instances.nodes) {
-      if (selectedSet.has(instance.id)) {
-        byId.set(instance.id, instance)
-      }
-    }
-  } else if (selectedModelNodeIds.value.length > 0) {
-    const selectedSet = new Set(selectedModelNodeIds.value)
-    for (const instance of diagram.parsedAttrs.instances.nodes) {
-      if (selectedSet.has(instance.modelNodeId)) {
-        byId.set(instance.id, instance)
-      }
-    }
-  }
-
-  return Array.from(byId.values())
-}
-
-const copySelectedNotesToClipboard = (): boolean => {
-  if (!activeDiagram.value) return false
-
-  const selectedNotes = getSelectedDiagramInstances()
-    .filter(instance => isNoteInstance(instance))
-    .map(instance => deepClone(instance))
-
-  if (selectedNotes.length === 0) return false
-
-  noteClipboard.value = selectedNotes
-  notePasteCount.value = 0
-  return true
-}
-
-const pasteCopiedNotes = (): boolean => {
-  const diagram = activeDiagram.value
-  if (!diagram || isDiagramReadOnly.value) return false
-  if (!noteClipboard.value || noteClipboard.value.length === 0) return false
-
-  const pasteOffset = NOTE_PASTE_STEP * (notePasteCount.value + 1)
-  const pastedNotes = noteClipboard.value.map(source => {
-    const nextId = createId()
-    const isDirectoryNote = source.attrs?.isDirectoryNote === true
-    return {
-      ...deepClone(source),
-      id: nextId,
-      modelNodeId: isDirectoryNote ? source.modelNodeId : `${NOTE_NODE_PREFIX}${nextId}`,
-      x: source.x + pasteOffset,
-      y: source.y + pasteOffset,
-    } satisfies DiagramNodeInstance
-  })
-
-  const pastedInstanceIds = pastedNotes.map(note => note.id)
-  const pastedModelNodeIds = pastedNotes.map(note => note.modelNodeId)
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      const existingIds = new Set(diagram.parsedAttrs.instances.nodes.map(item => item.id))
-      for (const note of pastedNotes) {
-        if (!existingIds.has(note.id)) {
-          diagram.parsedAttrs.instances.nodes.push(deepClone(note))
-        }
-      }
-      selectedModelNodeIds.value = pastedModelNodeIds
-      selectedInstanceIds.value = pastedInstanceIds
-      selectedModelLinkId.value = null
-      selectedEdgeInstanceId.value = null
-      selectedCanvasElementId.value =
-        pastedInstanceIds.length === 1 ? `instance-${pastedInstanceIds[0]}` : null
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      const pastedSet = new Set(pastedInstanceIds)
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => !pastedSet.has(item.id)
-      )
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge => !pastedSet.has(edge.sourceInstanceId) && !pastedSet.has(edge.targetInstanceId)
-      )
-      selectedModelNodeIds.value = []
-      selectedInstanceIds.value = []
-      selectedModelLinkId.value = null
-      selectedEdgeInstanceId.value = null
-      selectedCanvasElementId.value = null
-      markDiagramDirty(diagram.id)
-    },
-  })
-
-  notePasteCount.value += 1
-  return true
-}
-
 watch(
   () => activeDiagram.value?.id ?? null,
   diagramId => {
@@ -2407,785 +1528,6 @@ const setDiagramAttrs = (next: DiagramAttrs) => {
     state.value.diagrams = diagrams
   }
   markDiagramDirty(diagram.id)
-}
-
-const ensureNodeBindingByNodeType = (node: EditorNode): boolean => {
-  const notationId = activeNotationId.value
-  if (!notationId) return false
-  const existing = node.parsedAttrs.notationComponents[notationId]?.componentId
-  if (existing) return true
-  const options = resolveComponentByNodeType(state.value.components, notationId, node.nodeTypeId)
-  if (options.length === 1) {
-    bindNodeComponent(node, options[0]!.id)
-    return true
-  }
-  if (options.length > 1) {
-    componentChoiceNodeId.value = node.id
-    componentChoiceOptions.value = options.map(item => ({ id: item.id, name: item.name }))
-    showComponentChoiceModal.value = true
-    return false
-  }
-  setUiError(t('models.noMatchingComponent'))
-  return false
-}
-
-const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-  const node = state.value.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
-  if (!node) return
-  if (isDirectoryNode(modelNodeId)) {
-    const directoryNoteInstance = {
-      id: createId(),
-      modelNodeId,
-      x,
-      y,
-      width: 230,
-      height: 126,
-      attrs: {
-        isNote: true,
-        isDirectoryNote: true,
-        noteText: node.name,
-        diagramStyle: {
-          nodeShape: 'rectangle',
-          fillColor: '#eaf2ff',
-          strokeColor: '#6f94ff',
-          strokeWidth: 1.5,
-          labelColor: '#233a80',
-          labelFontSize: 13,
-          labelAlign: 'left',
-          labelInset: 12,
-          labelPlacement: 'center',
-        },
-      } as Record<string, unknown>,
-    }
-
-    executeDiagramHistoryCommand({
-      execute: () => {
-        const alreadyExists = diagram.parsedAttrs.instances.nodes.some(
-          item => item.id === directoryNoteInstance.id
-        )
-        if (!alreadyExists) {
-          diagram.parsedAttrs.instances.nodes.push(deepClone(directoryNoteInstance))
-        }
-        markDiagramDirty(diagram.id)
-      },
-      undo: () => {
-        diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-          item => item.id !== directoryNoteInstance.id
-        )
-        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge =>
-            edge.sourceInstanceId !== directoryNoteInstance.id &&
-            edge.targetInstanceId !== directoryNoteInstance.id
-        )
-        markDiagramDirty(diagram.id)
-      },
-    })
-    return
-  }
-  const notationIdForChoice = activeNotationId.value
-  let willOpenComponentChoiceModal = false
-  if (notationIdForChoice) {
-    const existingComp = node.parsedAttrs.notationComponents[notationIdForChoice]?.componentId
-    if (!existingComp) {
-      const compOptions = resolveComponentByNodeType(
-        state.value.components,
-        notationIdForChoice,
-        node.nodeTypeId
-      )
-      willOpenComponentChoiceModal = compOptions.length > 1
-    }
-  }
-
-  const hasBinding = ensureNodeBindingByNodeType(node)
-  if (!hasBinding) {
-    if (willOpenComponentChoiceModal) {
-      pendingTreeNodeDiagramDrop.value = { modelNodeId, x, y }
-    }
-    return
-  }
-
-  const notationId = activeNotationId.value
-  const componentId = notationId
-    ? (node.parsedAttrs.notationComponents[notationId]?.componentId ?? null)
-    : null
-  const component = componentId
-    ? state.value.components.find(item => item.id === componentId && item.notationId === notationId)
-    : null
-  const diagramStyle = component
-    ? parseEntityAttrs(component.attrs ?? null).diagramStyle
-    : undefined
-  const width = typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160
-  const height = typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56
-
-  const nodeInstance = {
-    id: createId(),
-    modelNodeId,
-    x,
-    y,
-    width,
-    height,
-    attrs: diagramStyle ? { diagramStyle: JSON.parse(JSON.stringify(diagramStyle)) } : undefined,
-  }
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      const alreadyExists = diagram.parsedAttrs.instances.nodes.some(
-        item => item.id === nodeInstance.id
-      )
-      if (!alreadyExists) {
-        diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => item.id !== nodeInstance.id
-      )
-      markDiagramDirty(diagram.id)
-    },
-  })
-}
-
-const createNodeFromPaletteComponent = (componentId: string, x: number, y: number) => {
-  if (isDiagramReadOnly.value) return
-  const diagram = activeDiagram.value
-  if (!diagram || !diagram.nodeId) {
-    setUiError(t('models.cannotCreateNodeWithoutDirectory'))
-    return
-  }
-  const component = state.value.components.find(item => item.id === componentId)
-  if (!component) return
-  const nodeId = createId()
-  const notationId = activeNotationId.value
-  const defaultDirectoryPath = nodeTypeDefaultDirectoryById.value.get(component.nodeTypeId) ?? ''
-  if (defaultDirectoryPath && !directoryNodeType.value) {
-    setUiError(t('models.directoryTypeRequiredForAutoPath'))
-    return
-  }
-  const parsedComponentAttrs = parseEntityAttrs(component.attrs ?? null)
-  const ds = parsedComponentAttrs.diagramStyle
-  const width = typeof ds?.width === 'number' ? ds.width : 160
-  const height = typeof ds?.height === 'number' ? ds.height : 56
-  const instanceId = createId()
-  const newInstance = {
-    id: instanceId,
-    modelNodeId: nodeId,
-    x,
-    y,
-    width,
-    height,
-    attrs: ds ? { diagramStyle: JSON.parse(JSON.stringify(ds)) } : undefined,
-  }
-  let createdDirectoryIds: string[] = []
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      createdDirectoryIds = []
-      let parentNodeId = diagram.nodeId
-
-      if (defaultDirectoryPath) {
-        const ensuredPath = ensureDirectoryPath(defaultDirectoryPath)
-        if (!ensuredPath.parentNodeId) return
-        parentNodeId = ensuredPath.parentNodeId
-        createdDirectoryIds = ensuredPath.createdDirectoryIds
-      }
-
-      const parsedAttrs = parseNodeAttrs(null)
-      parsedAttrs.treeOrder = getNextTreeOrderForParent(parentNodeId ?? null)
-      if (notationId) {
-        parsedAttrs.notationComponents[notationId] = { componentId }
-        const scopedDefaults: Record<string, unknown> = {}
-        applyDefaultCustomValues(scopedDefaults, component.attrs)
-        parsedAttrs.componentProperties[notationId] = { [componentId]: scopedDefaults }
-      }
-
-      const newNode: EditorNode = {
-        id: nodeId,
-        name: component.name,
-        modelId: state.value.modelId,
-        ownerId: state.value.ownerId,
-        nodeTypeId: component.nodeTypeId,
-        parentNodeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs,
-        _isNew: true,
-      }
-
-      const hasNode = state.value.nodes.some(item => item.id === nodeId)
-      if (!hasNode) {
-        state.value.nodes.push(deepClone(newNode))
-      }
-      const hasInstance = diagram.parsedAttrs.instances.nodes.some(
-        item => item.id === newInstance.id
-      )
-      if (!hasInstance) {
-        diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      state.value.nodes = state.value.nodes.filter(
-        item => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
-      )
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => item.id !== newInstance.id
-      )
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
-      )
-      if (selectedModelNodeIds.value.includes(nodeId)) {
-        selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== nodeId)
-      }
-      if (
-        selectedNodeId.value === nodeId ||
-        createdDirectoryIds.includes(selectedNodeId.value ?? '')
-      ) {
-        selectedNodeId.value = null
-      }
-      markDiagramDirty(diagram.id)
-    },
-  })
-}
-
-const createDiagramNote = (x: number, y: number) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-
-  const instanceId = createId()
-  const modelNodeId = `${NOTE_NODE_PREFIX}${instanceId}`
-  const noteInstance = {
-    id: instanceId,
-    modelNodeId,
-    x,
-    y,
-    width: 220,
-    height: 120,
-    attrs: {
-      isNote: true,
-      noteText: t('models.newNoteText'),
-      diagramStyle: {
-        nodeShape: 'rectangle',
-        fillColor: '#fff9c4',
-        strokeColor: '#e6c85b',
-        strokeWidth: 1.5,
-        labelColor: '#5a4600',
-        labelFontSize: 13,
-        labelAlign: 'left',
-        labelInset: 10,
-        labelPlacement: 'center',
-      },
-    } as Record<string, unknown>,
-  }
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      const exists = diagram.parsedAttrs.instances.nodes.some(item => item.id === noteInstance.id)
-      if (!exists) {
-        diagram.parsedAttrs.instances.nodes.push(deepClone(noteInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-        item => item.id !== noteInstance.id
-      )
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge =>
-          edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
-      )
-      selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== modelNodeId)
-      if (selectedCanvasElementId.value === `instance-${noteInstance.id}`) {
-        selectedCanvasElementId.value = null
-      }
-      if (editingNoteInstanceId.value === noteInstance.id) {
-        showNoteEditorModal.value = false
-        editingNoteInstanceId.value = null
-      }
-      markDiagramDirty(diagram.id)
-    },
-  })
-}
-
-const startConnectNodes = (
-  sourceModelNodeId: string,
-  targetModelNodeId: string,
-  sourceInstanceId: string,
-  targetInstanceId: string,
-  sourcePortId?: string,
-  targetPortId?: string,
-  sourceOutlineParam?: number,
-  targetOutlineParam?: number
-) => {
-  if (isActiveNotationRulesLoading.value) {
-    setUiError(t('models.relationRulesLoadingConnectBlocked'))
-    return
-  }
-
-  const diagram = activeDiagram.value
-  if (!diagram) return
-  if (
-    isNoteLikeConnection(sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId)
-  ) {
-    const modelLinkId = `${NOTE_EDGE_PREFIX}${createId()}`
-    const edgeAttrs: Record<string, unknown> = {
-      isDiagramOnly: true,
-      diagramStyle: {
-        edgeType: defaultEdgeType.value,
-        startMarkerType: 'none',
-        endMarkerType: 'none',
-        lineDash: [4, 4],
-      },
-    }
-    if (sourcePortId) edgeAttrs.fromPortId = sourcePortId
-    if (targetPortId) edgeAttrs.toPortId = targetPortId
-    if (sourceOutlineParam !== undefined) edgeAttrs.fromOutlineParam = sourceOutlineParam
-    if (targetOutlineParam !== undefined) edgeAttrs.toOutlineParam = targetOutlineParam
-    const noteEdgeInstance = {
-      id: createId(),
-      modelLinkId,
-      sourceInstanceId,
-      targetInstanceId,
-      attrs: edgeAttrs,
-    }
-    executeDiagramHistoryCommand({
-      execute: () => {
-        const hasEdge = diagram.parsedAttrs.instances.edges.some(
-          edge => edge.id === noteEdgeInstance.id
-        )
-        if (!hasEdge) {
-          diagram.parsedAttrs.instances.edges.push(deepClone(noteEdgeInstance))
-        }
-        markDiagramDirty(diagram.id)
-      },
-      undo: () => {
-        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge => edge.id !== noteEdgeInstance.id
-        )
-        if (selectedModelLinkId.value === modelLinkId) {
-          selectedModelLinkId.value = null
-          selectedEdgeInstanceId.value = null
-          selectedCanvasElementId.value = null
-        }
-        markDiagramDirty(diagram.id)
-      },
-    })
-    return
-  }
-
-  const notationId = activeNotationId.value
-  if (!notationId) return
-  const sourceNode = state.value.nodes.find(item => item.id === sourceModelNodeId)
-  const targetNode = state.value.nodes.find(item => item.id === targetModelNodeId)
-  if (!sourceNode || !targetNode) return
-
-  const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
-  const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
-  if (!sourceComponentId || !targetComponentId) {
-    setUiError(t('models.noComponentsForLink'))
-    return
-  }
-
-  const sourceComponent = state.value.components.find(
-    component => component.id === sourceComponentId && component.notationId === notationId
-  )
-  const targetComponent = state.value.components.find(
-    component => component.id === targetComponentId && component.notationId === notationId
-  )
-  const sourceIsUntyped = sourceComponent
-    ? isUntypedNodeTypeId(sourceComponent.nodeTypeId)
-    : false
-  const targetIsUntyped = targetComponent
-    ? isUntypedNodeTypeId(targetComponent.nodeTypeId)
-    : false
-  const allowedUntypedRelations = state.value.relations.filter(
-    relation =>
-      relation.notationId === notationId &&
-      isUntypedLinkTypeId(relation.linkTypeId)
-  )
-  if (!sourceIsUntyped && targetIsUntyped) {
-    setUiError(t('models.noAllowedRelationRules'))
-    return
-  }
-
-  const allowedRelations = sourceIsUntyped
-    ? allowedUntypedRelations
-    : (() => {
-        const ruleRelationIds = state.value.relationRules
-          .filter(
-            rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
-          )
-          .map(rule => rule.relationId)
-        if (ruleRelationIds.length === 0) {
-          setUiError(t('models.noAllowedRelationRules'))
-          return [] as RelationResponse[]
-        }
-        return state.value.relations.filter(
-          relation =>
-            relation.notationId === notationId &&
-            ruleRelationIds.includes(relation.id) &&
-            !isUntypedLinkTypeId(relation.linkTypeId)
-        )
-      })()
-  if (allowedRelations.length === 0) {
-    setUiError(t('models.noAvailableRelations'))
-    return
-  }
-  pendingConnection.value = {
-    sourceModelNodeId,
-    targetModelNodeId,
-    sourceInstanceId,
-    targetInstanceId,
-    sourcePortId,
-    targetPortId,
-    sourceOutlineParam,
-    targetOutlineParam,
-  }
-
-  // Сохраняем доступные relations для возможного выбора позже
-  relationChoiceOptions.value = allowedRelations.map(relation => ({
-    id: relation.id,
-    name: relation.name,
-    linkTypeId: relation.linkTypeId,
-  }))
-
-  // Для связи из untyped-компонента всегда создаём новую связь на диаграмме:
-  // reuse существующих link-объектов здесь запрещён по продуктовым правилам.
-  if (sourceIsUntyped) {
-    if (allowedRelations.length === 1) {
-      finalizeConnection(allowedRelations[0]!.id)
-      return
-    }
-    showRelationChoiceModal.value = true
-    return
-  }
-
-  // Собираем все существующие связи для всех allowedRelations
-  const existingLinks: EditorLink[] = []
-  for (const relation of allowedRelations) {
-    const links = state.value.links.filter(
-      link =>
-        !link._isDeleted &&
-        link.sourceId === sourceModelNodeId &&
-        link.targetId === targetModelNodeId &&
-        link.linkTypeId === relation.linkTypeId
-    )
-    existingLinks.push(...links)
-  }
-
-  // Если есть существующие связи, показываем их первым делом
-  if (existingLinks.length > 0) {
-    reuseLinkOptions.value = existingLinks
-    showReuseLinkModal.value = true
-    return
-  }
-
-  // Если нет существующих связей, показываем выбор relation (если > 1)
-  if (allowedRelations.length === 1) {
-    finalizeConnection(allowedRelations[0]!.id)
-    return
-  }
-  showRelationChoiceModal.value = true
-}
-
-const finalizeConnection = (relationId: string) => {
-  const notationId = activeNotationId.value
-  const diagram = activeDiagram.value
-  const connection = pendingConnection.value
-  if (!notationId || !diagram || !connection) return
-  showRelationChoiceModal.value = false
-  const relation = state.value.relations.find(item => item.id === relationId)
-  if (!relation) return
-
-  pendingRelationId.value = relationId
-  createOrReuseLink(null)
-}
-
-const handleCreateNewLinkFromReuseModal = () => {
-  showReuseLinkModal.value = false
-
-  // Если есть только один relation, используем его сразу
-  if (relationChoiceOptions.value.length === 1) {
-    finalizeConnection(relationChoiceOptions.value[0]!.id)
-    return
-  }
-
-  // Иначе показываем выбор relation
-  showRelationChoiceModal.value = true
-}
-
-const handleRequestAutoLink = (
-  sourceModelNodeId: string,
-  targetModelNodeId: string,
-  sourceInstanceId: string,
-  targetInstanceId: string,
-  availableRelations: RelationResponse[],
-  existingLinksNotOnDiagram: EditorLink[]
-) => {
-  const diagram = activeDiagram.value
-  if (!diagram) return
-
-  // Store connection data
-  pendingConnection.value = {
-    sourceModelNodeId,
-    targetModelNodeId,
-    sourceInstanceId,
-    targetInstanceId,
-    sourcePortId: undefined,
-    targetPortId: undefined,
-    sourceOutlineParam: undefined,
-    targetOutlineParam: undefined,
-  }
-
-  // Если есть существующие связи не на диаграмме - показываем диалог использования
-  if (existingLinksNotOnDiagram.length > 0) {
-    reuseLinkOptions.value = existingLinksNotOnDiagram
-    showReuseLinkModal.value = true
-    return
-  }
-
-  // Prepare relation options
-  relationChoiceOptions.value = availableRelations.map(relation => ({
-    id: relation.id,
-    name: relation.name,
-    linkTypeId: relation.linkTypeId,
-  }))
-
-  // Связей нет - нужно создать новую
-  // Если только один relation - спрашиваем создать ли связь
-  if (availableRelations.length === 1) {
-    // Показываем диалог с одним вариантом (как при перетаскивании с Shift)
-    showRelationChoiceModal.value = true
-    return
-  }
-
-  // Несколько вариантов - показываем выбор
-  showRelationChoiceModal.value = true
-}
-
-const handleSelectExistingLink = (linkId: string) => {
-  const notationId = activeNotationId.value
-  const link = state.value.links.find(item => item.id === linkId)
-  if (!notationId || !link) return
-
-  // Находим relationId по linkTypeId и notationId
-  const relation = state.value.relations.find(
-    item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
-  )
-  if (!relation) return
-
-  pendingRelationId.value = relation.id
-  createOrReuseLink(linkId)
-}
-
-const placeTraceLinkOnDiagram = (linkId: string) => {
-  const diagram = activeDiagram.value
-  const notationId = activeNotationId.value
-  if (!diagram || !notationId || isDiagramReadOnly.value) return
-
-  const link = state.value.links.find(item => item.id === linkId && !item._isDeleted)
-  if (!link) return
-
-  const alreadyOnDiagram = diagram.parsedAttrs.instances.edges.some(
-    edge => edge.modelLinkId === link.id
-  )
-  if (alreadyOnDiagram) return
-
-  const relation = state.value.relations.find(
-    item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
-  )
-  if (!relation) return
-
-  if (!canConnect(link.sourceId, link.targetId)) return
-
-  const sourceInstance = diagram.parsedAttrs.instances.nodes.find(
-    instance => instance.modelNodeId === link.sourceId
-  )
-  const targetInstance = diagram.parsedAttrs.instances.nodes.find(
-    instance => instance.modelNodeId === link.targetId
-  )
-  if (!sourceInstance || !targetInstance) return
-
-  pendingConnection.value = {
-    sourceModelNodeId: link.sourceId,
-    targetModelNodeId: link.targetId,
-    sourceInstanceId: sourceInstance.id,
-    targetInstanceId: targetInstance.id,
-    sourcePortId: undefined,
-    targetPortId: undefined,
-    sourceOutlineParam: undefined,
-    targetOutlineParam: undefined,
-  }
-  pendingRelationId.value = relation.id
-  createOrReuseLink(link.id)
-}
-
-const createOrReuseLink = (linkId: string | null) => {
-  const notationId = activeNotationId.value
-  const diagram = activeDiagram.value
-  const connection = pendingConnection.value
-  const relationId = pendingRelationId.value
-  if (!notationId || !diagram || !connection || !relationId) return
-  const relation = state.value.relations.find(item => item.id === relationId)
-  if (!relation) return
-  const isUntypedRelation = isUntypedLinkTypeId(relation.linkTypeId)
-
-  const isNewLink = !linkId || isUntypedRelation
-  const resolvedLinkId = isUntypedRelation
-    ? `${UNTYPED_EDGE_PREFIX}${createId()}`
-    : (linkId ?? createId())
-  const existingLink = state.value.links.find(item => item.id === resolvedLinkId) ?? null
-  if (!isNewLink && !existingLink) return
-  const previousParsedAttrs = existingLink ? deepClone(existingLink.parsedAttrs) : null
-  const newLink: EditorLink | null = isNewLink && !isUntypedRelation
-    ? {
-        id: resolvedLinkId,
-        sourceId: connection.sourceModelNodeId,
-        targetId: connection.targetModelNodeId,
-        modelId: state.value.modelId,
-        ownerId: state.value.ownerId,
-        linkTypeId: relation.linkTypeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs: parseLinkAttrs(null),
-        _isNew: true,
-      }
-    : null
-
-  const relParsed = parseEntityAttrs(relation.attrs ?? null)
-  const relationDs = relParsed.diagramStyle
-  const edgeAttrs: Record<string, unknown> = {}
-  const diagramStyle: Record<string, unknown> = relationDs
-    ? JSON.parse(JSON.stringify(relationDs))
-    : {}
-  diagramStyle.edgeType = defaultEdgeType.value
-  if (Object.keys(diagramStyle).length > 0) {
-    edgeAttrs.diagramStyle = diagramStyle
-  }
-  if (connection.sourcePortId) {
-    edgeAttrs.fromPortId = connection.sourcePortId
-  }
-  if (connection.targetPortId) {
-    edgeAttrs.toPortId = connection.targetPortId
-  }
-  if (connection.sourceOutlineParam !== undefined) {
-    edgeAttrs.fromOutlineParam = connection.sourceOutlineParam
-  }
-  if (connection.targetOutlineParam !== undefined) {
-    edgeAttrs.toOutlineParam = connection.targetOutlineParam
-  }
-  const newEdgeInstance = {
-    id: createId(),
-    modelLinkId: resolvedLinkId,
-    sourceInstanceId: connection.sourceInstanceId,
-    targetInstanceId: connection.targetInstanceId,
-    attrs: Object.keys(edgeAttrs).length ? edgeAttrs : undefined,
-  }
-
-  executeDiagramHistoryCommand({
-    execute: () => {
-      if (isUntypedRelation) {
-        const hasEdge = diagram.parsedAttrs.instances.edges.some(
-          edge => edge.id === newEdgeInstance.id
-        )
-        if (!hasEdge) {
-          diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
-        }
-        markDiagramDirty(diagram.id)
-        return
-      }
-      let link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
-      if (!link && newLink) {
-        state.value.links.push(deepClone(newLink))
-        link = state.value.links.find(item => item.id === resolvedLinkId) ?? null
-      }
-      if (!link) return
-
-      bindLinkRelation(link, relation.id)
-      const hasEdge = diagram.parsedAttrs.instances.edges.some(
-        edge => edge.id === newEdgeInstance.id
-      )
-      if (!hasEdge) {
-        diagram.parsedAttrs.instances.edges.push(deepClone(newEdgeInstance))
-      }
-      markDiagramDirty(diagram.id)
-    },
-    undo: () => {
-      diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-        edge => edge.id !== newEdgeInstance.id
-      )
-
-      if (isUntypedRelation) {
-        markDiagramDirty(diagram.id)
-        return
-      }
-
-      if (isNewLink) {
-        state.value.links = state.value.links.filter(item => item.id !== resolvedLinkId)
-      } else if (previousParsedAttrs) {
-        const link = state.value.links.find(item => item.id === resolvedLinkId)
-        if (link) {
-          link.parsedAttrs = deepClone(previousParsedAttrs)
-          markLinkDirty(link.id)
-        }
-      }
-      markDiagramDirty(diagram.id)
-    },
-  })
-
-  pendingConnection.value = null
-  pendingRelationId.value = null
-  showReuseLinkModal.value = false
-}
-
-const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boolean => {
-  if (isActiveNotationRulesLoading.value) return false
-  if (isDiagramNoteModelNodeId(sourceModelNodeId) || isDiagramNoteModelNodeId(targetModelNodeId)) {
-    return true
-  }
-  if (isDirectoryNode(sourceModelNodeId) || isDirectoryNode(targetModelNodeId)) {
-    return true
-  }
-  const notationId = activeNotationId.value
-  if (!notationId) return false
-  const sourceNode = state.value.nodes.find(item => item.id === sourceModelNodeId)
-  const targetNode = state.value.nodes.find(item => item.id === targetModelNodeId)
-  if (!sourceNode || !targetNode) return false
-  const sourceComponentId = sourceNode.parsedAttrs.notationComponents[notationId]?.componentId
-  const targetComponentId = targetNode.parsedAttrs.notationComponents[notationId]?.componentId
-  if (!sourceComponentId || !targetComponentId) return false
-  const sourceComponent = state.value.components.find(
-    component => component.id === sourceComponentId && component.notationId === notationId
-  )
-  const targetComponent = state.value.components.find(
-    component => component.id === targetComponentId && component.notationId === notationId
-  )
-  const sourceIsUntyped = sourceComponent
-    ? isUntypedNodeTypeId(sourceComponent.nodeTypeId)
-    : false
-  const targetIsUntyped = targetComponent
-    ? isUntypedNodeTypeId(targetComponent.nodeTypeId)
-    : false
-  if (sourceIsUntyped) {
-    return state.value.relations.some(
-      relation =>
-        relation.notationId === notationId &&
-        isUntypedLinkTypeId(relation.linkTypeId)
-    )
-  }
-  if (targetIsUntyped) return false
-  const typedRuleRelationIds = state.value.relationRules
-    .filter(rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId)
-    .map(rule => rule.relationId)
-  if (typedRuleRelationIds.length === 0) return false
-  return state.value.relations.some(
-    relation =>
-      relation.notationId === notationId &&
-      typedRuleRelationIds.includes(relation.id) &&
-      !isUntypedLinkTypeId(relation.linkTypeId)
-  )
 }
 
 const handleReconnectEdge = (
@@ -3307,7 +1649,11 @@ const handleCanvasSelectNodes = (modelNodeIds: string[]) => {
   selectedEdgeInstanceId.value = null
   if (!selectionSyncEnabled.value || modelNodeIds.length !== 1) return
   const modelNodeId = modelNodeIds[0]!
-  if (isDiagramNoteModelNodeId(modelNodeId)) {
+  if (
+    isDiagramNoteModelNodeId(modelNodeId) ||
+    isDiagramContainerModelNodeId(modelNodeId) ||
+    isEdgeAnchorModelNodeId(modelNodeId)
+  ) {
     selectedNodeId.value = null
     return
   }
@@ -3338,118 +1684,10 @@ const toggleSelectionSync = () => {
 
 const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
   const node = state.value.nodes.find(item => item.id === modelNodeId)
-  if (!node || node.name === newLabel) return
-  node.name = newLabel
+  const nextName = newLabel.trim()
+  if (!node || !nextName || node.name === nextName) return
+  node.name = nextName
   markNodeDirty(node.id)
-}
-
-const isDirectoryNode = (nodeId: string): boolean => {
-  const node = state.value.nodes.find(item => item.id === nodeId)
-  if (!node) return false
-  const nodeType = state.value.nodeTypes.find(type => type.id === node.nodeTypeId)
-  return (nodeType?.name ?? '').trim().toLowerCase() === 'directory'
-}
-
-const isDescendantNode = (nodeId: string, potentialParentId: string): boolean => {
-  const children = state.value.nodes.filter(
-    item => item.parentNodeId === potentialParentId && !item._isDeleted
-  )
-  for (const child of children) {
-    if (child.id === nodeId) return true
-    if (isDescendantNode(nodeId, child.id)) return true
-  }
-  return false
-}
-
-const handleMoveNode = (
-  nodeId: string,
-  targetNodeId: string | null,
-  position: 'above' | 'below' | 'inside'
-) => {
-  const nodes = state.value.nodes
-  const fromIndex = nodes.findIndex(item => item.id === nodeId)
-  if (fromIndex < 0) return
-  const movingNode = nodes[fromIndex]!
-
-  if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
-
-  const targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
-  if (targetNodeId && !targetNode) return
-
-  let newParentNodeId: string | null
-  let insertIndex: number
-
-  if (!targetNode) {
-    newParentNodeId = treeRootNodeId.value ?? null
-    const rootIndices = nodes
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => item.id !== nodeId && !item._isDeleted && !item.parentNodeId)
-      .map(({ index }) => index)
-    insertIndex = rootIndices.length > 0 ? rootIndices[rootIndices.length - 1]! + 1 : nodes.length
-  } else if (position === 'inside' && isDirectoryNode(targetNode.id)) {
-    newParentNodeId = targetNode.id
-    const childIndices = nodes
-      .map((item, index) => ({ item, index }))
-      .filter(
-        ({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
-      )
-      .map(({ index }) => index)
-    insertIndex =
-      childIndices.length > 0
-        ? childIndices[childIndices.length - 1]! + 1
-        : nodes.indexOf(targetNode) + 1
-  } else {
-    newParentNodeId = targetNode.parentNodeId ?? null
-    const targetIndex = nodes.indexOf(targetNode)
-    insertIndex = position === 'above' ? targetIndex : targetIndex + 1
-  }
-
-  const parentChanged = movingNode.parentNodeId !== newParentNodeId
-  movingNode.parentNodeId = newParentNodeId
-
-  nodes.splice(fromIndex, 1)
-  if (fromIndex < insertIndex) insertIndex -= 1
-  insertIndex = Math.max(0, Math.min(insertIndex, nodes.length))
-  nodes.splice(insertIndex, 0, movingNode)
-
-  const orderChanged = fromIndex !== insertIndex
-  if (parentChanged || orderChanged) {
-    markNodeDirty(movingNode.id)
-    reindexTreeOrders()
-  }
-}
-
-const handleMoveDiagram = (diagramId: string, newNodeId: string | null) => {
-  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
-  if (!diagram) return
-  const resolvedNodeId = newNodeId ?? treeRootNodeId.value ?? null
-  if (diagram.nodeId === resolvedNodeId) return
-  diagram.nodeId = resolvedNodeId
-  markDiagramDirty(diagram.id)
-}
-
-const handleRenameNode = (nodeId: string, newName: string) => {
-  const node = state.value.nodes.find(item => item.id === nodeId)
-  if (!node || node.name === newName) return
-  node.name = newName
-  markNodeDirty(node.id)
-}
-
-const handleRenameDiagram = (diagramId: string, newName: string) => {
-  const diagram = state.value.diagrams.find(item => item.id === diagramId)
-  const trimmedName = newName.trim()
-  if (!diagram || !trimmedName) return
-  if (diagram.name === trimmedName) return
-
-  const oldNameNormalized = diagram.name.trim().toLowerCase()
-  for (const row of state.value.diagrams) {
-    if (row._isDeleted) continue
-    if (row.modelId !== diagram.modelId) continue
-    if (row.name.trim().toLowerCase() !== oldNameNormalized) continue
-    if (row.name === trimmedName) continue
-    row.name = trimmedName
-    markDiagramDirty(row.id)
-  }
 }
 
 const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
@@ -3633,149 +1871,6 @@ const confirmDiagramDelete = () => {
   markDiagramDeleted(diagramId)
   cancelDiagramDelete()
 }
-
-const collectDefaultCustomPropertyValues = (
-  customProperties: { name: string; defaultValue?: string | number | boolean; system?: boolean }[]
-): Record<string, unknown> => {
-  const defaults: Record<string, unknown> = {}
-  for (const property of customProperties) {
-    if (property.system) continue
-    if (!property.name) continue
-    if (property.defaultValue !== undefined) {
-      defaults[property.name] = property.defaultValue
-    }
-  }
-  return defaults
-}
-
-const collectOefMissingRequiredReport = (request: ReturnType<typeof buildOefBatchSaveRequest>['request']) => {
-  const componentById = new Map(state.value.components.map(component => [component.id, component]))
-  const relationById = new Map(state.value.relations.map(relation => [relation.id, relation]))
-  const nodeTypeById = new Map(state.value.nodeTypes.map(nodeType => [nodeType.id, nodeType]))
-
-  let nodeType = 0
-  let component = 0
-  let relation = 0
-
-  for (const node of request.nodes.create) {
-    const nodeAttrs = parseNodeAttrs(node.attrs)
-    const nodeTypeEntity = nodeTypeById.get(node.nodeTypeId)
-    if (nodeTypeEntity) {
-      const requiredTypeProps = (parseTypeAttrs(nodeTypeEntity.attrs ?? null).customProperties ?? []).filter(
-        property => property.required && !property.system
-      )
-      for (const property of requiredTypeProps) {
-        const value = nodeAttrs.typeProperties[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          nodeType += 1
-        }
-      }
-    }
-
-    for (const [notationId, binding] of Object.entries(nodeAttrs.notationComponents)) {
-      const componentEntity = componentById.get(binding.componentId)
-      if (!componentEntity || componentEntity.notationId !== notationId) continue
-
-      const requiredProps = parseEntityAttrs(componentEntity.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      const scopedValues = nodeAttrs.componentProperties?.[notationId]?.[binding.componentId] ?? {}
-      for (const property of requiredProps) {
-        const value = scopedValues[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          component += 1
-        }
-      }
-    }
-  }
-
-  for (const link of request.links.create) {
-    const linkAttrs = parseLinkAttrs(link.attrs)
-    for (const [notationId, binding] of Object.entries(linkAttrs.notationRelations)) {
-      const relationEntity = relationById.get(binding.relationId)
-      if (!relationEntity || relationEntity.notationId !== notationId) continue
-
-      const requiredProps = parseEntityAttrs(relationEntity.attrs ?? null).customProperties.filter(
-        property => property.required && !property.system
-      )
-      const scopedValues = linkAttrs.relationProperties?.[notationId]?.[binding.relationId] ?? {}
-      for (const property of requiredProps) {
-        const value = scopedValues[property.name]
-        if (!isRequiredPropertyFilled(value, property.type)) {
-          relation += 1
-        }
-      }
-    }
-  }
-
-  const total = nodeType + component + relation
-  return { nodeType, component, relation, total }
-}
-
-const handleOefImportSubmit = async (payload: {
-  draft: ImportDraft
-  notationId: string
-  mapping: ImportMappingState
-}) => {
-  const modelId = state.value.modelId
-  if (!modelId) return
-  const nodeTypePropertyDefaultsById = Object.fromEntries(
-    state.value.nodeTypes.map(nodeType => [
-      nodeType.id,
-      collectDefaultCustomPropertyValues(parseTypeAttrs(nodeType.attrs ?? null).customProperties ?? []),
-    ])
-  )
-  const componentPropertyDefaultsById = Object.fromEntries(
-    state.value.components.map(component => [
-      component.id,
-      collectDefaultCustomPropertyValues(parseEntityAttrs(component.attrs ?? null).customProperties),
-    ])
-  )
-  const relationPropertyDefaultsById = Object.fromEntries(
-    state.value.relations.map(relation => [
-      relation.id,
-      collectDefaultCustomPropertyValues(parseEntityAttrs(relation.attrs ?? null).customProperties),
-    ])
-  )
-  const built = buildOefBatchSaveRequest({
-    draft: payload.draft,
-    notationId: payload.notationId,
-    mapping: payload.mapping,
-    parentNodeId: treeRootNodeId.value ?? null,
-    nodeTypePropertyDefaultsById,
-    componentPropertyDefaultsById,
-    relationPropertyDefaultsById,
-  })
-  if (!hasBatchChanges(built.request)) {
-    setUiError(t('models.oefImportNoChanges'))
-    return
-  }
-
-  isImportingOef.value = true
-  const result = await batchSave(modelId, built.request)
-  isImportingOef.value = false
-  if (!result.success) {
-    setUiError(t('models.oefImportFailed', { message: result.error.message }))
-    return
-  }
-  await loadModel()
-  const warningCounts = new Map<string, number>()
-  for (const warning of built.warnings) {
-    warningCounts.set(warning.code, (warningCounts.get(warning.code) ?? 0) + 1)
-  }
-  const warningGroups = [...warningCounts.entries()]
-    .map(([code, count]) => ({ code, count }))
-    .sort((a, b) => b.count - a.count)
-  const missingRequired = collectOefMissingRequiredReport(built.request)
-  showImportWizard.value = false
-  oefImportReport.value = {
-    ...built.createdCounts,
-    warningsCount: built.warnings.length,
-    warningGroups,
-    missingRequired,
-  }
-}
-
 
 const handleToolbarAction = async (event: string) => {
   switch (event) {
@@ -4074,10 +2169,7 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   }
 
   if (targetNodeInstance) {
-    if (!targetNodeInstance.attrs) targetNodeInstance.attrs = {}
-    targetNodeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
-    if (typeof style.width === 'number') targetNodeInstance.width = style.width
-    if (typeof style.height === 'number') targetNodeInstance.height = style.height
+    applyDiagramStyleToNodeInstance(targetNodeInstance, style)
     markDiagramDirty(diagram.id)
     return
   }
@@ -4109,17 +2201,26 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
   if (selectedElementId.startsWith('instance-')) {
     const instanceId = selectedElementId.slice('instance-'.length)
     const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
-    if (instance?.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
-      return instance.attrs.diagramStyle as DiagramStyle
+    if (!instance) return undefined
+
+    if (instance.attrs?.diagramStyle && typeof instance.attrs.diagramStyle === 'object') {
+      return withInstanceDimensions(instance.attrs.diagramStyle as DiagramStyle, instance)
     }
     const notationId = activeNotationId.value
-    if (!notationId) return undefined
-    const modelNode = state.value.nodes.find(item => item.id === instance?.modelNodeId)
-    const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
-    if (!componentId) return undefined
+    if (!notationId) return withInstanceDimensions(undefined, instance)
+    const modelNode = state.value.nodes.find(item => item.id === instance.modelNodeId)
+    const componentId = resolveInstanceComponentId({
+      instance,
+      node: modelNode ?? null,
+      notationId,
+    })
+    if (!componentId) return withInstanceDimensions(undefined, instance)
     const component = state.value.components.find(item => item.id === componentId)
-    if (!component) return undefined
-    return parseEntityAttrs(component.attrs ?? null).diagramStyle
+    if (!component) return withInstanceDimensions(undefined, instance)
+    return withInstanceDimensions(
+      parseEntityAttrs(component.attrs ?? null).diagramStyle,
+      instance
+    )
   }
 
   if (selectedElementId.startsWith('edge-')) {
@@ -4185,7 +2286,11 @@ const restoreStyleFromNotation = () => {
     const modelNode = state.value.nodes.find(
       item => item.id === instance.modelNodeId && !item._isDeleted
     )
-    const componentId = modelNode?.parsedAttrs.notationComponents[notationId]?.componentId
+    const componentId = resolveInstanceComponentId({
+      instance,
+      node: modelNode ?? null,
+      notationId,
+    })
     const component = componentId
       ? state.value.components.find(
           item => item.id === componentId && item.notationId === notationId
@@ -4277,7 +2382,7 @@ watch(
   () => diagramEditLock.lockForceRevoked.value,
   (revoked) => {
     if (!revoked) return
-    diagramEditLock.dismissForceRevoked()
+    dismissForceRevoked()
     alert(t('models.diagramLockForceRevoked'))
     allowLeave.value = true
     router.push({ name: 'models' })
@@ -4305,15 +2410,22 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 
 onMounted(async () => {
   await loadModel()
-  syncDefaultsOnLoad()
   applyRouteDiagramSelection()
-  void fetchWikiDocuments()
+  scheduleFetchDocumentsFromApi()
+  scheduleSyncDefaultsOnLoad()
+  // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
+  void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('keydown', onDeleteKeydown)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener('keydown', onDeleteKeydown)
+  if (documentsFetchTimer) {
+    clearTimeout(documentsFetchTimer)
+    documentsFetchTimer = null
+  }
+  documentsFetchSeq += 1
   if (uiErrorTimer) {
     clearTimeout(uiErrorTimer)
     uiErrorTimer = null
@@ -4395,7 +2507,8 @@ onBeforeUnmount(() => {
         <div
           class="model-canvas-area"
           :class="{
-            'model-canvas-area--has-newer-banner': newerNotationVersions.length > 0 && activeDiagram,
+            'model-canvas-area--has-newer-banner':
+              newerNotationVersions.length > 0 && !!activeDiagram && !isDiagramReadOnly,
           }"
         >
           <template v-if="activeDiagram && !isDiagramReadOnly">
@@ -4457,16 +2570,25 @@ onBeforeUnmount(() => {
             </div>
           </template>
           <div
-            v-if="newerNotationVersions.length > 0 && activeDiagram"
+            v-if="newerNotationVersions.length > 0 && activeDiagram && !isDiagramReadOnly"
             class="model-canvas-area__newer-notation-banner"
           >
             <span class="material-symbols-outlined model-canvas-area__newer-notation-icon">info</span>
-            {{
-              t('diagram.newerNotationVersionsBanner', {
-                name: newerNotationVersions[0]?.name ?? '',
-                version: newerNotationVersions[0]?.version ?? '',
-              })
-            }}
+            <span class="model-canvas-area__newer-notation-text">
+              {{
+                t('diagram.newerNotationVersionsBanner', {
+                  name: newerNotationVersions[0]?.name ?? '',
+                  version: newerNotationVersions[0]?.version ?? '',
+                })
+              }}
+            </span>
+            <button
+              type="button"
+              class="btn btn--primary btn--sm model-canvas-area__newer-notation-action"
+              @click="openMigrateModal()"
+            >
+              {{ t('diagram.migrateNotationAction') }}
+            </button>
           </div>
           <div class="model-canvas-area__toolbar">
             <ModelEditorHeader
@@ -4542,9 +2664,11 @@ onBeforeUnmount(() => {
             "
             @create-node-from-component="createNodeFromPaletteComponent"
             @create-note="createDiagramNote"
+            @create-container="createDiagramContainer"
             @add-existing-node="addExistingNodeToDiagram"
             @place-existing-model-link="placeTraceLinkOnDiagram"
             @connect-nodes="startConnectNodes"
+            @connect-node-to-edge="connectNodeToEdge"
             @request-auto-link="handleRequestAutoLink"
             @reconnect-edge="handleReconnectEdge"
             @find-in-tree="handleFindInTree"
@@ -4590,7 +2714,7 @@ onBeforeUnmount(() => {
               :model-documents="modelDocuments"
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
-              @bind-node-component="(id) => selectedNode && !isDiagramReadOnly && bindNodeComponent(selectedNode, id)"
+              @bind-node-component="handleBindNodeComponent"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
               @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
@@ -4644,148 +2768,23 @@ onBeforeUnmount(() => {
     </template>
   </MainLayout>
 
-  <Teleport to="body">
-    <Transition name="toast">
-      <div v-if="isSaving" class="save-toast save-toast--progress">
-        <UiIcon name="sync" class="save-toast__icon spin" />
-        <span>{{ saveProgress || t('common.saving') }}</span>
-      </div>
-      <div v-else-if="saveSuccess" class="save-toast save-toast--success">
-        <UiIcon name="check_circle" class="save-toast__icon" />
-        <span>{{ t('common.saved') }}</span>
-      </div>
-      <div v-else-if="saveError || uiError" class="save-toast save-toast--error">
-        <UiIcon name="error" class="save-toast__icon" />
-        <span>{{ saveError || uiError }}</span>
-      </div>
-    </Transition>
-  </Teleport>
+  <SaveToast
+    :saving="isSaving"
+    :success="saveSuccess"
+    :error="saveError || uiError"
+    :progress="saveProgress"
+  />
 
-  <BaseModal
+  <BatchSaveConflictModal
     v-if="batchSaveConflict && batchSaveConflict.length > 0"
-    :title="t('models.batchSaveConflictTitle')"
-    max-width="min(96vw, 780px)"
+    :conflict-count="batchSaveConflict.length"
+    :rows="batchSaveConflictRows"
+    :cross-link-warnings="batchConflictCrossLinkWarningRows"
     @close="dismissBatchSaveConflict"
-  >
-    <div class="bsc__body">
-      <p class="bsc__intro">
-        {{ t('models.batchSaveConflictIntro', { count: batchSaveConflict.length }) }}
-      </p>
-
-      <!-- Cross-deleted links warning -->
-      <p v-if="batchConflictCrossLinkWarnings.loading" class="bsc__hint">
-        {{ t('models.batchSaveConflictCrossDeletedLinksLoading') }}
-      </p>
-      <p
-        v-else-if="batchConflictCrossLinkWarnings.error"
-        class="bsc__alert bsc__alert--error"
-      >
-        {{ batchConflictCrossLinkWarnings.error }}
-      </p>
-      <div
-        v-else-if="batchConflictCrossLinkWarnings.items.length > 0"
-        class="bsc__alert bsc__alert--warn"
-      >
-        <strong>{{ t('models.batchSaveConflictCrossDeletedLinksTitle') }}</strong>
-        <ul class="bsc__cross-list">
-          <li
-            v-for="(cw, cwi) in batchConflictCrossLinkWarnings.items"
-            :key="`${cw.modelLinkId}-${cwi}`"
-          >
-            <span class="bsc__cross-diag">{{ formatBatchCrossLinkDiagramNames(cw.diagramNames) }}</span>
-            {{ cw.edgeSummary }}
-          </li>
-        </ul>
-      </div>
-
-      <!-- Conflict list -->
-      <div class="bsc__list">
-        <div v-for="row in batchSaveConflictRows" :key="row.key" class="bsc__item">
-          <div class="bsc__item-head">
-            <span class="bsc__tag">{{ row.kindLabel }}</span>
-            <span class="bsc__item-name">{{ row.primary }}</span>
-          </div>
-          <p v-if="row.context" class="bsc__item-context">{{ row.context }}</p>
-          <p v-if="row.detail" class="bsc__item-meta">{{ row.detail }}</p>
-          <details class="bsc__details">
-            <summary>{{ t('models.batchSaveConflictCompareToggle') }}</summary>
-            <div class="bsc__details-body">
-              <p v-if="row.compareServerError" class="bsc__alert bsc__alert--error">
-                {{ t('models.batchSaveConflictCompareError') }}: {{ row.compareServerError }}
-              </p>
-              <p v-else-if="row.compareServerLoading" class="bsc__hint">
-                {{ t('models.batchSaveConflictCompareLoading') }}
-              </p>
-              <p
-                v-else-if="row.compareTimestampOnlySinceDiagramOpen || row.compareOnlyTimestampDiff"
-                class="bsc__hint bsc__hint--italic"
-              >
-                {{ row.compareTimestampOnlySinceDiagramOpen
-                  ? t('models.batchSaveConflictCompareTimestampSinceDiagramOpen')
-                  : t('models.batchSaveConflictCompareTimestampOnly') }}
-              </p>
-              <div v-if="row.compareRows.length > 0" class="bsc__table-wrap">
-                <table class="bsc__table">
-                  <thead>
-                    <tr>
-                      <th>{{ t('models.batchSaveConflictFieldColField') }}</th>
-                      <th>{{ t('models.batchSaveConflictFieldColLocal') }}</th>
-                      <th>{{ t('models.batchSaveConflictFieldColServer') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="fr in row.compareRows"
-                      :key="fr.field"
-                      :class="{ 'bsc__table--diff': fr.differs }"
-                    >
-                      <td class="bsc__td-key">{{ fr.fieldLabel ?? fr.field }}</td>
-                      <td class="bsc__td-val"><pre>{{ fr.local }}</pre></td>
-                      <td class="bsc__td-val"><pre>{{ fr.server }}</pre></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Action cards -->
-      <div class="bsc__actions" role="group" :aria-label="t('models.batchSaveConflictChoicesAria')">
-        <button
-          type="button"
-          class="bsc__action bsc__action--reload"
-          @click="handleBatchConflictReload"
-        >
-          <span class="bsc__action-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3.5 10a6.5 6.5 0 0 1 11.25-4.43" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M16.5 10a6.5 6.5 0 0 1-11.25 4.43" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14 2.5v3.5h-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 17.5v-3.5h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-          <span class="bsc__action-content">
-            <strong>{{ t('models.batchSaveConflictReload') }}</strong>
-            <span>{{ t('models.batchSaveConflictChoiceReloadDesc') }}</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          class="bsc__action bsc__action--overwrite"
-          @click="handleBatchConflictOverwrite"
-        >
-          <span class="bsc__action-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10l4 4 8-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-          <span class="bsc__action-content">
-            <strong>{{ t('models.batchSaveConflictOverwrite') }}</strong>
-            <span>{{ t('models.batchSaveConflictChoiceOverwriteDesc') }}</span>
-          </span>
-        </button>
-      </div>
-
-      <button type="button" class="bsc__dismiss" @click="dismissBatchSaveConflict">
-        {{ t('common.cancel') }}
-      </button>
-    </div>
-  </BaseModal>
+    @reload="handleBatchConflictReload"
+    @overwrite="handleBatchConflictOverwrite"
+    @dismiss="dismissBatchSaveConflict"
+  />
 
   <BaseModal
     v-if="showCreateNodeModal"
@@ -4861,6 +2860,55 @@ onBeforeUnmount(() => {
         @click="createNode"
       >
         {{ t('common.create') }}
+      </button>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="showMigrateModal && migrateTarget"
+    :title="t('diagram.migrateNotationTitle')"
+    max-width="520px"
+    @close="closeMigrateModal"
+  >
+    <p class="leave-text">
+      {{
+        t('diagram.migrateNotationConfirm', {
+          name: migrateTarget.name,
+          version: migrateTarget.version,
+        })
+      }}
+    </p>
+    <p class="leave-text">{{ t('diagram.migrateNotationHint') }}</p>
+    <div
+      v-if="migratePreviewUnmapped.components.length || migratePreviewUnmapped.relations.length"
+      class="leave-text leave-text--warning"
+    >
+      <p v-if="migratePreviewUnmapped.components.length">
+        {{
+          t('diagram.migrateNotationUnmappedComponents', {
+            list: migratePreviewUnmapped.components.join(', '),
+          })
+        }}
+      </p>
+      <p v-if="migratePreviewUnmapped.relations.length">
+        {{
+          t('diagram.migrateNotationUnmappedRelations', {
+            list: migratePreviewUnmapped.relations.join(', '),
+          })
+        }}
+      </p>
+    </div>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" :disabled="isMigrating" @click="closeMigrateModal">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        :disabled="isMigrating"
+        @click="confirmMigrateNotation"
+      >
+        {{ isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction') }}
       </button>
     </template>
   </BaseModal>
@@ -4976,56 +3024,13 @@ onBeforeUnmount(() => {
     </div>
   </BaseModal>
 
-  <BaseModal
+  <LinkReuseModal
     v-if="showReuseLinkModal"
-    :title="t('models.existingLinksFoundTitle')"
-    max-width="500px"
+    :options="reuseLinkModalOptions"
     @close="showReuseLinkModal = false"
-  >
-    <div class="choice-list">
-      <button
-        v-for="link in reuseLinkOptions"
-        :key="link.id"
-        type="button"
-        class="choice-item"
-        @click="handleSelectExistingLink(link.id)"
-      >
-        <div class="reuse-link-option">
-          <div class="reuse-link-option__title">
-            {{ t('models.useExistingLink') }}
-          </div>
-          <div class="reuse-link-option__meta">
-            {{ t('models.reuseLinkTypeLabel') }}: {{ getLinkTypeName(link.linkTypeId) }}
-          </div>
-          <div class="reuse-link-option__props">
-            <div class="reuse-link-option__props-title">
-              {{ t('models.reuseLinkCustomPropertiesLabel') }}
-            </div>
-            <div
-              v-for="property in getReuseLinkCustomProperties(link)"
-              :key="`${link.id}-${property.name}`"
-              class="reuse-link-option__prop"
-            >
-              {{ property.name }}: {{ property.value }}
-            </div>
-            <div
-              v-if="getReuseLinkCustomProperties(link).length === 0"
-              class="reuse-link-option__empty"
-            >
-              {{ t('models.reuseLinkNoCustomProperties') }}
-            </div>
-          </div>
-        </div>
-      </button>
-      <button
-        type="button"
-        class="choice-item choice-item--primary"
-        @click="handleCreateNewLinkFromReuseModal"
-      >
-        {{ t('models.createNewLink') }}
-      </button>
-    </div>
-  </BaseModal>
+    @select="handleSelectExistingLink"
+    @create-new="handleCreateNewLinkFromReuseModal"
+  />
 
   <BaseModal
     v-if="showDiagramSwitchModal"
@@ -5212,12 +3217,16 @@ onBeforeUnmount(() => {
   <ModelImportWizard
     v-if="showImportWizard"
     :visible="showImportWizard"
+    :model-id="state.modelId ?? ''"
     :notations="state.notations"
     :node-types="state.nodeTypes"
     :link-types="state.linkTypes"
     :components="state.components"
     :relations="state.relations"
+    :relation-rules="state.relationRules"
     :import-busy="isImportingOef"
+    :import-progress="oefImportProgress"
+    :ensure-notation-catalog="ensureImportNotationCatalog"
     @close="showImportWizard = false"
     @submit="handleOefImportSubmit"
   />
@@ -5245,7 +3254,7 @@ onBeforeUnmount(() => {
     </p>
     <div v-if="oefImportReport.warningGroups.length > 0" class="model-import-report__warnings">
       <p class="leave-text">{{ t('models.oefImportReportWarningsByReason') }}</p>
-      <ul class="model-import-report model-import-report--warnings">
+      <ul class="model-import-report model-import-report--warnings model-import-report--scrollable">
         <li v-for="item in oefImportReport.warningGroups" :key="item.code">
           {{ oefWarningLabel(item.code) }}: {{ item.count }}
         </li>
@@ -5301,6 +3310,10 @@ onBeforeUnmount(() => {
     <UiIcon name="sync" class="overlay-loading__icon spin" />
     <span>{{ t('common.loading') }}</span>
   </div>
+  <div v-else-if="isPreparingDiagram" class="overlay-loading overlay-loading--soft">
+    <UiIcon name="sync" class="overlay-loading__icon spin" />
+    <span>{{ t('models.diagramLoading') }}</span>
+  </div>
   <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">
     <UiIcon name="error" class="overlay-loading__icon" />
     <span>{{ errorMessage }}</span>
@@ -5321,6 +3334,10 @@ onBeforeUnmount(() => {
   z-index: 2000;
   font-size: 14px;
   font-weight: 500;
+}
+
+.overlay-loading--soft {
+  background: color-mix(in srgb, var(--base-bg) 72%, transparent);
 }
 
 .overlay-loading--error {
@@ -5477,6 +3494,11 @@ onBeforeUnmount(() => {
 
 .model-import-report--warnings {
   margin-top: 6px;
+}
+
+.model-import-report--scrollable {
+  max-height: min(220px, 40vh);
+  overflow-y: auto;
 }
 
 .json-viewer {
@@ -5668,7 +3690,7 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5679,13 +3701,38 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 
+.model-canvas-area__newer-notation-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-canvas-area__newer-notation-action {
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
 .model-canvas-area__newer-notation-icon {
   font-size: 18px;
   flex-shrink: 0;
 }
 
+/* Keep overlays below the full-width banner strip */
 .model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
-  top: 42px;
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner .canvas-settings-toggle,
+.model-canvas-area--has-newer-banner .canvas-settings {
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner :deep(.canvas-palette-toggle),
+.model-canvas-area--has-newer-banner :deep(.canvas-palette) {
+  top: 50px;
+}
+
+.model-canvas-area--has-newer-banner .relation-rules-loading-badge {
+  top: 96px;
 }
 
 .model-canvas-area__toolbar {
@@ -5699,72 +3746,6 @@ onBeforeUnmount(() => {
 
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
-}
-
-.save-toast {
-  position: fixed;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 2100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-.save-toast--progress {
-  background: var(--surface);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.save-toast--success {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid rgba(43, 184, 150, 0.2);
-}
-
-.save-toast--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid var(--danger-soft);
-}
-
-
-.save-toast__icon {
-  width: 20px;
-  height: 20px;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 
 .node-type-dropdown {
@@ -5868,324 +3849,4 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-/* ── Batch-save conflict dialog ──────────────── */
-.bsc__body {
-  max-height: min(72vh, 740px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
-}
-
-.bsc__intro {
-  margin: 0 0 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-
-/* Alerts & hints */
-.bsc__hint {
-  margin: 0 0 12px;
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
-.bsc__hint--italic {
-  font-style: italic;
-}
-
-.bsc__alert {
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.bsc__alert strong {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 12px;
-}
-
-.bsc__alert--error {
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-
-.bsc__alert--warn {
-  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
-  background: color-mix(in srgb, var(--warning) 6%, var(--surface));
-  color: var(--base-text);
-}
-
-.bsc__cross-list {
-  margin: 4px 0 0;
-  padding-left: 16px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.bsc__cross-list li {
-  margin: 2px 0;
-}
-
-.bsc__cross-diag {
-  font-weight: 500;
-}
-
-.bsc__cross-diag::after {
-  content: ' — ';
-  color: var(--text-subtle);
-}
-
-/* Conflict list */
-.bsc__list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0 0 20px;
-}
-
-.bsc__item {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--surface-muted);
-  border: 1px solid transparent;
-  transition: border-color 0.15s;
-}
-
-.bsc__item:hover {
-  border-color: var(--border);
-}
-
-.bsc__item-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.bsc__tag {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-subtle);
-  background: var(--surface-strong);
-  padding: 2px 6px;
-  border-radius: 4px;
-  line-height: 1.4;
-}
-
-.bsc__item-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--base-text);
-  word-break: break-word;
-}
-
-.bsc__item-context {
-  margin: 4px 0 0;
-  padding-left: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
-
-.bsc__item-meta {
-  margin: 2px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-subtle);
-}
-
-/* Compare details */
-.bsc__details {
-  margin-top: 6px;
-}
-
-.bsc__details summary {
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--primary);
-  user-select: none;
-  padding: 2px 0;
-}
-
-.bsc__details summary:hover {
-  text-decoration: underline;
-}
-
-.bsc__details-body {
-  padding-top: 8px;
-}
-
-.bsc__table-wrap {
-  max-height: 240px;
-  overflow: auto;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-}
-
-.bsc__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.bsc__table th,
-.bsc__table td {
-  padding: 5px 8px;
-  text-align: left;
-  vertical-align: top;
-  border-bottom: 1px solid var(--border);
-}
-
-.bsc__table th {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-subtle);
-  background: var(--surface-muted);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.bsc__td-key {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-  width: 28%;
-  word-break: break-word;
-}
-
-.bsc__td-val {
-  width: 36%;
-}
-
-.bsc__td-val pre {
-  margin: 0;
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-  line-height: 1.35;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.bsc__table--diff {
-  background: color-mix(in srgb, var(--warning) 10%, transparent);
-}
-
-.bsc__table--diff .bsc__td-key {
-  font-weight: 600;
-  color: var(--base-text);
-}
-
-/* Action cards */
-.bsc__actions {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-@media (min-width: 560px) {
-  .bsc__actions {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.bsc__action {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-}
-
-.bsc__action:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-}
-
-.bsc__action:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.bsc__action--reload:hover {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
-}
-
-.bsc__action--overwrite:hover {
-  border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
-  background: color-mix(in srgb, var(--danger) 4%, var(--surface));
-}
-
-.bsc__action-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-}
-
-.bsc__action--reload .bsc__action-icon {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.bsc__action--overwrite .bsc__action-icon {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.bsc__action-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.bsc__action-content strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--base-text);
-}
-
-.bsc__action-content span:last-child {
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-
-.bsc__dismiss {
-  display: block;
-  margin: 0 auto;
-  padding: 6px 16px;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--text-subtle);
-  background: none;
-  border: none;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
-}
-
-.bsc__dismiss:hover {
-  color: var(--text-muted);
-  background: var(--surface-strong);
-}
 </style>

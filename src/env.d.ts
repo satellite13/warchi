@@ -1,26 +1,32 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_API_PROXY_TARGET?: string
-  readonly VITE_API_BASE_URL?: string
-  readonly VITE_API_VERSION?: string
-  readonly VITE_MODEL_LIVE_SYNC_MODE?: 'ws' | 'poll' | 'hybrid'
-  readonly VITE_MODEL_LIVE_POLL_MS?: string
-  readonly APP_VERSION?: string
-  readonly APP_BUILD_TIME?: string
+  readonly VITE_API_PROXY_TARGET?: string;
+  readonly VITE_API_BASE_URL?: string;
+  readonly VITE_API_VERSION?: string;
+  readonly VITE_MODEL_LIVE_SYNC_MODE?: "ws" | "poll" | "hybrid";
+  readonly VITE_MODEL_LIVE_POLL_MS?: string;
+  readonly VITE_SITE_URL?: string;
+  readonly VITE_SITE_RETURN_ORIGINS?: string;
+  readonly APP_VERSION?: string;
+  readonly APP_BUILD_TIME?: string;
 }
 
 interface ImportMeta {
-  readonly env: ImportMetaEnv
+  readonly env: ImportMetaEnv;
 }
 
-declare module '*.md?raw' {
-  const content: string
-  export default content
+declare module "*.md?raw" {
+  const content: string;
+  export default content;
 }
 
-declare module '*.vue' {
-  import type { DefineComponent } from 'vue'
-  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
-  export default component
+declare module "*.vue" {
+  import type { DefineComponent } from "vue";
+  const component: DefineComponent<
+    Record<string, unknown>,
+    Record<string, unknown>,
+    unknown
+  >;
+  export default component;
 }

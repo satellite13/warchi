@@ -1,19 +1,18 @@
 import type {
+  ArrowMarkerConfig,
   TextLabelOptions,
   TextStyle,
   NodeImageOptions,
   ArrowMarkerType,
 } from '@ngroznykh/papirus'
-import type { DiagramStyle, CustomProperty } from '../notationAttrs'
+import { resolveLabelTemplate } from '@/domain/attrs/labelTemplate'
+import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 
 const DEFAULT_COMPONENT_ANCHORS = { top: 3, right: 1, bottom: 3, left: 1 }
 
-export function resolveComponentAnchorPoints(ds?: DiagramStyle): {
-  top: number
-  right: number
-  bottom: number
-  left: number
-} {
+export function resolveComponentAnchorPoints(
+  ds?: DiagramStyle,
+): { top: number; right: number; bottom: number; left: number } {
   const normalize = (value: unknown, fallback: number): number => {
     const parsed = Math.round(Number(value))
     if (!Number.isFinite(parsed) || parsed < 0) return fallback
@@ -34,38 +33,26 @@ export function resolveComponentAnchorPoints(ds?: DiagramStyle): {
  * - `${prop}` — свойства **компонента**;
  * - `${name}` — имя элемента на палитре.
  */
-export function resolveLabelTemplate(
-  template: string,
-  name: string,
-  customProperties: CustomProperty[],
-  typeProperties: CustomProperty[] = []
-): string {
-  let out = template
-  out = out.replace(/#\{(\w+)\}/g, (_m, key: string) => {
-    const prop = typeProperties.find(p => p.name === key)
-    if (!prop) return ''
-    const val = prop.defaultValue
-    return val != null ? String(val) : ''
-  })
-  out = out.replace(/\$\{(\w+)\}/g, (_m, key: string) => {
-    if (key === 'name') return name
-    const prop = customProperties.find(p => p.name === key)
-    if (!prop) return ''
-    const val = prop.defaultValue
-    return val != null ? String(val) : ''
-  })
-  return out.replace(/\\n/g, '\n')
-}
+export { resolveLabelTemplate }
 
 export function buildNodeLabel(
   name: string,
   ds?: DiagramStyle,
   customProperties?: CustomProperty[],
-  typeProperties?: CustomProperty[]
-): string | TextLabelOptions {
+  typeProperties?: CustomProperty[],
+): string | TextLabelOptions | undefined {
+  if (ds?.showLabel === false) {
+    return undefined
+  }
+
   const hasTemplate = !!ds?.labelTemplate
   const displayText = hasTemplate
-    ? resolveLabelTemplate(ds!.labelTemplate!, name, customProperties ?? [], typeProperties ?? [])
+    ? resolveLabelTemplate(
+        ds!.labelTemplate!,
+        name,
+        customProperties ?? [],
+        typeProperties ?? [],
+      )
     : name
 
   const labelInset = ds?.labelInset
@@ -112,6 +99,19 @@ export function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLa
   return opts
 }
 
+/** Merge diagramStyle label fields into an existing TextLabel without dropping prior overrides. */
+export function mergeEdgeLabelStyleFromDiagramStyle(
+  currentOverrides: TextStyle | undefined,
+  ds?: DiagramStyle
+): TextStyle {
+  return {
+    ...(currentOverrides ?? {}),
+    ...(ds?.labelColor ? { color: ds.labelColor } : {}),
+    ...(ds?.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
+    ...(ds?.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
+  }
+}
+
 export function buildEdgeLabelBackground(ds?: DiagramStyle) {
   return {
     color: ds?.labelBgColor || 'transparent',
@@ -154,8 +154,11 @@ export function buildNodeIcon(ds?: DiagramStyle) {
 export function buildMarker(
   typeStr: string | undefined,
   ds: DiagramStyle | undefined,
-  prefix: 'start' | 'end'
-) {
+  prefix: 'start' | 'end',
+): ArrowMarkerConfig | undefined {
+  if (typeStr === 'none') {
+    return { type: 'none' }
+  }
   const markerType =
     typeStr === 'arrow' ||
     typeStr === 'open' ||

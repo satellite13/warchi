@@ -23,11 +23,12 @@ const handleAuthCleared = () => {
 };
 
 onMounted(() => {
+  // Register before loadCurrentUser so AUTH_CLEARED from a stale session redirects reliably.
+  window.addEventListener(AUTH_CLEARED_EVENT, handleAuthCleared);
+
   if (isAuthenticated.value) {
     loadCurrentUser();
   }
-
-  window.addEventListener(AUTH_CLEARED_EVENT, handleAuthCleared);
 });
 
 onUnmounted(() => {
@@ -112,7 +113,7 @@ onUnmounted(() => {
 
 @keyframes spin {
   from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  to { transform: rotate(-360deg); }
 }
 
 .toast-enter-active,

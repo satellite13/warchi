@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /**
- * Generates the list of Material Symbols Outlined icon names from
- * @material-design-icons/svg/outlined and writes src/config/materialSymbolsOutlinedNames.generated.ts.
- * Run after: npm install @material-design-icons/svg
+ * generate-material-icon-names.mjs — генерация списка имён Material Symbols Outlined.
+ * Сканирует @material-design-icons/svg/outlined и пишет
+ * src/config/materialSymbolsOutlinedNames.generated.ts для автодополнения иконок
+ * в UI (бейджи свойств и т.п.).
  *
- * Usage: node scripts/generate-material-icon-names.mjs
- * Or:    npm run generate:badge-icon-names
+ * Использование:
+ *   node scripts/generate-material-icon-names.mjs
+ *   npm run generate:badge-icon-names
+ *
+ * Требует: npm install -D @material-design-icons/svg
  */
 import fs from 'node:fs';
 import path from 'node:path';

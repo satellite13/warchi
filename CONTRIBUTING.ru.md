@@ -30,7 +30,7 @@ npm run test
 
 ```bash
 helm lint ./charts/warchi
-bash -n ./deploy.sh
+bash -n ./scripts/deploy.sh
 ```
 
 ## Ветки и Pull Request

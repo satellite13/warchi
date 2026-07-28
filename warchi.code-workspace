@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../arepos-server"
+		},
+		{
+			"path": "../warchi-site"
 		}
 	],
 	"settings": {

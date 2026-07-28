@@ -1,0 +1,26 @@
+replicaCount: 1
+
+image:
+  repository: arch/warchi
+  pullPolicy: IfNotPresent
+  tag: "0.8.18"
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: arch-redirect-https@kubernetescrd
+  hosts:
+    - host: app.warchi.ru
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: warchi-app-ru-tls
+      hosts:
+        - app.warchi.ru
+
+api:
+  baseUrl: ""
+  notationUrl: /api/v1/notation

@@ -7,13 +7,16 @@ export type OefElement = {
   id: string
   type: string
   name: string
+  properties?: Record<string, string>
 }
 
 export type OefRelationship = {
   id: string
   type: string
+  name: string
   sourceElementId: string
   targetElementId: string
+  properties?: Record<string, string>
 }
 
 export type OefViewNode = {
@@ -24,6 +27,8 @@ export type OefViewNode = {
   y: number
   width?: number
   height?: number
+  /** Text of ArchiMate diagram Label (sticky note). */
+  labelText?: string
 }
 
 export type OefViewConnection = {
@@ -42,17 +47,26 @@ export type OefView = {
   connections: OefViewConnection[]
 }
 
+export type OefOrganizationNode = {
+  label?: string | null
+  children?: OefOrganizationNode[] | null
+  refId?: string | null
+  refKind?: 'element' | 'relationship' | 'view' | null
+}
+
 export type OefParsedModel = {
   model: OefModel
   elements: OefElement[]
   relationships: OefRelationship[]
   views: OefView[]
+  organizations?: OefOrganizationNode[]
 }
 
 export type ImportDraftNode = {
   sourceElementId: string
   sourceType: string
   name: string
+  properties?: Record<string, string>
 }
 
 export type ImportDraftLink = {
@@ -60,6 +74,8 @@ export type ImportDraftLink = {
   sourceType: string
   sourceElementId: string
   targetElementId: string
+  name?: string
+  properties?: Record<string, string>
 }
 
 export type ImportDraftDiagramNodeInstance = {
@@ -69,6 +85,10 @@ export type ImportDraftDiagramNodeInstance = {
   y: number
   width?: number
   height?: number
+  isNote?: boolean
+  noteText?: string
+  isContainer?: boolean
+  containerLabel?: string
 }
 
 export type ImportDraftDiagramConnectionInstance = {
@@ -76,6 +96,13 @@ export type ImportDraftDiagramConnectionInstance = {
   sourceRelationshipId: string
   sourceNodeId: string
   targetNodeId: string
+  isNoteLink?: boolean
+  /** One endpoint is another view connection (line-on-line). */
+  attachesToConnectionId?: string
+  /** Which endpoint attaches to the host connection. */
+  attachEndpoint?: 'source' | 'target'
+  /** Skip creating a model link; keep as diagram-only edge (rel→rel Association etc.). */
+  isDiagramOnlyLink?: boolean
 }
 
 export type ImportDraftDiagram = {
@@ -92,6 +119,7 @@ export type ImportDraft = {
   nodes: ImportDraftNode[]
   links: ImportDraftLink[]
   diagrams: ImportDraftDiagram[]
+  organizations: OefOrganizationNode[]
   sourceElementTypes: string[]
   sourceRelationshipTypes: string[]
 }
@@ -108,6 +136,7 @@ export type ImportIssueCode =
   | 'missingRelationshipType'
   | 'relationshipMissingSource'
   | 'relationshipMissingTarget'
+  | 'relationshipEndpointIsRelationship'
   | 'viewNodeMissingElementRef'
   | 'viewConnectionMissingRelationshipRef'
   | 'viewConnectionMissingSourceNode'

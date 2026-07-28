@@ -1,3 +1,4 @@
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import type {
   DiagramAttrs,
   DiagramEdgeInstance,
@@ -47,7 +48,7 @@ type LinkScopedWriteInput = {
   edgeInstanceId?: string | null
 }
 
-const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const cloneJson = clonePlainDeep
 
 const toScopedMap = (value: unknown): ScopedCustomValues =>
   value && typeof value === 'object' && !Array.isArray(value)

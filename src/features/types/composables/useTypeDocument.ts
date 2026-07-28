@@ -2,7 +2,6 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiPost, apiPut, apiFetch } from '@/composables/useApi'
 import { buildApiUrl } from '@/api/config'
-import { getAccessToken } from '@/composables/authStorage'
 import { fetchFileContent } from '@/api/fileApi'
 import type { FileUploadResponse, FileVersionResponse } from '@/types/api'
 
@@ -171,12 +170,12 @@ export function useTypeDocument() {
       const headers: Record<string, string> = {
         Accept: 'text/markdown, text/plain, */*',
       }
-      const accessToken = getAccessToken()
-      if (accessToken) {
-        headers.Authorization = `Bearer ${accessToken}`
-      }
-
-      const response = await fetch(url, { method: 'GET', headers, cache: 'no-store' })
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+      })
       if (response.ok) {
         const content = await response.text()
         documentContent.value = content

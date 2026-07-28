@@ -1,6 +1,20 @@
 #!/bin/bash
+#
+# verify-availability-guard.sh — проверка «сторожа доступности» (outage guard).
+# Убеждается, что apiClient, App.vue и i18n правильно подключены к блокировке UI
+# при недоступности бэкенда или authz; затем выполняет npm run build.
+# Используется в CI и локально перед релизом.
+#
+# Использование:
+#   ./scripts/verify-availability-guard.sh
+#   npm run verify:availability
+#
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -30,10 +44,16 @@ main() {
   assert_has_match "reportAvailabilityOutage\\(" "src/api/apiClient.ts" "apiClient reports outage"
   assert_has_match "clearOutage\\(" "src/api/apiClient.ts" "apiClient clears outage on success"
   assert_has_match "resolveOutageKind\\(" "src/api/apiClient.ts" "apiClient classifies outage kind"
+  assert_has_match "authz_unavailable" "src/api/apiClient.ts" "apiClient classifies authz outage"
+  assert_has_match "authorization service is unavailable" "src/api/apiClient.ts" \
+    "apiClient detects authz unavailable message"
+  assert_has_match "clearOutage\\(\"authz_unavailable\"\\)" "src/api/apiClient.ts" \
+    "apiClient clears authz outage after permissions check success"
 
   log_info "Checking global outage blocker in App.vue..."
   assert_has_match "useAvailabilityGuard\\(" "src/App.vue" "App uses availability guard"
   assert_has_match "outage-blocker" "src/App.vue" "App renders outage blocker"
+  assert_has_match "authz_unavailable" "src/App.vue" "App distinguishes authz outage message"
 
   log_info "Checking i18n keys for outage UI..."
   assert_has_match "outageTitle|outageAuthzMessage|outageBackendMessage|outageRetry|outageChecking" \

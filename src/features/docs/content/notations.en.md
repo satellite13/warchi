@@ -35,7 +35,7 @@ A notation consists of the following elements:
 
 - **Node types** — visual templates for components (rectangles, circles, etc.)
 - **Link types** — visual templates for connections (arrows, lines)
-- **Relation rules** — define which element types can be connected
+- **Relation rules** — define which element types can be connected. Edit them in the component properties panel or via the **Rules matrix** in the editor toolbar (click a from→to cell).
 
 ### Style Configuration
 
@@ -73,9 +73,12 @@ Practical guidance:
 - circle is useful for compact role/event-like nodes;
 - custom shape is useful when built-in options are not enough and a custom contour is required.
 
+For a **custom shape**, the outline comes from the [Shapes](/docs/shapes) catalog. If corners or cuts stretch when the node is resized, enable **Fixed edges (9-slice)** in the shape editor and set non-scaling zones with the guides. Details: [Shapes → Fixed edges](/docs/shapes).
+
 Additional notes:
 
 - corner radius (`R`) applies to rectangular forms where radius is supported;
+- for **beveled rectangle**, chamfer size is set separately (`cornerCut`, in px), similar to radius on a rounded rectangle;
 - after changing shape, review content inset (`T/R/B/L`) and label position.
 
 ### Composite UI Editor
@@ -111,16 +114,47 @@ You can add diagram-only nodes and edges directly on notation preview canvas:
 - they are stored in `editorDiagramLayer` inside notation attrs,
 - they are imported/exported with notation data.
 
+### Content, label, and icon insets
+
+The node style panel has three different inset controls. They nest and are **not interchangeable**. Values are authored in **pixels**.
+
+For **content inset**, any side can be marked **proportional (∝)**: the number stays reference px at the style default W×H and is recalculated when the node is resized. Unchecked sides stay fixed px.
+
+Placement chain:
+
+```
+shape (node outer bounds)
+  └─ content inset (T/R/B/L)
+        → content area
+           ├─ icon: placement zone → icon inset (single number) → image
+           └─ label: full content area → label inset (T/R/B/L) → text
+```
+
+| Style field | What it constrains | How it is set |
+|-------------|--------------------|---------------|
+| **Content inset** (`contentInset`) | Shared rectangle inside the shape for label and icon | Sides `T/R/B/L` |
+| **Label inset** (`labelInset`) | Padding around text **inside** the content area (before line alignment) | Sides `T/R/B/L` |
+| **Icon inset** (`iconInset`) | Gap from the **icon zone** edge to the image | Single number (not per side) |
+
+Practical notes:
+
+- for tall silhouettes (for example an actor with a head on top), increase the **top content inset** and enable **∝** on that side so the label stays in the “body” when the shape is scaled;
+- **label inset** is useful when you only need to nudge glyphs inside an already chosen content area without moving the icon;
+- **icon inset** does not replace content inset: it applies only inside the icon zone;
+- badges (for example interactive properties) also use the content area and have no separate style inset fields;
+- **Pair** / **All** on `T/R/B/L` blocks sync sides in pairs or all at once; button labels follow the UI language.
+
+See [Label alignment](#label-alignment) below for label position vs text alignment.
+
 #### Short field label hints
 
 For compact layout, the style panel uses abbreviated labels:
 
 - `W/H/R` — width, height, radius;
 - `PT/PB/PL/PR` — top/bottom/left/right ports;
-- `T/R/B/L` — top/right/bottom/left insets.
+- `T/R/B/L` — top/right/bottom/left insets (content inset and label inset).
 
 Hovering a field shows a tooltip with the full meaning.
-Inset sync buttons **Pair**/**All** are localized automatically according to the active UI language.
 
 ### Custom Properties
 
@@ -151,7 +185,7 @@ If a component type has the `group=true` system property, that component can act
 
 If a link type has the `group=true` system property, that link is treated as a grouping relation:
 
-- when `target` is fully inside `source`, the link may be hidden on the diagram (the structural relation still exists, visual noise is reduced);
+- when `target` is fully inside `source`, the link may be hidden on the diagram (the structural relation still exists, visual noise is reduced); self-loops (`source === target`) are still shown;
 - when dropping one component inside another, if a `group=true` relation is allowed, the editor suggests reusing an existing relation or creating a new one;
 - if multiple relation types are possible, the relation type chooser is shown.
 

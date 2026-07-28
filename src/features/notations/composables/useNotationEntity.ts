@@ -10,8 +10,8 @@ import type {
   EditorComponent,
   EditorRelation,
 } from '../types'
-import { subscribeStylePresetsChanges } from '../styles/stylePresets'
-import type { ComponentStylePreset, RelationStylePreset } from '../styles/stylePresets'
+import { subscribeStylePresetsChanges } from '@/features/diagram-style/styles/stylePresets'
+import type { ComponentStylePreset, RelationStylePreset } from '@/features/diagram-style/styles/stylePresets'
 import { useComponentManagement } from './useComponentManagement'
 import { useRelationManagement } from './useRelationManagement'
 

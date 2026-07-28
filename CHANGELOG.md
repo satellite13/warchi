@@ -4,6 +4,294 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.14] - 2026-07-28
+
+### Fixed
+- With outline attach off, reconnecting an edge end to a side port no longer snaps back to the top/bottom facing side (papirus 0.8.3).
+
+## [0.10.13] - 2026-07-28
+
+### Fixed
+- Orthogonal links inside containers and stacks no longer cut through siblings or lick the source side on same-side elbows; intentional wraps (`top→top`, `bottom→bottom`, `left→left`, …) stay on the chosen anchors (papirus 0.8.2).
+
+## [0.10.12] - 2026-07-28
+
+### Fixed
+- Orthogonal polylines no longer crawl along wide target edges when reconnecting or dragging attachments (papirus 0.8.1).
+- Edge label color/size/background are kept when changing link type or syncing the diagram (no longer dropped on label recreate).
+
+## [0.10.11] - 2026-07-27
+
+### Added
+- OEF import maps element and relationship properties into custom property attrs, with mismatch warnings in the wizard.
+- Model compare: searchable diagram select.
+
+### Fixed
+- Model/diagram compare loads all paginated nodes and links (with id dedupe) so large models render and diff completely.
+- Compare no longer marks copied links or remapped diagram attrs as modified when content is the same (stableId / canonicalize).
+
+## [0.10.10] - 2026-07-26
+
+### Fixed
+- Helm chart `version` / `appVersion` / image tag aligned with the package release (were still 0.10.7 on 0.10.8–0.10.9 tags).
+
+## [0.10.9] - 2026-07-26
+
+### Changed
+- Notation and Shapes help now describe custom-shape fixed edges (9-slice) and link to the shape editor workflow.
+
+## [0.10.8] - 2026-07-26
+
+### Added
+- Custom shapes: optional fixed-edge (9-slice) scaling so corners stay stable when resizing.
+- Beveled rectangle: editable chamfer size (`cornerCut`) in px, like corner radius.
+- Content inset: per-side proportional (∝) scaling relative to the style default size (papirus 0.7.3).
+- In-app docs for content / label / icon insets and proportional content inset.
+
+### Changed
+- Trapezoid and parallelogram keep a fixed side slant in px when width changes.
+- Sticky-note fold cut is fixed at 16px.
+
+### Fixed
+- Applying style-panel inset changes no longer resets a canvas-resized node back to style default size.
+
+## [0.10.7] - 2026-07-25
+
+### Fixed
+- OEF import keeps Aggregation/Composition self-loops visible on diagrams (group relations no longer hide loops).
+- OEF relationship names are applied to diagram edge labels (requires arepos-server 0.6.4 for server normalize).
+- Diagram Container default label placement is top-left.
+- OEF import wizard no longer freezes before progress appears; footer buttons no longer overlap on step transitions.
+- "Existing links found" dialog options are styled as clear interactive choices.
+
+## [0.10.6] - 2026-07-25
+
+### Changed
+- Model relation matrix with a selected notation groups by node types and that notation’s link types, highlights pairs allowed by relation rules, and offers “Allowed by rules only” instead of binding-based “Unmapped”.
+
+## [0.10.5] - 2026-07-25
+
+### Fixed
+- Relation matrix now shows component and relation custom properties from diagram instance snapshots (same values as on the diagram), not stale model-node defaults.
+
+## [0.10.4] - 2026-07-24
+
+### Fixed
+- Interactive custom-property icons now appear on composite notation components (requires papirus 0.7.2).
+
+## [0.10.3] - 2026-07-24
+
+### Fixed
+- Diagram palette Container inline label is persisted on save (was lost after reload).
+
+## [0.10.2] - 2026-07-24
+
+### Added
+- Notation editor relation-rules matrix: edit allowed relations by component pair (filters, heatmap, copy/paste, keyboard navigation).
+
+## [0.10.1] - 2026-07-23
+
+### Fixed
+- Creating a diagram with a notation not yet used in the model no longer leaves an empty palette until reload.
+
+## [0.10.0] - 2026-07-23
+
+### Added
+- Notation export/import packages used custom shapes into the catalog on the target instance (select works after transfer; requires arepos-server 0.6.1 for API import).
+- Notation visuals on model diagrams are bound per diagram instance instead of per model node.
+
+### Fixed
+- Creating a notation component/relation no longer collides on name+version; tree rename supported.
+- nginx re-resolves the arepos upstream via kube-dns so `/api` and `/ws` keep working after backend pod IP changes.
+
+## [0.9.1] - 2026-07-21
+
+### Added
+- `showLabel` flag in figure style: hide the canvas label while keeping the entity name in trees/panels.
+- OEF import mapping loads the selected notation catalog (components/relations/types) even when the model has no diagrams for that notation yet; mapping dropdowns list all available targets.
+
+### Fixed
+- Toolbar toggles for outline attach / lock anchors / grid extras apply reliably (no skipped side-effect when local state was already synced).
+- After drag, node positions no longer snap back when edge-to-edge links update midpoints.
+- With «Lock link anchors» off, edge ends float to the nearest port toward the other node; turning the toggle off clears stored ports (requires papirus 0.7.1).
+- After turning off «Attach to outline», reconnecting an end to a port no longer snaps back to the old outline point.
+- Save toast appears immediately; validation / canvas flush no longer freeze the UI before «Saving…».
+
+## [0.9.0] - 2026-07-21
+
+### Added
+- Large OEF (Open Exchange) imports: server-side XML normalize (`POST /models/{id}/oef/normalize`) and chunked batch-save apply with progress in the import wizard (requires arepos-server 0.6.0).
+- OEF Organizations imported as Directory folders in the model tree.
+- Migrate a diagram to a newer notation version from the version banner (in-place remap by component/relation name; save required).
+- Connect a Note to a relation edge on the diagram (diagram-only edge anchor; requires papirus 0.7.0).
+
+### Fixed
+- nginx no longer rate-limits general `/api/` traffic (notation import and other SPA bursts hit 429); login/register/refresh limits remain.
+- Transient `/auth/refresh` failures (429/5xx) no longer clear the session; refresh rate limit is relaxed.
+- Re-saving/importing a notation after a partial failure no longer fails with 409: existing components/relations with the same name+version are reused.
+- Notation palette icon picker search works again (spurious lazy-preview `@error` no longer wipes the option list).
+- OEF import no longer fails with nginx 413 on huge batch-save bodies: payload is applied in chunks; normalize upload allows up to 100 MB via a dedicated nginx location.
+- Large models load all node/link/diagram pages into the editor; live sync pull pages full snapshots.
+- Duplicate OEF diagram names are uniquified on import; `parentNodeId` remaps correctly across node batch-save chunks.
+
+## [0.8.18] - 2026-07-20
+
+### Fixed
+- Public diagram SVG share links render inline in the browser (`image/svg+xml`) instead of forcing a download (requires arepos-server 0.5.5).
+
+## [0.8.17] - 2026-07-20
+
+### Added
+- OEF import support for diagram Containers and association/connection attachments to other connections via live edge-midpoint anchors (diagram-only, no model links for rel→rel).
+- Diagram palette item for Containers (transparent fill, dashed stroke).
+- Client-side guard against saving model nodes with blank names, with a clear batch-save error.
+
+### Fixed
+- Composite node selection/transformer frame no longer disappears after resize on the canvas.
+- Tree/canvas renames are no longer overwritten by stale canvas labels during history sync (including names like `$`).
+- Notation import save no longer fails with opaque type-name conflicts when the same type name already exists for another owner; clearer conflict messaging when the name is already taken for the current user.
+
+## [0.8.16] - 2026-07-17
+
+### Fixed
+- Login via marketing-site `returnUrl` no longer bounces back when only a stale localStorage profile remains; the session is revalidated with `/auth/me` first.
+- File uploads through the app nginx proxy no longer fail with HTTP 413 for bodies larger than 1 MB (limit raised to match the backend).
+
+## [0.8.15] - 2026-07-16
+
+### Changed
+- Docker Compose quick-start no longer needs a local papirus clone: `@ngroznykh/papirus` comes from npm, and the named Docker context is an empty in-repo directory.
+
+## [0.8.14] - 2026-07-16
+
+### Added
+- Docker Compose quick-start for a local wArchi stack with arepos-server, PostgreSQL, MinIO, and Cerbos.
+
+## [0.8.13] - 2026-07-16
+
+### Fixed
+- VPS verification validates the active WebSocket proxy route without emulating STOMP through wget.
+
+## [0.8.12] - 2026-07-16
+
+### Fixed
+- VPS verification checks the SPA shell instead of searching lazy-loaded landing text in index HTML.
+
+## [0.8.11] - 2026-07-16
+
+### Fixed
+- Kept the VPS deployment workflow version contract synchronized with the published release tag.
+
+## [0.8.10] - 2026-07-16
+
+### Fixed
+- App TLS certificate ownership survives removal of the temporary ingress during VPS cutover.
+
+## [0.8.9] - 2026-07-16
+
+### Fixed
+- VPS cutover retries only transient ingress-health failures before triggering guarded rollback.
+
+## [0.8.8] - 2026-07-16
+
+### Fixed
+- Recovery recognizes equivalent OCI index and image-config digests across Docker and containerd.
+
+## [0.8.7] - 2026-07-16
+
+### Fixed
+- Recovery digest checks support the containerd/OCI format used by the production k3d cluster.
+
+## [0.8.6] - 2026-07-16
+
+### Fixed
+- VPS deployment retains the verified 1 GiB backend memory limit instead of insufficient chart defaults.
+- Recovery mode reuses digest-verified images and builds only missing immutable release images.
+
+## [0.8.5] - 2026-07-16
+
+### Fixed
+- VPS backup validates PostgreSQL dumps through bounded file-based checks with guaranteed cleanup.
+
+## [0.8.4] - 2026-07-16
+
+### Fixed
+- VPS backup archives MinIO through a serialized, read-only helper pod and always restores application replicas.
+
+## [0.8.3] - 2026-07-16
+
+### Fixed
+- VPS deployment preflight uses the projects' pinned release branches instead of a potentially stale remote default.
+
+## [0.8.2] - 2026-07-16
+
+### Added
+- Backup-first, verified deployment workflow for the `warchi.ru` VPS/k3d production environment.
+
+### Changed
+- Exported notation, diagram, and relation-matrix filenames are transliterated to readable ASCII.
+
+## [0.8.1] - 2026-07-16
+
+### Added
+- Local HTTPS for the wArchi SPA in Kubernetes (self-signed cert for cluster hostname access).
+
+### Changed
+- Refreshed in-app help for models, notations, admin, auth, and related topics.
+
+### Fixed
+- Admin permanent-delete shows a clear conflict message when active models still use a notation.
+- SSO return URLs accept both `http` and `https` for the marketing site.
+
+## [0.8.0] - 2026-07-14
+
+### Added
+- Content-Security-Policy and related security headers on nginx SPA/static responses, with `verify:csp` check script.
+
+### Changed
+- Diagram styling UI and notation attrs live in shared `diagram-style` / `domain/attrs` modules used by models and notations.
+- Markdown preview and wiki/docs HTML go through DOMPurify sanitization.
+- `@ngroznykh/papirus` updated to 0.6.5.
+
+### Fixed
+- Landing page iframe embed under CSP (`frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`).
+- Landing fonts self-hosted (Manrope, JetBrains Mono) so Google Fonts no longer violate `style-src`.
+
+## [0.7.1] - 2026-07-09
+
+### Fixed
+- Shared resource dialogs correctly load access shares from the arepos `ListResponse` `{ items }` envelope.
+
+## [0.7.0] - 2026-07-06
+
+### Added
+- HttpOnly cookie authentication with CSRF protection on API writes (replaces access tokens in localStorage/WebSocket URLs).
+- Password policy UI for registration and admin user forms.
+- Helm infrastructure phase 2: optional network policies, pod disruption budget, `/health` endpoint, and local CI/version-sync scripts.
+
+### Changed
+- Catalog list responses show owner display names and emails from the list API (`ownerDisplayName` / `ownerEmail`).
+- Shape editor shows form owner labels consistently with type editors.
+- Icon pickers lazy-load SVG previews to avoid loading every icon on mount.
+- nginx SPA routing: no cache for `index.html`/app routes, long-lived cache for hashed assets; register rate limit aligned with nginx limits.
+
+### Fixed
+- Catalog pages (models, notations, types) correctly read arepos `ListResponse` `{ items }` envelopes instead of only Spring `content`, so entities render again.
+- Diagram lock verify-before-save no longer crashes on the same list envelope.
+
+## [0.6.5] - 2026-07-06
+
+### Fixed
+- Model editor save no longer crashes when verifying diagram edit lock: `/diagram-locks` list responses use the `{ items }` envelope instead of a bare array.
+
+## [0.6.4] - 2026-06-04
+
+### Added
+- OEF import now supports ArchiMate diagram notes (`Label`/`Note` view nodes) and annotation lines (`Line` connections without a relationship reference), mapping them to diagram-only note instances on import.
+
+### Removed
+- Residual French (FR) locale on the landing page, unused `fr` message blocks in i18n locale files, and release docs references to `CHANGELOG.fr.md`.
+
 ## [0.6.3] - 2026-05-19
 
 ### Added

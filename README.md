@@ -54,7 +54,7 @@ App runs on `http://localhost:5173` and proxies `/api/*` to backend.
 
 ## Deployment (`deploy.sh`)
 
-`./deploy.sh` supports two modes:
+`./scripts/deploy.sh` supports two modes:
 
 - **Legacy**: recreates release
 - **Blue/Green**: deploys inactive color, verifies readiness, optionally switches traffic
@@ -78,10 +78,10 @@ Main environment flags:
 Examples:
 
 ```bash
-./deploy.sh
-BUILD_IMAGE=false ./deploy.sh
-BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./deploy.sh
-BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./deploy.sh
+./scripts/deploy.sh
+BUILD_IMAGE=false ./scripts/deploy.sh
+BLUE_GREEN=true BG_SWITCH=true IMAGE_TAG=0.0.22 ./scripts/deploy.sh
+BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./scripts/deploy.sh
 ```
 
 ## Environment Variables

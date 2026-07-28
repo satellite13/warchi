@@ -8,6 +8,11 @@ interface VersionDetails {
   buildTime: string;
 }
 
+interface HealthDetails {
+  status: "ok";
+  version: string;
+}
+
 /**
  * Vite plugin that:
  * 1. Generates version.json at build time (for runtime version check)
@@ -26,6 +31,10 @@ export default function versionPlugin(): Plugin {
   const versionDetails: VersionDetails = {
     version,
     buildTime
+  };
+  const healthDetails: HealthDetails = {
+    status: "ok",
+    version
   };
 
   return {
@@ -46,6 +55,12 @@ export default function versionPlugin(): Plugin {
           res.end(JSON.stringify(versionDetails, null, 2));
           return;
         }
+        if (req.url === "/health" || req.url === "/health?") {
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.end(JSON.stringify(healthDetails));
+          return;
+        }
         next();
       });
     },
@@ -54,6 +69,10 @@ export default function versionPlugin(): Plugin {
       writeFileSync(
         resolve(process.cwd(), outDir, "version.json"),
         JSON.stringify(versionDetails, null, 2)
+      );
+      writeFileSync(
+        resolve(process.cwd(), outDir, "health.json"),
+        JSON.stringify(healthDetails)
       );
     }
   };

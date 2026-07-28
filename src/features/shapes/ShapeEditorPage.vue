@@ -1,17 +1,33 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from "vue"
+import { ref, computed, onMounted, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { useNodeShapes } from "@/composables/useNodeShapes"
 import type { NodeShapeResponse } from "@/types/api"
-import { DEFAULT_RECTANGLE_OUTLINE } from "../notations/notationAttrs"
-import type { OutlineSegment } from "../notations/notationAttrs"
+import { DEFAULT_RECTANGLE_OUTLINE, createDefaultScaleSlice } from "@/domain/attrs/notationAttrs"
+import type { OutlineSegment, ScaleSlice } from "@/domain/attrs/notationAttrs"
+import {
+  hasEffectiveScaleSlice,
+  mergeScaleSliceIntoAttrs,
+  parseScaleSliceFromAttrs,
+} from "@/types/shapes"
 import BaseModal from "@/components/modals/BaseModal.vue"
 import DocumentEditorModal from "@/components/modals/DocumentEditorModal.vue"
 import ShareAccessModal from "@/components/modals/ShareAccessModal.vue"
+import UnsavedChangesModal from "@/components/modals/UnsavedChangesModal.vue"
+import ListDetailEditorLayout from "@/components/layout/ListDetailEditorLayout.vue"
+import SaveToast from "@/components/ui/SaveToast.vue"
 import ShapeSidebar from "./components/ShapeSidebar.vue"
 import ShapeForm from "./components/ShapeForm.vue"
 import { apiPost } from "@/composables/useApi"
 import { usePermissions } from "@/composables/usePermissions"
+import { useAuth } from "@/composables/useAuth"
+import { useDirtySelectionGuard } from "@/composables/useDirtySelectionGuard"
+import { useSaveErrorToast } from "@/composables/useSaveErrorToast"
+import { canEditByAccessPermission } from "@/utils/accessPermission"
+import {
+  resolveOwnerDisplayNames,
+  resolveOwnerLabel,
+} from "@/utils/resolveOwnerNames"
 
 const { t } = useI18n()
 const {
@@ -31,9 +47,12 @@ const isDeleting = ref(false)
 const saveError = ref<string | null>(null)
 const localName = ref("")
 const localOutline = ref<OutlineSegment[]>([])
+const localScaleSlice = ref<ScaleSlice | null>(null)
+const scaleSliceEnabled = ref(false)
 const showDeleteConfirm = ref(false)
 const showShareModal = ref(false)
 const { checkPermission } = usePermissions()
+const { currentUser } = useAuth()
 
 function parseOutlineJson(json: string | null): OutlineSegment[] {
   if (!json) return []
@@ -45,8 +64,36 @@ function parseOutlineJson(json: string | null): OutlineSegment[] {
   }
 }
 
-const canEditSelected = computed(() => selectedDetail.value?.canEdit ?? false)
+const canEditSelected = computed(() => {
+  const detail = selectedDetail.value
+  if (!detail) return false
+  if (canEditByAccessPermission(detail.accessPermission)) return true
+  const userId = currentUser.value?.id
+  return !!userId && detail.ownerId === userId
+})
 const canShareSelected = ref(false)
+const ownerDisplayNames = ref(new Map<string, string>())
+
+async function loadOwnerDisplayNames(ownerIds: string[]): Promise<void> {
+  ownerDisplayNames.value = await resolveOwnerDisplayNames(
+    ownerIds,
+    ownerDisplayNames.value,
+    currentUser.value,
+    t("common.unknownUser")
+  )
+}
+
+const selectedShapeOwnerName = computed(() => {
+  const detail = selectedDetail.value
+  const fallback = t("common.unknownUser")
+  if (!detail?.ownerId) return fallback
+  return resolveOwnerLabel(
+    ownerDisplayNames.value,
+    detail.ownerId,
+    currentUser.value,
+    fallback
+  )
+})
 
 /** Есть несохранённые изменения относительно данных с сервера */
 const isDirty = computed(() => {
@@ -55,12 +102,48 @@ const isDirty = computed(() => {
   const savedName = detail.name ?? ""
   const savedOutline = parseOutlineJson(detail.outline)
   if (localName.value !== savedName) return true
-  return JSON.stringify(localOutline.value) !== JSON.stringify(savedOutline)
+  if (JSON.stringify(localOutline.value) !== JSON.stringify(savedOutline)) return true
+  const savedSlice = parseScaleSliceFromAttrs(detail.attrs) ?? null
+  const localSlice = scaleSliceEnabled.value ? localScaleSlice.value : null
+  return JSON.stringify(normalizeSliceForCompare(localSlice)) !==
+    JSON.stringify(normalizeSliceForCompare(savedSlice))
 })
 
+function normalizeSliceForCompare(slice: ScaleSlice | null): ScaleSlice | null {
+  if (!slice || !hasEffectiveScaleSlice(slice)) return null
+  return {
+    left: slice.left,
+    right: slice.right,
+    top: slice.top,
+    bottom: slice.bottom,
+    refWidth: slice.refWidth,
+    refHeight: slice.refHeight,
+  }
+}
+
+function loadScaleSliceFromDetail(detail: NodeShapeResponse | null) {
+  const slice = parseScaleSliceFromAttrs(detail?.attrs) ?? null
+  if (slice) {
+    localScaleSlice.value = slice
+    scaleSliceEnabled.value = true
+  } else {
+    localScaleSlice.value = createDefaultScaleSlice({
+      left: 24,
+      right: 24,
+      top: 24,
+      bottom: 24,
+    })
+    scaleSliceEnabled.value = false
+  }
+}
+
 onMounted(() => {
-  fetchList({ size: 200 }).then((ok) => {
-    if (!ok) saveError.value = t("shapes.errorLoad")
+  fetchList({ size: 200 }).then(async (ok) => {
+    if (!ok) {
+      saveError.value = t("shapes.errorLoad")
+      return
+    }
+    await loadOwnerDisplayNames(list.value.map((shape) => shape.ownerId))
   })
 })
 
@@ -68,6 +151,7 @@ watch(selectedShapeId, async (id) => {
   selectedDetail.value = null
   localName.value = ""
   localOutline.value = []
+  loadScaleSliceFromDetail(null)
   canShareSelected.value = false
   if (!id) return
   const detail = await fetchById(id)
@@ -77,6 +161,8 @@ watch(selectedShapeId, async (id) => {
     localOutline.value = parseOutlineJson(detail.outline).length
       ? parseOutlineJson(detail.outline)
       : [...DEFAULT_RECTANGLE_OUTLINE]
+    loadScaleSliceFromDetail(detail)
+    await loadOwnerDisplayNames([detail.ownerId])
     canShareSelected.value = await checkPermission({
       resourceType: 'NODE_SHAPE',
       resourceId: detail.id,
@@ -87,11 +173,19 @@ watch(selectedShapeId, async (id) => {
   }
 })
 
-function handleSelect(id: string) {
+const {
+  showUnsavedDialog,
+  requestSelect,
+  requestAdd,
+  discardAndContinue,
+  cancelSwitch,
+} = useDirtySelectionGuard({ isDirty })
+
+function applySelect(id: string) {
   selectedShapeId.value = id
 }
 
-async function handleAdd() {
+async function createAndSelectShape() {
   saveError.value = null
   const outlineJson = JSON.stringify(DEFAULT_RECTANGLE_OUTLINE)
   const created = await create({
@@ -100,6 +194,7 @@ async function handleAdd() {
   })
   if (created) {
     await fetchList({ size: 200 })
+    await loadOwnerDisplayNames(list.value.map((shape) => shape.ownerId))
     selectedShapeId.value = created.id
     selectedDetail.value = created
     localName.value = created.name
@@ -107,23 +202,47 @@ async function handleAdd() {
       parseOutlineJson(created.outline).length > 0
         ? parseOutlineJson(created.outline)
         : [...DEFAULT_RECTANGLE_OUTLINE]
+    loadScaleSliceFromDetail(created)
   } else {
     saveError.value = t("shapes.errorSave")
   }
+}
+
+function handleSelect(id: string) {
+  if (selectedShapeId.value === id) return
+  requestSelect(id, applySelect)
+}
+
+function handleAdd() {
+  requestAdd('__add_shape', () => {
+    void createAndSelectShape()
+  })
+}
+
+function discardAndSwitch() {
+  discardAndContinue({
+    onSelect: applySelect,
+    onAdd: () => {
+      void createAndSelectShape()
+    },
+  })
 }
 
 async function handleSave() {
   if (!selectedDetail.value || !canEditSelected.value) return
   saveError.value = null
   isSaving.value = true
+  const sliceToSave = scaleSliceEnabled.value ? localScaleSlice.value : null
+  const nextAttrs = mergeScaleSliceIntoAttrs(selectedDetail.value.attrs, sliceToSave)
   const updated = await update(selectedDetail.value.id, {
     name: localName.value.trim() || selectedDetail.value.name,
     outline: JSON.stringify(localOutline.value),
-    attrs: selectedDetail.value.attrs ?? undefined
+    attrs: nextAttrs
   })
   isSaving.value = false
   if (updated) {
     selectedDetail.value = updated
+    loadScaleSliceFromDetail(updated)
     const idx = list.value.findIndex((s) => s.id === updated.id)
     if (idx >= 0) {
       list.value = [
@@ -134,6 +253,18 @@ async function handleSave() {
     }
   } else {
     saveError.value = t("shapes.errorSave")
+  }
+}
+
+function handleScaleSliceEnabled(enabled: boolean) {
+  scaleSliceEnabled.value = enabled
+  if (enabled && !localScaleSlice.value) {
+    localScaleSlice.value = createDefaultScaleSlice({
+      left: 24,
+      right: 24,
+      top: 24,
+      bottom: 24,
+    })
   }
 }
 
@@ -212,280 +343,110 @@ async function confirmDelete() {
   }
 }
 
-// Toast for save/load errors (like TypeEditorPage)
-const isToastVisible = ref(false)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(saveError, (value) => {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-    toastTimer = null
-  }
-  if (!value) {
-    isToastVisible.value = false
-    return
-  }
-  isToastVisible.value = true
-  toastTimer = setTimeout(() => {
-    isToastVisible.value = false
-  }, 5000)
-})
-
-onBeforeUnmount(() => {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-    toastTimer = null
-  }
-})
+const { isToastVisible, toastError } = useSaveErrorToast(saveError)
 </script>
 
 <template>
-  <div class="shape-editor">
-    <ShapeSidebar
-      :shapes="list"
-      :selected-shape-id="selectedShapeId"
-      :is-loading="isLoading"
-      @select-shape="handleSelect"
-      @add-shape="handleAdd"
+  <ListDetailEditorLayout
+    :has-selection="!!selectedDetail"
+    empty-icon="hexagon"
+    :empty-title="t('shapes.selectShape')"
+    :empty-hint="t('shapes.orCreateNew')"
+  >
+    <template #sidebar>
+      <ShapeSidebar
+        :shapes="list"
+        :selected-shape-id="selectedShapeId"
+        :is-loading="isLoading"
+        @select-shape="handleSelect"
+        @add-shape="handleAdd"
+      />
+    </template>
+
+    <ShapeForm
+      v-if="selectedDetail"
+      :selected-shape="selectedDetail"
+      :name="localName"
+      :outline="localOutline"
+      :scale-slice="localScaleSlice"
+      :scale-slice-enabled="scaleSliceEnabled"
+      :owner-display-name="selectedShapeOwnerName"
+      :can-edit="canEditSelected"
+      :can-share="canShareSelected"
+      :is-dirty="isDirty"
+      :is-saving="isSaving"
+      :is-deleting="isDeleting"
+      :has-doc="!!getShapeDocFileId()"
+      @save="handleSave"
+      @delete="openDeleteConfirm"
+      @share="showShareModal = true"
+      @open-doc="openDocModal"
+      @update:name="localName = $event"
+      @update:outline="localOutline = $event"
+      @update:scale-slice="localScaleSlice = $event"
+      @update:scale-slice-enabled="handleScaleSliceEnabled"
     />
 
-    <main class="shape-editor__main">
-      <div v-if="!selectedDetail" class="shape-editor__empty">
-        <div class="empty-state">
-          <UiIcon name="hexagon" class="empty-state__icon" />
-          <p class="empty-state__text">{{ t("shapes.selectShape") }}</p>
-          <p class="empty-state__hint">{{ t("shapes.orCreateNew") }}</p>
-        </div>
-      </div>
+    <template #modals>
+      <UnsavedChangesModal
+        v-if="showUnsavedDialog"
+        :title="t('shapes.unsavedChangesTitle')"
+        :message="t('shapes.unsavedChangesText')"
+        :stay-label="t('shapes.stay')"
+        :confirm-label="t('shapes.discardAndSwitch')"
+        @stay="cancelSwitch"
+        @confirm="discardAndSwitch"
+        @close="cancelSwitch"
+      />
 
-      <template v-else>
-        <div class="shape-editor__content">
-          <div class="shape-editor__center">
-            <ShapeForm
-              :selected-shape="selectedDetail"
-              :name="localName"
-              :outline="localOutline"
-              :can-edit="canEditSelected"
-              :can-share="canShareSelected"
-              :is-dirty="isDirty"
-              :is-saving="isSaving"
-              :is-deleting="isDeleting"
-              :has-doc="!!getShapeDocFileId()"
-              @save="handleSave"
-              @delete="openDeleteConfirm"
-              @share="showShareModal = true"
-              @open-doc="openDocModal"
-              @update:name="localName = $event"
-              @update:outline="localOutline = $event"
-            />
-          </div>
-        </div>
-      </template>
-    </main>
+      <DocumentEditorModal
+        v-if="showDocModal && selectedDetail"
+        :title="selectedDetail.name"
+        :file-id="docModalFileId"
+        :read-only="!canEditSelected"
+        @close="handleDocModalClose"
+        @saved="handleDocSaved"
+      />
 
-    <DocumentEditorModal
-      v-if="showDocModal && selectedDetail"
-      :title="selectedDetail.name"
-      :file-id="docModalFileId"
-      :read-only="!canEditSelected"
-      @close="handleDocModalClose"
-      @saved="handleDocSaved"
-    />
+      <ShareAccessModal
+        v-if="showShareModal && selectedDetail"
+        :title="t('shapes.accessTitle')"
+        resource-type="NODE_SHAPE"
+        :resource-id="selectedDetail.id"
+        @close="showShareModal = false"
+      />
 
-    <ShareAccessModal
-      v-if="showShareModal && selectedDetail"
-      :title="t('shapes.accessTitle')"
-      resource-type="NODE_SHAPE"
-      :resource-id="selectedDetail.id"
-      @close="showShareModal = false"
-    />
+      <BaseModal
+        v-if="showDeleteConfirm"
+        :title="t('shapes.delete')"
+        max-width="400px"
+        @close="showDeleteConfirm = false"
+      >
+        <p class="shape-editor__delete-text">
+          {{ t("shapes.deleteConfirm", { name: selectedDetail?.name ?? "" }) }}
+        </p>
+        <template #footer>
+          <button type="button" class="btn btn--secondary" @click="showDeleteConfirm = false">
+            {{ t("common.cancel") }}
+          </button>
+          <button type="button" class="btn btn--danger" @click="confirmDelete">
+            {{ t("common.delete") }}
+          </button>
+        </template>
+      </BaseModal>
+    </template>
 
-    <BaseModal
-      v-if="showDeleteConfirm"
-      :title="t('shapes.delete')"
-      max-width="400px"
-      @close="showDeleteConfirm = false"
-    >
-      <p class="shape-editor__delete-text">
-        {{ t("shapes.deleteConfirm", { name: selectedDetail?.name ?? "" }) }}
-      </p>
-      <template #footer>
-        <button type="button" class="btn btn--secondary" @click="showDeleteConfirm = false">
-          {{ t("common.cancel") }}
-        </button>
-        <button type="button" class="btn btn--danger" @click="confirmDelete">
-          {{ t("common.delete") }}
-        </button>
-      </template>
-    </BaseModal>
-
-    <Teleport to="body">
-      <Transition name="toast">
-        <div v-if="isToastVisible && saveError" class="save-toast save-toast--error">
-          <UiIcon name="error" class="save-toast__icon" />
-          <span>{{ saveError }}</span>
-        </div>
-      </Transition>
-    </Teleport>
-  </div>
+    <template #toast>
+      <SaveToast :error="isToastVisible ? toastError : null" />
+    </template>
+  </ListDetailEditorLayout>
 </template>
 
 <style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.shape-editor {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  background: var(--base-bg);
-}
-
-.shape-editor__main {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 28px 36px;
-}
-
-.shape-editor__content {
-  display: flex;
-  gap: 28px;
-  align-items: flex-start;
-  animation: fadeIn 0.25s ease;
-}
-
-.shape-editor__center {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.shape-editor__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  animation: fadeIn 0.4s ease;
-}
-
-.empty-state__icon {
-  width: 56px;
-  height: 56px;
-  color: var(--border-strong);
-  margin-bottom: 4px;
-}
-
-.empty-state__text {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.empty-state__hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-subtle);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn--secondary {
-  background: var(--surface-strong);
-  color: var(--text-muted);
-}
-
-.btn--secondary:hover:not(:disabled) {
-  background: var(--border);
-  color: var(--base-text);
-}
-
-.btn--danger {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.btn--danger:hover:not(:disabled) {
-  filter: brightness(0.95);
-}
-
 .shape-editor__delete-text {
   margin: 0;
   font-size: 14px;
   color: var(--base-text);
   line-height: 1.55;
-}
-
-.save-toast {
-  position: fixed;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 2100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-.save-toast--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid var(--danger-soft);
-}
-
-.save-toast__icon {
-  width: 20px;
-  height: 20px;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 </style>

@@ -49,6 +49,8 @@ export interface OwnedTypeUpdateRequest {
 export interface OwnedTypeResponse extends BaseEntityResponse {
   name: string
   ownerId: string
+  ownerEmail?: string | null
+  ownerDisplayName?: string | null
   accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
 }
 
@@ -220,6 +222,8 @@ export interface NotationMetaResponse {
   version: string
   ownerId: string
   ownerEmail: string
+  ownerDisplayName: string
+  deleted?: boolean
 }
 
 // ── Node Types ──
@@ -245,7 +249,7 @@ export interface NodeShapeResponse extends BaseEntityResponse {
   ownerId: string
   outline: string | null
   contentArea?: string | null
-  canEdit: boolean
+  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
 }
 
 export interface NodeShapeRequest {

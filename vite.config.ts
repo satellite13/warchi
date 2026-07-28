@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   return {
+    base: "/",
     plugins: [vue(), versionPlugin()],
     resolve: {
       alias: {
@@ -27,7 +28,7 @@ export default defineConfig(({ mode }) => {
               return "papirus";
             }
             if (id.includes("md-editor-v3")) {
-              return "md-editor";
+              return "md-editor-lib";
             }
             if (id.includes("@ckpack/vue-color")) {
               return "color-picker";
@@ -44,106 +45,49 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "happy-dom",
       setupFiles: ["./src/test/setup.ts"],
-      exclude: ["tests/**", "node_modules/**"],
+      exclude: ["tests/**", "node_modules/**", ".worktrees/**"],
       coverage: {
-        provider: "istanbul",
-        reporter: ["text", "html", "lcov", "json"],
-        include: ["src/**/*.{ts,vue}"],
+        provider: "v8",
+        include: [
+          "src/composables/**/*.{ts,vue}",
+          "src/api/**/*.{ts,vue}",
+          "src/features/models/utils/**/*.{ts,vue}",
+        ],
         exclude: [
           "src/**/*.test.ts",
-          "src/**/*.spec.ts",
           "src/**/*.d.ts",
           "src/test/**",
           "src/main.ts",
           "src/i18n/**",
           "src/router/**",
           "src/env.d.ts",
-          "src/views/**/*.vue",
-          "src/layouts/**/*.vue",
-          "src/components/**/*.vue",
-          "src/features/**/components/**/*.vue",
-          "src/features/**/*.vue",
-          "src/config/**/*.generated.ts",
-          "src/config/mdEditor.ts",
-          "src/types/**/*.ts",
-          "src/api/config.ts",
-          "src/composables/useApi.ts",
-          "src/features/docs/**/*.ts",
-          "src/features/models/composables/index.ts",
-          "src/features/models/composables/useAutoVersionCheck.ts",
-          "src/features/models/composables/useModelComparisonDiff.ts",
-          "src/features/models/composables/useModelVersionDiff.ts",
-          "src/features/models/composables/useSavePipeline.ts",
-          "src/features/models/composables/liveTimeCollab.ts",
-          "src/features/models/composables/useDiagramExport.ts",
-          "src/features/models/composables/useDocumentModal.ts",
-          "src/features/models/composables/useEditorLoadModel.ts",
-          "src/features/models/composables/useRelationsApi.ts",
-          "src/features/models/composables/useModelLiveSync.ts",
-          "src/features/models/composables/useNoteEditor.ts",
-          "src/features/models/composables/useModulesLoader.ts",
-          "src/features/models/utils/modelSyncTelemetry.ts",
-          "src/features/models-matrix/utils/buildRelationMatrixCsv.ts",
-          "src/features/models-matrix/utils/buildRelationMatrixPng.ts",
-          "src/features/models-matrix/composables/useMatrixData.ts",
-          "src/features/notations/composables/useCustomProperties.ts",
-          "src/features/notations/composables/useNotationDiagram.ts",
-          "src/features/notations/composables/useNotationEditor.ts",
-          "src/features/notations/composables/useNotationStyles.ts",
-          "src/features/notations/composables/useNotationEntity.ts",
-          "src/features/notations/composables/useNotationExport.ts",
-          "src/features/notations/composables/useNotationImportApi.ts",
-          "src/features/notations/composables/useNotationToolbarState.ts",
-          "src/features/notations/composables/useRelationRulesSync.ts",
-          "src/features/notations/utils/notationAttrsJson.ts",
-          "src/features/notations/utils/compositeNewTypes.ts",
-          "src/features/shapes/**/*.ts",
-          "src/features/shapes/**/*.vue",
-          "src/features/types/**/*.ts",
-          "src/features/types/**/*.vue",
-          "src/features/notations/styles/**/*.ts",
-          "src/features/notations/types/**/*.ts",
-          "src/views/composables/**/*.ts",
-          "src/composables/useAvailabilityGuard.ts",
-          "**/types.ts",
-          "src/composables/useActivityFormatting.ts",
-          "src/composables/useResizablePropsPanel.ts",
-          "src/composables/useVersionCheck.ts",
-          "src/composables/useWikiDocuments.ts",
-          "src/features/models/composables/useDiagramEditLock.ts",
-          "src/features/models/composables/modelEditorLoadModel.ts",
-          "src/features/models/composables/modelEditorSavePipeline.ts",
-          "src/features/models/composables/modelNotationRelationsApi.ts",
-          "src/features/models/composables/useComparisonDiff.ts",
-          "src/features/models/composables/useDiagramRealtimeCollab.ts",
-          "src/features/models/composables/useModelDiagramExport.ts",
-          "src/features/models/composables/useModelLiveSync.ts",
-          "src/features/models/composables/useNotationRelationsAndRulesLoader.ts",
-          "src/features/models/utils/batchSaveConflictDisplay.ts",
-          "src/features/models/utils/diagramScopedProperties.ts",
-          "src/features/models/utils/diagramViewportPersistence.ts",
-          "src/features/models/utils/mergeLocalCustomPropsAfterReload.ts",
-          "src/features/models/utils/modelSyncTelemetry.ts",
-          "src/features/models/utils/sanitizeDiagramInstances.ts",
-          "src/features/models-matrix/composables/useRelationMatrixData.ts",
-          "src/features/models-matrix/utils/relationMatrixCsv.ts",
-          "src/features/models-matrix/utils/relationMatrixPng.ts",
-          "src/features/notations/composables/useComponentStyleState.ts",
-          "src/features/notations/composables/useRelationStyleState.ts",
-          "src/features/notations/composables/useNotationImportApi.ts",
-          "src/features/notations/composables/useNotationToolbarState.ts",
-          "src/features/notations/composables/useRelationRulesSync.ts",
-          "src/features/notations/utils/compositeNewTypes.ts",
-          "src/utils/getModelEntityPosition.ts",
-          "src/utils/buildModelEntityError.ts",
         ],
+        reporter: ["text", "html", "lcov", "json"],
+        thresholds: {
+          lines: 40,
+          functions: 40,
+          branches: 30,
+          statements: 40,
+        },
       },
     },
     server: {
       proxy: {
         "/api": {
           target: env.VITE_API_PROXY_TARGET || "http://localhost:8080",
-          changeOrigin: true
+          changeOrigin: true,
+          // Backend may set Domain=.arch.svc.cluster.local for k8s SSO; browsers
+          // reject those cookies on localhost Vite, so strip Domain for local dev.
+          configure: (proxy) => {
+            proxy.on("proxyRes", (proxyRes) => {
+              const raw = proxyRes.headers["set-cookie"]
+              if (!raw) return
+              const cookies = Array.isArray(raw) ? raw : [raw]
+              proxyRes.headers["set-cookie"] = cookies.map((cookie) =>
+                cookie.replace(/;\s*Domain=[^;]*/gi, "")
+              )
+            })
+          },
         },
         "/ws": {
           target: env.VITE_API_PROXY_TARGET || "http://localhost:8080",

@@ -8,14 +8,20 @@ import AppHeader from "@/components/layout/AppHeader.vue"
 import AppFooter from "@/components/layout/AppFooter.vue"
 import ResizablePanelLayout from "@/components/layout/ResizablePanelLayout.vue"
 import { useRelationMatrixData } from "@/features/models-matrix/composables/useRelationMatrixData"
-import { UNMAPPED_ENTITY_ID, type RelationMatrixFilters as RelationMatrixFilterState } from "@/features/models-matrix/types"
+import type { RelationMatrixFilters as RelationMatrixFilterState } from "@/features/models-matrix/types"
+import type { EditorLink, EditorNode } from "@/features/models/types"
 import type { NotationMetaResponse } from "@/types/api"
 import { buildRelationMatrix, relationMatrixCellKey } from "@/features/models-matrix/utils/buildRelationMatrix"
+import {
+  resolveMatrixLinkRelationProperties,
+  resolveMatrixNodeComponentProperties,
+} from "@/features/models-matrix/utils/resolveMatrixScopedProperties"
 import { downloadRelationMatrixCsv } from "@/features/models-matrix/utils/relationMatrixCsv"
 import { exportRelationMatrixPng } from "@/features/models-matrix/utils/relationMatrixPng"
 import RelationMatrixFilters from "@/features/models-matrix/components/RelationMatrixFilters.vue"
 import RelationMatrixGrid from "@/features/models-matrix/components/RelationMatrixGrid.vue"
 import RelationMatrixDetailsPanel from "@/features/models-matrix/components/RelationMatrixDetailsPanel.vue"
+import { sanitizeFileName } from "@/utils/sanitizeFileName"
 
 const route = useRoute()
 const router = useRouter()
@@ -31,7 +37,7 @@ const matrixFilters = ref<RelationMatrixFilterState>({
   selectedRowIds: [],
   selectedColumnIds: [],
   selectedRelationIds: [],
-  mappedOnly: false,
+  allowedOnly: false,
   heatmapEnabled: true,
   hideEmptyAxes: false,
 })
@@ -52,9 +58,9 @@ const matrix = computed(() => {
     linkTypes: currentState.linkTypes,
     components: currentState.components,
     relations: currentState.relations,
+    relationRules: currentState.relationRules,
     notations: currentState.notations,
     labels: {
-      unmapped: t("models.relationMatrixUnmapped"),
       unknownRelation: t("models.relationMatrixUnknownRelation"),
     },
   })
@@ -97,6 +103,51 @@ const selectedColumnName = computed(() => {
   const cell = selectedCell.value
   return cell ? columnNameById.value.get(cell.columnId) ?? cell.columnId : ""
 })
+
+const resolveNodePropertiesForAxis = (
+  node: EditorNode,
+  nodeTypeId: string,
+  notationId: string | null,
+  diagrams: NonNullable<typeof state.value>["diagrams"],
+  components: NonNullable<typeof state.value>["components"]
+): Record<string, unknown> => {
+  if (!notationId) {
+    return node.parsedAttrs.typeProperties ?? {}
+  }
+  const binding = node.parsedAttrs.notationComponents[notationId]
+  if (binding?.componentId) {
+    const component = components.find(item => item.id === binding.componentId)
+    if (component?.nodeTypeId === nodeTypeId) {
+      return resolveMatrixNodeComponentProperties({
+        node,
+        notationId,
+        componentId: binding.componentId,
+        diagrams,
+      })
+    }
+  }
+  return node.parsedAttrs.typeProperties ?? {}
+}
+
+const resolveLinkPropertiesForMatrix = (
+  link: EditorLink,
+  linkTypeId: string,
+  notationId: string,
+  diagrams: NonNullable<typeof state.value>["diagrams"],
+  relations: NonNullable<typeof state.value>["relations"]
+): Record<string, unknown> => {
+  const boundRelationId = link.parsedAttrs.notationRelations[notationId]?.relationId
+  const relationId =
+    boundRelationId ??
+    relations.find(relation => relation.notationId === notationId && relation.linkTypeId === linkTypeId)?.id
+  if (!relationId) return {}
+  return resolveMatrixLinkRelationProperties({
+    link,
+    notationId,
+    relationId,
+    diagrams,
+  })
+}
 
 const formatPropertyValue = (value: unknown): string => {
   if (value === null || value === undefined || value === "") return t("models.relationMatrixValueEmpty")
@@ -142,18 +193,18 @@ const verticalInfo = computed(() => {
   const rowId = cell.rowId
   const notationId = matrixFilters.value.notationId
 
-  const component = currentState.components.find(item => item.id === rowId)
-  const nodeType = component
-    ? currentState.nodeTypes.find(item => item.id === component.nodeTypeId)
-    : currentState.nodeTypes.find(item => item.id === rowId)
+  const nodeType = currentState.nodeTypes.find(item => item.id === rowId)
 
   const properties = collectPropertyStats(sourceNodeIds, nodeId => {
     const node = currentState.nodes.find(item => item.id === nodeId)
     if (!node) return {}
-    if (notationId && rowId !== UNMAPPED_ENTITY_ID) {
-      return node.parsedAttrs.componentProperties[notationId]?.[rowId] ?? {}
-    }
-    return node.parsedAttrs.typeProperties ?? {}
+    return resolveNodePropertiesForAxis(
+      node,
+      rowId,
+      notationId,
+      currentState.diagrams,
+      currentState.components
+    )
   })
 
   return {
@@ -175,18 +226,18 @@ const horizontalInfo = computed(() => {
   const columnId = cell.columnId
   const notationId = matrixFilters.value.notationId
 
-  const component = currentState.components.find(item => item.id === columnId)
-  const nodeType = component
-    ? currentState.nodeTypes.find(item => item.id === component.nodeTypeId)
-    : currentState.nodeTypes.find(item => item.id === columnId)
+  const nodeType = currentState.nodeTypes.find(item => item.id === columnId)
 
   const properties = collectPropertyStats(targetNodeIds, nodeId => {
     const node = currentState.nodes.find(item => item.id === nodeId)
     if (!node) return {}
-    if (notationId && columnId !== UNMAPPED_ENTITY_ID) {
-      return node.parsedAttrs.componentProperties[notationId]?.[columnId] ?? {}
-    }
-    return node.parsedAttrs.typeProperties ?? {}
+    return resolveNodePropertiesForAxis(
+      node,
+      columnId,
+      notationId,
+      currentState.diagrams,
+      currentState.components
+    )
   })
 
   return {
@@ -226,7 +277,13 @@ const selectedLinkDetails = computed(() => {
     const link = linkById.get(item.linkId)
     const customPropertiesRaw =
       notationId && link
-        ? (link.parsedAttrs.relationProperties[notationId]?.[item.relationId] ?? {})
+        ? resolveLinkPropertiesForMatrix(
+            link,
+            item.relationId,
+            notationId,
+            currentState.diagrams,
+            currentState.relations
+          )
         : {}
     const customProperties = Object.entries(customPropertiesRaw).map(([key, value]) => ({
       key,
@@ -278,14 +335,6 @@ const notationOptions = computed(() => {
     })
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
 })
-
-const sanitizeFileName = (value: string): string =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё_-]+/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
 
 const exportFilenameBase = computed(() => {
   const modelName = model.value?.name ?? "model"
@@ -404,12 +453,27 @@ watch(
 
 watch(
   () => matrixFilters.value.notationId,
-  () => {
+  notationId => {
     selectedCellKey.value = null
     selectedRowId.value = null
     selectedColumnId.value = null
     matrixFilters.value.selectedRelationIds = []
     relationSelectionInitialized.value = false
+
+    const currentState = state.value
+    if (notationId && currentState) {
+      const linkTypeIds = Array.from(
+        new Set(
+          currentState.relations
+            .filter(relation => relation.notationId === notationId)
+            .map(relation => relation.linkTypeId)
+        )
+      )
+      if (linkTypeIds.length > 0) {
+        matrixFilters.value.selectedRelationIds = linkTypeIds
+        relationSelectionInitialized.value = true
+      }
+    }
   }
 )
 
@@ -521,14 +585,14 @@ watch(
                 :selected-row-ids="matrixFilters.selectedRowIds"
                 :selected-column-ids="matrixFilters.selectedColumnIds"
                 :selected-relation-ids="matrixFilters.selectedRelationIds"
-                :mapped-only="matrixFilters.mappedOnly"
+                :allowed-only="matrixFilters.allowedOnly"
                 :heatmap-enabled="matrixFilters.heatmapEnabled"
                 :hide-empty-axes="matrixFilters.hideEmptyAxes"
                 @update:notation-id="matrixFilters.notationId = $event"
                 @update:selected-row-ids="matrixFilters.selectedRowIds = $event"
                 @update:selected-column-ids="matrixFilters.selectedColumnIds = $event"
                 @update:selected-relation-ids="matrixFilters.selectedRelationIds = $event"
-                @update:mapped-only="matrixFilters.mappedOnly = $event"
+                @update:allowed-only="matrixFilters.allowedOnly = $event"
                 @update:heatmap-enabled="matrixFilters.heatmapEnabled = $event"
                 @update:hide-empty-axes="matrixFilters.hideEmptyAxes = $event"
               />

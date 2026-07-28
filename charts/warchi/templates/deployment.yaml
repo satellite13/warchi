@@ -45,6 +45,9 @@ template:
           - name: http
             containerPort: {{ $ctx.Values.service.port }}
             protocol: TCP
+          - name: https
+            containerPort: {{ $ctx.Values.service.tlsPort }}
+            protocol: TCP
         {{- if $ctx.Values.configMap.enabled }}
         env:
           - name: API_BASE_URL
@@ -63,6 +66,10 @@ template:
             value: {{ $ctx.Values.api.baseUrl | quote }}
           - name: NOTATION_URL
             value: {{ $ctx.Values.api.notationUrl | quote }}
+        {{- end }}
+        {{- with $ctx.Values.startupProbe }}
+        startupProbe:
+          {{- toYaml . | nindent 10 }}
         {{- end }}
         {{- with $ctx.Values.livenessProbe }}
         livenessProbe:

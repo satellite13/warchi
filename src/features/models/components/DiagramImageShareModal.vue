@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
-import { buildApiUrl } from '@/api/config'
+import { resolvePublicResourceUrl } from '@/api/resolvePublicResourceUrl'
 import { createDiagramShareLink } from '@/composables/useApi'
 
 const props = defineProps<{
@@ -53,11 +53,8 @@ const getShareLink = async () => {
     if (!payload) return
     const result = await createDiagramShareLink(payload)
     if (result.success) {
-      const url = buildApiUrl(result.data.url)
-      shareUrl.value =
-        typeof window !== 'undefined' && url.startsWith('/')
-          ? `${window.location.origin}${url}`
-          : url
+      // Backend returns absolute URL or /api/v1/... path — do not wrap with buildApiUrl
+      shareUrl.value = resolvePublicResourceUrl(result.data.url)
     } else {
       errorMessage.value = result.error.message
     }

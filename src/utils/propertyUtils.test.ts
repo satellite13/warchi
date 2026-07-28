@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CustomProperty } from '@/features/notations/notationAttrs'
+import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 import { coercePropertyValue, regexTestProperty } from '@/utils/propertyUtils'
 
 const prop = (overrides: Partial<CustomProperty>): CustomProperty =>

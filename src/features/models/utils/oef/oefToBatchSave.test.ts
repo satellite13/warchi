@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '@/features/models/modelAttrs'
 import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
-import { buildOefBatchSaveRequest } from './oefToBatchSave'
+import { buildOefBatchSaveRequest, OEF_ENTITY_NAME_MAX_LENGTH } from './oefToBatchSave'
 import type { ImportMappingState } from './mappingState'
+import { collectDisallowedOefLinkGroups } from './oefRelationRuleValidation'
 import mainXml from './__fixtures__/Main.xml?raw'
+import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
+import namedRelationshipXml from './__fixtures__/named-relationship.xml?raw'
+import propsXml from './__fixtures__/element-properties.xml?raw'
 
 function buildFullMappingState(): ImportMappingState {
   return {
@@ -59,13 +63,24 @@ describe('oefToBatchSave', () => {
     const diagram = result.request.diagrams.create[0]!
     expect(diagram.nodeId).toBe('root-node-id')
     const attrs = parseDiagramAttrs(diagram.attrs)
-    expect(attrs.instances.nodes).toHaveLength(6)
-    expect(attrs.instances.edges).toHaveLength(5)
+    expect(attrs.instances.nodes).toHaveLength(7)
+    expect(attrs.instances.edges).toHaveLength(6)
     for (const instance of attrs.instances.nodes) {
-      expect(nodeIds.has(instance.modelNodeId)).toBe(true)
+      if (instance.attrs?.isNote === true) {
+        expect(instance.modelNodeId.startsWith('__diagram-note__:')).toBe(true)
+        expect(instance.attrs.noteText).toBe('Test note')
+        expect(instance.width).toBe(185)
+        expect(instance.height).toBe(80)
+      } else {
+        expect(nodeIds.has(instance.modelNodeId)).toBe(true)
+      }
     }
     for (const edge of attrs.instances.edges) {
-      expect(linkIds.has(edge.modelLinkId)).toBe(true)
+      if (edge.attrs?.isDiagramOnly === true) {
+        expect(edge.modelLinkId.startsWith('__diagram-note-edge__:')).toBe(true)
+      } else {
+        expect(linkIds.has(edge.modelLinkId)).toBe(true)
+      }
     }
 
     const serviceNode = result.request.nodes.create.find(
@@ -84,6 +99,74 @@ describe('oefToBatchSave', () => {
     expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe(
       'high'
     )
+  })
+
+  it('imports Container and Association-to-Flow as diagram-only with edge anchor', () => {
+    const draft = buildImportDraft(parseOefXml(containerAssocXml))
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessProcess: { nodeTypeId: 'nt-process', componentId: 'cmp-process' },
+          DataObject: { nodeTypeId: 'nt-data', componentId: 'cmp-data' },
+        },
+        relationshipTypeMap: {
+          Flow: { linkTypeId: 'lt-flow', relationId: 'rel-flow' },
+          Association: { linkTypeId: 'lt-assoc', relationId: 'rel-assoc' },
+        },
+      },
+      notationId: 'notation-1',
+    })
+
+    expect(result.request.nodes.create).toHaveLength(3)
+    expect(result.request.links.create).toHaveLength(1)
+    expect(result.request.links.create[0]?.linkTypeId).toBe('lt-flow')
+
+    const attrs = parseDiagramAttrs(result.request.diagrams.create[0]!.attrs)
+    const containers = attrs.instances.nodes.filter(node => node.attrs?.isContainer === true)
+    const anchors = attrs.instances.nodes.filter(node => node.attrs?.isEdgeAnchor === true)
+    const diagramOnlyEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly === true)
+    const modelEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly !== true)
+
+    expect(containers).toHaveLength(1)
+    expect(containers[0]?.attrs?.containerLabel).toBe('Group')
+    const containerStyle = containers[0]?.attrs?.diagramStyle as
+      | { labelAlign?: string; labelVerticalAlign?: string }
+      | undefined
+    expect(containerStyle?.labelVerticalAlign).toBe('top')
+    expect(containerStyle?.labelAlign).toBe('left')
+    expect(anchors).toHaveLength(1)
+    expect(typeof anchors[0]?.attrs?.hostEdgeInstanceId).toBe('string')
+    expect(modelEdges).toHaveLength(1)
+    expect(diagramOnlyEdges).toHaveLength(1)
+    expect(
+      diagramOnlyEdges.some(
+        edge =>
+          edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
+      )
+    ).toBe(true)
+  })
+
+  it('copies OEF relationship name onto diagram edge label', () => {
+    const draft = buildImportDraft(parseOefXml(namedRelationshipXml))
+    expect(draft.links[0]?.name).toBe('Payload flow')
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessProcess: { nodeTypeId: 'nt-process', componentId: 'cmp-process' },
+        },
+        relationshipTypeMap: {
+          Flow: { linkTypeId: 'lt-flow', relationId: 'rel-flow' },
+        },
+      },
+      notationId: 'notation-1',
+    })
+
+    const attrs = parseDiagramAttrs(result.request.diagrams.create[0]!.attrs)
+    expect(attrs.instances.edges).toHaveLength(1)
+    expect(attrs.instances.edges[0]?.attrs?.label).toBe('Payload flow')
   })
 
   it('skips unmapped entities and reports warnings', () => {
@@ -109,5 +192,182 @@ describe('oefToBatchSave', () => {
     expect(result.request.nodes.create.length).toBeLessThan(draft.nodes.length)
     expect(result.warnings.some(item => item.code === 'nodeTypeNotMapped')).toBe(true)
     expect(result.warnings.some(item => item.code === 'linkTypeNotMapped')).toBe(true)
+  })
+
+  it('places elements and diagrams under organization directories', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    draft.organizations = [
+      {
+        label: 'Business',
+        children: draft.nodes.map(node => ({
+          refId: node.sourceElementId,
+          refKind: 'element' as const,
+        })),
+      },
+      {
+        label: 'Views',
+        children: draft.diagrams.map(diagram => ({
+          refId: diagram.sourceViewId,
+          refKind: 'view' as const,
+        })),
+      },
+    ]
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+      directoryNodeTypeId: 'nt-directory',
+      parentNodeId: 'root-node-id',
+    })
+
+    const directories = result.request.nodes.create.filter(item => item.nodeTypeId === 'nt-directory')
+    expect(directories).toHaveLength(2)
+    expect(directories[0]!.parentNodeId).toBe('root-node-id')
+    const businessTempId = directories[0]!.tempId
+    const viewsTempId = directories[1]!.tempId
+    expect(result.request.nodes.create.some(item => item.parentNodeId === businessTempId)).toBe(true)
+    expect(result.request.diagrams.create[0]!.nodeId).toBe(viewsTempId)
+  })
+
+  it('truncates node and diagram names to API max length', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    const longName = 'N'.repeat(OEF_ENTITY_NAME_MAX_LENGTH + 40)
+    draft.nodes[0]!.name = longName
+    draft.diagrams[0]!.name = longName
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+    })
+
+    expect(result.request.nodes.create[0]!.name).toHaveLength(OEF_ENTITY_NAME_MAX_LENGTH)
+    expect(result.request.diagrams.create[0]!.name).toHaveLength(OEF_ENTITY_NAME_MAX_LENGTH)
+    expect(result.warnings.filter(item => item.code === 'nameTruncated')).toHaveLength(2)
+  })
+
+  it('deduplicates duplicate diagram names within one import', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    draft.diagrams.push({
+      ...structuredClone(draft.diagrams[0]!),
+      sourceViewId: 'view-duplicate-2',
+      name: draft.diagrams[0]!.name,
+    })
+    draft.diagrams.push({
+      ...structuredClone(draft.diagrams[0]!),
+      sourceViewId: 'view-duplicate-3',
+      name: draft.diagrams[0]!.name,
+    })
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+    })
+
+    const names = result.request.diagrams.create.map(item => item.name)
+    expect(new Set(names).size).toBe(names.length)
+    expect(names.filter(name => name === draft.diagrams[0]!.name)).toHaveLength(1)
+    expect(names.some(name => name.endsWith(' (2)'))).toBe(true)
+    expect(names.some(name => name.endsWith(' (3)'))).toBe(true)
+    expect(result.warnings.filter(item => item.code === 'nameDeduplicated')).toHaveLength(2)
+  })
+
+  it('skips links disallowed by empty relation rules when decisions are skip', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    const mapping = buildFullMappingState()
+    const groups = collectDisallowedOefLinkGroups({
+      draft,
+      mapping,
+      relationRules: [],
+    })
+    const ruleDecisions = Object.fromEntries(groups.map(group => [group.key, 'skip' as const]))
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping,
+      notationId: 'notation-1',
+      relationRules: [],
+      ruleDecisions,
+    })
+
+    expect(result.request.links.create).toHaveLength(0)
+    expect(result.warnings.length).toBeGreaterThan(0)
+    expect(result.warnings.every(item => item.code === 'linkNotAllowedByRelationRules')).toBe(true)
+    expect(result.warnings.some(item => item.code === 'diagramConnectionMissingModelLink')).toBe(
+      false
+    )
+  })
+
+  it('imports links disallowed by empty relation rules when decisions are import', () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    const mapping = buildFullMappingState()
+    const groups = collectDisallowedOefLinkGroups({
+      draft,
+      mapping,
+      relationRules: [],
+    })
+    const ruleDecisions = Object.fromEntries(groups.map(group => [group.key, 'import' as const]))
+
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping,
+      notationId: 'notation-1',
+      relationRules: [],
+      ruleDecisions,
+    })
+
+    expect(result.request.links.create).toHaveLength(5)
+    expect(result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')).toHaveLength(
+      5
+    )
+  })
+
+  it('merges OEF properties into type and component values by name', () => {
+    const draft = buildImportDraft(parseOefXml(propsXml))
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessService: { nodeTypeId: 'nt-1', componentId: 'cmp-1' },
+        },
+        relationshipTypeMap: {
+          Association: { linkTypeId: 'lt-1', relationId: 'rel-1' },
+        },
+      },
+      notationId: 'notation-1',
+      nodeTypePropertyDefaultsById: { 'nt-1': { Owner: 'Default', Count: 1 } },
+      componentPropertyDefaultsById: { 'cmp-1': {} },
+      relationPropertyDefaultsById: { 'rel-1': {} },
+      nodeTypeCustomPropertiesById: {
+        'nt-1': [
+          { id: '1', name: 'Owner', type: 'string', required: false, min: null, max: null },
+          { id: '2', name: 'Count', type: 'number', required: false, min: null, max: null },
+        ],
+      },
+      componentCustomPropertiesById: {
+        'cmp-1': [
+          { id: '3', name: 'Owner', type: 'string', required: false, min: null, max: null },
+        ],
+      },
+      relationCustomPropertiesById: {
+        'rel-1': [
+          { id: '4', name: 'Owner', type: 'string', required: false, min: null, max: null },
+        ],
+      },
+    })
+
+    const nodeAttrs = parseNodeAttrs(result.request.nodes.create[0]!.attrs)
+    expect(nodeAttrs.typeProperties.Owner).toBe('Team A')
+    expect(nodeAttrs.typeProperties.Count).toBe(7)
+    expect(nodeAttrs.componentProperties['notation-1']?.['cmp-1']?.Owner).toBe('Team A')
+
+    const linkAttrs = parseLinkAttrs(result.request.links.create[0]!.attrs)
+    expect(linkAttrs.relationProperties['notation-1']?.['rel-1']?.Owner).toBe('Link Owner')
+
+    expect(
+      result.warnings.some(w => w.code === 'propertyUnmatched' && w.message.includes('OrphanProp'))
+    ).toBe(true)
   })
 })

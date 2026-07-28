@@ -36,8 +36,10 @@ function pathForDisplay(path: string): string {
   return path.startsWith("Root/") ? path.slice(5) : path
 }
 
-const otherVersions = () =>
-  props.relatedVersions.filter((m) => m.id !== props.modelId)
+const otherVersions = () => {
+  const versions = Array.isArray(props.relatedVersions) ? props.relatedVersions : []
+  return versions.filter((m) => m.id !== props.modelId)
+}
 
 function onSelectVersion(ev: Event) {
   const val = (ev.target as HTMLSelectElement).value
@@ -45,7 +47,7 @@ function onSelectVersion(ev: Event) {
 }
 
 watch(
-  () => props.relatedVersions.length,
+  () => (Array.isArray(props.relatedVersions) ? props.relatedVersions.length : 0),
   () => {
     if (otherVersions().length === 1 && !props.compareTargetId) {
       emit("selectVersion", otherVersions()[0]!.id)

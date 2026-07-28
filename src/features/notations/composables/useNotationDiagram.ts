@@ -1,31 +1,44 @@
-import { shallowRef, watch, type Ref } from 'vue'
+import { shallowRef, watch, type Ref } from "vue"
 import {
   DiagramRenderer,
   RectangleNode,
   CircleNode,
-  DiamondNode,
   CustomShapeNode,
-  CompositeNode,
   deserializeCComponent,
   Node as DiagramNode,
   Edge,
   AutoLayout,
-  GridOverlay,
-  MiniMap,
-  RulersOverlay,
-  NavigationManager,
   SelectionManager,
-  InteractionManager,
   TextLabel,
+  type InteractionManager,
+  type NavigationManager,
   type ElementState,
   type EdgeStyle as PapirusEdgeStyle,
   type CContainer,
-} from '@ngroznykh/papirus'
-import { diagramShapeFactories } from '@/utils/diagramShapes'
-import { customOutlineToPath2D, customOutlineToSvgPath } from '@/utils/customOutlinePath'
-import type { CustomProperty, DiagramStyle } from '../notationAttrs'
-import type { NotationEditorState, EditorComponent } from '../types'
-import { useNotationStyles, COMPONENT_STYLE, type RelationEdgeStyle } from './useNotationStyles'
+} from "@ngroznykh/papirus"
+import {
+  createDiagramNode,
+  getDiagramNodeShape,
+  resolveCornerCutPx,
+  resolveDiagramNodeShape,
+} from "@/features/diagram/diagramNodeFactory"
+import { customOutlineToPath2D, customOutlineToSvgPath } from "@/utils/customOutlinePath"
+import { diagramShapeFactories } from "@/utils/diagramShapes"
+import { applyContentInsetFromStyle } from "@/features/diagram-style/utils/applyContentInsetFromStyle"
+import {
+  ensureNodeShapeScaleSliceCatalog,
+  withResolvedScaleSlice,
+} from "@/utils/resolveCustomScaleSlice"
+import type { CustomProperty, DiagramStyle } from "@/domain/attrs/notationAttrs"
+import type {
+  NotationEditorState,
+  EditorComponent,
+} from "../types"
+import {
+  useNotationStyles,
+  COMPONENT_STYLE,
+  type RelationEdgeStyle,
+} from "./useNotationStyles"
 import {
   resolveComponentAnchorPoints,
   buildNodeLabel,
@@ -33,14 +46,15 @@ import {
   buildEdgeLabelBackground,
   buildNodeIcon,
   buildMarker,
-} from '../utils/notationElementBuilders'
+  mergeEdgeLabelStyleFromDiagramStyle,
+} from "../utils/notationElementBuilders"
 import {
   applyStylePropertyBindings,
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
-} from '../utils/compositeBindings'
+} from "@/features/diagram-style/utils/compositeBindings"
 
-export type EntityKind = 'component' | 'relation'
+export type EntityKind = "component" | "relation"
 
 export interface NotationDiagramOptions {
   state: Ref<NotationEditorState>
@@ -48,12 +62,13 @@ export interface NotationDiagramOptions {
   onSelect: (id: string | null, kind: EntityKind | null) => void
 }
 
+
 const ANCHOR_STYLE = {
-  fillColor: 'transparent',
-  strokeColor: 'transparent',
-  strokeWidth: 0,
+  fillColor: "transparent",
+  strokeColor: "transparent",
+  strokeWidth: 0
 }
-const SOFT_SELECTION_COLOR = '#6366f1'
+const SOFT_SELECTION_COLOR = "#6366f1"
 const SOFT_SELECTION_OFFSET_PX = 3
 
 const ANCHOR_SIZE = 10
@@ -71,17 +86,11 @@ type AnchorRelationMeta = {
   diagramStyle?: DiagramStyle
 }
 
-type NodeWithLabelPlacement = DiagramNode & { labelPlacement?: string }
 type InsetSides = { top?: number; right?: number; bottom?: number; left?: number }
 type TextLabelWithSpacing = TextLabel & {
   inset?: number | InsetSides
   padding?: number
   margin?: number
-}
-
-function setNodeLabelPlacement(node: DiagramNode, placement: string | undefined): void {
-  if (!placement) return
-  ;(node as NodeWithLabelPlacement).labelPlacement = placement
 }
 
 function setTextLabelSpacing(
@@ -95,46 +104,9 @@ function setTextLabelSpacing(
   if (options.margin != null) withSpacing.margin = options.margin
 }
 
-type ComponentShape =
-  | 'rectangle'
-  | 'beveled-rectangle'
-  | 'diamond'
-  | 'circle'
-  | 'trapezoid'
-  | 'slanted-rectangle'
-  | 'custom'
-  | 'composite'
 
 function disableTransformerFrame(node: DiagramNode) {
   node.resizeHandlesEnabled = false
-}
-
-function getComponentShape(ds?: DiagramStyle): ComponentShape {
-  const shape = ds?.nodeShape as ComponentShape | undefined
-  switch (shape) {
-    case 'beveled-rectangle':
-    case 'diamond':
-    case 'circle':
-    case 'trapezoid':
-    case 'slanted-rectangle':
-    case 'custom':
-    case 'composite':
-      return shape
-    default:
-      return 'rectangle'
-  }
-}
-
-function isCustomShapeNode(node: DiagramNode): node is CustomShapeNode {
-  return node instanceof CustomShapeNode
-}
-
-function getNodeShapeFromNode(node: DiagramNode): ComponentShape {
-  if (node instanceof CompositeNode) return 'composite'
-  if (node instanceof DiamondNode) return 'diamond'
-  if (node instanceof CircleNode) return 'circle'
-  if (isCustomShapeNode(node)) return (node.shapeType as ComponentShape) ?? 'rectangle'
-  return 'rectangle'
 }
 
 function normalizeTagForSort(value: string): string {
@@ -144,21 +116,21 @@ function normalizeTagForSort(value: string): string {
 function getComponentTagsSortKey(component: EditorComponent): string {
   const tags = (component.parsedAttrs.tags ?? [])
     .map(normalizeTagForSort)
-    .filter(tag => tag.length > 0)
-    .sort((a, b) => a.localeCompare(b, 'ru', { sensitivity: 'base' }))
-  return tags.join('|')
+    .filter((tag) => tag.length > 0)
+    .sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }))
+  return tags.join("|")
 }
 
 function compareComponentsForLayout(a: EditorComponent, b: EditorComponent): number {
-  const tagsDiff = getComponentTagsSortKey(a).localeCompare(getComponentTagsSortKey(b), 'ru', {
-    sensitivity: 'base',
+  const tagsDiff = getComponentTagsSortKey(a).localeCompare(getComponentTagsSortKey(b), "ru", {
+    sensitivity: "base"
   })
   if (tagsDiff !== 0) return tagsDiff
 
-  const nameDiff = a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' })
+  const nameDiff = a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
   if (nameDiff !== 0) return nameDiff
 
-  return a.id.localeCompare(b.id, 'ru', { sensitivity: 'base' })
+  return a.id.localeCompare(b.id, "ru", { sensitivity: "base" })
 }
 
 export function useNotationDiagram(options: NotationDiagramOptions) {
@@ -168,60 +140,47 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   const interactionManagerRef = shallowRef<InteractionManager | null>(null)
   const selectionManagerRef = shallowRef<SelectionManager | null>(null)
   const navigationManagerRef = shallowRef<NavigationManager | null>(null)
-  const gridOverlayRef = shallowRef<GridOverlay | null>(null)
-  const miniMapRef = shallowRef<MiniMap | null>(null)
-  const rulersOverlayRef = shallowRef<RulersOverlay | null>(null)
   const nodeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   const edgeIdToEntity = new Map<string, { id: string; kind: EntityKind }>()
   let cleanupSelectionOutlineOverlay: (() => void) | null = null
   let syncingRelationSelection = false
   let syncingSelectionFromState = false
 
-  const { resolveComponentStyle, resolveRelationStyle } = useNotationStyles(state)
+  const {
+    resolveComponentStyle,
+    resolveRelationStyle,
+  } = useNotationStyles(state)
 
   function typeCustomPropertiesForComponent(component: EditorComponent): CustomProperty[] {
-    const nt = state.value.nodeTypes.find(n => n.id === component.nodeTypeId)
+    const nt = state.value.nodeTypes.find((n) => n.id === component.nodeTypeId)
     if (!nt) return []
-    return (nt.parsedAttrs.customProperties ?? []).filter(p => !p.system)
+    return (nt.parsedAttrs.customProperties ?? []).filter((p) => !p.system)
   }
 
-  function createComponentNode(item: EditorComponent, x: number, y: number): DiagramNode {
+  function createComponentNode(
+    item: EditorComponent,
+    x: number,
+    y: number
+  ): DiagramNode {
     const visual = resolveComponentStyle(item)
-    const ds = item.parsedAttrs.diagramStyle
-    const shape = getComponentShape(ds)
-    const commonBase = {
-      id: `component-${item.id}`,
-      x,
-      y,
-      width: visual.width,
-      height: visual.height,
-      style: visual.style,
-      anchorPoints: resolveComponentAnchorPoints(ds),
-      contentInset: (ds?.contentInset ?? 0) as unknown as number,
-    }
-    const commonOptions = {
-      ...commonBase,
-      label: buildNodeLabel(
-        item.name,
-        ds,
-        item.parsedAttrs.customProperties.filter(p => !p.system),
-        typeCustomPropertiesForComponent(item)
-      ),
-      ...(buildNodeIcon(ds) ? { icon: buildNodeIcon(ds) } : {}),
-    }
-    const beveledFactory = diagramShapeFactories['beveled-rectangle']
-    const trapezoidFactory = diagramShapeFactories['trapezoid']
-    const slantedFactory = diagramShapeFactories['slanted-rectangle']
+    const ds = withResolvedScaleSlice(item.parsedAttrs.diagramStyle)
+    const shape = resolveDiagramNodeShape(ds)
+    const componentProperties = item.parsedAttrs.customProperties.filter((p) => !p.system)
+    const nodeTypeProperties = typeCustomPropertiesForComponent(item)
+    const icon = buildNodeIcon(ds)
+    let composite:
+      | {
+          content: CContainer
+          stylePatch?: Record<string, unknown>
+        }
+      | undefined
 
-    let node: DiagramNode
-    if (shape === 'composite') {
-      const componentProperties = item.parsedAttrs.customProperties.filter(p => !p.system)
-      const nodeTypeProperties = typeCustomPropertiesForComponent(item)
+    if (shape === "composite") {
       const componentValues = Object.fromEntries(
-        componentProperties.map(p => [p.name, p.defaultValue])
+        componentProperties.map((p) => [p.name, p.defaultValue])
       )
       const nodeTypeValues = Object.fromEntries(
-        nodeTypeProperties.map(p => [p.name, p.defaultValue])
+        nodeTypeProperties.map((p) => [p.name, p.defaultValue])
       )
       const baseContent = ds?.compositeContent ?? createDefaultCompositeContent(item.name)
       const contentWithNameAndIcon = injectCompositeNameAndIcon(baseContent, {
@@ -235,93 +194,37 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         nodeTypeProperties,
         nodeTypeValues,
       })
-      const compositeStyle = {
-        ...visual.style,
-        ...bindingResult.outerPatch,
-        ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
-        ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
-        ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-        ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
-      }
-      const rawCompositeShape = ds?.compositeShapeType ?? 'rectangle'
-      const compositeShapeMappedToCustom =
-        rawCompositeShape === 'beveled-rectangle' ||
-        rawCompositeShape === 'trapezoid' ||
-        rawCompositeShape === 'slanted-rectangle'
-      let compositePathFactory: ((w: number, h: number) => Path2D) | undefined
-      if (compositeShapeMappedToCustom) {
-        compositePathFactory = diagramShapeFactories[rawCompositeShape]?.path
-      } else if (rawCompositeShape === 'custom' && ds?.customOutline?.length) {
-        const segments = ds.customOutline
-        compositePathFactory = (w, h) => customOutlineToPath2D(segments, w, h)
-      }
-      node = new CompositeNode({
-        ...commonBase,
-        style: compositeStyle,
-        shapeType:
-          compositeShapeMappedToCustom || (rawCompositeShape === 'custom' && compositePathFactory)
-            ? 'custom'
-            : (rawCompositeShape as 'rectangle' | 'circle' | 'diamond' | 'custom'),
-        cornerRadius: visual.cornerRadius,
-        autoSize: ds?.compositeAutoSize ?? false,
-        minWidth: ds?.compositeMinWidth ?? 0,
-        minHeight: ds?.compositeMinHeight ?? 0,
+      composite = {
         content: deserializeCComponent(bindingResult.content) as unknown as CContainer,
-        ...(compositePathFactory ? { pathFactory: compositePathFactory } : {}),
-      })
-    } else if (shape === 'diamond') {
-      node = new DiamondNode(commonOptions)
-    } else if (shape === 'circle') {
-      node = new CircleNode(commonOptions)
-    } else if (shape === 'beveled-rectangle') {
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: beveledFactory.path,
-        svgPath: beveledFactory.svgPath,
-      })
-    } else if (shape === 'trapezoid') {
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: trapezoidFactory.path,
-        svgPath: trapezoidFactory.svgPath,
-      })
-    } else if (shape === 'slanted-rectangle') {
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: slantedFactory.path,
-        svgPath: slantedFactory.svgPath,
-      })
-    } else if (shape === 'custom' && ds?.customOutline?.length) {
-      const segments = ds.customOutline
-      node = new CustomShapeNode({
-        ...commonOptions,
-        path: (w, h) => customOutlineToPath2D(segments, w, h),
-        svgPath: (w, h) => customOutlineToSvgPath(segments, w, h),
-      })
-    } else {
-      node = new RectangleNode({
-        ...commonOptions,
-        cornerRadius: visual.cornerRadius,
-      })
+        stylePatch: bindingResult.outerPatch,
+      }
     }
-    if (node instanceof CustomShapeNode) {
-      node.shapeType = shape
-    }
-    setNodeLabelPlacement(node, ds?.labelPlacement)
+
+    const node = createDiagramNode({
+      id: `component-${item.id}`,
+      x,
+      y,
+      width: visual.width,
+      height: visual.height,
+      style: visual.style,
+      diagramStyle: ds,
+      anchorPoints: resolveComponentAnchorPoints(ds),
+      contentInset: (ds?.contentInset ?? 0) as unknown as number,
+      label: buildNodeLabel(
+        item.name,
+        ds,
+        componentProperties,
+        nodeTypeProperties,
+      ),
+      ...(icon ? { icon } : {}),
+      cornerRadius: visual.cornerRadius,
+      composite,
+    })
     disableTransformerFrame(node)
     return node
   }
 
-  function createDiagramLayerNode(
-    nodeId: string,
-    layerNode: {
-      x: number
-      y: number
-      width: number
-      height: number
-      attrs?: Record<string, unknown>
-    }
-  ): DiagramNode {
+  function createDiagramLayerNode(nodeId: string, layerNode: { x: number; y: number; width: number; height: number; attrs?: Record<string, unknown> }): DiagramNode {
     const layerStyle = (layerNode.attrs?.style as Record<string, unknown> | undefined) ?? {}
     return new RectangleNode({
       id: nodeId,
@@ -329,12 +232,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       y: layerNode.y,
       width: layerNode.width,
       height: layerNode.height,
-      label: typeof layerNode.attrs?.label === 'string' ? layerNode.attrs.label : '',
+      label: typeof layerNode.attrs?.label === "string" ? layerNode.attrs.label : "",
       style: {
-        fillColor: typeof layerStyle.fillColor === 'string' ? layerStyle.fillColor : '#fff8d6',
-        strokeColor:
-          typeof layerStyle.strokeColor === 'string' ? layerStyle.strokeColor : '#d4b85f',
-        strokeWidth: typeof layerStyle.strokeWidth === 'number' ? layerStyle.strokeWidth : 1,
+        fillColor: typeof layerStyle.fillColor === "string" ? layerStyle.fillColor : "#fff8d6",
+        strokeColor: typeof layerStyle.strokeColor === "string" ? layerStyle.strokeColor : "#d4b85f",
+        strokeWidth: typeof layerStyle.strokeWidth === "number" ? layerStyle.strokeWidth : 1,
         lineDash: [6, 4],
       },
       anchorPoints: NO_ANCHORS,
@@ -350,28 +252,28 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const componentNodes: DiagramNode[] = []
 
     // Filter out deleted items
-    const activeComponents = state.value.components.filter(c => !c._isDeleted)
+    const activeComponents = state.value.components.filter((c) => !c._isDeleted)
     const activeComponentsSorted = [...activeComponents].sort(compareComponentsForLayout)
-    const activeRelations = state.value.relations.filter(r => !r._isDeleted)
+    const activeRelations = state.value.relations.filter((r) => !r._isDeleted)
 
     // --- Components as rectangle nodes ---
     for (const component of activeComponents) {
       const nodeId = `component-${component.id}`
       currentNodeIds.add(nodeId)
-      nodeIdToEntity.set(nodeId, { id: component.id, kind: 'component' })
+      nodeIdToEntity.set(nodeId, { id: component.id, kind: "component" })
 
       const existing = renderer.getNode(nodeId)
       if (existing) {
-        const ds = component.parsedAttrs.diagramStyle
-        const expectedShape = getComponentShape(ds)
-        const existingShape = getNodeShapeFromNode(existing)
+        const ds = withResolvedScaleSlice(component.parsedAttrs.diagramStyle)
+        const expectedShape = resolveDiagramNodeShape(ds)
+        const existingShape = getDiagramNodeShape(existing)
         if (expectedShape !== existingShape) {
           const replacement = createComponentNode(component, existing.x, existing.y)
           renderer.removeNode(nodeId)
           renderer.addNode(replacement)
           continue
         }
-        if (expectedShape === 'composite') {
+        if (expectedShape === "composite") {
           const replacement = createComponentNode(component, existing.x, existing.y)
           renderer.removeNode(nodeId)
           renderer.addNode(replacement)
@@ -383,10 +285,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const newLabel = buildNodeLabel(
           component.name,
           ds,
-          component.parsedAttrs.customProperties.filter(p => !p.system),
-          typeCustomPropertiesForComponent(component)
+          component.parsedAttrs.customProperties.filter((p) => !p.system),
+          typeCustomPropertiesForComponent(component),
         )
-        if (typeof newLabel === 'string') {
+        if (newLabel === undefined) {
+          existing.label = undefined
+        } else if (typeof newLabel === "string") {
           existing.label = newLabel
         } else {
           existing.label = new TextLabel(newLabel)
@@ -399,14 +303,32 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           ...(ds?.fillOpacity != null ? { fillOpacity: ds.fillOpacity } : {}),
           ...(ds?.strokeOpacity != null ? { strokeOpacity: ds.strokeOpacity } : {}),
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-          ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
+          ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         }
         if (existing instanceof RectangleNode) {
           existing.cornerRadius = visual.cornerRadius
         }
+        if (
+          expectedShape === "custom" &&
+          existing instanceof CustomShapeNode &&
+          ds?.customOutline?.length
+        ) {
+          const segments = ds.customOutline
+          const slice = ds.customScaleSlice
+          existing.setPathFactory((w, h) => customOutlineToPath2D(segments, w, h, slice))
+          existing.setSvgPath((w, h) => customOutlineToSvgPath(segments, w, h, slice))
+        }
+        if (expectedShape === "beveled-rectangle" && existing instanceof CustomShapeNode) {
+          const cut = resolveCornerCutPx(ds)
+          const factory = diagramShapeFactories["beveled-rectangle"]
+          existing.setPathFactory((w, h) => factory.path(w, h, cut))
+          existing.setSvgPath((w, h) => factory.svgPath(w, h, cut))
+        }
         existing.icon = buildNodeIcon(ds)
-        existing.contentInset = (ds?.contentInset ?? 0) as unknown as number
-        setNodeLabelPlacement(existing, ds?.labelPlacement)
+        applyContentInsetFromStyle(existing, ds)
+        if (ds?.labelPlacement) {
+          ;(existing as DiagramNode & { labelPlacement?: string }).labelPlacement = ds.labelPlacement
+        }
       } else {
         componentNodes.push(createComponentNode(component, 0, 0))
       }
@@ -439,16 +361,16 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       if (existingEdge) {
         existingEdge.from = { nodeId: sourceId }
         existingEdge.to = { nodeId: targetId }
-        existingEdge.label = typeof layerEdge.attrs?.label === 'string' ? layerEdge.attrs.label : ''
+        existingEdge.label = typeof layerEdge.attrs?.label === "string" ? layerEdge.attrs.label : ""
       } else {
         renderer.addEdge(
           new Edge({
             id: edgeId,
             from: { nodeId: sourceId },
             to: { nodeId: targetId },
-            type: 'polyline',
-            style: { strokeColor: '#d4b85f', strokeWidth: 1, lineDash: [6, 4] },
-            label: typeof layerEdge.attrs?.label === 'string' ? layerEdge.attrs.label : '',
+            type: "polyline",
+            style: { strokeColor: "#d4b85f", strokeWidth: 1, lineDash: [6, 4] },
+            label: typeof layerEdge.attrs?.label === "string" ? layerEdge.attrs.label : "",
           })
         )
       }
@@ -467,9 +389,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       currentNodeIds.add(tgtId)
       currentEdgeIds.add(edgeId)
 
-      nodeIdToEntity.set(srcId, { id: relation.id, kind: 'relation' })
-      nodeIdToEntity.set(tgtId, { id: relation.id, kind: 'relation' })
-      edgeIdToEntity.set(edgeId, { id: relation.id, kind: 'relation' })
+      nodeIdToEntity.set(srcId, { id: relation.id, kind: "relation" })
+      nodeIdToEntity.set(tgtId, { id: relation.id, kind: "relation" })
+      edgeIdToEntity.set(edgeId, { id: relation.id, kind: "relation" })
 
       const edgeStyle = resolveRelationStyle(relation)
 
@@ -481,20 +403,27 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         disableTransformerFrame(existingSrc)
         if (existingTgt) disableTransformerFrame(existingTgt)
         const ds = relation.parsedAttrs.diagramStyle
-        // Set label as string first (setter creates proper TextLabel), then apply style
-        existingEdge.label = relation.name
-        if (
-          existingEdge.label &&
-          (ds?.labelColor || ds?.labelFontSize || ds?.labelOpacity != null)
-        ) {
-          existingEdge.label.style = {
-            ...(ds.labelColor ? { color: ds.labelColor } : {}),
-            ...(ds.labelOpacity != null ? { opacity: ds.labelOpacity } : {}),
-            ...(ds.labelFontSize ? { fontSize: ds.labelFontSize } : {}),
+        // Update label in place — assigning a string recreates TextLabel and drops styles
+        // (then a delayed history flush can persist the wipe after edgeType changes).
+        if (existingEdge.label) {
+          existingEdge.label.text = relation.name
+          existingEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+            existingEdge.label.styleOverrides,
+            ds
+          )
+        } else {
+          const labelConfig = buildEdgeLabel(relation.name, ds)
+          existingEdge.label =
+            typeof labelConfig === 'string' ? labelConfig : new TextLabel(labelConfig)
+          if (existingEdge.label) {
+            existingEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
+              existingEdge.label.styleOverrides,
+              ds
+            )
           }
         }
         setTextLabelSpacing(existingEdge.label, {
-          inset: ds?.labelInset,
+          inset: ds?.labelInset
         })
         // Update edge style
         existingEdge.style = {
@@ -502,21 +431,17 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           strokeWidth: edgeStyle.strokeWidth,
           strokeOpacity: edgeStyle.strokeOpacity ?? 1,
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-          ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
+          ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         } as PapirusEdgeStyle
         existingEdge.labelBackground = buildEdgeLabelBackground(ds)
         existingEdge.labelOffset = ds?.edgeLabelOffset ?? 18
         existingEdge.labelLineGap = ds?.edgeLabelLineGap ?? false
         if (ds?.edgeType) {
-          existingEdge.type = ds.edgeType as
-            | 'straight'
-            | 'polyline'
-            | 'editable-polyline'
-            | 'bezier'
+          existingEdge.type = ds.edgeType as "straight" | "polyline" | "editable-polyline" | "bezier"
         }
-        existingEdge.startMarker = buildMarker(ds?.startMarkerType, ds, 'start')
-        existingEdge.endMarker = buildMarker(ds?.endMarkerType, ds, 'end')
-        existingEdge.arrowType = 'none'
+        existingEdge.startMarker = buildMarker(ds?.startMarkerType, ds, "start")
+        existingEdge.endMarker = buildMarker(ds?.endMarkerType, ds, "end")
+        existingEdge.arrowType = "none"
       } else {
         // Create new anchor pair + edge
         const srcNode = new CircleNode({
@@ -526,7 +451,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           width: ANCHOR_SIZE,
           height: ANCHOR_SIZE,
           style: ANCHOR_STYLE,
-          anchorPoints: NO_ANCHORS,
+          anchorPoints: NO_ANCHORS
         })
         const tgtNode = new CircleNode({
           id: tgtId,
@@ -535,7 +460,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           width: ANCHOR_SIZE,
           height: ANCHOR_SIZE,
           style: ANCHOR_STYLE,
-          anchorPoints: NO_ANCHORS,
+          anchorPoints: NO_ANCHORS
         })
         disableTransformerFrame(srcNode)
         disableTransformerFrame(tgtNode)
@@ -549,7 +474,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           relationId: relation.id,
           relationName: relation.name,
           edgeStyle,
-          diagramStyle: relation.parsedAttrs.diagramStyle,
+          diagramStyle: relation.parsedAttrs.diagramStyle
         })
       }
     }
@@ -573,9 +498,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const autoLayout = new AutoLayout()
       const startX = GRID_SIZE * 3
       const startY = GRID_SIZE * 3
-      const newComponentById = new Map(componentNodes.map(node => [node.id, node]))
+      const newComponentById = new Map(componentNodes.map((node) => [node.id, node]))
       const componentNodesForLayout = activeComponentsSorted
-        .map(component => {
+        .map((component) => {
           const nodeId = `component-${component.id}`
           const existing = renderer.getNode(nodeId)
           return existing ?? newComponentById.get(nodeId) ?? null
@@ -587,7 +512,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         columnGap: COLUMN_GAP,
         rowGap: ROW_GAP,
         startX,
-        startY,
+        startY
       })
       for (const node of componentNodes) {
         renderer.addNode(node)
@@ -600,7 +525,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       let startX = GRID_SIZE * 3
       const allNodes = [...renderer.nodes.values()]
       if (allNodes.length > 0) {
-        const maxX = Math.max(...allNodes.map(n => n.x + n.width))
+        const maxX = Math.max(...allNodes.map((n) => n.x + n.width))
         startX = Math.ceil((maxX + COLUMN_GAP * 2) / GRID_SIZE) * GRID_SIZE
       }
 
@@ -611,19 +536,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         columnGap: COLUMN_GAP,
         rowGap: ROW_GAP,
         startX,
-        startY: GRID_SIZE * 3,
+        startY: GRID_SIZE * 3
       })
 
       for (const srcNode of newAnchorSources) {
         const relationMeta = relationMetaBySourceId.get(srcNode.id)
         if (!relationMeta) continue
-        const {
-          pairedTarget: tgtNode,
-          edgeStyle,
-          relationName,
-          relationId,
-          diagramStyle: ds,
-        } = relationMeta
+        const { pairedTarget: tgtNode, edgeStyle, relationName, relationId, diagramStyle: ds } = relationMeta
 
         // Position target relative to source
         tgtNode.x = srcNode.x + ANCHOR_GAP
@@ -632,17 +551,16 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         renderer.addNode(srcNode)
         renderer.addNode(tgtNode)
 
-        const edgeTypeVal =
-          (ds?.edgeType as 'straight' | 'polyline' | 'editable-polyline' | 'bezier') || 'polyline'
-        const startMarker = buildMarker(ds?.startMarkerType, ds, 'start')
-        const endMarker = buildMarker(ds?.endMarkerType, ds, 'end')
+        const edgeTypeVal = (ds?.edgeType as "straight" | "polyline" | "editable-polyline" | "bezier") || "polyline"
+        const startMarker = buildMarker(ds?.startMarkerType, ds, "start")
+        const endMarker = buildMarker(ds?.endMarkerType, ds, "end")
 
         const edge = new Edge({
           id: `relation-edge-${relationId}`,
           from: { nodeId: srcNode.id },
           to: { nodeId: tgtNode.id },
           type: edgeTypeVal,
-          arrowType: 'none',
+          arrowType: "none",
           label: buildEdgeLabel(relationName, ds),
           labelOffset: ds?.edgeLabelOffset ?? 18,
           ...(ds?.edgeLabelPosition != null ? { labelPosition: ds.edgeLabelPosition } : {}),
@@ -654,10 +572,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
             strokeWidth: edgeStyle.strokeWidth,
             strokeOpacity: edgeStyle.strokeOpacity ?? 1,
             ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-            ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
+            ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
           } as PapirusEdgeStyle,
           startMarker,
-          endMarker,
+          endMarker
         })
         if (edge.label && ds?.labelInset != null) {
           ;(edge.label as unknown as { inset?: unknown }).inset = ds.labelInset
@@ -670,36 +588,36 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   function updateSelection(renderer: DiagramRenderer, selectedEntityId?: string | null) {
     const id = selectedEntityId === undefined ? selectedId.value : selectedEntityId
     syncSelectionManagerFromEntityId(id)
-    const activeComponents = state.value.components.filter(c => !c._isDeleted)
+    const activeComponents = state.value.components.filter((c) => !c._isDeleted)
 
     // Update node selection styles
     for (const [nodeId, node] of renderer.nodes) {
       const entity = nodeIdToEntity.get(nodeId)
       const isSelected = entity && entity.id === id
 
-      if (entity?.kind === 'component') {
-        const item = activeComponents.find(entry => entry.id === entity.id)
+      if (entity?.kind === "component") {
+        const item = activeComponents.find((entry) => entry.id === entity.id)
         const baseStyle = item ? resolveComponentStyle(item).style : COMPONENT_STYLE
         const ds = item?.parsedAttrs.diagramStyle
         const fullStyle = {
           ...baseStyle,
           ...(ds?.opacity != null ? { opacity: ds.opacity } : {}),
-          ...(ds?.lineDash ? { lineDash: ds.lineDash } : {}),
+          ...(ds?.lineDash ? { lineDash: ds.lineDash } : {})
         }
         if (isSelected) {
           node.style = fullStyle
-          node.state = 'normal' as ElementState
+          node.state = "normal" as ElementState
         } else {
           node.style = fullStyle
-          if (node.state === 'selected') {
-            node.state = 'normal' as ElementState
+          if (node.state === "selected") {
+            node.state = "normal" as ElementState
           }
         }
-      } else if (entity?.kind === 'relation') {
+      } else if (entity?.kind === "relation") {
         // Anchor nodes stay invisible
         node.style = ANCHOR_STYLE
-        if (node.state === 'selected') {
-          node.state = 'normal' as ElementState
+        if (node.state === "selected") {
+          node.state = "normal" as ElementState
         }
       }
     }
@@ -710,10 +628,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       const isSelected = entity && entity.id === id
 
       if (isSelected) {
-        edge.state = 'selected'
+        edge.state = "selected"
       } else {
-        if (edge.state === 'selected') {
-          edge.state = 'normal' as ElementState
+        if (edge.state === "selected") {
+          edge.state = "normal" as ElementState
         }
       }
     }
@@ -723,9 +641,9 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const anchorIds: string[] = []
     for (const [nodeId, entity] of nodeIdToEntity) {
       if (
-        entity.kind === 'relation' &&
+        entity.kind === "relation" &&
         entity.id === relationId &&
-        (nodeId.startsWith('relation-src-') || nodeId.startsWith('relation-tgt-'))
+        (nodeId.startsWith("relation-src-") || nodeId.startsWith("relation-tgt-"))
       ) {
         anchorIds.push(nodeId)
       }
@@ -778,38 +696,15 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     }
   }
 
-  function initRenderer(renderer: DiagramRenderer) {
+  function initRenderer(renderer: DiagramRenderer, interactionManager: InteractionManager) {
     rendererRef.value = renderer
-
-    const gridOverlay = new GridOverlay({
-      gridSize: GRID_SIZE,
-      color: '#e2e8f0',
-    })
-    renderer.use(gridOverlay)
-    gridOverlayRef.value = gridOverlay
-
-    const rulersOverlay = new RulersOverlay({ enabled: true })
-    renderer.use(rulersOverlay)
-    rulersOverlayRef.value = rulersOverlay
-
-    const miniMap = new MiniMap({ width: 120, height: 60, padding: 20, contentMargin: 200 })
-    renderer.use(miniMap)
-    miniMapRef.value = miniMap
-
-    const interactionManager = renderer.enableInteractions({
-      snapToGrid: true,
-      gridSize: GRID_SIZE,
-      alignToNodes: true,
-      alignmentScreenTolerance: 40,
-      previewPathType: 'straight',
-      keymap: { deleteKeys: [] },
-    })
     // Notation editor does not support interactive port-to-port connections.
-    const connectionManager = interactionManager.connection as unknown as {
-      connectionValidator?: ((sourceNodeId: string, targetNodeId: string) => boolean) | null
-      tryStartConnectionAtPoint?: (event: unknown) => boolean
-      tryStartReconnection?: (event: unknown) => boolean
-    }
+    const connectionManager =
+      interactionManager.connection as unknown as {
+        connectionValidator?: ((sourceNodeId: string, targetNodeId: string) => boolean) | null
+        tryStartConnectionAtPoint?: (event: unknown) => boolean
+        tryStartReconnection?: (event: unknown) => boolean
+      }
     connectionManager.connectionValidator = () => false
     connectionManager.tryStartConnectionAtPoint = () => false
     connectionManager.tryStartReconnection = () => false
@@ -820,13 +715,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     navigationManagerRef.value = interactionManager.navigation
 
     cleanupSelectionOutlineOverlay?.()
-    cleanupSelectionOutlineOverlay = renderer.addOverlayRenderer(ctx => {
+    cleanupSelectionOutlineOverlay = renderer.addOverlayRenderer((ctx) => {
       const selectedEntityId = selectedId.value
       if (!selectedEntityId) return
 
       let selectedNode: DiagramNode | null = null
       for (const [nodeId, entity] of nodeIdToEntity) {
-        if (entity.kind === 'component' && entity.id === selectedEntityId) {
+        if (entity.kind === "component" && entity.id === selectedEntityId) {
           const node = renderer.getNode(nodeId)
           if (node) {
             selectedNode = node
@@ -854,7 +749,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       ctx.restore()
     })
 
-    selectionManager.on('select', (elementIds: string[]) => {
+    selectionManager.on("select", (elementIds: string[]) => {
       if (syncingRelationSelection || syncingSelectionFromState) {
         return
       }
@@ -891,11 +786,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       updateSelection(renderer)
     })
 
-    interactionManager.drag.on('dragend', (draggedNodeIds: string[]) => {
+    interactionManager.drag.on("dragend", (draggedNodeIds: string[]) => {
       if (!Array.isArray(draggedNodeIds) || draggedNodeIds.length === 0) return
       const draggedSet = new Set(draggedNodeIds)
       let changed = false
-      state.value.diagramLayer.nodes = state.value.diagramLayer.nodes.map(node => {
+      state.value.diagramLayer.nodes = state.value.diagramLayer.nodes.map((node) => {
         const papirusId = `layer-node-${node.id}`
         if (!draggedSet.has(papirusId)) return node
         const rendered = renderer.getNode(papirusId)
@@ -914,6 +809,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
 
     syncNodes(renderer)
     updateSelection(renderer)
+
+    void ensureNodeShapeScaleSliceCatalog().then((ok) => {
+      if (!ok || rendererRef.value !== renderer) return
+      // Re-apply path factories once catalog scaleSlice attrs are available.
+      syncNodes(renderer)
+      updateSelection(renderer)
+    })
 
     watch(
       () => [state.value.components, state.value.relations, state.value.diagramLayer],
@@ -938,11 +840,11 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     if (!renderer) return
 
     const activeComponentsSorted = state.value.components
-      .filter(component => !component._isDeleted)
+      .filter((component) => !component._isDeleted)
       .sort(compareComponentsForLayout)
 
     const componentNodes = activeComponentsSorted
-      .map(component => renderer.getNode(`component-${component.id}`))
+      .map((component) => renderer.getNode(`component-${component.id}`))
       .filter((node): node is DiagramNode => node !== undefined)
 
     if (componentNodes.length === 0) return
@@ -953,35 +855,31 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       columnGap: COLUMN_GAP,
       rowGap: ROW_GAP,
       startX: GRID_SIZE * 3,
-      startY: GRID_SIZE * 3,
+      startY: GRID_SIZE * 3
     })
 
     // Re-layout relation anchor pairs to the right of components
     const relationSourceNodes: CircleNode[] = []
     for (const [nodeId, node] of renderer.nodes) {
       const entity = nodeIdToEntity.get(nodeId)
-      if (
-        entity?.kind === 'relation' &&
-        nodeId.startsWith('relation-src-') &&
-        node instanceof CircleNode
-      ) {
+      if (entity?.kind === "relation" && nodeId.startsWith("relation-src-") && node instanceof CircleNode) {
         relationSourceNodes.push(node)
       }
     }
 
     if (relationSourceNodes.length > 0) {
-      const maxX = Math.max(...componentNodes.map(n => n.x + n.width))
+      const maxX = Math.max(...componentNodes.map((n) => n.x + n.width))
       const startX = Math.ceil((maxX + COLUMN_GAP * 2) / GRID_SIZE) * GRID_SIZE
       autoLayout.applyGridLayout(relationSourceNodes, {
         columns: 1,
         columnGap: COLUMN_GAP,
         rowGap: ROW_GAP,
         startX,
-        startY: GRID_SIZE * 3,
+        startY: GRID_SIZE * 3
       })
 
       for (const srcNode of relationSourceNodes) {
-        const relationId = srcNode.id.replace('relation-src-', '')
+        const relationId = srcNode.id.replace("relation-src-", "")
         const tgtNode = renderer.getNode(`relation-tgt-${relationId}`)
         if (tgtNode instanceof CircleNode) {
           tgtNode.x = srcNode.x + ANCHOR_GAP
@@ -1011,9 +909,6 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     interactionManagerRef.value = null
     selectionManagerRef.value = null
     navigationManagerRef.value = null
-    gridOverlayRef.value = null
-    miniMapRef.value = null
-    rulersOverlayRef.value = null
     rendererRef.value = null
     nodeIdToEntity.clear()
     edgeIdToEntity.clear()
@@ -1022,15 +917,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
   return {
     rendererRef,
     interactionManagerRef,
-    gridOverlayRef,
-    miniMapRef,
-    rulersOverlayRef,
     initRenderer,
     destroyRenderer,
     fitToView,
     autoLayoutComponents,
     resetView,
     getNodeEntity,
-    getEdgeEntity,
+    getEdgeEntity
   }
 }

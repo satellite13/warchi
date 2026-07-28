@@ -28,6 +28,16 @@ The model owner can grant access to other users via the **Share** button:
 
 The model card displays the current access level.
 
+### Notation access through a model
+
+Model access and notation access are **separate** permissions. If you have **EDIT** on a shared model but no direct share on the notation:
+
+- the model editor loads notation metadata, components, relations, and types **only for the notation version already used by an active diagram in that model**;
+- you **cannot** attach an arbitrary foreign notation by ID with model permissions alone — the API enforces this;
+- to browse or edit the notation in the **Notations** catalog, the owner must still grant a separate notation share.
+
+The client passes `modelId` when loading notation data from the model editor context.
+
 ### Versioning
 
 Models support semantic versioning (SemVer):
@@ -122,10 +132,12 @@ Compact fields use short labels:
 
 - `W/H/R` — width, height, radius;
 - `PT/PB/PL/PR` — number of top/bottom/left/right ports;
-- `T/R/B/L` — top/right/bottom/left insets.
+- `T/R/B/L` — top/right/bottom/left insets (content inset and label inset).
 
 When hovering these fields, a tooltip shows the full parameter name.
 Inset blocks also support sync modes **Pair** (paired sides) and **All** (all sides), and button captions are localized according to the current UI language.
+
+The three node style insets (**content**, **label**, **icon**) nest and are not interchangeable: first the shape’s content area shrinks, then text and the icon zone sit inside it. Details: [Notations → Content, label, and icon insets](/docs/notations).
 
 The left and right panels can be resized and collapsed.
 
@@ -138,6 +150,32 @@ For the active diagram, the **Diagram Info** action is available in the toolbar.
 - diagram name and version;
 - notation name and version;
 - notation owner (if metadata is available).
+
+### Relation matrix
+
+The model editor header includes **Relation matrix**. It opens a separate matrix screen for links between the model's node types (this is **not** the notation editor **Rules matrix**: that one edits allowed component pairs; this one audits links already present in the model).
+
+- **Without notation (types)** — the vertical and horizontal axes use **node types**; the Relations axis lists **link types** in the model.
+- With a **notation** selected, the vertical and horizontal axes still use **node types**, while Relations lists **link types** used by that notation's relations. A link is placed by source/target **node types** and by **link type** id — not by relation name and not by per-instance component/relation bindings. Names such as `relationship` and `flow` are not matched to each other by themselves.
+- Links whose link type is **not used** by any relation of the selected notation are **excluded** from the matrix (outside that notation's vocabulary).
+- Cells **allowed by the selected notation's relation rules** are visually highlighted.
+- **Allowed by rules only** (when a notation is selected) keeps only those cells; **Hide empty rows and columns** removes axes with no links.
+- Filters for axes and link types, plus a heatmap by link count per cell.
+- Clicking a cell opens a details panel with the list of links.
+- Export: **CSV long**, **CSV wide**, **PNG**.
+
+Use the matrix to audit relation coverage and produce reports without walking every diagram manually.
+
+### Open Exchange (XML) import
+
+The editor header also offers the **Import Open Exchange (XML)** wizard to load an architecture model from OEF XML:
+
+1. **Analyze** — pick a target notation and XML file; the file is uploaded to the server for parsing (up to ~100 MB), and the client receives compact JSON plus validation issues.
+2. **Mapping** — map file element/relationship types to notation components/relations (filter unmapped types and bulk-apply mappings).
+3. **Preview** — review import volume (nodes, links, diagrams) and warnings.
+4. Click **Import** — entities are created in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically).
+
+If required properties are still empty after import, fill them in the properties panel before the next save.
 
 ## Saving
 

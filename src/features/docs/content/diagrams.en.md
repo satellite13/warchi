@@ -211,4 +211,4 @@ The preview is also uploaded automatically when you save the model, so an "alway
 
 ## Saving
 
-The **Save** button on the toolbar becomes active when there are unsaved changes. Before saving, the system validates that all required component properties are filled. If validation fails, an error message will be shown with the specific element and property indicated.
+The **Save** button on the toolbar becomes active when there are unsaved changes. Before saving, the system validates required fields: **node type properties** and **notation component properties** wherever those schemas apply. If validation fails, an error message will be shown with the specific element and property indicated. See [Models → Saving](/docs/models) for save conflicts and live sync.

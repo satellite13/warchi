@@ -10,17 +10,16 @@ import { useDashboard } from "../composables/useDashboard"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
 import { getUserDisplayName } from "../utils/userDisplay"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
-import EntitySection from "../components/dashboard/EntitySection.vue"
+import CompactEntityRow from "../components/list/CompactEntityRow.vue"
+import EmptyState from "../components/list/EmptyState.vue"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
-import changelogFr from "../../CHANGELOG.fr.md?raw"
 
 const router = useRouter()
 const { t, locale } = useI18n()
 
 const changelogRaw = computed(() => {
   if (locale.value === "ru") return changelogRu
-  if (locale.value === "fr") return changelogFr
   return changelogEn
 })
 const { currentUser } = useAuth()
@@ -154,32 +153,68 @@ const releaseNotes = computed(() => {
           <!-- Left: recent items -->
           <div class="main-grid__left">
             <!-- Recent Models -->
-            <EntitySection
-              icon="schema"
-              :title="t('home.sectionRecentModels')"
-              :link-label="t('home.sectionAllModels')"
-              :items="recentModels"
-              :is-loading="isLoading"
-              empty-icon="folder_off"
-              :empty-text="t('home.sectionNoModels')"
-              route-name="model-editor"
-              :format-relative-date="formatRelativeDate"
-              @link-click="goTo('models')"
-            />
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="schema" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
+                <button type="button" class="section__link" @click="goTo('models')">
+                  {{ t("home.sectionAllModels") }}
+                  <UiIcon name="arrow_forward" />
+                </button>
+              </div>
+              <div v-if="isLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="recentModels.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoModels')"
+              />
+              <div v-else class="entity-list">
+                <CompactEntityRow
+                  v-for="item in recentModels"
+                  :key="item.id"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="formatRelativeDate(item.updatedAt)"
+                  @click="router.push({ name: 'model-editor', params: { id: item.id } })"
+                />
+              </div>
+            </section>
 
             <!-- Recent Notations -->
-            <EntitySection
-              icon="account_tree"
-              :title="t('home.sectionRecentNotations')"
-              :link-label="t('home.sectionAllNotations')"
-              :items="recentNotations"
-              :is-loading="isLoading"
-              empty-icon="folder_off"
-              :empty-text="t('home.sectionNoNotations')"
-              route-name="notation-editor"
-              :format-relative-date="formatRelativeDate"
-              @link-click="goTo('notations')"
-            />
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="account_tree" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
+                <button type="button" class="section__link" @click="goTo('notations')">
+                  {{ t("home.sectionAllNotations") }}
+                  <UiIcon name="arrow_forward" />
+                </button>
+              </div>
+              <div v-if="isLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="recentNotations.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoNotations')"
+              />
+              <div v-else class="entity-list">
+                <CompactEntityRow
+                  v-for="item in recentNotations"
+                  :key="item.id"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="formatRelativeDate(item.updatedAt)"
+                  @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
+                />
+              </div>
+            </section>
 
             <section class="section release-notes">
               <div class="section__header">
@@ -191,10 +226,13 @@ const releaseNotes = computed(() => {
                   {{ item }}
                 </li>
               </ul>
-              <div v-else class="section__empty section__empty--compact">
-                <UiIcon name="description" />
-                <span>{{ t("home.sectionReleaseNotesEmpty") }}</span>
-              </div>
+              <EmptyState
+                v-else
+                variant="compact"
+                icon="description"
+                :title="t('home.sectionReleaseNotesEmpty')"
+                class="section__empty--compact"
+              />
             </section>
           </div>
 
@@ -230,10 +268,12 @@ const releaseNotes = computed(() => {
               <div v-if="isLoading" class="skeleton-list">
                 <div v-for="i in 5" :key="i" class="skeleton-item skeleton-item--sm" />
               </div>
-              <div v-else-if="recentActivity.length === 0" class="section__empty">
-                <UiIcon name="hourglass_empty" />
-                <span>{{ t("home.sectionNoActivity") }}</span>
-              </div>
+              <EmptyState
+                v-else-if="recentActivity.length === 0"
+                variant="compact"
+                icon="hourglass_empty"
+                :title="t('home.sectionNoActivity')"
+              />
               <div v-else class="activity-feed">
                 <div
                   v-for="log in recentActivity"
@@ -449,13 +489,12 @@ const releaseNotes = computed(() => {
 }
 
 /* ── Main Grid ── */
- .main-grid {
+.main-grid {
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 20px;
   align-items: start;
   min-height: 0;
-  animation: slideUp 0.5s ease 0.16s both;
 }
 
 .main-grid__left {
@@ -539,25 +578,8 @@ const releaseNotes = computed(() => {
   height: 14px;
 }
 
-.section__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 28px 0;
-  color: var(--text-subtle);
-  font-size: 13px;
-}
-
 .section__empty--compact {
   padding: 8px 0 2px;
-}
-
-.section__empty .ui-icon {
-  width: 32px;
-  height: 32px;
-  opacity: 0.5;
 }
 
 .release-notes {
@@ -577,7 +599,12 @@ const releaseNotes = computed(() => {
   line-height: 1.4;
 }
 
-
+/* ── Entity List ── */
+.entity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
 /* ── Quick Actions ── */
 .actions-grid {
@@ -685,14 +712,41 @@ const releaseNotes = computed(() => {
   flex-shrink: 0;
 }
 
+/* ── Skeletons ── */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-item {
+  height: 56px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--surface-strong) 25%, var(--surface-muted) 50%, var(--surface-strong) 75%);
+  background-size: 400% 100%;
+  animation: shimmer 1.8s ease infinite;
+}
+
+.skeleton-item--sm {
+  height: 40px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
 /* ── Entry animations ── */
-.dashboard .hero {
+.hero {
   animation: slideUp 0.5s ease both;
 }
 
-.dashboard .stats-row {
+.stats-row {
   animation: slideUp 0.5s ease 0.08s both;
+}
+
+.main-grid {
+  animation: slideUp 0.5s ease 0.16s both;
 }
 
 @keyframes slideUp {

@@ -51,8 +51,8 @@ No Pinia/Vuex — state managed via composables with module-level refs.
 - **Entity versioning**: All entities use `VersionedEntity` with semver. CRUD via `useEntityList<T>` composable
 - **Editor state**: Internal flags `_isNew`, `_isDirty`, `_isDeleted` on editor entities. Save order: create → update → delete
 - **Custom properties**: JSON `attrs` field parsed/serialized. Internal flags stripped before API calls
-- **Auth**: JWT in localStorage, auto-refresh on 401, router guards with `meta.requiresAuth`
-- **Batch save conflicts**: `POST /models/{id}/batch-save` sends `baseUpdatedAt`; HTTP 409 returns `conflicts[]`. UI offers reload vs force-overwrite with per-entity field diff. See `docs/plans/model-batch-save-conflicts.md`
+- **Auth**: httpOnly cookie session with CSRF on mutating requests; localStorage stores only the user profile for UI state. 401/403 session failures clear local auth state; transient network failures do not force logout.
+- **Batch save conflicts**: `POST /models/{id}/batch-save` sends `baseUpdatedAt`; HTTP 409 returns `conflicts[]`. UI offers reload vs force-overwrite with per-entity field diff. See in-app help at `/docs/models` (Saving → conflict).
 - **Model live sync**: WebSocket/STOMP + polling hybrid for real-time diagram collaboration. Config via `VITE_MODEL_LIVE_SYNC_MODE` (ws/poll/hybrid)
 
 ## Feature Branch Workflow

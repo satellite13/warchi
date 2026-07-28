@@ -79,6 +79,8 @@ const isColumnHighlighted = (columnId: string): boolean => props.selectedColumnI
               'matrix-grid__cell--active': isSelected(row.id, column.id),
               'matrix-grid__cell--row-highlighted': isRowHighlighted(row.id),
               'matrix-grid__cell--column-highlighted': isColumnHighlighted(column.id),
+              'matrix-grid__cell--allowed':
+                matrix.cells[relationMatrixCellKey(row.id, column.id)]?.allowedByNotationRules,
             }"
             :style="{ background: heatColor(matrix.cells[relationMatrixCellKey(row.id, column.id)]?.total ?? 0) }"
             :title="cellTitle(row.id, column.id)"
@@ -177,5 +179,10 @@ const isColumnHighlighted = (columnId: string): boolean => props.selectedColumnI
 .matrix-grid__cell--row-highlighted:not(.matrix-grid__cell--active),
 .matrix-grid__cell--column-highlighted:not(.matrix-grid__cell--active) {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.matrix-grid__cell--allowed {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 30%, transparent);
 }
 </style>

@@ -2,14 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { EditorLink, EditorNode } from '@/features/models/types'
 import type { ComponentResponse, LinkTypeResponse, RelationResponse } from '@/types/api'
 import { buildRelationMatrix, relationMatrixCellKey } from './buildRelationMatrix'
-import { UNMAPPED_ENTITY_ID, type RelationMatrixFilters } from '../types'
+import type { RelationMatrixFilters } from '../types'
 
-const createNode = (
-  id: string,
-  name: string,
-  nodeTypeId: string,
-  componentId?: string
-): EditorNode => ({
+const createNode = (id: string, name: string, nodeTypeId: string): EditorNode => ({
   id,
   name,
   modelId: 'm1',
@@ -17,19 +12,13 @@ const createNode = (
   nodeTypeId,
   parsedAttrs: {
     treeOrder: 0,
-    notationComponents: componentId ? { n1: { componentId } } : {},
+    notationComponents: {},
     componentProperties: {},
     typeProperties: {},
   },
 })
 
-const createLink = (
-  id: string,
-  sourceId: string,
-  targetId: string,
-  linkTypeId: string,
-  relationId?: string
-): EditorLink => ({
+const createLink = (id: string, sourceId: string, targetId: string, linkTypeId: string): EditorLink => ({
   id,
   sourceId,
   targetId,
@@ -37,7 +26,7 @@ const createLink = (
   ownerId: 'u1',
   linkTypeId,
   parsedAttrs: {
-    notationRelations: relationId ? { n1: { relationId } } : {},
+    notationRelations: {},
     relationProperties: {},
   },
 })
@@ -50,44 +39,17 @@ const nodeTypes = [
 const linkTypes: LinkTypeResponse[] = [
   { id: 'sync', name: 'Sync', ownerId: 'u1' },
   { id: 'async', name: 'Async', ownerId: 'u1' },
+  { id: 'other', name: 'Other', ownerId: 'u1' },
 ]
 
 const components: ComponentResponse[] = [
-  {
-    id: 'c-service',
-    notationId: 'n1',
-    nodeTypeId: 'service',
-    name: 'AppComponent',
-    version: '1.0.0',
-    ownerId: 'u1',
-  },
-  {
-    id: 'c-db',
-    notationId: 'n1',
-    nodeTypeId: 'db',
-    name: 'DbComponent',
-    version: '1.0.0',
-    ownerId: 'u1',
-  },
+  { id: 'c-service', notationId: 'n1', nodeTypeId: 'service', name: 'AppComponent', version: '1.0.0', ownerId: 'u1' },
+  { id: 'c-db', notationId: 'n1', nodeTypeId: 'db', name: 'DbComponent', version: '1.0.0', ownerId: 'u1' },
 ]
 
 const relations: RelationResponse[] = [
-  {
-    id: 'r-sync',
-    notationId: 'n1',
-    linkTypeId: 'sync',
-    name: 'SyncRelation',
-    version: '1.0.0',
-    ownerId: 'u1',
-  },
-  {
-    id: 'r-async',
-    notationId: 'n1',
-    linkTypeId: 'async',
-    name: 'AsyncRelation',
-    version: '1.0.0',
-    ownerId: 'u1',
-  },
+  { id: 'r-sync', notationId: 'n1', linkTypeId: 'sync', name: 'SyncRelation', version: '1.0.0', ownerId: 'u1' },
+  { id: 'r-async', notationId: 'n1', linkTypeId: 'async', name: 'AsyncRelation', version: '1.0.0', ownerId: 'u1' },
 ]
 
 const baseFilters: RelationMatrixFilters = {
@@ -95,7 +57,7 @@ const baseFilters: RelationMatrixFilters = {
   selectedRowIds: [],
   selectedColumnIds: [],
   selectedRelationIds: ['sync', 'async'],
-  mappedOnly: false,
+  allowedOnly: false,
   heatmapEnabled: true,
   hideEmptyAxes: false,
 }
@@ -116,6 +78,7 @@ describe('buildRelationMatrix', () => {
       linkTypes,
       components,
       relations,
+      relationRules: [],
       notations: [],
     })
 
@@ -123,73 +86,102 @@ describe('buildRelationMatrix', () => {
     expect(matrix.mode).toBe('types')
     expect(cell?.total).toBe(2)
     expect(cell?.relationCounts.sync).toBe(2)
+    expect(cell?.allowedByNotationRules).toBe(false)
     expect(matrix.maxCellTotal).toBe(2)
   })
 
-  it('uses notation bindings and keeps unmapped entries', () => {
+  it('notation mode groups by node type and link type without bindings', () => {
     const matrix = buildRelationMatrix({
       filters: {
         ...baseFilters,
         notationId: 'n1',
-        selectedRelationIds: ['r-sync', 'r-async', UNMAPPED_ENTITY_ID],
+        selectedRelationIds: ['sync'],
+        allowedOnly: false,
       },
       nodes: [
-        createNode('n-service-1', 'Service A', 'service', 'c-service'),
-        createNode('n-db-1', 'Db A', 'db', 'c-db'),
-        createNode('n-db-2', 'Db B', 'db'),
+        createNode('n1', 'A', 'service'),
+        createNode('n2', 'B', 'db'),
       ],
-      links: [
-        createLink('l1', 'n-service-1', 'n-db-1', 'sync', 'r-sync'),
-        createLink('l2', 'n-service-1', 'n-db-2', 'sync'),
-      ],
+      links: [createLink('l1', 'n1', 'n2', 'sync')],
       nodeTypes,
       linkTypes,
       components,
       relations,
+      relationRules: [{ relationId: 'r-sync', fromComponentId: 'c-service', toComponentId: 'c-db' }],
       notations: [],
-      labels: {
-        unmapped: 'Unmapped',
-        unknownRelation: 'Unknown',
-      },
     })
 
     expect(matrix.mode).toBe('notation')
-    const mappedCell = matrix.cells[relationMatrixCellKey('c-service', 'c-db')]
-    expect(mappedCell?.total).toBe(1)
+    expect(matrix.relationOptions.map(relation => relation.id)).toEqual(['async', 'sync'])
+    expect(matrix.rowOptions.map(row => row.id)).toEqual(['db', 'service'])
 
-    const unmappedCell = matrix.cells[relationMatrixCellKey('c-service', UNMAPPED_ENTITY_ID)]
-    expect(unmappedCell?.total).toBe(1)
-    expect(unmappedCell?.hasUnmapped).toBe(true)
+    const cell = matrix.cells[relationMatrixCellKey('service', 'db')]
+    expect(cell?.total).toBe(1)
+    expect(cell?.allowedByNotationRules).toBe(true)
   })
 
-  it('drops unmapped links when mappedOnly is enabled', () => {
+  it('excludes links whose link type is not used by notation relations', () => {
     const matrix = buildRelationMatrix({
       filters: {
         ...baseFilters,
         notationId: 'n1',
-        mappedOnly: true,
-        selectedRelationIds: ['r-sync', 'r-async'],
+        selectedRelationIds: ['other', 'sync'],
+        allowedOnly: false,
       },
       nodes: [
-        createNode('n-service-1', 'Service A', 'service', 'c-service'),
-        createNode('n-db-1', 'Db A', 'db', 'c-db'),
-        createNode('n-db-2', 'Db B', 'db'),
+        createNode('n1', 'A', 'service'),
+        createNode('n2', 'B', 'db'),
       ],
       links: [
-        createLink('l1', 'n-service-1', 'n-db-1', 'sync', 'r-sync'),
-        createLink('l2', 'n-service-1', 'n-db-2', 'sync'),
+        createLink('l1', 'n1', 'n2', 'sync'),
+        createLink('l2', 'n1', 'n2', 'other'),
       ],
       nodeTypes,
       linkTypes,
       components,
       relations,
+      relationRules: [],
       notations: [],
     })
 
-    const mappedCell = matrix.cells[relationMatrixCellKey('c-service', 'c-db')]
-    const unmappedCell = matrix.cells[relationMatrixCellKey('c-service', UNMAPPED_ENTITY_ID)]
-    expect(mappedCell?.total).toBe(1)
-    expect(unmappedCell).toBeUndefined()
+    const cell = matrix.cells[relationMatrixCellKey('service', 'db')]
+    expect(cell?.total).toBe(1)
+    expect(cell?.relationCounts.sync).toBe(1)
+    expect(cell?.relationCounts.other).toBeUndefined()
+    expect(matrix.relationOptions.map(relation => relation.id)).toEqual(['async', 'sync'])
+  })
+
+  it('allowedOnly drops cells that are not allowed by rules', () => {
+    const nodes = [
+      createNode('n1', 'A', 'service'),
+      createNode('n2', 'B', 'db'),
+    ]
+    const links = [createLink('l1', 'n1', 'n2', 'sync')]
+    const filters = {
+      ...baseFilters,
+      notationId: 'n1',
+      selectedRelationIds: ['sync'],
+      allowedOnly: true,
+    }
+    const input = {
+      filters,
+      nodes,
+      links,
+      nodeTypes,
+      linkTypes,
+      components,
+      relations,
+      notations: [],
+    }
+
+    const withoutRule = buildRelationMatrix({ ...input, relationRules: [] })
+    expect(withoutRule.cells[relationMatrixCellKey('service', 'db')]).toBeUndefined()
+
+    const withRule = buildRelationMatrix({
+      ...input,
+      relationRules: [{ relationId: 'r-sync', fromComponentId: 'c-service', toComponentId: 'c-db' }],
+    })
+    expect(withRule.cells[relationMatrixCellKey('service', 'db')]?.total).toBe(1)
   })
 
   it('hides empty rows and columns when hideEmptyAxes is enabled', () => {
@@ -209,6 +201,7 @@ describe('buildRelationMatrix', () => {
       linkTypes,
       components,
       relations,
+      relationRules: [],
       notations: [],
     })
 

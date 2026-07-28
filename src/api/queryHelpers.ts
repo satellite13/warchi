@@ -4,6 +4,9 @@ export const PAGE_SIZE_LIST = 50
 export const PAGE_SIZE_BATCH = 100
 export const PAGE_SIZE_FULL = 1000
 export const PAGE_SIZE_NOTATION = 2000
+/** Prefer one shot for large OEF models; server allows large page sizes. */
+export const PAGE_SIZE_MODEL_NODES = 25000
+export const PAGE_SIZE_MODEL_DIAGRAMS = 2000
 
 /** URLSearchParams with `{ size }` for fetching all/many items */
 export function listParams(size: number = PAGE_SIZE_FULL): URLSearchParams {

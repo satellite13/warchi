@@ -5,35 +5,109 @@ import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
 import { useOidcAuth } from "../composables/useOidcAuth";
 import LanguageSwitcher from "../components/layout/LanguageSwitcher.vue";
+import UiIcon from "@/components/ui/UiIcon.vue";
+import {
+  evaluatePasswordRules,
+  isPasswordPolicySatisfied,
+  passwordStrength,
+  type PasswordRuleId
+} from "@/utils/passwordPolicy";
+import { isSafeInternalRedirectPath, isSafeSiteReturnUrl } from "@/utils/safeRedirect";
 
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
-const { login } = useAuth();
+const { login, register, registerAdmin } = useAuth();
 const { ssoLogin } = useOidcAuth();
 
-const email = ref("");
-const password = ref("");
-const isLoading = ref(false);
-const errorMessage = ref<string | null>(null);
-const successMessage = ref<string | null>(null);
 const isSsoLoading = ref(false);
 const ssoError = ref<string | null>(null);
-
-const submitLabel = computed(() => {
-  if (isLoading.value) return t("auth.submitLoading");
-  return t("auth.submitLogin");
-});
-
 const ssoLabel = computed(() => {
   if (isSsoLoading.value) return t("auth.submitSsoLoading");
   return t("auth.submitSso");
 });
 
+const handleSsoLogin = async () => {
+  isSsoLoading.value = true;
+  ssoError.value = null;
+  const timeoutId = window.setTimeout(() => {
+    ssoError.value = t("auth.ssoTimeout");
+    isSsoLoading.value = false;
+  }, 15000);
+  try {
+    await ssoLogin();
+  } catch {
+    ssoError.value = t("auth.ssoError");
+    isSsoLoading.value = false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+
+const email = ref("");
+const password = ref("");
+const adminSecret = ref("");
+const firstName = ref("");
+const lastName = ref("");
+const middleName = ref("");
+const position = ref("");
+const isLoading = ref(false);
+const errorMessage = ref<string | null>(null);
+const successMessage = ref<string | null>(null);
+const mode = ref<"login" | "register" | "register-admin">("login");
+const showPassword = ref(false);
+const showAdminSecret = ref(false);
+
+const passwordRules = computed(() => evaluatePasswordRules(password.value));
+const passwordStrengthLevel = computed(() => passwordStrength(password.value));
+const showPasswordHints = computed(
+  () => mode.value !== "login" && password.value.length > 0
+);
+
+const passwordRuleLabel = (id: PasswordRuleId): string => {
+  const keys: Record<PasswordRuleId, string> = {
+    minLength: "auth.passwordRuleMinLength",
+    uppercase: "auth.passwordRuleUppercase",
+    lowercase: "auth.passwordRuleLowercase",
+    digit: "auth.passwordRuleDigit"
+  };
+  return t(keys[id]);
+};
+
+const passwordStrengthLabel = computed(() => {
+  const level = passwordStrengthLevel.value;
+  if (level === "weak") return t("auth.passwordStrengthWeak");
+  if (level === "medium") return t("auth.passwordStrengthMedium");
+  return t("auth.passwordStrengthStrong");
+});
+
+const modeTitle = computed(() => {
+  if (mode.value === "register") return t("auth.modeRegisterTitle");
+  if (mode.value === "register-admin") return t("auth.modeRegisterAdminTitle");
+  return t("auth.modeLoginTitle");
+});
+
+const submitLabel = computed(() => {
+  if (isLoading.value) return t("auth.submitLoading");
+  if (mode.value === "register") return t("auth.submitRegister");
+  if (mode.value === "register-admin") return t("auth.submitRegisterAdmin");
+  return t("auth.submitLogin");
+});
+
 const validateForm = (): string | null => {
   if (!email.value.trim()) return t("auth.validationEmailRequired");
   if (!password.value.trim()) return t("auth.validationPasswordRequired");
-  if (password.value.trim().length < 6) return t("auth.validationPasswordMin");
+  if (mode.value !== "login") {
+    if (!isPasswordPolicySatisfied(password.value.trim())) {
+      return t("auth.validationPasswordPolicy");
+    }
+    if (!firstName.value.trim()) return t("auth.validationFirstNameRequired");
+    if (!lastName.value.trim()) return t("auth.validationLastNameRequired");
+  }
+  if (mode.value === "register-admin" && !adminSecret.value.trim()) {
+    return t("auth.validationAdminSecretRequired");
+  }
   return null;
 };
 
@@ -48,41 +122,68 @@ const handleSubmit = async () => {
   errorMessage.value = null;
   successMessage.value = null;
 
-  const result = await login(email.value.trim(), password.value.trim());
+  const emailValue = email.value.trim();
+  const passwordValue = password.value.trim();
+  const adminSecretValue = adminSecret.value.trim();
+  const profileValue = {
+    firstName: firstName.value.trim(),
+    lastName: lastName.value.trim(),
+    middleName: middleName.value.trim() || undefined,
+    position: position.value.trim() || undefined
+  };
+
+  const result =
+    mode.value === "register"
+      ? await register(emailValue, passwordValue, profileValue)
+      : mode.value === "register-admin"
+        ? await registerAdmin(emailValue, passwordValue, adminSecretValue, profileValue)
+        : await login(emailValue, passwordValue);
 
   isLoading.value = false;
 
   if (result.success) {
-    successMessage.value = t("auth.successLogin");
-    const redirectTarget =
-      typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
-        ? route.query.redirect
-        : null;
-    await router.push(redirectTarget ?? { name: "home" });
+    successMessage.value =
+      mode.value === "login" ? t("auth.successLogin") : t("auth.successRegister");
+    const returnUrl =
+      typeof route.query.returnUrl === "string" ? route.query.returnUrl : null;
+    if (returnUrl && isSafeSiteReturnUrl(returnUrl)) {
+      window.location.assign(returnUrl);
+      return;
+    }
+    if (mode.value === "login") {
+      const redirectTarget =
+        typeof route.query.redirect === "string" && isSafeInternalRedirectPath(route.query.redirect)
+          ? route.query.redirect
+          : null;
+      await router.push(redirectTarget ?? { name: "home" });
+    } else {
+      await router.push({ name: "home" });
+    }
   } else {
     errorMessage.value = result.error || t("auth.defaultError");
   }
 };
 
-const handleSsoLogin = async () => {
-  isSsoLoading.value = true;
-  ssoError.value = null;
+const tabs = computed(
+  () =>
+    [
+      { key: "login", label: t("auth.tabLogin") },
+      { key: "register", label: t("auth.tabRegister") },
+      { key: "register-admin", label: t("auth.tabAdmin") }
+    ] as const
+);
 
-  const timeoutMs = 30000;
-  const timeoutHandle = setTimeout(() => {
-    ssoError.value = t("auth.ssoTimeout");
-    isSsoLoading.value = false;
-  }, timeoutMs);
-
-  try {
-    await ssoLogin();
-    clearTimeout(timeoutHandle);
-  } catch {
-    clearTimeout(timeoutHandle);
-    ssoError.value = t("auth.ssoError");
-    isSsoLoading.value = false;
-  }
+const setMode = (newMode: "login" | "register" | "register-admin") => {
+  if (isLoading.value) return;
+  mode.value = newMode;
+  errorMessage.value = null;
+  successMessage.value = null;
 };
+
+const siteReturnUrl = computed(() => {
+  const value = typeof route.query.returnUrl === "string" ? route.query.returnUrl : null;
+  return value && isSafeSiteReturnUrl(value) ? value : null;
+});
 </script>
 
 <template>
@@ -98,7 +199,7 @@ const handleSsoLogin = async () => {
     <!-- Card -->
     <div class="card">
       <div class="card-header">
-        <object class="card-logo" data="/warchi.svg" type="image/svg+xml" />
+        <img class="card-logo" src="/warchi.svg" alt="" />
         <div>
           <h1 class="card-brand">wArchi</h1>
           <p class="card-desc">{{ t("auth.cardSubtitle") }}</p>
@@ -106,25 +207,117 @@ const handleSsoLogin = async () => {
         <LanguageSwitcher class="card-header__language" />
       </div>
 
-      <!-- SSO Login Button -->
-      <button
-        type="button"
-        class="sso-btn"
-        :disabled="isSsoLoading"
-        @click="handleSsoLogin"
-      >
-        <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
-        {{ ssoLabel }}
-      </button>
+      <p v-if="siteReturnUrl" class="return-to-site">
+        <a :href="siteReturnUrl">{{ t("auth.returnToSite") }}</a>
+      </p>
 
-      <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
+      <div class="tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          type="button"
+          class="tab"
+          :class="{ 'tab--active': mode === tab.key }"
+          @click="setMode(tab.key)"
+        >
+          {{ tab.label }}
+          <span v-if="mode === tab.key" class="tab__indicator"></span>
+        </button>
+      </div>
 
-      <div class="divider">
-        <span>{{ t("auth.orDivider") }}</span>
+      <div v-if="mode === 'login'" class="sso-block">
+        <button
+          type="button"
+          class="sso-btn"
+          :disabled="isSsoLoading"
+          @click="handleSsoLogin"
+        >
+          <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
+          {{ ssoLabel }}
+        </button>
+        <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
+        <div class="sso-divider"><span>{{ t('auth.orDivider') }}</span></div>
       </div>
 
       <form class="form" @submit.prevent="handleSubmit">
-        <h2 class="form__title">{{ t("auth.modeLoginTitle") }}</h2>
+        <h2 class="form__title">{{ modeTitle }}</h2>
+
+        <Transition name="slide">
+          <section v-if="mode !== 'login'" class="profile-fields">
+            <div class="field">
+              <label class="field__label" for="last-name">{{ t("auth.labelLastName") }}</label>
+              <div class="field__wrap">
+                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M4 16c1.2-2.3 3.2-3.5 6-3.5s4.8 1.2 6 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <input
+                  id="last-name"
+                  v-model="lastName"
+                  class="field__input"
+                  type="text"
+                  :placeholder="t('auth.placeholderLastName')"
+                  autocomplete="family-name"
+                  :disabled="isLoading"
+                >
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="first-name">{{ t("auth.labelFirstName") }}</label>
+              <div class="field__wrap">
+                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M4 16c1.2-2.3 3.2-3.5 6-3.5s4.8 1.2 6 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <input
+                  id="first-name"
+                  v-model="firstName"
+                  class="field__input"
+                  type="text"
+                  :placeholder="t('auth.placeholderFirstName')"
+                  autocomplete="given-name"
+                  :disabled="isLoading"
+                >
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="middle-name">{{ t("auth.labelMiddleName") }}</label>
+              <div class="field__wrap">
+                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M4 16c1.2-2.3 3.2-3.5 6-3.5s4.8 1.2 6 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <input
+                  id="middle-name"
+                  v-model="middleName"
+                  class="field__input"
+                  type="text"
+                  :placeholder="t('auth.placeholderMiddleName')"
+                  autocomplete="additional-name"
+                  :disabled="isLoading"
+                >
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="position">{{ t("auth.labelPosition") }}</label>
+              <div class="field__wrap">
+                <svg class="field__icon" viewBox="0 0 20 20" fill="none">
+                  <rect x="3" y="5" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M7 5.5V4.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 13 4.5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <input
+                  id="position"
+                  v-model="position"
+                  class="field__input"
+                  type="text"
+                  :placeholder="t('auth.placeholderPosition')"
+                  autocomplete="organization-title"
+                  :disabled="isLoading"
+                >
+              </div>
+            </div>
+          </section>
+        </Transition>
 
         <div class="field">
           <label class="field__label" for="email">{{ t("auth.labelEmail") }}</label>
@@ -147,7 +340,7 @@ const handleSsoLogin = async () => {
 
         <div class="field">
           <label class="field__label" for="password">{{ t("auth.labelPassword") }}</label>
-          <div class="field__wrap">
+          <div class="field__wrap field__wrap--password">
             <svg class="field__icon" viewBox="0 0 20 20" fill="none">
               <rect x="4" y="9" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/>
               <path d="M7 9V6a3 3 0 0 1 6 0v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -155,14 +348,81 @@ const handleSsoLogin = async () => {
             <input
               id="password"
               v-model="password"
-              class="field__input"
-              type="password"
+              class="field__input field__input--password"
+              :type="showPassword ? 'text' : 'password'"
               :placeholder="t('auth.placeholderPassword')"
-              autocomplete="current-password"
+              :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
               :disabled="isLoading"
             >
+            <button
+              type="button"
+              class="field__toggle"
+              :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+              :disabled="isLoading"
+              @click="showPassword = !showPassword"
+            >
+              <UiIcon
+                :name="showPassword ? 'visibility_off' : 'visibility'"
+                class="field__toggle-icon"
+              />
+            </button>
           </div>
+          <Transition name="fade">
+            <div v-if="showPasswordHints" class="password-hints">
+              <div
+                class="password-hints__strength"
+                :class="`password-hints__strength--${passwordStrengthLevel}`"
+              >
+                {{ passwordStrengthLabel }}
+              </div>
+              <ul class="password-hints__rules">
+                <li
+                  v-for="rule in passwordRules"
+                  :key="rule.id"
+                  class="password-hints__rule"
+                  :class="{ 'password-hints__rule--passed': rule.passed }"
+                >
+                  <UiIcon
+                    :name="rule.passed ? 'check_circle' : 'radio_button_unchecked'"
+                    class="password-hints__icon"
+                  />
+                  {{ passwordRuleLabel(rule.id) }}
+                </li>
+              </ul>
+            </div>
+          </Transition>
         </div>
+
+        <Transition name="slide">
+          <div v-if="mode === 'register-admin'" class="field">
+            <label class="field__label" for="admin-secret">{{ t("auth.labelAdminSecret") }}</label>
+            <div class="field__wrap field__wrap--password">
+              <svg class="field__icon" viewBox="0 0 20 20" fill="none">
+                <path d="M10 2l1.5 4.5H16l-3.7 2.7 1.4 4.3L10 11l-3.7 2.5 1.4-4.3L4 6.5h4.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
+              <input
+                id="admin-secret"
+                v-model="adminSecret"
+                class="field__input field__input--password"
+                :type="showAdminSecret ? 'text' : 'password'"
+                :placeholder="t('auth.placeholderAdminSecret')"
+                :disabled="isLoading"
+              >
+              <button
+                type="button"
+                class="field__toggle"
+                :aria-label="showAdminSecret ? t('auth.hidePassword') : t('auth.showPassword')"
+                :disabled="isLoading"
+                @click="showAdminSecret = !showAdminSecret"
+              >
+                <UiIcon
+                  :name="showAdminSecret ? 'visibility_off' : 'visibility'"
+                  class="field__toggle-icon"
+                />
+              </button>
+            </div>
+          </div>
+        </Transition>
 
         <Transition name="fade">
           <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
@@ -190,6 +450,21 @@ const handleSsoLogin = async () => {
   background: #f0ede8;
   position: relative;
   overflow: hidden;
+}
+
+.return-to-site {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.return-to-site a {
+  color: var(--primary, #7c5cfc);
+  text-decoration: none;
+}
+
+.return-to-site a:hover {
+  text-decoration: underline;
 }
 
 /* ─── Background ──────────────────────────────── */
@@ -295,7 +570,7 @@ const handleSsoLogin = async () => {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .card-header__language {
@@ -313,7 +588,7 @@ const handleSsoLogin = async () => {
   font-size: 26px;
   font-weight: 700;
   color: var(--base-text);
-  letterSpacing: -0.04em;
+  letter-spacing: -0.04em;
   line-height: 1.1;
 }
 
@@ -324,68 +599,55 @@ const handleSsoLogin = async () => {
   letter-spacing: 0.01em;
 }
 
-/* ─── SSO Button ──────────────────────────────── */
-.sso-btn {
-  position: relative;
+/* ─── Tabs ────────────────────────────────────── */
+.tabs {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  width: 100%;
-  padding: 14px 24px;
-  font-size: 15px;
+  gap: 4px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding-bottom: 0;
+}
+
+.tab {
+  position: relative;
+  flex: 1;
+  padding: 10px 8px 12px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
-  color: #000;
-  background: #FDC300;
   border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
-}
-
-.sso-btn:hover:not(:disabled) {
-  background: #E79F26;
-  box-shadow: 0 6px 24px rgba(253, 195, 0, 0.35);
-  transform: translateY(-1px);
-}
-
-.sso-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.sso-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.sso-btn__spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.2);
-  border-top-color: #000;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-/* ─── Divider ─────────────────────────────────── */
-.divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 20px 0;
+  background: transparent;
   color: var(--text-subtle);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 0.2s ease;
 }
 
-.divider::before,
-.divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: rgba(0, 0, 0, 0.08);
+.tab:hover:not(.tab--active) {
+  color: var(--text-muted);
+}
+
+.tab--active {
+  color: var(--primary);
+}
+
+.tab__indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 12%;
+  right: 12%;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px 2px 0 0;
+  animation: indicatorIn 0.25s ease-out;
+}
+
+@keyframes indicatorIn {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 /* ─── Form ────────────────────────────────────── */
@@ -452,6 +714,10 @@ const handleSsoLogin = async () => {
   box-sizing: border-box;
 }
 
+.field__input--plain {
+  padding-left: 14px;
+}
+
 .field__input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-soft);
@@ -465,6 +731,99 @@ const handleSsoLogin = async () => {
 .field__input:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.field__wrap--password .field__input--password {
+  padding-right: 44px;
+}
+
+.field__toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.field__toggle:hover:not(:disabled) {
+  color: var(--primary);
+  background: rgba(124, 92, 252, 0.08);
+}
+
+.field__toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.field__toggle-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.password-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.password-hints__strength {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.password-hints__strength--weak {
+  color: var(--danger);
+}
+
+.password-hints__strength--medium {
+  color: var(--warning);
+}
+
+.password-hints__strength--strong {
+  color: var(--success);
+}
+
+.password-hints__rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.password-hints__rule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+.password-hints__rule--passed {
+  color: var(--success);
+}
+
+.password-hints__icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ─── Messages ────────────────────────────────── */
@@ -499,8 +858,8 @@ const handleSsoLogin = async () => {
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
-  color: #000;
-  background: #FDC300;
+  color: #fff;
+  background: var(--primary);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -508,8 +867,8 @@ const handleSsoLogin = async () => {
 }
 
 .submit:hover:not(:disabled) {
-  background: #E79F26;
-  box-shadow: 0 6px 24px rgba(253, 195, 0, 0.28);
+  background: var(--primary-hover);
+  box-shadow: 0 6px 24px rgba(124, 92, 252, 0.28);
   transform: translateY(-1px);
 }
 
@@ -525,8 +884,8 @@ const handleSsoLogin = async () => {
 .submit__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.15);
-  border-top-color: #000;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -536,6 +895,36 @@ const handleSsoLogin = async () => {
 }
 
 /* ─── Transitions ─────────────────────────────── */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  opacity: 0;
+  max-height: 0;
+  margin-top: -20px;
+}
+
+.slide-enter-to,
+.slide-leave-from {
+  opacity: 1;
+  max-height: 420px;
+  margin-top: 0;
+}
+
+.profile-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px 12px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
@@ -554,3 +943,58 @@ const handleSsoLogin = async () => {
   }
 }
 </style>
+
+.sso-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sso-btn {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sso-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.sso-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sso-btn__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+.sso-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sso-divider::before,
+.sso-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

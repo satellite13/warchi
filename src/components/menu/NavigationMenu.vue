@@ -3,11 +3,10 @@ import { ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
-import { usePermissions } from "../../composables/usePermissions";
+import { canViewAdminPanel } from "../../composables/usePermissions";
 import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
 
 const { currentUser } = useAuth();
-const { checkPermission } = usePermissions();
 const { t } = useI18n();
 const canViewAdmin = ref(false);
 
@@ -18,11 +17,7 @@ watch(
       canViewAdmin.value = false;
       return;
     }
-    canViewAdmin.value = await checkPermission({
-      resourceType: "ADMIN_PANEL",
-      resourceId: userId,
-      action: "VIEW",
-    });
+    canViewAdmin.value = await canViewAdminPanel(userId);
   },
   { immediate: true }
 );

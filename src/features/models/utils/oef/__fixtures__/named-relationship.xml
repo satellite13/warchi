@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="id-named-rel-model">
+  <name>Named relationship</name>
+  <elements>
+    <element identifier="el-a" xsi:type="BusinessProcess"><name>Process A</name></element>
+    <element identifier="el-b" xsi:type="BusinessProcess"><name>Process B</name></element>
+  </elements>
+  <relationships>
+    <relationship identifier="rel-named" source="el-a" target="el-b" xsi:type="Flow">
+      <name>Payload flow</name>
+    </relationship>
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="view-1" xsi:type="Diagram">
+        <name>Main</name>
+        <node identifier="node-a" elementRef="el-a" xsi:type="Element" x="10" y="10" w="120" h="60" />
+        <node identifier="node-b" elementRef="el-b" xsi:type="Element" x="200" y="10" w="120" h="60" />
+        <connection identifier="conn-named" relationshipRef="rel-named" xsi:type="Relationship" source="node-a" target="node-b" />
+      </view>
+    </diagrams>
+  </views>
+</model>

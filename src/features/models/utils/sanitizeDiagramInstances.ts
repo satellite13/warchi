@@ -1,12 +1,18 @@
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import type { DiagramAttrs, DiagramEdgeInstance, DiagramNodeInstance } from '../modelAttrs'
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
-
-/** Как в batchSaveConflictDisplay: ребро заметки на диаграмме. */
-const DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX = '__diagram-note-edge__:'
+import {
+  DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
+  isContainerInstance,
+  isEdgeAnchorInstance,
+} from './diagramOnlyInstances'
 
 function isStickyNoteInstance(inst: DiagramNodeInstance): boolean {
   return inst.attrs?.isNote === true && inst.attrs?.isDirectoryNote !== true
+}
+
+function isDiagramOnlyNodeInstance(inst: DiagramNodeInstance): boolean {
+  return isStickyNoteInstance(inst) || isContainerInstance(inst) || isEdgeAnchorInstance(inst)
 }
 
 function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode | undefined {
@@ -16,14 +22,17 @@ function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode |
 }
 
 /**
- * Экземпляр ноды на холсте согласован с деревом модели: нода есть и не удалена.
- * Заметки (sticky) не привязаны к модельной ноде.
+ * Экземпляр ноды на холсте: убираем только если модельная нода явно удалена в state.
+ * Если ноды нет в state (progressive load / неполная выборка) — оставляем, как для рёбер
+ * без link в state: иначе save вычищает почти все элементы с диаграмм.
+ * Diagram-only (sticky note / container / edge anchor) не привязаны к модельной ноде.
  */
 function keepInstanceNode(nodes: EditorNode[], inst: DiagramNodeInstance): boolean {
   if (!inst.id || !inst.modelNodeId) return false
-  if (isStickyNoteInstance(inst)) return true
+  if (isDiagramOnlyNodeInstance(inst)) return true
   const n = activeModelNode(nodes, inst.modelNodeId)
-  return !!n && !n._isDeleted
+  if (!n) return true
+  return !n._isDeleted
 }
 
 function keepModelEdge(edge: DiagramEdgeInstance, linkById: Map<string, EditorLink>): boolean {
@@ -46,7 +55,8 @@ export type SanitizeDiagramInstancesResult = {
 
 /**
  * Убирает из attrs диаграммы заведомый мусор относительно текущих нод и связей модели:
- * экземпляры без ноды в дереве, рёбра с битым source/target, рёбра с modelLinkId без живой связи в state.
+ * экземпляры с явно удалённой нодой, рёбра с битым source/target, рёбра с удалённой связью.
+ * Отсутствие ноды/связи в state само по себе не повод удалять экземпляр (данные ещё могут грузиться).
  */
 export function sanitizeDiagramInstancesForModel(
   attrs: DiagramAttrs,
@@ -88,7 +98,7 @@ export function sanitizeDiagramInstancesForModel(
 
 /**
  * Перед сохранением: чистит все диаграммы в state. При изменениях помечает диаграмму `_isDirty`,
- * чтобы batch/legacy save отправили исправленный JSON на сервер.
+ * чтобы batch save (primary) отправил исправленный JSON на сервер.
  */
 export function applyDiagramGarbageSanitizeToState(state: ModelEditorState): void {
   for (const d of state.diagrams) {

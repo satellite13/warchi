@@ -3,9 +3,11 @@ import { ref, computed } from "vue"
 import { useI18n } from "vue-i18n"
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import "@/config/mdEditor"
-import { MdEditor, MdPreview } from 'md-editor-v3'
+import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
+import SafeMarkdownPreview from "@/components/markdown/SafeMarkdownPreview.vue"
 import { useLocale } from '@/composables/useLocale'
+import { sanitizeMarkdownHtml } from "@/utils/sanitizeMarkdownHtml"
 import type { FileVersionResponse } from '@/types/api'
 
 const props = defineProps<{
@@ -213,6 +215,7 @@ function formatSize(bytes: number): string {
           <MdEditor
             :model-value="content"
             :language="editorLanguage"
+            :sanitize="sanitizeMarkdownHtml"
             :preview="false"
             :toolbars="[
               'bold',
@@ -249,7 +252,7 @@ function formatSize(bytes: number): string {
             {{ t('types.docEmpty') }}
           </div>
           <div v-else class="doc-preview-wrap">
-            <MdPreview :model-value="content" :language="editorLanguage" />
+            <SafeMarkdownPreview :model-value="content" :language="editorLanguage" />
           </div>
         </template>
       </template>

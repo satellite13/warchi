@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue"
-import { useI18n } from "vue-i18n"
-import BaseModal from "@/components/modals/BaseModal.vue"
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import BaseModal from '@/components/modals/BaseModal.vue'
+import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
 
-defineProps<{
+const props = defineProps<{
   attrsJson: string
   typeUsages: {
     notationId: string
@@ -13,106 +14,87 @@ defineProps<{
   }[]
   isLoadingUsages: boolean
   isNewType: boolean
-  typeKind: "node" | "link"
+  typeKind: 'node' | 'link'
 }>()
 
 const showAttrs = ref(false)
 const showAttrsModal = ref(false)
 const showUsages = ref(true)
 const { t } = useI18n()
+
+const usageCount = computed(() =>
+  props.typeUsages.reduce((sum, group) => sum + group.elements.length, 0),
+)
 </script>
 
 <template>
   <aside class="type-aside">
-    <!-- JSON attrs -->
-    <div class="aside-panel">
-      <div
-        class="aside-panel__title aside-panel__title--toggle"
-        role="button"
-        tabindex="0"
-        @click="showAttrs = !showAttrs"
-        @keydown.enter="showAttrs = !showAttrs"
-      >
-        <UiIcon
-          name="expand_more"
-          class="aside-panel__chevron"
-          :class="{ 'aside-panel__chevron--collapsed': !showAttrs }"
-        />
-        <UiIcon name="data_object" class="aside-panel__icon" />
-        attrs
+    <CollapsibleSection
+      variant="aside"
+      title="attrs"
+      :open="showAttrs"
+      @toggle="showAttrs = !showAttrs"
+    >
+      <template #header-leading>
+        <UiIcon name="data_object" class="type-aside__leading-icon" />
+      </template>
+      <template #header-extra>
         <button
           type="button"
-          class="aside-panel__expand-btn"
+          class="type-aside__expand-btn"
           :title="t('types.openFullscreen')"
           @click.stop="showAttrsModal = true"
         >
           <UiIcon name="open_in_full" />
         </button>
-      </div>
-      <pre v-if="showAttrs" class="json-preview">{{ attrsJson }}</pre>
-    </div>
-
-    <!-- Usages -->
-    <div class="aside-panel">
-      <div
-        class="aside-panel__title aside-panel__title--toggle"
-        role="button"
-        tabindex="0"
-        @click="showUsages = !showUsages"
-        @keydown.enter="showUsages = !showUsages"
-      >
-        <UiIcon
-          name="expand_more"
-          class="aside-panel__chevron"
-          :class="{ 'aside-panel__chevron--collapsed': !showUsages }"
-        />
-        {{ t("types.usage") }}
-        <span v-if="typeUsages.length > 0" class="aside-panel__count">
-          {{ typeUsages.reduce((sum, g) => sum + g.elements.length, 0) }}
-        </span>
-      </div>
-
-      <template v-if="showUsages">
-        <div v-if="isLoadingUsages" class="aside-panel__empty">
-          <span class="loading-pulse"></span>
-          {{ t("common.loading") }}
-        </div>
-        <div v-else-if="isNewType" class="aside-panel__empty">
-          {{ t("types.saveTypeToSeeUsage") }}
-        </div>
-        <div v-else-if="typeUsages.length === 0" class="aside-panel__empty">
-          {{ t("types.notUsed") }}
-        </div>
-        <div v-else class="usages-groups">
-          <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
-            <div class="usage-group__header">
-              <img
-                v-if="group.notationIcon"
-                :src="`/icons/${group.notationIcon}.svg`"
-                :alt="group.notationName"
-                class="usage-group__icon-img"
-              >
-              <UiIcon v-else name="account_tree" class="usage-group__icon" />
-              <span class="usage-group__name">{{ group.notationName }}</span>
-              <span class="usage-group__count">{{ group.elements.length }}</span>
-            </div>
-            <ul class="usage-group__list">
-              <li v-for="el in group.elements" :key="el.id" class="usage-item">
-                <img
-                  :src="`/icons/${el.icon}.svg`"
-                  :alt="el.name"
-                  class="usage-item__icon-img"
-                >
-                <span class="usage-item__name">{{ el.name }}</span>
-                <span class="usage-item__version">{{ el.version }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
       </template>
-    </div>
+      <pre class="json-preview">{{ attrsJson }}</pre>
+    </CollapsibleSection>
 
-    <!-- Fullscreen modal -->
+    <CollapsibleSection
+      variant="aside"
+      :title="t('types.usage')"
+      :open="showUsages"
+      @toggle="showUsages = !showUsages"
+    >
+      <template v-if="typeUsages.length > 0" #header-extra>
+        <span class="type-aside__count">{{ usageCount }}</span>
+      </template>
+
+      <div v-if="isLoadingUsages" class="type-aside__empty">
+        <span class="loading-pulse" />
+        {{ t('common.loading') }}
+      </div>
+      <div v-else-if="isNewType" class="type-aside__empty">
+        {{ t('types.saveTypeToSeeUsage') }}
+      </div>
+      <div v-else-if="typeUsages.length === 0" class="type-aside__empty">
+        {{ t('types.notUsed') }}
+      </div>
+      <div v-else class="usages-groups">
+        <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
+          <div class="usage-group__header">
+            <img
+              v-if="group.notationIcon"
+              :src="`/icons/${group.notationIcon}.svg`"
+              :alt="group.notationName"
+              class="usage-group__icon-img"
+            >
+            <UiIcon v-else name="account_tree" class="usage-group__icon" />
+            <span class="usage-group__name">{{ group.notationName }}</span>
+            <span class="usage-group__count">{{ group.elements.length }}</span>
+          </div>
+          <ul class="usage-group__list">
+            <li v-for="el in group.elements" :key="el.id" class="usage-item">
+              <img :src="`/icons/${el.icon}.svg`" :alt="el.name" class="usage-item__icon-img">
+              <span class="usage-item__name">{{ el.name }}</span>
+              <span class="usage-item__version">{{ el.version }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </CollapsibleSection>
+
     <BaseModal
       v-if="showAttrsModal"
       :title="t('types.attrsTitle')"
@@ -137,13 +119,22 @@ const { t } = useI18n()
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .type-aside {
@@ -158,53 +149,13 @@ const { t } = useI18n()
   animation-delay: 80ms;
 }
 
-.aside-panel {
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
+.type-aside__leading-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
-.aside-panel__title {
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.aside-panel__title--toggle {
-  cursor: pointer;
-  user-select: none;
-  margin-bottom: 0;
-  padding: 2px 0;
-  border-radius: 6px;
-  transition: color 0.15s ease;
-}
-
-.aside-panel__title--toggle:hover {
-  color: var(--base-text);
-}
-
-.aside-panel__icon {
-  font-size: 16px;
-}
-
-.aside-panel__chevron {
-  font-size: 18px;
-  transition: transform 0.2s ease;
-}
-
-.aside-panel__chevron--collapsed {
-  transform: rotate(-90deg);
-}
-
-.aside-panel__count {
+.type-aside__count {
   font-size: 11px;
   font-weight: 600;
   color: #fff;
@@ -216,7 +167,7 @@ const { t } = useI18n()
   text-align: center;
 }
 
-.aside-panel__expand-btn {
+.type-aside__expand-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,19 +184,19 @@ const { t } = useI18n()
   transition: all 0.15s ease;
 }
 
-.aside-panel__expand-btn .ui-icon {
-  font-size: 15px;
+.type-aside__expand-btn .ui-icon {
+  width: 15px;
+  height: 15px;
 }
 
-.aside-panel__expand-btn:hover {
+.type-aside__expand-btn:hover {
   background: var(--primary-soft);
   color: var(--primary);
 }
 
-.aside-panel__empty {
+.type-aside__empty {
   font-size: 13px;
   color: var(--text-subtle);
-  padding-top: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -262,7 +213,7 @@ const { t } = useI18n()
 }
 
 .json-preview {
-  margin: 12px 0 0;
+  margin: 0;
   padding: 12px 14px;
   font-size: 11px;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -286,12 +237,10 @@ const { t } = useI18n()
   line-height: 1.6;
 }
 
-/* Usages */
 .usages-groups {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-top: 10px;
   animation: fadeIn 0.2s ease;
 }
 
@@ -362,18 +311,10 @@ const { t } = useI18n()
   background: var(--surface-strong);
 }
 
-.usage-item__icon,
 .usage-item__icon-img {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-}
-
-.usage-item__icon {
-  color: var(--text-subtle);
-}
-
-.usage-item__icon-img {
   object-fit: contain;
 }
 

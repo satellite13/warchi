@@ -7,8 +7,9 @@ import {
   buildEdgeLabelBackground,
   buildNodeIcon,
   buildMarker,
+  mergeEdgeLabelStyleFromDiagramStyle,
 } from '@/features/notations/utils/notationElementBuilders'
-import type { DiagramStyle, CustomProperty } from '@/features/notations/notationAttrs'
+import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
 
 function makeCustomProp(
@@ -23,7 +24,8 @@ function makeCustomProp(
   }
 }
 
-function expectTextLabelOptions(value: string | TextLabelOptions): TextLabelOptions {
+function expectTextLabelOptions(value: string | TextLabelOptions | undefined): TextLabelOptions {
+  expect(value).toBeDefined()
   expect(typeof value).toBe('object')
   return value as TextLabelOptions
 }
@@ -120,6 +122,17 @@ describe('buildNodeLabel', () => {
     const result = expectTextLabelOptions(buildNodeLabel('N', ds))
     expect(result.inset).toBe(8)
   })
+
+  it('returns undefined when showLabel is false', () => {
+    expect(buildNodeLabel('Node', { showLabel: false })).toBeUndefined()
+    expect(buildNodeLabel('Node', { showLabel: false, labelColor: '#f00' })).toBeUndefined()
+    expect(buildNodeLabel('Node', { showLabel: false, labelTemplate: '${name}' })).toBeUndefined()
+  })
+
+  it('still returns label when showLabel is true or absent', () => {
+    expect(buildNodeLabel('Node', { showLabel: true })).toBe('Node')
+    expect(buildNodeLabel('Node', {})).toBe('Node')
+  })
 })
 
 describe('buildEdgeLabel', () => {
@@ -139,6 +152,26 @@ describe('buildEdgeLabel', () => {
     const ds: DiagramStyle = { labelInset: 4 }
     const result = expectTextLabelOptions(buildEdgeLabel('E', ds))
     expect(result.inset).toBe(4)
+  })
+})
+
+describe('mergeEdgeLabelStyleFromDiagramStyle', () => {
+  it('preserves existing overrides when diagramStyle omits label fields', () => {
+    expect(
+      mergeEdgeLabelStyleFromDiagramStyle(
+        { color: '#ff0000', fontSize: 18 },
+        { edgeType: 'bezier' }
+      )
+    ).toEqual({ color: '#ff0000', fontSize: 18 })
+  })
+
+  it('overlays diagramStyle label fields on existing overrides', () => {
+    expect(
+      mergeEdgeLabelStyleFromDiagramStyle(
+        { color: '#ff0000', fontSize: 18, opacity: 0.9 },
+        { labelColor: '#00ff00', labelFontSize: 12 }
+      )
+    ).toEqual({ color: '#00ff00', fontSize: 12, opacity: 0.9 })
   })
 })
 
@@ -223,6 +256,11 @@ describe('buildMarker', () => {
   it('returns undefined for invalid type', () => {
     expect(buildMarker(undefined, {}, 'start')).toBeUndefined()
     expect(buildMarker('invalid', {}, 'end')).toBeUndefined()
+  })
+
+  it('returns explicit none marker so legacy arrowType heads stay disabled', () => {
+    expect(buildMarker('none', {}, 'start')).toEqual({ type: 'none' })
+    expect(buildMarker('none', {}, 'end')).toEqual({ type: 'none' })
   })
 
   it('returns marker for arrow type', () => {

@@ -109,6 +109,16 @@
             </font>
           </style>
         </node>
+        <node identifier="id-c489773e4ebb464db0ec585c9660f0db" xsi:type="Label" x="648" y="96" w="185" h="80">
+          <label xml:lang="ru">Test note</label>
+          <style>
+            <fillColor r="255" g="255" b="255" a="100" />
+            <lineColor r="92" g="92" b="92" a="100" />
+            <font name="Lucida Grande" size="12">
+              <color r="0" g="0" b="0" />
+            </font>
+          </style>
+        </node>
         <connection identifier="id-5b8d65abd7334d64a9d52ed706c94758" relationshipRef="id-4ede1ff1b9774e59b5dba8cd735d5306" xsi:type="Relationship" source="id-21752fd5dbb4498ea8ebd19e50ec88e2" target="id-d4c49c8f26e8478286f4fcff3753b0ea">
           <style>
             <lineColor r="0" g="0" b="0" />
@@ -142,6 +152,14 @@
           </style>
         </connection>
         <connection identifier="id-d83a4593a6e64df48736dff432146f80" relationshipRef="id-898bbd2d4f894ae68b711fb1b8b4b208" xsi:type="Relationship" source="id-0c731dd742c844a5b5ac5e0682b2c001" target="id-d4c49c8f26e8478286f4fcff3753b0ea">
+          <style>
+            <lineColor r="0" g="0" b="0" />
+            <font name="Lucida Grande" size="12">
+              <color r="0" g="0" b="0" />
+            </font>
+          </style>
+        </connection>
+        <connection identifier="id-1e665baab40f44609e49afa1289bb821" xsi:type="Line" source="id-c489773e4ebb464db0ec585c9660f0db" target="id-be24e2937ff84e88a578c01b8508ce59">
           <style>
             <lineColor r="0" g="0" b="0" />
             <font name="Lucida Grande" size="12">

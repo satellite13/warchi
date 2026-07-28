@@ -1,5 +1,5 @@
-import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
-import { compareVersions } from '@/utils/version'
+import type { DiagramResponse, LinkResponse, NodeResponse } from "@/types/api"
+import { compareVersions } from "@/utils/version"
 
 /** Путь узла от корня дерева (например "Root/Module A/Component 1") */
 export function buildNodePathMap(nodes: NodeResponse[]): Map<string, string> {
@@ -11,8 +11,9 @@ export function buildNodePathMap(nodes: NodeResponse[]): Map<string, string> {
   function getPath(node: NodeResponse): string {
     const cached = pathById.get(node.id)
     if (cached !== undefined) return cached
-    const parent = node.parentNodeId != null ? byId.get(node.parentNodeId) : undefined
-    const parentPath = parent ? getPath(parent) : ''
+    const parent =
+      node.parentNodeId != null ? byId.get(node.parentNodeId) : undefined
+    const parentPath = parent ? getPath(parent) : ""
     const path = parentPath ? `${parentPath}/${node.name}` : node.name
     pathById.set(node.id, path)
     return path
@@ -23,20 +24,24 @@ export function buildNodePathMap(nodes: NodeResponse[]): Map<string, string> {
 }
 
 /** Ключ связи для сопоставления между версиями */
-export function linkKey(sourcePath: string, targetPath: string, linkTypeId: string): string {
+export function linkKey(
+  sourcePath: string,
+  targetPath: string,
+  linkTypeId: string
+): string {
   return `${sourcePath}\t${targetPath}\t${linkTypeId}`
 }
 
 export type NodeDiffItem =
-  | { kind: 'added'; path: string; node: NodeResponse }
-  | { kind: 'removed'; path: string; node: NodeResponse }
-  | { kind: 'modified'; path: string; base: NodeResponse; target: NodeResponse }
+  | { kind: "added"; path: string; node: NodeResponse }
+  | { kind: "removed"; path: string; node: NodeResponse }
+  | { kind: "modified"; path: string; base: NodeResponse; target: NodeResponse }
 
 export type LinkDiffItem =
-  | { kind: 'added'; sourcePath: string; targetPath: string; link: LinkResponse }
-  | { kind: 'removed'; sourcePath: string; targetPath: string; link: LinkResponse }
+  | { kind: "added"; sourcePath: string; targetPath: string; link: LinkResponse }
+  | { kind: "removed"; sourcePath: string; targetPath: string; link: LinkResponse }
   | {
-      kind: 'modified'
+      kind: "modified"
       sourcePath: string
       targetPath: string
       base: LinkResponse
@@ -44,21 +49,122 @@ export type LinkDiffItem =
     }
 
 export type DiagramDiffItem =
-  | { kind: 'added'; name: string; diagram: DiagramResponse }
-  | { kind: 'removed'; name: string; diagram: DiagramResponse }
-  | { kind: 'modified'; name: string; base: DiagramResponse; target: DiagramResponse }
+  | { kind: "added"; name: string; diagram: DiagramResponse }
+  | { kind: "removed"; name: string; diagram: DiagramResponse }
+  | { kind: "modified"; name: string; base: DiagramResponse; target: DiagramResponse }
 
 function nodeEquals(a: NodeResponse, b: NodeResponse): boolean {
-  return a.name === b.name && (a.attrs ?? '') === (b.attrs ?? '') && a.nodeTypeId === b.nodeTypeId
+  return (
+    a.name === b.name &&
+    (a.attrs ?? "") === (b.attrs ?? "") &&
+    a.nodeTypeId === b.nodeTypeId
+  )
 }
 
 function linkEquals(a: LinkResponse, b: LinkResponse): boolean {
-  return (a.attrs ?? '') === (b.attrs ?? '') && a.linkTypeId === b.linkTypeId
+  return (
+    (a.attrs ?? "") === (b.attrs ?? "") &&
+    a.linkTypeId === b.linkTypeId
+  )
 }
 
-function diagramEquals(a: DiagramResponse, b: DiagramResponse): boolean {
+function buildEntityStableIdMap(
+  entities: Array<{ id: string; stableId?: string | null }>,
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const entity of entities) {
+    map.set(entity.id, entity.stableId ?? entity.id)
+  }
+  return map
+}
+
+/** Deterministic JSON for semantic compare (key order independent). */
+export function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`
+  }
+  const obj = value as Record<string, unknown>
+  const keys = Object.keys(obj).sort()
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(obj[key])}`)
+    .join(',')}}`
+}
+
+function instanceId(value: unknown): string {
+  if (!value || typeof value !== 'object') return ''
+  const id = (value as Record<string, unknown>).id
+  return typeof id === 'string' ? id : ''
+}
+
+/**
+ * Normalize diagram attrs for cross-model compare: remap modelNodeId/modelLinkId to
+ * stableIds. ModelCopyService remaps those UUIDs while keeping instance ids, so raw
+ * attrs strings always differ between related versions even when diagrams match.
+ */
+export function canonicalizeDiagramAttrsForCompare(
+  raw: string | null | undefined,
+  nodeStableById: Map<string, string>,
+  linkStableById: Map<string, string>,
+): string {
+  if (!raw) return ''
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return raw
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return stableStringify(parsed)
+  }
+
+  const data = parsed as Record<string, unknown>
+  const instancesRaw = data.instances
+  if (instancesRaw && typeof instancesRaw === 'object' && !Array.isArray(instancesRaw)) {
+    const instances = instancesRaw as Record<string, unknown>
+    if (Array.isArray(instances.nodes)) {
+      instances.nodes = [...instances.nodes]
+        .map((node) => {
+          if (!node || typeof node !== 'object' || Array.isArray(node)) return node
+          const next = { ...(node as Record<string, unknown>) }
+          if (typeof next.modelNodeId === 'string') {
+            next.modelNodeId = nodeStableById.get(next.modelNodeId) ?? next.modelNodeId
+          }
+          return next
+        })
+        .sort((a, b) => instanceId(a).localeCompare(instanceId(b)))
+    }
+    if (Array.isArray(instances.edges)) {
+      instances.edges = [...instances.edges]
+        .map((edge) => {
+          if (!edge || typeof edge !== 'object' || Array.isArray(edge)) return edge
+          const next = { ...(edge as Record<string, unknown>) }
+          if (typeof next.modelLinkId === 'string') {
+            next.modelLinkId = linkStableById.get(next.modelLinkId) ?? next.modelLinkId
+          }
+          return next
+        })
+        .sort((a, b) => instanceId(a).localeCompare(instanceId(b)))
+    }
+  }
+
+  return stableStringify(data)
+}
+
+function diagramEquals(
+  a: DiagramResponse,
+  b: DiagramResponse,
+  aNodeStableById: Map<string, string>,
+  aLinkStableById: Map<string, string>,
+  bNodeStableById: Map<string, string>,
+  bLinkStableById: Map<string, string>,
+): boolean {
+  if (a.version !== b.version || a.notationId !== b.notationId) return false
   return (
-    a.version === b.version && (a.attrs ?? '') === (b.attrs ?? '') && a.notationId === b.notationId
+    canonicalizeDiagramAttrsForCompare(a.attrs, aNodeStableById, aLinkStableById) ===
+    canonicalizeDiagramAttrsForCompare(b.attrs, bNodeStableById, bLinkStableById)
   )
 }
 
@@ -90,7 +196,7 @@ export function compareNodes(
     if (targetByStable) {
       matchedTargetIds.add(targetByStable.id)
       if (!nodeEquals(node, targetByStable)) {
-        result.push({ kind: 'modified', path, base: node, target: targetByStable })
+        result.push({ kind: "modified", path, base: node, target: targetByStable })
       }
       continue
     }
@@ -98,17 +204,17 @@ export function compareNodes(
     if (targetByPathNode) {
       matchedTargetIds.add(targetByPathNode.id)
       if (!nodeEquals(node, targetByPathNode)) {
-        result.push({ kind: 'modified', path, base: node, target: targetByPathNode })
+        result.push({ kind: "modified", path, base: node, target: targetByPathNode })
       }
       continue
     }
-    result.push({ kind: 'removed', path, node })
+    result.push({ kind: "removed", path, node })
   }
   for (const node of targetNodes) {
     if (matchedTargetIds.has(node.id)) continue
     const path = targetPathMap.get(node.id)!
     if (baseByPath.has(path)) continue
-    result.push({ kind: 'added', path, node })
+    result.push({ kind: "added", path, node })
   }
 
   return result
@@ -155,13 +261,7 @@ export function compareLinks(
     if (targetByStable) {
       matchedTargetIds.add(targetByStable.id)
       if (!linkEquals(link, targetByStable)) {
-        result.push({
-          kind: 'modified',
-          sourcePath: sp,
-          targetPath: tp,
-          base: link,
-          target: targetByStable,
-        })
+        result.push({ kind: "modified", sourcePath: sp, targetPath: tp, base: link, target: targetByStable })
       }
       continue
     }
@@ -170,17 +270,11 @@ export function compareLinks(
     if (targetByKeyLink) {
       matchedTargetIds.add(targetByKeyLink.id)
       if (!linkEquals(link, targetByKeyLink)) {
-        result.push({
-          kind: 'modified',
-          sourcePath: sp,
-          targetPath: tp,
-          base: link,
-          target: targetByKeyLink,
-        })
+        result.push({ kind: "modified", sourcePath: sp, targetPath: tp, base: link, target: targetByKeyLink })
       }
       continue
     }
-    result.push({ kind: 'removed', sourcePath: sp, targetPath: tp, link })
+    result.push({ kind: "removed", sourcePath: sp, targetPath: tp, link })
   }
   for (const link of targetLinks) {
     if (matchedTargetIds.has(link.id)) continue
@@ -189,7 +283,7 @@ export function compareLinks(
     if (sp === undefined || tp === undefined) continue
     const key = linkKey(sp, tp, link.linkTypeId)
     if (baseByKey.has(key)) continue
-    result.push({ kind: 'added', sourcePath: sp, targetPath: tp, link })
+    result.push({ kind: "added", sourcePath: sp, targetPath: tp, link })
   }
 
   return result
@@ -213,10 +307,15 @@ function getLatestDiagramsByName(diagrams: DiagramResponse[]): DiagramResponse[]
 /**
  * Сравнивает диаграммы по имени (одно имя = один «логический» диаграммный артефакт).
  * Ожидает уже нормализованные массивы (одна диаграмма на имя — последняя по версии).
+ * Attrs сравниваются семантически: modelNodeId/modelLinkId → stableId (устойчиво к copy model).
  */
 export function compareDiagrams(
   baseDiagrams: DiagramResponse[],
-  targetDiagrams: DiagramResponse[]
+  targetDiagrams: DiagramResponse[],
+  baseNodeStableById: Map<string, string> = new Map(),
+  baseLinkStableById: Map<string, string> = new Map(),
+  targetNodeStableById: Map<string, string> = new Map(),
+  targetLinkStableById: Map<string, string> = new Map(),
 ): DiagramDiffItem[] {
   const baseByName = new Map<string, DiagramResponse>()
   for (const d of baseDiagrams) baseByName.set(d.name.trim(), d)
@@ -228,14 +327,23 @@ export function compareDiagrams(
   for (const [name, diagram] of baseByName) {
     const targetDiagram = targetByName.get(name)
     if (!targetDiagram) {
-      result.push({ kind: 'removed', name, diagram })
-    } else if (!diagramEquals(diagram, targetDiagram)) {
-      result.push({ kind: 'modified', name, base: diagram, target: targetDiagram })
+      result.push({ kind: "removed", name, diagram })
+    } else if (
+      !diagramEquals(
+        diagram,
+        targetDiagram,
+        baseNodeStableById,
+        baseLinkStableById,
+        targetNodeStableById,
+        targetLinkStableById,
+      )
+    ) {
+      result.push({ kind: "modified", name, base: diagram, target: targetDiagram })
     }
   }
   for (const [name, diagram] of targetByName) {
     if (!baseByName.has(name)) {
-      result.push({ kind: 'added', name, diagram })
+      result.push({ kind: "added", name, diagram })
     }
   }
 
@@ -263,14 +371,21 @@ export function computeModelDiff(
   return {
     nodes: compareNodes(base.nodes, target.nodes),
     links: compareLinks(base.links, target.links, basePathMap, targetPathMap),
-    diagrams: compareDiagrams(baseDiagrams, targetDiagrams),
+    diagrams: compareDiagrams(
+      baseDiagrams,
+      targetDiagrams,
+      buildEntityStableIdMap(base.nodes),
+      buildEntityStableIdMap(base.links),
+      buildEntityStableIdMap(target.nodes),
+      buildEntityStableIdMap(target.links),
+    ),
   }
 }
 
 export type DiagramDiffStateMaps = {
-  diffStateByModelNodeId: Record<string, 'added' | 'removed' | 'modified'>
-  diffStateByModelLinkId: Record<string, 'added' | 'removed' | 'modified'>
-  diffStateByEdgeInstanceId: Record<string, 'added' | 'removed' | 'modified'>
+  diffStateByModelNodeId: Record<string, "added" | "removed" | "modified">
+  diffStateByModelLinkId: Record<string, "added" | "removed" | "modified">
+  diffStateByEdgeInstanceId: Record<string, "added" | "removed" | "modified">
 }
 
 /**
@@ -293,7 +408,7 @@ export function buildDiagramDiffStateMaps(
     targetId: string
     linkTypeId: string
   }>,
-  side: 'base' | 'target',
+  side: "base" | "target",
   options?: {
     /** stableId узлов/связей на противоположной диаграмме (stableId или id при отсутствии stableId). */
     otherSideStableIds?: {
@@ -319,21 +434,29 @@ export function buildDiagramDiffStateMaps(
     useEdgeInstanceIdMatching?: boolean
   }
 ): DiagramDiffStateMaps {
-  const removedNodeIds = new Set(diff.nodes.filter(n => n.kind === 'removed').map(n => n.node.id))
-  const addedNodeIds = new Set(diff.nodes.filter(n => n.kind === 'added').map(n => n.node.id))
+  const removedNodeIds = new Set(
+    diff.nodes.filter((n) => n.kind === "removed").map((n) => n.node.id)
+  )
+  const addedNodeIds = new Set(
+    diff.nodes.filter((n) => n.kind === "added").map((n) => n.node.id)
+  )
   const modifiedBaseNodeIds = new Set(
-    diff.nodes.filter(n => n.kind === 'modified').map(n => n.base.id)
+    diff.nodes.filter((n) => n.kind === "modified").map((n) => n.base.id)
   )
   const modifiedTargetNodeIds = new Set(
-    diff.nodes.filter(n => n.kind === 'modified').map(n => n.target.id)
+    diff.nodes.filter((n) => n.kind === "modified").map((n) => n.target.id)
   )
-  const removedLinkIds = new Set(diff.links.filter(l => l.kind === 'removed').map(l => l.link.id))
-  const addedLinkIds = new Set(diff.links.filter(l => l.kind === 'added').map(l => l.link.id))
+  const removedLinkIds = new Set(
+    diff.links.filter((l) => l.kind === "removed").map((l) => l.link.id)
+  )
+  const addedLinkIds = new Set(
+    diff.links.filter((l) => l.kind === "added").map((l) => l.link.id)
+  )
   const modifiedBaseLinkIds = new Set(
-    diff.links.filter(l => l.kind === 'modified').map(l => l.base.id)
+    diff.links.filter((l) => l.kind === "modified").map((l) => l.base.id)
   )
   const modifiedTargetLinkIds = new Set(
-    diff.links.filter(l => l.kind === 'modified').map(l => l.target.id)
+    diff.links.filter((l) => l.kind === "modified").map((l) => l.target.id)
   )
 
   const otherStableIds = options?.otherSideStableIds
@@ -343,30 +466,26 @@ export function buildDiagramDiffStateMaps(
   const currentEdgeInstanceSignatures = options?.currentEdgeInstanceSignatures
   const useEdgeInstanceIdMatching = options?.useEdgeInstanceIdMatching ?? false
 
-  const diffStateByModelNodeId: Record<string, 'added' | 'removed' | 'modified'> = {}
+  const diffStateByModelNodeId: Record<string, "added" | "removed" | "modified"> = {}
   for (const nodeId of instanceNodeIds) {
     const stableId = currentStableIds?.nodeIdToStableId.get(nodeId) ?? nodeId
-    const absentOnOtherByStableId = otherStableIds?.nodeStableIds
-      ? !otherStableIds.nodeStableIds.has(stableId)
-      : false
-    if (side === 'base') {
-      if (removedNodeIds.has(nodeId) || absentOnOtherByStableId)
-        diffStateByModelNodeId[nodeId] = 'removed'
-      else if (modifiedBaseNodeIds.has(nodeId)) diffStateByModelNodeId[nodeId] = 'modified'
+    const absentOnOtherByStableId =
+      otherStableIds?.nodeStableIds ? !otherStableIds.nodeStableIds.has(stableId) : false
+    if (side === "base") {
+      if (removedNodeIds.has(nodeId) || absentOnOtherByStableId) diffStateByModelNodeId[nodeId] = "removed"
+      else if (modifiedBaseNodeIds.has(nodeId)) diffStateByModelNodeId[nodeId] = "modified"
     } else {
-      if (addedNodeIds.has(nodeId) || absentOnOtherByStableId)
-        diffStateByModelNodeId[nodeId] = 'added'
-      else if (modifiedTargetNodeIds.has(nodeId)) diffStateByModelNodeId[nodeId] = 'modified'
+      if (addedNodeIds.has(nodeId) || absentOnOtherByStableId) diffStateByModelNodeId[nodeId] = "added"
+      else if (modifiedTargetNodeIds.has(nodeId)) diffStateByModelNodeId[nodeId] = "modified"
     }
   }
 
-  const diffStateByModelLinkId: Record<string, 'added' | 'removed' | 'modified'> = {}
-  const diffStateByEdgeInstanceId: Record<string, 'added' | 'removed' | 'modified'> = {}
+  const diffStateByModelLinkId: Record<string, "added" | "removed" | "modified"> = {}
+  const diffStateByEdgeInstanceId: Record<string, "added" | "removed" | "modified"> = {}
   for (const edge of instanceEdges) {
     const stableId = currentStableIds?.linkIdToStableId.get(edge.modelLinkId) ?? edge.modelLinkId
-    const absentOnOtherByStableId = otherStableIds?.linkStableIds
-      ? !otherStableIds.linkStableIds.has(stableId)
-      : false
+    const absentOnOtherByStableId =
+      otherStableIds?.linkStableIds ? !otherStableIds.linkStableIds.has(stableId) : false
     const absentOnOtherByEdgeInstanceId =
       useEdgeInstanceIdMatching && otherSideEdgeInstanceIds
         ? !otherSideEdgeInstanceIds.has(edge.edgeInstanceId)
@@ -379,21 +498,21 @@ export function buildDiagramDiffStateMaps(
       currentEdgeInstanceSignatures.get(edge.edgeInstanceId) !==
         otherSideEdgeInstanceSignatures.get(edge.edgeInstanceId)
     const isAbsentOnOther = absentOnOtherByStableId || absentOnOtherByEdgeInstanceId
-    if (side === 'base') {
+    if (side === "base") {
       if (removedLinkIds.has(edge.modelLinkId) || isAbsentOnOther) {
-        diffStateByModelLinkId[edge.modelLinkId] = 'removed'
-        diffStateByEdgeInstanceId[edge.edgeInstanceId] = 'removed'
+        diffStateByModelLinkId[edge.modelLinkId] = "removed"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "removed"
       } else if (modifiedBaseLinkIds.has(edge.modelLinkId) || modifiedByEdgeInstanceSignature) {
-        diffStateByModelLinkId[edge.modelLinkId] = 'modified'
-        diffStateByEdgeInstanceId[edge.edgeInstanceId] = 'modified'
+        diffStateByModelLinkId[edge.modelLinkId] = "modified"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "modified"
       }
     } else {
       if (addedLinkIds.has(edge.modelLinkId) || isAbsentOnOther) {
-        diffStateByModelLinkId[edge.modelLinkId] = 'added'
-        diffStateByEdgeInstanceId[edge.edgeInstanceId] = 'added'
+        diffStateByModelLinkId[edge.modelLinkId] = "added"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "added"
       } else if (modifiedTargetLinkIds.has(edge.modelLinkId) || modifiedByEdgeInstanceSignature) {
-        diffStateByModelLinkId[edge.modelLinkId] = 'modified'
-        diffStateByEdgeInstanceId[edge.edgeInstanceId] = 'modified'
+        diffStateByModelLinkId[edge.modelLinkId] = "modified"
+        diffStateByEdgeInstanceId[edge.edgeInstanceId] = "modified"
       }
     }
   }

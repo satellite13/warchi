@@ -1,10 +1,18 @@
-import { computed, ref } from 'vue'
-import { apiGet } from '@/composables/useApi'
-import { listParams } from '@/api/queryHelpers'
-import type { ModelData } from '@/types/entities'
-import type { PaginatedResponse } from '@/types/entities'
-import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
-import { computeModelDiff, type ModelVersionDiff } from '@/utils/modelDiff'
+import { computed, ref } from "vue"
+import { apiGet } from "@/composables/useApi"
+import type { ModelData } from "@/types/entities"
+import type { PaginatedResponse } from "@/types/entities"
+import type {
+  DiagramResponse,
+  LinkResponse,
+  NodeResponse,
+} from "@/types/api"
+import {
+  computeModelDiff,
+  type ModelVersionDiff,
+} from "@/utils/modelDiff"
+import { paginatedContent } from "@/utils/paginatedResponse"
+import { fetchAllByModelId } from "./modelEditorLoadModel"
 
 export type ModelVersionDiffState = {
   relatedVersions: ModelData[]
@@ -47,38 +55,35 @@ export function useModelVersionDiff() {
 
   async function loadBaseFromApi(modelId: string): Promise<void> {
     baseData.value = null
-    const listQuery = listParams()
-    const [nodesRes, linksRes, diagramsRes] = await Promise.all([
-      apiGet<PaginatedResponse<NodeResponse>>(
-        `/nodes?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
-      ),
-      apiGet<PaginatedResponse<LinkResponse>>(
-        `/links?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
-      ),
-      apiGet<PaginatedResponse<DiagramResponse>>(
-        `/diagrams?modelId=${encodeURIComponent(modelId)}&${listQuery.toString()}`
-      ),
-    ])
-    const nodes = nodesRes.success ? (nodesRes.data.content ?? []) : []
-    const links = linksRes.success ? (linksRes.data.content ?? []) : []
-    const diagrams = diagramsRes.success ? (diagramsRes.data.content ?? []) : []
-    baseData.value = { nodes, links, diagrams }
+    try {
+      const [nodes, links, diagrams] = await Promise.all([
+        fetchAllByModelId<NodeResponse>('/nodes', modelId),
+        fetchAllByModelId<LinkResponse>('/links', modelId),
+        fetchAllByModelId<DiagramResponse>('/diagrams', modelId),
+      ])
+      baseData.value = { nodes, links, diagrams }
+    } catch {
+      baseData.value = { nodes: [], links: [], diagrams: [] }
+    }
   }
 
   async function fetchRelatedVersions(modelId: string): Promise<void> {
     relatedVersionsLoading.value = true
     relatedVersionsError.value = null
     try {
-      const result = await apiGet<ModelData[]>(`/models/${modelId}/related-versions`)
+      const result = await apiGet<PaginatedResponse<ModelData>>(
+        `/models/${modelId}/related-versions`
+      )
       if (result.success) {
-        relatedVersions.value = result.data
+        relatedVersions.value = paginatedContent(result.data)
       } else {
         relatedVersions.value = []
         relatedVersionsError.value = result.error.message
       }
     } catch (e) {
       relatedVersions.value = []
-      relatedVersionsError.value = e instanceof Error ? e.message : 'Не удалось загрузить версии'
+      relatedVersionsError.value =
+        e instanceof Error ? e.message : "Не удалось загрузить версии"
     } finally {
       relatedVersionsLoading.value = false
     }
@@ -90,26 +95,17 @@ export function useModelVersionDiff() {
     compareTargetError.value = null
     compareTargetData.value = null
     try {
-      const listQuery = listParams()
-      const [nodesRes, linksRes, diagramsRes] = await Promise.all([
-        apiGet<PaginatedResponse<NodeResponse>>(
-          `/nodes?modelId=${encodeURIComponent(otherModelId)}&${listQuery.toString()}`
-        ),
-        apiGet<PaginatedResponse<LinkResponse>>(
-          `/links?modelId=${encodeURIComponent(otherModelId)}&${listQuery.toString()}`
-        ),
-        apiGet<PaginatedResponse<DiagramResponse>>(
-          `/diagrams?modelId=${encodeURIComponent(otherModelId)}&${listQuery.toString()}`
-        ),
+      const [nodes, links, diagrams] = await Promise.all([
+        fetchAllByModelId<NodeResponse>('/nodes', otherModelId),
+        fetchAllByModelId<LinkResponse>('/links', otherModelId),
+        fetchAllByModelId<DiagramResponse>('/diagrams', otherModelId),
       ])
-      const nodes = nodesRes.success ? (nodesRes.data.content ?? []) : []
-      const links = linksRes.success ? (linksRes.data.content ?? []) : []
-      const diagrams = diagramsRes.success ? (diagramsRes.data.content ?? []) : []
       compareTargetData.value = { nodes, links, diagrams }
       return true
     } catch (e) {
+      compareTargetData.value = null
       compareTargetError.value =
-        e instanceof Error ? e.message : 'Не удалось загрузить данные версии'
+        e instanceof Error ? e.message : "Не удалось загрузить данные версии"
       return false
     } finally {
       compareTargetLoading.value = false

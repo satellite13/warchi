@@ -23,19 +23,23 @@ function makeMockRenderer(zoom = 1, offsetX = 0, offsetY = 0) {
 describe('diagramViewportPersistence', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers()
     vi.spyOn(Date, 'now').mockReturnValue(1000)
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
   describe('persistDiagramViewport', () => {
-    it('saves viewport state for a diagram', () => {
+    it('saves viewport state for a diagram after debounce', () => {
       vi.mocked(loadJson).mockReturnValue(null)
 
       const renderer = makeMockRenderer(1.5, 100, 200)
       persistDiagramViewport('diagram-1', renderer as never)
+      expect(saveJson).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(200)
 
       expect(saveJson).toHaveBeenCalledWith(
         STORAGE_KEY,
@@ -45,11 +49,30 @@ describe('diagramViewportPersistence', () => {
       )
     })
 
+    it('coalesces rapid pan/zoom persists into one write', () => {
+      vi.mocked(loadJson).mockReturnValue(null)
+      const renderer = makeMockRenderer(1, 0, 0)
+      persistDiagramViewport('diagram-1', renderer as never)
+      renderer.offsetX = 10
+      persistDiagramViewport('diagram-1', renderer as never)
+      renderer.offsetX = 20
+      persistDiagramViewport('diagram-1', renderer as never)
+      vi.advanceTimersByTime(200)
+      expect(saveJson).toHaveBeenCalledTimes(1)
+      expect(saveJson).toHaveBeenCalledWith(
+        STORAGE_KEY,
+        expect.objectContaining({
+          'diagram-1': expect.objectContaining({ offsetX: 20 }),
+        })
+      )
+    })
+
     it('clamps zoom to min/max range', () => {
       vi.mocked(loadJson).mockReturnValue(null)
 
       const renderer = makeMockRenderer(0.1, 0, 0)
       persistDiagramViewport('diagram-1', renderer as never)
+      vi.advanceTimersByTime(200)
 
       expect(saveJson).toHaveBeenCalledWith(
         STORAGE_KEY,
@@ -64,6 +87,7 @@ describe('diagramViewportPersistence', () => {
 
       const renderer = makeMockRenderer(5.0, 0, 0)
       persistDiagramViewport('diagram-1', renderer as never)
+      vi.advanceTimersByTime(200)
 
       expect(saveJson).toHaveBeenCalledWith(
         STORAGE_KEY,
@@ -80,6 +104,7 @@ describe('diagramViewportPersistence', () => {
 
       const renderer = makeMockRenderer(1, 50, 60)
       persistDiagramViewport('diagram-new', renderer as never)
+      vi.advanceTimersByTime(200)
 
       expect(saveJson).toHaveBeenCalledWith(
         STORAGE_KEY,

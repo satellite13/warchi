@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
 import { useI18n } from "vue-i18n"
-import { MdPreview } from "md-editor-v3"
-import "md-editor-v3/lib/style.css"
 import "@/config/mdEditor"
 import AppHeader from "../components/layout/AppHeader.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import UiIcon from "../components/ui/UiIcon.vue"
+import SafeMarkdownPreview from "@/components/markdown/SafeMarkdownPreview.vue"
+import EmptyState from "@/components/list/EmptyState.vue"
 import { useWikiDocuments, type DocumentWikiItem } from "../composables/useWikiDocuments"
 import { useLocale } from "../composables/useLocale"
 
@@ -159,17 +159,19 @@ onMounted(() => {
         </p>
       </aside>
       <div class="wiki-view__content">
-        <div v-if="!selectedFileId" class="wiki-view__placeholder">
-          <UiIcon name="menu_book" class="wiki-view__placeholder-icon" />
-          <p>{{ t("wiki.selectDocument") }}</p>
-        </div>
+        <EmptyState
+          v-if="!selectedFileId"
+          variant="panel"
+          icon="menu_book"
+          :title="t('wiki.selectDocument')"
+        />
         <template v-else>
           <div v-if="contentLoading" class="wiki-view__content-loading">
             <UiIcon name="sync" class="wiki-view__content-loading-spinner" />
             <span class="wiki-view__content-loading-text">{{ t("common.loading") }}</span>
           </div>
           <div v-else class="wiki-view__markdown docs-content__body">
-            <MdPreview :model-value="content" :language="editorLanguage" />
+            <SafeMarkdownPreview :model-value="content" :language="editorLanguage" />
           </div>
         </template>
       </div>
@@ -389,7 +391,7 @@ onMounted(() => {
 }
 
 @keyframes wiki-spin {
-  to { transform: rotate(360deg); }
+  to { transform: rotate(-360deg); }
 }
 
 .wiki-view__markdown :deep(h1) { font-size: 28px; font-weight: 700; color: var(--base-text); margin: 0 0 16px; }

@@ -1,0 +1,126 @@
+# GitLab CI — черновик для Фазы 2 (PKTECHARCH-31).
+# Подключить после появления GitLab runner и registry.
+#
+# Переменные (Settings → CI/CD → Variables):
+#   CI_REGISTRY, CI_REGISTRY_USER, CI_REGISTRY_PASSWORD
+#   KUBE_CONFIG_STAGING (base64 kubeconfig для staging)
+
+stages:
+  - quality
+  - build
+  - scan
+  - deploy
+
+variables:
+  NODE_VERSION: "22"
+  DOCKER_IMAGE: "$CI_REGISTRY_IMAGE/warchi"
+
+.cache_node_modules: &cache_node_modules
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+  policy: pull-push
+
+lint:
+  stage: quality
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    <<: *cache_node_modules
+  script:
+    - npm ci --no-audit --fund=false
+    - node scripts/check-versions.mjs
+    - npm run lint
+
+type-check:
+  stage: quality
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    <<: *cache_node_modules
+  script:
+    - npm ci --no-audit --fund=false
+    - npx vue-tsc -b
+
+unit-test:
+  stage: quality
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    <<: *cache_node_modules
+  script:
+    - npm ci --no-audit --fund=false
+    - npm run test:coverage
+  # artifacts:
+  #   reports:
+  #     coverage_report:
+  #       coverage_format: cobertura
+  #       path: coverage/cobertura-coverage.xml
+
+build:
+  stage: build
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    <<: *cache_node_modules
+  script:
+    - npm ci --no-audit --fund=false
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 day
+  needs:
+    - lint
+    - type-check
+    - unit-test
+
+# e2e-test:
+#   stage: quality
+#   image: mcr.microsoft.com/playwright:v1.49.0-noble
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == "main"
+#     - if: $CI_COMMIT_BRANCH =~ /^release\//
+#     - if: $CI_COMMIT_BRANCH =~ /^hotfix\//
+#   script:
+#     - npm ci --no-audit --fund=false
+#     - npx playwright install --with-deps chromium
+#     - npm run test:e2e
+
+scan:
+  stage: scan
+  image: node:${NODE_VERSION}-alpine
+  allow_failure: true
+  script:
+    - npm audit --audit-level=moderate || true
+  needs:
+    - build
+
+docker:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+    - if: $CI_COMMIT_TAG =~ /^v/
+  script:
+    - docker build
+        --build-arg APP_VERSION="$CI_COMMIT_TAG"
+        --build-arg VITE_API_BASE_URL=""
+        --build-arg VITE_NOTATION_URL="/api/v1/notation"
+        -t "$DOCKER_IMAGE:sha-$CI_COMMIT_SHORT_SHA"
+        -t "$DOCKER_IMAGE:$CI_COMMIT_TAG"
+        .
+    - echo "Push to registry when CI_REGISTRY is configured"
+  needs:
+    - build
+
+# deploy-staging:
+#   stage: deploy
+#   image: alpine/helm:3.16
+#   environment:
+#     name: staging
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == "main"
+#   script:
+#     - helm upgrade --install warchi charts/warchi -n arch -f infra/helm-values/warchi-yc.yaml

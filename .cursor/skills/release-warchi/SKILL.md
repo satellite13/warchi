@@ -24,16 +24,17 @@ description: Executes the full release cycle for warchi: commit changes, bump ve
 ### 3. Поднять версии
 
 - Обновить `version` в `package.json`
-- При необходимости — связанные версии в соседних проектах (papirus, arepos-server)
+- При необходимости — связанные версии в соседних проектах (papirus, arepos-server, warchi-site)
+- При запросе релиза «всех проектов» не забывать **warchi-site** (отдельный репозиторий / skill `release-warchi-site`)
 - Если используется зависимость papirus на локальный проект, перевести на последную версию с npmjs
 - **Важно:** после переключения papirus с `file:../papirus` на npm-версию выполнить `rm -rf node_modules package-lock.json && npm install` — иначе в `package-lock.json` остаются локальные ссылки (`"../papirus"` в `packages`, `"node_modules/@ngroznykh/papirus": { "resolved": "../papirus", "link": true }`), из-за которых сборка Docker-образа падает с `TS2307: Cannot find module '@ngroznykh/papirus'` (локальный путь недоступен в контексте сборки образа)
 - При изменении зависимостей зафиксировать `package-lock.json`
 - Если изменения маленькие поднимаем патч-версию, если большие — мажорную или минорную, в зависимости от семантики изменений
 
-### 4. Обновить CHANGELOG.md, CHANGELOG.ru.md и CHANGELOG.fr.md
+### 4. Обновить CHANGELOG.md и CHANGELOG.ru.md
 
 - Добавить секцию `## [X.Y.Z] - YYYY-MM-DD`
-- Заполнить Added / Changed / Fixed (и эквиваленты в RU/FR)
+- Заполнить Added / Changed / Fixed (и эквиваленты в RU)
 - Обновить ссылки внизу: `[Unreleased]`, `[X.Y.Z]`
 - Включать в три файла changelog только функциональные изменения, а не технические детали релиза (например, «обновили зависимости» не должно попадать в changelog)
 
@@ -46,7 +47,7 @@ description: Executes the full release cycle for warchi: commit changes, bump ve
 
 ### 6. Релизный коммит
 
-- `git add CHANGELOG.md CHANGELOG.ru.md CHANGELOG.fr.md package.json package-lock.json <прочие релизные файлы>`
+- `git add CHANGELOG.md CHANGELOG.ru.md package.json package-lock.json <прочие релизные файлы>`
 - `git commit -m "Release X.Y.Z."`
 
 ### 7. Аннотированный тег

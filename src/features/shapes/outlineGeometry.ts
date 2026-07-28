@@ -2,7 +2,7 @@ import type {
   OutlineSegment,
   OutlineSegmentBezier,
   OutlineSegmentLine,
-} from '../notations/notationAttrs'
+} from '@/domain/attrs/notationAttrs'
 
 // ── Constants ──────────────────────────────────────────────
 

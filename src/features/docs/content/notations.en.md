@@ -21,9 +21,11 @@ Notations also support sharing via the **Share** button:
 
 When working with shared resources, available actions are determined by the granted permission level.
 
-### Importing a Notation
+### Exporting and importing a notation
 
-You can also import a notation from a JSON file containing the full notation description with types and styles.
+**Export** is available from the notation card menu in the list and from the notation editor header. Both download the **same** JSON document (`warchi-notation-export` v2) — types, components, relations, rules, and shapes.
+
+**Import** is **editor-only**: choose a JSON file with the full notation description.
 
 ## Notation Editor
 

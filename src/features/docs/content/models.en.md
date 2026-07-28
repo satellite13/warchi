@@ -177,6 +177,20 @@ The editor header also offers the **Import Open Exchange (XML)** wizard to load 
 
 If required properties are still empty after import, fill them in the properties panel before the next save.
 
+### Model package (export / import)
+
+A model ZIP package moves a model between environments, users, or serves as a backup. The archive includes:
+
+- model metadata, nodes, links, and diagrams;
+- **notations** used by the model’s diagrams (types, components, relations, rules, shapes) — one JSON file per notation;
+- **wiki files** and `document_refs` attachments, including cross-page `mdfile://` links.
+
+Diagram preview SVGs are **not** included — they are regenerated on save or when publishing a diagram share link from the editor.
+
+**Export** is available from the model card menu in the list and from the editor header. **Import** is **editor-only**: pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). On success, the new model opens in the editor.
+
+If you already have a model or notation with the same **name and version**, import returns **409** and nothing is persisted.
+
 ## Saving
 
 The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply.

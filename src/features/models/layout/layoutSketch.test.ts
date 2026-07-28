@@ -3,7 +3,7 @@ import { buildLayoutSketchModel } from './layoutSketch'
 import { parseDiagramAttrs } from '../modelAttrs'
 
 describe('buildLayoutSketchModel', () => {
-  it('computes viewBox with padding from node bounds', () => {
+  it('computes viewBox with padding from node bounds only', () => {
     const diagram = parseDiagramAttrs(null)
     diagram.instances.nodes = [
       { id: 'a', modelNodeId: 'n1', x: 0, y: 0, width: 100, height: 40 },
@@ -20,10 +20,9 @@ describe('buildLayoutSketchModel', () => {
     const model = buildLayoutSketchModel(diagram, 16)
     expect(model.viewBox).toEqual({ x: -16, y: -16, width: 332, height: 152 })
     expect(model.nodes).toHaveLength(2)
-    expect(model.edges[0]!.points.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('uses controlPoints between centers for editable polyline', () => {
+  it('ignores edge geometry for viewBox', () => {
     const diagram = parseDiagramAttrs(null)
     diagram.instances.nodes = [
       { id: 'a', modelNodeId: 'n1', x: 0, y: 0, width: 100, height: 40 },
@@ -36,16 +35,11 @@ describe('buildLayoutSketchModel', () => {
         sourceInstanceId: 'a',
         targetInstanceId: 'b',
         attrs: {
-          controlPoints: [{ x: 150, y: 60 }],
-          diagramStyle: { edgeType: 'editable-polyline' },
+          controlPoints: [{ x: 150, y: 500 }],
         },
       },
     ]
     const model = buildLayoutSketchModel(diagram, 0)
-    expect(model.edges[0]!.points).toEqual([
-      { x: 50, y: 20 },
-      { x: 150, y: 60 },
-      { x: 250, y: 20 },
-    ])
+    expect(model.viewBox).toEqual({ x: 0, y: 0, width: 300, height: 40 })
   })
 })

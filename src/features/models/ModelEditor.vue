@@ -35,6 +35,7 @@ import {
   ensureNotationImportCatalog,
 } from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
+import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
   isContainerInstance,
   isDiagramContainerModelNodeId,
@@ -2206,16 +2207,36 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
 
   if (targetEdgeInstance) {
     if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
-    const baseStyle =
+    let bound: DiagramStyle | undefined
+    if (targetEdgeInstance.modelLinkId) {
+      const modelLink = state.value.links.find(item => item.id === targetEdgeInstance.modelLinkId)
+      const notationId = activeNotationId.value
+      if (modelLink && notationId) {
+        const relationId = modelLink.parsedAttrs.notationRelations[notationId]?.relationId
+        const relation = relationId
+          ? state.value.relations.find(item => item.id === relationId)
+          : null
+        if (relation) {
+          bound = parseEntityAttrs(relation.attrs ?? null).diagramStyle
+        }
+      }
+    }
+    const previousInstance =
       targetEdgeInstance.attrs.diagramStyle &&
       typeof targetEdgeInstance.attrs.diagramStyle === 'object'
-        ? (targetEdgeInstance.attrs.diagramStyle as Record<string, unknown>)
-        : {}
-    const currentType = (baseStyle.edgeType as string | undefined) ?? 'bezier'
+        ? (targetEdgeInstance.attrs.diagramStyle as DiagramStyle)
+        : undefined
+    const previousEffective = mergeEffectiveDiagramStyle(bound, previousInstance) ?? {}
+    const currentType = (previousEffective.edgeType as string | undefined) ?? 'bezier'
     const newType = (style as Record<string, unknown>).edgeType as string | undefined
     const fromPolyline = currentType === 'polyline' || currentType === 'editable-polyline'
     const toNonPolyline = newType === 'bezier' || newType === 'straight'
-    targetEdgeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
+    // Merge relation defaults under panel style so a partial/stale panel payload cannot
+    // drop label fields that only existed on the notation relation.
+    targetEdgeInstance.attrs.diagramStyle = {
+      ...previousEffective,
+      ...JSON.parse(JSON.stringify(style)),
+    }
     if (fromPolyline && toNonPolyline && targetEdgeInstance.attrs.controlPoints) {
       delete targetEdgeInstance.attrs.controlPoints
     }
@@ -2256,11 +2277,10 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
   if (selectedElementId.startsWith('edge-')) {
     const edgeId = selectedElementId.slice('edge-'.length)
     const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
-    if (edge?.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === 'object') {
-      return edge.attrs.diagramStyle as DiagramStyle
-    }
-    // Fallback to notation relation style
-    if (edge?.modelLinkId) {
+    if (!edge) return undefined
+
+    let bound: DiagramStyle | undefined
+    if (edge.modelLinkId) {
       const modelLink = state.value.links.find(item => item.id === edge.modelLinkId)
       const notationId = activeNotationId.value
       if (modelLink && notationId) {
@@ -2269,10 +2289,16 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
           ? state.value.relations.find(item => item.id === relationId)
           : null
         if (relation) {
-          return parseEntityAttrs(relation.attrs ?? null).diagramStyle
+          bound = parseEntityAttrs(relation.attrs ?? null).diagramStyle
         }
       }
     }
+
+    const instanceStyle =
+      edge.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === 'object'
+        ? (edge.attrs.diagramStyle as DiagramStyle)
+        : undefined
+    return mergeEffectiveDiagramStyle(bound, instanceStyle)
   }
 
   return undefined

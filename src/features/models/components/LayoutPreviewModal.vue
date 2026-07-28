@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import type { DiagramAttrs } from '../modelAttrs'
 import { defaultLayoutUiOptions, type LayoutUiOptions } from '../layout/layoutOptions'
-import { buildLayoutSketchModel, pointsToSvgPath } from '../layout/layoutSketch'
+import { buildLayoutSketchModel } from '../layout/layoutSketch'
 import {
   runDiagramLayout,
   type DiagramLayoutMode,
@@ -263,49 +263,54 @@ function handleApply() {
           </button>
         </div>
 
-        <div class="layout-preview__sketch-wrap">
+        <div
+          class="layout-preview__sketch-wrap"
+          :class="{ 'layout-preview__sketch-wrap--stale': previewStale && after }"
+        >
           <p v-if="noopMessage && view === 'after' && !after" class="layout-preview__noop">
             {{ noopMessage }}
           </p>
           <p v-else-if="showNeedsUpdateHint" class="layout-preview__noop">
             {{ t('toolbar.layoutPreviewNeedsUpdate') }}
           </p>
-          <template v-else>
-            <p v-if="previewStale && view === 'after'" class="layout-preview__stale">
-              {{ t('toolbar.layoutPreviewStale') }}
-            </p>
-            <svg
-              :viewBox="`${sketch.viewBox.x} ${sketch.viewBox.y} ${sketch.viewBox.width} ${sketch.viewBox.height}`"
-              class="layout-preview__svg"
-              aria-hidden="true"
-            >
-              <rect
-                v-for="n in sketch.nodes"
-                :key="n.id"
-                class="layout-preview__node"
-                :x="n.x"
-                :y="n.y"
-                :width="n.width"
-                :height="n.height"
-                rx="4"
-              />
-              <path
-                v-for="e in sketch.edges"
-                :key="e.id"
-                class="layout-preview__edge"
-                :d="pointsToSvgPath(e.points)"
-                fill="none"
-              />
-            </svg>
-          </template>
+          <svg
+            v-else
+            :viewBox="`${sketch.viewBox.x} ${sketch.viewBox.y} ${sketch.viewBox.width} ${sketch.viewBox.height}`"
+            class="layout-preview__svg"
+            aria-hidden="true"
+          >
+            <rect
+              v-for="n in sketch.nodes"
+              :key="n.id"
+              class="layout-preview__node"
+              :x="n.x"
+              :y="n.y"
+              :width="n.width"
+              :height="n.height"
+              rx="4"
+            />
+          </svg>
         </div>
 
         <button
           type="button"
-          class="btn btn--secondary layout-preview__update"
+          class="btn layout-preview__update"
+          :class="previewStale || showNeedsUpdateHint ? 'btn--primary' : 'btn--secondary'"
           :disabled="updating || busy"
+          :title="
+            previewStale
+              ? t('toolbar.layoutPreviewStale')
+              : showNeedsUpdateHint
+                ? t('toolbar.layoutPreviewNeedsUpdate')
+                : undefined
+          "
           @click="refreshPreview"
         >
+          <span
+            v-if="previewStale || showNeedsUpdateHint"
+            class="layout-preview__update-dot"
+            aria-hidden="true"
+          />
           {{ updating ? t('common.loading') : t('toolbar.layoutPreviewUpdate') }}
         </button>
       </div>
@@ -482,6 +487,11 @@ function handleApply() {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: opacity 0.15s ease;
+}
+
+.layout-preview__sketch-wrap--stale {
+  opacity: 0.55;
 }
 
 .layout-preview__svg {
@@ -497,11 +507,6 @@ function handleApply() {
   stroke-width: 1.5;
 }
 
-.layout-preview__edge {
-  stroke: var(--text-subtle);
-  stroke-width: 1.5;
-}
-
 .layout-preview__noop {
   margin: 0;
   padding: 16px;
@@ -510,17 +515,19 @@ function handleApply() {
   text-align: center;
 }
 
-.layout-preview__stale {
-  margin: 0 0 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--warning, #e67e22);
-  background: color-mix(in srgb, var(--warning, #e67e22) 12%, transparent);
-  border-radius: var(--radius-sm, 6px);
-}
-
 .layout-preview__update {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.layout-preview__update-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 @media (max-width: 720px) {

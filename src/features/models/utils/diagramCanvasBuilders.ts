@@ -92,3 +92,21 @@ export function resolveModelEdgeOptions(ds?: DiagramStyle): ModelEdgeOptions {
   if (ds.edgeLabelLineGap != null) opts.labelLineGap = ds.edgeLabelLineGap
   return opts
 }
+
+/**
+ * Relation (bound) style + instance overrides. Instance-only `{ edgeType }` from layout
+ * must not wipe label/stroke fields that live on the notation relation.
+ */
+export function mergeEffectiveDiagramStyle(
+  bound: DiagramStyle | undefined,
+  instanceStyle: DiagramStyle | undefined
+): DiagramStyle | undefined {
+  if (
+    instanceStyle &&
+    typeof instanceStyle === 'object' &&
+    !Array.isArray(instanceStyle)
+  ) {
+    return { ...(bound ?? {}), ...instanceStyle }
+  }
+  return bound
+}

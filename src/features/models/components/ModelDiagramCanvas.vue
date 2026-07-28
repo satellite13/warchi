@@ -72,6 +72,7 @@ import {
   buildModelEdgeLabelBackground,
   buildModelEdgeLabelConfig,
   buildModelNodeIcon,
+  mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
@@ -752,10 +753,11 @@ const tryCreateAutoLink = (draggedPapNodeId: string) => {
 }
 
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
-  if (edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object') {
-    return edgeInst.attrs.diagramStyle as DiagramStyle
-  }
-  return getBoundRelationStyle(edgeInst.modelLinkId)
+  const instanceStyle =
+    edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object'
+      ? (edgeInst.attrs.diagramStyle as DiagramStyle)
+      : undefined
+  return mergeEffectiveDiagramStyle(getBoundRelationStyle(edgeInst.modelLinkId), instanceStyle)
 }
 
 const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined => {
@@ -1954,21 +1956,23 @@ function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) 
   const edgeInst = next.instances.edges.find(edge => edge.id === edgeInstanceId)
   if (!edgeInst) return
 
-  const baseStyle =
+  const instanceStyle =
     edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object'
-      ? (edgeInst.attrs.diagramStyle as Record<string, unknown>)
-      : {}
+      ? (edgeInst.attrs.diagramStyle as DiagramStyle)
+      : undefined
+  const effective =
+    mergeEffectiveDiagramStyle(getBoundRelationStyle(edgeInst.modelLinkId), instanceStyle) ?? {}
 
-  const currentType = (baseStyle.edgeType as EdgePathType | undefined) ?? 'bezier'
+  const currentType = (effective.edgeType as EdgePathType | undefined) ?? 'bezier'
   if (currentType === edgeType) return
 
   if (!edgeInst.attrs) edgeInst.attrs = {}
+  // Persist full effective style + new type so relation label/stroke fields are not dropped
+  // when instance diagramStyle previously held only `{ edgeType }` (e.g. after auto-layout).
   edgeInst.attrs.diagramStyle = {
-    ...baseStyle,
+    ...effective,
     edgeType,
   }
-  // При смене с polyline/editable-polyline на bezier или straight удаляем промежуточные точки:
-  // они имеют другой формат/семантику и искажают отрисовку стрелки
   const fromPolyline = currentType === 'polyline' || currentType === 'editable-polyline'
   const toNonPolyline = edgeType === 'bezier' || edgeType === 'straight'
   if (fromPolyline && toNonPolyline && edgeInst.attrs.controlPoints) {

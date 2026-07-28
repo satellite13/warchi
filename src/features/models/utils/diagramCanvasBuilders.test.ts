@@ -11,6 +11,7 @@ import {
   buildModelEdgeLabelBackground,
   buildModelEdgeLabelConfig,
   buildModelNodeIcon,
+  mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
 } from './diagramCanvasBuilders'
 
@@ -126,5 +127,25 @@ describe('diagramCanvasBuilders', () => {
       startMarker: { type: 'none' },
       endMarker: { type: 'none' },
     })
+  })
+
+  it('merges relation style with instance edgeType override without dropping label fields', () => {
+    const bound: DiagramStyle = {
+      edgeType: 'bezier',
+      strokeColor: '#333',
+      labelColor: '#00f',
+      labelFontSize: 14,
+      labelBgColor: '#fff',
+    }
+    const instance: DiagramStyle = { edgeType: 'polyline' }
+    expect(mergeEffectiveDiagramStyle(bound, instance)).toEqual({
+      edgeType: 'polyline',
+      strokeColor: '#333',
+      labelColor: '#00f',
+      labelFontSize: 14,
+      labelBgColor: '#fff',
+    })
+    expect(mergeEffectiveDiagramStyle(bound, undefined)).toEqual(bound)
+    expect(mergeEffectiveDiagramStyle(undefined, instance)).toEqual(instance)
   })
 })

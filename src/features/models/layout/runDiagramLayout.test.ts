@@ -7,6 +7,7 @@ vi.mock('./elkLoader', () => ({
   getElk: async () => ({ layout: layoutMock }),
 }))
 
+import { defaultLayoutUiOptions } from './layoutOptions'
 import {
   inferLayoutDirection,
   resolveLayoutScopeIds,
@@ -131,7 +132,6 @@ describe('runDiagramLayout', () => {
     const result = await runDiagramLayout({
       diagram,
       mode: 'overlap',
-      selectedInstanceIds: [],
     })
 
     expect(result).toEqual({ status: 'error', message: 'ELK layout failed' })
@@ -139,5 +139,76 @@ describe('runDiagramLayout', () => {
       { id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 80, height: 40 },
       { id: 'b', modelNodeId: 'm2', x: 120, y: 0, width: 80, height: 40 },
     ])
+  })
+
+  it('ignores selectedInstanceIds and lays out all nodes', async () => {
+    layoutMock.mockResolvedValue({
+      id: 'root',
+      children: [
+        { id: 'a', x: 0, y: 0, width: 80, height: 40 },
+        { id: 'b', x: 160, y: 0, width: 80, height: 40 },
+        { id: 'c', x: 320, y: 0, width: 80, height: 40 },
+      ],
+      edges: [],
+    })
+
+    const diagram: DiagramAttrs = {
+      instances: {
+        nodes: [
+          { id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 80, height: 40 },
+          { id: 'b', modelNodeId: 'm2', x: 100, y: 0, width: 80, height: 40 },
+          { id: 'c', modelNodeId: 'm3', x: 200, y: 0, width: 80, height: 40 },
+        ],
+        edges: [],
+      },
+    }
+
+    await runDiagramLayout({
+      diagram,
+      mode: 'layered',
+      selectedInstanceIds: ['a'],
+    })
+
+    const graphArg = layoutMock.mock.calls[0]?.[0] as { children?: { id: string }[] }
+    const childIds = (graphArg.children ?? []).map(c => c.id).sort()
+    expect(childIds).toEqual(['a', 'b', 'c'])
+  })
+
+  it('uses uiOptions mapping for layered', async () => {
+    const diagram: DiagramAttrs = {
+      instances: {
+        nodes: [
+          { id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 80, height: 40 },
+          { id: 'b', modelNodeId: 'm2', x: 0, y: 80, width: 80, height: 40 },
+        ],
+        edges: [{ id: 'e1', modelLinkId: 'l1', sourceInstanceId: 'a', targetInstanceId: 'b' }],
+      },
+    }
+    const ui = defaultLayoutUiOptions('layered')
+    ui.direction = 'LEFT'
+    ui.nodeNodeSpacing = 11
+
+    await runDiagramLayout({ diagram, mode: 'layered', uiOptions: ui })
+
+    const graphArg = layoutMock.mock.calls[0]?.[0] as { layoutOptions?: Record<string, string> }
+    expect(graphArg.layoutOptions?.['elk.direction']).toBe('LEFT')
+    expect(graphArg.layoutOptions?.['elk.spacing.nodeNode']).toBe('11')
+  })
+
+  it('AUTO direction still infers when ui.direction is AUTO', async () => {
+    const diagram: DiagramAttrs = {
+      instances: {
+        nodes: [
+          { id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 80, height: 40 },
+          { id: 'b', modelNodeId: 'm2', x: 10, y: 200, width: 80, height: 40 },
+        ],
+        edges: [{ id: 'e1', modelLinkId: 'l1', sourceInstanceId: 'a', targetInstanceId: 'b' }],
+      },
+    }
+
+    await runDiagramLayout({ diagram, mode: 'layered' })
+
+    const graphArg = layoutMock.mock.calls[0]?.[0] as { layoutOptions?: Record<string, string> }
+    expect(graphArg.layoutOptions?.['elk.direction']).toBe('DOWN')
   })
 })

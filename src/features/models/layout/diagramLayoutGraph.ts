@@ -215,25 +215,18 @@ export function applyElkLayout(
     if (!scopeIds.has(edge.sourceInstanceId) || !scopeIds.has(edge.targetInstanceId)) continue
 
     const bendPoints = elkEdge.sections?.flatMap(s => s.bendPoints ?? []) ?? []
-    if (bendPoints.length > 0) {
-      if (!edge.attrs) edge.attrs = {}
-      edge.attrs.controlPoints = bendPoints.map(p => ({ x: p.x, y: p.y }))
+    if (!edge.attrs) edge.attrs = {}
+    const existingStyle =
+      edge.attrs.diagramStyle && typeof edge.attrs.diagramStyle === 'object'
+        ? (edge.attrs.diagramStyle as Record<string, unknown>)
+        : {}
 
-      const existingStyle =
-        edge.attrs.diagramStyle && typeof edge.attrs.diagramStyle === 'object'
-          ? (edge.attrs.diagramStyle as Record<string, unknown>)
-          : {}
-      const currentType = existingStyle.edgeType as string | undefined
-      if (!currentType || currentType === 'bezier' || currentType === 'straight') {
-        edge.attrs.diagramStyle = { ...existingStyle, edgeType: 'editable-polyline' }
-      } else if (!edge.attrs.diagramStyle) {
-        edge.attrs.diagramStyle = existingStyle
-      }
-    } else if (edge.attrs) {
+    if (bendPoints.length > 0) {
+      edge.attrs.controlPoints = bendPoints.map(p => ({ x: p.x, y: p.y }))
+      edge.attrs.diagramStyle = { ...existingStyle, edgeType: 'editable-polyline' }
+    } else {
       delete edge.attrs.controlPoints
-      if (Object.keys(edge.attrs).length === 0) {
-        delete edge.attrs
-      }
+      edge.attrs.diagramStyle = { ...existingStyle, edgeType: 'straight' }
     }
   }
 

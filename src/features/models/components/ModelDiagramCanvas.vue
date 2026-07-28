@@ -75,7 +75,6 @@ import {
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
-import { runDiagramLayout } from '../layout/runDiagramLayout'
 import {
   applyStylePropertyBindings,
   BIND_TO_NAME,
@@ -117,6 +116,8 @@ const props = withDefaults(
     attachToOutlineEnabled?: boolean
     autoLinkInGroups?: boolean
     readOnly?: boolean
+    /** When false, layout undo can clear the unsaved indicator if attrs are restored. */
+    diagramDirty?: boolean
     navigationOnlyMode?: boolean
     /** Подсветка diff: красный — удалён, зелёный — добавлен, жёлтый — изменён */
     diffStateByModelNodeId?: Record<string, 'added' | 'removed' | 'modified'>
@@ -142,6 +143,7 @@ const props = withDefaults(
     relationRules: () => [],
     autoLinkInGroups: true,
     readOnly: false,
+    diagramDirty: false,
     navigationOnlyMode: false,
     selectedEdgeInstanceId: null,
     selectedInstanceIds: () => [],
@@ -184,7 +186,7 @@ function applyDiffOverlayToEdgeStyle(
 }
 
 const emit = defineEmits<{
-  updateDiagram: [next: DiagramAttrs]
+  updateDiagram: [next: DiagramAttrs, options?: { dirty?: boolean }]
   selectNodes: [modelNodeIds: string[]]
   selectInstanceIds: [instanceIds: string[]]
   selectLink: [modelLinkId: string | null]
@@ -241,8 +243,6 @@ const emit = defineEmits<{
     existingLinksNotOnDiagram: EditorLink[],
   ]
   liveCollaborationGesture: [phase: 'block' | 'unblock']
-  layoutError: [message: string]
-  layoutBusy: [busy: boolean]
 }>()
 const { t } = useI18n()
 
@@ -263,6 +263,13 @@ const attachToOutlineEnabled = ref(props.attachToOutlineEnabled)
 // setAttachToOutline / setSnapToGrid / etc. via `if (next === local) return`.
 const canUndo = ref(false)
 const canRedo = ref(false)
+/**
+ * When true, history `change` only refreshes canUndo/canRedo.
+ * Auto-layout commands apply attrs via updateDiagram + syncDiagram; the usual
+ * persist-from-papirus path would race (papirus still has pre-layout coords) and
+ * both break undo and can leave an extra no-op history step.
+ */
+let suppressHistoryCanvasPersist = false
 /** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
 const viewportRev = ref(0)
 
@@ -2160,6 +2167,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     if (props.readOnly) return
     canUndo.value = manager.history.canUndo
     canRedo.value = manager.history.canRedo
+    if (suppressHistoryCanvasPersist) return
     // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
     persistNodePositions(Array.from(nodeIdToInstance.keys()))
     detectEdgePortChanges()
@@ -2581,69 +2589,46 @@ const zoomToSelection = () => {
   )
 }
 
-const layoutBusy = ref(false)
-
-const resolveSelectedInstanceIds = (): string[] => {
-  const ids = new Set<string>()
-  const selectedPap = interactionManager?.selection.selectedIds
-  if (selectedPap && selectedPap.size > 0) {
-    for (const papId of selectedPap) {
-      const entity = nodeIdToInstance.get(papId)
-      if (entity) ids.add(entity.instanceId)
-    }
-    return [...ids]
-  }
-  const selectedModel = new Set(props.selectedModelNodeIds)
-  for (const inst of instanceNodes.value) {
-    if (selectedModel.has(inst.modelNodeId)) ids.add(inst.id)
-  }
-  return [...ids]
+const applyDiagramAttrsToCanvas = (
+  attrs: DiagramAttrs,
+  options?: { dirty?: boolean }
+): void => {
+  emit('updateDiagram', attrs, options)
+  // Parent setDiagramAttrs is sync; apply to papirus immediately so history
+  // listeners (and the user) never see attrs/renderer diverge.
+  syncDiagram()
 }
 
-const runAutoLayout = async (mode: 'layered' | 'overlap') => {
-  if (!props.activeDiagram || props.readOnly || layoutBusy.value) return
-  layoutBusy.value = true
-  emit('layoutBusy', true)
-  try {
-    const before = cloneDiagramAttrs()
-    const result = await runDiagramLayout({
-      diagram: before,
-      mode,
-      selectedInstanceIds: resolveSelectedInstanceIds(),
+const runLayoutHistoryCommand = (apply: () => void): void => {
+  suppressHistoryCanvasPersist = true
+  apply()
+  // HistoryManager emits `change` synchronously after execute/undo returns;
+  // clear on microtask so persist-from-papirus stays suppressed for that tick.
+  queueMicrotask(() => {
+    suppressHistoryCanvasPersist = false
+  })
+}
+
+const applyLayoutResult = (after: DiagramAttrs): void => {
+  if (!props.activeDiagram || props.readOnly) return
+  const before = cloneDiagramAttrs()
+  const clearDirtyOnUndo = !props.diagramDirty
+  const history = interactionManager?.history
+  if (history && typeof history.execute === 'function') {
+    history.execute({
+      execute: () => {
+        runLayoutHistoryCommand(() => applyDiagramAttrsToCanvas(after))
+      },
+      undo: () => {
+        runLayoutHistoryCommand(() =>
+          applyDiagramAttrsToCanvas(before, { dirty: !clearDirtyOnUndo })
+        )
+      },
     })
-    if (result.status === 'error') {
-      emit('layoutError', result.message)
-      return
-    }
-    if (result.status === 'noop') return
-
-    const after = result.diagram
-    const history = interactionManager?.history
-    if (history && typeof history.execute === 'function') {
-      history.execute({
-        execute: () => {
-          emit('updateDiagram', after)
-        },
-        undo: () => {
-          emit('updateDiagram', before)
-        },
-      })
-    } else {
-      emit('updateDiagram', after)
-    }
-    requestAnimationFrame(() => fitToView())
-  } finally {
-    layoutBusy.value = false
-    emit('layoutBusy', false)
+  } else {
+    applyDiagramAttrsToCanvas(after)
   }
-}
-
-const autoLayoutNodes = () => {
-  void runAutoLayout('layered')
-}
-
-const autoLayoutTidy = () => {
-  void runAutoLayout('overlap')
+  requestAnimationFrame(() => fitToView())
 }
 
 const toggleGrid = (): boolean => {
@@ -3201,8 +3186,7 @@ defineExpose({
   zoomOut,
   fitToView,
   zoomToSelection,
-  autoLayoutNodes,
-  autoLayoutTidy,
+  applyLayoutResult,
   resetView,
   toggleGrid,
   getGridVisible,

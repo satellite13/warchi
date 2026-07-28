@@ -204,12 +204,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
   },
   {
-    icon: 'compress',
-    event: 'auto-layout-tidy',
-    title: t('toolbar.autoLayoutTidy'),
-    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
-  },
-  {
     icon: 'restart_alt',
     event: 'reset-view',
     title: t('toolbar.resetZoom'),

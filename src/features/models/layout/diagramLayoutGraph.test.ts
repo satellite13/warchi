@@ -258,32 +258,89 @@ describe('applyElkLayout', () => {
     expect(diagram).toEqual(snapshot)
   })
 
-  it('removes controlPoints when ELK returns no bend points', () => {
+  it('sets straight and clears controlPoints when ELK has no bend points', () => {
     const diagram: DiagramAttrs = {
       instances: {
-        nodes: [{ id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 40, height: 40 }],
+        nodes: [
+          { id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 80, height: 40 },
+          { id: 'b', modelNodeId: 'm2', x: 200, y: 0, width: 80, height: 40 },
+        ],
         edges: [
           {
             id: 'e1',
             modelLinkId: 'l1',
             sourceInstanceId: 'a',
-            targetInstanceId: 'a',
-            attrs: { controlPoints: [{ x: 5, y: 5 }] },
+            targetInstanceId: 'b',
+            attrs: {
+              controlPoints: [{ x: 5, y: 5 }],
+              diagramStyle: { edgeType: 'bezier' },
+            },
           },
         ],
       },
     }
     const elkResult = {
       id: 'root',
-      children: [{ id: 'a', x: 0, y: 0, width: 40, height: 40 }],
+      children: [
+        { id: 'a', x: 10, y: 20, width: 80, height: 40 },
+        { id: 'b', x: 200, y: 20, width: 80, height: 40 },
+      ],
       edges: [
         {
           id: 'e1',
-          sections: [{ startPoint: { x: 0, y: 0 }, endPoint: { x: 0, y: 0 }, bendPoints: [] }],
+          sections: [{ startPoint: { x: 90, y: 40 }, endPoint: { x: 200, y: 40 } }],
         },
       ],
     }
-    const next = applyElkLayout(diagram, elkResult, new Set(['a']))
-    expect(next.instances.edges[0]?.attrs?.controlPoints).toBeUndefined()
+    const next = applyElkLayout(diagram, elkResult, new Set(['a', 'b']))
+    const edge = next.instances.edges[0]!
+    expect(edge.attrs?.controlPoints).toBeUndefined()
+    expect(edge.attrs?.diagramStyle).toMatchObject({ edgeType: 'straight' })
+  })
+
+  it('forces editable-polyline even when previous type was polyline', () => {
+    const diagram: DiagramAttrs = {
+      instances: {
+        nodes: [
+          { id: 'a', modelNodeId: 'm1', x: 0, y: 0, width: 80, height: 40 },
+          { id: 'b', modelNodeId: 'm2', x: 0, y: 100, width: 80, height: 40 },
+        ],
+        edges: [
+          {
+            id: 'e1',
+            modelLinkId: 'l1',
+            sourceInstanceId: 'a',
+            targetInstanceId: 'b',
+            attrs: { diagramStyle: { edgeType: 'polyline' } },
+          },
+        ],
+      },
+    }
+    const next = applyElkLayout(
+      diagram,
+      {
+        id: 'root',
+        children: [
+          { id: 'a', x: 10, y: 20, width: 80, height: 40 },
+          { id: 'b', x: 200, y: 20, width: 80, height: 40 },
+        ],
+        edges: [
+          {
+            id: 'e1',
+            sections: [
+              {
+                startPoint: { x: 90, y: 40 },
+                endPoint: { x: 200, y: 40 },
+                bendPoints: [{ x: 140, y: 40 }],
+              },
+            ],
+          },
+        ],
+      },
+      new Set(['a', 'b'])
+    )
+    const edge = next.instances.edges[0]!
+    expect(edge.attrs?.controlPoints).toEqual([{ x: 140, y: 40 }])
+    expect(edge.attrs?.diagramStyle).toMatchObject({ edgeType: 'editable-polyline' })
   })
 })

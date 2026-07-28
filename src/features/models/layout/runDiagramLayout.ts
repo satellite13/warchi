@@ -4,10 +4,14 @@ import {
   buildElkGraph,
   nodeBounds,
   type ElkGraphNode,
-  type ElkLayoutOptions,
   type LayoutNode,
 } from './diagramLayoutGraph'
 import { getElk } from './elkLoader'
+import {
+  defaultLayoutUiOptions,
+  toElkLayoutOptions,
+  type LayoutUiOptions,
+} from './layoutOptions'
 
 export type DiagramLayoutMode = 'layered' | 'overlap'
 export type LayoutDirection = 'RIGHT' | 'DOWN'
@@ -15,7 +19,9 @@ export type LayoutDirection = 'RIGHT' | 'DOWN'
 export type RunDiagramLayoutInput = {
   diagram: DiagramAttrs
   mode: DiagramLayoutMode
-  selectedInstanceIds: string[]
+  /** @deprecated ignored — layout always uses full diagram */
+  selectedInstanceIds?: string[]
+  uiOptions?: LayoutUiOptions
 }
 
 export type RunDiagramLayoutResult =
@@ -85,9 +91,9 @@ export function inferLayoutDirection(
 export async function runDiagramLayout(
   input: RunDiagramLayoutInput
 ): Promise<RunDiagramLayoutResult> {
-  const { diagram, mode, selectedInstanceIds } = input
+  const { diagram, mode, uiOptions: uiOptionsInput } = input
   const allIds = diagram.instances.nodes.map(n => n.id)
-  const scopeIds = resolveLayoutScopeIds(selectedInstanceIds, allIds)
+  const scopeIds = new Set(allIds)
 
   if (scopeIds.size < 2) {
     return { status: 'noop' }
@@ -108,23 +114,12 @@ export async function runDiagramLayout(
       targetInstanceId: e.targetInstanceId,
     }))
 
-    let layoutOptions: ElkLayoutOptions
-
-    if (mode === 'layered') {
-      const direction = inferLayoutDirection(nodes, edges, scopeIds)
-      layoutOptions = {
-        'elk.algorithm': 'layered',
-        'elk.direction': direction,
-        'elk.edgeRouting': 'ORTHOGONAL',
-        'elk.spacing.nodeNode': '40',
-        'elk.layered.spacing.nodeNodeBetweenLayers': '48',
-      }
-    } else {
-      layoutOptions = {
-        'elk.algorithm': 'sporeOverlap',
-        'elk.edgeRouting': 'ORTHOGONAL',
-      }
+    const ui = { ...defaultLayoutUiOptions(mode), ...uiOptionsInput }
+    let resolvedDirection: LayoutDirection | undefined
+    if (mode === 'layered' && ui.direction === 'AUTO') {
+      resolvedDirection = inferLayoutDirection(nodes, edges, scopeIds)
     }
+    const layoutOptions = toElkLayoutOptions(mode, ui, resolvedDirection)
 
     const graph = buildElkGraph(nodes, edges, { scopeIds, layoutOptions })
 

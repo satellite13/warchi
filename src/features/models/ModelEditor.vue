@@ -56,6 +56,7 @@ import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import LayoutPreviewModal from './components/LayoutPreviewModal.vue'
 import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
@@ -77,6 +78,7 @@ import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
@@ -623,6 +625,8 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
 })
 
 const layoutBusy = ref(false)
+const showLayoutPreviewModal = ref(false)
+const layoutPreviewBefore = ref<DiagramAttrs | null>(null)
 const uiError = ref<string | null>(null)
 let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
 const setUiError = (msg: string) => {
@@ -632,6 +636,17 @@ const setUiError = (msg: string) => {
     uiError.value = null
     uiErrorTimer = null
   }, 5000)
+}
+
+function handleLayoutPreviewApply(after: DiagramAttrs) {
+  showLayoutPreviewModal.value = false
+  layoutPreviewBefore.value = null
+  diagramCanvasRef.value?.applyLayoutResult(after)
+}
+
+function handleLayoutPreviewClose() {
+  showLayoutPreviewModal.value = false
+  layoutPreviewBefore.value = null
 }
 
 const {
@@ -1506,7 +1521,7 @@ watch(
   }
 )
 
-const setDiagramAttrs = (next: DiagramAttrs) => {
+const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
   const diagram = activeDiagram.value
   if (!diagram) return
   if (isDiagramReadOnly.value) return
@@ -1525,10 +1540,20 @@ const setDiagramAttrs = (next: DiagramAttrs) => {
     const diagrams = [...state.value.diagrams]
     const current = diagrams[idx]
     if (!current) return
-    diagrams[idx] = { ...current, parsedAttrs: next }
+    const keepDirty = options?.dirty === false ? false : true
+    diagrams[idx] = {
+      ...current,
+      parsedAttrs: next,
+      ...(keepDirty
+        ? current._isNew
+          ? {}
+          : { _isDirty: true }
+        : { _isDirty: false }),
+    }
     state.value.diagrams = diagrams
+  } else if (options?.dirty !== false) {
+    markDiagramDirty(diagram.id)
   }
-  markDiagramDirty(diagram.id)
 }
 
 const handleReconnectEdge = (
@@ -1921,12 +1946,13 @@ const handleToolbarAction = async (event: string) => {
     case 'zoom-selection':
       diagramCanvasRef.value?.zoomToSelection()
       break
-    case 'auto-layout-nodes':
-      diagramCanvasRef.value?.autoLayoutNodes()
+    case 'auto-layout-nodes': {
+      const d = activeDiagram.value
+      if (!d || isDiagramReadOnly.value) break
+      layoutPreviewBefore.value = clonePlainDeep(d.parsedAttrs)
+      showLayoutPreviewModal.value = true
       break
-    case 'auto-layout-tidy':
-      diagramCanvasRef.value?.autoLayoutTidy()
-      break
+    }
     case 'reset-view':
       diagramCanvasRef.value?.resetView()
       break
@@ -2630,6 +2656,7 @@ onBeforeUnmount(() => {
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
             :read-only="isDiagramReadOnly"
+            :diagram-dirty="Boolean(activeDiagram?._isDirty)"
             :navigation-only-mode="diagramNavigationOnlyMode"
             :nodes="state.nodes"
             :links="state.links"
@@ -2688,8 +2715,6 @@ onBeforeUnmount(() => {
             @palette-visible-change="paletteVisible = $event"
             @open-diagram="selectDiagram"
             @open-document="handleOpenDocumentFromBadge"
-            @layout-error="(msg) => setUiError(msg || t('toolbar.autoLayoutFailed'))"
-            @layout-busy="(busy) => { layoutBusy = busy }"
           />
           <div
             v-if="activeDiagram && isActiveNotationRulesLoading"
@@ -2792,6 +2817,16 @@ onBeforeUnmount(() => {
     @reload="handleBatchConflictReload"
     @overwrite="handleBatchConflictOverwrite"
     @dismiss="dismissBatchSaveConflict"
+  />
+
+  <LayoutPreviewModal
+    v-if="layoutPreviewBefore"
+    :open="showLayoutPreviewModal"
+    :before="layoutPreviewBefore"
+    :busy="layoutBusy"
+    @close="handleLayoutPreviewClose"
+    @apply="handleLayoutPreviewApply"
+    @error="(msg) => setUiError(msg || t('toolbar.autoLayoutFailed'))"
   />
 
   <BaseModal

@@ -36,5 +36,5 @@ RUN sed -i "s|arepos-server.arch.svc.cluster.local|${AREPOS_UPSTREAM}|g" /tmp/de
 # Non-root + readOnlyRootFilesystem: pid/cache live on emptyDir mounts (/var/run, /var/cache/nginx).
 RUN chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /var/run /etc/nginx/conf.d /etc/nginx/certs
 USER 101
-EXPOSE 80 443
+EXPOSE 8080 8443
 CMD ["nginx", "-g", "daemon off;"]

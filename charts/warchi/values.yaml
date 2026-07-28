@@ -44,9 +44,9 @@ securityContext:
 
 service:
   type: ClusterIP
-  port: 80
+  port: 8080
   # TLS (self-signed cert baked into the image; required for browser HTTPS-First on *.cluster.local)
-  tlsPort: 443
+  tlsPort: 8443
 
 ingress:
   enabled: true

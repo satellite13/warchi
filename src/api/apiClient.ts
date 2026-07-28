@@ -309,6 +309,93 @@ export function apiFetchText(
   )
 }
 
+export type ApiDownloadData = {
+  blob: Blob
+  fileName?: string
+}
+
+const parseContentDispositionFileName = (header: string | null): string | undefined => {
+  if (!header) return undefined
+
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim())
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const quotedMatch = header.match(/filename="([^"]+)"/i)
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1].trim()
+  }
+
+  const plainMatch = header.match(/filename=([^;]+)/i)
+  return plainMatch?.[1]?.trim()
+}
+
+/** GET binary response as Blob (cookies + 401 refresh retry). */
+export async function apiDownload(
+  path: string,
+  canRetryAfterRefresh = true,
+): Promise<ApiResult<ApiDownloadData>> {
+  const url = buildApiUrl(path)
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Accept: '*/*',
+      },
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+
+      if (response.status === 401 && canRetryAfterRefresh && !isPublicAuthPath(path)) {
+        const refreshed = await refreshAccessToken()
+        if (refreshed) {
+          return apiDownload(path, false)
+        }
+      }
+
+      const rawMessage = extractErrorMessage(response.status, text)
+      const normalizedMessage = normalizeApiErrorMessage(response.status, path, rawMessage)
+      const outageKind = resolveOutageKind(response.status, normalizedMessage)
+      if (outageKind) {
+        reportAvailabilityOutage(outageKind, normalizedMessage)
+      }
+      let errorDetails: unknown
+      try {
+        const parsed = JSON.parse(text) as unknown
+        if (parsed !== null && typeof parsed === 'object') {
+          errorDetails = parsed
+        }
+      } catch {
+        /* not JSON */
+      }
+      return {
+        success: false,
+        error: createApiError(response.status, normalizedMessage, errorDetails),
+      }
+    }
+
+    clearOutage('backend_unavailable')
+    const blob = await response.blob()
+    const fileName = parseContentDispositionFileName(response.headers.get('Content-Disposition'))
+    return { success: true, data: { blob, fileName } }
+  } catch (error) {
+    const fallbackMessage = error instanceof Error ? error.message : 'Ошибка подключения'
+    reportAvailabilityOutage('backend_unavailable', fallbackMessage)
+    return {
+      success: false,
+      error: createApiError(0, fallbackMessage),
+    }
+  }
+}
+
 export const apiGet = <T>(path: string): Promise<ApiResult<T>> =>
   apiFetch<T>(path, { method: "GET" })
 

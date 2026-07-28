@@ -81,6 +81,8 @@ import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
+import { sanitizeFileName } from '@/utils/sanitizeFileName'
+import { downloadModelPackage, uploadModelPackage } from './composables/useModelPackage'
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
@@ -628,6 +630,10 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
 const layoutBusy = ref(false)
 const showLayoutPreviewModal = ref(false)
 const layoutPreviewBefore = ref<DiagramAttrs | null>(null)
+const modelPackageInputRef = ref<HTMLInputElement | null>(null)
+const isImportingModelPackage = ref(false)
+const modelPackageImportProgress = ref<string | null>(null)
+const modelPackageImportSuccess = ref(false)
 const uiError = ref<string | null>(null)
 let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
 const setUiError = (msg: string) => {
@@ -2022,6 +2028,30 @@ const handleToolbarAction = async (event: string) => {
         showImportWizard.value = true
       }
       break
+    case 'export-model-package': {
+      const modelId = model.value?.id
+      if (!modelId) break
+      try {
+        const fileName = `${sanitizeFileName(model.value?.name ?? '') || 'model'}.zip`
+        await downloadModelPackage(modelId, fileName)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setUiError(t('models.packageExportFailed', { message }))
+      }
+      break
+    }
+    case 'import-model-package': {
+      const input = modelPackageInputRef.value
+      if (!input || isImportingModelPackage.value) break
+      input.value = ''
+      const inputWithShowPicker = input as HTMLInputElement & { showPicker?: () => void }
+      if (typeof inputWithShowPicker.showPicker === 'function') {
+        inputWithShowPicker.showPicker()
+      } else {
+        input.click()
+      }
+      break
+    }
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
         pendingDiagramAction.value = 'close'
@@ -2407,6 +2437,47 @@ const copyDiagramJson = () => {
   navigator.clipboard.writeText(diagramJsonContent.value)
 }
 
+async function onModelPackageSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || isImportingModelPackage.value) return
+
+  isImportingModelPackage.value = true
+  modelPackageImportProgress.value = t('models.packageImporting')
+  try {
+    const result = await uploadModelPackage(file, pct => {
+      modelPackageImportProgress.value =
+        pct > 0 ? `${t('models.packageImporting')} ${pct}%` : t('models.packageImporting')
+    })
+
+    if (!result.ok) {
+      if (result.code === 'CONFLICT') {
+        setUiError(t('models.packageImportConflict'))
+      } else if (result.code === 'PAYLOAD_TOO_LARGE') {
+        setUiError(t('models.packageImportTooLarge'))
+      } else if (result.code === 'BAD_REQUEST') {
+        setUiError(t('models.packageImportBadRequest'))
+      } else {
+        setUiError(t('models.packageImportError', { message: result.message }))
+      }
+      return
+    }
+
+    modelPackageImportSuccess.value = true
+    await router.push({ name: 'model-editor', params: { id: result.modelId } })
+    window.setTimeout(() => {
+      modelPackageImportSuccess.value = false
+    }, 2000)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    setUiError(t('models.packageImportError', { message }))
+  } finally {
+    isImportingModelPackage.value = false
+    modelPackageImportProgress.value = null
+  }
+}
+
 const router = useRouter()
 const route = useRoute()
 const applyRouteDiagramSelection = () => {
@@ -2490,6 +2561,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <input
+    ref="modelPackageInputRef"
+    class="model-package-import-input"
+    type="file"
+    accept=".zip,application/zip"
+    @change="onModelPackageSelected"
+  />
   <MainLayout>
     <template #header>
       <ModelEditorHeader
@@ -2828,10 +2906,10 @@ onBeforeUnmount(() => {
   </MainLayout>
 
   <SaveToast
-    :saving="isSaving"
-    :success="saveSuccess"
+    :saving="isSaving || isImportingModelPackage"
+    :success="saveSuccess || modelPackageImportSuccess"
     :error="saveError || uiError"
-    :progress="saveProgress"
+    :progress="isImportingModelPackage ? modelPackageImportProgress : saveProgress"
   />
 
   <BatchSaveConflictModal
@@ -3916,6 +3994,16 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--text-subtle);
   text-align: center;
+}
+
+.model-package-import-input {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 </style>

@@ -4,8 +4,24 @@ import type { EditorComponent } from '../types'
 import { applyShapeImportResolutions } from './applyShapeImportResolutions'
 import type { ExportedNodeShape } from './exportedNodeShape'
 
-const fileOutline = [{ type: 'line' as const, points: [[0, 0], [1, 0]] as [number, number][] }]
-const catalogOutline = [{ type: 'line' as const, points: [[0, 0], [3, 0]] as [number, number][] }]
+const fileOutline = [
+  {
+    type: 'line' as const,
+    points: [
+      [0, 0],
+      [1, 0],
+    ] as [number, number][],
+  },
+]
+const catalogOutline = [
+  {
+    type: 'line' as const,
+    points: [
+      [0, 0],
+      [3, 0],
+    ] as [number, number][],
+  },
+]
 
 function component(id: string, shapeId: string): EditorComponent {
   return {
@@ -52,7 +68,7 @@ describe('applyShapeImportResolutions', () => {
       catalogById,
     })
 
-    expect(nextPending.map((s) => s.id)).toEqual(['imported-s2'])
+    expect(nextPending.map(s => s.id)).toEqual(['imported-s2'])
     expect(components[0]!.parsedAttrs.diagramStyle?.customShapeId).toBe('catalog-1')
     expect(components[0]!.parsedAttrs.diagramStyle?.customOutline).toEqual(catalogOutline)
   })

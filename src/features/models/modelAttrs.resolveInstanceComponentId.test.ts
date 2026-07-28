@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import {
-  parseNodeAttrs,
-  resolveInstanceComponentId,
-  type DiagramNodeInstance,
-} from './modelAttrs'
+import { parseNodeAttrs, resolveInstanceComponentId, type DiagramNodeInstance } from './modelAttrs'
 
 describe('resolveInstanceComponentId', () => {
   const node = {
     parsedAttrs: parseNodeAttrs(
       JSON.stringify({
         notationComponents: { 'notation-1': { componentId: 'node-default' } },
-      }),
+      })
     ),
   }
 
@@ -27,7 +23,7 @@ describe('resolveInstanceComponentId', () => {
         instance,
         node,
         notationId: 'notation-1',
-      }),
+      })
     ).toBe('instance-visual')
   })
 
@@ -43,7 +39,7 @@ describe('resolveInstanceComponentId', () => {
         instance,
         node,
         notationId: 'notation-1',
-      }),
+      })
     ).toBe('node-default')
   })
 
@@ -53,7 +49,7 @@ describe('resolveInstanceComponentId', () => {
         instance: { id: 'inst-1', modelNodeId: 'node-1', x: 0, y: 0 },
         node: { parsedAttrs: parseNodeAttrs(null) },
         notationId: 'notation-1',
-      }),
+      })
     ).toBeNull()
   })
 })

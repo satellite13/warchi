@@ -100,8 +100,7 @@ export function useModelBatchConflictUi(options: {
   function batchConflictNodeContextLine(c: BatchConflictItem): string | null {
     if (c.kind !== 'node') return null
     const { nodes, nodeTypes } = options.state.value
-    const n =
-      nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
+    const n = nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
     if (!n) return null
     const typeName = nodeTypes.find(nt => nt.id === n.nodeTypeId)?.name?.trim()
     const typePart = typeName
@@ -123,16 +122,16 @@ export function useModelBatchConflictUi(options: {
   function batchConflictPrimaryLine(c: BatchConflictItem): string {
     const { nodes, links, diagrams, linkTypes } = options.state.value
     if (c.kind === 'node') {
-      const n =
-        nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
+      const n = nodes.find(x => x.id === c.id && !x._isDeleted) ?? nodes.find(x => x.id === c.id)
       const name = n?.name?.trim()
       if (name) return name
       if (n) return options.t('models.batchSaveConflictUnnamedNode')
-      return options.t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('node') })
+      return options.t('models.batchSaveConflictEntityMissing', {
+        kind: batchConflictKindLabel('node'),
+      })
     }
     if (c.kind === 'link') {
-      const l =
-        links.find(x => x.id === c.id && !x._isDeleted) ?? links.find(x => x.id === c.id)
+      const l = links.find(x => x.id === c.id && !x._isDeleted) ?? links.find(x => x.id === c.id)
       if (l) {
         const src = nodes.find(x => x.id === l.sourceId)
         const tgt = nodes.find(x => x.id === l.targetId)
@@ -141,20 +140,30 @@ export function useModelBatchConflictUi(options: {
         const lt = linkTypes.find(x => x.id === l.linkTypeId)
         const typeName = lt?.name?.trim()
         if (typeName) {
-          return options.t('models.batchSaveConflictLinkWithType', { type: typeName, from: srcName, to: tgtName })
+          return options.t('models.batchSaveConflictLinkWithType', {
+            type: typeName,
+            from: srcName,
+            to: tgtName,
+          })
         }
         return options.t('models.batchSaveConflictLinkLine', { from: srcName, to: tgtName })
       }
-      return options.t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('link') })
+      return options.t('models.batchSaveConflictEntityMissing', {
+        kind: batchConflictKindLabel('link'),
+      })
     }
     if (c.kind === 'diagram') {
       const d =
-        diagrams.find(x => x.id === c.id && !x._isDeleted) ??
-        diagrams.find(x => x.id === c.id)
+        diagrams.find(x => x.id === c.id && !x._isDeleted) ?? diagrams.find(x => x.id === c.id)
       if (d) {
-        return options.t('models.batchSaveConflictDiagramLine', { name: d.name, version: d.version })
+        return options.t('models.batchSaveConflictDiagramLine', {
+          name: d.name,
+          version: d.version,
+        })
       }
-      return options.t('models.batchSaveConflictEntityMissing', { kind: batchConflictKindLabel('diagram') })
+      return options.t('models.batchSaveConflictEntityMissing', {
+        kind: batchConflictKindLabel('diagram'),
+      })
     }
     return conflictShortId(c.id)
   }
@@ -259,7 +268,14 @@ export function useModelBatchConflictUi(options: {
       for (const c of list) {
         const key = batchConflictCompareKey(c)
         next[key] = {
-          rows: buildConflictCompareRows(c, options.state.value, null, true, null, batchConflictFieldT),
+          rows: buildConflictCompareRows(
+            c,
+            options.state.value,
+            null,
+            true,
+            null,
+            batchConflictFieldT
+          ),
           serverLoading: true,
           serverError: null,
         }
@@ -284,7 +300,7 @@ export function useModelBatchConflictUi(options: {
           collected = await fetchAllPages<LinkResponse>(
             '/links',
             { modelId: mid },
-            { pageSize: 2000, errorLabel: 'links' },
+            { pageSize: 2000, errorLabel: 'links' }
           )
         } catch (err) {
           if (gCross !== batchConflictCrossLinkGen) return
@@ -345,13 +361,9 @@ export function useModelBatchConflictUi(options: {
       const rawRows = cmp?.rows ?? []
       const compareServerLoading = cmp?.serverLoading ?? true
       const compareServerError = cmp?.serverError ?? null
-      const compareRows = compareServerLoading
-        ? []
-        : filterConflictCompareRowsForUi(rawRows)
+      const compareRows = compareServerLoading ? [] : filterConflictCompareRowsForUi(rawRows)
       const compareOnlyTimestampDiff =
-        !compareServerLoading &&
-        compareRows.length === 0 &&
-        rawRows.some(r => r.differs)
+        !compareServerLoading && compareRows.length === 0 && rawRows.some(r => r.differs)
       const openBaseline = diagramConflictOpenBaselineUpdatedAt.value[c.id]
       const compareTimestampOnlySinceDiagramOpen =
         compareOnlyTimestampDiff &&

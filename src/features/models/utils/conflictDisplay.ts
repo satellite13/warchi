@@ -21,10 +21,7 @@ export type ConflictFieldRow = {
 }
 
 /** Перевод строк сравнения (ключи `models.*`). */
-export type ConflictTranslateFn = (
-  key: string,
-  params?: Record<string, string | number>
-) => string
+export type ConflictTranslateFn = (key: string, params?: Record<string, string | number>) => string
 
 /**
  * Рёбра на диаграммах с modelLinkId, которого нет среди связей на сервере.
@@ -88,9 +85,7 @@ export function nodeDisplayNameForConflict(
 
   if (!n) {
     const id = formatEntityIdShort(modelNodeId)
-    return translate
-      ? translate('models.batchSaveConflictUnknownNode', { id })
-      : `? ${id}`
+    return translate ? translate('models.batchSaveConflictUnknownNode', { id }) : `? ${id}`
   }
 
   const typeLabel = nodeTypeLabelForConflict(st, n.nodeTypeId)
@@ -116,9 +111,7 @@ function linkDisplayLineForConflict(
     st.links.find(x => x.id === modelLinkId)
   if (!l) {
     const id = formatEntityIdShort(modelLinkId)
-    return translate
-      ? translate('models.batchSaveConflictUnknownLink', { id })
-      : id
+    return translate ? translate('models.batchSaveConflictUnknownLink', { id }) : id
   }
   const src = nodeDisplayNameForConflict(st, l.sourceId, translate)
   const tgt = nodeDisplayNameForConflict(st, l.targetId, translate)
@@ -187,7 +180,9 @@ export function canvasEdgeDisplayLine(
   const base =
     topo ||
     (translate
-      ? translate('models.batchSaveConflictDiagramEdgeLinkId', { id: formatEntityIdShort(modelLinkId) })
+      ? translate('models.batchSaveConflictDiagramEdgeLinkId', {
+          id: formatEntityIdShort(modelLinkId),
+        })
       : formatEntityIdShort(modelLinkId))
   const hint = translate
     ? translate('models.batchSaveConflictDiagramEdgeLinkMissingHint')

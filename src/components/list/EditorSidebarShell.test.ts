@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import EditorSidebarShell from './EditorSidebarShell.vue'
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -33,7 +33,7 @@ describe('EditorSidebarShell', () => {
   it('renders title, optional count, and action slot', () => {
     const wrapper = mountShell(
       { count: 3 },
-      { actions: '<button class="ess-action-btn" type="button">+</button>' },
+      { actions: '<button class="ess-action-btn" type="button">+</button>' }
     )
 
     expect(wrapper.find('.ess__title').text()).toBe('Types')

@@ -66,8 +66,7 @@ export function useRelationManagement(options: RelationManagementOptions) {
 
     let linkTypeId = bound.typeSelection.value
     if (linkTypeId === RELATION_WITHOUT_TYPE_VALUE) {
-      linkTypeId =
-        addType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
+      linkTypeId = addType(state.value.linkTypes, UNTYPED_LINK_TYPE_NAME, state.value.ownerId) || ''
     }
     if (linkTypeId === NEW_TYPE_VALUE) {
       linkTypeId =

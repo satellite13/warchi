@@ -72,7 +72,10 @@ export type OefImportBuildWarningCode =
   | 'propertyConversionFailed'
   | 'propertyUnmatched'
 
-export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
+export function truncateOefEntityName(
+  name: string,
+  maxLength = OEF_ENTITY_NAME_MAX_LENGTH
+): string {
   if (name.length <= maxLength) return name
   return name.slice(0, maxLength)
 }
@@ -88,7 +91,7 @@ export function allocateUniqueEntityName(
   fallback = 'Untitled',
   maxLength = OEF_ENTITY_NAME_MAX_LENGTH
 ): { name: string; deduplicated: boolean } {
-  const base = truncateOefEntityName((rawName.trim() || fallback), maxLength)
+  const base = truncateOefEntityName(rawName.trim() || fallback, maxLength)
   const keyFor = (name: string): string => `${name}\0${version}`
   if (!usedNameVersions.has(keyFor(base))) {
     usedNameVersions.add(keyFor(base))
@@ -492,7 +495,9 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     linkTempBySourceRelationshipId.set(link.sourceRelationshipId, tempId)
   }
 
-  for (const { propertyName, count } of aggregateUnmatchedPropertyNames(allUnmatchedPropertyNames)) {
+  for (const { propertyName, count } of aggregateUnmatchedPropertyNames(
+    allUnmatchedPropertyNames
+  )) {
     warnings.push({
       code: 'propertyUnmatched',
       message: `OEF property "${propertyName}" did not match any custom property (${count})`,

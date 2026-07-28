@@ -15,6 +15,6 @@ import router from './index'
 
 describe('router', () => {
   it('has a catch-all route for unknown paths', () => {
-    expect(router.getRoutes().some((route) => route.path === '/:pathMatch(.*)*')).toBe(true)
+    expect(router.getRoutes().some(route => route.path === '/:pathMatch(.*)*')).toBe(true)
   })
 })

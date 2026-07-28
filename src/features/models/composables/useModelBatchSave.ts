@@ -349,7 +349,9 @@ export function applyBatchRemapping(
     currentId: string,
     previousId?: string
   ): boolean => {
-    return !batchIds || batchIds.has(currentId) || (previousId !== undefined && batchIds.has(previousId))
+    return (
+      !batchIds || batchIds.has(currentId) || (previousId !== undefined && batchIds.has(previousId))
+    )
   }
 
   for (const node of nodes) {

@@ -59,9 +59,10 @@ function mountCollab(options?: {
           currentUserId,
           isLockHolder,
           isSpectator,
-          getDiagramRenderer: () => ({
-            screenToWorld: (x: number, y: number) => ({ x: x + 10, y: y + 20 }),
-          }) as never,
+          getDiagramRenderer: () =>
+            ({
+              screenToWorld: (x: number, y: number) => ({ x: x + 10, y: y + 20 }),
+            }) as never,
         })
         return () => null
       },

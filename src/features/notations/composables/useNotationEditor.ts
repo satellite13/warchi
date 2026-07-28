@@ -41,10 +41,7 @@ import { parseNotationAttrs, mergeNotationAttrs } from '../utils/notationAttrsJs
 import { useNodeShapes } from '@/composables/useNodeShapes'
 import type { NodeShapeResponse } from '@/types/api'
 import type { ExportedNodeShape } from '../utils/exportedNodeShape'
-import {
-  mergeShapePackage,
-  remapComponentCustomShapeIds,
-} from '../utils/notationShapePackage'
+import { mergeShapePackage, remapComponentCustomShapeIds } from '../utils/notationShapePackage'
 import { persistPendingShapes } from '../utils/persistPendingShapes'
 
 export interface NotationEditorReturn {
@@ -214,15 +211,13 @@ async function runTasksWithConcurrencyLimit(
 }
 
 const fetchAllRelationRulesByNotation = async (
-  notationId: string,
+  notationId: string
 ): Promise<RelationRuleResponse[]> =>
   fetchAllPages<RelationRuleResponse>(
     '/relation-rules',
     { notationId, includeAttrs: 'true' },
-    { pageSize: RELATION_RULES_FETCH_SIZE, errorLabel: 'правил связей' },
+    { pageSize: RELATION_RULES_FETCH_SIZE, errorLabel: 'правил связей' }
   )
-
-
 
 async function saveComponents(
   components: EditorComponent[],
@@ -236,7 +231,13 @@ async function saveComponents(
     const result = await apiDelete<void>(`/components/${component.id}`)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError('нотации','удаления', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError(
+          'нотации',
+          'удаления',
+          'компонента',
+          result.error.status,
+          result.error.message
+        )
       )
     }
   }
@@ -283,7 +284,13 @@ async function saveComponents(
     const result = await apiPut<ComponentResponse>(`/components/${component.id}`, request)
     if (!result.success) {
       throw new Error(
-        formatEntitySaveError('нотации','обновления', 'компонента', result.error.status, result.error.message)
+        formatEntitySaveError(
+          'нотации',
+          'обновления',
+          'компонента',
+          result.error.status,
+          result.error.message
+        )
       )
     }
     component._isDirty = false
@@ -408,8 +415,7 @@ async function syncRelationRules(
   const REQUEST_CONCURRENCY = 8
   const existingRules = (await fetchAllRelationRulesByNotation(notationId)).filter(
     rule =>
-      currentComponentIds.has(rule.fromComponentId) &&
-      currentComponentIds.has(rule.toComponentId)
+      currentComponentIds.has(rule.fromComponentId) && currentComponentIds.has(rule.toComponentId)
   )
   const desiredKeys = new Set<string>()
   const existingRuleIdsByKey = new Map<string, string[]>()
@@ -495,9 +501,7 @@ async function syncRelationRules(
   return activeRules
 }
 
-export function useNotationEditor(
-  pendingShapes?: Ref<ExportedNodeShape[]>
-): NotationEditorReturn {
+export function useNotationEditor(pendingShapes?: Ref<ExportedNodeShape[]>): NotationEditorReturn {
   const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
@@ -509,7 +513,16 @@ export function useNotationEditor(
 
   const isLoading = ref(true)
   const errorMessage = ref<string | null>(null)
-  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, failSave, finishSave } = useSaveState()
+  const {
+    isSaving,
+    saveError,
+    saveSuccess,
+    saveProgress,
+    startSave,
+    completeSave,
+    failSave,
+    finishSave,
+  } = useSaveState()
 
   const notationAttrsDirty = computed(() => {
     const currentAttrs = notation.value?.attrs ?? null
@@ -540,7 +553,7 @@ export function useNotationEditor(
 
   watch(
     () => state.value.diagramLayer,
-    (layer) => {
+    layer => {
       if (!notation.value || isLoading.value) return
       notation.value.attrs = mergeNotationAttrs(notation.value.attrs ?? null, {
         editorDiagramLayer: layer,
@@ -576,24 +589,23 @@ export function useNotationEditor(
         allLinkTypesResult,
         componentsResult,
         relationsResult,
-      ] =
-        await Promise.all([
-          apiGet<NotationData>(`/notations/${notationId}`),
-          apiGet<PaginatedResponse<NodeTypeResponse>>(
-            `/node-types?${listQueryWithNotation.toString()}`
-          ),
-          apiGet<PaginatedResponse<LinkTypeResponse>>(
-            `/link-types?${listQueryWithNotation.toString()}`
-          ),
-          apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
-          apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
-          apiGet<PaginatedResponse<ComponentResponse>>(
-            `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-          ),
-          apiGet<PaginatedResponse<RelationResponse>>(
-            `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
-          ),
-        ])
+      ] = await Promise.all([
+        apiGet<NotationData>(`/notations/${notationId}`),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(
+          `/node-types?${listQueryWithNotation.toString()}`
+        ),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(
+          `/link-types?${listQueryWithNotation.toString()}`
+        ),
+        apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${listQuery.toString()}`),
+        apiGet<PaginatedResponse<ComponentResponse>>(
+          `/components?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
+        ),
+        apiGet<PaginatedResponse<RelationResponse>>(
+          `/relations?notationId=${encodeURIComponent(notationId)}&${listQuery.toString()}`
+        ),
+      ])
 
       if (!notationResult.success) {
         if (notationResult.error.status === 404) {
@@ -642,7 +654,7 @@ export function useNotationEditor(
       }
 
       const diagramLayer = normalizeDiagramLayer(
-        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer,
+        parseNotationAttrs(notation.value.attrs ?? null).editorDiagramLayer
       )
       state.value = {
         notationId,
@@ -687,7 +699,9 @@ export function useNotationEditor(
       const { notationId, ownerId, nodeTypes, linkTypes, components, relations, relationRules } =
         state.value
       const typeOwnerId = ownerId
-      const onProgress = (msg: string) => { saveProgress.value = msg }
+      const onProgress = (msg: string) => {
+        saveProgress.value = msg
+      }
 
       if (notationAttrsDirty.value && notation.value) {
         onProgress('Обновление атрибутов нотации')
@@ -696,7 +710,8 @@ export function useNotationEditor(
         })
         if (!updateResult.success) {
           throw new Error(
-            formatEntitySaveError('нотации',
+            formatEntitySaveError(
+              'нотации',
               'обновления',
               'нотации',
               updateResult.error.status ?? 0,
@@ -713,7 +728,7 @@ export function useNotationEditor(
         typeOwnerId,
         apiEndpoint: '/node-types',
         entityTypeName: 'типа узла',
-        getTypeId: (c) => c.nodeTypeId,
+        getTypeId: c => c.nodeTypeId,
         setTypeId: (c, id) => {
           c.nodeTypeId = id
         },
@@ -727,7 +742,7 @@ export function useNotationEditor(
         typeOwnerId,
         apiEndpoint: '/link-types',
         entityTypeName: 'типа связи',
-        getTypeId: (r) => r.linkTypeId,
+        getTypeId: r => r.linkTypeId,
         setTypeId: (r, id) => {
           r.linkTypeId = id
         },
@@ -740,11 +755,10 @@ export function useNotationEditor(
         onProgress(t('notations.saveProgressShapes'))
         const shapesToPersist = mergeShapePackage(pendingShapes.value, components)
         try {
-          const existingShapes = await fetchAllPages<NodeShapeResponse>(
-            '/node-shapes',
-            undefined,
-            { pageSize: 200, errorLabel: t('notations.saveProgressShapes') },
-          )
+          const existingShapes = await fetchAllPages<NodeShapeResponse>('/node-shapes', undefined, {
+            pageSize: 200,
+            errorLabel: t('notations.saveProgressShapes'),
+          })
           const existingNames = existingShapes.map(shape => shape.name)
           const idMap = await persistPendingShapes({
             shapes: shapesToPersist,
@@ -763,7 +777,7 @@ export function useNotationEditor(
             t('notations.saveErrorShapes', {
               message: error instanceof Error ? error.message : String(error),
             }),
-            { cause: error },
+            { cause: error }
           )
         }
       }
@@ -773,7 +787,12 @@ export function useNotationEditor(
       state.value.relationRules = await syncRelationRules(
         nodeTypes,
         linkTypes,
-        components, relations, relationRules, notationId, ownerId, onProgress
+        components,
+        relations,
+        relationRules,
+        notationId,
+        ownerId,
+        onProgress
       )
 
       state.value.components = components.filter(c => !c._isDeleted)

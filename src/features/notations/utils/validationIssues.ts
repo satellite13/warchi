@@ -1,5 +1,9 @@
 import type { ComposerTranslation } from 'vue-i18n'
-import type { CustomProperty, DiagramStyle, CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
+import type {
+  CustomProperty,
+  DiagramStyle,
+  CompositeSerializedCComponent,
+} from '@/domain/attrs/notationAttrs'
 import { customPropertyValidationErrors } from './customPropertyValidation'
 
 export type ValidationIssue = {
@@ -10,7 +14,7 @@ export type ValidationIssue = {
 }
 
 export function customPropertyErrors(property: CustomProperty, t: ComposerTranslation): string[] {
-  return customPropertyValidationErrors(property, (key) => String(t(key)))
+  return customPropertyValidationErrors(property, key => String(t(key)))
 }
 
 function traverseComposite(

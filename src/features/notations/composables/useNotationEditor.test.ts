@@ -8,7 +8,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -27,10 +27,13 @@ vi.mock('@/composables/useApi', () => ({
 
 vi.mock('@/api/queryHelpers', () => ({
   listParams: vi.fn(() => new URLSearchParams({ size: '1000' })),
-  pagedListParams: vi.fn((page = 0, size = 50) => new URLSearchParams({
-    page: String(page),
-    size: String(size),
-  })),
+  pagedListParams: vi.fn(
+    (page = 0, size = 50) =>
+      new URLSearchParams({
+        page: String(page),
+        size: String(size),
+      })
+  ),
 }))
 
 vi.mock('@/composables/useSaveState', () => ({
@@ -47,7 +50,10 @@ vi.mock('@/composables/useSaveState', () => ({
 }))
 
 vi.mock('@/utils/formatEntityError', () => ({
-  formatEntitySaveError: vi.fn((_context: string, _operation: string, _entity: string, _status: number, message: string) => message),
+  formatEntitySaveError: vi.fn(
+    (_context: string, _operation: string, _entity: string, _status: number, message: string) =>
+      message
+  ),
 }))
 
 vi.mock('./useRelationRulesSync', () => ({
@@ -61,16 +67,46 @@ describe('useNotationEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(apiGet)
-      .mockResolvedValueOnce(ok({ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1', attrs: null }))
+      .mockResolvedValueOnce(
+        ok({
+          id: 'notation-1',
+          name: 'Notation',
+          version: '1.0.0',
+          ownerId: 'owner-1',
+          attrs: null,
+        })
+      )
       .mockResolvedValueOnce(ok(page([{ id: 'nt-1', name: 'NodeType', ownerId: 'owner-1' }])))
       .mockResolvedValueOnce(ok(page([{ id: 'lt-1', name: 'LinkType', ownerId: 'owner-1' }])))
       .mockResolvedValueOnce(ok(page([])))
       .mockResolvedValueOnce(ok(page([])))
       .mockResolvedValueOnce(
-        ok(page([{ id: 'component-1', name: 'Component', version: '1.0.0', notationId: 'notation-1', ownerId: 'owner-1', nodeTypeId: 'nt-1' }]))
+        ok(
+          page([
+            {
+              id: 'component-1',
+              name: 'Component',
+              version: '1.0.0',
+              notationId: 'notation-1',
+              ownerId: 'owner-1',
+              nodeTypeId: 'nt-1',
+            },
+          ])
+        )
       )
       .mockResolvedValueOnce(
-        ok(page([{ id: 'relation-1', name: 'Relation', version: '1.0.0', notationId: 'notation-1', ownerId: 'owner-1', linkTypeId: 'lt-1' }]))
+        ok(
+          page([
+            {
+              id: 'relation-1',
+              name: 'Relation',
+              version: '1.0.0',
+              notationId: 'notation-1',
+              ownerId: 'owner-1',
+              linkTypeId: 'lt-1',
+            },
+          ])
+        )
       )
       .mockResolvedValueOnce(ok(page([])))
   })

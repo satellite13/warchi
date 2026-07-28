@@ -21,7 +21,8 @@ export const modelsMessages = {
       accessTitle: 'Доступ к модели',
       versionTreeTitle: 'Дерево версий: {name}',
       versionTreeEmpty: 'Нет данных о происхождении версий.',
-      versionTreeMultipleRoots: 'Несколько независимых веток (созданы с нуля или источник вне списка).',
+      versionTreeMultipleRoots:
+        'Несколько независимых веток (созданы с нуля или источник вне списка).',
       documentation: 'Страница в Wiki',
       diagramDocumentation: 'Страница диаграммы в Wiki',
       oefImportTitle: 'Импорт Open Exchange (XML)',
@@ -91,7 +92,8 @@ export const modelsMessages = {
         relationshipEndpointIsRelationship:
           'Связи, прикреплённые к другим связям, будут импортированы только на диаграмму',
         viewNodeMissingElementRef: 'Узлы диаграммы ссылаются на отсутствующий элемент',
-        viewConnectionMissingRelationshipRef: 'Соединения диаграммы ссылаются на отсутствующую связь',
+        viewConnectionMissingRelationshipRef:
+          'Соединения диаграммы ссылаются на отсутствующую связь',
         viewConnectionMissingSourceNode: 'У соединений диаграммы отсутствует исходный узел',
         viewConnectionMissingTargetNode: 'У соединений диаграммы отсутствует целевой узел',
         viewNodeMissingCoordinates: 'У узлов диаграммы некорректные координаты',
@@ -134,10 +136,8 @@ export const modelsMessages = {
       oefImportWarningRelationsBranchSkipped: 'Пропущена ветка Relations из organizations',
       oefImportWarningDirectoryTypeMissing: 'Нет типа Directory — папки не созданы',
       oefImportWarningDirectoryTypeCreated: 'Тип Directory создан автоматически',
-      oefImportWarningPropertyConversionFailed:
-        'Значение свойства OEF не удалось привести к типу',
-      oefImportWarningPropertyUnmatched:
-        'Свойство OEF не совпало ни с одним кастомным свойством',
+      oefImportWarningPropertyConversionFailed: 'Значение свойства OEF не удалось привести к типу',
+      oefImportWarningPropertyUnmatched: 'Свойство OEF не совпало ни с одним кастомным свойством',
       oefImportDirectoryTypeCreateFailed:
         'Не удалось создать тип Directory для папок импорта: {message}',
       oefImportStatFolders: 'Папок: {count}',
@@ -162,7 +162,8 @@ export const modelsMessages = {
       diagramLockReload: 'Загрузить с сервера',
       diagramLockBadgeYou: 'Вы держите блокировку редактирования',
       diagramLockBadgeOther: 'Редактирует: {name}',
-      diagramLockForceRevoked: 'Блокировка снята администратором. Редактирование диаграммы недоступно.',
+      diagramLockForceRevoked:
+        'Блокировка снята администратором. Редактирование диаграммы недоступно.',
       resizeLeftPanelWidth: 'Потяните, чтобы изменить ширину левой панели',
       resizeRightPanelWidth: 'Потяните, чтобы изменить ширину правой панели',
       showLeftPanel: 'Показать левую панель',
@@ -281,8 +282,7 @@ export const modelsMessages = {
       batchSaveConflictFieldColField: 'Поле',
       batchSaveConflictFieldColLocal: 'У вас',
       batchSaveConflictFieldColServer: 'На сервере',
-      batchSaveConflictRepeatHint:
-        'При следующем сохранении сервер проверяется заново.',
+      batchSaveConflictRepeatHint: 'При следующем сохранении сервер проверяется заново.',
       batchSaveConflictKindNode: 'Нода',
       batchSaveConflictKindLink: 'Связь',
       batchSaveConflictKindDiagram: 'Диаграмма',
@@ -404,7 +404,8 @@ export const modelsMessages = {
       notationMetaUnavailable: 'Метаданные нотации недоступны. Работа с диаграммой ограничена.',
       notationNameDeleted: '{name} (удалена)',
       notationRelationRulesLoadFailed: 'Не удалось загрузить правила связей для активной нотации.',
-      notationRelationRulesRefreshFailed: 'Не удалось обновить relations и правила связей для диаграммы.',
+      notationRelationRulesRefreshFailed:
+        'Не удалось обновить relations и правила связей для диаграммы.',
       directoryTypeNotFound: 'Тип Directory не найден. Невозможно создать папку.',
       noAvailableNodeTypes: 'Нет доступных типов нод, кроме Directory.',
       diagramSwitchFailed: 'Не удалось открыть выбранную диаграмму после обновления данных.',
@@ -422,15 +423,16 @@ export const modelsMessages = {
         'У ноды «{node}» не заполнено обязательное свойство типа «{prop}».',
       validationNodeComponentPropRequired:
         'У ноды «{node}» не заполнено обязательное свойство компонента «{prop}» на диаграмме «{diagram}».',
-      validationLinkPropRequired:
-        'У связи «{link}» не заполнено обязательное свойство «{prop}».',
+      validationLinkPropRequired: 'У связи «{link}» не заполнено обязательное свойство «{prop}».',
       noMatchingComponent: 'В выбранной нотации нет подходящего компонента для типа узла.',
       cannotCreateNodeWithoutDirectory: 'Нельзя создать ноду без активной директории диаграммы.',
       directoryTypeRequiredForAutoPath: 'Для автосоздания пути нужен тип узла Directory.',
       newNoteText: 'Новая заметка',
       deleteContainer: 'Удалить контейнер',
-      noComponentsForLink: 'Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.',
-      noAllowedRelationRules: 'Для этой пары компонентов нет разрешённых связей по правилам нотации.',
+      noComponentsForLink:
+        'Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.',
+      noAllowedRelationRules:
+        'Для этой пары компонентов нет разрешённых связей по правилам нотации.',
       noAvailableRelations: 'Для этой пары компонентов нет доступных relation по правилам нотации.',
       figureComponentNotFound: 'Для выбранной фигуры не найден компонент нотации.',
       edgeRelationNotFound: 'Для выбранной связи не найден relation нотации.',
@@ -480,7 +482,8 @@ export const modelsMessages = {
       accessTitle: 'Model access',
       versionTreeTitle: 'Version tree: {name}',
       versionTreeEmpty: 'No version lineage data.',
-      versionTreeMultipleRoots: 'Multiple independent branches (created from scratch or source not in list).',
+      versionTreeMultipleRoots:
+        'Multiple independent branches (created from scratch or source not in list).',
       documentation: 'Page in Wiki',
       diagramDocumentation: 'Diagram page in Wiki',
       oefImportTitle: 'Import Open Exchange (XML)',
@@ -595,8 +598,7 @@ export const modelsMessages = {
       oefImportWarningDirectoryTypeCreated: 'Directory node type was created automatically',
       oefImportWarningPropertyConversionFailed:
         'OEF property value could not be converted to the target type',
-      oefImportWarningPropertyUnmatched:
-        'OEF property did not match any custom property',
+      oefImportWarningPropertyUnmatched: 'OEF property did not match any custom property',
       oefImportDirectoryTypeCreateFailed:
         'Failed to create Directory type for import folders: {message}',
       oefImportStatFolders: 'Folders: {count}',
@@ -621,7 +623,8 @@ export const modelsMessages = {
       diagramLockReload: 'Reload from server',
       diagramLockBadgeYou: 'You hold the edit lock',
       diagramLockBadgeOther: 'Being edited by {name}',
-      diagramLockForceRevoked: 'Lock released by administrator. Diagram editing is no longer available.',
+      diagramLockForceRevoked:
+        'Lock released by administrator. Diagram editing is no longer available.',
       resizeLeftPanelWidth: 'Drag to resize left panel width',
       resizeRightPanelWidth: 'Drag to resize right panel width',
       showLeftPanel: 'Show left panel',
@@ -739,8 +742,7 @@ export const modelsMessages = {
       batchSaveConflictFieldColField: 'Field',
       batchSaveConflictFieldColLocal: 'Yours',
       batchSaveConflictFieldColServer: 'On server',
-      batchSaveConflictRepeatHint:
-        'The next save will re-check the server.',
+      batchSaveConflictRepeatHint: 'The next save will re-check the server.',
       batchSaveConflictKindNode: 'Node',
       batchSaveConflictKindLink: 'Link',
       batchSaveConflictKindDiagram: 'Diagram',
@@ -862,7 +864,8 @@ export const modelsMessages = {
       notationMetaUnavailable: 'Notation metadata unavailable. Diagram functionality is limited.',
       notationNameDeleted: '{name} (deleted)',
       notationRelationRulesLoadFailed: 'Failed to load relation rules for the active notation.',
-      notationRelationRulesRefreshFailed: 'Failed to refresh relations and relation rules for the diagram.',
+      notationRelationRulesRefreshFailed:
+        'Failed to refresh relations and relation rules for the diagram.',
       directoryTypeNotFound: 'Directory type not found. Cannot create folder.',
       noAvailableNodeTypes: 'No available node types besides Directory.',
       diagramSwitchFailed: 'Failed to open the selected diagram after refreshing data.',
@@ -876,12 +879,10 @@ export const modelsMessages = {
       batchSaveVersionConflict: 'Version conflict while saving (data changed on server).',
       batchSaveBlankNodeName:
         'Cannot save: {count} element(s) have an empty name. Set a name and try again.',
-      validationNodeTypePropRequired:
-        'Node "{node}" is missing required type property "{prop}".',
+      validationNodeTypePropRequired: 'Node "{node}" is missing required type property "{prop}".',
       validationNodeComponentPropRequired:
         'Node "{node}" is missing required component property "{prop}" on diagram "{diagram}".',
-      validationLinkPropRequired:
-        'Link "{link}" is missing required property "{prop}".',
+      validationLinkPropRequired: 'Link "{link}" is missing required property "{prop}".',
       noMatchingComponent: 'No matching notation component for this node type.',
       cannotCreateNodeWithoutDirectory: 'Cannot create a node without an active diagram directory.',
       directoryTypeRequiredForAutoPath: 'Directory node type is required for auto-path creation.',

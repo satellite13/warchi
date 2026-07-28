@@ -45,14 +45,16 @@ export const commonMessages = {
       deleteIrreversible: 'Это действие нельзя отменить.',
       newVersionAvailable: 'Новая версия v{version} доступна. Обновление...',
       outageTitle: 'Сервис временно недоступен',
-      outageAuthzMessage: 'Сервис авторизации недоступен. Работа с приложением временно невозможна.',
+      outageAuthzMessage:
+        'Сервис авторизации недоступен. Работа с приложением временно невозможна.',
       outageBackendMessage: 'Backend недоступен. Работа с приложением временно невозможна.',
       outageRetry: 'Повторить',
       outageChecking: 'Проверка...',
       enterEntityName: 'Введите название {entity}',
       enterEntityVersion: 'Введите версию {entity}',
       versionFormatHint: 'Версия должна быть в формате X.Y.Z (например, 1.0.0)',
-      versionBelowMax: 'Версия не может быть меньше максимальной существующей ({maxExisting}) для данного имени',
+      versionBelowMax:
+        'Версия не может быть меньше максимальной существующей ({maxExisting}) для данного имени',
       userNotAuthenticated: 'Пользователь не авторизован',
       createEntityFailed: 'Не удалось создать {entity}',
       endpointNotFound:
@@ -170,7 +172,8 @@ export const commonMessages = {
       deleteIrreversible: 'This action cannot be undone.',
       newVersionAvailable: 'New version v{version} available. Updating...',
       outageTitle: 'Service is temporarily unavailable',
-      outageAuthzMessage: 'Authorization service is unavailable. The application cannot be used right now.',
+      outageAuthzMessage:
+        'Authorization service is unavailable. The application cannot be used right now.',
       outageBackendMessage: 'Backend is unavailable. The application cannot be used right now.',
       outageRetry: 'Retry',
       outageChecking: 'Checking...',

@@ -15,9 +15,7 @@ describe('isOefLinkAllowedByRelationRules', () => {
         fromComponentId: 'c-from',
         toComponentId: 'c-to',
         relationId: 'rel-1',
-        relationRules: [
-          { relationId: 'rel-1', fromComponentId: 'c-from', toComponentId: 'c-to' },
-        ],
+        relationRules: [{ relationId: 'rel-1', fromComponentId: 'c-from', toComponentId: 'c-to' }],
       })
     ).toBe(true)
   })
@@ -28,9 +26,7 @@ describe('isOefLinkAllowedByRelationRules', () => {
         fromComponentId: 'c-from',
         toComponentId: 'c-to',
         relationId: 'rel-1',
-        relationRules: [
-          { relationId: 'rel-1', fromComponentId: 'other', toComponentId: 'c-to' },
-        ],
+        relationRules: [{ relationId: 'rel-1', fromComponentId: 'other', toComponentId: 'c-to' }],
       })
     ).toBe(false)
   })

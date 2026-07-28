@@ -361,8 +361,8 @@ describe('compareDiagrams', () => {
         baseNodeStable,
         baseLinkStable,
         targetNodeStable,
-        targetLinkStable,
-      ),
+        targetLinkStable
+      )
     ).toEqual([])
   })
 
@@ -392,7 +392,7 @@ describe('compareDiagrams', () => {
       new Map([['node-old-a', 'stable-a']]),
       new Map(),
       new Map([['node-new-a', 'stable-a']]),
-      new Map(),
+      new Map()
     )
     expect(diff).toHaveLength(1)
     expect(diff[0].kind).toBe('modified')

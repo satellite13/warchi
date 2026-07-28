@@ -9,13 +9,13 @@ import {
 describe('passwordPolicy', () => {
   it('requires minimum length', () => {
     const rules = evaluatePasswordRules('Ab1')
-    expect(rules.find((rule) => rule.id === 'minLength')?.passed).toBe(false)
+    expect(rules.find(rule => rule.id === 'minLength')?.passed).toBe(false)
     expect(PASSWORD_MIN_LENGTH).toBe(8)
   })
 
   it('accepts a valid password', () => {
     expect(isPasswordPolicySatisfied('ValidPass1')).toBe(true)
-    expect(evaluatePasswordRules('ValidPass1').every((rule) => rule.passed)).toBe(true)
+    expect(evaluatePasswordRules('ValidPass1').every(rule => rule.passed)).toBe(true)
   })
 
   it('rejects passwords missing character classes', () => {

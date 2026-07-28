@@ -42,7 +42,7 @@ function scheduleNextRetry() {
     const ok = await pingBackend()
     isRetrying.value = false
     if (ok) {
-      clearOutage("backend_unavailable")
+      clearOutage('backend_unavailable')
     } else {
       scheduleNextRetry()
     }
@@ -83,7 +83,7 @@ export async function retryNow(): Promise<boolean> {
   const ok = await pingBackend()
   isRetrying.value = false
   if (ok) {
-    clearOutage("backend_unavailable")
+    clearOutage('backend_unavailable')
   } else {
     startAutoRetry()
   }

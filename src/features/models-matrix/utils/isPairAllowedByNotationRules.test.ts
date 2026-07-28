@@ -10,9 +10,7 @@ const relations = [
   { id: 'r-flow', notationId: 'n1', linkTypeId: 'lt-flow' },
   { id: 'r-other', notationId: 'n1', linkTypeId: 'lt-other' },
 ]
-const rules = [
-  { relationId: 'r-flow', fromComponentId: 'c-a', toComponentId: 'c-b' },
-]
+const rules = [{ relationId: 'r-flow', fromComponentId: 'c-a', toComponentId: 'c-b' }]
 
 describe('isPairAllowedByNotationRules', () => {
   it('returns true when any component pair + relation of link type has a rule', () => {

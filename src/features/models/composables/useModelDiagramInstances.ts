@@ -75,7 +75,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     if (component) {
       applyDefaultCustomPropertyValuesFromAttrs(
         node.parsedAttrs.componentProperties[notationId][componentId]!,
-        component.attrs,
+        component.attrs
       )
     }
     options.markNodeDirty(node.id)
@@ -91,7 +91,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
   const getComponentDiagramStyle = (componentId: string) => {
     const notationId = options.activeNotationId.value
     const component = options.state.value.components.find(
-      item => item.id === componentId && (!notationId || item.notationId === notationId),
+      item => item.id === componentId && (!notationId || item.notationId === notationId)
     )
     return component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
   }
@@ -103,7 +103,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
     if (!instance) return
     const node = options.state.value.nodes.find(
-      item => item.id === instance.modelNodeId && !item._isDeleted,
+      item => item.id === instance.modelNodeId && !item._isDeleted
     )
     if (!node) return
 
@@ -133,7 +133,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     node: EditorNode,
     x: number,
     y: number,
-    componentId: string,
+    componentId: string
   ): void => {
     const diagram = options.activeDiagram.value
     if (!diagram) return
@@ -160,7 +160,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       },
       undo: () => {
         diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-          item => item.id !== nodeInstance.id,
+          item => item.id !== nodeInstance.id
         )
         options.markDiagramDirty(diagram.id)
       },
@@ -176,7 +176,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     const matchingComponents = resolveComponentByNodeType(
       options.state.value.components,
       notationId,
-      node.nodeTypeId,
+      node.nodeTypeId
     )
     if (matchingComponents.length === 1) {
       bindNodeComponent(node, matchingComponents[0]!.id)
@@ -228,19 +228,21 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       }
       options.executeDiagramHistoryCommand({
         execute: () => {
-          if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === directoryNoteInstance.id)) {
+          if (
+            !diagram.parsedAttrs.instances.nodes.some(item => item.id === directoryNoteInstance.id)
+          ) {
             diagram.parsedAttrs.instances.nodes.push(deepClone(directoryNoteInstance))
           }
           options.markDiagramDirty(diagram.id)
         },
         undo: () => {
           diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-            item => item.id !== directoryNoteInstance.id,
+            item => item.id !== directoryNoteInstance.id
           )
           diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
             edge =>
               edge.sourceInstanceId !== directoryNoteInstance.id &&
-              edge.targetInstanceId !== directoryNoteInstance.id,
+              edge.targetInstanceId !== directoryNoteInstance.id
           )
           options.markDiagramDirty(diagram.id)
         },
@@ -256,7 +258,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     const matchingComponents = resolveComponentByNodeType(
       options.state.value.components,
       notationId,
-      node.nodeTypeId,
+      node.nodeTypeId
     )
     if (matchingComponents.length === 0) {
       options.setUiError(options.t('models.noMatchingComponent'))
@@ -374,9 +376,12 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           item => item.id !== newInstance.id
         )
         diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
+          edge =>
+            edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
         )
-        options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(id => id !== nodeId)
+        options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(
+          id => id !== nodeId
+        )
         if (
           options.selectedNodeId.value === nodeId ||
           createdDirectoryIds.includes(options.selectedNodeId.value ?? '')
@@ -428,7 +433,8 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           item => item.id !== noteInstance.id
         )
         diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge => edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
+          edge =>
+            edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
         )
         options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(
           id => id !== modelNodeId

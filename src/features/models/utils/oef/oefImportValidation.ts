@@ -1,4 +1,11 @@
-import type { ImportIssue, ImportValidationResult, OefParsedModel, OefView, OefViewConnection, OefViewNode } from './types'
+import type {
+  ImportIssue,
+  ImportValidationResult,
+  OefParsedModel,
+  OefView,
+  OefViewConnection,
+  OefViewNode,
+} from './types'
 
 function isOefDiagramNoteNode(node: OefViewNode): boolean {
   return node.type === 'Label' || node.type === 'Note'
@@ -75,8 +82,10 @@ function validateView(view: OefView, relationshipIds: Set<string>): ImportIssue[
         message: `View connection "${connection.id}" points to missing relationship "${connection.relationshipId}"`,
       })
     }
-    const sourceOk = nodeIds.has(connection.sourceNodeId) || connectionIds.has(connection.sourceNodeId)
-    const targetOk = nodeIds.has(connection.targetNodeId) || connectionIds.has(connection.targetNodeId)
+    const sourceOk =
+      nodeIds.has(connection.sourceNodeId) || connectionIds.has(connection.sourceNodeId)
+    const targetOk =
+      nodeIds.has(connection.targetNodeId) || connectionIds.has(connection.targetNodeId)
     if (!sourceOk) {
       issues.push({
         code: 'viewConnectionMissingSourceNode',
@@ -149,8 +158,10 @@ export function validateParsedOefModel(parsed: OefParsedModel): ImportValidation
       })
     }
 
-    const sourceIsElement = !!relationship.sourceElementId && elementIds.has(relationship.sourceElementId)
-    const targetIsElement = !!relationship.targetElementId && elementIds.has(relationship.targetElementId)
+    const sourceIsElement =
+      !!relationship.sourceElementId && elementIds.has(relationship.sourceElementId)
+    const targetIsElement =
+      !!relationship.targetElementId && elementIds.has(relationship.targetElementId)
     const sourceIsRelationship =
       !!relationship.sourceElementId && relationshipIds.has(relationship.sourceElementId)
     const targetIsRelationship =

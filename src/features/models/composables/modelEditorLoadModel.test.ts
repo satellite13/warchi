@@ -58,10 +58,7 @@ describe('fetchAllByModelId', () => {
     const calls = vi.mocked(apiGet).mock.calls.map(call => String(call[0]))
     expect(calls[0]).toContain('page=0')
     expect(calls).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('page=1'),
-        expect.stringContaining('page=2'),
-      ])
+      expect.arrayContaining([expect.stringContaining('page=1'), expect.stringContaining('page=2')])
     )
   })
 
@@ -149,7 +146,9 @@ describe('loadModelEditorData', () => {
         )
       }
       if (path.startsWith('/notations?')) {
-        return ok(page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }]))
+        return ok(
+          page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }])
+        )
       }
       if (path.startsWith('/links?')) {
         return ok(

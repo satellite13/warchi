@@ -39,7 +39,10 @@ export type ModelEdgeOptions = Partial<{
 export function buildModelNodeIcon(ds?: DiagramStyle): NodeImageOptions | undefined {
   const icon = buildNodeIcon(ds)
   if (!icon) return undefined
-  if (ds?.iconPlacement && VALID_ICON_PLACEMENTS.has(ds.iconPlacement as NodeImageOptions['placement'])) {
+  if (
+    ds?.iconPlacement &&
+    VALID_ICON_PLACEMENTS.has(ds.iconPlacement as NodeImageOptions['placement'])
+  ) {
     return icon
   }
   return { ...icon, placement: 'left' }

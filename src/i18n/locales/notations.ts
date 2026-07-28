@@ -21,7 +21,8 @@ export const notationsMessages = {
       accessTitle: 'Доступ к нотации',
       versionTreeTitle: 'Дерево версий: {name}',
       versionTreeEmpty: 'Нет данных о происхождении версий.',
-      versionTreeMultipleRoots: 'Несколько независимых веток (созданы с нуля или источник вне списка).',
+      versionTreeMultipleRoots:
+        'Несколько независимых веток (созданы с нуля или источник вне списка).',
       resizePropertiesPanelHeight: 'Потяните, чтобы изменить высоту панели свойств',
       resizeElementsPanelWidth: 'Потяните, чтобы изменить ширину панели элементов',
       resizeStylesPanelWidth: 'Потяните, чтобы изменить ширину панели стилей',
@@ -115,10 +116,8 @@ export const notationsMessages = {
       enterRelationName: 'Введите название отношения',
       enterRelationVersion: 'Введите версию отношения',
       enterNewLinkTypeName: 'Введите название нового типа связи',
-      componentNameVersionConflict:
-        'Компонент с таким именем и версией уже есть в этой нотации',
-      relationNameVersionConflict:
-        'Отношение с таким именем и версией уже есть в этой нотации',
+      componentNameVersionConflict: 'Компонент с таким именем и версией уже есть в этой нотации',
+      relationNameVersionConflict: 'Отношение с таким именем и версией уже есть в этой нотации',
       boundEntityNameVersionConflict:
         'В нотации уже есть {entity} «{name}» версии {version}. Задайте уникальное имя или версию.',
     },
@@ -145,7 +144,8 @@ export const notationsMessages = {
       accessTitle: 'Notation access',
       versionTreeTitle: 'Version tree: {name}',
       versionTreeEmpty: 'No version lineage data.',
-      versionTreeMultipleRoots: 'Multiple independent branches (created from scratch or source not in list).',
+      versionTreeMultipleRoots:
+        'Multiple independent branches (created from scratch or source not in list).',
       resizePropertiesPanelHeight: 'Drag to resize properties panel height',
       resizeElementsPanelWidth: 'Drag to resize elements panel width',
       resizeStylesPanelWidth: 'Drag to resize styles panel width',
@@ -226,12 +226,9 @@ export const notationsMessages = {
       saveErrorShapes: 'Failed to create shapes: {message}',
       compositeValidationRootInvalid: 'compositeContent root must be a container',
       compositeValidationNameRoleMissing: 'Composite must contain exactly one text with role: name',
-      compositeValidationNameRoleDuplicate:
-        'Composite contains more than one text with role: name',
-      compositeValidationIconBindDuplicate:
-        'Composite allows only one icon with bindsNotationIcon',
-      compositeValidationIconBindTargetInvalid:
-        'bindsNotationIcon is allowed only on icon nodes',
+      compositeValidationNameRoleDuplicate: 'Composite contains more than one text with role: name',
+      compositeValidationIconBindDuplicate: 'Composite allows only one icon with bindsNotationIcon',
+      compositeValidationIconBindTargetInvalid: 'bindsNotationIcon is allowed only on icon nodes',
       compositeValidationTargetNotFound: 'Target id is not found in compositeContent: {targetId}',
       enterComponentName: 'Enter component name',
       enterComponentVersion: 'Enter component version',

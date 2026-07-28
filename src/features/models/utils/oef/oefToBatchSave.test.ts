@@ -125,14 +125,15 @@ describe('oefToBatchSave', () => {
     const attrs = parseDiagramAttrs(result.request.diagrams.create[0]!.attrs)
     const containers = attrs.instances.nodes.filter(node => node.attrs?.isContainer === true)
     const anchors = attrs.instances.nodes.filter(node => node.attrs?.isEdgeAnchor === true)
-    const diagramOnlyEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly === true)
+    const diagramOnlyEdges = attrs.instances.edges.filter(
+      edge => edge.attrs?.isDiagramOnly === true
+    )
     const modelEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly !== true)
 
     expect(containers).toHaveLength(1)
     expect(containers[0]?.attrs?.containerLabel).toBe('Group')
     const containerStyle = containers[0]?.attrs?.diagramStyle as
-      | { labelAlign?: string; labelVerticalAlign?: string }
-      | undefined
+      { labelAlign?: string; labelVerticalAlign?: string } | undefined
     expect(containerStyle?.labelVerticalAlign).toBe('top')
     expect(containerStyle?.labelAlign).toBe('left')
     expect(anchors).toHaveLength(1)
@@ -141,8 +142,7 @@ describe('oefToBatchSave', () => {
     expect(diagramOnlyEdges).toHaveLength(1)
     expect(
       diagramOnlyEdges.some(
-        edge =>
-          edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
+        edge => edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
       )
     ).toBe(true)
   })
@@ -221,12 +221,16 @@ describe('oefToBatchSave', () => {
       parentNodeId: 'root-node-id',
     })
 
-    const directories = result.request.nodes.create.filter(item => item.nodeTypeId === 'nt-directory')
+    const directories = result.request.nodes.create.filter(
+      item => item.nodeTypeId === 'nt-directory'
+    )
     expect(directories).toHaveLength(2)
     expect(directories[0]!.parentNodeId).toBe('root-node-id')
     const businessTempId = directories[0]!.tempId
     const viewsTempId = directories[1]!.tempId
-    expect(result.request.nodes.create.some(item => item.parentNodeId === businessTempId)).toBe(true)
+    expect(result.request.nodes.create.some(item => item.parentNodeId === businessTempId)).toBe(
+      true
+    )
     expect(result.request.diagrams.create[0]!.nodeId).toBe(viewsTempId)
   })
 
@@ -319,9 +323,9 @@ describe('oefToBatchSave', () => {
     })
 
     expect(result.request.links.create).toHaveLength(5)
-    expect(result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')).toHaveLength(
-      5
-    )
+    expect(
+      result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')
+    ).toHaveLength(5)
   })
 
   it('merges OEF properties into type and component values by name', () => {

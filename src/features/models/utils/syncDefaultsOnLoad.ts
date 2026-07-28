@@ -40,7 +40,7 @@ export async function syncDefaultsOnLoadChunked(state: ModelEditorState): Promis
         applyDefaultCustomPropertyValuesFromAttrs(
           node.parsedAttrs.componentProperties[notationId][componentId]!,
           component.attrs,
-          { skipSystem: true },
+          { skipSystem: true }
         )
       }
     }
@@ -65,7 +65,7 @@ export async function syncDefaultsOnLoadChunked(state: ModelEditorState): Promis
         applyDefaultCustomPropertyValuesFromAttrs(
           link.parsedAttrs.relationProperties[notationId][relationId]!,
           relation.attrs,
-          { skipSystem: true },
+          { skipSystem: true }
         )
       }
     }

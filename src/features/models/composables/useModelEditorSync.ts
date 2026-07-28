@@ -56,7 +56,7 @@ export function useModelEditorSync(options: {
   const activeDiagram = computed(() =>
     options.selectedDiagramId.value
       ? (options.state.value.diagrams.find(
-          (diagram) => diagram.id === options.selectedDiagramId.value && !diagram._isDeleted
+          diagram => diagram.id === options.selectedDiagramId.value && !diagram._isDeleted
         ) ?? null)
       : null
   )

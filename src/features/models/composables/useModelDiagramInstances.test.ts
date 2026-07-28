@@ -214,7 +214,7 @@ describe('useModelDiagramInstances', () => {
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(1)
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.modelNodeId).toBe('existing-node')
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
-      'component-2',
+      'component-2'
     )
   })
 
@@ -234,10 +234,10 @@ describe('useModelDiagramInstances', () => {
 
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(2)
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
-      'component-1',
+      'component-1'
     )
     expect(diagram.value.parsedAttrs.instances.nodes[1]?.attrs?.notationComponentId).toBe(
-      'component-2',
+      'component-2'
     )
   })
 
@@ -260,19 +260,19 @@ describe('useModelDiagramInstances', () => {
         x: 20,
         y: 20,
         attrs: { notationComponentId: 'component-1' },
-      },
+      }
     )
 
     instances.bindInstanceComponent('inst-b', 'component-2')
 
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
-      'component-1',
+      'component-1'
     )
     expect(diagram.value.parsedAttrs.instances.nodes[1]?.attrs?.notationComponentId).toBe(
-      'component-2',
+      'component-2'
     )
     expect(state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1']?.componentId).toBe(
-      'component-1',
+      'component-1'
     )
     expect(markDiagramDirty).toHaveBeenCalledWith('diagram-1')
   })

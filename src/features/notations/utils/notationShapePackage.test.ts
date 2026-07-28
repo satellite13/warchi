@@ -9,15 +9,51 @@ import {
 } from './notationShapePackage'
 
 const rectOutline: OutlineSegment[] = [
-  { type: 'line', points: [[0, 0], [1, 0]] },
-  { type: 'line', points: [[1, 0], [1, 1]] },
-  { type: 'line', points: [[1, 1], [0, 1]] },
-  { type: 'line', points: [[0, 1], [0, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [1, 0],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 0],
+      [1, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 1],
+      [0, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0, 1],
+      [0, 0],
+    ],
+  },
 ]
 
 const otherOutline: OutlineSegment[] = [
-  { type: 'line', points: [[0, 0], [0.5, 0.5]] },
-  { type: 'line', points: [[0.5, 0.5], [1, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [0.5, 0.5],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0.5, 0.5],
+      [1, 0],
+    ],
+  },
 ]
 
 const component = (partial: Partial<EditorComponent> & { id: string }): EditorComponent =>
@@ -208,9 +244,9 @@ describe('notationShapePackage', () => {
           }),
         ]
       )
-      expect(shapes.map((s) => s.id).sort()).toEqual(['s1', 's2'])
-      expect(shapes.find((s) => s.id === 's1')?.name).toBe('Pack')
-      expect(shapes.find((s) => s.id === 's2')?.name).toBe('Imported shape')
+      expect(shapes.map(s => s.id).sort()).toEqual(['s1', 's2'])
+      expect(shapes.find(s => s.id === 's1')?.name).toBe('Pack')
+      expect(shapes.find(s => s.id === 's2')?.name).toBe('Imported shape')
     })
 
     it('keeps package entry when id collides with synthesis', () => {

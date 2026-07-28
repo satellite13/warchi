@@ -49,7 +49,7 @@ describe('NavigationMenu', () => {
 
     expect(canViewAdminPanel).toHaveBeenCalledWith('user-1')
     expect(
-      wrapper.findAllComponents(RouterLinkStub).some((link) => link.props('to') === '/admin')
+      wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/admin')
     ).toBe(true)
   })
 
@@ -59,7 +59,7 @@ describe('NavigationMenu', () => {
 
     expect(canViewAdminPanel).not.toHaveBeenCalled()
     expect(
-      wrapper.findAllComponents(RouterLinkStub).some((link) => link.props('to') === '/admin')
+      wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/admin')
     ).toBe(false)
   })
 
@@ -72,7 +72,7 @@ describe('NavigationMenu', () => {
 
     expect(canViewAdminPanel).toHaveBeenCalledWith('user-1')
     expect(
-      wrapper.findAllComponents(RouterLinkStub).some((link) => link.props('to') === '/admin')
+      wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/admin')
     ).toBe(false)
   })
 })

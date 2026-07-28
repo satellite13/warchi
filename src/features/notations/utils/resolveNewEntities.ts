@@ -13,7 +13,9 @@ export type ResolveByKeyOptions<TLocal, TRemote> = {
   keyOfRemote: (remote: TRemote) => string
   loadExisting: () => Promise<TRemote[]>
   reloadExisting?: () => Promise<TRemote[]>
-  create: (local: TLocal) => Promise<{ ok: true; data: TRemote } | { ok: false; status: number; message: string }>
+  create: (
+    local: TLocal
+  ) => Promise<{ ok: true; data: TRemote } | { ok: false; status: number; message: string }>
   onReuse: (local: TLocal, remote: TRemote) => void
   onCreated: (local: TLocal, remote: TRemote) => void
   onProgress: (msg: string) => void
@@ -26,7 +28,7 @@ export type ResolveByKeyOptions<TLocal, TRemote> = {
  * Generic create-or-reuse loop for new editor entities (types, components, relations).
  */
 export async function resolveNewEntitiesByKey<TLocal, TRemote extends { id: string }>(
-  options: ResolveByKeyOptions<TLocal, TRemote>,
+  options: ResolveByKeyOptions<TLocal, TRemote>
 ): Promise<void> {
   const existing = await options.loadExisting()
   const existingByKey = new Map<string, TRemote>()
@@ -85,8 +87,8 @@ export async function resolveNewEntitiesByKey<TLocal, TRemote extends { id: stri
           'создания',
           options.entityTypeName,
           result.status,
-          result.message,
-        ),
+          result.message
+        )
       )
     }
 
@@ -101,7 +103,7 @@ export async function resolveNewEntitiesByKey<TLocal, TRemote extends { id: stri
 export async function loadExistingByListParams<T>(
   apiEndpoint: string,
   params?: Record<string, string | undefined>,
-  pageSize: number = PAGE_SIZE_FULL,
+  pageSize: number = PAGE_SIZE_FULL
 ): Promise<T[]> {
   // Prefer fetchAllPages so multi-page catalogs are fully covered.
   return fetchAllPages<T>(apiEndpoint, params, {
@@ -113,7 +115,7 @@ export async function loadExistingByListParams<T>(
 /** Fallback single-shot list (legacy callers / conflict refresh). */
 export async function loadExistingPageContent<T>(
   apiEndpoint: string,
-  query: URLSearchParams,
+  query: URLSearchParams
 ): Promise<T[]> {
   const result = await apiGet<PaginatedResponse<T>>(`${apiEndpoint}?${query.toString()}`)
   if (!result.success) {
@@ -128,7 +130,7 @@ export function buildListQuery(size: number = PAGE_SIZE_FULL): URLSearchParams {
 
 export async function postCreateEntity<T>(
   apiEndpoint: string,
-  body: Record<string, unknown>,
+  body: Record<string, unknown>
 ): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
   const result = await apiPost<T>(apiEndpoint, body)
   if (!result.success) {
@@ -142,6 +144,6 @@ export function typeNameConflictMessage(name: string, entityTypeName: string): s
     i18n.global.t('notations.typeNameConflict', {
       name,
       entity: entityTypeName,
-    }),
+    })
   )
 }

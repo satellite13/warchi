@@ -52,7 +52,13 @@ function createState(): ModelEditorState {
         attrs: null,
       } as never,
     ],
-    relationRules: [{ fromComponentId: 'source-component', toComponentId: 'target-component', relationId: 'relation' } as never],
+    relationRules: [
+      {
+        fromComponentId: 'source-component',
+        toComponentId: 'target-component',
+        relationId: 'relation',
+      } as never,
+    ],
   }
 }
 
@@ -209,9 +215,7 @@ describe('useModelDiagramConnections', () => {
 
     connections.startConnectNodes('source', 'target', 'source-instance', 'target-instance')
 
-    expect(setUiError).toHaveBeenCalledWith(
-      'translated:models.relationRulesLoadingConnectBlocked'
-    )
+    expect(setUiError).toHaveBeenCalledWith('translated:models.relationRulesLoadingConnectBlocked')
     expect(diagram.value.parsedAttrs.instances.edges).toHaveLength(0)
   })
 
@@ -291,9 +295,7 @@ describe('useModelDiagramConnections', () => {
         pathParam: 0.4,
       },
     })
-    const noteEdge = diagram.value.parsedAttrs.instances.edges.find(
-      edge => edge.id !== 'host-edge'
-    )
+    const noteEdge = diagram.value.parsedAttrs.instances.edges.find(edge => edge.id !== 'host-edge')
     expect(noteEdge).toMatchObject({
       sourceInstanceId: 'note-instance',
       targetInstanceId: anchor?.id,
@@ -315,7 +317,12 @@ describe('useModelDiagramConnections', () => {
       diagram,
     } = createHarness()
 
-    connections.startConnectNodes('__diagram-note__:note', 'target', 'note-instance', 'target-instance')
+    connections.startConnectNodes(
+      '__diagram-note__:note',
+      'target',
+      'note-instance',
+      'target-instance'
+    )
     const edge = diagram.value.parsedAttrs.instances.edges[0]!
     selectedModelLinkId.value = edge.modelLinkId
     selectedEdgeInstanceId.value = edge.id

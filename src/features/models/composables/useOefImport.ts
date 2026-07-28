@@ -128,9 +128,15 @@ export function useOefImport(options: {
   function collectOefMissingRequiredReport(
     request: ReturnType<typeof buildOefBatchSaveRequest>['request']
   ): OefImportReport['missingRequired'] {
-    const componentById = new Map(options.state.value.components.map(component => [component.id, component]))
-    const relationById = new Map(options.state.value.relations.map(relation => [relation.id, relation]))
-    const nodeTypeById = new Map(options.state.value.nodeTypes.map(nodeType => [nodeType.id, nodeType]))
+    const componentById = new Map(
+      options.state.value.components.map(component => [component.id, component])
+    )
+    const relationById = new Map(
+      options.state.value.relations.map(relation => [relation.id, relation])
+    )
+    const nodeTypeById = new Map(
+      options.state.value.nodeTypes.map(nodeType => [nodeType.id, nodeType])
+    )
 
     let nodeType = 0
     let component = 0
@@ -140,9 +146,9 @@ export function useOefImport(options: {
       const nodeAttrs = parseNodeAttrs(node.attrs)
       const nodeTypeEntity = nodeTypeById.get(node.nodeTypeId)
       if (nodeTypeEntity) {
-        const requiredTypeProps = (parseTypeAttrs(nodeTypeEntity.attrs ?? null).customProperties ?? []).filter(
-          property => property.required && !property.system
-        )
+        const requiredTypeProps = (
+          parseTypeAttrs(nodeTypeEntity.attrs ?? null).customProperties ?? []
+        ).filter(property => property.required && !property.system)
         for (const property of requiredTypeProps) {
           const value = nodeAttrs.typeProperties[property.name]
           if (!isCustomPropertyValueFilled(value, property.type)) {
@@ -155,10 +161,11 @@ export function useOefImport(options: {
         const componentEntity = componentById.get(binding.componentId)
         if (!componentEntity || componentEntity.notationId !== notationId) continue
 
-        const requiredProps = parseEntityAttrs(componentEntity.attrs ?? null).customProperties.filter(
-          property => property.required && !property.system
-        )
-        const scopedValues = nodeAttrs.componentProperties?.[notationId]?.[binding.componentId] ?? {}
+        const requiredProps = parseEntityAttrs(
+          componentEntity.attrs ?? null
+        ).customProperties.filter(property => property.required && !property.system)
+        const scopedValues =
+          nodeAttrs.componentProperties?.[notationId]?.[binding.componentId] ?? {}
         for (const property of requiredProps) {
           const value = scopedValues[property.name]
           if (!isCustomPropertyValueFilled(value, property.type)) {
@@ -174,9 +181,9 @@ export function useOefImport(options: {
         const relationEntity = relationById.get(binding.relationId)
         if (!relationEntity || relationEntity.notationId !== notationId) continue
 
-        const requiredProps = parseEntityAttrs(relationEntity.attrs ?? null).customProperties.filter(
-          property => property.required && !property.system
-        )
+        const requiredProps = parseEntityAttrs(
+          relationEntity.attrs ?? null
+        ).customProperties.filter(property => property.required && !property.system)
         const scopedValues = linkAttrs.relationProperties?.[notationId]?.[binding.relationId] ?? {}
         for (const property of requiredProps) {
           const value = scopedValues[property.name]

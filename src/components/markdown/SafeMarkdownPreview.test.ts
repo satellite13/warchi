@@ -25,7 +25,8 @@ describe('SafeMarkdownPreview', () => {
   it('sanitizes markdown preview html through the shared sanitizer', () => {
     const wrapper = mount(SafeMarkdownPreview, {
       props: {
-        modelValue: '<img src="x" onerror="alert(1)"><a href="https://example.com" target="_blank">ok</a>',
+        modelValue:
+          '<img src="x" onerror="alert(1)"><a href="https://example.com" target="_blank">ok</a>',
         language: 'ru-RU',
       },
     })

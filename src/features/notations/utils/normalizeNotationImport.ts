@@ -1,9 +1,5 @@
 import type { ComposerTranslation } from 'vue-i18n'
-import {
-  createId,
-  parseEntityAttrs,
-  parseTypeAttrs,
-} from '@/domain/attrs/notationAttrs'
+import { createId, parseEntityAttrs, parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 import { validateCompositeDiagramStyle } from '@/features/notations/utils/validationIssues'
 import { mergeShapePackage } from '@/features/notations/utils/notationShapePackage'
 import {
@@ -63,10 +59,7 @@ type NotationExportWrapper = Record<string, unknown> & {
 const hasExportWrapper = (raw: unknown): raw is NotationExportWrapper =>
   isRecord(raw) && typeof raw.format === 'string' && isRecord(raw.state)
 
-function getImportSource(
-  raw: unknown,
-  t: ComposerTranslation
-): Record<string, unknown> {
+function getImportSource(raw: unknown, t: ComposerTranslation): Record<string, unknown> {
   const source = isRecord(raw) && isRecord(raw.state) ? raw.state : raw
   if (!isRecord(source)) {
     throw new Error(t('notations.importFormatError'))
@@ -167,7 +160,7 @@ export function collectImportShapes(
   components: EditorComponent[]
 ): ExportedNodeShape[] {
   const parsedShapes = parseExportedShapesFromRaw(raw)
-  const activeComponents = components.filter((c) => !c._isDeleted)
+  const activeComponents = components.filter(c => !c._isDeleted)
   return mergeShapePackage(parsedShapes.map(stripShapeDocumentFileId), activeComponents)
 }
 
@@ -192,9 +185,7 @@ function claimByName<T extends { id: string; name: string; _isDeleted?: boolean 
 ): T | undefined {
   const key = nameKey(importedName)
   if (!key) return undefined
-  return pool.find(
-    (item) => !item._isDeleted && !claimed.has(item.id) && nameKey(item.name) === key
-  )
+  return pool.find(item => !item._isDeleted && !claimed.has(item.id) && nameKey(item.name) === key)
 }
 
 function collectImportedNames(items: Record<string, unknown>[], fallback: string): Set<string> {
@@ -224,11 +215,11 @@ export function analyzeNotationImportLocalOnly(
   )
 
   const componentNames = baseState.components
-    .filter((c) => !c._isDeleted && !importedComponentNames.has(nameKey(c.name)))
-    .map((c) => c.name)
+    .filter(c => !c._isDeleted && !importedComponentNames.has(nameKey(c.name)))
+    .map(c => c.name)
   const relationNames = baseState.relations
-    .filter((r) => !r._isDeleted && !importedRelationNames.has(nameKey(r.name)))
-    .map((r) => r.name)
+    .filter(r => !r._isDeleted && !importedRelationNames.has(nameKey(r.name)))
+    .map(r => r.name)
 
   return {
     componentNames,
@@ -346,8 +337,8 @@ export function normalizeNotationImport(
     })
   }
 
-  const nodeTypeIds = new Set(nodeTypes.map((item) => item.id))
-  const linkTypeIds = new Set(linkTypes.map((item) => item.id))
+  const nodeTypeIds = new Set(nodeTypes.map(item => item.id))
+  const linkTypeIds = new Set(linkTypes.map(item => item.id))
   const defaultNodeTypeId = nodeTypes[0]!.id
   const defaultLinkTypeId = linkTypes[0]!.id
 
@@ -361,7 +352,7 @@ export function normalizeNotationImport(
     const parsedAttrs = parseEntityAttrs(JSON.stringify(item.parsedAttrs ?? {}))
     delete parsedAttrs.documentFileId
     const issues = validateCompositeDiagramStyle(parsedAttrs.diagramStyle, t)
-    const integrityError = issues.find((issue) => issue.code === 'A5_TARGET_NOT_FOUND')
+    const integrityError = issues.find(issue => issue.code === 'A5_TARGET_NOT_FOUND')
     if (integrityError) {
       throw new Error(integrityError.message)
     }
@@ -468,12 +459,8 @@ export function normalizeNotationImport(
     }
   }
 
-  const activeComponentIds = new Set(
-    components.filter((c) => !c._isDeleted).map((c) => c.id)
-  )
-  const activeRelationIds = new Set(
-    relations.filter((r) => !r._isDeleted).map((r) => r.id)
-  )
+  const activeComponentIds = new Set(components.filter(c => !c._isDeleted).map(c => c.id))
+  const activeRelationIds = new Set(relations.filter(r => !r._isDeleted).map(r => r.id))
 
   const claimedRuleKeys = new Set<string>()
   const relationRules: EditorRelationRule[] = []
@@ -500,8 +487,8 @@ export function normalizeNotationImport(
       new Set(
         rawRelationIds
           .filter((relationId): relationId is string => typeof relationId === 'string')
-          .map((relationId) => relationIdMap.get(relationId) ?? relationId)
-          .filter((relationId) => activeRelationIds.has(relationId))
+          .map(relationId => relationIdMap.get(relationId) ?? relationId)
+          .filter(relationId => activeRelationIds.has(relationId))
       )
     )
 
@@ -509,7 +496,7 @@ export function normalizeNotationImport(
     claimedRuleKeys.add(pairKey)
 
     const existing = baseState.relationRules.find(
-      (rule) =>
+      rule =>
         !rule._isDeleted &&
         rule.fromComponentId === fromComponentId &&
         rule.toComponentId === toComponentId
@@ -541,8 +528,7 @@ export function normalizeNotationImport(
     if (claimedRuleKeys.has(pairKey)) continue
 
     const endpointsAlive =
-      activeComponentIds.has(local.fromComponentId) &&
-      activeComponentIds.has(local.toComponentId)
+      activeComponentIds.has(local.fromComponentId) && activeComponentIds.has(local.toComponentId)
 
     if (localOnlyPolicy === 'delete' || !endpointsAlive) {
       if (local._isNew) continue
@@ -550,7 +536,7 @@ export function normalizeNotationImport(
     } else {
       relationRules.push({
         ...local,
-        allowedRelationIds: local.allowedRelationIds.filter((id) => activeRelationIds.has(id)),
+        allowedRelationIds: local.allowedRelationIds.filter(id => activeRelationIds.has(id)),
       })
     }
   }

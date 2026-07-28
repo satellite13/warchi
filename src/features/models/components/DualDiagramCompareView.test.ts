@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import DualDiagramCompareView from './DualDiagramCompareView.vue'
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -19,7 +19,7 @@ vi.mock('@/composables/useResizablePropsPanel', () => ({
 
 vi.mock('../composables/useComparisonDiff', async () => {
   const actual = await vi.importActual<typeof import('../composables/useComparisonDiff')>(
-    '../composables/useComparisonDiff',
+    '../composables/useComparisonDiff'
   )
   return {
     ...actual,
@@ -45,9 +45,7 @@ vi.mock('../composables/useComparisonDiff', async () => {
       handleRightSelectNodes: vi.fn(),
       handleRightSelectLink: vi.fn(),
       handleRightSelectEdgeInstanceId: vi.fn(),
-      selectedPropertyRows: [
-        { key: 'name', base: 'A', target: 'B', changed: true },
-      ],
+      selectedPropertyRows: [{ key: 'name', base: 'A', target: 'B', changed: true }],
       selectedElementDiffKind: 'modified',
       comparePropWasLabel: 'was',
       comparePropBecameLabel: 'became',

@@ -7,10 +7,7 @@ export function hasCustomPropertyDefaultValue(property: CustomProperty): boolean
   return hasDefaultValue(property)
 }
 
-export function customPropertyValidationErrors(
-  property: CustomProperty,
-  t: TranslateFn
-): string[] {
+export function customPropertyValidationErrors(property: CustomProperty, t: TranslateFn): string[] {
   const errors: string[] = []
 
   if (!property.name.trim()) {

@@ -1,9 +1,9 @@
-import type { Ref } from "vue"
-import i18n from "@/i18n"
-import type { ModelData } from "@/types/entities"
-import type { BatchConflictItem } from "./useModelBatchSave"
-import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from "../types"
-import { applyDiagramGarbageSanitizeToState } from "../utils/sanitizeDiagramInstances"
+import type { Ref } from 'vue'
+import i18n from '@/i18n'
+import type { ModelData } from '@/types/entities'
+import type { BatchConflictItem } from './useModelBatchSave'
+import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from '../types'
+import { applyDiagramGarbageSanitizeToState } from '../utils/sanitizeDiagramInstances'
 import {
   applyBatchRemapping,
   batchSave,
@@ -13,9 +13,15 @@ import {
   isValidBatchResponse,
   parseBatchSaveConflictDetails,
   refreshBatchSavedEntityTimestamps,
-} from "./useModelBatchSave"
-import { withoutDeleted } from "./modelEditorMappers"
-import { remapNodeIds, saveDiagrams, saveLinks, saveModelMetadata, saveNodes } from "./modelEditorSavePipeline"
+} from './useModelBatchSave'
+import { withoutDeleted } from './modelEditorMappers'
+import {
+  remapNodeIds,
+  saveDiagrams,
+  saveLinks,
+  saveModelMetadata,
+  saveNodes,
+} from './modelEditorSavePipeline'
 
 type ExecuteModelEditorSaveOptions = {
   model: Ref<ModelData | null>
@@ -39,13 +45,25 @@ export function hasLegacyEntitySaveWork(
   links: EditorLink[],
   diagrams: EditorDiagram[]
 ): boolean {
-  const entityNeedsSave = (row: { _isNew?: boolean; _isDirty?: boolean; _isDeleted?: boolean }): boolean =>
-    Boolean((row._isNew && !row._isDeleted) || (row._isDirty && !row._isDeleted && !row._isNew) || (row._isDeleted && !row._isNew))
+  const entityNeedsSave = (row: {
+    _isNew?: boolean
+    _isDirty?: boolean
+    _isDeleted?: boolean
+  }): boolean =>
+    Boolean(
+      (row._isNew && !row._isDeleted) ||
+      (row._isDirty && !row._isDeleted && !row._isNew) ||
+      (row._isDeleted && !row._isNew)
+    )
 
-  return nodes.some(entityNeedsSave) || links.some(entityNeedsSave) || diagrams.some(entityNeedsSave)
+  return (
+    nodes.some(entityNeedsSave) || links.some(entityNeedsSave) || diagrams.some(entityNeedsSave)
+  )
 }
 
-export async function executeModelEditorSave(options: ExecuteModelEditorSaveOptions): Promise<boolean> {
+export async function executeModelEditorSave(
+  options: ExecuteModelEditorSaveOptions
+): Promise<boolean> {
   const modelValue = options.model.value
   if (!modelValue) return false
 
@@ -53,7 +71,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     const { ownerId, modelId, nodes, links, diagrams } = options.state.value
 
     if (options.model.value && options.modelDirty.value) {
-      options.onProgress(t("models.saveUpdatingModel", { name: options.model.value.name }))
+      options.onProgress(t('models.saveUpdatingModel', { name: options.model.value.name }))
       const { data } = await saveModelMetadata(options.model.value, options.modelCatalog.value)
       options.model.value = data
       options.modelInitialName.value = data.name
@@ -67,7 +85,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
 
     const blankNamedNodes = findBlankNamedBatchNodes(nodes)
     if (blankNamedNodes.length > 0) {
-      options.saveError.value = t("models.batchSaveBlankNodeName", {
+      options.saveError.value = t('models.batchSaveBlankNodeName', {
         count: blankNamedNodes.length,
       })
       options.scheduleSaveErrorClear()
@@ -82,7 +100,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
       const batchResult = await batchSave(modelId, batchRequest)
       if (batchResult.success) {
         if (!isValidBatchResponse(batchResult.data)) {
-          options.saveError.value = t("models.batchSaveInvalidResponse")
+          options.saveError.value = t('models.batchSaveInvalidResponse')
           options.scheduleSaveErrorClear()
           return false
         }
@@ -98,8 +116,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
           options.batchSaveConflict.value = conflicts
           return false
         }
-        options.saveError.value =
-          batchResult.error.message || t("models.batchSaveVersionConflict")
+        options.saveError.value = batchResult.error.message || t('models.batchSaveVersionConflict')
         options.scheduleSaveErrorClear()
         return false
       } else {
@@ -109,7 +126,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
       }
     } else if (hasLegacyEntitySaveWork(nodes, links, diagrams)) {
       console.warn(
-        "[ModelEditorSave] Unexpected dirty entity state without batch changes; falling back to legacy save pipeline"
+        '[ModelEditorSave] Unexpected dirty entity state without batch changes; falling back to legacy save pipeline'
       )
       const newNodeIdMap = await saveNodes(nodes, modelId, ownerId, options.onProgress)
       remapNodeIds(newNodeIdMap, links, diagrams)
@@ -122,8 +139,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     options.state.value.diagrams = withoutDeleted(options.state.value.diagrams)
     return true
   } catch (error) {
-    options.saveError.value =
-      error instanceof Error ? error.message : t("models.saveFailedGeneric")
+    options.saveError.value = error instanceof Error ? error.message : t('models.saveFailedGeneric')
     options.scheduleSaveErrorClear()
     return false
   }

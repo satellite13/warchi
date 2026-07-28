@@ -1,10 +1,10 @@
-import { ref, computed, onMounted } from "vue"
-import { apiGet } from "./useApi"
-import { pagedListParams } from "@/api/queryHelpers"
-import { paginatedContent } from "@/utils/paginatedResponse"
-import type { PaginatedResponse } from "../types/entities"
-import type { ModelData, NotationData } from "../types/entities"
-import type { NodeTypeResponse, LinkTypeResponse, AuditLogResponse } from "../types/api"
+import { ref, computed, onMounted } from 'vue'
+import { apiGet } from './useApi'
+import { pagedListParams } from '@/api/queryHelpers'
+import { paginatedContent } from '@/utils/paginatedResponse'
+import type { PaginatedResponse } from '../types/entities'
+import type { ModelData, NotationData } from '../types/entities'
+import type { NodeTypeResponse, LinkTypeResponse, AuditLogResponse } from '../types/api'
 
 export interface DashboardStats {
   models: number
@@ -91,19 +91,17 @@ export function useDashboard() {
 
   const totalVersions = computed(() => ({
     models: models.value.length,
-    notations: notations.value.length
+    notations: notations.value.length,
   }))
 
-  const recentModels = computed(() =>
-    sortByDateDesc(models.value, (m) => m.updatedAt).slice(0, 5)
-  )
+  const recentModels = computed(() => sortByDateDesc(models.value, m => m.updatedAt).slice(0, 5))
 
   const recentNotations = computed(() =>
-    sortByDateDesc(notations.value, (n) => n.updatedAt).slice(0, 5)
+    sortByDateDesc(notations.value, n => n.updatedAt).slice(0, 5)
   )
 
   const recentActivity = computed(() =>
-    sortByDateDesc(auditLogs.value, (a) => a.changedAt).slice(0, 12)
+    sortByDateDesc(auditLogs.value, a => a.changedAt).slice(0, 12)
   )
 
   const loadAll = async () => {
@@ -141,7 +139,7 @@ export function useDashboard() {
       apiGet<PaginatedResponse<NotationData>>(`/notations?${notationsQuery.toString()}`),
       apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
       apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${linkTypesQuery.toString()}`),
-      apiGet<PaginatedResponse<AuditLogResponse>>("/audit-log?page=0&size=20")
+      apiGet<PaginatedResponse<AuditLogResponse>>('/audit-log?page=0&size=20'),
     ])
 
     if (modelsRes.success) models.value = paginatedContent(modelsRes.data)
@@ -161,6 +159,6 @@ export function useDashboard() {
     totalVersions,
     recentModels,
     recentNotations,
-    recentActivity
+    recentActivity,
   }
 }

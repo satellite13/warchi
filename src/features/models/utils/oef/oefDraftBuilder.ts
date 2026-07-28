@@ -67,9 +67,7 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
           targetNodeId: connection.targetNodeId,
           ...(isNoteLink ? { isNoteLink: true } : {}),
           ...(isDiagramOnlyLink ? { isDiagramOnlyLink: true } : {}),
-          ...(attachesToConnectionId
-            ? { attachesToConnectionId, attachEndpoint }
-            : {}),
+          ...(attachesToConnectionId ? { attachesToConnectionId, attachEndpoint } : {}),
         }
       }
     )

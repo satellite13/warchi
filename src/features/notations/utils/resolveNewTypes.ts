@@ -42,7 +42,7 @@ function remapTypeId<TType extends TypeLike, TEntity>(
   newId: string,
   entities: TEntity[],
   getTypeId: (entity: TEntity) => string,
-  setTypeId: (entity: TEntity, newId: string) => void,
+  setTypeId: (entity: TEntity, newId: string) => void
 ): void {
   type.id = newId
   type._isNew = false
@@ -52,7 +52,7 @@ function remapTypeId<TType extends TypeLike, TEntity>(
 }
 
 export async function resolveNewTypes<TType extends TypeLike, TEntity>(
-  options: ResolveNewTypesOptions<TType, TEntity>,
+  options: ResolveNewTypesOptions<TType, TEntity>
 ): Promise<void> {
   const {
     types,

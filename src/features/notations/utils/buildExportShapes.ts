@@ -1,9 +1,6 @@
 import type { EditorComponent } from '../types'
 import { stripShapeDocumentFileId, type ExportedNodeShape } from './exportedNodeShape'
-import {
-  collectCustomShapeIds,
-  mergeShapePackage,
-} from './notationShapePackage'
+import { collectCustomShapeIds, mergeShapePackage } from './notationShapePackage'
 
 type FetchShapeRow = {
   id: string
@@ -36,7 +33,7 @@ function filterUsedPackageShapes(
   components: EditorComponent[]
 ): ExportedNodeShape[] {
   const usedIds = getUsedShapeIds(components)
-  return packageShapes.filter((shape) => usedIds.has(shape.id))
+  return packageShapes.filter(shape => usedIds.has(shape.id))
 }
 
 export async function buildExportShapes(params: {
@@ -44,7 +41,7 @@ export async function buildExportShapes(params: {
   pendingShapes: ExportedNodeShape[]
   fetchById: (id: string) => Promise<FetchShapeRow | null>
 }): Promise<ExportedNodeShape[]> {
-  const components = params.components.filter((component) => !component._isDeleted)
+  const components = params.components.filter(component => !component._isDeleted)
 
   if (params.pendingShapes.length > 0) {
     const stripped = params.pendingShapes.map(stripShapeDocumentFileId)

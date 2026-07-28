@@ -19,7 +19,7 @@ export type CustomPropertyEditorOptions<T extends CustomPropertyHost> = {
  * Shared custom-property list mutations for type/notation editors.
  */
 export function useCustomPropertyEditor<T extends CustomPropertyHost>(
-  options: CustomPropertyEditorOptions<T>,
+  options: CustomPropertyEditorOptions<T>
 ) {
   const { selectedItem, onMutateItem, validateProperty } = options
 
@@ -60,7 +60,7 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   const removeCustomProperty = (propertyId: string) => {
     mutate(item => {
       item.parsedAttrs.customProperties = item.parsedAttrs.customProperties.filter(
-        p => p.id !== propertyId,
+        p => p.id !== propertyId
       )
     })
   }

@@ -414,7 +414,11 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.strokeOpacity === 'number') style.strokeOpacity = value.strokeOpacity
   if (typeof value.strokeWidth === 'number') style.strokeWidth = value.strokeWidth
   if (typeof value.cornerRadius === 'number') style.cornerRadius = value.cornerRadius
-  if (typeof value.cornerCut === 'number' && Number.isFinite(value.cornerCut) && value.cornerCut >= 0) {
+  if (
+    typeof value.cornerCut === 'number' &&
+    Number.isFinite(value.cornerCut) &&
+    value.cornerCut >= 0
+  ) {
     style.cornerCut = value.cornerCut
   }
   if (typeof value.opacity === 'number') style.opacity = value.opacity

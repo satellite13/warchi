@@ -117,8 +117,7 @@ export function projectOnSegment(
 // ── Hit test ───────────────────────────────────────────────
 
 export type DragTarget =
-  | { type: 'vertex'; segmentIndex: number }
-  | { type: 'cp'; segmentIndex: number; cp: 1 | 2 }
+  { type: 'vertex'; segmentIndex: number } | { type: 'cp'; segmentIndex: number; cp: 1 | 2 }
 
 export type HitResult = DragTarget | { type: 'edge'; segmentIndex: number } | null
 

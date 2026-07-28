@@ -107,7 +107,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     targetModelNodeId: string,
     reportErrors = true,
     sourceInstanceId?: string,
-    targetInstanceId?: string,
+    targetInstanceId?: string
   ): { relations: RelationResponse[]; sourceIsUntyped: boolean } | null => {
     const notationId = options.activeNotationId.value
     if (!notationId) return null
@@ -160,7 +160,8 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
 
     const ruleRelationIds = options.state.value.relationRules
       .filter(
-        rule => rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
+        rule =>
+          rule.fromComponentId === sourceComponentId && rule.toComponentId === targetComponentId
       )
       .map(rule => rule.relationId)
     if (ruleRelationIds.length === 0) {
@@ -211,8 +212,10 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     }
     if (connection.sourcePortId) attrs.fromPortId = connection.sourcePortId
     if (connection.targetPortId) attrs.toPortId = connection.targetPortId
-    if (connection.sourceOutlineParam !== undefined) attrs.fromOutlineParam = connection.sourceOutlineParam
-    if (connection.targetOutlineParam !== undefined) attrs.toOutlineParam = connection.targetOutlineParam
+    if (connection.sourceOutlineParam !== undefined)
+      attrs.fromOutlineParam = connection.sourceOutlineParam
+    if (connection.targetOutlineParam !== undefined)
+      attrs.toOutlineParam = connection.targetOutlineParam
     const edge = {
       id: createId(),
       modelLinkId,
@@ -370,7 +373,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       targetModelNodeId,
       true,
       sourceInstanceId,
-      targetInstanceId,
+      targetInstanceId
     )
     if (!allowed) return
     if (allowed.relations.length === 0) {
@@ -406,7 +409,8 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
   }
 
   const finalizeConnection = (relationId: string) => {
-    if (!options.activeNotationId.value || !options.activeDiagram.value || !pendingConnection.value) return
+    if (!options.activeNotationId.value || !options.activeDiagram.value || !pendingConnection.value)
+      return
     if (!options.state.value.relations.some(item => item.id === relationId)) return
     showRelationChoiceModal.value = false
     pendingRelationId.value = relationId
@@ -493,8 +497,10 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     const attrs: Record<string, unknown> = { diagramStyle }
     if (connection.sourcePortId) attrs.fromPortId = connection.sourcePortId
     if (connection.targetPortId) attrs.toPortId = connection.targetPortId
-    if (connection.sourceOutlineParam !== undefined) attrs.fromOutlineParam = connection.sourceOutlineParam
-    if (connection.targetOutlineParam !== undefined) attrs.toOutlineParam = connection.targetOutlineParam
+    if (connection.sourceOutlineParam !== undefined)
+      attrs.fromOutlineParam = connection.sourceOutlineParam
+    if (connection.targetOutlineParam !== undefined)
+      attrs.toOutlineParam = connection.targetOutlineParam
     const edge = {
       id: createId(),
       modelLinkId: resolvedLinkId,
@@ -533,7 +539,9 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
           return
         }
         if (isNewLink) {
-          options.state.value.links = options.state.value.links.filter(item => item.id !== resolvedLinkId)
+          options.state.value.links = options.state.value.links.filter(
+            item => item.id !== resolvedLinkId
+          )
         } else if (previousParsedAttrs) {
           const link = options.state.value.links.find(item => item.id === resolvedLinkId)
           if (link) {
@@ -572,13 +580,18 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     const notationId = options.activeNotationId.value
     if (!diagram || !notationId || options.isDiagramReadOnly.value) return
     const link = options.state.value.links.find(item => item.id === linkId && !item._isDeleted)
-    if (!link || diagram.parsedAttrs.instances.edges.some(edge => edge.modelLinkId === link.id)) return
+    if (!link || diagram.parsedAttrs.instances.edges.some(edge => edge.modelLinkId === link.id))
+      return
     const relation = options.state.value.relations.find(
       item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
     )
     if (!relation || !canConnect(link.sourceId, link.targetId)) return
-    const source = diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === link.sourceId)
-    const target = diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === link.targetId)
+    const source = diagram.parsedAttrs.instances.nodes.find(
+      item => item.modelNodeId === link.sourceId
+    )
+    const target = diagram.parsedAttrs.instances.nodes.find(
+      item => item.modelNodeId === link.targetId
+    )
     if (!source || !target) return
     setPendingConnection(link.sourceId, link.targetId, source.id, target.id)
     pendingRelationId.value = relation.id

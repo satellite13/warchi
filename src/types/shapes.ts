@@ -22,9 +22,7 @@ export type ScaleSlice = {
 export const DEFAULT_SCALE_SLICE_REF_WIDTH = 180
 export const DEFAULT_SCALE_SLICE_REF_HEIGHT = 120
 
-export function createDefaultScaleSlice(
-  partial?: Partial<ScaleSlice>
-): ScaleSlice {
+export function createDefaultScaleSlice(partial?: Partial<ScaleSlice>): ScaleSlice {
   return {
     left: 0,
     right: 0,

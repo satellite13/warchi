@@ -25,10 +25,10 @@ const buildRequest = (input: CheckPermissionsInput): PermissionCheckRequest => (
 })
 
 export async function canViewAdminPanel(userId: string): Promise<boolean> {
-  const result = await apiPost<PermissionCheckResponse>("/permissions/check", {
-    resourceType: "ADMIN_PANEL",
+  const result = await apiPost<PermissionCheckResponse>('/permissions/check', {
+    resourceType: 'ADMIN_PANEL',
     resourceId: userId,
-    actions: ["VIEW"],
+    actions: ['VIEW'],
   })
   if (!result.success) {
     return false

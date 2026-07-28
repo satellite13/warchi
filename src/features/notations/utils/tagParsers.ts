@@ -1,9 +1,6 @@
 import { createId, type CustomProperty } from '@/domain/attrs/notationAttrs'
 
-export const parseTagsInput = (
-  value: string,
-  options?: { unique?: boolean },
-): string[] => {
+export const parseTagsInput = (value: string, options?: { unique?: boolean }): string[] => {
   const tags = value
     .split(',')
     .map(tag => tag.trim())

@@ -45,7 +45,7 @@ const rule = (
   from: string,
   to: string,
   allowedRelationIds: string[],
-  extra?: Partial<EditorRelationRule>,
+  extra?: Partial<EditorRelationRule>
 ): EditorRelationRule => ({
   id: `${from}-${to}`,
   fromComponentId: from,

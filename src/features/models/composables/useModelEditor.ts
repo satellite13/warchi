@@ -218,7 +218,8 @@ export const useModelEditor = (): ModelEditorReturn => {
       resolveCatalogReady()
       resolveBackgroundReady()
       // Tree is already visible; surface catalog/links failure without blanking the editor.
-      errorMessage.value = error instanceof Error ? error.message : 'Не удалось догрузить данные модели.'
+      errorMessage.value =
+        error instanceof Error ? error.message : 'Не удалось догрузить данные модели.'
     }
   }
 

@@ -1,19 +1,19 @@
-import { ref, computed, watch, type Ref } from "vue"
-import { useI18n } from "vue-i18n"
-import { apiGet, apiPost, apiPut, apiDelete } from "@/composables/useApi"
+import { ref, computed, watch, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/composables/useApi'
 import { listParams } from '@/api/queryHelpers'
-import { useAuth } from "@/composables/useAuth"
-import { useSaveState } from "@/composables/useSaveState"
+import { useAuth } from '@/composables/useAuth'
+import { useSaveState } from '@/composables/useSaveState'
 import {
   normalizeOwnerId,
   resolveOwnerDisplayNames,
   resolveOwnerLabel,
-} from "@/utils/resolveOwnerNames"
-import { parseTypeAttrs, serializeTypeAttrs } from "@/domain/attrs/notationAttrs"
-import { createEmptyCustomProperty } from "@/domain/attrs/createEmptyCustomProperty"
-import { createId } from "@/utils/createId"
-import { formatTypeOperationError } from "@/utils/formatEntityError"
-import type { TypeParsedAttrs } from "../../notations/types"
+} from '@/utils/resolveOwnerNames'
+import { parseTypeAttrs, serializeTypeAttrs } from '@/domain/attrs/notationAttrs'
+import { createEmptyCustomProperty } from '@/domain/attrs/createEmptyCustomProperty'
+import { createId } from '@/utils/createId'
+import { formatTypeOperationError } from '@/utils/formatEntityError'
+import type { TypeParsedAttrs } from '../../notations/types'
 import type {
   NodeTypeResponse,
   NodeTypeRequest,
@@ -22,12 +22,12 @@ import type {
   LinkTypeRequest,
   LinkTypeUpdateRequest,
   ComponentResponse,
-  RelationResponse
-} from "@/types/api"
-import type { AccessPermission, PaginatedResponse, NotationData } from "@/types/entities"
-import { paginatedContent } from "@/utils/paginatedResponse"
+  RelationResponse,
+} from '@/types/api'
+import type { AccessPermission, PaginatedResponse, NotationData } from '@/types/entities'
+import { paginatedContent } from '@/utils/paginatedResponse'
 
-export type TypeKind = "node" | "link"
+export type TypeKind = 'node' | 'link'
 
 export interface TypeItem {
   id: string
@@ -51,7 +51,7 @@ function toTypeItem(resp: NodeTypeResponse | LinkTypeResponse, kind: TypeKind): 
     ownerDisplayName: resp.ownerDisplayName ?? null,
     accessPermission: resp.accessPermission ?? null,
     kind,
-    parsedAttrs: parseTypeAttrs(resp.attrs ?? null)
+    parsedAttrs: parseTypeAttrs(resp.attrs ?? null),
   }
 }
 
@@ -79,8 +79,8 @@ export function useTypeEditor() {
   const selectedType = computed(() => {
     if (!selectedTypeId.value) return null
     return (
-      nodeTypes.value.find((t) => t.id === selectedTypeId.value) ??
-      linkTypes.value.find((t) => t.id === selectedTypeId.value) ??
+      nodeTypes.value.find(t => t.id === selectedTypeId.value) ??
+      linkTypes.value.find(t => t.id === selectedTypeId.value) ??
       null
     )
   })
@@ -97,16 +97,16 @@ export function useTypeEditor() {
   })
 
   function collectOwnerIds(extraOwnerId?: string | null): string[] {
-    const ids = [...nodeTypes.value, ...linkTypes.value].map((item) => item.ownerId)
+    const ids = [...nodeTypes.value, ...linkTypes.value].map(item => item.ownerId)
     if (extraOwnerId) ids.push(extraOwnerId)
     return ids
   }
 
   watch(
     () => selectedType.value?.ownerId,
-    async (ownerId) => {
+    async ownerId => {
       if (!ownerId) return
-      const fallback = t("common.unknownUser")
+      const fallback = t('common.unknownUser')
       const key = normalizeOwnerId(ownerId)
       const cached = ownerDisplayNames.value.get(key)
       if (cached && cached !== fallback) return
@@ -136,18 +136,18 @@ export function useTypeEditor() {
 
       const [nodeResult, linkResult] = await Promise.all([
         apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${query.toString()}`),
-        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${query.toString()}`)
+        apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${query.toString()}`),
       ])
 
       if (nodeResult.success) {
-        nodeTypes.value = paginatedContent(nodeResult.data).map((r) => toTypeItem(r, "node"))
+        nodeTypes.value = paginatedContent(nodeResult.data).map(r => toTypeItem(r, 'node'))
       }
       if (linkResult.success) {
-        linkTypes.value = paginatedContent(linkResult.data).map((r) => toTypeItem(r, "link"))
+        linkTypes.value = paginatedContent(linkResult.data).map(r => toTypeItem(r, 'link'))
       }
 
       const allTypes = [...nodeTypes.value, ...linkTypes.value]
-      await loadOwnerDisplayNames(allTypes.map((item) => item.ownerId))
+      await loadOwnerDisplayNames(allTypes.map(item => item.ownerId))
     } finally {
       isLoading.value = false
     }
@@ -158,13 +158,13 @@ export function useTypeEditor() {
       ownerIds,
       ownerDisplayNames.value,
       currentUser.value,
-      t("common.unknownUser")
+      t('common.unknownUser')
     )
   }
 
   const selectedTypeOwnerName = computed(() => {
     const type = selectedType.value
-    const fallback = t("common.unknownUser")
+    const fallback = t('common.unknownUser')
     if (!type?.ownerId) return fallback
     return resolveOwnerLabel(
       ownerDisplayNames.value,
@@ -183,13 +183,13 @@ export function useTypeEditor() {
   function addType(kind: TypeKind) {
     const item: TypeItem = {
       id: createId(),
-      name: "",
-      ownerId: currentUser.value?.id ?? "",
+      name: '',
+      ownerId: currentUser.value?.id ?? '',
       kind,
       parsedAttrs: { customProperties: [] },
-      _isNew: true
+      _isNew: true,
     }
-    if (kind === "node") {
+    if (kind === 'node') {
       nodeTypes.value.push(item)
     } else {
       linkTypes.value.push(item)
@@ -205,22 +205,20 @@ export function useTypeEditor() {
 
     try {
       if (item._isNew) {
-        if (item.kind === "node") {
+        if (item.kind === 'node') {
           const body: NodeTypeRequest = {
             name: item.name,
             ownerId: requestOwnerId,
-            attrs
+            attrs,
           }
-          const result = await apiPost<NodeTypeResponse>("/node-types", body)
+          const result = await apiPost<NodeTypeResponse>('/node-types', body)
           if (!result.success) {
-            failSave(
-              formatTypeOperationError("save", result.error.status, result.error.message)
-            )
+            failSave(formatTypeOperationError('save', result.error.status, result.error.message))
             return false
           }
-          const idx = nodeTypes.value.findIndex((t) => t.id === item.id)
+          const idx = nodeTypes.value.findIndex(t => t.id === item.id)
           if (idx !== -1) {
-            const updated = toTypeItem(result.data, "node")
+            const updated = toTypeItem(result.data, 'node')
             nodeTypes.value[idx] = updated
             if (selectedTypeId.value === item.id) {
               selectedTypeId.value = updated.id
@@ -230,18 +228,16 @@ export function useTypeEditor() {
           const body: LinkTypeRequest = {
             name: item.name,
             ownerId: requestOwnerId,
-            attrs
+            attrs,
           }
-          const result = await apiPost<LinkTypeResponse>("/link-types", body)
+          const result = await apiPost<LinkTypeResponse>('/link-types', body)
           if (!result.success) {
-            failSave(
-              formatTypeOperationError("save", result.error.status, result.error.message)
-            )
+            failSave(formatTypeOperationError('save', result.error.status, result.error.message))
             return false
           }
-          const idx = linkTypes.value.findIndex((t) => t.id === item.id)
+          const idx = linkTypes.value.findIndex(t => t.id === item.id)
           if (idx !== -1) {
-            const updated = toTypeItem(result.data, "link")
+            const updated = toTypeItem(result.data, 'link')
             linkTypes.value[idx] = updated
             if (selectedTypeId.value === item.id) {
               selectedTypeId.value = updated.id
@@ -249,31 +245,27 @@ export function useTypeEditor() {
           }
         }
       } else {
-        if (item.kind === "node") {
+        if (item.kind === 'node') {
           const body: NodeTypeUpdateRequest = { name: item.name, attrs }
           const result = await apiPut<NodeTypeResponse>(`/node-types/${item.id}`, body)
           if (!result.success) {
-            failSave(
-              formatTypeOperationError("save", result.error.status, result.error.message)
-            )
+            failSave(formatTypeOperationError('save', result.error.status, result.error.message))
             return false
           }
-          const idx = nodeTypes.value.findIndex((t) => t.id === item.id)
+          const idx = nodeTypes.value.findIndex(t => t.id === item.id)
           if (idx !== -1) {
-            nodeTypes.value[idx] = toTypeItem(result.data, "node")
+            nodeTypes.value[idx] = toTypeItem(result.data, 'node')
           }
         } else {
           const body: LinkTypeUpdateRequest = { name: item.name, attrs }
           const result = await apiPut<LinkTypeResponse>(`/link-types/${item.id}`, body)
           if (!result.success) {
-            failSave(
-              formatTypeOperationError("save", result.error.status, result.error.message)
-            )
+            failSave(formatTypeOperationError('save', result.error.status, result.error.message))
             return false
           }
-          const idx = linkTypes.value.findIndex((t) => t.id === item.id)
+          const idx = linkTypes.value.findIndex(t => t.id === item.id)
           if (idx !== -1) {
-            linkTypes.value[idx] = toTypeItem(result.data, "link")
+            linkTypes.value[idx] = toTypeItem(result.data, 'link')
           }
         }
       }
@@ -293,12 +285,10 @@ export function useTypeEditor() {
     startSave()
 
     try {
-      const path = item.kind === "node" ? `/node-types/${item.id}` : `/link-types/${item.id}`
+      const path = item.kind === 'node' ? `/node-types/${item.id}` : `/link-types/${item.id}`
       const result = await apiDelete<void>(path)
       if (!result.success) {
-        failSave(
-          formatTypeOperationError("delete", result.error.status, result.error.message)
-        )
+        failSave(formatTypeOperationError('delete', result.error.status, result.error.message))
         return false
       }
       removeLocal(item)
@@ -310,10 +300,10 @@ export function useTypeEditor() {
   }
 
   function removeLocal(item: TypeItem) {
-    if (item.kind === "node") {
-      nodeTypes.value = nodeTypes.value.filter((t) => t.id !== item.id)
+    if (item.kind === 'node') {
+      nodeTypes.value = nodeTypes.value.filter(t => t.id !== item.id)
     } else {
-      linkTypes.value = linkTypes.value.filter((t) => t.id !== item.id)
+      linkTypes.value = linkTypes.value.filter(t => t.id !== item.id)
     }
     if (selectedTypeId.value === item.id) {
       selectedTypeId.value = null
@@ -331,7 +321,7 @@ export function useTypeEditor() {
   function removeCustomProperty(item: TypeItem, propertyId: string) {
     if (!item.parsedAttrs.customProperties) return
     item.parsedAttrs.customProperties = item.parsedAttrs.customProperties.filter(
-      (p) => p.id !== propertyId
+      p => p.id !== propertyId
     )
     markTypeDirty(item)
   }
@@ -343,7 +333,7 @@ export function useTypeEditor() {
     try {
       const parsed = JSON.parse(attrs) as { icon?: string }
       const v = parsed?.icon
-      return typeof v === "string" && v.trim() ? v.trim() : undefined
+      return typeof v === 'string' && v.trim() ? v.trim() : undefined
     } catch {
       return undefined
     }
@@ -351,23 +341,23 @@ export function useTypeEditor() {
 
   /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
   function parsePaletteIconFromAttrs(attrs: string | null | undefined): string {
-    if (attrs == null) return "widgets"
+    if (attrs == null) return 'widgets'
     try {
       const parsed = JSON.parse(attrs) as {
         diagramStyle?: { iconName?: string }
         paletteMaterialIcon?: string
       }
       const fromStyle =
-        typeof parsed?.diagramStyle?.iconName === "string" && parsed.diagramStyle.iconName.trim()
+        typeof parsed?.diagramStyle?.iconName === 'string' && parsed.diagramStyle.iconName.trim()
           ? parsed.diagramStyle.iconName.trim()
           : undefined
       const fromPalette =
-        typeof parsed?.paletteMaterialIcon === "string" && parsed.paletteMaterialIcon.trim()
+        typeof parsed?.paletteMaterialIcon === 'string' && parsed.paletteMaterialIcon.trim()
           ? parsed.paletteMaterialIcon.trim()
           : undefined
-      return fromStyle ?? fromPalette ?? "widgets"
+      return fromStyle ?? fromPalette ?? 'widgets'
     } catch {
-      return "widgets"
+      return 'widgets'
     }
   }
 
@@ -401,9 +391,9 @@ export function useTypeEditor() {
 
       const [notationsResult, elementsResult] = await Promise.all([
         apiGet<PaginatedResponse<NotationData>>(`/notations?${query.toString()}`),
-        item.kind === "node"
+        item.kind === 'node'
           ? apiGet<PaginatedResponse<ComponentResponse>>(`/components?${query.toString()}`)
-          : apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
+          : apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`),
       ])
 
       const notationsMap = new Map<string, { name: string; icon?: string }>()
@@ -411,7 +401,7 @@ export function useTypeEditor() {
         for (const n of notationsResult.data.content ?? []) {
           notationsMap.set(n.id, {
             name: `${n.name} (${n.version})`,
-            icon: parseIconFromAttrs(n.attrs)
+            icon: parseIconFromAttrs(n.attrs),
           })
         }
       }
@@ -422,8 +412,8 @@ export function useTypeEditor() {
       }
 
       const allElements = elementsResult.data.content ?? []
-      const matched = allElements.filter((el) => {
-        if (item.kind === "node") {
+      const matched = allElements.filter(el => {
+        if (item.kind === 'node') {
           return (el as ComponentResponse).nodeTypeId === item.id
         }
         return (el as RelationResponse).linkTypeId === item.id
@@ -439,7 +429,7 @@ export function useTypeEditor() {
           id: el.id,
           name: el.name,
           version: el.version,
-          icon: parsePaletteIconFromAttrs(el.attrs)
+          icon: parsePaletteIconFromAttrs(el.attrs),
         })
       }
 
@@ -449,7 +439,7 @@ export function useTypeEditor() {
           notationId,
           notationName: notation?.name ?? notationId,
           notationIcon: notation?.icon,
-          elements
+          elements,
         }
       })
     } finally {
@@ -457,14 +447,14 @@ export function useTypeEditor() {
     }
   }
 
-watch(selectedTypeId, () => {
-  const item = selectedType.value
-  if (item) {
-    loadUsages(item)
-  } else {
-    typeUsages.value = []
-  }
-})
+  watch(selectedTypeId, () => {
+    const item = selectedType.value
+    if (item) {
+      loadUsages(item)
+    } else {
+      typeUsages.value = []
+    }
+  })
 
   return {
     currentUserId,
@@ -490,6 +480,6 @@ watch(selectedTypeId, () => {
     typeUsages,
     isLoadingUsages,
     loadUsages,
-    isDirty
+    isDirty,
   }
 }

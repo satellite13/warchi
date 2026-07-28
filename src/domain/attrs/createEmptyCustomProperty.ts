@@ -1,9 +1,7 @@
 import { createId } from '@/utils/createId'
 import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 
-export function createEmptyCustomProperty(
-  overrides: Partial<CustomProperty> = {},
-): CustomProperty {
+export function createEmptyCustomProperty(overrides: Partial<CustomProperty> = {}): CustomProperty {
   return {
     id: createId(),
     name: '',

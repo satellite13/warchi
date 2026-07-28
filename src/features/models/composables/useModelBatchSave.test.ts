@@ -223,7 +223,9 @@ describe('useModelBatchSave', () => {
   })
 
   it('refreshes updatedAt after batch save so the next save does not false-409', async () => {
-    const nodes = [createNode({ id: 'node-1', updatedAt: '2026-01-01T00:00:00.000Z', _isDirty: true })]
+    const nodes = [
+      createNode({ id: 'node-1', updatedAt: '2026-01-01T00:00:00.000Z', _isDirty: true }),
+    ]
     const links = [
       createLink({ id: 'link-1', updatedAt: '2026-01-02T00:00:00.000Z', _isDirty: true }),
     ]
@@ -245,11 +247,11 @@ describe('useModelBatchSave', () => {
         data: { ...diagrams[0]!, updatedAt: '2026-01-03T01:00:00.000Z', attrs: null },
       })
 
-    await refreshBatchSavedEntityTimestamps(
-      { nodes, links, diagrams },
-      request,
-      { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} }
-    )
+    await refreshBatchSavedEntityTimestamps({ nodes, links, diagrams }, request, {
+      nodeIdMap: {},
+      linkIdMap: {},
+      diagramIdMap: {},
+    })
 
     expect(apiGet).toHaveBeenCalledWith('/nodes/node-1')
     expect(apiGet).toHaveBeenCalledWith('/links/link-1')

@@ -18,9 +18,9 @@ describe('oefImportValidation', () => {
     const parsed = parseOefXml(containerAssocXml)
     const validation = validateParsedOefModel(parsed)
     expect(validation.hasErrors).toBe(false)
-    expect(validation.issues.some(issue => issue.code === 'relationshipEndpointIsRelationship')).toBe(
-      true
-    )
+    expect(
+      validation.issues.some(issue => issue.code === 'relationshipEndpointIsRelationship')
+    ).toBe(true)
     expect(validation.issues.some(issue => issue.code === 'viewNodeMissingElementRef')).toBe(false)
     expect(validation.issues.some(issue => issue.code === 'viewConnectionMissingTargetNode')).toBe(
       false

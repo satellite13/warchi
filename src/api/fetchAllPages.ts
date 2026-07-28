@@ -1,7 +1,11 @@
 import { apiGet } from '@/composables/useApi'
 import { PAGE_SIZE_NOTATION, pagedListParams } from '@/api/queryHelpers'
 import type { PaginatedResponse } from '@/types/entities'
-import { paginatedContent, paginatedIsLastPage, paginatedTotalPages } from '@/utils/paginatedResponse'
+import {
+  paginatedContent,
+  paginatedIsLastPage,
+  paginatedTotalPages,
+} from '@/utils/paginatedResponse'
 
 export type FetchAllPagesOptions = {
   pageSize?: number
@@ -20,7 +24,7 @@ function applyParams(query: URLSearchParams, params?: Record<string, string | un
 export async function fetchAllPages<T>(
   path: string,
   params?: Record<string, string | undefined>,
-  options?: FetchAllPagesOptions,
+  options?: FetchAllPagesOptions
 ): Promise<T[]> {
   const pageSize = options?.pageSize ?? PAGE_SIZE_NOTATION
   const errorLabel = options?.errorLabel ?? path
@@ -48,7 +52,7 @@ export async function fetchAllPages<T>(
           throw new Error(`Ошибка загрузки ${errorLabel}: ${result.error.message}`)
         }
         return paginatedContent(result.data)
-      }),
+      })
     )
     for (const batch of rest) collected.push(...batch)
     return collected

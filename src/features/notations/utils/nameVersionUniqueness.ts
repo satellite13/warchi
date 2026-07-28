@@ -24,7 +24,7 @@ export function findNameVersionConflict(
   entities: NamedVersionedEntity[],
   name: string,
   version: string,
-  excludeId?: string,
+  excludeId?: string
 ): NamedVersionedEntity | undefined {
   const key = entityNameVersionKey(name, version)
   if (!key.replace('\u0000', '')) return undefined
@@ -32,7 +32,7 @@ export function findNameVersionConflict(
     entity =>
       !entity._isDeleted &&
       entity.id !== excludeId &&
-      entityNameVersionKey(entity.name, entity.version) === key,
+      entityNameVersionKey(entity.name, entity.version) === key
   )
 }
 
@@ -41,7 +41,7 @@ export function findNameVersionConflict(
  * Used to block save when the editor already contains colliding rows.
  */
 export function findDuplicateNameVersionGroups<T extends NamedVersionedEntity>(
-  entities: T[],
+  entities: T[]
 ): NameVersionDuplicateGroup[] {
   const byKey = new Map<string, { name: string; version: string; ids: string[] }>()
   for (const entity of entities) {

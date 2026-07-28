@@ -73,7 +73,9 @@ export function useDiagramRenderer(options: UseDiagramRendererOptions) {
   function createRendererOptions(width: number, height: number): DiagramOptions {
     const configured = resolveMaybeFactory(options.rendererOptions) ?? {}
     const backgroundColor =
-      resolveMaybeFactory(options.backgroundColor) ?? configured.backgroundColor ?? DEFAULT_BACKGROUND
+      resolveMaybeFactory(options.backgroundColor) ??
+      configured.backgroundColor ??
+      DEFAULT_BACKGROUND
     return {
       ...configured,
       width,

@@ -1,10 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import {
-  CircleNode,
-  CustomShapeNode,
-  DiamondNode,
-  RectangleNode,
-} from '@ngroznykh/papirus'
+import { CircleNode, CustomShapeNode, DiamondNode, RectangleNode } from '@ngroznykh/papirus'
 import {
   createDiagramNode,
   getDiagramNodeShape,
@@ -48,7 +43,7 @@ describe('diagramNodeFactory', () => {
     'slanted-rectangle',
     'custom',
     'composite',
-  ] as const)('resolves %s node shape', (nodeShape) => {
+  ] as const)('resolves %s node shape', nodeShape => {
     expect(resolveDiagramNodeShape({ nodeShape } as DiagramStyle)).toBe(nodeShape)
   })
 

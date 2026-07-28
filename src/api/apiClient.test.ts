@@ -22,7 +22,7 @@ vi.mock('@/utils/csrfCookie', () => ({
 
 vi.mock('@/composables/useAvailabilityGuard', async () => {
   const actual = await vi.importActual<typeof import('@/composables/useAvailabilityGuard')>(
-    '@/composables/useAvailabilityGuard',
+    '@/composables/useAvailabilityGuard'
   )
   return {
     ...actual,
@@ -78,7 +78,7 @@ describe('apiClient', () => {
           headers: expect.objectContaining({
             Accept: 'application/json',
           }),
-        }),
+        })
       )
     })
   })
@@ -100,7 +100,7 @@ describe('apiClient', () => {
             'Content-Type': 'application/json',
             'X-CSRF-Token': 'csrf-test-token',
           }),
-        }),
+        })
       )
     })
   })
@@ -118,7 +118,7 @@ describe('apiClient', () => {
           method: 'PUT',
           credentials: 'include',
           body: JSON.stringify({ name: 'updated' }),
-        }),
+        })
       )
     })
   })
@@ -135,7 +135,7 @@ describe('apiClient', () => {
         expect.objectContaining({
           method: 'DELETE',
           credentials: 'include',
-        }),
+        })
       )
     })
   })
@@ -369,10 +369,7 @@ describe('apiClient', () => {
 
   describe('availability outage classification', () => {
     it('reports authz_unavailable on 503 with authorization service message', async () => {
-      const fetchMock = mockFetchResponse(
-        { message: 'Authorization service is unavailable' },
-        503,
-      )
+      const fetchMock = mockFetchResponse({ message: 'Authorization service is unavailable' }, 503)
       vi.stubGlobal('fetch', fetchMock)
 
       const result = await apiGet('/permissions/check')
@@ -380,7 +377,7 @@ describe('apiClient', () => {
       expect(result.success).toBe(false)
       expect(reportAvailabilityOutage).toHaveBeenCalledWith(
         'authz_unavailable',
-        expect.stringMatching(/authorization service is unavailable/i),
+        expect.stringMatching(/authorization service is unavailable/i)
       )
       expect(useAvailabilityGuard().outage.value?.kind).toBe('authz_unavailable')
     })
@@ -394,7 +391,7 @@ describe('apiClient', () => {
       expect(result.success).toBe(false)
       expect(reportAvailabilityOutage).toHaveBeenCalledWith(
         'backend_unavailable',
-        expect.any(String),
+        expect.any(String)
       )
     })
 

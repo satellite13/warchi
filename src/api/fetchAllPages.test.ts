@@ -18,10 +18,14 @@ describe('fetchAllPages', () => {
       data: { content: [{ id: 'a' }], totalPages: 1, last: true },
     })
 
-    const result = await fetchAllPages<{ id: string }>('/items', { foo: 'bar' }, {
-      pageSize: 10,
-      errorLabel: 'items',
-    })
+    const result = await fetchAllPages<{ id: string }>(
+      '/items',
+      { foo: 'bar' },
+      {
+        pageSize: 10,
+        errorLabel: 'items',
+      }
+    )
 
     expect(result).toEqual([{ id: 'a' }])
     expect(apiGet).toHaveBeenCalledTimes(1)

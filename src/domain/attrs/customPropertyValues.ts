@@ -1,7 +1,4 @@
-import {
-  parseEntityAttrs,
-  type CustomProperty,
-} from '@/domain/attrs/notationAttrs'
+import { parseEntityAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
 
 /**
  * Whether a runtime/default value counts as filled for the property type.
@@ -28,7 +25,7 @@ export type ApplyDefaultCustomPropertyValuesOptions = {
 export function applyDefaultCustomPropertyValues(
   target: Record<string, unknown>,
   customProperties: CustomProperty[],
-  options?: ApplyDefaultCustomPropertyValuesOptions,
+  options?: ApplyDefaultCustomPropertyValuesOptions
 ): void {
   for (const property of customProperties) {
     if (options?.skipSystem && property.system) continue
@@ -42,17 +39,17 @@ export function applyDefaultCustomPropertyValues(
 export function applyDefaultCustomPropertyValuesFromAttrs(
   target: Record<string, unknown>,
   attrsRaw: string | null | undefined,
-  options?: ApplyDefaultCustomPropertyValuesOptions,
+  options?: ApplyDefaultCustomPropertyValuesOptions
 ): void {
   applyDefaultCustomPropertyValues(
     target,
     parseEntityAttrs(attrsRaw ?? null).customProperties,
-    options,
+    options
   )
 }
 
 export function collectDefaultCustomPropertyValues(
-  customProperties: CustomProperty[],
+  customProperties: CustomProperty[]
 ): Record<string, unknown> {
   const defaults: Record<string, unknown> = {}
   applyDefaultCustomPropertyValues(defaults, customProperties, { skipSystem: true })

@@ -1,9 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import type { ModelEditorState } from '../types'
 
-export function useModelSelection(options: {
-  state: Ref<ModelEditorState>
-}) {
+export function useModelSelection(options: { state: Ref<ModelEditorState> }) {
   const selectedNodeId = ref<string | null>(null)
   const selectedDiagramId = ref<string | null>(null)
   const selectedModelNodeIds = ref<string[]>([])
@@ -14,7 +12,9 @@ export function useModelSelection(options: {
 
   const selectedTreeNode = computed(() =>
     selectedNodeId.value
-      ? (options.state.value.nodes.find(node => node.id === selectedNodeId.value && !node._isDeleted) ?? null)
+      ? (options.state.value.nodes.find(
+          node => node.id === selectedNodeId.value && !node._isDeleted
+        ) ?? null)
       : null
   )
   const selectedDiagramNode = computed(() =>
@@ -28,8 +28,9 @@ export function useModelSelection(options: {
 
   const selectedLink = computed(() =>
     selectedModelLinkId.value
-      ? (options.state.value.links.find(link => link.id === selectedModelLinkId.value && !link._isDeleted) ??
-        null)
+      ? (options.state.value.links.find(
+          link => link.id === selectedModelLinkId.value && !link._isDeleted
+        ) ?? null)
       : null
   )
 
@@ -48,7 +49,9 @@ export function useModelSelection(options: {
       : null
     const modelNodeId = selectedNode.value?.id
     if (!diagram || !modelNodeId) return null
-    return diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
+    return (
+      diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
+    )
   })
 
   const selectedLinkEdgeInstanceId = computed<string | null>(() => {

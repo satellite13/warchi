@@ -9,13 +9,15 @@ describe('groupImportIssues', () => {
         code: 'relationshipEndpointIsRelationship',
         level: 'warning',
         entityId: 'rel-1',
-        message: 'Relationship "rel-1" attaches to another relationship and will be imported as diagram-only',
+        message:
+          'Relationship "rel-1" attaches to another relationship and will be imported as diagram-only',
       },
       {
         code: 'relationshipEndpointIsRelationship',
         level: 'warning',
         entityId: 'rel-2',
-        message: 'Relationship "rel-2" attaches to another relationship and will be imported as diagram-only',
+        message:
+          'Relationship "rel-2" attaches to another relationship and will be imported as diagram-only',
       },
       {
         code: 'missingElementType',

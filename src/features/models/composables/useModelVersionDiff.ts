@@ -1,18 +1,11 @@
-import { computed, ref } from "vue"
-import { apiGet } from "@/composables/useApi"
-import type { ModelData } from "@/types/entities"
-import type { PaginatedResponse } from "@/types/entities"
-import type {
-  DiagramResponse,
-  LinkResponse,
-  NodeResponse,
-} from "@/types/api"
-import {
-  computeModelDiff,
-  type ModelVersionDiff,
-} from "@/utils/modelDiff"
-import { paginatedContent } from "@/utils/paginatedResponse"
-import { fetchAllByModelId } from "./modelEditorLoadModel"
+import { computed, ref } from 'vue'
+import { apiGet } from '@/composables/useApi'
+import type { ModelData } from '@/types/entities'
+import type { PaginatedResponse } from '@/types/entities'
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
+import { computeModelDiff, type ModelVersionDiff } from '@/utils/modelDiff'
+import { paginatedContent } from '@/utils/paginatedResponse'
+import { fetchAllByModelId } from './modelEditorLoadModel'
 
 export type ModelVersionDiffState = {
   relatedVersions: ModelData[]
@@ -82,8 +75,7 @@ export function useModelVersionDiff() {
       }
     } catch (e) {
       relatedVersions.value = []
-      relatedVersionsError.value =
-        e instanceof Error ? e.message : "Не удалось загрузить версии"
+      relatedVersionsError.value = e instanceof Error ? e.message : 'Не удалось загрузить версии'
     } finally {
       relatedVersionsLoading.value = false
     }
@@ -105,7 +97,7 @@ export function useModelVersionDiff() {
     } catch (e) {
       compareTargetData.value = null
       compareTargetError.value =
-        e instanceof Error ? e.message : "Не удалось загрузить данные версии"
+        e instanceof Error ? e.message : 'Не удалось загрузить данные версии'
       return false
     } finally {
       compareTargetLoading.value = false

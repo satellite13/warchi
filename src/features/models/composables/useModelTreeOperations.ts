@@ -61,16 +61,21 @@ export function useModelTreeOperations(options: {
 
   const directoryNodeType = computed(
     () =>
-      options.state.value.nodeTypes.find(typeItem => typeItem.name.trim().toLowerCase() === 'directory') ??
-      null
+      options.state.value.nodeTypes.find(
+        typeItem => typeItem.name.trim().toLowerCase() === 'directory'
+      ) ?? null
   )
   const nonDirectoryNodeTypes = computed(() =>
-    options.state.value.nodeTypes.filter(typeItem => typeItem.name.trim().toLowerCase() !== 'directory')
+    options.state.value.nodeTypes.filter(
+      typeItem => typeItem.name.trim().toLowerCase() !== 'directory'
+    )
   )
   const nodeTypeDefaultDirectoryById = computed(() => {
     const map = new Map<string, string>()
     for (const nodeType of options.state.value.nodeTypes) {
-      const defaultDirectoryPath = parseTypeAttrs(nodeType.attrs ?? null).defaultDirectoryPath?.trim()
+      const defaultDirectoryPath = parseTypeAttrs(
+        nodeType.attrs ?? null
+      ).defaultDirectoryPath?.trim()
       if (defaultDirectoryPath) {
         map.set(nodeType.id, defaultDirectoryPath)
       }
@@ -327,7 +332,8 @@ export function useModelTreeOperations(options: {
       const childIndices = nodes
         .map((item, index) => ({ item, index }))
         .filter(
-          ({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
+          ({ item }) =>
+            item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
         )
         .map(({ index }) => index)
       insertIndex =
@@ -356,7 +362,9 @@ export function useModelTreeOperations(options: {
   }
 
   const handleMoveDiagram = (diagramId: string, newNodeId: string | null) => {
-    const diagram = options.state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+    const diagram = options.state.value.diagrams.find(
+      item => item.id === diagramId && !item._isDeleted
+    )
     if (!diagram) return
     const resolvedNodeId = newNodeId ?? treeRootNodeId.value ?? null
     if (diagram.nodeId === resolvedNodeId) return

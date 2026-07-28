@@ -26,17 +26,13 @@ describe('resolveCustomScaleSlice', () => {
   })
 
   it('resolves from catalog attrs by customShapeId', () => {
-    rememberNodeShapeAttrs([
-      { id: 's1', attrs: JSON.stringify({ scaleSlice: slice }) },
-    ])
+    rememberNodeShapeAttrs([{ id: 's1', attrs: JSON.stringify({ scaleSlice: slice }) }])
     const ds: DiagramStyle = { customShapeId: 's1', customOutline: [] }
     expect(resolveCustomScaleSlice(ds)).toEqual(slice)
   })
 
   it('withResolvedScaleSlice fills missing snapshot from catalog', () => {
-    rememberNodeShapeAttrs([
-      { id: 's1', attrs: JSON.stringify({ scaleSlice: slice }) },
-    ])
+    rememberNodeShapeAttrs([{ id: 's1', attrs: JSON.stringify({ scaleSlice: slice }) }])
     const ds: DiagramStyle = { customShapeId: 's1' }
     expect(withResolvedScaleSlice(ds)?.customScaleSlice).toEqual(slice)
   })

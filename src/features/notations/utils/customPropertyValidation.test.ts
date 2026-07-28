@@ -43,8 +43,8 @@ describe('customPropertyValidationErrors', () => {
   })
 
   it('reports required properties without default values', () => {
-    expect(customPropertyValidationErrors(property({ required: true, defaultValue: '' }), t)).toContain(
-      'types.validationRequiredDefault'
-    )
+    expect(
+      customPropertyValidationErrors(property({ required: true, defaultValue: '' }), t)
+    ).toContain('types.validationRequiredDefault')
   })
 })

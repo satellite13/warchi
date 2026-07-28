@@ -13,7 +13,9 @@ const modalStub = {
   template: '<section class="base-modal"><slot /></section>',
 }
 
-function mountModal(overrides: Partial<InstanceType<typeof BatchSaveConflictModal>['$props']> = {}) {
+function mountModal(
+  overrides: Partial<InstanceType<typeof BatchSaveConflictModal>['$props']> = {}
+) {
   return mount(BatchSaveConflictModal, {
     props: {
       conflictCount: 1,

@@ -24,10 +24,10 @@ describe('validationIssues composite diagram style validation', () => {
           },
         ],
       },
-      ((key: string) => key) as ComposerTranslation,
+      ((key: string) => key) as ComposerTranslation
     )
 
-    expect(issues.some((i) => i.code === 'COMPOSITE_NAME_ROLE_MISSING')).toBe(true)
-    expect(issues.some((i) => i.code === 'A5_TARGET_NOT_FOUND')).toBe(true)
+    expect(issues.some(i => i.code === 'COMPOSITE_NAME_ROLE_MISSING')).toBe(true)
+    expect(issues.some(i => i.code === 'A5_TARGET_NOT_FOUND')).toBe(true)
   })
 })

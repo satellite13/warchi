@@ -18,7 +18,7 @@ export function resolveLabelTemplate(
   name: string,
   componentProperties: CustomProperty[],
   typeProperties: CustomProperty[] = [],
-  values?: LabelTemplateValues,
+  values?: LabelTemplateValues
 ): string {
   let out = template
   out = out.replace(/#\{(\w+)\}/g, (_m, key: string) => {

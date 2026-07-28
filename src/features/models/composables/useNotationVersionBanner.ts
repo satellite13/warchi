@@ -117,22 +117,19 @@ export function useNotationVersionBanner(options: {
     { immediate: true }
   )
 
-  watch(
-    options.selectedDiagramId,
-    async () => {
-      const notationId = options.activeNotationId.value
-      if (!notationId) return
-      try {
-        await options.ensureNotationRelationsAndRules(notationId, { force: true })
-      } catch (error) {
-        options.setUiError(
-          error instanceof Error
-            ? error.message
-            : options.t('models.notationRelationRulesRefreshFailed')
-        )
-      }
+  watch(options.selectedDiagramId, async () => {
+    const notationId = options.activeNotationId.value
+    if (!notationId) return
+    try {
+      await options.ensureNotationRelationsAndRules(notationId, { force: true })
+    } catch (error) {
+      options.setUiError(
+        error instanceof Error
+          ? error.message
+          : options.t('models.notationRelationRulesRefreshFailed')
+      )
     }
-  )
+  })
 
   watch(
     () => options.activeDiagram.value?.notationId ?? null,

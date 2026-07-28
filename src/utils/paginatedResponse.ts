@@ -3,15 +3,15 @@ import type { PaginatedResponse } from '@/types/entities'
 /** Элементы списка: массив как есть, Spring `content` или arepos `items`. */
 export function paginatedContent<T>(data: PaginatedResponse<T> | T[]): T[] {
   if (Array.isArray(data)) {
-    return data;
+    return data
   }
   if (Array.isArray(data.content)) {
-    return data.content;
+    return data.content
   }
   if (Array.isArray(data.items)) {
-    return data.items;
+    return data.items
   }
-  return [];
+  return []
 }
 
 type PageMetaSource = Pick<

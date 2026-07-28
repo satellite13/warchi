@@ -16,18 +16,14 @@ export interface CustomPropertiesReturn {
 
 export function useCustomProperties(
   selectedItem: ComputedRef<EditorComponent | EditorRelation | null>,
-  onMutateItem?: (
-    id: string,
-    apply: (item: EditorComponent | EditorRelation) => void,
-  ) => void,
+  onMutateItem?: (id: string, apply: (item: EditorComponent | EditorRelation) => void) => void
 ): CustomPropertiesReturn {
   const { t } = useI18n()
 
   const editor = useCustomPropertyEditor({
     selectedItem,
     onMutateItem,
-    validateProperty: property =>
-      customPropertyValidationErrors(property, key => String(t(key))),
+    validateProperty: property => customPropertyValidationErrors(property, key => String(t(key))),
   })
 
   return {

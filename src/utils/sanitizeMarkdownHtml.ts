@@ -54,16 +54,15 @@ export function sanitizeMarkdownHtml(unsafeHtml: string): string {
   const purifier = createDOMPurify(window)
   const supportsBasicHtml =
     purifier.isSupported !== false &&
-    purifier.sanitize('<a href="https://example.com" target="_blank">x</a>', DOMPURIFY_OPTIONS).includes('<a')
-  const clean =
-    !supportsBasicHtml
-      ? unsafeHtml
-      : purifier.sanitize(unsafeHtml, DOMPURIFY_OPTIONS)
+    purifier
+      .sanitize('<a href="https://example.com" target="_blank">x</a>', DOMPURIFY_OPTIONS)
+      .includes('<a')
+  const clean = !supportsBasicHtml ? unsafeHtml : purifier.sanitize(unsafeHtml, DOMPURIFY_OPTIONS)
 
   const template = document.createElement('template')
   template.innerHTML = clean
 
-  template.content.querySelectorAll('*').forEach((el) => {
+  template.content.querySelectorAll('*').forEach(el => {
     if (BLOCKED_TAGS.has(el.tagName.toLowerCase())) {
       el.remove()
       return
@@ -77,7 +76,7 @@ export function sanitizeMarkdownHtml(unsafeHtml: string): string {
     }
   })
 
-  template.content.querySelectorAll<HTMLElement>('[href], [src], [action]').forEach((el) => {
+  template.content.querySelectorAll<HTMLElement>('[href], [src], [action]').forEach(el => {
     for (const attrName of ['href', 'src', 'action']) {
       const value = el.getAttribute(attrName)
       if (value !== null && !isAllowedUrl(value)) {
@@ -86,7 +85,7 @@ export function sanitizeMarkdownHtml(unsafeHtml: string): string {
     }
   })
 
-  template.content.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]').forEach((link) => {
+  template.content.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]').forEach(link => {
     link.setAttribute('rel', 'noopener noreferrer')
   })
 

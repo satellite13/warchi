@@ -252,7 +252,7 @@ export type ResolveInstanceComponentIdInput = {
 
 /** Prefer per-instance visual binding, then node-level default for the notation. */
 export const resolveInstanceComponentId = (
-  input: ResolveInstanceComponentIdInput,
+  input: ResolveInstanceComponentIdInput
 ): string | null => {
   const fromInstance = input.instance?.attrs?.notationComponentId
   if (typeof fromInstance === 'string' && fromInstance.trim().length > 0) {

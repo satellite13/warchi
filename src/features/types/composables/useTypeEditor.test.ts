@@ -11,7 +11,7 @@ vi.mock('vue-i18n', async importOriginal => {
         if (!params) return key
         return Object.entries(params).reduce(
           (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-          key,
+          key
         )
       },
     }),
@@ -165,9 +165,23 @@ describe('useTypeEditor', () => {
     const editor = useTypeEditor()
     const item = existingType()
     vi.mocked(apiGet)
-      .mockResolvedValueOnce(ok(page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }])))
       .mockResolvedValueOnce(
-        ok(page([{ id: 'component-1', name: 'Component', version: '1.0.0', notationId: 'notation-1', ownerId: 'owner-1', nodeTypeId: 'type-1', attrs: '{"paletteMaterialIcon":"hub"}' }]))
+        ok(page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }]))
+      )
+      .mockResolvedValueOnce(
+        ok(
+          page([
+            {
+              id: 'component-1',
+              name: 'Component',
+              version: '1.0.0',
+              notationId: 'notation-1',
+              ownerId: 'owner-1',
+              nodeTypeId: 'type-1',
+              attrs: '{"paletteMaterialIcon":"hub"}',
+            },
+          ])
+        )
       )
 
     await editor.loadUsages(item)

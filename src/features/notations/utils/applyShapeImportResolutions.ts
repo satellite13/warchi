@@ -45,5 +45,5 @@ export function applyShapeImportResolutions(params: {
     }
   }
 
-  return params.pendingShapes.filter((shape) => !reusedImportedIds.has(shape.id))
+  return params.pendingShapes.filter(shape => !reusedImportedIds.has(shape.id))
 }

@@ -102,18 +102,11 @@ function nodeRows(
       field: 'parentNodeId',
       local: n.parentNodeId ?? 'null',
       server: sParent,
-      differs:
-        serverPending ||
-        (n.parentNodeId ?? null) !== (server?.parentNodeId ?? null),
+      differs: serverPending || (n.parentNodeId ?? null) !== (server?.parentNodeId ?? null),
     }
   )
   rows.push(
-    ...attrsFieldRows(
-      serializeNodeAttrs(n.parsedAttrs),
-      server?.attrs,
-      'attrs',
-      serverPending
-    )
+    ...attrsFieldRows(serializeNodeAttrs(n.parsedAttrs), server?.attrs, 'attrs', serverPending)
   )
   return rows
 }
@@ -217,9 +210,7 @@ function summarizeComponentPropsReadable(
       const label = comp?.name?.trim() || `${entityId.slice(0, 8)}…`
       const keys = Object.keys(props ?? {})
       const kPreview =
-        keys.length === 0
-          ? ''
-          : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
+        keys.length === 0 ? '' : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
       parts.push(`${label}${kPreview}`)
     }
   }
@@ -238,9 +229,7 @@ function summarizeRelationPropsReadable(
       const label = rel?.name?.trim() || `${entityId.slice(0, 8)}…`
       const keys = Object.keys(props ?? {})
       const kPreview =
-        keys.length === 0
-          ? ''
-          : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
+        keys.length === 0 ? '' : ` (${keys.slice(0, 6).join(', ')}${keys.length > 6 ? '…' : ''})`
       parts.push(`${label}${kPreview}`)
     }
   }
@@ -368,7 +357,9 @@ function diagramAttrsSemanticDiffRows(
     if (loc && !srv) {
       rows.push({
         field: `diagram.canvas.edge.${lid}.onlyLocal`,
-        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyLocal', { link: lineFor(loc, localA) }),
+        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyLocal', {
+          link: lineFor(loc, localA),
+        }),
         local: t('models.batchSaveConflictDiagramOnCanvas'),
         server: '—',
         differs: true,
@@ -378,7 +369,9 @@ function diagramAttrsSemanticDiffRows(
     if (!loc && srv) {
       rows.push({
         field: `diagram.canvas.edge.${lid}.onlyServer`,
-        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyServer', { link: lineFor(srv, serverA) }),
+        fieldLabel: t('models.batchSaveConflictDiagramEdgeOnlyServer', {
+          link: lineFor(srv, serverA),
+        }),
         local: '—',
         server: t('models.batchSaveConflictDiagramOnCanvas'),
         differs: true,
@@ -508,7 +501,13 @@ function diagramRows(
     : canonicalDiagramAttrsForConflictCompare(parseDiagramAttrs(server?.attrs ?? null))
   const localAttrsCanonical = canonicalDiagramAttrsForConflictCompare(d.parsedAttrs)
   rows.push(
-    ...diagramAttrsSemanticDiffRows(st, localAttrsCanonical, serverAttrsParsed, serverPending, translate)
+    ...diagramAttrsSemanticDiffRows(
+      st,
+      localAttrsCanonical,
+      serverAttrsParsed,
+      serverPending,
+      translate
+    )
   )
   return rows
 }

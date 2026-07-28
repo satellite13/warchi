@@ -12,7 +12,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
   items: Ref<T[]>,
   groupedItems: ComputedRef<EntityGroup<T>[]>,
   ownerEmails: Ref<Map<string, string>>,
-  selectedVersionByName: Ref<Record<string, string>>,
+  selectedVersionByName: Ref<Record<string, string>>
 ) {
   const { t } = useI18n()
   const modal = useModalState<T>()
@@ -27,12 +27,12 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     if (!normalizedName) return null
 
     const sameNameGroup = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizedName,
+      g => normalizeEntityName(g.name) === normalizedName
     )
     if (!sameNameGroup) return null
 
     if (preferredSourceId) {
-      const source = sameNameGroup.versions.find((item) => item.id === preferredSourceId)
+      const source = sameNameGroup.versions.find(item => item.id === preferredSourceId)
       if (source?.version) {
         return bumpMinor(source.version)
       }
@@ -46,10 +46,10 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     const name = newItemName.value.trim()
     if (!name) return []
     const group = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizeEntityName(name),
+      g => normalizeEntityName(g.name) === normalizeEntityName(name)
     )
     if (!group) return []
-    return group.versions.map((item) => ({ id: item.id, version: item.version }))
+    return group.versions.map(item => ({ id: item.id, version: item.version }))
   })
 
   const validateCreate = (): string | null => {
@@ -66,10 +66,10 @@ export function useEntityCreateModal<T extends VersionedEntity>(
     const name = newItemName.value.trim()
     const version = newItemVersion.value.trim()
     const sameNameGroup = groupedItems.value.find(
-      (g) => normalizeEntityName(g.name) === normalizeEntityName(name),
+      g => normalizeEntityName(g.name) === normalizeEntityName(name)
     )
     const hasExactVersionConflict = sameNameGroup?.versions.some(
-      (item) => item.version.trim() === version,
+      item => item.version.trim() === version
     )
     if (hasExactVersionConflict) {
       return config.conflictMessage
@@ -114,7 +114,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
         if (result.error.status === 404) {
           throw new Error(
             config.createNotFoundMessage ??
-              t('common.endpointNotFound', { endpoint: config.endpoint }),
+              t('common.endpointNotFound', { endpoint: config.endpoint })
           )
         }
         throw new Error(result.error.message)
@@ -124,9 +124,9 @@ export function useEntityCreateModal<T extends VersionedEntity>(
       modal.show.value = false
 
       if (created?.id) {
-        const exists = items.value.some((item) => item.id === created.id)
+        const exists = items.value.some(item => item.id === created.id)
         items.value = exists
-          ? items.value.map((item) => (item.id === created.id ? created : item))
+          ? items.value.map(item => (item.id === created.id ? created : item))
           : [created, ...items.value]
       }
 
@@ -184,7 +184,7 @@ export function useEntityCreateModal<T extends VersionedEntity>(
       if (suggested) {
         newItemVersion.value = suggested
       }
-    },
+    }
   )
 
   const closeCreateModal = () => {

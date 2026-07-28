@@ -13,7 +13,10 @@ const inFlightById = new Map<string, Promise<EditorDiagram | null>>()
 let writeTail: Promise<unknown> = Promise.resolve()
 
 function enqueueWrite<T>(task: () => T): Promise<T> {
-  const run = writeTail.then(() => task(), () => task())
+  const run = writeTail.then(
+    () => task(),
+    () => task()
+  )
   writeTail = run.then(
     () => undefined,
     () => undefined

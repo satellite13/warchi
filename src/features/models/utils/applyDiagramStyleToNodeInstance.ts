@@ -38,8 +38,7 @@ export function applyDiagramStyleToNodeInstance(
   const next = JSON.parse(JSON.stringify(style)) as DiagramStyle
   const hasPrev = Boolean(prev)
   const widthChanged = hasPrev && typeof style.width === 'number' && style.width !== prev?.width
-  const heightChanged =
-    hasPrev && typeof style.height === 'number' && style.height !== prev?.height
+  const heightChanged = hasPrev && typeof style.height === 'number' && style.height !== prev?.height
 
   if (widthChanged && typeof style.width === 'number') {
     instance.width = style.width

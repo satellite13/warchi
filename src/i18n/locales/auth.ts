@@ -91,14 +91,16 @@ export const authMessages = {
       statusBlocked: 'Заблокирован',
       profileNotFilled: 'Профиль не заполнен',
       profileUpdated: 'Профиль пользователя {email} обновлен',
-      passwordMinLength: 'Новый пароль должен соответствовать политике безопасности (мин. 8 символов, буквы и цифра)',
+      passwordMinLength:
+        'Новый пароль должен соответствовать политике безопасности (мин. 8 символов, буквы и цифра)',
       passwordUpdated: 'Пароль пользователя {email} обновлен',
       changePassword: 'Сменить пароль',
       newPassword: 'Новый пароль',
     },
     adminDiagramLocks: {
       title: 'Блокировки редактирования диаграмм',
-      subtitle: 'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
+      subtitle:
+        'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
       diagram: 'Диаграмма',
       holder: 'Кто держит',
       expires: 'Истекает',
@@ -243,7 +245,8 @@ export const authMessages = {
       deletePermanently: 'Delete permanently',
       emptyModels: 'No deleted models',
       emptyNotations: 'No deleted notations',
-      confirmPermanently: 'Permanently delete this item from the database? This action cannot be undone.',
+      confirmPermanently:
+        'Permanently delete this item from the database? This action cannot be undone.',
       loading: 'Loading...',
       deletedSuccess: 'Item permanently deleted',
       deleteConflictActiveModels:

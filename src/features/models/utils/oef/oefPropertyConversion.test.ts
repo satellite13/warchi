@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CustomProperty } from '@/domain/attrs/notationAttrs'
-import {
-  convertOefPropertyValue,
-  mergeOefPropertiesIntoBuckets,
-} from './oefPropertyConversion'
+import { convertOefPropertyValue, mergeOefPropertiesIntoBuckets } from './oefPropertyConversion'
 
 function prop(
   overrides: Partial<CustomProperty> & { name: string; type: CustomProperty['type'] }

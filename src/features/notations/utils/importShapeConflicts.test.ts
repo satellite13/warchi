@@ -8,10 +8,28 @@ import {
   sortShapeCandidates,
 } from './importShapeConflicts'
 
-const outlineA = JSON.stringify([{ type: 'line', points: [[0, 0], [1, 0]] }])
-const outlineB = JSON.stringify([{ type: 'line', points: [[0, 0], [2, 0]] }])
+const outlineA = JSON.stringify([
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [1, 0],
+    ],
+  },
+])
+const outlineB = JSON.stringify([
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [2, 0],
+    ],
+  },
+])
 
-function catalog(partial: Partial<NodeShapeResponse> & Pick<NodeShapeResponse, 'id' | 'name'>): NodeShapeResponse {
+function catalog(
+  partial: Partial<NodeShapeResponse> & Pick<NodeShapeResponse, 'id' | 'name'>
+): NodeShapeResponse {
   return {
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -22,19 +40,41 @@ function catalog(partial: Partial<NodeShapeResponse> & Pick<NodeShapeResponse, '
   }
 }
 
-function imported(partial: Partial<ExportedNodeShape> & Pick<ExportedNodeShape, 'id' | 'name'>): ExportedNodeShape {
+function imported(
+  partial: Partial<ExportedNodeShape> & Pick<ExportedNodeShape, 'id' | 'name'>
+): ExportedNodeShape {
   return { outline: outlineA, ...partial }
 }
 
 describe('sortShapeCandidates', () => {
   it('orders OWNER before EDIT before VIEW, then updatedAt desc', () => {
     const list = [
-      catalog({ id: 'v', name: 'Hex', accessPermission: 'VIEW', updatedAt: '2026-03-01T00:00:00Z' }),
-      catalog({ id: 'e-old', name: 'Hex', accessPermission: 'EDIT', updatedAt: '2026-01-01T00:00:00Z' }),
-      catalog({ id: 'e-new', name: 'Hex', accessPermission: 'EDIT', updatedAt: '2026-02-01T00:00:00Z' }),
-      catalog({ id: 'o', name: 'Hex', accessPermission: 'OWNER', updatedAt: '2026-01-01T00:00:00Z' }),
+      catalog({
+        id: 'v',
+        name: 'Hex',
+        accessPermission: 'VIEW',
+        updatedAt: '2026-03-01T00:00:00Z',
+      }),
+      catalog({
+        id: 'e-old',
+        name: 'Hex',
+        accessPermission: 'EDIT',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }),
+      catalog({
+        id: 'e-new',
+        name: 'Hex',
+        accessPermission: 'EDIT',
+        updatedAt: '2026-02-01T00:00:00Z',
+      }),
+      catalog({
+        id: 'o',
+        name: 'Hex',
+        accessPermission: 'OWNER',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }),
     ]
-    expect(sortShapeCandidates(list).map((s) => s.id)).toEqual(['o', 'e-new', 'e-old', 'v'])
+    expect(sortShapeCandidates(list).map(s => s.id)).toEqual(['o', 'e-new', 'e-old', 'v'])
   })
 })
 
@@ -46,7 +86,7 @@ describe('analyzeImportShapeConflicts', () => {
     )
     expect(conflicts).toHaveLength(1)
     expect(conflicts[0]!.imported.id).toBe('i1')
-    expect(conflicts[0]!.candidates.map((c) => c.id)).toEqual(['c1'])
+    expect(conflicts[0]!.candidates.map(c => c.id)).toEqual(['c1'])
     expect(conflicts[0]!.geometryMatches).toEqual([true])
   })
 

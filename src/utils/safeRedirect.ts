@@ -21,7 +21,7 @@ export function allowedSiteReturnOrigins(
 ): string[] {
   const fromList = (env.VITE_SITE_RETURN_ORIGINS || '')
     .split(',')
-    .map((s) => s.trim())
+    .map(s => s.trim())
     .filter(Boolean)
   if (fromList.length > 0) return fromList
   const siteUrl = (env.VITE_SITE_URL || '').trim()
@@ -36,7 +36,7 @@ export function isSafeSiteReturnUrl(
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
-    return allowedOrigins.some((origin) => {
+    return allowedOrigins.some(origin => {
       try {
         const allowed = new URL(origin)
         if (allowed.origin === url.origin) return true

@@ -2,10 +2,7 @@ import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
 import type { DiagramAttrs } from '../modelAttrs'
 import type { ModelEditorState } from '../types'
-import {
-  getDiagramScopedLinkValues,
-  getDiagramScopedNodeValues,
-} from './diagramScopedProperties'
+import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from './diagramScopedProperties'
 
 export type RequiredCustomPropertyValidationIssue = {
   key:

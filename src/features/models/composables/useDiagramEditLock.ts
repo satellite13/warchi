@@ -1,16 +1,16 @@
-import { computed, onBeforeUnmount, ref, watch, type Ref } from "vue"
-import { buildApiUrl } from "@/api/config"
-import { getCsrfTokenFromCookie, CSRF_HEADER_NAME } from "@/utils/csrfCookie"
-import { apiGet, apiPost } from "@/composables/useApi"
-import type { DiagramLockStatusResponse } from "@/types/api"
-import type { PaginatedResponse } from "@/types/entities"
-import { paginatedContent } from "@/utils/paginatedResponse"
+import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { buildApiUrl } from '@/api/config'
+import { getCsrfTokenFromCookie, CSRF_HEADER_NAME } from '@/utils/csrfCookie'
+import { apiGet, apiPost } from '@/composables/useApi'
+import type { DiagramLockStatusResponse } from '@/types/api'
+import type { PaginatedResponse } from '@/types/entities'
+import { paginatedContent } from '@/utils/paginatedResponse'
 
 const HEARTBEAT_MS = 60_000
 const POLL_MS = 12_000
 const LOCKS_LIST_MS = 15_000
 
-const LOCKED_BY_OTHER = "LOCKED_BY_OTHER"
+const LOCKED_BY_OTHER = 'LOCKED_BY_OTHER'
 
 /** Сравнение ISO-времён диаграммы: сервер новее локального снимка (для кнопки «Загрузить с сервера»). */
 export function isDiagramServerNewerThanLocal(
@@ -25,9 +25,9 @@ export function isDiagramServerNewerThanLocal(
 }
 
 function isLockStatusPayload(value: unknown): value is DiagramLockStatusResponse {
-  if (value === null || typeof value !== "object") return false
+  if (value === null || typeof value !== 'object') return false
   const o = value as Record<string, unknown>
-  return typeof o.diagramId === "string" && typeof o.isLocked === "boolean"
+  return typeof o.diagramId === 'string' && typeof o.isLocked === 'boolean'
 }
 
 /**
@@ -137,7 +137,7 @@ export function useDiagramEditLock(options: {
    */
   function checkHeldLockRevoked(serverLocks: DiagramLockStatusResponse[]): void {
     if (!heldDiagramId.value) return
-    const entry = serverLocks.find((l) => l.diagramId === heldDiagramId.value)
+    const entry = serverLocks.find(l => l.diagramId === heldDiagramId.value)
     const stillOurs =
       entry != null &&
       entry.isLocked &&
@@ -157,7 +157,7 @@ export function useDiagramEditLock(options: {
     if (!isBlockedByOther.value) return
     const diagramId = options.selectedDiagramId.value
     if (!diagramId) return
-    const entry = locksList.value.find((l) => l.diagramId === diagramId)
+    const entry = locksList.value.find(l => l.diagramId === diagramId)
     const at = entry?.diagramUpdatedAt
     if (at) {
       remoteDiagramUpdatedAt.value = at
@@ -230,7 +230,7 @@ export function useDiagramEditLock(options: {
     if (!res.success && res.error.status === 409) {
       await fetchLocksList()
       if (seq !== lockOpSeq) return
-      const entry = locksList.value.find((l) => l.diagramId === diagramId && l.isLocked)
+      const entry = locksList.value.find(l => l.diagramId === diagramId && l.isLocked)
       if (entry) {
         isBlockedByOther.value = true
         lockHolderDisplay.value = entry.lockedByDisplay ?? null
@@ -258,7 +258,7 @@ export function useDiagramEditLock(options: {
 
   async function pollWhileBlocked(diagramId: string): Promise<void> {
     await fetchLocksList()
-    const entry = locksList.value.find((l) => l.diagramId === diagramId)
+    const entry = locksList.value.find(l => l.diagramId === diagramId)
     if (!entry || !entry.isLocked) {
       clearPoll()
       await applyLockForSelection()
@@ -286,7 +286,7 @@ export function useDiagramEditLock(options: {
 
   watch(
     () => options.modelId.value,
-    (mid) => {
+    mid => {
       void fetchLocksList()
       clearLocksListTimer()
       if (!mid) {
@@ -302,42 +302,42 @@ export function useDiagramEditLock(options: {
   const onBeforeWindowUnload = (): void => {
     const id = heldDiagramId.value
     if (!id) return
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     const csrfToken = getCsrfTokenFromCookie()
     if (csrfToken) {
       headers[CSRF_HEADER_NAME] = csrfToken
     }
     void fetch(buildApiUrl(`/diagram-locks/${id}/release`), {
-      method: "POST",
+      method: 'POST',
       headers,
-      body: "{}",
-      credentials: "include",
+      body: '{}',
+      credentials: 'include',
       keepalive: true,
     })
   }
 
   /** Пока вкладка в фоне — отпускаем lock, чтобы другой редактор мог работать; при возврате снова пытаемся взять. */
   const onDocumentVisibilityChange = (): void => {
-    if (typeof document === "undefined") return
-    if (document.visibilityState === "hidden") {
+    if (typeof document === 'undefined') return
+    if (document.visibilityState === 'hidden') {
       void releaseHeld().then(() => fetchLocksList())
       return
     }
     void applyLockForSelection()
   }
 
-  if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", onBeforeWindowUnload)
-    document.addEventListener("visibilitychange", onDocumentVisibilityChange)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', onBeforeWindowUnload)
+    document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   }
 
   onBeforeUnmount(() => {
     clearHeartbeat()
     clearPoll()
     clearLocksListTimer()
-    if (typeof window !== "undefined") {
-      window.removeEventListener("beforeunload", onBeforeWindowUnload)
-      document.removeEventListener("visibilitychange", onDocumentVisibilityChange)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', onBeforeWindowUnload)
+      document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
     }
     void releaseHeld()
   })
@@ -359,7 +359,7 @@ export function useDiagramEditLock(options: {
       `/diagram-locks?modelId=${encodeURIComponent(mid)}`
     )
     if (!res.success) return false
-    const entry = paginatedContent(res.data).find((l) => l.diagramId === heldDiagramId.value)
+    const entry = paginatedContent(res.data).find(l => l.diagramId === heldDiagramId.value)
     const stillOurs =
       entry != null &&
       entry.isLocked &&

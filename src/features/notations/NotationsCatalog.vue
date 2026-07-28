@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { NotationData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
@@ -7,6 +8,7 @@ import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { downloadNotationExport } from "@/features/models/composables/useModelPackage";
 
 const { t } = useI18n();
+const exportError = ref<string | null>(null);
 
 const config: EntityListConfig<NotationData> = {
   endpoint: "notations",
@@ -32,10 +34,12 @@ const config: EntityListConfig<NotationData> = {
 };
 
 async function handleExport(item: NotationData) {
+  exportError.value = null;
   try {
     await downloadNotationExport(item.id);
   } catch (err) {
-    console.error("Notation export failed:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    exportError.value = t("notations.notationExportFailed", { message });
   }
 }
 </script>
@@ -50,6 +54,7 @@ async function handleExport(item: NotationData) {
     :show-version-tree="true"
     :show-create-from-version-button="true"
     can-export
+    :action-error-message="exportError"
     @export="handleExport"
   />
 </template>

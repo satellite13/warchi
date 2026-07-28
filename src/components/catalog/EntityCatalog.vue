@@ -34,6 +34,8 @@ const props = defineProps<{
   showCreateFromVersionButton?: boolean
   /** Показывать кнопку экспорта на карточках. */
   canExport?: boolean
+  /** Ошибка последнего действия (например, экспорт). */
+  actionErrorMessage?: string | null
 }>();
 
 const emit = defineEmits<{
@@ -235,6 +237,8 @@ function handleExport(group: {
       />
     </header>
 
+    <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
+
     <section class="model-grid">
       <CreateCard
         :title="t(`${i18nPrefix}.createTitle`)"
@@ -402,6 +406,7 @@ function handleExport(group: {
   margin: -8px;
 }
 
+.catalog-action-error,
 .error-state {
   width: 100%;
   padding: 16px;
@@ -410,6 +415,10 @@ function handleExport(group: {
   color: var(--danger);
   font-size: 14px;
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.catalog-action-error {
+  margin-bottom: 12px;
 }
 
 .icon-modal__body {

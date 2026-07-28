@@ -7,12 +7,14 @@ const props = withDefaults(
   defineProps<{
     saving?: boolean
     success?: boolean
+    successMessage?: string | null
     error?: string | null
     progress?: string | null
   }>(),
   {
     saving: false,
     success: false,
+    successMessage: null,
     error: null,
     progress: null,
   },
@@ -29,7 +31,7 @@ const mode = computed<'progress' | 'success' | 'error' | null>(() => {
 
 const message = computed(() => {
   if (mode.value === 'progress') return props.progress || t('common.saving')
-  if (mode.value === 'success') return t('common.saved')
+  if (mode.value === 'success') return props.successMessage || t('common.saved')
   if (mode.value === 'error') return props.error ?? ''
   return ''
 })

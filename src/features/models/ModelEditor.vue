@@ -634,6 +634,7 @@ const modelPackageInputRef = ref<HTMLInputElement | null>(null)
 const isImportingModelPackage = ref(false)
 const modelPackageImportProgress = ref<string | null>(null)
 const modelPackageImportSuccess = ref(false)
+const modelPackageImportSuccessMessage = ref<string | null>(null)
 const uiError = ref<string | null>(null)
 let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
 const setUiError = (msg: string) => {
@@ -2464,11 +2465,20 @@ async function onModelPackageSelected(event: Event) {
       return
     }
 
-    modelPackageImportSuccess.value = true
-    await router.push({ name: 'model-editor', params: { id: result.modelId } })
-    window.setTimeout(() => {
-      modelPackageImportSuccess.value = false
-    }, 2000)
+    const importTarget = router.resolve({
+      name: 'model-editor',
+      params: { id: result.modelId },
+    })
+
+    if (hasUnsavedChanges.value) {
+      pendingImportSuccessWarnings.value = result.warnings
+      pendingRoute = importTarget
+      showLeaveDialog.value = true
+      return
+    }
+
+    await router.push(importTarget)
+    showPackageImportSuccess(result.warnings)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     setUiError(t('models.packageImportError', { message }))
@@ -2476,6 +2486,16 @@ async function onModelPackageSelected(event: Event) {
     isImportingModelPackage.value = false
     modelPackageImportProgress.value = null
   }
+}
+
+function formatPackageImportSuccessMessage(warnings: string[]): string | null {
+  if (warnings.length === 0) return null
+  if (warnings.length <= 2) {
+    return t('models.packageImportCompletedWithWarningsDetail', {
+      messages: warnings.join('; '),
+    })
+  }
+  return t('models.packageImportCompletedWithWarnings', { count: warnings.length })
 }
 
 const router = useRouter()
@@ -2490,18 +2510,36 @@ const applyRouteDiagramSelection = () => {
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationNormalized | null = null
+const pendingImportSuccessWarnings = ref<string[] | null>(null)
+
+function showPackageImportSuccess(warnings: string[]) {
+  modelPackageImportSuccessMessage.value = formatPackageImportSuccessMessage(warnings)
+  modelPackageImportSuccess.value = true
+  window.setTimeout(() => {
+    modelPackageImportSuccess.value = false
+    modelPackageImportSuccessMessage.value = null
+  }, warnings.length > 0 ? 5000 : 2000)
+}
+
 const confirmLeave = () => {
   showLeaveDialog.value = false
   allowLeave.value = true
+  const importWarnings = pendingImportSuccessWarnings.value
+  pendingImportSuccessWarnings.value = null
   if (pendingRoute) {
     const route = pendingRoute
     pendingRoute = null
-    router.push(route)
+    void router.push(route).then(() => {
+      if (importWarnings) {
+        showPackageImportSuccess(importWarnings)
+      }
+    })
   }
 }
 const cancelLeave = () => {
   showLeaveDialog.value = false
   pendingRoute = null
+  pendingImportSuccessWarnings.value = null
 }
 
 /** Админ снял блокировку — выкинуть из диаграммы без сохранения */
@@ -2908,6 +2946,7 @@ onBeforeUnmount(() => {
   <SaveToast
     :saving="isSaving || isImportingModelPackage"
     :success="saveSuccess || modelPackageImportSuccess"
+    :success-message="modelPackageImportSuccessMessage"
     :error="saveError || uiError"
     :progress="isImportingModelPackage ? modelPackageImportProgress : saveProgress"
   />

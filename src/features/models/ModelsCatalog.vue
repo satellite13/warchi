@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ModelData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
@@ -8,6 +9,7 @@ import { downloadModelPackage } from "./composables/useModelPackage";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 
 const { t } = useI18n();
+const exportError = ref<string | null>(null);
 
 const config: EntityListConfig<ModelData> = {
   endpoint: "models",
@@ -33,11 +35,13 @@ const config: EntityListConfig<ModelData> = {
 };
 
 async function handleExport(item: ModelData) {
+  exportError.value = null;
   try {
     const fileName = `${sanitizeFileName(item.name) || "model"}.zip`;
     await downloadModelPackage(item.id, fileName);
   } catch (err) {
-    console.error("Model package export failed:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    exportError.value = t("models.packageExportFailed", { message });
   }
 }
 </script>
@@ -52,6 +56,7 @@ async function handleExport(item: ModelData) {
     :show-version-tree="true"
     :show-create-from-version-button="true"
     can-export
+    :action-error-message="exportError"
     @export="handleExport"
   />
 </template>

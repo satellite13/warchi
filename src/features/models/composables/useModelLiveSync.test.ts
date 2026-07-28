@@ -16,6 +16,10 @@ vi.mock('@/composables/authStorage', () => ({
   loadStoredUser: vi.fn(() => null),
 }))
 
+vi.mock('../utils/modelEditorSnapshotFreshness', () => ({
+  isModelEditorSnapshotFresh: vi.fn(() => false),
+}))
+
 function page<T>(content: T[]) {
   return { content, totalElements: content.length, totalPages: 1, size: content.length, number: 0 }
 }
@@ -178,5 +182,56 @@ describe('useModelLiveSync snapshot pull', () => {
     expect(currentModel.value?.name).toBe('Remote Model')
     expect(currentModel.value?.version).toBe('1.1.0')
     expect(ensureNotationRelationsAndRules).toHaveBeenCalledWith('notation-1')
+  })
+
+  it('halts sync and notifies when model GET returns 404', async () => {
+    const state = ref(createEmptyModelEditorState())
+    state.value.modelId = 'model-gone'
+    const currentModel = ref<ModelData | null>(model({ id: 'model-gone' }))
+    const onModelUnavailable = vi.fn()
+    let modelGets = 0
+
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path.startsWith('/nodes?') || path.startsWith('/links?') || path.startsWith('/diagrams?')) {
+        return { success: true, data: page([]) }
+      }
+      if (path === '/models/model-gone') {
+        modelGets += 1
+        return { success: false, error: { status: 404, message: 'Not found' } }
+      }
+      throw new Error(`Unexpected apiGet path: ${path}`)
+    })
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-gone'),
+            state,
+            model: currentModel,
+            enabled: ref(true),
+            isLoading: ref(false),
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            onModelUnavailable,
+          })
+          return () => null
+        },
+      })
+    )
+
+    await flushPromises()
+    await flushPromises()
+    const getsAfterHalt = modelGets
+    await flushPromises()
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+
+    expect(onModelUnavailable).toHaveBeenCalledWith(404)
+    expect(modelGets).toBe(getsAfterHalt)
+    expect(modelGets).toBeGreaterThanOrEqual(1)
+
+    wrapper.unmount()
   })
 })

@@ -1,8 +1,12 @@
 <script setup lang="ts">
-defineProps<{
-  title: string;
-  description?: string;
-}>();
+withDefaults(
+  defineProps<{
+    title: string
+    description?: string
+    icon?: string
+  }>(),
+  { icon: 'add' }
+)
 
 const emit = defineEmits<{
   click: [];
@@ -12,7 +16,7 @@ const emit = defineEmits<{
 <template>
   <button class="create-card" type="button" @click="emit('click')">
     <div class="create-card__icon">
-      <UiIcon name="add" />
+      <UiIcon :name="icon" />
     </div>
     <span class="create-card__title">{{ title }}</span>
     <span v-if="description" class="create-card__description">{{ description }}</span>

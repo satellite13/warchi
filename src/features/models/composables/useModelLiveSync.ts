@@ -97,14 +97,31 @@ export function useModelLiveSync(options: {
   preserveOpenDiagramCanvasInstances?: Ref<boolean>
   /** Все сообщения по topic модели с совпадающим modelId (включая diagram_live и т.д.) */
   onModelTopicBroadcast?: (msg: Record<string, unknown>) => void
+  /** Модель удалена / недоступна (404/403) — остановить sync и показать ошибку в редакторе */
+  onModelUnavailable?: (status: number) => void
 }): void {
   let inFlight = false
   let stompClient: Client | null = null
   let fallbackPollTimer: ReturnType<typeof setInterval> | null = null
   let wsConnected = false
+  /** После soft/permanent delete не долбить /models/{id} 404’ами. */
+  let unavailableModelId: string | null = null
   const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
   let stompPullCoalesceScheduled = false
   let wsAuthRefreshInFlight: Promise<boolean> | null = null
+
+  const isHaltedForCurrentModel = (): boolean => {
+    const mid = options.modelId.value
+    return typeof mid === 'string' && unavailableModelId === mid
+  }
+
+  const haltForUnavailable = (mid: string, status: number): void => {
+    if (unavailableModelId === mid) return
+    unavailableModelId = mid
+    disconnectPush()
+    stopFallbackPoll()
+    options.onModelUnavailable?.(status)
+  }
 
   const ensureWsAuthCookieFresh = async (): Promise<boolean> => {
     if (!wsAuthRefreshInFlight) {
@@ -137,6 +154,7 @@ export function useModelLiveSync(options: {
   const startFallbackPoll = (): void => {
     if (!isPollEnabled) return
     if (!options.enabled.value || options.isLoading.value) return
+    if (isHaltedForCurrentModel()) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
     if (fallbackPollTimer !== null) return
@@ -158,6 +176,7 @@ export function useModelLiveSync(options: {
   const pullRemoteSnapshot = async (pullOpts?: PullSnapshotOptions): Promise<void> => {
     if (inFlight) return
     if (!options.enabled.value || options.isLoading.value) return
+    if (isHaltedForCurrentModel()) return
     if (!pullOpts?.ignoreSavingGuard && options.isSaving.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
@@ -194,6 +213,11 @@ export function useModelLiveSync(options: {
       ])
 
       if (!modelRes.success) {
+        // Soft/permanent delete → findById returns 404; keep polling would spam console on any page
+        // until the editor unmounts (and Safari keeps those errors in the console).
+        if (modelRes.error.status === 404 || modelRes.error.status === 403) {
+          haltForUnavailable(mid, modelRes.error.status)
+        }
         return
       }
 
@@ -297,6 +321,7 @@ export function useModelLiveSync(options: {
     disconnectPush()
     if (!isWsEnabled) return
     if (!options.enabled.value) return
+    if (isHaltedForCurrentModel()) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
     if (!loadStoredUser()) return
@@ -355,20 +380,20 @@ export function useModelLiveSync(options: {
       },
       onDisconnect: () => {
         wsConnected = false
-        if (options.enabled.value) {
+        if (options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
       onStompError: () => {
         wsConnected = false
-        if (options.enabled.value) {
+        if (options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
       onWebSocketClose: () => {
         wsConnected = false
         void ensureWsAuthCookieFresh()
-        if (options.enabled.value) {
+        if (options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
@@ -388,6 +413,15 @@ export function useModelLiveSync(options: {
     }
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") {
+      disconnectPush()
+      stopFallbackPoll()
+      return
+    }
+    // New model id → allow sync again after a previous unavailable halt.
+    if (unavailableModelId != null && unavailableModelId !== mid) {
+      unavailableModelId = null
+    }
+    if (isHaltedForCurrentModel()) {
       disconnectPush()
       stopFallbackPoll()
       return
@@ -432,7 +466,7 @@ export function useModelLiveSync(options: {
       }
       return
     }
-    if (!options.enabled.value) return
+    if (!options.enabled.value || isHaltedForCurrentModel()) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
     if (isPollEnabled) {
@@ -445,6 +479,7 @@ export function useModelLiveSync(options: {
   }
 
   const onAuthUpdated = (): void => {
+    if (isHaltedForCurrentModel()) return
     if (isWsEnabled) {
       connectPush()
     }

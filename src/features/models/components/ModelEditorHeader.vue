@@ -239,11 +239,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     event: 'export-model-package',
     title: t('toolbar.exportModelPackage'),
   },
-  {
-    icon: 'upload',
-    event: 'import-model-package',
-    title: t('toolbar.importModelPackage'),
-  },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin
     ? [

@@ -34,12 +34,17 @@ const props = defineProps<{
   showCreateFromVersionButton?: boolean
   /** Показывать кнопку экспорта на карточках. */
   canExport?: boolean
+  /** Карточка импорта ZIP-пакета (создаёт новую модель). */
+  canImportPackage?: boolean
   /** Ошибка последнего действия (например, экспорт). */
   actionErrorMessage?: string | null
+  /** Статус импорта пакета (прогресс / успех). */
+  actionStatusMessage?: string | null
 }>();
 
 const emit = defineEmits<{
   export: [item: VersionedEntity]
+  importPackage: []
 }>();
 
 const router = useRouter();
@@ -238,12 +243,20 @@ function handleExport(group: {
     </header>
 
     <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
+    <div v-if="actionStatusMessage" class="catalog-action-status">{{ actionStatusMessage }}</div>
 
     <section class="model-grid">
       <CreateCard
         :title="t(`${i18nPrefix}.createTitle`)"
         :description="t(`${i18nPrefix}.createDescription`)"
         @click="openCreateModal"
+      />
+      <CreateCard
+        v-if="canImportPackage"
+        icon="upload"
+        :title="t('toolbar.importModelPackage')"
+        :description="t(`${i18nPrefix}.packageImportDescription`)"
+        @click="emit('importPackage')"
       />
       <CardSkeleton v-if="isLoading" :count="4" />
       <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
@@ -417,8 +430,19 @@ function handleExport(group: {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-.catalog-action-error {
+.catalog-action-error,
+.catalog-action-status {
   margin-bottom: 12px;
+}
+
+.catalog-action-status {
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 14px;
+  border: 1px solid var(--border-strong);
 }
 
 .icon-modal__body {

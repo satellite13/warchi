@@ -16,7 +16,11 @@ import type {
   RelationResponse,
   RelationRuleResponse,
 } from "@/types/api"
-import { paginatedIsLastPage, paginatedTotalPages } from "@/utils/paginatedResponse"
+import {
+  paginatedContent,
+  paginatedIsLastPage,
+  paginatedTotalPages,
+} from "@/utils/paginatedResponse"
 import type { ModelEditorState } from "../types"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllComponentsByNotationIds } from "./modelNotationComponentsApi"
@@ -201,7 +205,8 @@ export async function loadModelEditorShell(
 
   return {
     model,
-    modelCatalog: modelsResult.success ? (modelsResult.data.content ?? []) : [],
+    // GET /models returns ListResponse { items }, not Spring Page { content }
+    modelCatalog: modelsResult.success ? paginatedContent(modelsResult.data) : [],
     state,
     loadedNotationIds: notationIds,
   }

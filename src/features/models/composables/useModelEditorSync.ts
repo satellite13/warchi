@@ -24,6 +24,7 @@ export function useModelEditorSync(options: {
   currentUserId: Ref<string | null | undefined>
   getDiagramRenderer: () => DiagramRenderer | null
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
+  onModelUnavailable?: (status: number) => void
 }) {
   const diagramEditLock = useDiagramEditLock({
     modelId: options.modelId,
@@ -100,6 +101,7 @@ export function useModelEditorSync(options: {
     currentUserId: options.currentUserId,
     preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),
     onModelTopicBroadcast: collab.handleModelTopicBroadcast,
+    onModelUnavailable: options.onModelUnavailable,
   })
 
   async function handleReloadModelForDiagramLock(loadModel: () => Promise<void>): Promise<void> {

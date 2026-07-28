@@ -30,7 +30,7 @@ Today:
 | Catalog conflicts | Delegate to `NotationImportService`: reuse node/link **types** by owner+name; always create new **shapes** (unique names); create notation; **409** if notation `name+version` exists |
 | Model conflicts | **409** if model `name+version` already exists; full rollback |
 | Processing | Server-side atomic endpoints (ZIP in / ZIP out) |
-| Files / wiki | Included in v1: blobs, `document_refs`, and `mdfile://` links inside markdown |
+| Files / wiki | Included in v1: blobs, full `file_versions` history, `document_refs`, and `mdfile://` links inside markdown |
 | Diagram preview SVG | **Not** in package (`diagrams/{id}/preview.svg` in MinIO). Regenerated on save / when creating a share link from the open editor |
 | Package format | ZIP (`manifest.json`, `model.json`, `notations/*.json`, `document-refs.json`, `files/*`) |
 | Notation scope | Only notations referenced by the model's **diagrams** |
@@ -54,7 +54,11 @@ model-package.zip
 └── files/
     └── <sourceFileId>/
         ├── meta.json
-        └── blob
+        ├── blob                    # latest content (compat)
+        └── versions/
+            ├── 1
+            ├── 2
+            └── …
 ```
 
 ### `manifest.json`
@@ -109,7 +113,8 @@ Only refs whose `fileId` is included in `files/` and whose entity side can be re
 ### `files/<id>/`
 
 - `meta.json`: `filename`, `contentType`, optional original attrs needed to recreate `Files` / versions
-- `blob`: file content from object storage (markdown wiki pages as stored)
+- `blob`: latest file content (kept for older importers / quick read)
+- `versions/<n>`: full history oldest→newest by version number (export always writes these; import prefers them when present, otherwise falls back to single `blob`). Cap: `MAX_FILE_VERSIONS` (100). `mdfile://` rewrite runs per version.
 
 Wiki cross-links use `mdfile://<fileUuid>` (same pattern as `MdFileLinkValidator`). Blobs in the package may still contain **source** UUIDs; importer rewrites them via `fileIdMap` before/when persisting content.
 
@@ -183,7 +188,7 @@ Id maps merge results from all imported notations (source package ids → newly 
 1. Validate manifest (`format`, `version`) and ZIP structure.
 2. Enforce size / count limits.
 3. Import each notation via `NotationImportService` (existing conflict and reuse semantics). Abort all on first 409/validation error.
-4. Create files in storage + DB from `files/*`; build `fileIdMap`; rewrite `mdfile://` UUIDs inside markdown blobs (and any attrs that embed them) before final persist / version write.
+4. Create files in storage + DB from `files/*` (recreate version history via `createOwnedBlob` + `appendOwnedBlobVersion` when `versions/*` present); build `fileIdMap`; rewrite `mdfile://` UUIDs inside each markdown version (and any attrs that embed them) before final persist.
 5. Create model; **409** if `name+version` exists.
 6. Create nodes, links, diagrams with **new** UUIDs; remap using merged maps from notation imports + `fileIdMap`:
    - `parentId`, link `source`/`target`
@@ -210,10 +215,11 @@ Order: notations → files → model → graph.
 
 | Place | Export package | Import package |
 |-------|----------------|----------------|
+| Models catalog (create-style card) | — | Yes (creates a **new** model) |
 | Catalog card menu | Yes | No |
-| Editor toolbar | Yes | Yes |
+| Editor toolbar | Yes | No |
 
-Import flow: file picker → `POST /models/package` → success toast → navigate to new model editor. Show clear message on 409 (model or notation already exists). Single-request progress (“Importing…”).
+Import flow: file picker on models catalog → `POST /models/package` → navigate to new model editor. Show clear message on 409 (model or notation already exists). Single-request progress (“Importing…”).
 
 ### Notations
 

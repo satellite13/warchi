@@ -39,6 +39,13 @@ const page = <T>(content: T[], meta?: { last?: boolean; totalPages?: number }) =
   last: meta?.last ?? true,
   totalPages: meta?.totalPages ?? 1,
 })
+/** arepos ListResponse for GET /models (items, not Spring content). */
+const listResponse = <T>(items: T[]) => ({
+  items,
+  total: items.length,
+  page: 0,
+  size: items.length,
+})
 
 describe('fetchAllByModelId', () => {
   beforeEach(() => {
@@ -116,7 +123,9 @@ describe('loadModelEditorData', () => {
         return ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' })
       }
       if (path.startsWith('/models?')) {
-        return ok(page([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }]))
+        return ok(
+          listResponse([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }])
+        )
       }
       if (path.startsWith('/nodes?')) {
         return ok(
@@ -243,7 +252,9 @@ describe('loadModelEditorData', () => {
         return ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' })
       }
       if (path.startsWith('/models?')) {
-        return ok(page([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }]))
+        return ok(
+          listResponse([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }])
+        )
       }
       if (path.startsWith('/nodes?')) return ok(page([]))
       if (path.startsWith('/diagrams?')) return ok(page([]))

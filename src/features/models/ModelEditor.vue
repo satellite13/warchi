@@ -82,7 +82,7 @@ import { compareVersions } from '@/utils/version'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
-import { downloadModelPackage, uploadModelPackage } from './composables/useModelPackage'
+import { downloadModelPackage } from './composables/useModelPackage'
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
@@ -354,6 +354,10 @@ const {
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
   ensureNotationRelationsAndRules,
+  onModelUnavailable: status => {
+    errorMessage.value =
+      status === 403 ? t('models.modelAccessRevoked') : t('models.modelNoLongerAvailable')
+  },
 })
 
 async function handleReloadModelForDiagramLock() {
@@ -630,11 +634,6 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
 const layoutBusy = ref(false)
 const showLayoutPreviewModal = ref(false)
 const layoutPreviewBefore = ref<DiagramAttrs | null>(null)
-const modelPackageInputRef = ref<HTMLInputElement | null>(null)
-const isImportingModelPackage = ref(false)
-const modelPackageImportProgress = ref<string | null>(null)
-const modelPackageImportSuccess = ref(false)
-const modelPackageImportSuccessMessage = ref<string | null>(null)
 const uiError = ref<string | null>(null)
 let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
 const setUiError = (msg: string) => {
@@ -2041,18 +2040,6 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     }
-    case 'import-model-package': {
-      const input = modelPackageInputRef.value
-      if (!input || isImportingModelPackage.value) break
-      input.value = ''
-      const inputWithShowPicker = input as HTMLInputElement & { showPicker?: () => void }
-      if (typeof inputWithShowPicker.showPicker === 'function') {
-        inputWithShowPicker.showPicker()
-      } else {
-        input.click()
-      }
-      break
-    }
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
         pendingDiagramAction.value = 'close'
@@ -2438,66 +2425,6 @@ const copyDiagramJson = () => {
   navigator.clipboard.writeText(diagramJsonContent.value)
 }
 
-async function onModelPackageSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file || isImportingModelPackage.value) return
-
-  isImportingModelPackage.value = true
-  modelPackageImportProgress.value = t('models.packageImporting')
-  try {
-    const result = await uploadModelPackage(file, pct => {
-      modelPackageImportProgress.value =
-        pct > 0 ? `${t('models.packageImporting')} ${pct}%` : t('models.packageImporting')
-    })
-
-    if (!result.ok) {
-      if (result.code === 'CONFLICT') {
-        setUiError(t('models.packageImportConflict'))
-      } else if (result.code === 'PAYLOAD_TOO_LARGE') {
-        setUiError(t('models.packageImportTooLarge'))
-      } else if (result.code === 'BAD_REQUEST') {
-        setUiError(t('models.packageImportBadRequest'))
-      } else {
-        setUiError(t('models.packageImportError', { message: result.message }))
-      }
-      return
-    }
-
-    const importTarget: RouteLocationRaw = {
-      name: 'model-editor',
-      params: { id: result.modelId },
-    }
-
-    if (hasUnsavedChanges.value) {
-      pendingImportSuccessWarnings.value = result.warnings
-      pendingRoute = importTarget
-      showLeaveDialog.value = true
-      return
-    }
-
-    await router.push(importTarget)
-    showPackageImportSuccess(result.warnings)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    setUiError(t('models.packageImportError', { message }))
-  } finally {
-    isImportingModelPackage.value = false
-    modelPackageImportProgress.value = null
-  }
-}
-
-function formatPackageImportSuccessMessage(warnings: string[]): string | null {
-  if (warnings.length === 0) return null
-  if (warnings.length <= 2) {
-    return t('models.packageImportCompletedWithWarningsDetail', {
-      messages: warnings.join('; '),
-    })
-  }
-  return t('models.packageImportCompletedWithWarnings', { count: warnings.length })
-}
-
 const router = useRouter()
 const route = useRoute()
 const applyRouteDiagramSelection = () => {
@@ -2510,36 +2437,19 @@ const applyRouteDiagramSelection = () => {
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null
-const pendingImportSuccessWarnings = ref<string[] | null>(null)
-
-function showPackageImportSuccess(warnings: string[]) {
-  modelPackageImportSuccessMessage.value = formatPackageImportSuccessMessage(warnings)
-  modelPackageImportSuccess.value = true
-  window.setTimeout(() => {
-    modelPackageImportSuccess.value = false
-    modelPackageImportSuccessMessage.value = null
-  }, warnings.length > 0 ? 5000 : 2000)
-}
 
 const confirmLeave = () => {
   showLeaveDialog.value = false
   allowLeave.value = true
-  const importWarnings = pendingImportSuccessWarnings.value
-  pendingImportSuccessWarnings.value = null
   if (pendingRoute) {
-    const route = pendingRoute
+    const next = pendingRoute
     pendingRoute = null
-    void router.push(route).then(() => {
-      if (importWarnings) {
-        showPackageImportSuccess(importWarnings)
-      }
-    })
+    void router.push(next)
   }
 }
 const cancelLeave = () => {
   showLeaveDialog.value = false
   pendingRoute = null
-  pendingImportSuccessWarnings.value = null
 }
 
 /** Админ снял блокировку — выкинуть из диаграммы без сохранения */
@@ -2599,13 +2509,6 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <input
-    ref="modelPackageInputRef"
-    class="model-package-import-input"
-    type="file"
-    accept=".zip,application/zip"
-    @change="onModelPackageSelected"
-  />
   <MainLayout>
     <template #header>
       <ModelEditorHeader
@@ -2944,11 +2847,10 @@ onBeforeUnmount(() => {
   </MainLayout>
 
   <SaveToast
-    :saving="isSaving || isImportingModelPackage"
-    :success="saveSuccess || modelPackageImportSuccess"
-    :success-message="modelPackageImportSuccessMessage"
+    :saving="isSaving"
+    :success="saveSuccess"
     :error="saveError || uiError"
-    :progress="isImportingModelPackage ? modelPackageImportProgress : saveProgress"
+    :progress="saveProgress"
   />
 
   <BatchSaveConflictModal
@@ -4033,16 +3935,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--text-subtle);
   text-align: center;
-}
-
-.model-package-import-input {
-  position: fixed;
-  left: -9999px;
-  top: 0;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
 }
 
 </style>

@@ -187,7 +187,7 @@ A model ZIP package moves a model between environments, users, or serves as a ba
 
 Diagram preview SVGs are **not** included — they are regenerated on save or when publishing a diagram share link from the editor.
 
-**Export** is available from the model card menu in the list and from the editor header. **Import** is **editor-only**: pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). On success, the new model opens in the editor.
+**Export** is available from the model card menu in the list and from the editor header. **Import** is on the models list (card next to “Create model”): pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). On success, the new model opens in the editor.
 
 If you already have a model or notation with the same **name and version**, import returns **409** and nothing is persisted.
 

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-28
+
+### Added
+- Model package ZIP import/export from the models catalog and editor toolbar (with notations and wiki files).
+- Notation package export from notation catalog cards.
+- Admin trash: soft-deleted node types, link types, and shapes with permanent delete confirmation.
+
+### Fixed
+- Model live sync stops after the model is deleted or access is revoked (404/403), instead of polling forever.
+- Admin permanent delete uses the shared confirmation modal instead of the browser `confirm` dialog.
+
 ## [0.10.15] - 2026-07-28
 
 ### Added

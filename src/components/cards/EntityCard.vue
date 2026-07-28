@@ -13,6 +13,8 @@ const props = defineProps<{
   ownerEmail?: string;
   accessLabel?: string;
   canShare?: boolean;
+  canExport?: boolean;
+  exportTitle?: string;
   canDelete?: boolean;
   canRename?: boolean;
   updatedAt?: string | null;
@@ -33,6 +35,7 @@ const emit = defineEmits<{
   delete: [];
   rename: [];
   share: [];
+  export: [];
   "version-change": [string];
   "change-icon": [];
   "show-version-tree": [];
@@ -101,6 +104,17 @@ const formattedUpdatedAt = computed(() => {
         @click.stop="emit('share')"
       >
         <UiIcon name="share" :alt="t('common.share')" />
+      </button>
+      <button
+        v-if="canExport"
+        type="button"
+        class="model-card__export"
+        :class="{ 'model-card__export--after-tree': showVersionTreeButton }"
+        :aria-label="exportTitle || t('common.export')"
+        :title="exportTitle || t('common.export')"
+        @click.stop="emit('export')"
+      >
+        <UiIcon name="download" :alt="exportTitle || t('common.export')" />
       </button>
       <button
         v-if="showVersionTreeButton && versionTreeI18nPrefix"
@@ -300,6 +314,7 @@ const formattedUpdatedAt = computed(() => {
 .model-card__delete,
 .model-card__rename,
 .model-card__share,
+.model-card__export,
 .model-card__version-tree {
   position: absolute;
   top: 12px;
@@ -332,6 +347,14 @@ const formattedUpdatedAt = computed(() => {
   right: 108px;
 }
 
+.model-card__export {
+  right: 108px;
+}
+
+.model-card__export--after-tree {
+  right: 140px;
+}
+
 .model-card__delete:hover {
   background: var(--surface-strong);
   border-color: var(--danger);
@@ -345,6 +368,7 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card__share:hover,
+.model-card__export:hover,
 .model-card__version-tree:hover {
   background: var(--surface-strong);
   border-color: var(--accent);
@@ -354,10 +378,12 @@ const formattedUpdatedAt = computed(() => {
 .model-card__delete :deep(.ui-icon),
 .model-card__rename :deep(.ui-icon),
 .model-card__share :deep(.ui-icon),
+.model-card__export :deep(.ui-icon),
 .model-card__version-tree :deep(.ui-icon),
 .model-card__delete :deep(svg),
 .model-card__rename :deep(svg),
 .model-card__share :deep(svg),
+.model-card__export :deep(svg),
 .model-card__version-tree :deep(svg) {
   width: 16px;
   height: 16px;

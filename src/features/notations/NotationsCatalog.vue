@@ -4,6 +4,7 @@ import type { NotationData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
+import { downloadNotationExport } from "@/features/models/composables/useModelPackage";
 
 const { t } = useI18n();
 
@@ -29,6 +30,14 @@ const config: EntityListConfig<NotationData> = {
     attrs: nextAttrs
   })
 };
+
+async function handleExport(item: NotationData) {
+  try {
+    await downloadNotationExport(item.id);
+  } catch (err) {
+    console.error("Notation export failed:", err);
+  }
+}
 </script>
 
 <template>
@@ -40,5 +49,7 @@ const config: EntityListConfig<NotationData> = {
     resource-type="NOTATION"
     :show-version-tree="true"
     :show-create-from-version-button="true"
+    can-export
+    @export="handleExport"
   />
 </template>

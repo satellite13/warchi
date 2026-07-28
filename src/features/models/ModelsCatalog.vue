@@ -4,6 +4,8 @@ import type { ModelData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
+import { downloadModelPackage } from "./composables/useModelPackage";
+import { sanitizeFileName } from "@/utils/sanitizeFileName";
 
 const { t } = useI18n();
 
@@ -29,6 +31,15 @@ const config: EntityListConfig<ModelData> = {
     attrs: nextAttrs
   })
 };
+
+async function handleExport(item: ModelData) {
+  try {
+    const fileName = `${sanitizeFileName(item.name) || "model"}.zip`;
+    await downloadModelPackage(item.id, fileName);
+  } catch (err) {
+    console.error("Model package export failed:", err);
+  }
+}
 </script>
 
 <template>
@@ -40,5 +51,7 @@ const config: EntityListConfig<ModelData> = {
     resource-type="MODEL"
     :show-version-tree="true"
     :show-create-from-version-button="true"
+    can-export
+    @export="handleExport"
   />
 </template>

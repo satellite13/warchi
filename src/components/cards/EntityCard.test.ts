@@ -66,6 +66,19 @@ describe('EntityCard', () => {
     expect(wrapper.emitted('rename')).toBeTruthy()
   })
 
+  it('export button emits export when canExport', async () => {
+    const wrapper = mountCard({ canExport: true, exportTitle: 'Export package' })
+    const button = wrapper.find('.model-card__export')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    expect(wrapper.emitted('export')).toBeTruthy()
+  })
+
+  it('does not show export button when canExport is false', () => {
+    const wrapper = mountCard()
+    expect(wrapper.find('.model-card__export').exists()).toBe(false)
+  })
+
   it('version select emits version-change', async () => {
     const wrapper = mountCard({
       versions: ['1.0.0', '2.0.0'],

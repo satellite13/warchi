@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
@@ -32,6 +32,12 @@ const props = defineProps<{
   showVersionTree?: boolean
   /** Показывать кнопку создания версии на базе выбранной (для моделей). */
   showCreateFromVersionButton?: boolean
+  /** Показывать кнопку экспорта на карточках. */
+  canExport?: boolean
+}>();
+
+const emit = defineEmits<{
+  export: [item: VersionedEntity]
 }>();
 
 const router = useRouter();
@@ -201,6 +207,21 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
   if (!item) return "";
   return `${item.name} v${item.version} — ${ownerLabelFor(item.ownerId, item.ownerEmail, item.ownerDisplayName)}`;
 }
+
+const exportTitle = computed(() => {
+  if (props.i18nPrefix === "models") return t("toolbar.exportModelPackage");
+  if (props.i18nPrefix === "notations") return t("toolbar.exportNotation");
+  return t("common.export");
+});
+
+function handleExport(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}) {
+  const selected = getSelectedItem(group);
+  if (!selected) return;
+  emit("export", selected);
+}
 </script>
 
 <template>
@@ -239,6 +260,8 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
         :owner-email="ownerLabelFor(getSelectedItem(group)?.ownerId, getSelectedItem(group)?.ownerEmail, getSelectedItem(group)?.ownerDisplayName)"
         :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission, locale)"
         :can-share="canShareSelected(group)"
+        :can-export="canExport"
+        :export-title="exportTitle"
         :can-delete="canEditSelected(group)"
         :can-rename="canEditSelected(group)"
         :updated-at="getSelectedItem(group)?.updatedAt"
@@ -251,6 +274,7 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
         @delete="handleDelete(group)"
         @rename="handleRename(group)"
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
+        @export="handleExport(group)"
         @show-version-tree="openVersionTreeModal(group)"
         @create-from-version="handleCreateFromSelectedVersion(group)"
         @version-change="handleVersionChange(group.name, $event)"

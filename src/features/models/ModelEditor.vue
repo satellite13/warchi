@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import {
-  onBeforeRouteLeave,
-  useRoute,
-  useRouter,
-  type RouteLocationNormalized,
-  type RouteLocationRaw,
-} from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import MainLayout from '@/layouts/MainLayout.vue'

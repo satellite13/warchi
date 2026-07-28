@@ -12,6 +12,7 @@ export const notationsMessages = {
       searchPlaceholder: 'Поиск по названию...',
       createTitle: 'Создать нотацию',
       createDescription: 'Новый набор правил',
+      packageImportTitle: 'Импорт JSON нотации',
       packageImportDescription: 'Создать новую нотацию из JSON-экспорта',
       packageImportConflict:
         'Не удалось импортировать нотацию: нотация с таким именем и версией уже существует.',
@@ -143,6 +144,7 @@ export const notationsMessages = {
       searchPlaceholder: 'Search by name...',
       createTitle: 'Create notation',
       createDescription: 'New ruleset',
+      packageImportTitle: 'Import notation JSON',
       packageImportDescription: 'Create a new notation from a JSON export file',
       packageImportConflict:
         'Could not import notation: a notation with the same name and version already exists.',

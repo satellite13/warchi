@@ -75,6 +75,7 @@ import {
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
+import { runDiagramLayout } from '../layout/runDiagramLayout'
 import {
   applyStylePropertyBindings,
   BIND_TO_NAME,
@@ -240,6 +241,8 @@ const emit = defineEmits<{
     existingLinksNotOnDiagram: EditorLink[],
   ]
   liveCollaborationGesture: [phase: 'block' | 'unblock']
+  layoutError: [message: string]
+  layoutBusy: [busy: boolean]
 }>()
 const { t } = useI18n()
 
@@ -2578,24 +2581,69 @@ const zoomToSelection = () => {
   )
 }
 
+const layoutBusy = ref(false)
+
+const resolveSelectedInstanceIds = (): string[] => {
+  const ids = new Set<string>()
+  const selectedPap = interactionManager?.selection.selectedIds
+  if (selectedPap && selectedPap.size > 0) {
+    for (const papId of selectedPap) {
+      const entity = nodeIdToInstance.get(papId)
+      if (entity) ids.add(entity.instanceId)
+    }
+    return [...ids]
+  }
+  const selectedModel = new Set(props.selectedModelNodeIds)
+  for (const inst of instanceNodes.value) {
+    if (selectedModel.has(inst.modelNodeId)) ids.add(inst.id)
+  }
+  return [...ids]
+}
+
+const runAutoLayout = async (mode: 'layered' | 'overlap') => {
+  if (!props.activeDiagram || props.readOnly || layoutBusy.value) return
+  layoutBusy.value = true
+  emit('layoutBusy', true)
+  try {
+    const before = cloneDiagramAttrs()
+    const result = await runDiagramLayout({
+      diagram: before,
+      mode,
+      selectedInstanceIds: resolveSelectedInstanceIds(),
+    })
+    if (result.status === 'error') {
+      emit('layoutError', result.message)
+      return
+    }
+    if (result.status === 'noop') return
+
+    const after = result.diagram
+    const history = interactionManager?.history
+    if (history && typeof history.execute === 'function') {
+      history.execute({
+        execute: () => {
+          emit('updateDiagram', after)
+        },
+        undo: () => {
+          emit('updateDiagram', before)
+        },
+      })
+    } else {
+      emit('updateDiagram', after)
+    }
+    requestAnimationFrame(() => fitToView())
+  } finally {
+    layoutBusy.value = false
+    emit('layoutBusy', false)
+  }
+}
+
 const autoLayoutNodes = () => {
-  if (!props.activeDiagram) return
-  const next = cloneDiagramAttrs()
-  const paddingX = 48
-  const paddingY = 40
-  const columnGap = 48
-  const rowGap = 28
-  const columns = Math.max(1, Math.ceil(Math.sqrt(next.instances.nodes.length || 1)))
-  next.instances.nodes.forEach((node, index) => {
-    const col = index % columns
-    const row = Math.floor(index / columns)
-    const width = node.width ?? DEFAULT_NODE_WIDTH
-    const height = node.height ?? DEFAULT_NODE_HEIGHT
-    node.x = paddingX + col * (width + columnGap)
-    node.y = paddingY + row * (height + rowGap)
-  })
-  emit('updateDiagram', next)
-  requestAnimationFrame(() => fitToView())
+  void runAutoLayout('layered')
+}
+
+const autoLayoutTidy = () => {
+  void runAutoLayout('overlap')
 }
 
 const toggleGrid = (): boolean => {
@@ -3154,6 +3202,7 @@ defineExpose({
   fitToView,
   zoomToSelection,
   autoLayoutNodes,
+  autoLayoutTidy,
   resetView,
   toggleGrid,
   getGridVisible,

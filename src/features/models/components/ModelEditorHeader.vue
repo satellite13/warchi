@@ -43,6 +43,7 @@ const props = withDefaults(
     showDiagramWikiButton?: boolean
     /** id текущей версии модели (для перехода к сравнению версий диаграммы). */
     modelId?: string | null
+    layoutBusy?: boolean
     /** Диаграмма занята другим пользователем (эксклюзивный lock) */
     diagramLockBlockedByOther?: boolean
     /** Email/отображаемое имя держателя lock (для подписи рядом с иконкой) */
@@ -82,6 +83,7 @@ const props = withDefaults(
     showModelWikiButton: true,
     showDiagramWikiButton: true,
     modelId: null,
+    layoutBusy: false,
     diagramLockBlockedByOther: false,
     diagramLockHolderDisplay: '',
     diagramLockServerNewer: false,
@@ -199,7 +201,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     icon: 'format_align_center',
     event: 'auto-layout-nodes',
     title: t('toolbar.autoLayoutNodes'),
-    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly,
+    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
+  },
+  {
+    icon: 'compress',
+    event: 'auto-layout-tidy',
+    title: t('toolbar.autoLayoutTidy'),
+    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
   },
   {
     icon: 'restart_alt',

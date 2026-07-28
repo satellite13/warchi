@@ -622,6 +622,7 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
   })
 })
 
+const layoutBusy = ref(false)
 const uiError = ref<string | null>(null)
 let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
 const setUiError = (msg: string) => {
@@ -1923,6 +1924,9 @@ const handleToolbarAction = async (event: string) => {
     case 'auto-layout-nodes':
       diagramCanvasRef.value?.autoLayoutNodes()
       break
+    case 'auto-layout-tidy':
+      diagramCanvasRef.value?.autoLayoutTidy()
+      break
     case 'reset-view':
       diagramCanvasRef.value?.resetView()
       break
@@ -2458,6 +2462,7 @@ onBeforeUnmount(() => {
         :diagram-versions="diagramVersionsForCurrentName"
         :selected-diagram-id="selectedDiagramId"
         :is-diagram-read-only="isDiagramReadOnly"
+        :layout-busy="layoutBusy"
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="canInspectDiagramJson"
@@ -2606,6 +2611,7 @@ onBeforeUnmount(() => {
               :can-share="canShareModel"
               :navigation-only-mode="diagramNavigationOnlyMode"
               :is-diagram-read-only="isDiagramReadOnly"
+              :layout-busy="layoutBusy"
               :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
               :diagram-lock-holder-display="diagramLockHolderName"
               :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
@@ -2682,6 +2688,8 @@ onBeforeUnmount(() => {
             @palette-visible-change="paletteVisible = $event"
             @open-diagram="selectDiagram"
             @open-document="handleOpenDocumentFromBadge"
+            @layout-error="(msg) => setUiError(msg || t('toolbar.autoLayoutFailed'))"
+            @layout-busy="(busy) => { layoutBusy = busy }"
           />
           <div
             v-if="activeDiagram && isActiveNotationRulesLoading"

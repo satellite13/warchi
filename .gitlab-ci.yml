@@ -8,7 +8,6 @@
 stages:
   - quality
   - build
-  - scan
   - deploy
 
 variables:
@@ -84,15 +83,6 @@ build:
 #     - npm ci --no-audit --fund=false
 #     - npx playwright install --with-deps chromium
 #     - npm run test:e2e
-
-scan:
-  stage: scan
-  image: node:${NODE_VERSION}-alpine
-  allow_failure: true
-  script:
-    - npm audit --audit-level=moderate || true
-  needs:
-    - build
 
 docker:
   stage: build

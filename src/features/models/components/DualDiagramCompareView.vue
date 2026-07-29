@@ -207,6 +207,7 @@ watch(
               type="checkbox"
               role="switch"
               :checked="syncViewports"
+              :aria-checked="syncViewports"
               @change="onSyncToggle(($event.target as HTMLInputElement).checked)"
             />
             <span class="ddc__sync-label">{{ t('models.compareSyncViewports') }}</span>
@@ -508,6 +509,10 @@ watch(
 .ddc__sync-input:checked::after {
   transform: translateX(16px);
   box-shadow: none;
+}
+.ddc__sync-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 .ddc__sync-label {
   white-space: nowrap;

@@ -3196,10 +3196,15 @@ const getViewport = (): ViewportState | null => {
 
 const setViewport = (state: ViewportState): void => {
   if (!renderer) return
-  renderer.viewport = {
-    zoom: state.zoom,
-    offsetX: state.offsetX,
-    offsetY: state.offsetY,
+  suppressViewportPersistence = true
+  try {
+    renderer.viewport = {
+      zoom: state.zoom,
+      offsetX: state.offsetX,
+      offsetY: state.offsetY,
+    }
+  } finally {
+    suppressViewportPersistence = false
   }
 }
 

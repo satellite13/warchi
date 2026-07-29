@@ -254,7 +254,7 @@ function handleExport(group: {
       <CreateCard
         v-if="canImportPackage"
         icon="upload"
-        :title="t('toolbar.importModelPackage')"
+        :title="t(`${i18nPrefix}.packageImportTitle`)"
         :description="t(`${i18nPrefix}.packageImportDescription`)"
         @click="emit('importPackage')"
       />

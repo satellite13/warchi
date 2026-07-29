@@ -25,7 +25,9 @@ When working with shared resources, available actions are determined by the gran
 
 **Export** is available from the notation card menu in the list and from the notation editor header. Both download the **same** JSON document (`warchi-notation-export` v2) — types, components, relations, rules, and shapes.
 
-**Import** is **editor-only**: choose a JSON file with the full notation description.
+**Import from the list** — card next to “Create notation”: pick the same JSON export file; the server creates a **new** notation owned by the current user. On success, the new notation opens in the editor. If a notation with the same **name and version** already exists, import returns **409** and nothing is persisted.
+
+**Import in the editor** — from the editor header: choose a JSON file with the full notation description to merge into the current notation.
 
 ## Notation Editor
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { ViewportState } from '@ngroznykh/papirus'
 import type { CompareSharedData } from '@/api/loadCompareSharedData'
 import { useResizablePropsPanel } from '@/composables/useResizablePropsPanel'
 import MainLayout from '@/layouts/MainLayout.vue'
@@ -15,6 +16,7 @@ import {
   type SelectedElement,
   useComparisonDiff,
 } from '@/features/models/composables/useComparisonDiff'
+import { loadString, saveString } from '@/utils/localStorage'
 
 export type DualCompareSideData = ComparisonDataSet & {
   nodeTypes?: NodeTypeResponse[]
@@ -42,6 +44,50 @@ const selectedElement = ref<SelectedElement | null>(null)
 
 const leftCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const rightCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
+
+const SYNC_VIEWPORTS_KEY = 'warchi:compare-sync-viewports'
+const syncViewports = ref(loadString(SYNC_VIEWPORTS_KEY, '1') !== '0')
+const lastActiveSide = ref<'left' | 'right'>('left')
+let applyingSync = false
+
+function canvasFor(side: 'left' | 'right') {
+  return side === 'left' ? leftCanvasRef.value : rightCanvasRef.value
+}
+
+function otherSide(side: 'left' | 'right'): 'left' | 'right' {
+  return side === 'left' ? 'right' : 'left'
+}
+
+function applyViewportTo(side: 'left' | 'right', state: ViewportState): void {
+  const canvas = canvasFor(side)
+  if (!canvas) return
+  applyingSync = true
+  try {
+    canvas.setViewport(state)
+  } finally {
+    applyingSync = false
+  }
+}
+
+function handleViewportChange(side: 'left' | 'right', _viewport: ViewportState): void {
+  lastActiveSide.value = side
+  if (!syncViewports.value || applyingSync) return
+  const src = canvasFor(side)?.getViewport()
+  if (!src) return
+  applyViewportTo(otherSide(side), src)
+}
+
+function snapOtherTo(side: 'left' | 'right'): void {
+  const src = canvasFor(side)?.getViewport()
+  if (!src) return
+  applyViewportTo(otherSide(side), src)
+}
+
+function onSyncToggle(next: boolean): void {
+  syncViewports.value = next
+  saveString(SYNC_VIEWPORTS_KEY, next ? '1' : '0')
+  if (next) snapOtherTo(lastActiveSide.value)
+}
 
 const { propsPanelHeight, startPropsPanelResize } = useResizablePropsPanel(props.propsPanelStorageKey)
 
@@ -86,6 +132,10 @@ function centerBothCanvases(): void {
     requestAnimationFrame(() => {
       leftCanvasRef.value?.fitToView()
       rightCanvasRef.value?.fitToView()
+      if (syncViewports.value) {
+        const src = leftCanvasRef.value?.getViewport()
+        if (src) applyViewportTo('right', src)
+      }
     })
   })
 }
@@ -150,6 +200,17 @@ watch(
           </div>
 
           <slot name="topbar-extra" />
+
+          <label class="ddc__sync" :title="t('models.compareSyncViewportsHint')">
+            <input
+              class="ddc__sync-input"
+              type="checkbox"
+              role="switch"
+              :checked="syncViewports"
+              @change="onSyncToggle(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="ddc__sync-label">{{ t('models.compareSyncViewports') }}</span>
+          </label>
         </div>
 
         <p v-if="error" class="ddc__error">{{ error }}</p>
@@ -198,6 +259,7 @@ watch(
                   @select-nodes="handleLeftSelectNodes"
                   @select-link="handleLeftSelectLink"
                   @select-edge-instance-id="handleLeftSelectEdgeInstanceId"
+                  @viewport-change="(vp) => handleViewportChange('left', vp)"
                 />
                 <div v-else class="ddc__placeholder">
                   {{ leftDiagram ? t('common.loading') : t('models.compareNoDiagram') }}
@@ -249,6 +311,7 @@ watch(
                   @select-nodes="handleRightSelectNodes"
                   @select-link="handleRightSelectLink"
                   @select-edge-instance-id="handleRightSelectEdgeInstanceId"
+                  @viewport-change="(vp) => handleViewportChange('right', vp)"
                 />
                 <div v-else class="ddc__placeholder">
                   {{ rightDiagram ? t('common.loading') : t('models.compareNoDiagram') }}
@@ -400,6 +463,54 @@ watch(
 .ddc__swap:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.ddc__sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.ddc__sync-input {
+  width: 34px;
+  height: 18px;
+  appearance: none;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  position: relative;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.ddc__sync-input::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  transition: transform 0.15s ease;
+}
+.ddc__sync-input:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.ddc__sync-input:checked::after {
+  transform: translateX(16px);
+  box-shadow: none;
+}
+.ddc__sync-label {
+  white-space: nowrap;
 }
 
 .ddc__error {

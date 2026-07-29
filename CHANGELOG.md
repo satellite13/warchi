@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.10.15] - 2026-07-29
+
+### Fixed
+- SSO OIDC callback now passes backend CSRF filter correctly; `POST /auth/sso/callback` no longer returns 403 after redirect from Keycloak.
+
 ## [0.10.14] - 2026-07-28
 
 ### Fixed

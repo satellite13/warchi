@@ -83,6 +83,9 @@ import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
 import { downloadModelPackage } from './composables/useModelPackage'
+import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
+import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
+import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
@@ -173,6 +176,36 @@ const {
   applyDiagramSelection,
 } = useModelSelection({ state })
 const showShareModal = ref(false)
+const showValidationScriptsModal = ref(false)
+
+const validationRunPayload = computed(() => {
+  if (!model.value) return null
+  return buildValidationSnapshot({
+    state: state.value,
+    modelName: model.value.name,
+    modelVersion: model.value.version,
+    openDiagramId: selectedDiagramId.value,
+  })
+})
+
+function handleValidationIssueSelect(issue: ValidationIssue): void {
+  showValidationScriptsModal.value = false
+  const target = issue.target
+  if (!target) return
+  if (target.kind === 'diagram') {
+    selectDiagram(target.id)
+    return
+  }
+  if (target.kind === 'node' || target.kind === 'folder') {
+    selectedNodeId.value = target.id
+    treePanelRef.value?.focusNode?.(target.id)
+    selectedModelNodeIds.value = [target.id]
+    return
+  }
+  if (target.kind === 'link') {
+    selectedModelLinkId.value = target.id
+  }
+}
 const showCompareModal = ref(false)
 
 const versionDiff = useModelVersionDiff()
@@ -2040,6 +2073,9 @@ const handleToolbarAction = async (event: string) => {
       }
       break
     }
+    case 'run-validation-script':
+      showValidationScriptsModal.value = true
+      break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
         pendingDiagramAction.value = 'close'
@@ -3290,6 +3326,14 @@ onBeforeUnmount(() => {
     resource-type="MODEL"
     :resource-id="model.id"
     @close="showShareModal = false"
+  />
+
+  <ValidationScriptsRunModal
+    v-if="showValidationScriptsModal && validationRunPayload"
+    :snapshot="validationRunPayload.snapshot"
+    :open-diagram-id="validationRunPayload.openDiagramId"
+    @close="showValidationScriptsModal = false"
+    @select-issue="handleValidationIssueSelect"
   />
 
   <DiagramImageShareModal

@@ -60,6 +60,40 @@ assert_header "X-Frame-Options" "DENY"
 assert_header "X-Content-Type-Options" "nosniff"
 assert_header "Referrer-Policy" "strict-origin-when-cross-origin"
 
+if echo "$HEADERS" | grep -qi "unsafe-eval"; then
+  log_error "Main SPA CSP must not allow unsafe-eval (use /script-sandbox.html instead)"
+  echo "$HEADERS" | sed -n '1,30p'
+  exit 1
+fi
+log_info "OK: main SPA CSP has no unsafe-eval"
+
+SANDBOX_HEADERS="$(curl -sS -D - -o /dev/null "$WARCHI_URL/script-sandbox.html" || true)"
+if [[ -z "$SANDBOX_HEADERS" ]] || echo "$SANDBOX_HEADERS" | head -1 | grep -qE '000|Failed'; then
+  log_error "No response from $WARCHI_URL/script-sandbox.html"
+  exit 1
+fi
+if ! echo "$SANDBOX_HEADERS" | grep -qi "^Content-Security-Policy:.*unsafe-eval"; then
+  log_error "script-sandbox.html CSP must allow unsafe-eval for user scripts"
+  echo "$SANDBOX_HEADERS" | sed -n '1,30p'
+  exit 1
+fi
+if ! echo "$SANDBOX_HEADERS" | grep -qi "^Content-Security-Policy:.*unsafe-inline"; then
+  log_error "script-sandbox.html CSP must allow unsafe-inline (opaque sandbox cannot load host scripts via 'self')"
+  echo "$SANDBOX_HEADERS" | sed -n '1,30p'
+  exit 1
+fi
+if ! echo "$SANDBOX_HEADERS" | grep -qi "^Content-Security-Policy:.*frame-ancestors 'self'"; then
+  log_error "script-sandbox.html CSP must set frame-ancestors 'self'"
+  echo "$SANDBOX_HEADERS" | sed -n '1,30p'
+  exit 1
+fi
+if ! echo "$SANDBOX_HEADERS" | grep -qi "^X-Frame-Options:.*SAMEORIGIN"; then
+  log_error "script-sandbox.html must allow same-origin framing (X-Frame-Options: SAMEORIGIN)"
+  echo "$SANDBOX_HEADERS" | sed -n '1,30p'
+  exit 1
+fi
+log_info "OK: script-sandbox.html CSP allows inline+eval and same-origin framing"
+
 # Config-source check: locations that set Cache-Control must also set CSP
 # (nginx replaces inherited add_header when a location defines any add_header).
 if ! rg -n "location = /index.html" -A 20 config/default.conf | rg -q "Content-Security-Policy"; then
@@ -68,6 +102,10 @@ if ! rg -n "location = /index.html" -A 20 config/default.conf | rg -q "Content-S
 fi
 if ! rg -n "location / \\{" -A 20 config/default.conf | rg -q "Content-Security-Policy"; then
   log_error "config/default.conf: location / must set Content-Security-Policy"
+  exit 1
+fi
+if ! rg -n "location = /script-sandbox.html" -A 20 config/default.conf | rg -q "unsafe-eval"; then
+  log_error "config/default.conf: location = /script-sandbox.html must allow unsafe-eval"
   exit 1
 fi
 log_info "OK: nginx config keeps CSP on SPA locations"

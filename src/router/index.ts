@@ -85,6 +85,11 @@ const router = createRouter({
       component: () => import("../views/ShapesView.vue")
     },
     {
+      path: "/validation-scripts",
+      name: "validation-scripts",
+      component: () => import("../views/ValidationScriptsView.vue")
+    },
+    {
       path: "/notations/:id",
       name: "notation-editor",
       component: () => import("../features/notations/NotationEditorPage.vue")

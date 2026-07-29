@@ -266,6 +266,30 @@ export interface NodeShapeUpdateRequest {
   attrs?: string | null
 }
 
+// ── Validation Scripts ──
+
+export interface ValidationScriptResponse extends BaseEntityResponse {
+  name: string
+  description?: string | null
+  source: string
+  ownerId: string
+  accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
+}
+
+export interface ValidationScriptRequest {
+  name: string
+  description?: string | null
+  source: string
+  attrs?: string | null
+}
+
+export interface ValidationScriptUpdateRequest {
+  name?: string | null
+  description?: string | null
+  source?: string | null
+  attrs?: string | null
+}
+
 // ── Relation Rules ──
 
 export interface RelationRuleResponse extends BaseEntityResponse {
@@ -313,6 +337,7 @@ export type PermissionResourceType =
   | 'NODE_TYPE'
   | 'LINK_TYPE'
   | 'NODE_SHAPE'
+  | 'VALIDATION_SCRIPT'
   | 'FILE'
   | 'SHARE'
   | 'ADMIN_PANEL'
@@ -332,7 +357,7 @@ export interface PermissionCheckResponse {
 
 // ── Access shares ──
 
-export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE'
+export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE' | 'VALIDATION_SCRIPT'
 export type SharePermission = 'VIEW' | 'EDIT'
 
 export interface AccessShareRequest {

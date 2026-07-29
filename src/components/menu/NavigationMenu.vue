@@ -40,6 +40,9 @@ watch(
     <RouterLink to="/shapes" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="hexagon" :alt="t('nav.shapes')" />{{ t("nav.shapes") }}
     </RouterLink>
+    <RouterLink to="/validation-scripts" class="app-nav__link" active-class="app-nav__link--active">
+      <UiIcon name="terminal" :alt="t('nav.validationScripts')" />{{ t("nav.validationScripts") }}
+    </RouterLink>
     <RouterLink to="/docs" class="app-nav__link" active-class="app-nav__link--active">
       <UiIcon name="menu_book" :alt="t('nav.docs')" />{{ t("nav.docs") }}
     </RouterLink>

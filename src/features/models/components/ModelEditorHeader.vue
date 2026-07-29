@@ -239,6 +239,11 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     event: 'export-model-package',
     title: t('toolbar.exportModelPackage'),
   },
+  {
+    icon: 'terminal',
+    event: 'run-validation-script',
+    title: t('validationScripts.toolbarRun'),
+  },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin
     ? [

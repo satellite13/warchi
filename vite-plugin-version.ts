@@ -1,7 +1,6 @@
 import type { Plugin } from "vite";
-import { writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
-import { readFileSync } from "fs";
 
 interface VersionDetails {
   version: string;
@@ -65,13 +64,14 @@ export default function versionPlugin(): Plugin {
       });
     },
     closeBundle() {
-      const outDir = "dist";
+      const outDir = resolve(process.cwd(), "dist");
+      if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
       writeFileSync(
-        resolve(process.cwd(), outDir, "version.json"),
+        resolve(outDir, "version.json"),
         JSON.stringify(versionDetails, null, 2)
       );
       writeFileSync(
-        resolve(process.cwd(), outDir, "health.json"),
+        resolve(outDir, "health.json"),
         JSON.stringify(healthDetails)
       );
     }

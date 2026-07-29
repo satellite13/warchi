@@ -10,6 +10,13 @@ type Viewport = { zoom: number; offsetX: number; offsetY: number }
 const LEFT_FIT_VP: Viewport = { zoom: 1.1, offsetX: 10, offsetY: 20 }
 const RIGHT_FIT_VP: Viewport = { zoom: 1.9, offsetX: 99, offsetY: 88 }
 
+type CanvasStubVm = {
+  _compareSide: 'left' | 'right'
+  _viewport: Viewport
+  setViewportCalls: Viewport[]
+  $emit: (e: string, p: Viewport) => void
+}
+
 let nextCanvasSide: 'left' | 'right' = 'left'
 
 function makeCanvasStub() {
@@ -24,30 +31,22 @@ function makeCanvasStub() {
       }
     },
     created() {
-      const self = this as { _compareSide: 'left' | 'right' }
+      const self = this as unknown as CanvasStubVm
       self._compareSide = nextCanvasSide
       nextCanvasSide = nextCanvasSide === 'left' ? 'right' : 'left'
     },
     methods: {
       fitToView() {
-        const self = this as {
-          _compareSide: 'left' | 'right'
-          _viewport: Viewport
-          $emit: (e: string, p: Viewport) => void
-        }
+        const self = this as unknown as CanvasStubVm
         const vp = self._compareSide === 'left' ? LEFT_FIT_VP : RIGHT_FIT_VP
         self._viewport = { ...vp }
         self.$emit('viewport-change', { ...vp })
       },
       getViewport(): Viewport {
-        return { ...(this as { _viewport: Viewport })._viewport }
+        return { ...(this as unknown as CanvasStubVm)._viewport }
       },
       setViewport(state: Viewport) {
-        const self = this as {
-          _viewport: Viewport
-          setViewportCalls: Viewport[]
-          $emit: (e: string, p: Viewport) => void
-        }
+        const self = this as unknown as CanvasStubVm
         self._viewport = { ...state }
         self.setViewportCalls.push({ ...state })
         self.$emit('viewport-change', { ...state })
@@ -284,7 +283,7 @@ describe('DualDiagramCompareView', () => {
 
     it('does not loop when setViewport emits viewport-change on target', async () => {
       const wrapper = mountCompare({ withDiagrams: true })
-      const { left, right } = canvasStubs(wrapper)
+      const { left } = canvasStubs(wrapper)
       const leftBefore = left.vm.setViewportCalls.length
       await left.vm.$emit('viewport-change', { zoom: 2, offsetX: 5, offsetY: 6 })
       await nextTick()

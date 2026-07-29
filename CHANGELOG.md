@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-07-29
+
+### Added
+- Notation catalog: import a `warchi-notation-export` JSON (v2) from the catalog toolbar.
+
+### Changed
+- Catalog create/import actions moved into compact toolbar buttons (large create cards removed from the grid).
+- App header is more compact (nav, logo); the product subtitle is shown as a logo tooltip.
+
+### Fixed
+- Type delete is no longer blocked by usages in soft-deleted notations.
+
 ## [0.11.0] - 2026-07-28
 
 ### Added

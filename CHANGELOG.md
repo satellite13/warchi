@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-07-29
+
+### Fixed
+- Helm chart version aligned with the application release for production deploy.
+
 ## [0.12.0] - 2026-07-29
 
 ### Added

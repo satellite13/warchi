@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-07-30
+
+### Added
+- Diagram compare: toggle to sync pan and zoom between the left and right canvases (on by default, persisted in localStorage).
+
 ## [0.12.1] - 2026-07-29
 
 ### Fixed

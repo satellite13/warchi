@@ -1,7 +1,7 @@
 # Compare viewports: sync pan/zoom toggle
 
 Date: 2026-07-30  
-Status: approved design
+Status: implemented (feat/compare-viewport-sync)
 
 ## Goal
 

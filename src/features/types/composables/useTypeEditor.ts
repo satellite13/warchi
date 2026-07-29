@@ -1,7 +1,8 @@
 import { ref, computed, watch, type Ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { apiGet, apiPost, apiPut, apiDelete } from "@/composables/useApi"
-import { listParams } from '@/api/queryHelpers'
+import { fetchAllPages } from "@/api/fetchAllPages"
+import { listParams } from "@/api/queryHelpers"
 import { useAuth } from "@/composables/useAuth"
 import { useSaveState } from "@/composables/useSaveState"
 import {
@@ -397,31 +398,24 @@ export function useTypeEditor() {
 
     isLoadingUsages.value = true
     try {
-      const query = listParams()
-
-      const [notationsResult, elementsResult] = await Promise.all([
-        apiGet<PaginatedResponse<NotationData>>(`/notations?${query.toString()}`),
+      // Only active (non-deleted) notations appear in /notations. Components/relations of
+      // soft-deleted notations can still be listed (admin bypass / diagram ACL path) — those
+      // must not hide the delete button or show as live usages.
+      const [notations, allElements] = await Promise.all([
+        fetchAllPages<NotationData>("/notations"),
         item.kind === "node"
-          ? apiGet<PaginatedResponse<ComponentResponse>>(`/components?${query.toString()}`)
-          : apiGet<PaginatedResponse<RelationResponse>>(`/relations?${query.toString()}`)
+          ? fetchAllPages<ComponentResponse>("/components")
+          : fetchAllPages<RelationResponse>("/relations"),
       ])
 
       const notationsMap = new Map<string, { name: string; icon?: string }>()
-      if (notationsResult.success) {
-        for (const n of notationsResult.data.content ?? []) {
-          notationsMap.set(n.id, {
-            name: `${n.name} (${n.version})`,
-            icon: parseIconFromAttrs(n.attrs)
-          })
-        }
+      for (const n of notations) {
+        notationsMap.set(n.id, {
+          name: `${n.name} (${n.version})`,
+          icon: parseIconFromAttrs(n.attrs),
+        })
       }
 
-      if (!elementsResult.success) {
-        typeUsages.value = []
-        return
-      }
-
-      const allElements = elementsResult.data.content ?? []
       const matched = allElements.filter((el) => {
         if (item.kind === "node") {
           return (el as ComponentResponse).nodeTypeId === item.id
@@ -432,6 +426,8 @@ export function useTypeEditor() {
       const grouped = new Map<string, UsageElement[]>()
       for (const el of matched) {
         const notId = (el as ComponentResponse).notationId ?? (el as RelationResponse).notationId
+        // Skip components/relations whose notation is soft-deleted or not visible.
+        if (!notationsMap.has(notId)) continue
         if (!grouped.has(notId)) {
           grouped.set(notId, [])
         }
@@ -439,19 +435,21 @@ export function useTypeEditor() {
           id: el.id,
           name: el.name,
           version: el.version,
-          icon: parsePaletteIconFromAttrs(el.attrs)
+          icon: parsePaletteIconFromAttrs(el.attrs),
         })
       }
 
       typeUsages.value = Array.from(grouped.entries()).map(([notationId, elements]) => {
-        const notation = notationsMap.get(notationId)
+        const notation = notationsMap.get(notationId)!
         return {
           notationId,
-          notationName: notation?.name ?? notationId,
-          notationIcon: notation?.icon,
-          elements
+          notationName: notation.name,
+          notationIcon: notation.icon,
+          elements,
         }
       })
+    } catch {
+      typeUsages.value = []
     } finally {
       isLoadingUsages.value = false
     }

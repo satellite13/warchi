@@ -33,7 +33,25 @@ vi.mock('@/composables/useApi', () => ({
 
 vi.mock('@/api/queryHelpers', () => ({
   listParams: vi.fn(() => new URLSearchParams({ size: '1000' })),
+  pagedListParams: vi.fn((page = 0, size = 2000) => {
+    const params = new URLSearchParams()
+    params.set('page', String(page))
+    params.set('size', String(size))
+    return params
+  }),
+  PAGE_SIZE_NOTATION: 2000,
 }))
+
+vi.mock('@/api/fetchAllPages', async () => {
+  const { apiGet } = await import('@/composables/useApi')
+  return {
+    fetchAllPages: vi.fn(async (path: string) => {
+      const result = await apiGet<{ content?: unknown[] }>(`${path}?page=0&size=2000`)
+      if (!result.success) throw new Error('fetch failed')
+      return result.data.content ?? []
+    }),
+  }
+})
 
 vi.mock('@/utils/resolveOwnerNames', () => ({
   normalizeOwnerId: (id: string | null | undefined) => (id ?? '').trim().toLowerCase(),
@@ -172,8 +190,8 @@ describe('useTypeEditor', () => {
 
     await editor.loadUsages(item)
 
-    expect(apiGet).toHaveBeenCalledWith('/notations?size=1000')
-    expect(apiGet).toHaveBeenCalledWith('/components?size=1000')
+    expect(apiGet).toHaveBeenCalledWith('/notations?page=0&size=2000')
+    expect(apiGet).toHaveBeenCalledWith('/components?page=0&size=2000')
     expect(editor.typeUsages.value).toEqual([
       {
         notationId: 'notation-1',
@@ -182,5 +200,32 @@ describe('useTypeEditor', () => {
         elements: [{ id: 'component-1', name: 'Component', version: '1.0.0', icon: 'hub' }],
       },
     ])
+  })
+
+  it('loadUsages ignores components from soft-deleted or invisible notations', async () => {
+    const editor = useTypeEditor()
+    const item = existingType()
+    vi.mocked(apiGet)
+      // Active notations list does not include the deleted notation.
+      .mockResolvedValueOnce(ok(page([])))
+      .mockResolvedValueOnce(
+        ok(
+          page([
+            {
+              id: 'component-1',
+              name: 'Orphan',
+              version: '1.0.0',
+              notationId: 'deleted-notation',
+              ownerId: 'owner-1',
+              nodeTypeId: 'type-1',
+              attrs: null,
+            },
+          ]),
+        ),
+      )
+
+    await editor.loadUsages(item)
+
+    expect(editor.typeUsages.value).toEqual([])
   })
 })

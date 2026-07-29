@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-29
+
+### Added
+- Shareable model validation scripts: catalog, CodeMirror editor, and run from the model editor (report-only JavaScript in a sandboxed iframe).
+- In-app help for the validation script API and model snapshot structures.
+
 ## [0.11.1] - 2026-07-29
 
 ### Added

@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useOidcAuth } from "../composables/useOidcAuth";
+import { useI18n } from "vue-i18n";
+import { apiPost } from "../api/apiClient";
+import { emitAuthUpdated, saveStoredUser } from "../composables/authStorage";
+import { normalizeUser } from "../utils/userRole";
+import type { User } from "../types/entities";
 
 const route = useRoute();
 const router = useRouter();
-const { processCallback } = useOidcAuth();
+const { t } = useI18n();
 
 const errorMessage = ref<string | null>(null);
 const isLoading = ref(true);
@@ -20,17 +24,35 @@ onMounted(async () => {
     return;
   }
 
-  const success = await processCallback(code, state);
-  isLoading.value = false;
+  try {
+    const result = await apiPost<{
+      accessToken?: string;
+      refreshToken?: string;
+      user: User;
+    }>("/auth/sso/callback", { code, state });
 
-  if (success) {
-    const redirectTarget =
-      typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
-        ? route.query.redirect
-        : null;
-    await router.replace(redirectTarget ?? { name: "home" });
-  } else {
-    errorMessage.value = "SSO login failed";
+    isLoading.value = false;
+
+    if (result.success && result.data) {
+      const normalizedUser = normalizeUser(result.data.user);
+      saveStoredUser(normalizedUser);
+      emitAuthUpdated(normalizedUser);
+
+      const redirectTarget =
+        typeof route.query.redirect === "string" && route.query.redirect.startsWith("/")
+          ? route.query.redirect
+          : null;
+      await router.replace(redirectTarget ?? { name: "home" });
+    } else {
+      const err = (result as { error: { message?: string; status?: number } }).error;
+      const detail = err?.message ?? err?.status ?? "unknown";
+      console.error("SSO callback failed:", err);
+      errorMessage.value = `${t("auth.ssoError")} (${detail})`;
+    }
+  } catch (e) {
+    console.error("SSO callback error:", e);
+    isLoading.value = false;
+    errorMessage.value = `${t("auth.ssoError")}: ${(e as Error).message}`;
   }
 });
 </script>

@@ -21,6 +21,7 @@ import {
   type EdgePathType,
   type EdgeStyle,
   type CContainer,
+  type ViewportState,
   isNodeEdgeEndpoint,
 } from '@ngroznykh/papirus'
 import {
@@ -244,6 +245,7 @@ const emit = defineEmits<{
     existingLinksNotOnDiagram: EditorLink[],
   ]
   liveCollaborationGesture: [phase: 'block' | 'unblock']
+  viewportChange: [viewport: ViewportState]
 }>()
 const { t } = useI18n()
 
@@ -2337,12 +2339,14 @@ function initRenderer(
   bindInteractionEvents(manager, r)
   r.on('zoom', () => {
     viewportRev.value += 1
+    emit('viewportChange', r.viewport)
     const diagramId = props.activeDiagram?.id
     if (!diagramId) return
     safePersistViewport(diagramId, r)
   })
   r.on('pan', () => {
     viewportRev.value += 1
+    emit('viewportChange', r.viewport)
     const diagramId = props.activeDiagram?.id
     if (!diagramId) return
     safePersistViewport(diagramId, r)
@@ -3185,6 +3189,20 @@ watch(
   }
 )
 
+const getViewport = (): ViewportState | null => {
+  if (!renderer) return null
+  return { ...renderer.viewport }
+}
+
+const setViewport = (state: ViewportState): void => {
+  if (!renderer) return
+  renderer.viewport = {
+    zoom: state.zoom,
+    offsetX: state.offsetX,
+    offsetY: state.offsetY,
+  }
+}
+
 defineExpose({
   zoomIn,
   zoomOut,
@@ -3192,6 +3210,8 @@ defineExpose({
   zoomToSelection,
   applyLayoutResult,
   resetView,
+  getViewport,
+  setViewport,
   toggleGrid,
   getGridVisible,
   toggleMiniMap,

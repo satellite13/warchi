@@ -1,6 +1,40 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DualDiagramCompareView from './DualDiagramCompareView.vue'
+import { nextTick } from 'vue'
+
+const SYNC_KEY = 'warchi:compare-sync-viewports'
+
+type Viewport = { zoom: number; offsetX: number; offsetY: number }
+
+function makeCanvasStub() {
+  return {
+    name: 'ModelDiagramCanvas',
+    template: '<div class="canvas-stub" />',
+    data() {
+      return {
+        _viewport: { zoom: 1, offsetX: 0, offsetY: 0 } as Viewport,
+        setViewportCalls: [] as Viewport[],
+      }
+    },
+    methods: {
+      fitToView: vi.fn(),
+      getViewport(): Viewport {
+        return { ...(this as { _viewport: Viewport })._viewport }
+      },
+      setViewport(state: Viewport) {
+        const self = this as {
+          _viewport: Viewport
+          setViewportCalls: Viewport[]
+          $emit: (e: string, p: Viewport) => void
+        }
+        self._viewport = { ...state }
+        self.setViewportCalls.push({ ...state })
+        self.$emit('viewport-change', { ...state })
+      },
+    },
+  }
+}
 
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
@@ -57,17 +91,18 @@ vi.mock('../composables/useComparisonDiff', async () => {
   }
 })
 
-const canvasStub = {
-  name: 'ModelDiagramCanvas',
-  template: '<div class="canvas-stub" />',
-  methods: { fitToView: vi.fn() },
-}
-
 function mountCompare(options?: {
   error?: string | null
   swapDisabled?: boolean
   withDiagrams?: boolean
+  syncStorage?: '1' | '0' | null
 }) {
+  if (options?.syncStorage === null) {
+    localStorage.removeItem(SYNC_KEY)
+  } else if (options?.syncStorage !== undefined) {
+    localStorage.setItem(SYNC_KEY, options.syncStorage)
+  }
+
   const diagram = options?.withDiagrams
     ? ({
         id: 'd1',
@@ -111,13 +146,25 @@ function mountCompare(options?: {
         AppHeader: true,
         AppFooter: true,
         UiIcon: true,
-        ModelDiagramCanvas: canvasStub,
+        ModelDiagramCanvas: makeCanvasStub(),
       },
     },
   })
 }
 
+function canvasStubs(wrapper: ReturnType<typeof mountCompare>) {
+  const canvases = wrapper.findAllComponents({ name: 'ModelDiagramCanvas' })
+  return {
+    left: canvases[0]!,
+    right: canvases[1]!,
+  }
+}
+
 describe('DualDiagramCompareView', () => {
+  beforeEach(() => {
+    localStorage.removeItem(SYNC_KEY)
+  })
+
   it('renders selector slots and swap control in the top bar', () => {
     const wrapper = mountCompare()
 
@@ -154,5 +201,75 @@ describe('DualDiagramCompareView', () => {
     expect(wrapper.find('.ddc__props').exists()).toBe(true)
     expect(wrapper.text()).toContain('Node /foo')
     expect(wrapper.text()).toContain('name')
+  })
+
+  describe('viewport sync', () => {
+    beforeEach(() => {
+      localStorage.removeItem(SYNC_KEY)
+    })
+
+    it('defaults sync ON and renders toggle checked', () => {
+      const wrapper = mountCompare({ withDiagrams: true })
+      const input = wrapper.find('.ddc__sync-input')
+      expect(input.exists()).toBe(true)
+      expect((input.element as HTMLInputElement).checked).toBe(true)
+    })
+
+    it('restores sync OFF from localStorage', () => {
+      localStorage.setItem(SYNC_KEY, '0')
+      const wrapper = mountCompare({ withDiagrams: true })
+      expect((wrapper.find('.ddc__sync-input').element as HTMLInputElement).checked).toBe(false)
+    })
+
+    it('persists toggle to localStorage', async () => {
+      const wrapper = mountCompare({ withDiagrams: true })
+      await wrapper.find('.ddc__sync-input').setValue(false)
+      expect(localStorage.getItem(SYNC_KEY)).toBe('0')
+      await wrapper.find('.ddc__sync-input').setValue(true)
+      expect(localStorage.getItem(SYNC_KEY)).toBe('1')
+    })
+
+    it('copies viewport from left to right when sync is on', async () => {
+      const wrapper = mountCompare({ withDiagrams: true })
+      const { left, right } = canvasStubs(wrapper)
+      const vp = { zoom: 2, offsetX: 40, offsetY: -10 }
+      await left.vm.$emit('viewport-change', vp)
+      await nextTick()
+      expect(right.vm.setViewportCalls.at(-1)).toEqual(vp)
+    })
+
+    it('does not sync when toggle is off', async () => {
+      localStorage.setItem(SYNC_KEY, '0')
+      const wrapper = mountCompare({ withDiagrams: true })
+      const { left, right } = canvasStubs(wrapper)
+      const before = right.vm.setViewportCalls.length
+      await left.vm.$emit('viewport-change', { zoom: 3, offsetX: 1, offsetY: 2 })
+      await nextTick()
+      expect(right.vm.setViewportCalls.length).toBe(before)
+    })
+
+    it('snaps opposite to last active when sync is turned on', async () => {
+      localStorage.setItem(SYNC_KEY, '0')
+      const wrapper = mountCompare({ withDiagrams: true })
+      const { left, right } = canvasStubs(wrapper)
+
+      right.vm._viewport = { zoom: 1.5, offsetX: 9, offsetY: 8 }
+      await right.vm.$emit('viewport-change', right.vm._viewport)
+      await nextTick()
+
+      await wrapper.find('.ddc__sync-input').setValue(true)
+      await nextTick()
+
+      expect(left.vm.setViewportCalls.at(-1)).toEqual({ zoom: 1.5, offsetX: 9, offsetY: 8 })
+    })
+
+    it('does not loop when setViewport emits viewport-change on target', async () => {
+      const wrapper = mountCompare({ withDiagrams: true })
+      const { left, right } = canvasStubs(wrapper)
+      const leftBefore = left.vm.setViewportCalls.length
+      await left.vm.$emit('viewport-change', { zoom: 2, offsetX: 5, offsetY: 6 })
+      await nextTick()
+      expect(left.vm.setViewportCalls.length).toBe(leftBefore)
+    })
   })
 })

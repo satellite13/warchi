@@ -48,7 +48,16 @@ const rightCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const SYNC_VIEWPORTS_KEY = 'warchi:compare-sync-viewports'
 const syncViewports = ref(loadString(SYNC_VIEWPORTS_KEY, '1') !== '0')
 const lastActiveSide = ref<'left' | 'right'>('left')
-let applyingSync = false
+let syncSuppressDepth = 0
+
+function withSyncSuppressed(fn: () => void): void {
+  syncSuppressDepth += 1
+  try {
+    fn()
+  } finally {
+    syncSuppressDepth -= 1
+  }
+}
 
 function canvasFor(side: 'left' | 'right') {
   return side === 'left' ? leftCanvasRef.value : rightCanvasRef.value
@@ -61,17 +70,14 @@ function otherSide(side: 'left' | 'right'): 'left' | 'right' {
 function applyViewportTo(side: 'left' | 'right', state: ViewportState): void {
   const canvas = canvasFor(side)
   if (!canvas) return
-  applyingSync = true
-  try {
+  withSyncSuppressed(() => {
     canvas.setViewport(state)
-  } finally {
-    applyingSync = false
-  }
+  })
 }
 
 function handleViewportChange(side: 'left' | 'right', _viewport: ViewportState): void {
   lastActiveSide.value = side
-  if (!syncViewports.value || applyingSync) return
+  if (!syncViewports.value || syncSuppressDepth > 0) return
   const src = canvasFor(side)?.getViewport()
   if (!src) return
   applyViewportTo(otherSide(side), src)
@@ -130,8 +136,10 @@ const {
 function centerBothCanvases(): void {
   nextTick(() => {
     requestAnimationFrame(() => {
-      leftCanvasRef.value?.fitToView()
-      rightCanvasRef.value?.fitToView()
+      withSyncSuppressed(() => {
+        leftCanvasRef.value?.fitToView()
+        rightCanvasRef.value?.fitToView()
+      })
       if (syncViewports.value) {
         const src = leftCanvasRef.value?.getViewport()
         if (src) applyViewportTo('right', src)

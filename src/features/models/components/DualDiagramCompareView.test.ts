@@ -7,6 +7,11 @@ const SYNC_KEY = 'warchi:compare-sync-viewports'
 
 type Viewport = { zoom: number; offsetX: number; offsetY: number }
 
+const LEFT_FIT_VP: Viewport = { zoom: 1.1, offsetX: 10, offsetY: 20 }
+const RIGHT_FIT_VP: Viewport = { zoom: 1.9, offsetX: 99, offsetY: 88 }
+
+let nextCanvasSide: 'left' | 'right' = 'left'
+
 function makeCanvasStub() {
   return {
     name: 'ModelDiagramCanvas',
@@ -15,10 +20,25 @@ function makeCanvasStub() {
       return {
         _viewport: { zoom: 1, offsetX: 0, offsetY: 0 } as Viewport,
         setViewportCalls: [] as Viewport[],
+        _compareSide: 'left' as 'left' | 'right',
       }
     },
+    created() {
+      const self = this as { _compareSide: 'left' | 'right' }
+      self._compareSide = nextCanvasSide
+      nextCanvasSide = nextCanvasSide === 'left' ? 'right' : 'left'
+    },
     methods: {
-      fitToView: vi.fn(),
+      fitToView() {
+        const self = this as {
+          _compareSide: 'left' | 'right'
+          _viewport: Viewport
+          $emit: (e: string, p: Viewport) => void
+        }
+        const vp = self._compareSide === 'left' ? LEFT_FIT_VP : RIGHT_FIT_VP
+        self._viewport = { ...vp }
+        self.$emit('viewport-change', { ...vp })
+      },
       getViewport(): Viewport {
         return { ...(this as { _viewport: Viewport })._viewport }
       },
@@ -97,6 +117,8 @@ function mountCompare(options?: {
   withDiagrams?: boolean
   syncStorage?: '1' | '0' | null
 }) {
+  nextCanvasSide = 'left'
+
   if (options?.syncStorage === null) {
     localStorage.removeItem(SYNC_KEY)
   } else if (options?.syncStorage !== undefined) {
@@ -267,6 +289,21 @@ describe('DualDiagramCompareView', () => {
       await left.vm.$emit('viewport-change', { zoom: 2, offsetX: 5, offsetY: 6 })
       await nextTick()
       expect(left.vm.setViewportCalls.length).toBe(leftBefore)
+    })
+
+    it('after paired fitToView, left fit wins (right snapped to left)', async () => {
+      const wrapper = mountCompare({ withDiagrams: true })
+      await nextTick()
+      await new Promise<void>((r) => requestAnimationFrame(() => r()))
+      await nextTick()
+
+      const { left, right } = canvasStubs(wrapper)
+      expect(left.vm.getViewport()).toEqual(LEFT_FIT_VP)
+      expect(right.vm.getViewport()).toEqual(LEFT_FIT_VP)
+      expect(right.vm.setViewportCalls.at(-1)).toEqual(LEFT_FIT_VP)
+      expect(left.vm.setViewportCalls.some((vp: Viewport) => vp.zoom === RIGHT_FIT_VP.zoom)).toBe(
+        false,
+      )
     })
   })
 })

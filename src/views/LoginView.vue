@@ -22,10 +22,6 @@ const { ssoLogin } = useOidcAuth();
 
 const isSsoLoading = ref(false);
 const ssoError = ref<string | null>(null);
-const ssoLabel = computed(() => {
-  if (isSsoLoading.value) return t("auth.submitSsoLoading");
-  return t("auth.submitSso");
-});
 
 const handleSsoLogin = async () => {
   isSsoLoading.value = true;
@@ -164,14 +160,7 @@ const handleSubmit = async () => {
   }
 };
 
-const tabs = computed(
-  () =>
-    [
-      { key: "login", label: t("auth.tabLogin") },
-      { key: "register", label: t("auth.tabRegister") },
-      { key: "register-admin", label: t("auth.tabAdmin") }
-    ] as const
-);
+const tabs = computed(() => [{ key: "login", label: t("auth.tabLogin") }] as const);
 
 const setMode = (newMode: "login" | "register" | "register-admin") => {
   if (isLoading.value) return;
@@ -232,8 +221,9 @@ const siteReturnUrl = computed(() => {
           :disabled="isSsoLoading"
           @click="handleSsoLogin"
         >
+          <img v-if="!isSsoLoading" class="sso-btn__icon" src="/icons/openid.png" alt="" width="16" height="16" />
           <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
-          {{ ssoLabel }}
+          <span v-if="!isSsoLoading">{{ t("auth.submitSso") }}</span>
         </button>
         <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
         <div class="sso-divider"><span>{{ t('auth.orDivider') }}</span></div>
@@ -936,13 +926,13 @@ const siteReturnUrl = computed(() => {
 }
 
 /* ─── Responsive ──────────────────────────────── */
+
 @media (max-width: 500px) {
   .card {
     margin: 16px;
     padding: 28px 24px 32px;
   }
 }
-</style>
 
 .sso-block {
   display: flex;
@@ -952,42 +942,59 @@ const siteReturnUrl = computed(() => {
 }
 
 .sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius);
-  padding: 12px 16px;
+  padding: 14px 24px;
+  font-size: 15px;
   font-weight: 600;
+  font-family: inherit;
+  background: #FDC300;
+  color: #000;
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
 }
 
 .sso-btn:hover:not(:disabled) {
-  border-color: var(--primary);
+  background: #E79F26;
+  box-shadow: 0 4px 16px rgba(253, 195, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.sso-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .sso-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+.sso-btn__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
 .sso-btn__spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 8px;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #000;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  vertical-align: middle;
+  animation: spin 0.6s linear infinite;
 }
 
 .sso-divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--muted);
+  color: var(--text-subtle);
   font-size: 12px;
 }
 
@@ -996,5 +1003,6 @@ const siteReturnUrl = computed(() => {
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--border);
+  background: rgba(0, 0, 0, 0.08);
 }
+</style>

@@ -68,6 +68,7 @@ export interface User {
   email: string
   role?: UserRole
   isActive?: boolean
+  oidcSub?: string | null
   firstName?: string | null
   lastName?: string | null
   middleName?: string | null

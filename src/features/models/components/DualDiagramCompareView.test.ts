@@ -204,10 +204,6 @@ describe('DualDiagramCompareView', () => {
   })
 
   describe('viewport sync', () => {
-    beforeEach(() => {
-      localStorage.removeItem(SYNC_KEY)
-    })
-
     it('defaults sync ON and renders toggle checked', () => {
       const wrapper = mountCompare({ withDiagrams: true })
       const input = wrapper.find('.ddc__sync-input')
@@ -233,6 +229,7 @@ describe('DualDiagramCompareView', () => {
       const wrapper = mountCompare({ withDiagrams: true })
       const { left, right } = canvasStubs(wrapper)
       const vp = { zoom: 2, offsetX: 40, offsetY: -10 }
+      left.vm._viewport = vp
       await left.vm.$emit('viewport-change', vp)
       await nextTick()
       expect(right.vm.setViewportCalls.at(-1)).toEqual(vp)

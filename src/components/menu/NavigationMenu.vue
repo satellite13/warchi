@@ -58,24 +58,29 @@ watch(
 <style scoped>
 .app-nav {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
 }
 
 .app-nav__link {
   text-decoration: none;
   color: var(--text-muted);
   font-weight: 500;
-  font-size: 14px;
-  padding: 7px 14px;
+  font-size: 12px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm);
   transition: color 0.2s ease, background 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .app-nav__link .ui-icon {
-  font-size: 20px;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .app-nav__link:hover {

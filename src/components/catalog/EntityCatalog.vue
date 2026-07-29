@@ -11,7 +11,6 @@ import type { VersionedEntity } from "../../types/entities";
 import type { ShareResourceType } from "../../types/api";
 import ListHeader from "../list/ListHeader.vue";
 import EntityCard from "../cards/EntityCard.vue";
-import CreateCard from "../cards/CreateCard.vue";
 import CardSkeleton from "../cards/CardSkeleton.vue";
 import EmptyState from "../list/EmptyState.vue";
 import EntityCreateModal from "../modals/EntityCreateModal.vue";
@@ -234,37 +233,49 @@ function handleExport(group: {
 <template>
   <main class="home">
     <header class="home-header">
-      <ListHeader
-        v-model="searchQuery"
-        :placeholder="t(`${i18nPrefix}.searchPlaceholder`)"
-        :count="itemCount"
-        :loading="isLoading"
-      />
+      <div class="catalog-toolbar">
+        <div class="catalog-toolbar__actions">
+          <button
+            type="button"
+            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            :title="t(`${i18nPrefix}.createDescription`)"
+            @click="openCreateModal"
+          >
+            <UiIcon name="add" />
+            <span>{{ t(`${i18nPrefix}.createTitle`) }}</span>
+          </button>
+          <button
+            v-if="canImportPackage"
+            type="button"
+            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            :title="t(`${i18nPrefix}.packageImportDescription`)"
+            @click="emit('importPackage')"
+          >
+            <UiIcon name="upload" />
+            <span>{{ t(`${i18nPrefix}.packageImportTitle`) }}</span>
+          </button>
+        </div>
+        <ListHeader
+          v-model="searchQuery"
+          class="catalog-toolbar__search"
+          :placeholder="t(`${i18nPrefix}.searchPlaceholder`)"
+          :count="itemCount"
+          :loading="isLoading"
+        />
+      </div>
     </header>
 
     <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
     <div v-if="actionStatusMessage" class="catalog-action-status">{{ actionStatusMessage }}</div>
 
     <section class="model-grid">
-      <CreateCard
-        :title="t(`${i18nPrefix}.createTitle`)"
-        :description="t(`${i18nPrefix}.createDescription`)"
-        @click="openCreateModal"
-      />
-      <CreateCard
-        v-if="canImportPackage"
-        icon="upload"
-        :title="t(`${i18nPrefix}.packageImportTitle`)"
-        :description="t(`${i18nPrefix}.packageImportDescription`)"
-        @click="emit('importPackage')"
-      />
       <CardSkeleton v-if="isLoading" :count="4" />
       <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
       <EmptyState
-        v-else-if="filteredItems.length === 0 && searchQuery"
+        v-else-if="filteredItems.length === 0"
         :title="t(`${i18nPrefix}.notFoundTitle`)"
         :description="t(`${i18nPrefix}.notFoundDescription`)"
-        icon="search"
+        :icon="searchQuery ? 'search' : icon"
       />
 
       <EntityCard
@@ -406,6 +417,38 @@ function handleExport(group: {
 .home-header {
   flex-shrink: 0;
   margin-bottom: 24px;
+}
+
+.catalog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.catalog-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.catalog-toolbar__btn {
+  height: 34px;
+  padding: 0 12px;
+}
+
+.catalog-toolbar__btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.catalog-toolbar__search {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .model-grid {

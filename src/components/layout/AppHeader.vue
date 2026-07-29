@@ -23,7 +23,7 @@ const handleLogout = async () => {
 <template>
   <header class="app-header">
     <div class="app-header__left">
-      <AppLogo size="md"/>
+      <AppLogo size="md" :show-subtitle="false"/>
       <NavigationMenu/>
     </div>
     <div class="user-info">
@@ -43,7 +43,8 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  gap: 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
@@ -60,34 +61,36 @@ const handleLogout = async () => {
 .app-header__left {
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 16px;
+  min-width: 0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .user-email {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
   letter-spacing: 0.01em;
 }
 
 .user-role {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--primary);
   background: var(--primary-soft);
   border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
   border-radius: 999px;
-  padding: 3px 8px;
+  padding: 2px 7px;
   letter-spacing: 0.03em;
 }
 
 .logout-button {
-  padding: 6px 8px;
+  padding: 4px 6px;
   font-size: large;
   font-weight: 100;
   color: var(--text-subtle);

@@ -77,8 +77,13 @@ async function onPackageSelected(event: Event) {
   actionStatusMessage.value = t("models.packageImporting");
   try {
     const result = await uploadModelPackage(file, pct => {
-      actionStatusMessage.value =
-        pct > 0 ? `${t("models.packageImporting")} ${pct}%` : t("models.packageImporting");
+      if (pct >= 100) {
+        actionStatusMessage.value = t("models.packageImportProcessing");
+      } else if (pct > 0) {
+        actionStatusMessage.value = `${t("models.packageImporting")} ${pct}%`;
+      } else {
+        actionStatusMessage.value = t("models.packageImporting");
+      }
     });
 
     if (!result.ok) {
@@ -87,6 +92,8 @@ async function onPackageSelected(event: Event) {
         exportError.value = t("models.packageImportConflict");
       } else if (result.code === "PAYLOAD_TOO_LARGE") {
         exportError.value = t("models.packageImportTooLarge");
+      } else if (result.status === 504 || result.status === 502) {
+        exportError.value = t("models.packageImportTimeout");
       } else if (result.code === "BAD_REQUEST") {
         exportError.value = result.message?.trim()
           ? t("models.packageImportError", { message: result.message })

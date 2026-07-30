@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-30
+
+### Added
+- Opt-in OIDC SSO login (branded button, callback/link flows, profile and admin visibility when enabled).
+
+### Fixed
+- Model and notation package import no longer fails with nginx 504 after upload reaches 100% (longer proxy timeouts and clearer timeout messaging).
+
 ## [0.12.2] - 2026-07-30
 
 ### Added

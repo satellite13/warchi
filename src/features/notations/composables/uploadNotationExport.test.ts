@@ -69,4 +69,23 @@ describe('uploadNotationExportJson', () => {
     }
     expect(apiPost).not.toHaveBeenCalled()
   })
+
+  it('sanitizes nginx HTML gateway timeout responses', async () => {
+    vi.mocked(apiPost).mockResolvedValue({
+      success: false,
+      error: {
+        status: 504,
+        message: '<html><head><title>504 Gateway Time-out</title></head></html>',
+      },
+    })
+    const file = new File(['{"format":"warchi-notation-export","version":2}'], 'x.json', {
+      type: 'application/json',
+    })
+    const result = await uploadNotationExportJson(file)
+    expect(result).toEqual({
+      ok: false,
+      status: 504,
+      message: 'Gateway timeout',
+    })
+  })
 })

@@ -81,6 +81,8 @@ async function onPackageSelected(event: Event) {
       actionStatusMessage.value = null;
       if (result.code === "CONFLICT") {
         exportError.value = t("notations.packageImportConflict");
+      } else if (result.status === 504 || result.status === 502) {
+        exportError.value = t("notations.packageImportTimeout");
       } else if (result.code === "BAD_REQUEST") {
         exportError.value = result.message?.trim()
           ? t("notations.packageImportError", { message: result.message })

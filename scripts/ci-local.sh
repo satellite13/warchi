@@ -36,6 +36,9 @@ node scripts/check-versions.mjs
 step "lint"
 npm run lint
 
+step "format:check"
+npm run format:check
+
 step "type-check"
 npx vue-tsc -b
 

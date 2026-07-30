@@ -29,10 +29,26 @@ type OidcStatus = {
 export type OidcPublicConfig = {
   enabled: boolean
   displayName: string
+  buttonBg?: string
+  buttonTextColor?: string
+  buttonIconUrl?: string
+  registrationEnabled: boolean
+}
+
+const DEFAULT_SSO_CONFIG: OidcPublicConfig = {
+  enabled: false,
+  displayName: 'SSO',
+  registrationEnabled: true,
+}
+
+function trimOrUndefined(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
 const oidcLinkStatus = ref<OidcStatus>({ linked: false })
-const ssoConfig = ref<OidcPublicConfig>({ enabled: false, displayName: 'SSO' })
+const ssoConfig = ref<OidcPublicConfig>({ ...DEFAULT_SSO_CONFIG })
 
 const applyOidcUser = (user: OidcLinkResponse['user']): void => {
   const normalizedUser = normalizeUser(user as unknown as User)
@@ -45,12 +61,17 @@ export function useOidcAuth() {
   async function fetchSsoConfig(): Promise<OidcPublicConfig> {
     const result = await apiGet<OidcPublicConfig>('/auth/sso/config')
     if (result.success && result.data) {
+      const data = result.data
       ssoConfig.value = {
-        enabled: Boolean(result.data.enabled),
-        displayName: result.data.displayName?.trim() || 'SSO',
+        enabled: Boolean(data.enabled),
+        displayName: data.displayName?.trim() || 'SSO',
+        buttonBg: trimOrUndefined(data.buttonBg),
+        buttonTextColor: trimOrUndefined(data.buttonTextColor),
+        buttonIconUrl: trimOrUndefined(data.buttonIconUrl),
+        registrationEnabled: data.registrationEnabled !== false,
       }
     } else {
-      ssoConfig.value = { enabled: false, displayName: 'SSO' }
+      ssoConfig.value = { ...DEFAULT_SSO_CONFIG }
     }
     return ssoConfig.value
   }

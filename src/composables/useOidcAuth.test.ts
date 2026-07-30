@@ -51,7 +51,7 @@ describe('useOidcAuth', () => {
     // Reset the module-level oidcLinkStatus ref between tests
     const { oidcLinkStatus, ssoConfig } = useOidcAuth()
     oidcLinkStatus.value = { linked: false }
-    ssoConfig.value = { enabled: false, displayName: 'SSO' }
+    ssoConfig.value = { enabled: false, displayName: 'SSO', registrationEnabled: true }
     // Reset location.href to empty string
     Object.defineProperty(globalThis, 'location', {
       value: { href: '' },
@@ -61,18 +61,32 @@ describe('useOidcAuth', () => {
   })
 
   describe('fetchSsoConfig', () => {
-    it('stores enabled config and display name', async () => {
+    it('stores enabled config, branding and registrationEnabled', async () => {
       mockApiGet.mockResolvedValue({
         success: true,
-        data: { enabled: true, displayName: 'Lemanapro' },
+        data: {
+          enabled: true,
+          displayName: 'Lemanapro',
+          buttonBg: '#0055aa',
+          buttonTextColor: '#ffffff',
+          buttonIconUrl: 'https://cdn.example.com/icon.svg',
+          registrationEnabled: false,
+        },
       })
 
       const { fetchSsoConfig, ssoConfig } = useOidcAuth()
       const result = await fetchSsoConfig()
 
       expect(mockApiGet).toHaveBeenCalledWith('/auth/sso/config')
-      expect(result).toEqual({ enabled: true, displayName: 'Lemanapro' })
-      expect(ssoConfig.value).toEqual({ enabled: true, displayName: 'Lemanapro' })
+      expect(result).toEqual({
+        enabled: true,
+        displayName: 'Lemanapro',
+        buttonBg: '#0055aa',
+        buttonTextColor: '#ffffff',
+        buttonIconUrl: 'https://cdn.example.com/icon.svg',
+        registrationEnabled: false,
+      })
+      expect(ssoConfig.value).toEqual(result)
     })
 
     it('falls back to disabled when request fails', async () => {
@@ -81,8 +95,35 @@ describe('useOidcAuth', () => {
       const { fetchSsoConfig, ssoConfig } = useOidcAuth()
       const result = await fetchSsoConfig()
 
-      expect(result).toEqual({ enabled: false, displayName: 'SSO' })
+      expect(result).toEqual({
+        enabled: false,
+        displayName: 'SSO',
+        registrationEnabled: true,
+      })
       expect(ssoConfig.value.enabled).toBe(false)
+    })
+
+    it('treats blank branding as absent and defaults registrationEnabled to true', async () => {
+      mockApiGet.mockResolvedValue({
+        success: true,
+        data: {
+          enabled: true,
+          displayName: '   ',
+          buttonBg: '',
+          buttonTextColor: null,
+          buttonIconUrl: '  ',
+        },
+      })
+
+      const { fetchSsoConfig, ssoConfig } = useOidcAuth()
+      const result = await fetchSsoConfig()
+
+      expect(result).toEqual({
+        enabled: true,
+        displayName: 'SSO',
+        registrationEnabled: true,
+      })
+      expect(ssoConfig.value).toEqual(result)
     })
   })
 

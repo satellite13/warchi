@@ -75,6 +75,7 @@ async function onPackageSelected(event: Event) {
   exportError.value = null;
   actionStatusMessage.value = t("notations.packageImporting");
   try {
+    actionStatusMessage.value = t("notations.packageImportProcessing");
     const result = await uploadNotationExportJson(file);
 
     if (!result.ok) {
@@ -125,6 +126,7 @@ async function onPackageSelected(event: Event) {
     can-import-package
     :action-error-message="exportError"
     :action-status-message="actionStatusMessage"
+    :action-busy="isImporting"
     @export="handleExport"
     @import-package="openPackagePicker"
   />

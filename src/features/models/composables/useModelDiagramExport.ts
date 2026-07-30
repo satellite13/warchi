@@ -73,14 +73,15 @@ export function useModelDiagramExport(
     URL.revokeObjectURL(url)
   }
 
-  const uploadDiagramPreview = async (): Promise<boolean> => {
-    if (!activeDiagram.value?.id || !diagramRenderer.value) {
+  const uploadDiagramPreview = async (diagramId?: string): Promise<boolean> => {
+    const targetId = diagramId ?? activeDiagram.value?.id
+    if (!targetId || !diagramRenderer.value) {
       setUiError('Откройте диаграмму перед обновлением превью.')
       return false
     }
     const svg = buildCaptionedSvg()
     if (!svg) return false
-    const result = await uploadDiagramSvg(activeDiagram.value.id, svg)
+    const result = await uploadDiagramSvg(targetId, svg)
     if (result.success) return true
     setUiError(result.error.message)
     return false

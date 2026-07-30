@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import AppHeader from "../components/layout/AppHeader.vue"
@@ -12,6 +12,7 @@ import { getUserDisplayName } from "../utils/userDisplay"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import CompactEntityRow from "../components/list/CompactEntityRow.vue"
 import EmptyState from "../components/list/EmptyState.vue"
+import { uploadNotationExportJson } from "@/features/notations/composables/uploadNotationExport"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
 
@@ -25,6 +26,11 @@ const changelogRaw = computed(() => {
 const { currentUser } = useAuth()
 const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
 const appVersion = import.meta.env.APP_VERSION ?? "dev"
+
+const notationPackageInputRef = ref<HTMLInputElement | null>(null)
+const isImportingNotation = ref(false)
+const importStatusMessage = ref<string | null>(null)
+const importErrorMessage = ref<string | null>(null)
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -78,9 +84,34 @@ const statCards = computed(() => [
 ])
 
 const quickActions = computed(() => [
-  { icon: "add_circle", label: t("home.quickCreateModel"), route: "models", color: "#7c5cfc" },
-  { icon: "add_circle", label: t("home.quickCreateNotation"), route: "notations", color: "#2bb896" },
-  { icon: DEFAULT_ENTITY_ICONS.nodeType, label: t("home.quickTypeEditor"), route: "types", color: "#f59e42" }
+  {
+    key: "create-model",
+    icon: "add_circle",
+    label: t("home.quickCreateModel"),
+    route: "models" as const,
+    color: "#7c5cfc",
+  },
+  {
+    key: "create-notation",
+    icon: "add_circle",
+    label: t("home.quickCreateNotation"),
+    route: "notations" as const,
+    color: "#2bb896",
+  },
+  {
+    key: "import-notation",
+    icon: "upload",
+    label: t("home.quickImportNotation"),
+    action: "import-notation" as const,
+    color: "#2bb896",
+  },
+  {
+    key: "type-editor",
+    icon: DEFAULT_ENTITY_ICONS.nodeType,
+    label: t("home.quickTypeEditor"),
+    route: "types" as const,
+    color: "#f59e42",
+  },
 ])
 
 
@@ -88,6 +119,71 @@ const { formatRelativeDate, operationLabel, operationIcon, operationColor, table
   useActivityFormatting(t, locale)
 
 const goTo = (name: string) => router.push({ name })
+
+function openNotationPackagePicker() {
+  if (isImportingNotation.value) return
+  importErrorMessage.value = null
+  importStatusMessage.value = null
+  const input = notationPackageInputRef.value
+  if (!input) return
+  input.value = ""
+  const withPicker = input as HTMLInputElement & { showPicker?: () => void }
+  if (typeof withPicker.showPicker === "function") {
+    withPicker.showPicker()
+  } else {
+    input.click()
+  }
+}
+
+function handleQuickAction(action: (typeof quickActions.value)[number]) {
+  if ("action" in action && action.action === "import-notation") {
+    openNotationPackagePicker()
+    return
+  }
+  if ("route" in action && action.route) {
+    goTo(action.route)
+  }
+}
+
+async function onNotationPackageSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ""
+  if (!file || isImportingNotation.value) return
+
+  isImportingNotation.value = true
+  importErrorMessage.value = null
+  importStatusMessage.value = t("notations.packageImporting")
+  try {
+    importStatusMessage.value = t("notations.packageImportProcessing")
+    const result = await uploadNotationExportJson(file)
+
+    if (!result.ok) {
+      importStatusMessage.value = null
+      if (result.code === "CONFLICT") {
+        importErrorMessage.value = t("notations.packageImportConflict")
+      } else if (result.status === 504 || result.status === 502) {
+        importErrorMessage.value = t("notations.packageImportTimeout")
+      } else if (result.code === "BAD_REQUEST") {
+        importErrorMessage.value = result.message?.trim()
+          ? t("notations.packageImportError", { message: result.message })
+          : t("notations.packageImportBadRequest")
+      } else {
+        importErrorMessage.value = t("notations.packageImportError", { message: result.message })
+      }
+      return
+    }
+
+    importStatusMessage.value = null
+    await router.push({ name: "notation-editor", params: { id: result.notationId } })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    importStatusMessage.value = null
+    importErrorMessage.value = t("notations.packageImportError", { message })
+  } finally {
+    isImportingNotation.value = false
+  }
+}
 
 const releaseNotes = computed(() => {
   const escapedVersion = appVersion.replace(/\./g, "\\.")
@@ -109,7 +205,21 @@ const releaseNotes = computed(() => {
       <AppHeader />
     </template>
     <template #default>
-      <div class="dashboard">
+      <div class="dashboard" :aria-busy="isImportingNotation || undefined">
+        <input
+          ref="notationPackageInputRef"
+          class="dashboard__package-input"
+          type="file"
+          accept=".json,application/json"
+          @change="onNotationPackageSelected"
+        />
+        <div v-if="importErrorMessage" class="dashboard__import-error">{{ importErrorMessage }}</div>
+        <div v-if="isImportingNotation" class="dashboard__busy">
+          <UiIcon name="sync" class="dashboard__busy-icon spin" />
+          <p class="dashboard__busy-message">
+            {{ importStatusMessage || t("notations.packageImporting") }}
+          </p>
+        </div>
         <!-- Hero -->
         <section class="hero">
           <div class="hero__content">
@@ -247,11 +357,12 @@ const releaseNotes = computed(() => {
               <div class="actions-grid">
                 <button
                   v-for="action in quickActions"
-                  :key="action.label"
+                  :key="action.key"
                   type="button"
                   class="action-btn"
                   :style="{ '--action-color': action.color }"
-                  @click="goTo(action.route)"
+                  :disabled="isImportingNotation"
+                  @click="handleQuickAction(action)"
                 >
                   <UiIcon :name="action.icon" class="action-btn__icon" />
                   <span class="action-btn__label">{{ action.label }}</span>
@@ -304,6 +415,7 @@ const releaseNotes = computed(() => {
 
 <style scoped>
 .dashboard {
+  position: relative;
   padding: 28px 36px 36px;
   display: flex;
   flex-direction: column;
@@ -311,6 +423,67 @@ const releaseNotes = computed(() => {
   height: 100%;
   overflow-y: auto;
   background: var(--base-bg);
+}
+
+.dashboard__package-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dashboard__import-error {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.dashboard__busy {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 16px;
+  background: color-mix(in srgb, var(--base-bg) 88%, transparent);
+  text-align: center;
+}
+
+.dashboard__busy-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.dashboard__busy-icon.spin {
+  animation: dashboard-spin 1s linear infinite;
+}
+
+.dashboard__busy-message {
+  margin: 0;
+  max-width: 420px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--base-text);
+}
+
+@keyframes dashboard-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
 }
 
 /* ── Hero ── */

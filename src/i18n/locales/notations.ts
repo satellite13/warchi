@@ -21,6 +21,7 @@ export const notationsMessages = {
       packageImportTimeout:
         'Импорт нотации превысил время ожидания шлюза. Обновите список нотаций — она могла успеть создаться; если нет, повторите импорт.',
       packageImporting: 'Импорт нотации…',
+      packageImportProcessing: 'Импорт нотации… обработка на сервере',
       emptySourceVersion: 'Пустая нотация',
       notFoundTitle: 'Нотации не найдены',
       notFoundDescription: 'Попробуйте изменить поисковый запрос',
@@ -155,6 +156,7 @@ export const notationsMessages = {
       packageImportTimeout:
         'Notation import exceeded the gateway timeout. Refresh the notations list — it may have been created; if not, retry the import.',
       packageImporting: 'Importing notation…',
+      packageImportProcessing: 'Importing notation… processing on server',
       emptySourceVersion: 'Empty notation',
       notFoundTitle: 'No notations found',
       notFoundDescription: 'Try changing the search query',

@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { resolvePublicResourceUrl } from '@/api/resolvePublicResourceUrl'
 import { createDiagramShareLink } from '@/composables/useApi'
+import { waitForPublicShareUrl } from '../utils/waitForPublicShareUrl'
 
 const props = defineProps<{
   visible: boolean
   diagramId: string | null
   diagramName: string
   modelId: string | null
-  /** Called before creating the link to upload current diagram preview. If it returns false, link creation is skipped. */
-  onBeforeGetLink?: () => Promise<boolean | void>
+  /**
+   * Upload current canvas preview for the resolved target diagram id
+   * (pinned version or latest-by-name). Return false to abort.
+   */
+  onUploadPreview?: (diagramId: string) => Promise<boolean | void>
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +28,8 @@ const shareMode = ref<'version' | 'latest'>('version')
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
 const shareUrl = ref<string | null>(null)
+const copied = ref(false)
+let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const canGetLink = computed(
   () =>
@@ -31,19 +37,21 @@ const canGetLink = computed(
     (shareMode.value === 'latest' && props.modelId && props.diagramName)
 )
 
+const clearCopiedFeedback = () => {
+  copied.value = false
+  if (copiedResetTimer != null) {
+    clearTimeout(copiedResetTimer)
+    copiedResetTimer = null
+  }
+}
+
 const getShareLink = async () => {
   if (!canGetLink.value) return
   isLoading.value = true
   errorMessage.value = null
   shareUrl.value = null
+  clearCopiedFeedback()
   try {
-    if (props.onBeforeGetLink) {
-      const ok = await props.onBeforeGetLink()
-      if (ok === false) {
-        errorMessage.value = t('diagramShare.uploadFailed')
-        return
-      }
-    }
     const payload =
       shareMode.value === 'version' && props.diagramId
         ? { diagramId: props.diagramId }
@@ -52,12 +60,25 @@ const getShareLink = async () => {
           : null
     if (!payload) return
     const result = await createDiagramShareLink(payload)
-    if (result.success) {
-      // Backend returns absolute URL or /api/v1/... path — do not wrap with buildApiUrl
-      shareUrl.value = resolvePublicResourceUrl(result.data.url)
-    } else {
+    if (!result.success) {
       errorMessage.value = result.error.message
+      return
     }
+    // Upload to the diagram id the public URL actually resolves to (important for latest-by-name).
+    if (props.onUploadPreview) {
+      const ok = await props.onUploadPreview(result.data.diagramId)
+      if (ok === false) {
+        errorMessage.value = t('diagramShare.uploadFailed')
+        return
+      }
+    }
+    const url = resolvePublicResourceUrl(result.data.url)
+    const ready = await waitForPublicShareUrl(url)
+    if (!ready) {
+      errorMessage.value = t('diagramShare.linkNotReady')
+      return
+    }
+    shareUrl.value = url
   } finally {
     isLoading.value = false
   }
@@ -67,10 +88,23 @@ const copyToClipboard = async () => {
   if (!shareUrl.value) return
   try {
     await navigator.clipboard.writeText(shareUrl.value)
-    emit('close')
+    // Keep the modal open: closing immediately after clipboard.writeText can drop the
+    // clipboard contents in some browsers (focus/gesture lost on unmount).
+    copied.value = true
+    if (copiedResetTimer != null) clearTimeout(copiedResetTimer)
+    copiedResetTimer = setTimeout(() => {
+      copied.value = false
+      copiedResetTimer = null
+    }, 2000)
   } catch {
+    clearCopiedFeedback()
     errorMessage.value = t('diagramShare.copyFailed')
   }
+}
+
+const openShareUrl = () => {
+  if (!shareUrl.value || typeof window === 'undefined') return
+  window.open(shareUrl.value, '_blank', 'noopener,noreferrer')
 }
 
 watch(
@@ -79,9 +113,14 @@ watch(
     if (visible) {
       shareUrl.value = null
       errorMessage.value = null
+      clearCopiedFeedback()
     }
   }
 )
+
+onUnmounted(() => {
+  clearCopiedFeedback()
+})
 </script>
 
 <template>
@@ -123,12 +162,27 @@ watch(
           class="diagram-share-modal__btn diagram-share-modal__btn--secondary"
           @click="copyToClipboard"
         >
-          {{ t('diagramShare.copyLink') }}
+          {{ copied ? t('diagramShare.copied') : t('diagramShare.copyLink') }}
+        </button>
+        <button
+          v-if="shareUrl"
+          type="button"
+          class="diagram-share-modal__btn diagram-share-modal__btn--secondary"
+          @click="openShareUrl"
+        >
+          {{ t('diagramShare.openLink') }}
         </button>
       </div>
-      <p v-if="shareUrl" class="diagram-share-modal__url" :title="shareUrl">
+      <a
+        v-if="shareUrl"
+        class="diagram-share-modal__url"
+        :href="shareUrl"
+        :title="shareUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         {{ shareUrl }}
-      </p>
+      </a>
     </div>
   </BaseModal>
 </template>
@@ -203,12 +257,18 @@ watch(
   background: var(--surface-muted);
 }
 .diagram-share-modal__url {
+  display: block;
   margin: 1rem 0 0;
   padding: 0.5rem;
   background: var(--surface-muted);
   border-radius: 6px;
   font-size: 0.8rem;
   word-break: break-all;
-  color: var(--text-muted);
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.diagram-share-modal__url:hover {
+  color: var(--primary-hover);
 }
 </style>

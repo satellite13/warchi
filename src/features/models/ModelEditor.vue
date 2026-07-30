@@ -3342,7 +3342,7 @@ onBeforeUnmount(() => {
     :diagram-id="activeDiagram?.id ?? null"
     :diagram-name="activeDiagram?.name ?? ''"
     :model-id="model?.id ?? null"
-    :on-before-get-link="uploadDiagramPreview"
+    :on-upload-preview="uploadDiagramPreview"
     @close="showDiagramImageShareModal = false"
   />
 

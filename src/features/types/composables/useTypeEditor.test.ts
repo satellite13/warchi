@@ -234,8 +234,8 @@ describe('useTypeEditor', () => {
               nodeTypeId: 'type-1',
               attrs: null,
             },
-          ]),
-        ),
+          ])
+        )
       )
 
     await editor.loadUsages(item)

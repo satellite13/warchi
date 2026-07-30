@@ -21,13 +21,13 @@ export function displayCatalogItemName(item: ValidationScriptApiCatalogItem): st
 /** Groups catalog entries for the in-editor API help panel. */
 export function getValidationScriptApiHelpGroups(): ValidationScriptApiHelpGroup[] {
   const ctxItems = validationScriptApiCatalog.filter(
-    (item) => item.label === 'ctx' || item.parent === 'ctx'
+    item => item.label === 'ctx' || item.parent === 'ctx'
   )
   const reportItems = validationScriptApiCatalog.filter(
-    (item) => item.label === 'report' || item.parent === 'report'
+    item => item.label === 'report' || item.parent === 'report'
   )
   const helperItems = validationScriptApiCatalog.filter(
-    (item) => !item.parent && item.label !== 'ctx' && item.label !== 'report'
+    item => !item.parent && item.label !== 'ctx' && item.label !== 'report'
   )
   return [
     { id: 'ctx', items: ctxItems },

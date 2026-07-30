@@ -52,7 +52,7 @@ export function useValidationScripts(options?: { beforeUpdate?: () => boolean })
   }
 
   async function create(
-    request: ValidationScriptRequest,
+    request: ValidationScriptRequest
   ): Promise<ValidationScriptResponse | null> {
     error.value = null
     const result = await apiPost<ValidationScriptResponse>(validationScriptsPath, request)
@@ -65,13 +65,10 @@ export function useValidationScripts(options?: { beforeUpdate?: () => boolean })
 
   async function update(
     id: string,
-    request: ValidationScriptUpdateRequest,
+    request: ValidationScriptUpdateRequest
   ): Promise<ValidationScriptResponse | null> {
     error.value = null
-    const result = await apiPut<ValidationScriptResponse>(
-      `${validationScriptsPath}/${id}`,
-      request,
-    )
+    const result = await apiPut<ValidationScriptResponse>(`${validationScriptsPath}/${id}`, request)
     if (!result.success) {
       error.value = result.error.message
       return null

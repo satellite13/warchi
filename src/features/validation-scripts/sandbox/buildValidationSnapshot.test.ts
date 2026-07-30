@@ -68,6 +68,6 @@ describe('buildValidationSnapshot', () => {
     expect(snapshot.model.diagrams[0]?.nodeIds).toEqual(['n1'])
     expect(snapshot.model.diagrams[0]?.linkIds).toEqual(['l1'])
     expect(snapshot.notations).toHaveLength(1)
-    expect(snapshot.types.nodeTypes.map((t) => t.id)).toEqual(['nt1'])
+    expect(snapshot.types.nodeTypes.map(t => t.id)).toEqual(['nt1'])
   })
 })

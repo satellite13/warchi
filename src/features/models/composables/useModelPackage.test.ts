@@ -6,11 +6,7 @@ vi.mock('@/api/apiClient', () => ({
 }))
 
 import { apiDownload, apiUpload } from '@/api/apiClient'
-import {
-  downloadModelPackage,
-  downloadNotationExport,
-  uploadModelPackage,
-} from './useModelPackage'
+import { downloadModelPackage, downloadNotationExport, uploadModelPackage } from './useModelPackage'
 
 describe('uploadModelPackage', () => {
   beforeEach(() => {

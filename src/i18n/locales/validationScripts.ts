@@ -35,10 +35,8 @@ export const validationScriptsMessages = {
       runTimeout: 'Превышено время выполнения скрипта',
       runNoIssues:
         'Скрипт завершился без сообщений. Сохраните скрипт перед запуском и вызывайте report.* — иначе список результатов пуст.',
-      runHintWithDiagram:
-        'Скрипт получит всю модель; ctx.diagram — текущая открытая диаграмма.',
-      runHintModelOnly:
-        'Скрипт получит всю модель; ctx.diagram = null (диаграмма не открыта).',
+      runHintWithDiagram: 'Скрипт получит всю модель; ctx.diagram — текущая открытая диаграмма.',
+      runHintModelOnly: 'Скрипт получит всю модель; ctx.diagram = null (диаграмма не открыта).',
       toolbarRun: 'Скрипты',
       issuesTitle: 'Результаты ({count})',
       issueError: 'Ошибка',
@@ -114,8 +112,7 @@ export const validationScriptsMessages = {
       errorSave: 'Failed to save',
       errorDelete: 'Failed to delete',
       unsavedChangesTitle: 'Unsaved changes',
-      unsavedChangesText:
-        'The current script has unsaved changes. Discard changes and continue?',
+      unsavedChangesText: 'The current script has unsaved changes. Discard changes and continue?',
       stay: 'Stay',
       discardAndSwitch: 'Discard and switch',
       defaultName: 'New script',

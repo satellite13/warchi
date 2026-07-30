@@ -94,14 +94,16 @@ export const authMessages = {
       statusBlocked: 'Заблокирован',
       profileNotFilled: 'Профиль не заполнен',
       profileUpdated: 'Профиль пользователя {email} обновлен',
-      passwordMinLength: 'Новый пароль должен соответствовать политике безопасности (мин. 8 символов, буквы и цифра)',
+      passwordMinLength:
+        'Новый пароль должен соответствовать политике безопасности (мин. 8 символов, буквы и цифра)',
       passwordUpdated: 'Пароль пользователя {email} обновлен',
       changePassword: 'Сменить пароль',
       newPassword: 'Новый пароль',
     },
     adminDiagramLocks: {
       title: 'Блокировки редактирования диаграмм',
-      subtitle: 'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
+      subtitle:
+        'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
       diagram: 'Диаграмма',
       holder: 'Кто держит',
       expires: 'Истекает',
@@ -133,10 +135,8 @@ export const authMessages = {
       deletedSuccess: 'Объект удалён навсегда',
       deleteConflictActiveModels:
         'Нельзя удалить: нотация ещё используется диаграммами в активных моделях. Сначала удалите эти модели навсегда или смените нотацию на диаграммах.',
-      deleteConflictNodeType:
-        'Нельзя удалить: тип узла ещё используется узлами или компонентами.',
-      deleteConflictLinkType:
-        'Нельзя удалить: тип связи ещё используется связями или отношениями.',
+      deleteConflictNodeType: 'Нельзя удалить: тип узла ещё используется узлами или компонентами.',
+      deleteConflictLinkType: 'Нельзя удалить: тип связи ещё используется связями или отношениями.',
       name: 'Название',
       version: 'Версия',
       updated: 'Обновлено',
@@ -256,7 +256,8 @@ export const authMessages = {
     },
     adminDeleted: {
       title: 'Deleted items',
-      subtitle: 'Models, notations, types and shapes in trash. Permanent deletion cannot be undone.',
+      subtitle:
+        'Models, notations, types and shapes in trash. Permanent deletion cannot be undone.',
       deletedModels: 'Deleted models',
       deletedNotations: 'Deleted notations',
       deletedNodeTypes: 'Deleted node types',
@@ -271,7 +272,8 @@ export const authMessages = {
       entityNodeType: 'node type',
       entityLinkType: 'link type',
       entityShape: 'shape',
-      confirmPermanently: 'Permanently delete this item from the database? This action cannot be undone.',
+      confirmPermanently:
+        'Permanently delete this item from the database? This action cannot be undone.',
       loading: 'Loading...',
       deletedSuccess: 'Item permanently deleted',
       deleteConflictActiveModels:

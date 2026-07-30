@@ -55,7 +55,7 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
       ? crypto.randomUUID()
       : `run-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const iframe = document.createElement('iframe')
     // No allow-same-origin: opaque origin so user script cannot touch parent DOM.
     iframe.setAttribute('sandbox', 'allow-scripts')

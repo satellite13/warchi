@@ -10,9 +10,7 @@ describe('validationScriptApiHelp', () => {
   it('groups cover every top-level catalog binding', () => {
     const groups = getValidationScriptApiHelpGroups()
     const labels = new Set(
-      groups.flatMap((group) =>
-        group.items.filter((item) => !item.parent).map((item) => item.label)
-      )
+      groups.flatMap(group => group.items.filter(item => !item.parent).map(item => item.label))
     )
     for (const name of VALIDATION_SCRIPT_TOP_LEVEL_NAMES) {
       expect(labels.has(name)).toBe(true)
@@ -25,7 +23,7 @@ describe('validationScriptApiHelp', () => {
   })
 
   it('lists compact structures for nodes, links and rules', () => {
-    const ids = VALIDATION_SCRIPT_API_STRUCTURES.map((s) => s.id)
+    const ids = VALIDATION_SCRIPT_API_STRUCTURES.map(s => s.id)
     expect(ids).toEqual(
       expect.arrayContaining(['node', 'link', 'relationRule', 'component', 'relation', 'target'])
     )

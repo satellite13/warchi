@@ -192,7 +192,11 @@ describe('useModelLiveSync snapshot pull', () => {
     let modelGets = 0
 
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?') || path.startsWith('/links?') || path.startsWith('/diagrams?')) {
+      if (
+        path.startsWith('/nodes?') ||
+        path.startsWith('/links?') ||
+        path.startsWith('/diagrams?')
+      ) {
         return { success: true, data: page([]) }
       }
       if (path === '/models/model-gone') {

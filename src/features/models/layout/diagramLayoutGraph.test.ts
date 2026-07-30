@@ -8,13 +8,13 @@ import {
 } from './diagramLayoutGraph'
 import type { DiagramAttrs } from '../modelAttrs'
 
-const n = (
-  id: string,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-): LayoutNode => ({ id, x, y, width: w, height: h })
+const n = (id: string, x: number, y: number, w: number, h: number): LayoutNode => ({
+  id,
+  x,
+  y,
+  width: w,
+  height: h,
+})
 
 describe('nodeBounds', () => {
   it('uses defaults when width/height missing', () => {

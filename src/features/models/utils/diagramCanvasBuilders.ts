@@ -104,11 +104,7 @@ export function mergeEffectiveDiagramStyle(
   bound: DiagramStyle | undefined,
   instanceStyle: DiagramStyle | undefined
 ): DiagramStyle | undefined {
-  if (
-    instanceStyle &&
-    typeof instanceStyle === 'object' &&
-    !Array.isArray(instanceStyle)
-  ) {
+  if (instanceStyle && typeof instanceStyle === 'object' && !Array.isArray(instanceStyle)) {
     return { ...(bound ?? {}), ...instanceStyle }
   }
   return bound

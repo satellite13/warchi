@@ -134,17 +134,23 @@ function catalogItemToCompletion(item: ValidationScriptApiCatalogItem): Completi
 
 function topLevelCompletions(): Completion[] {
   return validationScriptApiCatalog
-    .filter((item) => !item.parent && VALIDATION_SCRIPT_TOP_LEVEL_NAMES.includes(item.label as ValidationScriptTopLevelName))
+    .filter(
+      item =>
+        !item.parent &&
+        VALIDATION_SCRIPT_TOP_LEVEL_NAMES.includes(item.label as ValidationScriptTopLevelName)
+    )
     .map(catalogItemToCompletion)
 }
 
 function memberCompletions(parent: string): Completion[] {
   return validationScriptApiCatalog
-    .filter((item) => item.parent === parent)
+    .filter(item => item.parent === parent)
     .map(catalogItemToCompletion)
 }
 
-export function validationScriptCompletionSource(context: CompletionContext): CompletionResult | null {
+export function validationScriptCompletionSource(
+  context: CompletionContext
+): CompletionResult | null {
   const word = context.matchBefore(/[\w.]*$/)
   if (!word || (word.from === word.to && !context.explicit)) return null
 

@@ -8,11 +8,7 @@ vi.mock('./elkLoader', () => ({
 }))
 
 import { defaultLayoutUiOptions } from './layoutOptions'
-import {
-  inferLayoutDirection,
-  resolveLayoutScopeIds,
-  runDiagramLayout,
-} from './runDiagramLayout'
+import { inferLayoutDirection, resolveLayoutScopeIds, runDiagramLayout } from './runDiagramLayout'
 
 describe('inferLayoutDirection', () => {
   it('returns RIGHT when horizontal deltas dominate', () => {

@@ -123,7 +123,12 @@ describe('validationScriptApi', () => {
   it('filters diagram nodes and nodesOfType by name', () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), 'd1', issues)
-    expect(api.diagramNodes(api.ctx.diagram!).map((n) => n.id).sort()).toEqual(['n1', 'n2'])
+    expect(
+      api
+        .diagramNodes(api.ctx.diagram!)
+        .map(n => n.id)
+        .sort()
+    ).toEqual(['n1', 'n2'])
     expect(api.nodesOfType('Application')).toHaveLength(2)
     expect(api.nodesOfType('nt-db')).toHaveLength(1)
   })
@@ -153,7 +158,7 @@ if (!ctx.diagram) {
 `
     const { error } = executeValidationScript(source, api)
     expect(error).toBeUndefined()
-    expect(issues.some((i) => i.level === 'info' && i.message.includes('Flow'))).toBe(true)
+    expect(issues.some(i => i.level === 'info' && i.message.includes('Flow'))).toBe(true)
   })
 
   it('runs duplicate-links golden script', () => {
@@ -197,17 +202,14 @@ if (ctx.diagram) {
       api
     )
     expect(error).toBeUndefined()
-    expect(issues.map((i) => i.message).sort()).toEqual(['Node: App1', 'Node: App2'])
-    expect(issues.every((i) => i.target?.kind === 'node')).toBe(true)
+    expect(issues.map(i => i.message).sort()).toEqual(['Node: App1', 'Node: App2'])
+    expect(issues.every(i => i.target?.kind === 'node')).toBe(true)
   })
 
   it('captures runtime errors and keeps prior issues', () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), null, issues)
-    const { error } = executeValidationScript(
-      `report.info('before'); throw new Error('boom')`,
-      api
-    )
+    const { error } = executeValidationScript(`report.info('before'); throw new Error('boom')`, api)
     expect(error).toContain('boom')
     expect(issues).toEqual([{ level: 'info', message: 'before' }])
   })

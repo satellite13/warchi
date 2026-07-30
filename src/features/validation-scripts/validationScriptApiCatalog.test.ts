@@ -26,8 +26,8 @@ describe('validationScriptApiCatalog', () => {
 
   it('catalog includes every top-level binding', () => {
     const topLevelLabels = validationScriptApiCatalog
-      .filter((item) => !item.parent)
-      .map((item) => item.label)
+      .filter(item => !item.parent)
+      .map(item => item.label)
     for (const name of EXPECTED_TOP_LEVEL) {
       expect(topLevelLabels).toContain(name)
     }
@@ -35,13 +35,13 @@ describe('validationScriptApiCatalog', () => {
 
   it('includes ctx and report member completions', () => {
     const ctxMembers = validationScriptApiCatalog
-      .filter((item) => item.parent === 'ctx')
-      .map((item) => item.label)
+      .filter(item => item.parent === 'ctx')
+      .map(item => item.label)
     expect(ctxMembers).toEqual(expect.arrayContaining(['model', 'diagram', 'notations', 'types']))
 
     const reportMembers = validationScriptApiCatalog
-      .filter((item) => item.parent === 'report')
-      .map((item) => item.label)
+      .filter(item => item.parent === 'report')
+      .map(item => item.label)
     expect(reportMembers).toEqual(expect.arrayContaining(['error', 'warn', 'info']))
   })
 })

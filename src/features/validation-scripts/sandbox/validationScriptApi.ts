@@ -109,7 +109,7 @@ export function createValidationScriptApi(
   const ctx: ValidationRunContext = {
     model: snapshot.model,
     diagram: openDiagramId
-      ? (snapshot.model.diagrams.find((d) => d.id === openDiagramId) ?? null)
+      ? (snapshot.model.diagrams.find(d => d.id === openDiagramId) ?? null)
       : null,
     notations: snapshot.notations,
     types: snapshot.types,
@@ -137,22 +137,22 @@ export function createValidationScriptApi(
 
   const diagramNodes = (diagram: SnapshotDiagram): SnapshotNode[] => {
     const ids = new Set(diagram?.nodeIds ?? [])
-    return snapshot.model.nodes.filter((n) => ids.has(n.id))
+    return snapshot.model.nodes.filter(n => ids.has(n.id))
   }
 
   const diagramLinks = (diagram: SnapshotDiagram): SnapshotLink[] => {
     const ids = new Set(diagram?.linkIds ?? [])
-    return snapshot.model.links.filter((l) => ids.has(l.id))
+    return snapshot.model.links.filter(l => ids.has(l.id))
   }
 
   const nodesOfType = (typeIdOrName: string): SnapshotNode[] => {
     const ids = resolveTypeIds(snapshot.types.nodeTypes, typeIdOrName)
-    return snapshot.model.nodes.filter((n) => ids.has(n.nodeTypeId))
+    return snapshot.model.nodes.filter(n => ids.has(n.nodeTypeId))
   }
 
   const linksOfType = (typeIdOrName: string): SnapshotLink[] => {
     const ids = resolveTypeIds(snapshot.types.linkTypes, typeIdOrName)
-    return snapshot.model.links.filter((l) => ids.has(l.linkTypeId))
+    return snapshot.model.links.filter(l => ids.has(l.linkTypeId))
   }
 
   const linksBetween = (
@@ -166,7 +166,7 @@ export function createValidationScriptApi(
     if (options?.linkType) {
       typeFilter = resolveTypeIds(snapshot.types.linkTypes, options.linkType)
     }
-    return snapshot.model.links.filter((link) => {
+    return snapshot.model.links.filter(link => {
       const endpoints =
         (link.sourceId === aId && link.targetId === bId) ||
         (link.sourceId === bId && link.targetId === aId)
@@ -192,8 +192,7 @@ export function createValidationScriptApi(
             ? [link.sourceId, link.targetId]
             : [link.targetId, link.sourceId]
       }
-      const key =
-        by === 'endpoints' ? `${left}|${right}` : `${left}|${right}|${link.linkTypeId}`
+      const key = by === 'endpoints' ? `${left}|${right}` : `${left}|${right}|${link.linkTypeId}`
       const list = groups.get(key)
       if (list) list.push(link.id)
       else groups.set(key, [link.id])
@@ -221,7 +220,7 @@ export function createValidationScriptApi(
     node: SnapshotNode | string
   ): SnapshotNotation['components'][number] | null => {
     const id = nodeId(node)
-    const modelNode = snapshot.model.nodes.find((n) => n.id === id)
+    const modelNode = snapshot.model.nodes.find(n => n.id === id)
     if (!modelNode) return null
     const attrs = modelNode.attrs
     const notationComponents =
@@ -233,20 +232,20 @@ export function createValidationScriptApi(
         const componentId = binding?.componentId
         if (!componentId) continue
         for (const notation of snapshot.notations) {
-          const found = notation.components.find((c) => c.id === componentId)
+          const found = notation.components.find(c => c.id === componentId)
           if (found) return found
         }
       }
     }
     for (const notation of snapshot.notations) {
-      const byType = notation.components.find((c) => c.nodeTypeId === modelNode.nodeTypeId)
+      const byType = notation.components.find(c => c.nodeTypeId === modelNode.nodeTypeId)
       if (byType) return byType
     }
     return null
   }
 
   const relationRules = (notationId: string) => {
-    const notation = snapshot.notations.find((n) => n.id === notationId)
+    const notation = snapshot.notations.find(n => n.id === notationId)
     return notation?.relationRules ?? []
   }
 

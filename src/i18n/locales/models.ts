@@ -36,8 +36,7 @@ export const modelsMessages = {
       packageImporting: 'Импорт пакета…',
       packageExportFailed: 'Не удалось экспортировать пакет модели: {message}',
       packageImportCompletedWithWarnings: 'Пакет импортирован с предупреждениями: {count}',
-      packageImportCompletedWithWarningsDetail:
-        'Пакет импортирован. Предупреждения: {messages}',
+      packageImportCompletedWithWarningsDetail: 'Пакет импортирован. Предупреждения: {messages}',
       oefImportTargetNotation: 'Целевая нотация',
       oefImportSourceFile: 'Файл импорта (.xml)',
       oefImportSelectedFile: 'Выбран файл: {name}',

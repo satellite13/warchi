@@ -357,7 +357,8 @@ export interface PermissionCheckResponse {
 
 // ── Access shares ──
 
-export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE' | 'VALIDATION_SCRIPT'
+export type ShareResourceType =
+  'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE' | 'VALIDATION_SCRIPT'
 export type SharePermission = 'VIEW' | 'EDIT'
 
 export interface AccessShareRequest {

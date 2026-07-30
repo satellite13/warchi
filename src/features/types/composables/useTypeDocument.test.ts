@@ -49,16 +49,14 @@ describe('useTypeDocument loadVersions', () => {
 
     await loadVersions('file-1')
 
-    expect(docVersions.value.map((v) => v.versionNumber)).toEqual([2, 1])
+    expect(docVersions.value.map(v => v.versionNumber)).toEqual([2, 1])
     scope.stop()
   })
 
   it('accepts a bare array response', async () => {
     apiFetch.mockResolvedValue({
       success: true,
-      data: [
-        { versionNumber: 3, createdAt: '2026-01-03T00:00:00Z', createdBy: 'u1', size: 30 },
-      ],
+      data: [{ versionNumber: 3, createdAt: '2026-01-03T00:00:00Z', createdBy: 'u1', size: 30 }],
     })
 
     const scope = effectScope()

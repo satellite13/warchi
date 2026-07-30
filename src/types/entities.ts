@@ -1,90 +1,90 @@
 export interface VersionedEntity {
-  id: string;
-  name: string;
-  version: string;
-  ownerId: string;
+  id: string
+  name: string
+  version: string
+  ownerId: string
   /** Email владельца из API списка (доступен даже когда public profile скрыт). */
-  ownerEmail?: string | null;
+  ownerEmail?: string | null
   /** Имя владельца из API списка (firstName + lastName, иначе email). */
-  ownerDisplayName?: string | null;
-  accessPermission?: AccessPermission | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
+  ownerDisplayName?: string | null
+  accessPermission?: AccessPermission | null
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 export interface ModelData extends VersionedEntity {
-  attrs?: string | null;
+  attrs?: string | null
   /** Id модели-источника, из которой создана эта версия (дерево версий). */
-  sourceId?: string | null;
+  sourceId?: string | null
 }
 
 export interface NotationData extends VersionedEntity {
-  attrs?: string | null;
+  attrs?: string | null
   /** Id нотации-источника, из которой создана эта версия (дерево версий). */
-  sourceId?: string | null;
+  sourceId?: string | null
 }
 
 export interface EntityGroup<T extends VersionedEntity> {
-  name: string;
-  versions: T[];
+  name: string
+  versions: T[]
 }
 
 export interface UserInfo {
-  id: string;
-  email: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  middleName?: string | null;
-  position?: string | null;
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+  middleName?: string | null
+  position?: string | null
 }
 
 /** Метаданные страницы в ответах Spring Data 3.3+ при сериализации Page через PagedModel. */
 export interface SpringPagedModelPage {
-  size: number;
-  number: number;
-  totalElements: number;
-  totalPages: number;
+  size: number
+  number: number
+  totalElements: number
+  totalPages: number
 }
 
 export interface PaginatedResponse<T> {
-  content?: T[];
+  content?: T[]
   /** arepos ListResponse (`/models`, `/users`, `/diagram-locks`, …) */
-  items?: T[];
+  items?: T[]
   /** Spring Data VIA_DTO: поля пагинации внутри `page`. */
-  page?: SpringPagedModelPage;
-  totalElements?: number;
-  totalPages?: number;
-  number?: number;
-  size?: number;
-  first?: boolean;
-  last?: boolean;
-  numberOfElements?: number;
-  empty?: boolean;
-  sort?: object | null;
+  page?: SpringPagedModelPage
+  totalElements?: number
+  totalPages?: number
+  number?: number
+  size?: number
+  first?: boolean
+  last?: boolean
+  numberOfElements?: number
+  empty?: boolean
+  sort?: object | null
 }
 
 export interface User {
-  id: string;
-  email: string;
-  role?: UserRole;
-  isActive?: boolean;
-  firstName?: string | null;
-  lastName?: string | null;
-  middleName?: string | null;
-  position?: string | null;
-  attrs?: string | null;
-  oidcSub?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
+  id: string
+  email: string
+  role?: UserRole
+  isActive?: boolean
+  firstName?: string | null
+  lastName?: string | null
+  middleName?: string | null
+  position?: string | null
+  attrs?: string | null
+  oidcSub?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
-export type UserRole = "USER" | "ADMIN";
+export type UserRole = 'USER' | 'ADMIN'
 
 export interface UserProfileForm {
-  firstName: string;
-  lastName: string;
-  middleName?: string;
-  position?: string;
+  firstName: string
+  lastName: string
+  middleName?: string
+  position?: string
 }
 
-export type AccessPermission = "OWNER" | "EDIT" | "VIEW" | "ADMIN";
+export type AccessPermission = 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN'

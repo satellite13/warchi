@@ -35,8 +35,7 @@ vi.mock('vue-router', () => ({
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: { name?: string }) =>
-      params?.name ? `${key}:${params.name}` : key,
+    t: (key: string, params?: { name?: string }) => (params?.name ? `${key}:${params.name}` : key),
   }),
 }))
 
@@ -63,10 +62,10 @@ describe('LoginView', () => {
   it('hides register and admin tabs when registration is disabled', async () => {
     const wrapper = mount(LoginView)
     await flushPromises()
-    const labels = wrapper.findAll('.tab').map((t) => t.text())
-    expect(labels.some((t) => t.includes('auth.tabLogin'))).toBe(true)
-    expect(labels.some((t) => t.includes('auth.tabRegister'))).toBe(false)
-    expect(labels.some((t) => t.includes('auth.tabAdmin'))).toBe(false)
+    const labels = wrapper.findAll('.tab').map(t => t.text())
+    expect(labels.some(t => t.includes('auth.tabLogin'))).toBe(true)
+    expect(labels.some(t => t.includes('auth.tabRegister'))).toBe(false)
+    expect(labels.some(t => t.includes('auth.tabAdmin'))).toBe(false)
   })
 
   it('applies SSO button branding from config', async () => {
@@ -82,8 +81,8 @@ describe('LoginView', () => {
     ssoConfig.value = { ...ssoConfig.value, registrationEnabled: true }
     const wrapper = mount(LoginView)
     await flushPromises()
-    const labels = wrapper.findAll('.tab').map((t) => t.text())
-    expect(labels.some((t) => t.includes('auth.tabRegister'))).toBe(true)
-    expect(labels.some((t) => t.includes('auth.tabAdmin'))).toBe(true)
+    const labels = wrapper.findAll('.tab').map(t => t.text())
+    expect(labels.some(t => t.includes('auth.tabRegister'))).toBe(true)
+    expect(labels.some(t => t.includes('auth.tabAdmin'))).toBe(true)
   })
 })

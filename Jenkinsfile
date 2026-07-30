@@ -1,233 +1,28 @@
 #!/usr/bin/env groovy
-@Library (['common-utils']) _
+@Library(['common-utils']) _
 
-properties([
-        buildDiscarder (logRotator (artifactDaysToKeepStr: '', artifactNumToKeepStr: '7', daysToKeepStr: '', numToKeepStr: '7')),
-        disableConcurrentBuilds (),
-    ])
+// Thin stub: full LMRU CI lives in lmru-warchi-deploy.
+def LMRU_DEPLOY_REPO = 'git@gitlab.lmru.tech:products/warchi/lmru-warchi-deploy.git'
+def LMRU_DEPLOY_BRANCH = 'master'
+def LMRU_SERVICE = 'warchi'
 
-// Kubernetes credentials
-def SERVICE_ACCOUNT = "lm-sa-warchi"
-def CLUSTER = "os1c-polaris-stage-01"
-env.CLUSTER = CLUSTER
-env.ARTIFACTORY_CREDS = "${SERVICE_ACCOUNT}"
+def pipelineClosure
+node('dockerhost') {
+    checkout scm
 
-// Registry credentials
-env.DOCKER_REGISTRY = 'docker-warchi.art.lmru.tech'
-env.DOCKER_REGISTRY_CREDS = "${env.ARTIFACTORY_CREDS}"
-
-// Vault
-env.VAULT_NAMESPACE = 'warchi'
-env.VAULT_PATH = 'stage'
-env.DOCKER_APP_PATH = 'warchi'
-
-// Shared state between stages
-def git_commit = ''
-def git_date = ''
-
-pipeline {
-    agent {
-        node {
-            label 'dockerhost'
-        }
+    dir('_lmru_deploy') {
+        deleteDir()
+        git branch: LMRU_DEPLOY_BRANCH,
+                credentialsId: 'lm-sa-warchi',
+                url: LMRU_DEPLOY_REPO
     }
 
-    triggers {
-        gitlab(
-                triggerOnPush: true,
-                branchFilterType: "All",
-                secretToken: ''
-        )
-    }
+    def deployRoot = "${pwd()}/_lmru_deploy"
+    env.LMRU_DEPLOY_DIR = deployRoot
+    env.LMRU_SERVICE = LMRU_SERVICE
 
-    parameters {
-        string(name: 'OVERRIDE_BRANCH', defaultValue: '', description: 'Override branch (leave empty for auto-detect)')
-        string(name: 'OVERRIDE_TAG', defaultValue: '', description: 'Override tag for prod release (e.g. 7.10.1)')
-        choice(name: 'OVERRIDE_ENV', choices: ['', 'dev', 'preprod', 'prod'], description: 'Override deploy env (leave empty for auto)')
-    }
-    post {
-        always {
-            script {
-                def cx = load '.jenkinsjobs/checkmarx.groovy'
-                try {
-                    cx.deleteCxProject()
-                } catch (e) {
-                    echo "CX cleanup failed (non-critical): ${e.message}"
-                }
-            }
-        }
-    }
+    sh "rm -rf .jenkinsjobs && cp -a '${deployRoot}/jenkins/warchi' .jenkinsjobs"
 
-    stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    def checkout = load '.jenkinsjobs/checkout.groovy'
-                    deleteDir()
-                    checkout.configure_environment(
-                            scm,
-                            params.OVERRIDE_BRANCH,
-                            params.OVERRIDE_TAG,
-                            params.OVERRIDE_ENV
-                    )
-                }
-            }
-        }
-
-        stage('Preparation') {
-            steps {
-                script {
-                    def prep = load '.jenkinsjobs/preparation.groovy'
-                    def gitInfo = prep.preparation_for_build(SERVICE_ACCOUNT)
-                    git_commit = gitInfo.git_commit
-                    git_date = gitInfo.git_date
-                }
-            }
-        }
-
-        stage('Validate') {
-            parallel {
-                stage('CX_scan') {
-                    steps {
-                        echo "CX_scan skipped (re-enabled when needed)"
-                    }
-                }
-
-                stage('Code-Quality') {
-                    stages {
-                        stage('Lint') {
-                            steps {
-                                script {
-                                    def lint = load '.jenkinsjobs/lint.groovy'
-                                    lint.run_lint(SERVICE_ACCOUNT)
-                                }
-                            }
-                        }
-
-                        stage('Type-check') {
-                            steps {
-                                script {
-                                    def typecheck = load '.jenkinsjobs/typecheck.groovy'
-                                    typecheck.run_typecheck(SERVICE_ACCOUNT)
-                                }
-                            }
-                        }
-
-                        stage('Unit-test') {
-                            steps {
-                                script {
-                                    def tests = load '.jenkinsjobs/unit_tests.groovy'
-                                    tests.run_unit_tests(SERVICE_ACCOUNT)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Build') {
-            steps {
-                script {
-                    def build = load '.jenkinsjobs/build.groovy'
-                    build.run_build(SERVICE_ACCOUNT)
-                }
-            }
-        }
-
-        // TODO: re-enable E2E-test when Playwright tests are stable
-        stage('E2E-test') {
-            when {
-                expression { false }
-            }
-            steps {
-                script {
-                    def e2e = load '.jenkinsjobs/e2e_tests.groovy'
-                    try {
-                        e2e.run_e2e_tests(SERVICE_ACCOUNT)
-                    } catch (e) {
-                        echo "E2E-test failed (non-blocking): ${e.message}"
-                    }
-                }
-            }
-        }
-
-        stage('SonarQube') {
-            steps {
-                script {
-                    try {
-                        def scanner = docker.image('docker.art.lmru.tech/sonarsource/sonar-scanner-cli:latest')
-                        scanner.pull()
-                        scanner.inside('-u root -e HOME=${HOME} -w ${WORKSPACE}') {
-                            withSonarQubeEnv(credentialsId: 'sonarqube_token', installationName: 'SonarQube') {
-                                sh "sonar-scanner -Dsonar.projectVersion=${env.DOCKER_IMAGE_TAG ? env.DOCKER_IMAGE_TAG : 'SNAPSHOT'} -Dsonar.verbose=true"
-                            }
-                        }
-                    } catch (e) {
-                        echo "WARNING: SonarQube scan failed (non-blocking): ${e.message}"
-                    }
-                }
-            }
-        }
-
-        stage('SonarQube Quality Gate') {
-            steps {
-                script {
-                    try {
-                        timeout(time: 5, unit: 'MINUTES') {
-                            waitForQualityGate()
-                        }
-                    } catch (e) {
-                        echo "WARNING: SonarQube Quality Gate failed (non-blocking): ${e.message}"
-                    }
-                }
-            }
-        }
-
-        stage('Scan') {
-            steps {
-                script {
-                    def scan = load '.jenkinsjobs/audit_scan.groovy'
-                    scan.run_audit_scan(SERVICE_ACCOUNT)
-                }
-            }
-        }
-
-
-        stage('Docker') {
-            when {
-                expression { env.skip_docker_deploy != 'true' }
-            }
-            steps {
-                script {
-                    def dockerBuild = load '.jenkinsjobs/docker_build.groovy'
-                    def is_prod = (env.deployment_environment == 'prod') || (env.image_days_retention == '180')
-                    dockerBuild.image_build_and_push(env.DOCKER_IMAGE, env.DOCKER_IMAGE_TAG, is_prod,
-                            scm.userRemoteConfigs[0].url, git_commit, git_date, env.image_days_retention, env.deployment_namespace)
-                }
-            }
-        }
-
-        stage('Deploy') {
-            when {
-                expression { env.skip_docker_deploy != 'true' }
-            }
-            steps {
-                script {
-                    def deploy = load '.jenkinsjobs/deploy.groovy'
-                    def is_tag_build = (env.is_tag_build == 'true')
-
-                    if (is_tag_build) {
-                        echo "=== TAG RELEASE: deploy ${env.deployment_namespace} (${env.vault_approle}) ==="
-                        deploy.get_variables_and_deploy('prod', env.deployment_namespace, env.DOCKER_IMAGE, env.DOCKER_IMAGE_TAG)
-                    } else if (['preprod', 'dev'].contains(env.deployment_environment)) {
-                        echo "Deploy to ${env.deployment_namespace} (${env.deployment_environment}, ${env.vault_approle})"
-                        deploy.get_variables_and_deploy(env.deployment_environment, env.deployment_namespace, env.DOCKER_IMAGE, env.DOCKER_IMAGE_TAG)
-                    } else {
-                        echo "Skip deploy: env=${env.deployment_environment}"
-                    }
-                }
-            }
-        }
-    }
+    pipelineClosure = load "${deployRoot}/pipelines/warchi/pipeline.groovy"
 }
+pipelineClosure()

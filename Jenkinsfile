@@ -1,13 +1,11 @@
 #!/usr/bin/env groovy
 @Library(['common-utils']) _
 
-// Thin stub: full LMRU CI lives in lmru-warchi-deploy.
-// HTTPS avoids Jenkins agent "Host key verification failed" on SSH to gitlab.lmru.tech.
+// Thin stub: full LMRU CI lives in lmru-warchi-deploy (scripted pipeline via load).
+// IMPORTANT: do not use Jenkins "Replay" with an old edited script — click Build Now.
 def LMRU_DEPLOY_REPO = 'https://gitlab.lmru.tech/products/warchi/lmru-warchi-deploy.git'
 def LMRU_DEPLOY_BRANCH = 'master'
-def LMRU_SERVICE = 'warchi'
 
-def pipelineClosure
 node('dockerhost') {
     checkout scm
 
@@ -26,10 +24,10 @@ node('dockerhost') {
 
     def deployRoot = "${pwd()}/_lmru_deploy"
     env.LMRU_DEPLOY_DIR = deployRoot
-    env.LMRU_SERVICE = LMRU_SERVICE
+    env.LMRU_SERVICE = 'warchi'
 
     sh "rm -rf .jenkinsjobs && cp -a '${deployRoot}/jenkins/warchi' .jenkinsjobs"
 
-    pipelineClosure = load "${deployRoot}/pipelines/warchi/pipeline.groovy"
+    // Executes scripted stages in this node (no declarative pipeline / no returned closure)
+    load "${deployRoot}/pipelines/warchi/pipeline.groovy"
 }
-pipelineClosure()

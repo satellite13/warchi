@@ -42,6 +42,8 @@ export const typesMessages = {
       notUsed: 'Не используется',
       requiredShort: 'Обяз.',
       systemShort: 'Сист.',
+      systemTypeReadOnly:
+        'Системный тип — только просмотр. Удаление, изменение и шаринг недоступны.',
       removeProperty: 'Удалить свойство',
       propertyNamePlaceholder: 'Имя свойства',
       regexOptional: 'Regex (необязательно)',
@@ -199,6 +201,8 @@ export const typesMessages = {
       notUsed: 'Not used',
       requiredShort: 'Req.',
       systemShort: 'Sys.',
+      systemTypeReadOnly:
+        'System type is view-only. Delete, edit, and sharing are unavailable.',
       removeProperty: 'Remove property',
       propertyNamePlaceholder: 'Property name',
       regexOptional: 'Regex (optional)',

@@ -566,6 +566,8 @@ export type EntityAttrs = {
   documentFileId?: string
 }
 
+export type TypeSystemAttrs = boolean | { hiddenTreeRootType?: boolean }
+
 export type TypeAttrs = {
   style?: NodeStyle
   width?: number
@@ -576,6 +578,10 @@ export type TypeAttrs = {
   icon?: string
   documentFileId?: string
   customProperties?: CustomProperty[]
+  /** System marker (e.g. Directory root type); preserved round-trip */
+  system?: TypeSystemAttrs
+  /** Legacy system Directory marker companion to `system: true` */
+  kind?: string
 }
 
 // Parse entity attrs (for components/relations)
@@ -688,6 +694,17 @@ export const parseTypeAttrs = (attrs: string | null): TypeAttrs => {
       result.customProperties = customProperties
     }
 
+    if (record.system === true || record.system === false) {
+      result.system = record.system
+    } else if (isRecord(record.system)) {
+      result.system = {
+        hiddenTreeRootType: Boolean(record.system.hiddenTreeRootType),
+      }
+    }
+    if (typeof record.kind === 'string' && record.kind.trim().length > 0) {
+      result.kind = record.kind.trim()
+    }
+
     return result
   } catch {
     return {}
@@ -724,6 +741,12 @@ export const serializeTypeAttrs = (attrs: TypeAttrs): string => {
   }
   if (attrs.customProperties && attrs.customProperties.length > 0) {
     result.customProperties = stripInternalFlags(attrs.customProperties)
+  }
+  if (attrs.system !== undefined) {
+    result.system = attrs.system
+  }
+  if (typeof attrs.kind === 'string' && attrs.kind.trim().length > 0) {
+    result.kind = attrs.kind.trim()
   }
   return JSON.stringify(result)
 }

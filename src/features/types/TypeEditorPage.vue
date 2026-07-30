@@ -9,6 +9,7 @@ import { serializeTypeAttrs, type CustomProperty } from '@/domain/attrs/notation
 import { useCanShare } from '@/composables/useCanShare'
 import { useDirtySelectionGuard } from '@/composables/useDirtySelectionGuard'
 import { useSaveErrorToast } from '@/composables/useSaveErrorToast'
+import { isSystemMarkedType } from '@/utils/systemMarkedType'
 import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
@@ -51,6 +52,7 @@ const { t } = useI18n()
 const isSelectedTypeWikiReadOnly = computed(() => {
   const item = selectedType.value
   if (!item || item._isNew) return false
+  if (isSystemMarkedType(item)) return true
   return item.accessPermission === 'VIEW'
 })
 
@@ -120,23 +122,23 @@ async function handleDocumentSavedFromModal(fileId: string) {
 }
 
 async function handleSave() {
-  if (!selectedType.value) return
+  if (!selectedType.value || !canEditSelectedType.value) return
   await saveType(selectedType.value)
 }
 
 async function handleDelete() {
-  if (!selectedType.value) return
+  if (!selectedType.value || !canEditSelectedType.value) return
   await deleteType(selectedType.value)
 }
 
 function handleTypeNameUpdate(value: string) {
-  if (!selectedType.value) return
+  if (!selectedType.value || !canEditSelectedType.value) return
   selectedType.value.name = value
   markTypeDirty(selectedType.value)
 }
 
 function handleMutateProperty(propertyId: string, apply: (p: CustomProperty) => void) {
-  if (!selectedType.value) return
+  if (!selectedType.value || !canEditSelectedType.value) return
   const p = selectedType.value.parsedAttrs.customProperties?.find(cp => cp.id === propertyId)
   if (p) {
     apply(p)
@@ -145,7 +147,7 @@ function handleMutateProperty(propertyId: string, apply: (p: CustomProperty) => 
 }
 
 function handleDefaultDirectoryPathUpdate(value: string) {
-  if (!selectedType.value || selectedType.value.kind !== 'node') return
+  if (!selectedType.value || !canEditSelectedType.value || selectedType.value.kind !== 'node') return
   const normalized = value.trim()
   if (!normalized) {
     delete selectedType.value.parsedAttrs.defaultDirectoryPath
@@ -157,7 +159,7 @@ function handleDefaultDirectoryPathUpdate(value: string) {
 }
 
 function handleIconUpdate(value: string) {
-  if (!selectedType.value || selectedType.value.kind !== 'node') return
+  if (!selectedType.value || !canEditSelectedType.value || selectedType.value.kind !== 'node') return
   const normalized = value.trim()
   if (!normalized) {
     delete selectedType.value.parsedAttrs.icon
@@ -193,8 +195,11 @@ function discardAndSwitch() {
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
+const canEditSelectedType = computed(() => !isSystemMarkedType(selectedType.value))
 const { canShare: canShareBase } = useCanShare(selectedType)
-const canShareSelectedType = computed(() => canShareBase.value && !selectedType.value?._isNew)
+const canShareSelectedType = computed(
+  () => canShareBase.value && !selectedType.value?._isNew && canEditSelectedType.value,
+)
 const shareResourceType = computed<ShareResourceType>(() =>
   selectedType.value?.kind === 'link' ? 'LINK_TYPE' : 'NODE_TYPE'
 )
@@ -240,11 +245,13 @@ const batchShareItems = computed<BatchShareItem[]>(() => {
   for (const id of checkedTypeIds.value) {
     const nodeType = nodeTypes.value.find(t => t.id === id)
     if (nodeType) {
-      items.push({ id: nodeType.id, name: nodeType.name, resourceType: 'NODE_TYPE' })
+      if (!isSystemMarkedType(nodeType)) {
+        items.push({ id: nodeType.id, name: nodeType.name, resourceType: 'NODE_TYPE' })
+      }
       continue
     }
     const linkType = linkTypes.value.find(t => t.id === id)
-    if (linkType) {
+    if (linkType && !isSystemMarkedType(linkType)) {
       items.push({ id: linkType.id, name: linkType.name, resourceType: 'LINK_TYPE' })
     }
   }
@@ -294,6 +301,7 @@ function handleBatchShareDone() {
       :is-dirty="isDirty"
       :is-saving="isSaving"
       :is-type-in-use="isTypeInUse"
+      :can-edit="canEditSelectedType"
       :can-share="canShareSelectedType"
       :has-doc="!!documentFileId"
       :show-doc-button="showTypeWikiToolbarButton"

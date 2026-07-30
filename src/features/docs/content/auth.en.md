@@ -4,6 +4,12 @@
 
 After a successful sign-in, the server creates a cookie session and the app stores only the user profile needed for UI display. JWTs are not stored in `localStorage` or `sessionStorage`. If a user was redirected to login from a protected route, the app navigates back to that route after authentication; otherwise it opens the home page. Failed authentication returns an error message.
 
+## SSO sign-in
+
+When an administrator has enabled corporate SSO (OIDC), the login page shows an extra button labeled with the identity provider name. After a successful provider login, wArchi opens a normal cookie session — the rest of the app works the same as after password sign-in.
+
+In the profile (when SSO is enabled) you can **link** a provider account to an existing user or **unlink** it. Linking requires the SSO email to match the wArchi account email. Unlinking does not delete the local account and does not end the current session.
+
 ## Sign up
 
 After a successful sign-up, a session is created and the app navigates to the home page. Protected sections remain available without signing in again while the session is active.

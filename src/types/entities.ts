@@ -73,6 +73,7 @@ export interface User {
   middleName?: string | null;
   position?: string | null;
   attrs?: string | null;
+  oidcSub?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

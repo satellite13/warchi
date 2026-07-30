@@ -14,6 +14,18 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: "/auth/oidc/callback",
+      name: "oidc-callback",
+      component: () => import("../views/OidcCallbackView.vue"),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: "/auth/oidc/link-callback",
+      name: "oidc-link-callback",
+      component: () => import("../views/OidcLinkCallbackView.vue"),
+      meta: { requiresAuth: false }
+    },
+    {
       path: "/admin",
       component: () => import("../layouts/AdminLayout.vue"),
       meta: { requiresAdminPanel: true },

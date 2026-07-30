@@ -254,6 +254,9 @@ onMounted(() => {
                 </div>
                 <div class="au-user__meta">
                   <span class="au-user__email">{{ user.email }}</span>
+                  <span v-if="user.oidcSub" class="au-user__oidc">
+                    {{ t("adminUsersOidc.linkedAs", { sub: user.oidcSub }) }}
+                  </span>
                   <span class="au-user__id">{{ user.id }}</span>
                 </div>
               </div>
@@ -751,6 +754,14 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--base-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-user__oidc {
+  font-size: 11px;
+  color: var(--primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

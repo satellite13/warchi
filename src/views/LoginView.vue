@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
+import { useOidcAuth } from "../composables/useOidcAuth";
 import LanguageSwitcher from "../components/layout/LanguageSwitcher.vue";
 import UiIcon from "@/components/ui/UiIcon.vue";
 import {
@@ -17,6 +18,39 @@ const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
 const { login, register, registerAdmin } = useAuth();
+const { ssoLogin, fetchSsoConfig, ssoConfig } = useOidcAuth();
+
+const isSsoLoading = ref(false);
+const ssoError = ref<string | null>(null);
+const ssoReady = ref(false);
+
+const ssoButtonLabel = computed(() =>
+  isSsoLoading.value
+    ? t("auth.submitSsoLoading", { name: ssoConfig.value.displayName })
+    : t("auth.submitSso", { name: ssoConfig.value.displayName })
+);
+
+const handleSsoLogin = async () => {
+  isSsoLoading.value = true;
+  ssoError.value = null;
+  const timeoutId = window.setTimeout(() => {
+    ssoError.value = t("auth.ssoTimeout");
+    isSsoLoading.value = false;
+  }, 15000);
+  try {
+    await ssoLogin();
+  } catch {
+    ssoError.value = t("auth.ssoError");
+    isSsoLoading.value = false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+onMounted(async () => {
+  await fetchSsoConfig();
+  ssoReady.value = true;
+});
 
 const email = ref("");
 const password = ref("");
@@ -196,6 +230,21 @@ const siteReturnUrl = computed(() => {
           {{ tab.label }}
           <span v-if="mode === tab.key" class="tab__indicator"></span>
         </button>
+      </div>
+
+      <div v-if="mode === 'login' && ssoReady && ssoConfig.enabled" class="sso-block">
+        <button
+          type="button"
+          class="sso-btn"
+          :disabled="isSsoLoading"
+          @click="handleSsoLogin"
+        >
+          <img v-if="!isSsoLoading" class="sso-btn__icon" src="/icons/openid.png" alt="" width="16" height="16" />
+          <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
+          <span>{{ ssoButtonLabel }}</span>
+        </button>
+        <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
+        <div class="sso-divider"><span>{{ t('auth.orDivider') }}</span></div>
       </div>
 
       <form class="form" @submit.prevent="handleSubmit">
@@ -900,5 +949,77 @@ const siteReturnUrl = computed(() => {
     margin: 16px;
     padding: 28px 24px 32px;
   }
+}
+
+.sso-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  background: var(--primary, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+}
+
+.sso-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary, #2563eb) 25%, transparent);
+  transform: translateY(-1px);
+}
+
+.sso-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sso-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sso-btn__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.sso-btn__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.sso-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-subtle);
+  font-size: 12px;
+}
+
+.sso-divider::before,
+.sso-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
 }
 </style>

@@ -53,7 +53,8 @@ const clearSession = (): void => {
 }
 
 const isPublicAuthPath = (path: string): boolean =>
-  ["/auth/login", "/auth/register", "/auth/register-admin", "/auth/refresh"].includes(path)
+  ["/auth/login", "/auth/register", "/auth/register-admin", "/auth/refresh"].includes(path) ||
+  path.startsWith("/auth/sso/")
 
 const isMutatingMethod = (method: string): boolean => {
   const normalized = method.toUpperCase()

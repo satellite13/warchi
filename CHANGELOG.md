@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-31
+
+### Added
+- Model package import reports async job stages and progress (no more hanging on a long synchronous upload).
+
+### Fixed
+- System-marked types (`attrs.system`) are view-only in the types editor: no edit, delete, or share actions.
+
 ## [0.13.1] - 2026-07-30
 
 ### Added

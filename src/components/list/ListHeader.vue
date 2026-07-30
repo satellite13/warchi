@@ -25,13 +25,16 @@ defineProps<{
 .search-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 0;
+  width: 100%;
 }
 
 .search-field {
   margin-top: 0;
   flex: 1;
+  max-width: 360px;
 }
 
 .result-count {

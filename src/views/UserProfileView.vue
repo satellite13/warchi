@@ -3,13 +3,14 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFooter from "../components/layout/AppFooter.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
+import UiIcon from "@/components/ui/UiIcon.vue";
 import { apiGet } from "../composables/useApi";
 import { useAuth } from "../composables/useAuth";
 import { useOidcAuth } from "../composables/useOidcAuth";
 import type { User } from "../types/entities";
 
 const { currentUser, updateMyProfile } = useAuth();
-const { ssoLogin, unlinkSso, getLinkStatus, oidcLinkStatus } = useOidcAuth();
+const { ssoLogin, unlinkSso, getLinkStatus, fetchSsoConfig, oidcLinkStatus, ssoConfig } = useOidcAuth();
 const { t } = useI18n();
 
 const firstName = ref("");
@@ -114,12 +115,15 @@ const handleUnlinkSso = async (): Promise<void> => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   if (currentUser.value) {
     applyUser(currentUser.value);
   }
   loadProfile();
-  getLinkStatus();
+  await fetchSsoConfig();
+  if (ssoConfig.value.enabled) {
+    await getLinkStatus();
+  }
 });
 </script>
 
@@ -161,8 +165,7 @@ onMounted(() => {
         </form>
       </section>
 
-      <!-- SSO Section -->
-      <section class="card sso-section">
+      <section v-if="ssoConfig.enabled" class="card sso-section">
         <h2>{{ t("profile.ssoTitle") }}</h2>
         <p>{{ t("profile.ssoSubtitle") }}</p>
 

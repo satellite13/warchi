@@ -1,11 +1,11 @@
-import { apiGet, type ApiResult } from '@/composables/useApi'
+import { apiGet, type ApiResult } from "@/composables/useApi"
 import {
   listParams,
   PAGE_SIZE_MODEL_DIAGRAMS,
   PAGE_SIZE_MODEL_NODES,
   pagedListParams,
 } from '@/api/queryHelpers'
-import type { ModelData, NotationData, PaginatedResponse } from '@/types/entities'
+import type { ModelData, NotationData, PaginatedResponse } from "@/types/entities"
 import type {
   ComponentResponse,
   DiagramResponse,
@@ -15,15 +15,19 @@ import type {
   NodeTypeResponse,
   RelationResponse,
   RelationRuleResponse,
-} from '@/types/api'
-import { paginatedIsLastPage, paginatedTotalPages } from '@/utils/paginatedResponse'
-import type { ModelEditorState } from '../types'
-import { toEditorDiagram, toEditorLink, toEditorNode } from './modelEditorMappers'
-import { fetchAllComponentsByNotationIds } from './modelNotationComponentsApi'
+} from "@/types/api"
+import {
+  paginatedContent,
+  paginatedIsLastPage,
+  paginatedTotalPages,
+} from "@/utils/paginatedResponse"
+import type { ModelEditorState } from "../types"
+import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
+import { fetchAllComponentsByNotationIds } from "./modelNotationComponentsApi"
 import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
-} from './modelNotationRelationsApi'
+} from "./modelNotationRelationsApi"
 
 type LoadModelEditorDataResult = {
   model: ModelData
@@ -116,10 +120,10 @@ export async function fetchAllByModelId<T extends { id?: string }>(
 function requireModel(modelResult: ApiResult<ModelData>): ModelData {
   if (!modelResult.success) {
     if (modelResult.error.status === 404) {
-      throw new Error('Модель не найдена')
+      throw new Error("Модель не найдена")
     }
     if (modelResult.error.status === 403) {
-      throw new Error('Доступ к модели отозван или отсутствует.')
+      throw new Error("Доступ к модели отозван или отсутствует.")
     }
     throw new Error(modelResult.error.message)
   }
@@ -181,9 +185,7 @@ export async function loadModelEditorShell(
   const diagrams = diagramResponses.map(row =>
     toEditorDiagram(row, diagramIncludeAttrs ? { attrsPending: false } : undefined)
   )
-  const notationIds = Array.from(
-    new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))
-  )
+  const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
   // Attrs parse is CPU-heavy on large models — yield so the first paint stays responsive.
   const editorNodes = await mapInChunks(nodes, toEditorNode)
 
@@ -203,7 +205,8 @@ export async function loadModelEditorShell(
 
   return {
     model,
-    modelCatalog: modelsResult.success ? (modelsResult.data.content ?? []) : [],
+    // GET /models returns ListResponse { items }, not Spring Page { content }
+    modelCatalog: modelsResult.success ? paginatedContent(modelsResult.data) : [],
     state,
     loadedNotationIds: notationIds,
   }
@@ -218,9 +221,9 @@ export async function loadModelEditorCatalog(
   notationIds: string[]
 ): Promise<ModelEditorCatalog> {
   const typesQuery = listParams()
-  typesQuery.set('modelId', modelId)
+  typesQuery.set("modelId", modelId)
   for (const notationId of notationIds) {
-    typesQuery.append('notationId', notationId)
+    typesQuery.append("notationId", notationId)
   }
 
   const relationFetches =
@@ -254,9 +257,7 @@ export async function loadModelEditorCatalog(
 }
 
 /** Heavy model graph edges — can finish after the tree/catalog are usable. */
-export async function loadModelEditorLinks(
-  modelId: string
-): Promise<ReturnType<typeof toEditorLink>[]> {
+export async function loadModelEditorLinks(modelId: string): Promise<ReturnType<typeof toEditorLink>[]> {
   const links = await fetchAllByModelId<LinkResponse>('/links', modelId, PAGE_SIZE_MODEL_NODES)
   // Mapping parses attrs; yield so folder expand clicks stay responsive on large models.
   return mapInChunks(links, toEditorLink)

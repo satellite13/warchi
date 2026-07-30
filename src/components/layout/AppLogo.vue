@@ -1,19 +1,39 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
-defineProps<{
-  size?: "sm" | "md" | "lg";
-}>();
+const props = withDefaults(
+  defineProps<{
+    size?: "sm" | "md" | "lg";
+    /** When false, subtitle is only shown as native tooltip on the logo. */
+    showSubtitle?: boolean;
+  }>(),
+  {
+    size: "md",
+  }
+);
 
 const { t } = useI18n();
+
+const subtitleVisible = computed(() => {
+  if (props.showSubtitle !== undefined) return props.showSubtitle;
+  return props.size !== "sm";
+});
+
+const logoTitle = computed(() =>
+  subtitleVisible.value ? undefined : t("auth.cardSubtitle")
+);
 </script>
 
 <template>
-  <div :class="['logo', `logo--${size || 'md'}`]">
+  <div
+    :class="['logo', `logo--${size}`]"
+    :title="logoTitle"
+  >
     <img class="logo__icon" src="/warchi.svg" alt="" />
     <div class="logo__text">
       <span class="logo__title">wArchi</span>
-      <span v-if="size != 'sm'" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
+      <span v-if="subtitleVisible" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
     </div>
   </div>
 </template>
@@ -35,8 +55,8 @@ const { t } = useI18n();
 }
 
 .logo--md .logo__icon {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
 }
 
 .logo--lg .logo__icon {
@@ -61,7 +81,7 @@ const { t } = useI18n();
 }
 
 .logo--md .logo__title {
-  font-size: 19px;
+  font-size: 16px;
 }
 
 .logo--lg .logo__title {

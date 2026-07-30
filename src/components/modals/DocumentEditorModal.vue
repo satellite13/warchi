@@ -103,6 +103,9 @@ async function handleSave() {
   const fileId = await saveDocument()
   if (fileId) {
     emit('saved', fileId)
+    if (showVersions.value) {
+      await loadVersions(fileId)
+    }
   }
 }
 

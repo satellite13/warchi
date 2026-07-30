@@ -4,6 +4,8 @@ import { apiPost, apiPut, apiFetch } from '@/composables/useApi'
 import { buildApiUrl } from '@/api/config'
 import { fetchFileContent } from '@/api/fileApi'
 import type { FileUploadResponse, FileVersionResponse } from '@/types/api'
+import type { PaginatedResponse } from '@/types/entities'
+import { paginatedContent } from '@/utils/paginatedResponse'
 
 export interface DocumentState {
   content: string
@@ -147,11 +149,13 @@ export function useTypeDocument() {
 
     isLoadingVersions.value = true
     try {
-      const result = await apiFetch<FileVersionResponse[]>(`/files/${fileId}/versions`, {
-        method: 'GET',
-      })
+      // arepos returns ListResponse { items, total, page, size }
+      const result = await apiFetch<PaginatedResponse<FileVersionResponse> | FileVersionResponse[]>(
+        `/files/${fileId}/versions`,
+        { method: 'GET' },
+      )
       if (result.success) {
-        const versions = result.data ?? []
+        const versions = paginatedContent(result.data)
         versions.sort((a, b) => b.versionNumber - a.versionNumber)
         docVersions.value = versions
       }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
@@ -11,7 +11,6 @@ import type { VersionedEntity } from "../../types/entities";
 import type { ShareResourceType } from "../../types/api";
 import ListHeader from "../list/ListHeader.vue";
 import EntityCard from "../cards/EntityCard.vue";
-import CreateCard from "../cards/CreateCard.vue";
 import CardSkeleton from "../cards/CardSkeleton.vue";
 import EmptyState from "../list/EmptyState.vue";
 import EntityCreateModal from "../modals/EntityCreateModal.vue";
@@ -32,6 +31,19 @@ const props = defineProps<{
   showVersionTree?: boolean
   /** Показывать кнопку создания версии на базе выбранной (для моделей). */
   showCreateFromVersionButton?: boolean
+  /** Показывать кнопку экспорта на карточках. */
+  canExport?: boolean
+  /** Карточка импорта ZIP-пакета (создаёт новую модель). */
+  canImportPackage?: boolean
+  /** Ошибка последнего действия (например, экспорт). */
+  actionErrorMessage?: string | null
+  /** Статус импорта пакета (прогресс / успех). */
+  actionStatusMessage?: string | null
+}>();
+
+const emit = defineEmits<{
+  export: [item: VersionedEntity]
+  importPackage: []
 }>();
 
 const router = useRouter();
@@ -201,32 +213,69 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
   if (!item) return "";
   return `${item.name} v${item.version} — ${ownerLabelFor(item.ownerId, item.ownerEmail, item.ownerDisplayName)}`;
 }
+
+const exportTitle = computed(() => {
+  if (props.i18nPrefix === "models") return t("toolbar.exportModelPackage");
+  if (props.i18nPrefix === "notations") return t("toolbar.exportNotation");
+  return t("common.export");
+});
+
+function handleExport(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}) {
+  const selected = getSelectedItem(group);
+  if (!selected) return;
+  emit("export", selected);
+}
 </script>
 
 <template>
   <main class="home">
     <header class="home-header">
-      <ListHeader
-        v-model="searchQuery"
-        :placeholder="t(`${i18nPrefix}.searchPlaceholder`)"
-        :count="itemCount"
-        :loading="isLoading"
-      />
+      <div class="catalog-toolbar">
+        <div class="catalog-toolbar__actions">
+          <button
+            type="button"
+            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            :title="t(`${i18nPrefix}.createDescription`)"
+            @click="openCreateModal"
+          >
+            <UiIcon name="add" />
+            <span>{{ t(`${i18nPrefix}.createTitle`) }}</span>
+          </button>
+          <button
+            v-if="canImportPackage"
+            type="button"
+            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            :title="t(`${i18nPrefix}.packageImportDescription`)"
+            @click="emit('importPackage')"
+          >
+            <UiIcon name="upload" />
+            <span>{{ t(`${i18nPrefix}.packageImportTitle`) }}</span>
+          </button>
+        </div>
+        <ListHeader
+          v-model="searchQuery"
+          class="catalog-toolbar__search"
+          :placeholder="t(`${i18nPrefix}.searchPlaceholder`)"
+          :count="itemCount"
+          :loading="isLoading"
+        />
+      </div>
     </header>
 
+    <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
+    <div v-if="actionStatusMessage" class="catalog-action-status">{{ actionStatusMessage }}</div>
+
     <section class="model-grid">
-      <CreateCard
-        :title="t(`${i18nPrefix}.createTitle`)"
-        :description="t(`${i18nPrefix}.createDescription`)"
-        @click="openCreateModal"
-      />
       <CardSkeleton v-if="isLoading" :count="4" />
       <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
       <EmptyState
-        v-else-if="filteredItems.length === 0 && searchQuery"
+        v-else-if="filteredItems.length === 0"
         :title="t(`${i18nPrefix}.notFoundTitle`)"
         :description="t(`${i18nPrefix}.notFoundDescription`)"
-        icon="search"
+        :icon="searchQuery ? 'search' : icon"
       />
 
       <EntityCard
@@ -239,6 +288,8 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
         :owner-email="ownerLabelFor(getSelectedItem(group)?.ownerId, getSelectedItem(group)?.ownerEmail, getSelectedItem(group)?.ownerDisplayName)"
         :access-label="toAccessLabel(getSelectedItem(group)?.accessPermission, locale)"
         :can-share="canShareSelected(group)"
+        :can-export="canExport"
+        :export-title="exportTitle"
         :can-delete="canEditSelected(group)"
         :can-rename="canEditSelected(group)"
         :updated-at="getSelectedItem(group)?.updatedAt"
@@ -251,6 +302,7 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
         @delete="handleDelete(group)"
         @rename="handleRename(group)"
         @share="getSelectedItem(group) && openShareModal(getSelectedItem(group)!)"
+        @export="handleExport(group)"
         @show-version-tree="openVersionTreeModal(group)"
         @create-from-version="handleCreateFromSelectedVersion(group)"
         @version-change="handleVersionChange(group.name, $event)"
@@ -367,6 +419,38 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
   margin-bottom: 24px;
 }
 
+.catalog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.catalog-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.catalog-toolbar__btn {
+  height: 34px;
+  padding: 0 12px;
+}
+
+.catalog-toolbar__btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.catalog-toolbar__search {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .model-grid {
   display: flex;
   flex-wrap: wrap;
@@ -378,6 +462,7 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
   margin: -8px;
 }
 
+.catalog-action-error,
 .error-state {
   width: 100%;
   padding: 16px;
@@ -386,6 +471,21 @@ function formatDeleteEntityName(item: VersionedEntity | null): string {
   color: var(--danger);
   font-size: 14px;
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.catalog-action-error,
+.catalog-action-status {
+  margin-bottom: 12px;
+}
+
+.catalog-action-status {
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--base-text);
+  font-size: 14px;
+  border: 1px solid var(--border-strong);
 }
 
 .icon-modal__body {

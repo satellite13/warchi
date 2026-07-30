@@ -4,10 +4,54 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-## [0.10.15] - 2026-07-29
+## [0.12.2] - 2026-07-30
+
+### Added
+- Diagram compare: toggle to sync pan and zoom between the left and right canvases (on by default, persisted in localStorage).
+
+## [0.12.1] - 2026-07-29
 
 ### Fixed
-- SSO OIDC callback now passes backend CSRF filter correctly; `POST /auth/sso/callback` no longer returns 403 after redirect from Keycloak.
+- Helm chart version aligned with the application release for production deploy.
+
+## [0.12.0] - 2026-07-29
+
+### Added
+- Shareable model validation scripts: catalog, CodeMirror editor, and run from the model editor (report-only JavaScript in a sandboxed iframe).
+- In-app help for the validation script API and model snapshot structures.
+
+## [0.11.1] - 2026-07-29
+
+### Added
+- Notation catalog: import a `warchi-notation-export` JSON (v2) from the catalog toolbar.
+
+### Changed
+- Catalog create/import actions moved into compact toolbar buttons (large create cards removed from the grid).
+- App header is more compact (nav, logo); the product subtitle is shown as a logo tooltip.
+
+### Fixed
+- Type delete is no longer blocked by usages in soft-deleted notations.
+
+## [0.11.0] - 2026-07-28
+
+### Added
+- Model package ZIP import/export from the models catalog and editor toolbar (with notations and wiki files).
+- Notation package export from notation catalog cards.
+- Admin trash: soft-deleted node types, link types, and shapes with permanent delete confirmation.
+
+### Fixed
+- Model live sync stops after the model is deleted or access is revoked (404/403), instead of polling forever.
+- Admin permanent delete uses the shared confirmation modal instead of the browser `confirm` dialog.
+
+## [0.10.15] - 2026-07-28
+
+### Added
+- Diagram auto-layout (ELK): layered and remove-overlaps modes with a settings preview before apply.
+
+### Fixed
+- After auto-layout, links use orthogonal polyline routing instead of slanted ELK bend segments.
+- Edge labels and relation styles are kept when layout or the style panel / context menu only change `edgeType`.
+- Stale layout preview no longer inserts a banner that shifts the sketch; refresh is signaled on the Update button.
 
 ## [0.10.14] - 2026-07-28
 

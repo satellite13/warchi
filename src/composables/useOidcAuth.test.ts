@@ -49,13 +49,40 @@ describe('useOidcAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Reset the module-level oidcLinkStatus ref between tests
-    const { oidcLinkStatus } = useOidcAuth()
+    const { oidcLinkStatus, ssoConfig } = useOidcAuth()
     oidcLinkStatus.value = { linked: false }
+    ssoConfig.value = { enabled: false, displayName: 'SSO' }
     // Reset location.href to empty string
     Object.defineProperty(globalThis, 'location', {
       value: { href: '' },
       writable: true,
       configurable: true,
+    })
+  })
+
+  describe('fetchSsoConfig', () => {
+    it('stores enabled config and display name', async () => {
+      mockApiGet.mockResolvedValue({
+        success: true,
+        data: { enabled: true, displayName: 'Lemanapro' },
+      })
+
+      const { fetchSsoConfig, ssoConfig } = useOidcAuth()
+      const result = await fetchSsoConfig()
+
+      expect(mockApiGet).toHaveBeenCalledWith('/auth/sso/config')
+      expect(result).toEqual({ enabled: true, displayName: 'Lemanapro' })
+      expect(ssoConfig.value).toEqual({ enabled: true, displayName: 'Lemanapro' })
+    })
+
+    it('falls back to disabled when request fails', async () => {
+      mockApiGet.mockResolvedValue({ success: false, error: { message: 'down' } })
+
+      const { fetchSsoConfig, ssoConfig } = useOidcAuth()
+      const result = await fetchSsoConfig()
+
+      expect(result).toEqual({ enabled: false, displayName: 'SSO' })
+      expect(ssoConfig.value.enabled).toBe(false)
     })
   })
 

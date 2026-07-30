@@ -6,6 +6,7 @@ import { typesMessages } from './locales/types'
 import { diagramMessages } from './locales/diagram'
 import { homeMessages } from './locales/home'
 import { docsMessages } from './locales/docs'
+import { validationScriptsMessages } from './locales/validationScripts'
 
 type DeepRecord = Record<string, unknown>
 
@@ -15,7 +16,10 @@ function deepMerge(...objects: DeepRecord[]): DeepRecord {
     for (const key of Object.keys(obj)) {
       const val = obj[key]
       if (val && typeof val === 'object' && !Array.isArray(val)) {
-        result[key] = deepMerge((result[key] ?? {}) as DeepRecord, val as DeepRecord)
+        result[key] = deepMerge(
+          (result[key] ?? {}) as DeepRecord,
+          val as DeepRecord,
+        )
       } else {
         result[key] = val
       }
@@ -32,7 +36,8 @@ const mergedMessages = deepMerge(
   typesMessages,
   diagramMessages,
   homeMessages,
-  docsMessages
+  docsMessages,
+  validationScriptsMessages,
 ) as typeof commonMessages &
   typeof authMessages &
   typeof modelsMessages &
@@ -40,7 +45,8 @@ const mergedMessages = deepMerge(
   typeof typesMessages &
   typeof diagramMessages &
   typeof homeMessages &
-  typeof docsMessages
+  typeof docsMessages &
+  typeof validationScriptsMessages
 
 type SupportedMessages = {
   ru: (typeof mergedMessages)['ru']

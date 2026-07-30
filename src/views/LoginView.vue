@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
@@ -18,10 +18,17 @@ const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
 const { login, register, registerAdmin } = useAuth();
-const { ssoLogin } = useOidcAuth();
+const { ssoLogin, fetchSsoConfig, ssoConfig } = useOidcAuth();
 
 const isSsoLoading = ref(false);
 const ssoError = ref<string | null>(null);
+const ssoReady = ref(false);
+
+const ssoButtonLabel = computed(() =>
+  isSsoLoading.value
+    ? t("auth.submitSsoLoading", { name: ssoConfig.value.displayName })
+    : t("auth.submitSso", { name: ssoConfig.value.displayName })
+);
 
 const handleSsoLogin = async () => {
   isSsoLoading.value = true;
@@ -40,6 +47,10 @@ const handleSsoLogin = async () => {
   }
 };
 
+onMounted(async () => {
+  await fetchSsoConfig();
+  ssoReady.value = true;
+});
 
 const email = ref("");
 const password = ref("");
@@ -160,7 +171,14 @@ const handleSubmit = async () => {
   }
 };
 
-const tabs = computed(() => [{ key: "login", label: t("auth.tabLogin") }] as const);
+const tabs = computed(
+  () =>
+    [
+      { key: "login", label: t("auth.tabLogin") },
+      { key: "register", label: t("auth.tabRegister") },
+      { key: "register-admin", label: t("auth.tabAdmin") }
+    ] as const
+);
 
 const setMode = (newMode: "login" | "register" | "register-admin") => {
   if (isLoading.value) return;
@@ -214,7 +232,7 @@ const siteReturnUrl = computed(() => {
         </button>
       </div>
 
-      <div v-if="mode === 'login'" class="sso-block">
+      <div v-if="mode === 'login' && ssoReady && ssoConfig.enabled" class="sso-block">
         <button
           type="button"
           class="sso-btn"
@@ -223,7 +241,7 @@ const siteReturnUrl = computed(() => {
         >
           <img v-if="!isSsoLoading" class="sso-btn__icon" src="/icons/openid.png" alt="" width="16" height="16" />
           <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
-          <span v-if="!isSsoLoading">{{ t("auth.submitSso") }}</span>
+          <span>{{ ssoButtonLabel }}</span>
         </button>
         <div v-if="ssoError" class="msg msg--error">{{ ssoError }}</div>
         <div class="sso-divider"><span>{{ t('auth.orDivider') }}</span></div>
@@ -926,7 +944,6 @@ const siteReturnUrl = computed(() => {
 }
 
 /* ─── Responsive ──────────────────────────────── */
-
 @media (max-width: 500px) {
   .card {
     margin: 16px;
@@ -951,8 +968,8 @@ const siteReturnUrl = computed(() => {
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
-  background: #FDC300;
-  color: #000;
+  background: var(--primary, #2563eb);
+  color: #fff;
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -960,8 +977,8 @@ const siteReturnUrl = computed(() => {
 }
 
 .sso-btn:hover:not(:disabled) {
-  background: #E79F26;
-  box-shadow: 0 4px 16px rgba(253, 195, 0, 0.2);
+  filter: brightness(1.05);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary, #2563eb) 25%, transparent);
   transform: translateY(-1px);
 }
 
@@ -984,8 +1001,8 @@ const siteReturnUrl = computed(() => {
 .sso-btn__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.2);
-  border-top-color: #000;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }

@@ -38,6 +38,7 @@ This section includes focused pages:
 - **Diagrams** — editing flow, navigation, export, baselines, and version comparison;
 - **Types** — system/custom fields and attribute management;
 - **Shapes** — creation and reuse of custom node outlines;
+- **Scripts** — JavaScript model checks with a sandbox and issues report;
 - **Hotkeys** — keyboard shortcuts for faster daily work;
 - **FAQ** — answers to frequently asked questions;
 - **Changelog** — recent product updates.

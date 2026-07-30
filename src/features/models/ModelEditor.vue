@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import MainLayout from '@/layouts/MainLayout.vue'
@@ -35,6 +35,7 @@ import {
   ensureNotationImportCatalog,
 } from './composables'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
+import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
   isContainerInstance,
   isDiagramContainerModelNodeId,
@@ -56,6 +57,7 @@ import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import LayoutPreviewModal from './components/LayoutPreviewModal.vue'
 import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
@@ -77,7 +79,13 @@ import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
+import { sanitizeFileName } from '@/utils/sanitizeFileName'
+import { downloadModelPackage } from './composables/useModelPackage'
+import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
+import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
+import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
@@ -168,6 +176,36 @@ const {
   applyDiagramSelection,
 } = useModelSelection({ state })
 const showShareModal = ref(false)
+const showValidationScriptsModal = ref(false)
+
+const validationRunPayload = computed(() => {
+  if (!model.value) return null
+  return buildValidationSnapshot({
+    state: state.value,
+    modelName: model.value.name,
+    modelVersion: model.value.version,
+    openDiagramId: selectedDiagramId.value,
+  })
+})
+
+function handleValidationIssueSelect(issue: ValidationIssue): void {
+  showValidationScriptsModal.value = false
+  const target = issue.target
+  if (!target) return
+  if (target.kind === 'diagram') {
+    selectDiagram(target.id)
+    return
+  }
+  if (target.kind === 'node' || target.kind === 'folder') {
+    selectedNodeId.value = target.id
+    treePanelRef.value?.focusNode?.(target.id)
+    selectedModelNodeIds.value = [target.id]
+    return
+  }
+  if (target.kind === 'link') {
+    selectedModelLinkId.value = target.id
+  }
+}
 const showCompareModal = ref(false)
 
 const versionDiff = useModelVersionDiff()
@@ -349,6 +387,10 @@ const {
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
   ensureNotationRelationsAndRules,
+  onModelUnavailable: status => {
+    errorMessage.value =
+      status === 403 ? t('models.modelAccessRevoked') : t('models.modelNoLongerAvailable')
+  },
 })
 
 async function handleReloadModelForDiagramLock() {
@@ -622,6 +664,9 @@ const linkScopedValues = computed<Record<string, unknown>>(() => {
   })
 })
 
+const layoutBusy = ref(false)
+const showLayoutPreviewModal = ref(false)
+const layoutPreviewBefore = ref<DiagramAttrs | null>(null)
 const uiError = ref<string | null>(null)
 let uiErrorTimer: ReturnType<typeof setTimeout> | null = null
 const setUiError = (msg: string) => {
@@ -631,6 +676,17 @@ const setUiError = (msg: string) => {
     uiError.value = null
     uiErrorTimer = null
   }, 5000)
+}
+
+function handleLayoutPreviewApply(after: DiagramAttrs) {
+  showLayoutPreviewModal.value = false
+  layoutPreviewBefore.value = null
+  diagramCanvasRef.value?.applyLayoutResult(after)
+}
+
+function handleLayoutPreviewClose() {
+  showLayoutPreviewModal.value = false
+  layoutPreviewBefore.value = null
 }
 
 const {
@@ -1505,7 +1561,7 @@ watch(
   }
 )
 
-const setDiagramAttrs = (next: DiagramAttrs) => {
+const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
   const diagram = activeDiagram.value
   if (!diagram) return
   if (isDiagramReadOnly.value) return
@@ -1524,10 +1580,20 @@ const setDiagramAttrs = (next: DiagramAttrs) => {
     const diagrams = [...state.value.diagrams]
     const current = diagrams[idx]
     if (!current) return
-    diagrams[idx] = { ...current, parsedAttrs: next }
+    const keepDirty = options?.dirty === false ? false : true
+    diagrams[idx] = {
+      ...current,
+      parsedAttrs: next,
+      ...(keepDirty
+        ? current._isNew
+          ? {}
+          : { _isDirty: true }
+        : { _isDirty: false }),
+    }
     state.value.diagrams = diagrams
+  } else if (options?.dirty !== false) {
+    markDiagramDirty(diagram.id)
   }
-  markDiagramDirty(diagram.id)
 }
 
 const handleReconnectEdge = (
@@ -1920,9 +1986,13 @@ const handleToolbarAction = async (event: string) => {
     case 'zoom-selection':
       diagramCanvasRef.value?.zoomToSelection()
       break
-    case 'auto-layout-nodes':
-      diagramCanvasRef.value?.autoLayoutNodes()
+    case 'auto-layout-nodes': {
+      const d = activeDiagram.value
+      if (!d || isDiagramReadOnly.value) break
+      layoutPreviewBefore.value = clonePlainDeep(d.parsedAttrs)
+      showLayoutPreviewModal.value = true
       break
+    }
     case 'reset-view':
       diagramCanvasRef.value?.resetView()
       break
@@ -1990,6 +2060,21 @@ const handleToolbarAction = async (event: string) => {
       if (canInspectDiagramJson.value) {
         showImportWizard.value = true
       }
+      break
+    case 'export-model-package': {
+      const modelId = model.value?.id
+      if (!modelId) break
+      try {
+        const fileName = `${sanitizeFileName(model.value?.name ?? '') || 'model'}.zip`
+        await downloadModelPackage(modelId, fileName)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setUiError(t('models.packageExportFailed', { message }))
+      }
+      break
+    }
+    case 'run-validation-script':
+      showValidationScriptsModal.value = true
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -2176,16 +2261,36 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
 
   if (targetEdgeInstance) {
     if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
-    const baseStyle =
+    let bound: DiagramStyle | undefined
+    if (targetEdgeInstance.modelLinkId) {
+      const modelLink = state.value.links.find(item => item.id === targetEdgeInstance.modelLinkId)
+      const notationId = activeNotationId.value
+      if (modelLink && notationId) {
+        const relationId = modelLink.parsedAttrs.notationRelations[notationId]?.relationId
+        const relation = relationId
+          ? state.value.relations.find(item => item.id === relationId)
+          : null
+        if (relation) {
+          bound = parseEntityAttrs(relation.attrs ?? null).diagramStyle
+        }
+      }
+    }
+    const previousInstance =
       targetEdgeInstance.attrs.diagramStyle &&
       typeof targetEdgeInstance.attrs.diagramStyle === 'object'
-        ? (targetEdgeInstance.attrs.diagramStyle as Record<string, unknown>)
-        : {}
-    const currentType = (baseStyle.edgeType as string | undefined) ?? 'bezier'
+        ? (targetEdgeInstance.attrs.diagramStyle as DiagramStyle)
+        : undefined
+    const previousEffective = mergeEffectiveDiagramStyle(bound, previousInstance) ?? {}
+    const currentType = (previousEffective.edgeType as string | undefined) ?? 'bezier'
     const newType = (style as Record<string, unknown>).edgeType as string | undefined
     const fromPolyline = currentType === 'polyline' || currentType === 'editable-polyline'
     const toNonPolyline = newType === 'bezier' || newType === 'straight'
-    targetEdgeInstance.attrs.diagramStyle = JSON.parse(JSON.stringify(style))
+    // Merge relation defaults under panel style so a partial/stale panel payload cannot
+    // drop label fields that only existed on the notation relation.
+    targetEdgeInstance.attrs.diagramStyle = {
+      ...previousEffective,
+      ...JSON.parse(JSON.stringify(style)),
+    }
     if (fromPolyline && toNonPolyline && targetEdgeInstance.attrs.controlPoints) {
       delete targetEdgeInstance.attrs.controlPoints
     }
@@ -2226,11 +2331,10 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
   if (selectedElementId.startsWith('edge-')) {
     const edgeId = selectedElementId.slice('edge-'.length)
     const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
-    if (edge?.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === 'object') {
-      return edge.attrs.diagramStyle as DiagramStyle
-    }
-    // Fallback to notation relation style
-    if (edge?.modelLinkId) {
+    if (!edge) return undefined
+
+    let bound: DiagramStyle | undefined
+    if (edge.modelLinkId) {
       const modelLink = state.value.links.find(item => item.id === edge.modelLinkId)
       const notationId = activeNotationId.value
       if (modelLink && notationId) {
@@ -2239,10 +2343,16 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
           ? state.value.relations.find(item => item.id === relationId)
           : null
         if (relation) {
-          return parseEntityAttrs(relation.attrs ?? null).diagramStyle
+          bound = parseEntityAttrs(relation.attrs ?? null).diagramStyle
         }
       }
     }
+
+    const instanceStyle =
+      edge.attrs?.diagramStyle && typeof edge.attrs.diagramStyle === 'object'
+        ? (edge.attrs.diagramStyle as DiagramStyle)
+        : undefined
+    return mergeEffectiveDiagramStyle(bound, instanceStyle)
   }
 
   return undefined
@@ -2362,14 +2472,15 @@ const applyRouteDiagramSelection = () => {
 }
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
-let pendingRoute: RouteLocationNormalized | null = null
+let pendingRoute: RouteLocationRaw | null = null
+
 const confirmLeave = () => {
   showLeaveDialog.value = false
   allowLeave.value = true
   if (pendingRoute) {
-    const route = pendingRoute
+    const next = pendingRoute
     pendingRoute = null
-    router.push(route)
+    void router.push(next)
   }
 }
 const cancelLeave = () => {
@@ -2458,6 +2569,7 @@ onBeforeUnmount(() => {
         :diagram-versions="diagramVersionsForCurrentName"
         :selected-diagram-id="selectedDiagramId"
         :is-diagram-read-only="isDiagramReadOnly"
+        :layout-busy="layoutBusy"
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="canInspectDiagramJson"
@@ -2606,6 +2718,7 @@ onBeforeUnmount(() => {
               :can-share="canShareModel"
               :navigation-only-mode="diagramNavigationOnlyMode"
               :is-diagram-read-only="isDiagramReadOnly"
+              :layout-busy="layoutBusy"
               :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
               :diagram-lock-holder-display="diagramLockHolderName"
               :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
@@ -2624,6 +2737,7 @@ onBeforeUnmount(() => {
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
             :read-only="isDiagramReadOnly"
+            :diagram-dirty="Boolean(activeDiagram?._isDirty)"
             :navigation-only-mode="diagramNavigationOnlyMode"
             :nodes="state.nodes"
             :links="state.links"
@@ -2784,6 +2898,16 @@ onBeforeUnmount(() => {
     @reload="handleBatchConflictReload"
     @overwrite="handleBatchConflictOverwrite"
     @dismiss="dismissBatchSaveConflict"
+  />
+
+  <LayoutPreviewModal
+    v-if="layoutPreviewBefore"
+    :open="showLayoutPreviewModal"
+    :before="layoutPreviewBefore"
+    :busy="layoutBusy"
+    @close="handleLayoutPreviewClose"
+    @apply="handleLayoutPreviewApply"
+    @error="(msg) => setUiError(msg || t('toolbar.autoLayoutFailed'))"
   />
 
   <BaseModal
@@ -3202,6 +3326,14 @@ onBeforeUnmount(() => {
     resource-type="MODEL"
     :resource-id="model.id"
     @close="showShareModal = false"
+  />
+
+  <ValidationScriptsRunModal
+    v-if="showValidationScriptsModal && validationRunPayload"
+    :snapshot="validationRunPayload.snapshot"
+    :open-diagram-id="validationRunPayload.openDiagramId"
+    @close="showValidationScriptsModal = false"
+    @select-issue="handleValidationIssueSelect"
   />
 
   <DiagramImageShareModal

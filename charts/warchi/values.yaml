@@ -7,7 +7,7 @@ image:
   repository: art.lmru.tech/arch/warchi
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "0.10.14"
+  tag: "0.12.2"
 
 blueGreen:
   enabled: true

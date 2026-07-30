@@ -255,7 +255,7 @@ onMounted(() => {
                 <div class="au-user__meta">
                   <span class="au-user__email">{{ user.email }}</span>
                   <span v-if="user.oidcSub" class="au-user__oidc">
-                    LDAP: {{ user.oidcSub }}
+                    {{ t("adminUsersOidc.linkedAs", { sub: user.oidcSub }) }}
                   </span>
                   <span class="au-user__id">{{ user.id }}</span>
                 </div>

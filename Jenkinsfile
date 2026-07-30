@@ -2,7 +2,8 @@
 @Library(['common-utils']) _
 
 // Thin stub: full LMRU CI lives in lmru-warchi-deploy.
-def LMRU_DEPLOY_REPO = 'git@gitlab.lmru.tech:products/warchi/lmru-warchi-deploy.git'
+// HTTPS avoids Jenkins agent "Host key verification failed" on SSH to gitlab.lmru.tech.
+def LMRU_DEPLOY_REPO = 'https://gitlab.lmru.tech/products/warchi/lmru-warchi-deploy.git'
 def LMRU_DEPLOY_BRANCH = 'master'
 def LMRU_SERVICE = 'warchi'
 
@@ -12,9 +13,15 @@ node('dockerhost') {
 
     dir('_lmru_deploy') {
         deleteDir()
-        git branch: LMRU_DEPLOY_BRANCH,
-                credentialsId: 'lm-sa-warchi',
-                url: LMRU_DEPLOY_REPO
+        checkout([
+                $class           : 'GitSCM',
+                branches         : [[name: LMRU_DEPLOY_BRANCH]],
+                userRemoteConfigs: [[
+                                            url          : LMRU_DEPLOY_REPO,
+                                            credentialsId: 'lm-sa-warchi'
+                                    ]],
+                extensions       : [[$class: 'CloneOption', shallow: true, depth: 1, noTags: true]]
+        ])
     }
 
     def deployRoot = "${pwd()}/_lmru_deploy"

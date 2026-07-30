@@ -220,13 +220,13 @@ const siteReturnUrl = computed(() => {
 
 <template>
   <main class="login-page">
-    <!-- Animated background blobs -->
-    <div class="bg-layer">
+    <!-- Background isolated so mix-blend / blur don't poison the card in Safari -->
+    <div class="bg-layer" aria-hidden="true">
       <div class="blob blob--1"></div>
       <div class="blob blob--2"></div>
       <div class="blob blob--3"></div>
+      <div class="bg-noise"></div>
     </div>
-    <div class="bg-noise"></div>
 
     <!-- Card -->
     <div class="card">
@@ -488,9 +488,11 @@ const siteReturnUrl = computed(() => {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   background: #f0ede8;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .return-to-site {
@@ -514,13 +516,16 @@ const siteReturnUrl = computed(() => {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  z-index: 0;
+  /* Keep feTurbulence mix-blend and blob filters in their own stacking context
+     so WebKit does not drop / blank the login card (backdrop-filter sibling bug). */
+  isolation: isolate;
 }
 
 .blob {
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
-  will-change: transform;
 }
 
 .blob--1 {
@@ -581,10 +586,13 @@ const siteReturnUrl = computed(() => {
 .card {
   position: relative;
   z-index: 1;
+  isolation: isolate;
   width: 100%;
   max-width: 420px;
+  margin: 24px 16px;
   padding: 40px 36px 44px;
-  background: rgba(255, 255, 255, 0.72);
+  /* Solid enough fallback: Safari can fail backdrop-filter with page blend modes */
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.5);
@@ -592,17 +600,28 @@ const siteReturnUrl = computed(() => {
   box-shadow:
     0 8px 40px rgba(0, 0, 0, 0.06),
     0 1px 0 rgba(255, 255, 255, 0.6) inset;
-  animation: cardIn 0.5s ease-out both;
+  /* Do NOT use animation-fill-mode: both with opacity:0 — if WebKit skips/pauses
+     the animation (background tab, Low Power Mode, dynamic Vue mount), the card
+     stays invisible forever. Transform-only keeps the panel visible by default. */
+  animation: cardIn 0.5s ease-out;
 }
 
 @keyframes cardIn {
   from {
-    opacity: 0;
     transform: translateY(20px) scale(0.98);
   }
   to {
-    opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+
+  .blob {
+    animation: none;
   }
 }
 
@@ -979,7 +998,6 @@ const siteReturnUrl = computed(() => {
 /* ─── Responsive ──────────────────────────────── */
 @media (max-width: 500px) {
   .card {
-    margin: 16px;
     padding: 28px 24px 32px;
   }
 }

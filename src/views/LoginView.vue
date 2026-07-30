@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../composables/useAuth";
@@ -28,6 +28,19 @@ const ssoButtonLabel = computed(() =>
   isSsoLoading.value
     ? t("auth.submitSsoLoading", { name: ssoConfig.value.displayName })
     : t("auth.submitSso", { name: ssoConfig.value.displayName })
+);
+
+const ssoButtonStyle = computed(() => {
+  const style: Record<string, string> = {};
+  if (ssoConfig.value.buttonBg) style["--sso-btn-bg"] = ssoConfig.value.buttonBg;
+  if (ssoConfig.value.buttonTextColor) {
+    style["--sso-btn-color"] = ssoConfig.value.buttonTextColor;
+  }
+  return style;
+});
+
+const ssoIconSrc = computed(
+  () => ssoConfig.value.buttonIconUrl || "/icons/openid.png"
 );
 
 const handleSsoLogin = async () => {
@@ -171,13 +184,25 @@ const handleSubmit = async () => {
   }
 };
 
-const tabs = computed(
-  () =>
-    [
-      { key: "login", label: t("auth.tabLogin") },
-      { key: "register", label: t("auth.tabRegister") },
-      { key: "register-admin", label: t("auth.tabAdmin") }
-    ] as const
+const tabs = computed(() => {
+  const loginTab = { key: "login" as const, label: t("auth.tabLogin") };
+  if (!ssoReady.value || !ssoConfig.value.registrationEnabled) {
+    return [loginTab];
+  }
+  return [
+    loginTab,
+    { key: "register" as const, label: t("auth.tabRegister") },
+    { key: "register-admin" as const, label: t("auth.tabAdmin") }
+  ];
+});
+
+watch(
+  () => ssoReady.value && !ssoConfig.value.registrationEnabled,
+  (hideRegister) => {
+    if (hideRegister && mode.value !== "login") {
+      mode.value = "login";
+    }
+  }
 );
 
 const setMode = (newMode: "login" | "register" | "register-admin") => {
@@ -236,10 +261,18 @@ const siteReturnUrl = computed(() => {
         <button
           type="button"
           class="sso-btn"
+          :style="ssoButtonStyle"
           :disabled="isSsoLoading"
           @click="handleSsoLogin"
         >
-          <img v-if="!isSsoLoading" class="sso-btn__icon" src="/icons/openid.png" alt="" width="16" height="16" />
+          <img
+            v-if="!isSsoLoading"
+            class="sso-btn__icon"
+            :src="ssoIconSrc"
+            alt=""
+            width="16"
+            height="16"
+          />
           <span v-if="isSsoLoading" class="sso-btn__spinner"></span>
           <span>{{ ssoButtonLabel }}</span>
         </button>
@@ -968,8 +1001,8 @@ const siteReturnUrl = computed(() => {
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
-  background: var(--primary, #2563eb);
-  color: #fff;
+  background: var(--sso-btn-bg, var(--primary, #2563eb));
+  color: var(--sso-btn-color, #fff);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -978,7 +1011,7 @@ const siteReturnUrl = computed(() => {
 
 .sso-btn:hover:not(:disabled) {
   filter: brightness(1.05);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary, #2563eb) 25%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--sso-btn-bg, var(--primary, #2563eb)) 25%, transparent);
   transform: translateY(-1px);
 }
 
@@ -1001,8 +1034,8 @@ const siteReturnUrl = computed(() => {
 .sso-btn__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--sso-btn-color, #fff) 35%, transparent);
+  border-top-color: var(--sso-btn-color, #fff);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }

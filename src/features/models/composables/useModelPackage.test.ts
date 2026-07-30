@@ -3,37 +3,69 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('@/api/apiClient', () => ({
   apiUpload: vi.fn(),
   apiDownload: vi.fn(),
+  apiGet: vi.fn(),
 }))
 
-import { apiDownload, apiUpload } from '@/api/apiClient'
+import { apiDownload, apiGet, apiUpload } from '@/api/apiClient'
 import {
   downloadModelPackage,
   downloadNotationExport,
   uploadModelPackage,
+  type ModelPackageImportProgress,
 } from './useModelPackage'
 
 describe('uploadModelPackage', () => {
   beforeEach(() => {
     vi.mocked(apiUpload).mockReset()
+    vi.mocked(apiGet).mockReset()
+    vi.useFakeTimers()
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
-  it('returns modelId on success', async () => {
+  it('returns modelId after async job succeeds', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
       success: true,
-      data: {
-        modelId: 'new-model-id',
-        modelName: 'Imported',
-        modelVersion: '1.0.0',
-        warnings: ['skipped ref'],
-      },
+      data: { jobId: 'job-1', status: 'QUEUED' },
     })
+    vi.mocked(apiGet)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          jobId: 'job-1',
+          status: 'RUNNING',
+          stage: 'IMPORTING_NOTATIONS',
+          progress: 30,
+          message: 'Importing notation 1/1',
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          jobId: 'job-1',
+          status: 'SUCCEEDED',
+          stage: 'DONE',
+          progress: 100,
+          result: {
+            modelId: 'new-model-id',
+            modelName: 'Imported',
+            modelVersion: '1.0.0',
+            warnings: ['skipped ref'],
+          },
+        },
+      })
 
     const file = new File(['zip'], 'package.zip', { type: 'application/zip' })
-    const result = await uploadModelPackage(file)
+    const progressEvents: ModelPackageImportProgress[] = []
+    const promise = uploadModelPackage(file, p => progressEvents.push(p), {
+      pollIntervalMs: 10,
+      pollTimeoutMs: 5_000,
+    })
+    await vi.runAllTimersAsync()
+    const result = await promise
 
     expect(result).toEqual({
       ok: true,
@@ -47,39 +79,73 @@ describe('uploadModelPackage', () => {
       expect.any(FormData),
       expect.objectContaining({ onProgress: expect.any(Function) })
     )
+    expect(apiGet).toHaveBeenCalledWith('/models/package/jobs/job-1')
+    expect(progressEvents.some(p => p.phase === 'processing' && p.stage === 'IMPORTING_NOTATIONS')).toBe(
+      true
+    )
     const formData = vi.mocked(apiUpload).mock.calls[0]?.[1] as FormData
     expect(formData.get('file')).toBe(file)
   })
 
-  it('forwards upload progress as percent', async () => {
-    const percents: number[] = []
+  it('forwards upload progress while uploading bytes', async () => {
+    const events: ModelPackageImportProgress[] = []
     vi.mocked(apiUpload).mockImplementation(async (_path, _body, options) => {
       options?.onProgress?.({ loaded: 50, total: 100, percent: 50 })
       options?.onProgress?.({ loaded: 100, total: 100, percent: 100 })
       return {
         success: true,
-        data: {
+        data: { jobId: 'job-2', status: 'QUEUED' },
+      }
+    })
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        jobId: 'job-2',
+        status: 'SUCCEEDED',
+        stage: 'DONE',
+        progress: 100,
+        result: {
           modelId: 'id',
           modelName: 'M',
           modelVersion: '1.0.0',
           warnings: [],
         },
-      }
+      },
     })
 
     const file = new File(['zip'], 'package.zip', { type: 'application/zip' })
-    await uploadModelPackage(file, pct => percents.push(pct))
+    const promise = uploadModelPackage(file, p => events.push(p), {
+      pollIntervalMs: 10,
+      pollTimeoutMs: 5_000,
+    })
+    await vi.runAllTimersAsync()
+    await promise
 
-    expect(percents).toEqual([50, 100])
+    expect(events.filter(e => e.phase === 'uploading').map(e => e.percent)).toEqual([50, 100])
   })
 
-  it('maps 409 to CONFLICT', async () => {
+  it('maps failed job CONFLICT', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
-      success: false,
-      error: { status: 409, message: 'Model already exists' },
+      success: true,
+      data: { jobId: 'job-conflict', status: 'QUEUED' },
+    })
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        jobId: 'job-conflict',
+        status: 'FAILED',
+        stage: 'CREATING_MODEL',
+        progress: 75,
+        error: { status: 409, message: 'Model already exists', code: 'CONFLICT' },
+      },
     })
 
-    const result = await uploadModelPackage(new File([], 'p.zip'))
+    const promise = uploadModelPackage(new File([], 'p.zip'), undefined, {
+      pollIntervalMs: 10,
+      pollTimeoutMs: 5_000,
+    })
+    await vi.runAllTimersAsync()
+    const result = await promise
 
     expect(result).toEqual({
       ok: false,
@@ -89,7 +155,7 @@ describe('uploadModelPackage', () => {
     })
   })
 
-  it('maps 413 to PAYLOAD_TOO_LARGE', async () => {
+  it('maps upload 413 to PAYLOAD_TOO_LARGE', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
       success: false,
       error: { status: 413, message: 'ZIP too large' },
@@ -105,13 +171,28 @@ describe('uploadModelPackage', () => {
     })
   })
 
-  it('maps 400 to BAD_REQUEST', async () => {
+  it('maps failed job BAD_REQUEST', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
-      success: false,
-      error: { status: 400, message: 'Invalid package' },
+      success: true,
+      data: { jobId: 'job-bad', status: 'QUEUED' },
+    })
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        jobId: 'job-bad',
+        status: 'FAILED',
+        stage: 'VALIDATING',
+        progress: 5,
+        error: { status: 400, message: 'Invalid package', code: 'BAD_REQUEST' },
+      },
     })
 
-    const result = await uploadModelPackage(new File([], 'p.zip'))
+    const promise = uploadModelPackage(new File([], 'p.zip'), undefined, {
+      pollIntervalMs: 10,
+      pollTimeoutMs: 5_000,
+    })
+    await vi.runAllTimersAsync()
+    const result = await promise
 
     expect(result).toEqual({
       ok: false,
@@ -121,7 +202,7 @@ describe('uploadModelPackage', () => {
     })
   })
 
-  it('maps other errors without code', async () => {
+  it('maps other upload errors without code', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
       success: false,
       error: { status: 503, message: 'Storage unavailable' },
@@ -136,7 +217,7 @@ describe('uploadModelPackage', () => {
     })
   })
 
-  it('sanitizes nginx HTML gateway timeout responses', async () => {
+  it('sanitizes nginx HTML gateway timeout responses on upload', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
       success: false,
       error: {
@@ -151,6 +232,38 @@ describe('uploadModelPackage', () => {
       ok: false,
       status: 504,
       message: 'Gateway timeout',
+      code: 'TIMEOUT',
+    })
+  })
+
+  it('times out when job never finishes', async () => {
+    vi.mocked(apiUpload).mockResolvedValue({
+      success: true,
+      data: { jobId: 'job-slow', status: 'QUEUED' },
+    })
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        jobId: 'job-slow',
+        status: 'RUNNING',
+        stage: 'IMPORTING_FILES',
+        progress: 55,
+        message: 'Importing files',
+      },
+    })
+
+    const promise = uploadModelPackage(new File([], 'p.zip'), undefined, {
+      pollIntervalMs: 50,
+      pollTimeoutMs: 120,
+    })
+    await vi.advanceTimersByTimeAsync(200)
+    const result = await promise
+
+    expect(result).toEqual({
+      ok: false,
+      status: 504,
+      message: 'Import job timed out',
+      code: 'TIMEOUT',
     })
   })
 })

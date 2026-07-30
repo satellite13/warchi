@@ -8,7 +8,7 @@ const ssoConfig = ref({
   displayName: 'Lemanapro',
   buttonBg: '#F5C518',
   buttonTextColor: '#1A1A1A',
-  buttonIconUrl: '/icons/lemanapro.svg',
+  buttonIconUrl: '/icons/openid.png',
   registrationEnabled: false,
 })
 
@@ -54,7 +54,7 @@ describe('LoginView', () => {
       displayName: 'Lemanapro',
       buttonBg: '#F5C518',
       buttonTextColor: '#1A1A1A',
-      buttonIconUrl: '/icons/lemanapro.svg',
+      buttonIconUrl: '/icons/openid.png',
       registrationEnabled: false,
     }
   })
@@ -74,7 +74,7 @@ describe('LoginView', () => {
     const btn = wrapper.get('.sso-btn')
     expect(btn.attributes('style')).toContain('--sso-btn-bg: #F5C518')
     expect(btn.attributes('style')).toContain('--sso-btn-color: #1A1A1A')
-    expect(wrapper.get('.sso-btn__icon').attributes('src')).toBe('/icons/lemanapro.svg')
+    expect(wrapper.get('.sso-btn__icon').attributes('src')).toBe('/icons/openid.png')
   })
 
   it('shows register tabs when registrationEnabled is true', async () => {

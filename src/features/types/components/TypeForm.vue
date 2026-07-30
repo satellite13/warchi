@@ -16,12 +16,14 @@ const props = withDefaults(
     isSaving: boolean
     isTypeInUse: boolean
     canShare: boolean
+    /** false for system-marked types (attrs.system) */
+    canEdit?: boolean
     hasDoc?: boolean
     /** false при шаре VIEW без страницы: скрыть кнопку wiki */
     showDocButton?: boolean
     onMutateProperty?: (propertyId: string, apply: (p: CustomProperty) => void) => void
   }>(),
-  { showDocButton: true, onMutateProperty: undefined }
+  { canEdit: true, showDocButton: true, onMutateProperty: undefined }
 )
 
 const emit = defineEmits<{
@@ -78,8 +80,9 @@ watch(
       :help-title="t('types.helpTitle')"
       :is-dirty="isDirty"
       :is-saving="isSaving"
+      :can-edit="canEdit"
       :can-share="canShare"
-      :can-delete="!isTypeInUse"
+      :can-delete="canEdit && !isTypeInUse"
       :show-doc-button="showDocButton"
       :has-doc="hasDoc"
       :doc-button-title="t('types.documentation')"
@@ -92,6 +95,9 @@ watch(
     />
 
     <div class="type-form__body">
+      <p v-if="!canEdit" class="type-form__readonly-banner">
+        {{ t('types.systemTypeReadOnly') }}
+      </p>
       <!-- Name -->
       <div class="form-section">
         <h3 class="form-section__title">{{ t("types.main") }}</h3>
@@ -101,6 +107,7 @@ watch(
             class="form-input"
             :value="selectedType.name"
             :placeholder="t('types.typeNamePlaceholder')"
+            :disabled="!canEdit"
             @input="emit('updateName', ($event.target as HTMLInputElement).value)"
           >
         </div>
@@ -110,7 +117,11 @@ watch(
         </div>
         <div v-if="selectedType.kind === 'node'" class="form-row">
           <label class="form-label">{{ t("types.icon") }}</label>
+          <div v-if="!canEdit" class="form-input form-input--readonly">
+            {{ selectedType.parsedAttrs.icon || '—' }}
+          </div>
           <IconPicker
+            v-else
             :model-value="selectedType.parsedAttrs.icon ?? ''"
             @update:model-value="emit('updateIcon', $event)"
           />
@@ -121,6 +132,7 @@ watch(
             class="form-input"
             :value="selectedType.parsedAttrs.defaultDirectoryPath ?? ''"
             :placeholder="t('types.directoryExample')"
+            :disabled="!canEdit"
             @input="emit('updateDefaultDirectoryPath', ($event.target as HTMLInputElement).value)"
           >
         </div>
@@ -131,6 +143,7 @@ watch(
         <div class="form-section__header">
           <h3 class="form-section__title">{{ t("types.properties") }}</h3>
           <button
+            v-if="canEdit"
             type="button"
             class="add-btn"
             :title="t('types.addProperty')"
@@ -170,16 +183,18 @@ watch(
           {{ t("types.noPropertiesByFilter") }}
         </div>
 
-        <div v-else class="properties-list">
+        <div v-else class="properties-list" :class="{ 'properties-list--readonly': !canEdit }">
           <PropertyRow
             v-for="(property, idx) in filteredCustomProperties"
             :key="property.id"
             :property="property"
             :expanded="expandedIds.has(property.id)"
-            :on-mutate-property="(apply) => props.onMutateProperty?.(property.id, apply)"
+            :on-mutate-property="
+              canEdit ? (apply) => props.onMutateProperty?.(property.id, apply) : undefined
+            "
             :style="{ animationDelay: `${idx * 40}ms` }"
             @toggle="toggleCollapse(property.id)"
-            @remove="emit('removeProperty', property.id)"
+            @remove="canEdit && emit('removeProperty', property.id)"
           />
         </div>
       </div>
@@ -202,6 +217,16 @@ watch(
 .type-form {
   flex: 1;
   min-width: 0;
+}
+
+.type-form__readonly-banner {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .type-form__header {
@@ -402,6 +427,11 @@ watch(
 }
 
 /* Properties */
+.properties-list--readonly {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
 .properties-list {
   display: flex;
   flex-direction: column;

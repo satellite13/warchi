@@ -39,6 +39,8 @@ export interface TypeParsedAttrs {
   icon?: string
   documentFileId?: string
   customProperties?: CustomProperty[]
+  system?: boolean | { hiddenTreeRootType?: boolean }
+  kind?: string
 }
 
 // Parsed attrs for components/relations

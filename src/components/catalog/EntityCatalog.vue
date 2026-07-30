@@ -39,6 +39,8 @@ const props = defineProps<{
   actionErrorMessage?: string | null
   /** Статус импорта пакета (прогресс / успех). */
   actionStatusMessage?: string | null
+  /** Долгая операция (импорт пакета) — блокирует каталог и скрывает empty state. */
+  actionBusy?: boolean
 }>();
 
 const emit = defineEmits<{
@@ -249,6 +251,7 @@ function handleExport(group: {
             type="button"
             class="btn btn--secondary btn--xs catalog-toolbar__btn"
             :title="t(`${i18nPrefix}.packageImportDescription`)"
+            :disabled="actionBusy"
             @click="emit('importPackage')"
           >
             <UiIcon name="upload" />
@@ -260,16 +263,24 @@ function handleExport(group: {
           class="catalog-toolbar__search"
           :placeholder="t(`${i18nPrefix}.searchPlaceholder`)"
           :count="itemCount"
-          :loading="isLoading"
+          :loading="isLoading || actionBusy"
         />
       </div>
     </header>
 
     <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
-    <div v-if="actionStatusMessage" class="catalog-action-status">{{ actionStatusMessage }}</div>
+    <div v-if="actionStatusMessage && !actionBusy" class="catalog-action-status">
+      {{ actionStatusMessage }}
+    </div>
 
-    <section class="model-grid">
-      <CardSkeleton v-if="isLoading" :count="4" />
+    <section class="model-grid" :aria-busy="actionBusy || undefined">
+      <div v-if="actionBusy" class="catalog-busy">
+        <UiIcon name="sync" class="catalog-busy__icon spin" />
+        <p class="catalog-busy__message">
+          {{ actionStatusMessage || t(`${i18nPrefix}.packageImporting`) }}
+        </p>
+      </div>
+      <CardSkeleton v-else-if="isLoading" :count="4" />
       <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
       <EmptyState
         v-else-if="filteredItems.length === 0"
@@ -279,7 +290,7 @@ function handleExport(group: {
       />
 
       <EntityCard
-        v-for="group in filteredItems"
+        v-for="group in actionBusy ? [] : filteredItems"
         :id="getSelectedItem(group)?.id || group.name"
         :key="group.name"
         :name="group.name"
@@ -486,6 +497,45 @@ function handleExport(group: {
   color: var(--base-text);
   font-size: 14px;
   border: 1px solid var(--border-strong);
+}
+
+.catalog-busy {
+  width: 100%;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.catalog-busy__icon {
+  width: 28px;
+  height: 28px;
+}
+
+.catalog-busy__icon.spin {
+  animation: catalog-spin 1s linear infinite;
+}
+
+@keyframes catalog-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.catalog-busy__message {
+  margin: 0;
+  max-width: 420px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--base-text);
 }
 
 .icon-modal__body {

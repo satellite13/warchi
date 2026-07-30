@@ -80,9 +80,9 @@ describe('uploadModelPackage', () => {
       expect.objectContaining({ onProgress: expect.any(Function) })
     )
     expect(apiGet).toHaveBeenCalledWith('/models/package/jobs/job-1')
-    expect(progressEvents.some(p => p.phase === 'processing' && p.stage === 'IMPORTING_NOTATIONS')).toBe(
-      true
-    )
+    expect(
+      progressEvents.some(p => p.phase === 'processing' && p.stage === 'IMPORTING_NOTATIONS')
+    ).toBe(true)
     const formData = vi.mocked(apiUpload).mock.calls[0]?.[1] as FormData
     expect(formData.get('file')).toBe(file)
   })

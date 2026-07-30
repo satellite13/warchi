@@ -203,8 +203,7 @@ export const typesMessages = {
       notUsed: 'Not used',
       requiredShort: 'Req.',
       systemShort: 'Sys.',
-      systemTypeReadOnly:
-        'System type is view-only. Delete, edit, and sharing are unavailable.',
+      systemTypeReadOnly: 'System type is view-only. Delete, edit, and sharing are unavailable.',
       removeProperty: 'Remove property',
       propertyNamePlaceholder: 'Property name',
       regexOptional: 'Regex (optional)',

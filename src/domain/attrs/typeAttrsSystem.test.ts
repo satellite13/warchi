@@ -5,7 +5,7 @@ import { isSystemMarkedType } from '@/utils/systemMarkedType'
 describe('type attrs system marker', () => {
   it('round-trips system.hiddenTreeRootType and detects system type', () => {
     const parsed = parseTypeAttrs(
-      JSON.stringify({ system: { hiddenTreeRootType: true }, icon: 'folder' }),
+      JSON.stringify({ system: { hiddenTreeRootType: true }, icon: 'folder' })
     )
     expect(parsed.system).toEqual({ hiddenTreeRootType: true })
     expect(parsed.icon).toBe('folder')

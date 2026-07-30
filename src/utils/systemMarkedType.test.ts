@@ -10,7 +10,7 @@ describe('isSystemMarkedType', () => {
     expect(
       isSystemMarkedType({
         parsedAttrs: { system: { hiddenTreeRootType: true } },
-      }),
+      })
     ).toBe(true)
   })
 
@@ -18,7 +18,7 @@ describe('isSystemMarkedType', () => {
     expect(
       isSystemMarkedType({
         parsedAttrs: { system: { hiddenTreeRoot: true } },
-      }),
+      })
     ).toBe(true)
   })
 
@@ -28,7 +28,7 @@ describe('isSystemMarkedType', () => {
     expect(
       isSystemMarkedType({
         parsedAttrs: { system: { hiddenTreeRootType: false } },
-      }),
+      })
     ).toBe(false)
   })
 

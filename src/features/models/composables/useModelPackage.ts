@@ -70,7 +70,12 @@ function mapImportError(
   if (status === 400 || normalizedCode === 'BAD_REQUEST') {
     return { ok: false, status, message, code: 'BAD_REQUEST' }
   }
-  if (status === 504 || status === 502 || normalizedCode === 'TIMEOUT' || /<\s*html[\s>]/i.test(message)) {
+  if (
+    status === 504 ||
+    status === 502 ||
+    normalizedCode === 'TIMEOUT' ||
+    /<\s*html[\s>]/i.test(message)
+  ) {
     return {
       ok: false,
       status: status || 504,

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-07-30
+
+### Added
+- Dashboard quick action to import a notation package.
+- Catalog busy overlay while package import runs (hides empty-state “nothing found”).
+- Diagram SVG share modal: open link in a new tab; keep modal open after copy.
+
+### Fixed
+- Public diagram SVG share URL is shown only after the file is reachable (avoids a broken link while the share dialog is still open).
+- Nginx no longer applies SPA CSP to public diagram SVG share paths.
+
 ## [0.13.0] - 2026-07-30
 
 ### Added

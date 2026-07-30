@@ -18,6 +18,8 @@ export const notationsMessages = {
         'Не удалось импортировать нотацию: нотация с таким именем и версией уже существует.',
       packageImportBadRequest: 'Некорректный или повреждённый JSON-файл экспорта.',
       packageImportError: 'Не удалось импортировать нотацию: {message}',
+      packageImportTimeout:
+        'Импорт нотации превысил время ожидания шлюза. Обновите список нотаций — она могла успеть создаться; если нет, повторите импорт.',
       packageImporting: 'Импорт нотации…',
       emptySourceVersion: 'Пустая нотация',
       notFoundTitle: 'Нотации не найдены',
@@ -150,6 +152,8 @@ export const notationsMessages = {
         'Could not import notation: a notation with the same name and version already exists.',
       packageImportBadRequest: 'Invalid or corrupted JSON export file.',
       packageImportError: 'Could not import notation: {message}',
+      packageImportTimeout:
+        'Notation import exceeded the gateway timeout. Refresh the notations list — it may have been created; if not, retry the import.',
       packageImporting: 'Importing notation…',
       emptySourceVersion: 'Empty notation',
       notFoundTitle: 'No notations found',

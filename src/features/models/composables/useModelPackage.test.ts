@@ -135,6 +135,24 @@ describe('uploadModelPackage', () => {
       message: 'Storage unavailable',
     })
   })
+
+  it('sanitizes nginx HTML gateway timeout responses', async () => {
+    vi.mocked(apiUpload).mockResolvedValue({
+      success: false,
+      error: {
+        status: 504,
+        message: '<html><head><title>504 Gateway Time-out</title></head></html>',
+      },
+    })
+
+    const result = await uploadModelPackage(new File([], 'p.zip'))
+
+    expect(result).toEqual({
+      ok: false,
+      status: 504,
+      message: 'Gateway timeout',
+    })
+  })
 })
 
 describe('downloadModelPackage', () => {

@@ -29,6 +29,10 @@ function mapImportError(
   if (status === 400) {
     return { ok: false, status, message, code: 'BAD_REQUEST' }
   }
+  // nginx/HTML gateway pages are not useful in the UI toast
+  if (status === 502 || status === 504 || /<\s*html[\s>]/i.test(message)) {
+    return { ok: false, status, message: 'Gateway timeout' }
+  }
   return { ok: false, status, message }
 }
 

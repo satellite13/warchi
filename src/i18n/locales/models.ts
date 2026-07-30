@@ -32,7 +32,10 @@ export const modelsMessages = {
       packageImportTooLarge: 'Файл пакета слишком большой.',
       packageImportBadRequest: 'Некорректный или повреждённый файл пакета.',
       packageImportError: 'Не удалось импортировать пакет: {message}',
+      packageImportTimeout:
+        'Импорт пакета превысил время ожидания шлюза. Обновите список моделей — пакет мог успеть создаться; если нет, повторите импорт.',
       packageImporting: 'Импорт пакета…',
+      packageImportProcessing: 'Импорт пакета… обработка на сервере',
       packageExportFailed: 'Не удалось экспортировать пакет модели: {message}',
       packageImportCompletedWithWarnings: 'Пакет импортирован с предупреждениями: {count}',
       packageImportCompletedWithWarningsDetail:
@@ -507,7 +510,10 @@ export const modelsMessages = {
       packageImportTooLarge: 'The package file is too large.',
       packageImportBadRequest: 'Invalid or corrupted package file.',
       packageImportError: 'Could not import package: {message}',
+      packageImportTimeout:
+        'Package import exceeded the gateway timeout. Refresh the models list — the package may have been created; if not, retry the import.',
       packageImporting: 'Importing package…',
+      packageImportProcessing: 'Importing package… processing on server',
       packageExportFailed: 'Could not export model package: {message}',
       packageImportCompletedWithWarnings: 'Package imported with warnings: {count}',
       packageImportCompletedWithWarningsDetail: 'Package imported. Warnings: {messages}',

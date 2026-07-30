@@ -21,13 +21,18 @@ export async function uploadNotationExportJson(file: File): Promise<NotationExpo
   const result = await apiPost<NotationImportApiResponse>('/notations/import', document)
   if (!result.success) {
     const status = result.error.status
+    const message = result.error.message
     if (status === 409) {
-      return { ok: false, status, message: result.error.message, code: 'CONFLICT' }
+      return { ok: false, status, message, code: 'CONFLICT' }
     }
     if (status === 400) {
-      return { ok: false, status, message: result.error.message, code: 'BAD_REQUEST' }
+      return { ok: false, status, message, code: 'BAD_REQUEST' }
     }
-    return { ok: false, status, message: result.error.message }
+    // nginx/HTML gateway pages are not useful in the UI toast
+    if (status === 502 || status === 504 || /<\s*html[\s>]/i.test(message)) {
+      return { ok: false, status, message: 'Gateway timeout' }
+    }
+    return { ok: false, status, message }
   }
   if (!result.data?.notationId) {
     return { ok: false, status: 0, message: 'Invalid response', code: 'BAD_REQUEST' }

@@ -6,7 +6,11 @@ import type { ModelData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
-import { downloadModelPackage, uploadModelPackage } from "./composables/useModelPackage";
+import {
+  downloadModelPackage,
+  uploadModelPackage,
+  type ModelPackageImportProgress,
+} from "./composables/useModelPackage";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 
 const { t } = useI18n();
@@ -15,6 +19,33 @@ const exportError = ref<string | null>(null);
 const actionStatusMessage = ref<string | null>(null);
 const packageInputRef = ref<HTMLInputElement | null>(null);
 const isImporting = ref(false);
+
+function statusMessageForImportProgress(progress: ModelPackageImportProgress): string {
+  if (progress.phase === "uploading") {
+    if (progress.percent > 0 && progress.percent < 100) {
+      return `${t("models.packageImporting")} ${progress.percent}%`;
+    }
+    return t("models.packageImporting");
+  }
+  switch (progress.stage) {
+    case "QUEUED":
+      return t("models.packageImportStageQueued");
+    case "VALIDATING":
+      return t("models.packageImportStageValidating");
+    case "IMPORTING_NOTATIONS":
+      return t("models.packageImportStageNotations");
+    case "IMPORTING_FILES":
+      return t("models.packageImportStageFiles");
+    case "CREATING_MODEL":
+      return t("models.packageImportStageModel");
+    case "DOCUMENT_REFS":
+      return t("models.packageImportStageDocumentRefs");
+    case "DONE":
+      return t("models.packageImportStageDone");
+    default:
+      return t("models.packageImportProcessing");
+  }
+}
 
 const config: EntityListConfig<ModelData> = {
   endpoint: "models",
@@ -76,14 +107,8 @@ async function onPackageSelected(event: Event) {
   exportError.value = null;
   actionStatusMessage.value = t("models.packageImporting");
   try {
-    const result = await uploadModelPackage(file, pct => {
-      if (pct >= 100) {
-        actionStatusMessage.value = t("models.packageImportProcessing");
-      } else if (pct > 0) {
-        actionStatusMessage.value = `${t("models.packageImporting")} ${pct}%`;
-      } else {
-        actionStatusMessage.value = t("models.packageImporting");
-      }
+    const result = await uploadModelPackage(file, progress => {
+      actionStatusMessage.value = statusMessageForImportProgress(progress);
     });
 
     if (!result.ok) {
@@ -92,7 +117,7 @@ async function onPackageSelected(event: Event) {
         exportError.value = t("models.packageImportConflict");
       } else if (result.code === "PAYLOAD_TOO_LARGE") {
         exportError.value = t("models.packageImportTooLarge");
-      } else if (result.status === 504 || result.status === 502) {
+      } else if (result.code === "TIMEOUT" || result.status === 504 || result.status === 502) {
         exportError.value = t("models.packageImportTimeout");
       } else if (result.code === "BAD_REQUEST") {
         exportError.value = result.message?.trim()

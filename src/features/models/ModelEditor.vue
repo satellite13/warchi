@@ -89,7 +89,10 @@ import type { ValidationIssue } from '@/features/validation-scripts/sandbox/type
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
-import { ensureDiagramAttrsLoaded } from './composables/ensureDiagramAttrs'
+import {
+  ensureAllDiagramAttrsLoaded,
+  ensureDiagramAttrsLoaded,
+} from './composables/ensureDiagramAttrs'
 import {
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
@@ -888,6 +891,10 @@ async function ensureImportNotationCatalog(notationId: string): Promise<void> {
     state: state.value,
     ensureNotationRelationsAndRules,
   })
+}
+
+async function ensureImportDiagramAttrs(): Promise<void> {
+  await ensureAllDiagramAttrsLoaded(() => state.value)
 }
 
 const showLinkDeleteModal = ref(false)
@@ -3356,9 +3363,13 @@ onBeforeUnmount(() => {
     :components="state.components"
     :relations="state.relations"
     :relation-rules="state.relationRules"
+    :existing-nodes="state.nodes"
+    :existing-links="state.links"
+    :existing-diagrams="state.diagrams"
     :import-busy="isImportingOef"
     :import-progress="oefImportProgress"
     :ensure-notation-catalog="ensureImportNotationCatalog"
+    :ensure-diagram-attrs="ensureImportDiagramAttrs"
     @close="showImportWizard = false"
     @submit="handleOefImportSubmit"
   />
@@ -3374,6 +3385,18 @@ onBeforeUnmount(() => {
       <li>{{ t('models.oefImportStatNodes', { count: oefImportReport.nodes }) }}</li>
       <li>{{ t('models.oefImportStatLinks', { count: oefImportReport.links }) }}</li>
       <li>{{ t('models.oefImportStatDiagrams', { count: oefImportReport.diagrams }) }}</li>
+      <li v-if="oefImportReport.nodesReused > 0">
+        {{ t('models.oefImportReportReusedNodes', { count: oefImportReport.nodesReused }) }}
+      </li>
+      <li v-if="oefImportReport.nodesUpdated > 0">
+        {{ t('models.oefImportReportUpdatedNodes', { count: oefImportReport.nodesUpdated }) }}
+      </li>
+      <li v-if="oefImportReport.linksReused > 0">
+        {{ t('models.oefImportReportReusedLinks', { count: oefImportReport.linksReused }) }}
+      </li>
+      <li v-if="oefImportReport.linksUpdated > 0">
+        {{ t('models.oefImportReportUpdatedLinks', { count: oefImportReport.linksUpdated }) }}
+      </li>
       <li>
         {{ t('models.oefImportReportDiagramNodeInstances', { count: oefImportReport.diagramNodeInstances }) }}
       </li>

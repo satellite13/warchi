@@ -65,3 +65,14 @@ export async function ensureDiagramAttrsLoaded(
   inFlightById.set(diagramId, promise)
   return promise
 }
+
+/** Hydrate attrs for every non-deleted diagram still pending (OEF label reuse matching). */
+export async function ensureAllDiagramAttrsLoaded(stateSource: StateSource): Promise<void> {
+  const state = resolveState(stateSource)
+  const pendingIds = state.diagrams
+    .filter(diagram => !diagram._isDeleted && diagram._attrsPending)
+    .map(diagram => diagram.id)
+  for (const id of pendingIds) {
+    await ensureDiagramAttrsLoaded(stateSource, id)
+  }
+}

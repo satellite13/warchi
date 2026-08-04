@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef } from "vue"
+import { computed, nextTick, ref, toRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "@/utils/version"
@@ -141,14 +141,15 @@ const {
   filteredChildNodes,
   childNodes,
   toggleNode,
+  collectAncestorIds,
 } = useTreeSearch({
-  nodes: toRef(props, 'nodes'),
-  treeRootNodeId: toRef(props, 'treeRootNodeId'),
+  nodes: toRef(props, "nodes"),
+  treeRootNodeId: toRef(props, "treeRootNodeId"),
   isDirectory,
   nodeIndexById,
   extraNodeMatches: (node, query) => {
     const diagrams = latestDiagramsByNodeId.value.get(node.id)
-    return diagrams?.some(diagram => diagram.name.toLowerCase().includes(query)) ?? false
+    return diagrams?.some((diagram) => diagram.name.toLowerCase().includes(query)) ?? false
   },
 })
 
@@ -396,58 +397,50 @@ type TreeRow = TreeNodeRow | TreeDiagramRow
 const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   const rows: TreeRow[] = []
   const query = normalizedQuery.value
+  const limit = query ? MAX_SEARCH_TREE_ROWS : Number.POSITIVE_INFINITY
 
-  // Search mode: flat list of direct matches — avoids expanding thousands of folders.
-  if (query) {
-    for (const diagram of visibleRootDiagrams.value) {
-      rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
-      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-        return { rows, truncated: true }
-      }
-    }
-
-    const byId = nodeById.value
-    const matches: EditorNode[] = []
-    for (const id of matchingNodeIds.value) {
-      const node = byId.get(id)
-      if (node && !node._isDeleted) matches.push(node)
-    }
-    matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-
-    for (const node of matches) {
-      rows.push({ kind: "node", node, depth: 0 })
-      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-        return { rows, truncated: true }
-      }
-      for (const diagram of visibleNodeDiagrams(node.id)) {
-        rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: 1 })
-        if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-          return { rows, truncated: true }
-        }
-      }
-    }
-    return { rows, truncated: false }
+  const pushRow = (row: TreeRow): boolean => {
+    rows.push(row)
+    return rows.length >= limit
   }
 
   for (const diagram of visibleRootDiagrams.value) {
-    rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
+    if (pushRow({ kind: "diagram", nodeId: null, diagram, depth: 0 })) {
+      return { rows, truncated: !!query }
+    }
   }
 
-  const pushNode = (node: EditorNode, depth: number) => {
-    rows.push({ kind: "node", node, depth })
-    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return
+  const pushNode = (node: EditorNode, depth: number): boolean => {
+    if (pushRow({ kind: "node", node, depth })) return true
+    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return false
     for (const diagram of visibleNodeDiagrams(node.id)) {
-      rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })
+      if (pushRow({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })) return true
     }
     for (const child of visibleChildNodes(node.id)) {
-      pushNode(child, depth + 1)
+      if (pushNode(child, depth + 1)) return true
     }
+    return false
   }
 
   for (const rootNode of visibleRootNodes.value) {
-    pushNode(rootNode, 0)
+    if (pushNode(rootNode, 0)) {
+      return { rows, truncated: !!query }
+    }
   }
   return { rows, truncated: false }
+})
+
+watch(normalizedQuery, (query) => {
+  if (!query) return
+  const next = new Set(expandedNodes.value)
+  for (const id of collectAncestorIds(matchingNodeIds.value)) {
+    next.add(id)
+  }
+  for (const id of matchingNodeIds.value) {
+    const node = nodeById.value.get(id)
+    if (node && isDirectory(node)) next.add(id)
+  }
+  expandedNodes.value = next
 })
 
 const visibleTreeRows = computed(() => treeRows.value.rows)

@@ -113,6 +113,21 @@ export function useTreeSearch(deps: TreeSearchDeps) {
     return result
   })
 
+  const collectAncestorIds = (matchingIds: Set<string>): Set<string> => {
+    const rootId = deps.treeRootNodeId.value ?? null
+    const byId = nodeById.value
+    const ancestors = new Set<string>()
+    for (const id of matchingIds) {
+      let parentId = byId.get(id)?.parentNodeId ?? null
+      while (parentId && parentId !== rootId) {
+        if (ancestors.has(parentId)) break
+        ancestors.add(parentId)
+        parentId = byId.get(parentId)?.parentNodeId ?? null
+      }
+    }
+    return ancestors
+  }
+
   /**
    * Nodes visible under search: matches + all ancestors.
    * null when query is empty (show everything).
@@ -121,18 +136,10 @@ export function useTreeSearch(deps: TreeSearchDeps) {
     const query = normalizedQuery.value
     if (!query) return null
 
-    const rootId = deps.treeRootNodeId.value ?? null
-    const byId = nodeById.value
     const matching = matchingNodeIds.value
     const visible = new Set(matching)
-
-    for (const id of matching) {
-      let parentId = byId.get(id)?.parentNodeId ?? null
-      while (parentId && parentId !== rootId) {
-        if (visible.has(parentId)) break
-        visible.add(parentId)
-        parentId = byId.get(parentId)?.parentNodeId ?? null
-      }
+    for (const id of collectAncestorIds(matching)) {
+      visible.add(id)
     }
     return visible
   })
@@ -155,21 +162,6 @@ export function useTreeSearch(deps: TreeSearchDeps) {
     if (next.has(nodeId)) next.delete(nodeId)
     else next.add(nodeId)
     expandedNodes.value = next
-  }
-
-  const collectAncestorIds = (matchingIds: Set<string>): Set<string> => {
-    const rootId = deps.treeRootNodeId.value ?? null
-    const byId = nodeById.value
-    const ancestors = new Set<string>()
-    for (const id of matchingIds) {
-      let parentId = byId.get(id)?.parentNodeId ?? null
-      while (parentId && parentId !== rootId) {
-        if (ancestors.has(parentId)) break
-        ancestors.add(parentId)
-        parentId = byId.get(parentId)?.parentNodeId ?? null
-      }
-    }
-    return ancestors
   }
 
   return {

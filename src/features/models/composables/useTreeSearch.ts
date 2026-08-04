@@ -157,6 +157,21 @@ export function useTreeSearch(deps: TreeSearchDeps) {
     expandedNodes.value = next
   }
 
+  const collectAncestorIds = (matchingIds: Set<string>): Set<string> => {
+    const rootId = deps.treeRootNodeId.value ?? null
+    const byId = nodeById.value
+    const ancestors = new Set<string>()
+    for (const id of matchingIds) {
+      let parentId = byId.get(id)?.parentNodeId ?? null
+      while (parentId && parentId !== rootId) {
+        if (ancestors.has(parentId)) break
+        ancestors.add(parentId)
+        parentId = byId.get(parentId)?.parentNodeId ?? null
+      }
+    }
+    return ancestors
+  }
+
   return {
     expandedNodes,
     treeSearchQuery,
@@ -171,5 +186,6 @@ export function useTreeSearch(deps: TreeSearchDeps) {
     filteredRootNodes,
     filteredChildNodes,
     toggleNode,
+    collectAncestorIds,
   }
 }

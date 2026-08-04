@@ -232,4 +232,47 @@ describe('useTreeSearch', () => {
       expect(tree.filteredRootNodes.value.map(n => n.id)).toEqual(['a'])
     })
   })
+
+  describe('collectAncestorIds', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns ancestors of matching nodes up to but not including tree root', () => {
+      const tree = setup(
+        [
+          makeNode({ id: 'root', name: 'Root' }),
+          makeNode({ id: 'folder', name: 'Folder', parentNodeId: 'root', nodeTypeId: 'dir' }),
+          makeNode({ id: 'child', name: 'SpecialChild', parentNodeId: 'folder' }),
+          makeNode({ id: 'sibling', name: 'Other', parentNodeId: 'folder' }),
+        ],
+        'root',
+      )
+      tree.treeSearchQuery.value = 'special'
+      vi.advanceTimersByTime(200)
+      const ancestors = tree.collectAncestorIds(tree.matchingNodeIds.value)
+      expect([...ancestors].sort()).toEqual(['folder'])
+      expect(ancestors.has('root')).toBe(false)
+      expect(ancestors.has('child')).toBe(false)
+    })
+
+    it('returns empty set when there are no matches', () => {
+      const tree = setup([makeNode({ id: 'a', name: 'Alpha' })])
+      const ancestors = tree.collectAncestorIds(new Set())
+      expect(ancestors.size).toBe(0)
+    })
+
+    it('walks multiple levels', () => {
+      const tree = setup([
+        makeNode({ id: 'a', name: 'A', nodeTypeId: 'dir' }),
+        makeNode({ id: 'b', name: 'B', parentNodeId: 'a', nodeTypeId: 'dir' }),
+        makeNode({ id: 'c', name: 'TargetLeaf', parentNodeId: 'b' }),
+      ])
+      const ancestors = tree.collectAncestorIds(new Set(['c']))
+      expect([...ancestors].sort()).toEqual(['a', 'b'])
+    })
+  })
 })

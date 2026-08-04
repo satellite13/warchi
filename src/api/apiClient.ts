@@ -412,6 +412,12 @@ export const apiPut = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
     body: JSON.stringify(body),
   })
 
+export const apiPatch = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
+  apiFetch<T>(path, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
+
 export const apiDelete = <T>(path: string): Promise<ApiResult<T>> =>
   apiFetch<T>(path, { method: "DELETE" })
 

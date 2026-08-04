@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFooter from "../components/layout/AppFooter.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
+import ApiKeysSection from "@/components/profile/ApiKeysSection.vue";
 import UiIcon from "@/components/ui/UiIcon.vue";
 import { apiGet } from "../composables/useApi";
 import { useAuth } from "../composables/useAuth";
@@ -201,6 +202,8 @@ onMounted(async () => {
           </div>
         </div>
       </section>
+
+      <ApiKeysSection />
     </main>
     <footer class="profile-page__footer">
       <AppFooter />

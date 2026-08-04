@@ -1,7 +1,7 @@
 # Model tree search: hierarchical path + reveal on clear
 
 Date: 2026-08-04  
-Status: approved design
+Status: implemented (feat/model-tree-search-path-reveal)
 
 ## Goal
 

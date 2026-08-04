@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef } from "vue"
+import { computed, nextTick, ref, toRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "@/utils/version"
@@ -141,14 +141,15 @@ const {
   filteredChildNodes,
   childNodes,
   toggleNode,
+  collectAncestorIds,
 } = useTreeSearch({
-  nodes: toRef(props, 'nodes'),
-  treeRootNodeId: toRef(props, 'treeRootNodeId'),
+  nodes: toRef(props, "nodes"),
+  treeRootNodeId: toRef(props, "treeRootNodeId"),
   isDirectory,
   nodeIndexById,
   extraNodeMatches: (node, query) => {
     const diagrams = latestDiagramsByNodeId.value.get(node.id)
-    return diagrams?.some(diagram => diagram.name.toLowerCase().includes(query)) ?? false
+    return diagrams?.some((diagram) => diagram.name.toLowerCase().includes(query)) ?? false
   },
 })
 
@@ -378,6 +379,23 @@ const focusNode = (nodeId: string) => {
   })
 }
 
+const focusDiagram = (diagramId: string) => {
+  const diagram = props.diagrams.find((d) => d.id === diagramId && !d._isDeleted)
+  if (diagram?.nodeId && !(props.treeRootNodeId && diagram.nodeId === props.treeRootNodeId)) {
+    expandToNode(diagram.nodeId)
+    // Ensure the parent folder itself is expanded so the diagram row is visible
+    const next = new Set(expandedNodes.value)
+    next.add(diagram.nodeId)
+    expandedNodes.value = next
+  }
+  nextTick(() => {
+    const row = document.querySelector(
+      `[data-tree-diagram-id="${diagramId}"]`,
+    ) as HTMLElement | null
+    row?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  })
+}
+
 type TreeNodeRow = {
   kind: "node"
   node: EditorNode
@@ -396,64 +414,67 @@ type TreeRow = TreeNodeRow | TreeDiagramRow
 const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   const rows: TreeRow[] = []
   const query = normalizedQuery.value
+  const limit = query ? MAX_SEARCH_TREE_ROWS : Number.POSITIVE_INFINITY
 
-  // Search mode: flat list of direct matches — avoids expanding thousands of folders.
-  if (query) {
-    for (const diagram of visibleRootDiagrams.value) {
-      rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
-      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-        return { rows, truncated: true }
-      }
-    }
-
-    const byId = nodeById.value
-    const matches: EditorNode[] = []
-    for (const id of matchingNodeIds.value) {
-      const node = byId.get(id)
-      if (node && !node._isDeleted) matches.push(node)
-    }
-    matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-
-    for (const node of matches) {
-      rows.push({ kind: "node", node, depth: 0 })
-      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-        return { rows, truncated: true }
-      }
-      for (const diagram of visibleNodeDiagrams(node.id)) {
-        rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: 1 })
-        if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-          return { rows, truncated: true }
-        }
-      }
-    }
-    return { rows, truncated: false }
+  const pushRow = (row: TreeRow): boolean => {
+    rows.push(row)
+    return rows.length >= limit
   }
 
   for (const diagram of visibleRootDiagrams.value) {
-    rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
+    if (pushRow({ kind: "diagram", nodeId: null, diagram, depth: 0 })) {
+      return { rows, truncated: !!query }
+    }
   }
 
-  const pushNode = (node: EditorNode, depth: number) => {
-    rows.push({ kind: "node", node, depth })
-    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return
+  const pushNode = (node: EditorNode, depth: number): boolean => {
+    if (pushRow({ kind: "node", node, depth })) return true
+    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return false
     for (const diagram of visibleNodeDiagrams(node.id)) {
-      rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })
+      if (pushRow({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })) return true
     }
     for (const child of visibleChildNodes(node.id)) {
-      pushNode(child, depth + 1)
+      if (pushNode(child, depth + 1)) return true
     }
+    return false
   }
 
   for (const rootNode of visibleRootNodes.value) {
-    pushNode(rootNode, 0)
+    if (pushNode(rootNode, 0)) {
+      return { rows, truncated: !!query }
+    }
   }
   return { rows, truncated: false }
+})
+
+watch(normalizedQuery, (query, prev) => {
+  if (query) {
+    const next = new Set(expandedNodes.value)
+    for (const id of collectAncestorIds(matchingNodeIds.value)) {
+      next.add(id)
+    }
+    for (const id of matchingNodeIds.value) {
+      const node = nodeById.value.get(id)
+      if (node && isDirectory(node)) next.add(id)
+    }
+    expandedNodes.value = next
+    return
+  }
+  // Leaving search mode
+  if (!prev) return
+  if (props.selectedNodeId) {
+    focusNode(props.selectedNodeId)
+    return
+  }
+  if (props.selectedDiagramId) {
+    focusDiagram(props.selectedDiagramId)
+  }
 })
 
 const visibleTreeRows = computed(() => treeRows.value.rows)
 const searchResultsTruncated = computed(() => treeRows.value.truncated)
 
-defineExpose({ expandToNode, focusNode })
+defineExpose({ expandToNode, focusNode, focusDiagram })
 </script>
 
 <template>
@@ -570,7 +591,14 @@ defineExpose({ expandToNode, focusNode })
                 @keydown.esc.prevent="cancelRenameNode"
                 @blur="commitRenameNode(row.node)"
               >
-              <span v-else class="tree-node__name">{{ row.node.name }}</span>
+              <span
+                v-else
+                class="tree-node__name"
+                :class="{
+                  'tree-node__name--ancestor':
+                    !!normalizedQuery && !matchingNodeIds.has(row.node.id),
+                }"
+              >{{ row.node.name }}</span>
               <span v-if="!isDirectory(row.node)" class="tree-node__type">{{ nodeTypeNameById.get(row.node.nodeTypeId) }}</span>
             </button>
             <div class="tree-node__actions">
@@ -627,6 +655,7 @@ defineExpose({ expandToNode, focusNode })
           class="diagram-row diagram-row--flattened"
           :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
           :style="{ '--tree-depth': String(row.depth) }"
+          :data-tree-diagram-id="row.diagram.id"
           :draggable="!props.navigationOnlyMode"
           @dragstart="onDragDiagramStart($event, row.diagram.id)"
         >
@@ -1019,6 +1048,11 @@ defineExpose({ expandToNode, focusNode })
   font-size: 13px;
   font-weight: 500;
   color: var(--base-text);
+}
+
+.tree-node__name--ancestor {
+  color: var(--text-subtle);
+  font-weight: 400;
 }
 
 .tree-node__rename-input {

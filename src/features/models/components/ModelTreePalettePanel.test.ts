@@ -79,10 +79,14 @@ describe('ModelTreePalettePanel', () => {
 })
 
 describe('ModelTreePalettePanel search', () => {
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView
+
   beforeEach(() => {
     vi.useFakeTimers()
+    originalScrollIntoView = Element.prototype.scrollIntoView
   })
   afterEach(() => {
+    Element.prototype.scrollIntoView = originalScrollIntoView
     document.body.innerHTML = ''
     vi.useRealTimers()
   })
@@ -156,5 +160,24 @@ describe('ModelTreePalettePanel search', () => {
     await wrapper.get('[data-tree-node-id="hit"] .tree-node__select').trigger('click')
     expect((input.element as HTMLInputElement).value).toBe('special')
     expect(wrapper.emitted('selectNode')?.[0]).toEqual(['hit'])
+  })
+
+  it('mutes non-matching ancestor names during search', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir' }),
+        makeNode({ id: 'hit', name: 'SpecialChild', parentNodeId: 'folder' }),
+      ],
+    })
+    await wrapper.get('.panel__search-input').setValue('special')
+    vi.advanceTimersByTime(200)
+    await nextTick()
+
+    expect(wrapper.get('[data-tree-node-id="folder"] .tree-node__name').classes()).toContain(
+      'tree-node__name--ancestor',
+    )
+    expect(wrapper.get('[data-tree-node-id="hit"] .tree-node__name').classes()).not.toContain(
+      'tree-node__name--ancestor',
+    )
   })
 })

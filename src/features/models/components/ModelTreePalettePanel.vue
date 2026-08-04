@@ -591,7 +591,14 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 @keydown.esc.prevent="cancelRenameNode"
                 @blur="commitRenameNode(row.node)"
               >
-              <span v-else class="tree-node__name">{{ row.node.name }}</span>
+              <span
+                v-else
+                class="tree-node__name"
+                :class="{
+                  'tree-node__name--ancestor':
+                    !!normalizedQuery && !matchingNodeIds.has(row.node.id),
+                }"
+              >{{ row.node.name }}</span>
               <span v-if="!isDirectory(row.node)" class="tree-node__type">{{ nodeTypeNameById.get(row.node.nodeTypeId) }}</span>
             </button>
             <div class="tree-node__actions">
@@ -1041,6 +1048,11 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   font-size: 13px;
   font-weight: 500;
   color: var(--base-text);
+}
+
+.tree-node__name--ancestor {
+  color: var(--text-subtle);
+  font-weight: 400;
 }
 
 .tree-node__rename-input {

@@ -172,8 +172,8 @@ The editor header also offers the **Import Open Exchange (XML)** wizard to load 
 
 1. **Analyze** — pick a target notation and XML file; the file is uploaded to the server for parsing (up to ~100 MB), and the client receives compact JSON plus validation issues.
 2. **Mapping** — map file element/relationship types to notation components/relations (filter unmapped types and bulk-apply mappings).
-3. **Preview** — review import volume (nodes, links, diagrams) and warnings.
-4. Click **Import** — entities are created in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically).
+3. **Preview** — review import volume (nodes, links, diagrams) and warnings. Also configure **reuse**: always create nodes/links or match existing ones in the model (node: name + type; link: endpoints + type, optionally diagram edge label). On match — reuse id only or update properties from OEF. Diagrams and organization folders are always created anew.
+4. Click **Import** — entities are created/updated in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically).
 
 If required properties are still empty after import, fill them in the properties panel before the next save.
 

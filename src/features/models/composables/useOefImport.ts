@@ -9,6 +9,7 @@ import { parseEntityAttrs, parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
 import type { ModelEditorState } from '../types'
 import type { ImportMappingState } from '../utils/oef/mappingState'
+import type { OefReuseSettings } from '../utils/oef/reuseSettings'
 import type { ImportDraft } from '../utils/oef/types'
 import { applyOefBatchSaveChunks, type OefChunkProgress } from '../utils/oef/chunkOefBatchSave'
 import type { OefRelationRuleDecision } from '../utils/oef/oefRelationRuleValidation'
@@ -24,6 +25,10 @@ export type OefImportReport = {
   diagrams: number
   diagramNodeInstances: number
   diagramConnectionInstances: number
+  nodesReused: number
+  nodesUpdated: number
+  linksReused: number
+  linksUpdated: number
   warningsCount: number
   warningGroups: Array<{ code: string; count: number }>
   missingRequired: {
@@ -95,6 +100,12 @@ export function useOefImport(options: {
         return options.t('models.oefImportWarningPropertyConversionFailed')
       case 'propertyUnmatched':
         return options.t('models.oefImportWarningPropertyUnmatched')
+      case 'nodeMatchAmbiguous':
+        return options.t('models.oefImportWarningNodeMatchAmbiguous')
+      case 'linkMatchAmbiguous':
+        return options.t('models.oefImportWarningLinkMatchAmbiguous')
+      case 'linkLabelConflict':
+        return options.t('models.oefImportWarningLinkLabelConflict')
       default:
         return code
     }
@@ -204,6 +215,7 @@ export function useOefImport(options: {
     notationId: string
     mapping: ImportMappingState
     ruleDecisions: Record<string, OefRelationRuleDecision>
+    reuseSettings: OefReuseSettings
   }): Promise<void> {
     const modelId = options.state.value.modelId
     if (!modelId || isImportingOef.value) return
@@ -283,6 +295,10 @@ export function useOefImport(options: {
         relationCustomPropertiesById,
         relationRules: options.state.value.relationRules,
         ruleDecisions: payload.ruleDecisions,
+        existingNodes: options.state.value.nodes.filter(node => !node._isDeleted),
+        existingLinks: options.state.value.links.filter(link => !link._isDeleted),
+        existingDiagrams: options.state.value.diagrams.filter(diagram => !diagram._isDeleted),
+        reuseSettings: payload.reuseSettings,
       })
       if (directoryTypeCreated) {
         built.warnings.push({
@@ -290,8 +306,27 @@ export function useOefImport(options: {
           message: 'Directory node type was created automatically',
         })
       }
-      if (!hasBatchChanges(built.request)) {
+      const reusedOnly =
+        !hasBatchChanges(built.request) &&
+        (built.reuseCounts.nodesReused > 0 ||
+          built.reuseCounts.linksReused > 0 ||
+          built.reuseCounts.nodesUpdated > 0 ||
+          built.reuseCounts.linksUpdated > 0)
+      if (!hasBatchChanges(built.request) && !reusedOnly) {
         options.setUiError(options.t('models.oefImportNoChanges'))
+        return
+      }
+      if (reusedOnly) {
+        // Pure reuseId with no creates/updates/diagrams — still show report.
+        await options.loadModel()
+        showImportWizard.value = false
+        oefImportReport.value = {
+          ...built.createdCounts,
+          ...built.reuseCounts,
+          warningsCount: built.warnings.length,
+          warningGroups: [],
+          missingRequired: { nodeType: 0, component: 0, relation: 0, total: 0 },
+        }
         return
       }
 
@@ -321,6 +356,7 @@ export function useOefImport(options: {
       showImportWizard.value = false
       oefImportReport.value = {
         ...built.createdCounts,
+        ...built.reuseCounts,
         warningsCount: built.warnings.length,
         warningGroups,
         missingRequired,

@@ -1,15 +1,52 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '@/features/models/modelAttrs'
+import type { EditorLink, EditorNode } from '@/features/models/types'
 import { buildImportDraft } from './oefDraftBuilder'
 import { parseOefXml } from './oefParser'
 import { buildOefBatchSaveRequest, OEF_ENTITY_NAME_MAX_LENGTH } from './oefToBatchSave'
 import type { ImportMappingState } from './mappingState'
 import { collectDisallowedOefLinkGroups } from './oefRelationRuleValidation'
+import { createDefaultOefReuseSettings } from './reuseSettings'
+import type { ImportDraft } from './types'
 import mainXml from './__fixtures__/Main.xml?raw'
 import containerAssocXml from './__fixtures__/container-assoc-to-flow.xml?raw'
 import namedRelationshipXml from './__fixtures__/named-relationship.xml?raw'
 import propsXml from './__fixtures__/element-properties.xml?raw'
+
+function editorNode(
+  partial: Partial<EditorNode> & Pick<EditorNode, 'id' | 'name' | 'nodeTypeId'>
+): EditorNode {
+  return {
+    modelId: 'm',
+    ownerId: 'o',
+    createdAt: null,
+    updatedAt: '2026-01-01T00:00:00Z',
+    attrs: null,
+    parentNodeId: 'root',
+    parsedAttrs: {
+      treeOrder: 0,
+      notationComponents: {},
+      componentProperties: {},
+      typeProperties: {},
+    },
+    ...partial,
+  } as EditorNode
+}
+
+function editorLink(
+  partial: Partial<EditorLink> & Pick<EditorLink, 'id' | 'sourceId' | 'targetId' | 'linkTypeId'>
+): EditorLink {
+  return {
+    modelId: 'm',
+    ownerId: 'o',
+    createdAt: null,
+    updatedAt: '2026-01-01T00:00:00Z',
+    attrs: null,
+    parsedAttrs: { notationRelations: {}, relationProperties: {} },
+    ...partial,
+  } as EditorLink
+}
 
 function buildFullMappingState(): ImportMappingState {
   return {
@@ -363,5 +400,160 @@ describe('oefToBatchSave', () => {
     expect(
       result.warnings.some(w => w.code === 'propertyUnmatched' && w.message.includes('OrphanProp'))
     ).toBe(true)
+  })
+
+  it('reuses matching existing nodes by id without create', () => {
+    const draft: ImportDraft = {
+      sourceModelId: 'src',
+      sourceModelName: 'S',
+      nodes: [
+        { sourceElementId: 'e1', sourceType: 'BusinessService', name: 'Alpha' },
+        { sourceElementId: 'e2', sourceType: 'BusinessProcess', name: 'Beta' },
+      ],
+      links: [],
+      diagrams: [],
+      organizations: [],
+    }
+    const mapping: ImportMappingState = {
+      elementTypeMap: {
+        BusinessService: { nodeTypeId: 'nt-svc', componentId: 'cmp-svc' },
+        BusinessProcess: { nodeTypeId: 'nt-proc', componentId: 'cmp-proc' },
+      },
+      relationshipTypeMap: {},
+    }
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping,
+      notationId: 'notation-1',
+      existingNodes: [
+        editorNode({ id: 'n-alpha', name: 'Alpha', nodeTypeId: 'nt-svc' }),
+        editorNode({ id: 'n-beta', name: 'Beta', nodeTypeId: 'nt-proc' }),
+      ],
+      reuseSettings: {
+        ...createDefaultOefReuseSettings(),
+        nodesMode: 'reuseMatching',
+      },
+    })
+
+    expect(result.request.nodes.create).toHaveLength(0)
+    expect(result.request.nodes.update).toHaveLength(0)
+    expect(result.reuseCounts.nodesReused).toBe(2)
+  })
+
+  it('updates existing node properties and keeps parent', () => {
+    const draft: ImportDraft = {
+      sourceModelId: 'src',
+      sourceModelName: 'S',
+      nodes: [
+        {
+          sourceElementId: 'e1',
+          sourceType: 'BusinessService',
+          name: 'Alpha',
+          properties: { Owner: 'New' },
+        },
+      ],
+      links: [],
+      diagrams: [],
+      organizations: [],
+    }
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          BusinessService: { nodeTypeId: 'nt-svc', componentId: 'cmp-svc' },
+        },
+        relationshipTypeMap: {},
+      },
+      notationId: 'notation-1',
+      existingNodes: [
+        editorNode({
+          id: 'n-alpha',
+          name: 'Alpha',
+          nodeTypeId: 'nt-svc',
+          parentNodeId: 'keep-parent',
+          parsedAttrs: {
+            treeOrder: 3,
+            notationComponents: { 'notation-1': { componentId: 'cmp-svc' } },
+            componentProperties: {},
+            typeProperties: { Owner: 'Old' },
+          },
+        }),
+      ],
+      nodeTypeCustomPropertiesById: {
+        'nt-svc': [
+          { id: '1', name: 'Owner', type: 'string', required: false, min: null, max: null },
+        ],
+      },
+      componentCustomPropertiesById: { 'cmp-svc': [] },
+      reuseSettings: {
+        ...createDefaultOefReuseSettings(),
+        nodesMode: 'reuseMatching',
+        onNodeMatch: 'updateFromOef',
+      },
+    })
+
+    expect(result.request.nodes.create).toHaveLength(0)
+    expect(result.request.nodes.update).toHaveLength(1)
+    expect(result.request.nodes.update[0]!.parentNodeId).toBe('keep-parent')
+    expect(parseNodeAttrs(result.request.nodes.update[0]!.attrs).typeProperties.Owner).toBe('New')
+    expect(parseNodeAttrs(result.request.nodes.update[0]!.attrs).treeOrder).toBe(3)
+    expect(result.reuseCounts.nodesUpdated).toBe(1)
+  })
+
+  it('reuses link when both endpoints are reused', () => {
+    const draft: ImportDraft = {
+      sourceModelId: 'src',
+      sourceModelName: 'S',
+      nodes: [
+        { sourceElementId: 'e1', sourceType: 'BusinessService', name: 'Alpha' },
+        { sourceElementId: 'e2', sourceType: 'BusinessProcess', name: 'Beta' },
+      ],
+      links: [
+        {
+          sourceRelationshipId: 'r1',
+          sourceType: 'Serving',
+          sourceElementId: 'e1',
+          targetElementId: 'e2',
+          name: '',
+        },
+      ],
+      diagrams: [],
+      organizations: [],
+    }
+    const mapping: ImportMappingState = {
+      elementTypeMap: {
+        BusinessService: { nodeTypeId: 'nt-svc', componentId: 'cmp-svc' },
+        BusinessProcess: { nodeTypeId: 'nt-proc', componentId: 'cmp-proc' },
+      },
+      relationshipTypeMap: {
+        Serving: { linkTypeId: 'lt-serving', relationId: 'rel-serving' },
+      },
+    }
+    const result = buildOefBatchSaveRequest({
+      draft,
+      mapping,
+      notationId: 'notation-1',
+      existingNodes: [
+        editorNode({ id: 'n-alpha', name: 'Alpha', nodeTypeId: 'nt-svc' }),
+        editorNode({ id: 'n-beta', name: 'Beta', nodeTypeId: 'nt-proc' }),
+      ],
+      existingLinks: [
+        editorLink({
+          id: 'l-1',
+          sourceId: 'n-alpha',
+          targetId: 'n-beta',
+          linkTypeId: 'lt-serving',
+        }),
+      ],
+      reuseSettings: {
+        ...createDefaultOefReuseSettings(),
+        nodesMode: 'reuseMatching',
+        linksMode: 'reuseMatching',
+      },
+    })
+
+    expect(result.request.links.create).toHaveLength(0)
+    expect(result.reuseCounts.linksReused).toBe(1)
+    expect(result.reuseCounts.nodesReused).toBe(2)
   })
 })

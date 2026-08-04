@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-08-04
+
+### Changed
+- Model tree virtualizes large expanded hierarchies so expand, scroll, and updates stay responsive.
+
 ## [0.14.1] - 2026-08-04
 
 ### Added

@@ -51,6 +51,8 @@ function mountPanel(props: {
       selectedNodeId: props.selectedNodeId ?? null,
       selectedDiagramId: props.selectedDiagramId ?? null,
     },
+    // Needed so focusNode/focusDiagram document.querySelector + scrollIntoView work
+    attachTo: document.body,
     global: { stubs: { UiIcon: true } },
   })
 }
@@ -81,6 +83,7 @@ describe('ModelTreePalettePanel search', () => {
     vi.useFakeTimers()
   })
   afterEach(() => {
+    document.body.innerHTML = ''
     vi.useRealTimers()
   })
 
@@ -108,5 +111,50 @@ describe('ModelTreePalettePanel search', () => {
     expect(hit.attributes('style')).toMatch(/--tree-depth:\s*1/)
     const folder = wrapper.get('[data-tree-node-id="folder"]')
     expect(folder.attributes('style')).toMatch(/--tree-depth:\s*0/)
+  })
+
+  it('expands ancestors and keeps selection when search is cleared', async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir' }),
+        makeNode({ id: 'hit', name: 'SpecialChild', parentNodeId: 'folder' }),
+      ],
+      selectedNodeId: 'hit',
+    })
+
+    const input = wrapper.get('.panel__search-input')
+    await input.setValue('special')
+    vi.advanceTimersByTime(200)
+    await nextTick()
+
+    await input.setValue('')
+    // clear path sets debounced query sync when trimmed empty (no debounce wait required)
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.props('selectedNodeId')).toBe('hit')
+    // After clear, hierarchical full tree should show hit when folder expanded
+    expect(wrapper.find('[data-tree-node-id="hit"]').exists()).toBe(true)
+    expect(scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('does not clear search on select click', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir' }),
+        makeNode({ id: 'hit', name: 'SpecialChild', parentNodeId: 'folder' }),
+      ],
+    })
+    const input = wrapper.get('.panel__search-input')
+    await input.setValue('special')
+    vi.advanceTimersByTime(200)
+    await nextTick()
+
+    await wrapper.get('[data-tree-node-id="hit"] .tree-node__select').trigger('click')
+    expect((input.element as HTMLInputElement).value).toBe('special')
+    expect(wrapper.emitted('selectNode')?.[0]).toEqual(['hit'])
   })
 })

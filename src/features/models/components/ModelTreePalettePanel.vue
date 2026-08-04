@@ -379,6 +379,23 @@ const focusNode = (nodeId: string) => {
   })
 }
 
+const focusDiagram = (diagramId: string) => {
+  const diagram = props.diagrams.find((d) => d.id === diagramId && !d._isDeleted)
+  if (diagram?.nodeId && !(props.treeRootNodeId && diagram.nodeId === props.treeRootNodeId)) {
+    expandToNode(diagram.nodeId)
+    // Ensure the parent folder itself is expanded so the diagram row is visible
+    const next = new Set(expandedNodes.value)
+    next.add(diagram.nodeId)
+    expandedNodes.value = next
+  }
+  nextTick(() => {
+    const row = document.querySelector(
+      `[data-tree-diagram-id="${diagramId}"]`,
+    ) as HTMLElement | null
+    row?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  })
+}
+
 type TreeNodeRow = {
   kind: "node"
   node: EditorNode
@@ -430,23 +447,34 @@ const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   return { rows, truncated: false }
 })
 
-watch(normalizedQuery, (query) => {
-  if (!query) return
-  const next = new Set(expandedNodes.value)
-  for (const id of collectAncestorIds(matchingNodeIds.value)) {
-    next.add(id)
+watch(normalizedQuery, (query, prev) => {
+  if (query) {
+    const next = new Set(expandedNodes.value)
+    for (const id of collectAncestorIds(matchingNodeIds.value)) {
+      next.add(id)
+    }
+    for (const id of matchingNodeIds.value) {
+      const node = nodeById.value.get(id)
+      if (node && isDirectory(node)) next.add(id)
+    }
+    expandedNodes.value = next
+    return
   }
-  for (const id of matchingNodeIds.value) {
-    const node = nodeById.value.get(id)
-    if (node && isDirectory(node)) next.add(id)
+  // Leaving search mode
+  if (!prev) return
+  if (props.selectedNodeId) {
+    focusNode(props.selectedNodeId)
+    return
   }
-  expandedNodes.value = next
+  if (props.selectedDiagramId) {
+    focusDiagram(props.selectedDiagramId)
+  }
 })
 
 const visibleTreeRows = computed(() => treeRows.value.rows)
 const searchResultsTruncated = computed(() => treeRows.value.truncated)
 
-defineExpose({ expandToNode, focusNode })
+defineExpose({ expandToNode, focusNode, focusDiagram })
 </script>
 
 <template>
@@ -620,6 +648,7 @@ defineExpose({ expandToNode, focusNode })
           class="diagram-row diagram-row--flattened"
           :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
           :style="{ '--tree-depth': String(row.depth) }"
+          :data-tree-diagram-id="row.diagram.id"
           :draggable="!props.navigationOnlyMode"
           @dragstart="onDragDiagramStart($event, row.diagram.id)"
         >

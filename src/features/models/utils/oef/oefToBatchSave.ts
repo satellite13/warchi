@@ -14,6 +14,7 @@ import {
   serializeLinkAttrs,
   serializeNodeAttrs,
 } from '@/features/models/modelAttrs'
+import type { EditorDiagram, EditorLink, EditorNode } from '@/features/models/types'
 import {
   DEFAULT_CONTAINER_DIAGRAM_STYLE,
   DEFAULT_DIAGRAM_ONLY_LINK_STYLE,
@@ -26,7 +27,18 @@ import {
 } from '../diagramOnlyInstances'
 import { placeEdgeAnchorAtMidpoint } from '../edgeAnchorSync'
 import type { ImportMappingState } from './mappingState'
+import {
+  OEF_ENTITY_NAME_MAX_LENGTH,
+  allocateUniqueEntityName,
+  normalizeOefNodeName,
+  truncateOefEntityName,
+} from './oefEntityName'
+import { resolveOefEntityMatches } from './oefEntityReuse'
 import { buildOrganizationImportPlan } from './organizationImport'
+import {
+  createDefaultOefReuseSettings,
+  type OefReuseSettings,
+} from './reuseSettings'
 import {
   buildDisallowedOefLinkGroupKey,
   isOefLinkAllowedByRelationRules,
@@ -40,6 +52,12 @@ import {
 } from './oefPropertyConversion'
 import type { ImportDraft, ImportDraftDiagramConnectionInstance } from './types'
 
+export {
+  OEF_ENTITY_NAME_MAX_LENGTH,
+  allocateUniqueEntityName,
+  truncateOefEntityName,
+} from './oefEntityName'
+
 const DEFAULT_NOTE_DIAGRAM_STYLE = {
   nodeShape: 'rectangle',
   fillColor: '#fff9c4',
@@ -51,9 +69,6 @@ const DEFAULT_NOTE_DIAGRAM_STYLE = {
   labelInset: 10,
   labelPlacement: 'center',
 } as const
-
-/** Matches arepos BatchNodeCreate/BatchDiagramCreate @Size(max = 255) on name. */
-export const OEF_ENTITY_NAME_MAX_LENGTH = 255
 
 export type OefImportBuildWarningCode =
   | 'nodeTypeNotMapped'
@@ -71,41 +86,9 @@ export type OefImportBuildWarningCode =
   | 'linkImportedAgainstRelationRules'
   | 'propertyConversionFailed'
   | 'propertyUnmatched'
-
-export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
-  if (name.length <= maxLength) return name
-  return name.slice(0, maxLength)
-}
-
-/**
- * Ensure unique (name, version) within one import batch.
- * DB constraint: diagrams_model_name_version_key.
- */
-export function allocateUniqueEntityName(
-  rawName: string,
-  version: string,
-  usedNameVersions: Set<string>,
-  fallback = 'Untitled',
-  maxLength = OEF_ENTITY_NAME_MAX_LENGTH
-): { name: string; deduplicated: boolean } {
-  const base = truncateOefEntityName((rawName.trim() || fallback), maxLength)
-  const keyFor = (name: string): string => `${name}\0${version}`
-  if (!usedNameVersions.has(keyFor(base))) {
-    usedNameVersions.add(keyFor(base))
-    return { name: base, deduplicated: false }
-  }
-  let index = 2
-  while (true) {
-    const suffix = ` (${index})`
-    const truncatedBase = truncateOefEntityName(base, Math.max(1, maxLength - suffix.length))
-    const candidate = `${truncatedBase}${suffix}`
-    if (!usedNameVersions.has(keyFor(candidate))) {
-      usedNameVersions.add(keyFor(candidate))
-      return { name: candidate, deduplicated: true }
-    }
-    index += 1
-  }
-}
+  | 'nodeMatchAmbiguous'
+  | 'linkMatchAmbiguous'
+  | 'linkLabelConflict'
 
 export type OefImportBuildWarning = {
   code: OefImportBuildWarningCode
@@ -124,6 +107,12 @@ export type OefImportBuildResult = {
     diagrams: number
     diagramNodeInstances: number
     diagramConnectionInstances: number
+  }
+  reuseCounts: {
+    nodesReused: number
+    nodesUpdated: number
+    linksReused: number
+    linksUpdated: number
   }
 }
 
@@ -144,6 +133,10 @@ export type BuildOefBatchSaveParams = {
   relationCustomPropertiesById?: Record<string, CustomProperty[]>
   relationRules?: OefRelationRuleRef[]
   ruleDecisions?: Record<string, OefRelationRuleDecision>
+  existingNodes?: EditorNode[]
+  existingLinks?: EditorLink[]
+  existingDiagrams?: EditorDiagram[]
+  reuseSettings?: OefReuseSettings
 }
 
 function makeDirectoryAttrs(treeOrder: number): string {
@@ -248,6 +241,29 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   const parentNodeId = params.parentNodeId ?? null
   const diagramVersion = params.diagramVersion ?? '1.0.0'
   const relationshipIds = new Set(params.draft.links.map(link => link.sourceRelationshipId))
+  const reuseSettings = params.reuseSettings ?? createDefaultOefReuseSettings()
+  const existingNodes = params.existingNodes ?? []
+  const existingLinks = params.existingLinks ?? []
+  const existingDiagrams = params.existingDiagrams ?? []
+  const existingNodeById = new Map(existingNodes.map(node => [node.id, node]))
+  const existingLinkById = new Map(existingLinks.map(link => [link.id, link]))
+
+  const matchResult = resolveOefEntityMatches({
+    draft: params.draft,
+    mapping: params.mapping,
+    notationId: params.notationId,
+    existingNodes,
+    existingLinks,
+    existingDiagrams,
+    settings: reuseSettings,
+  })
+  for (const warning of matchResult.warnings) {
+    warnings.push({
+      code: warning.code,
+      sourceId: warning.sourceId,
+      message: warning.message,
+    })
+  }
 
   const request: BatchSaveRequest = {
     ...(params.force === true ? { force: true } : {}),
@@ -266,6 +282,10 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   )
   const skippedByRelationRules = new Set<string>()
   const allUnmatchedPropertyNames: string[] = []
+  let nodesReused = 0
+  let nodesUpdated = 0
+  let linksReused = 0
+  let linksUpdated = 0
 
   const orgPlan = buildOrganizationImportPlan(params.draft.organizations)
   for (const warning of orgPlan.warnings) {
@@ -329,6 +349,76 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       })
       continue
     }
+
+    const resolution = matchResult.nodes[node.sourceElementId]
+    if (resolution?.action === 'reuse' && resolution.id) {
+      nodeTempBySourceElementId.set(node.sourceElementId, resolution.id)
+      nodesReused += 1
+      continue
+    }
+
+    const typeSchema = params.nodeTypeCustomPropertiesById?.[mapped.nodeTypeId] ?? []
+    const componentSchema = params.componentCustomPropertiesById?.[mapped.componentId] ?? []
+
+    if (resolution?.action === 'update' && resolution.id) {
+      const existing = existingNodeById.get(resolution.id)
+      if (!existing) {
+        // Fall through to create if editor state drifted.
+      } else {
+        const existingComponentValues =
+          existing.parsedAttrs.componentProperties[params.notationId]?.[mapped.componentId] ?? {}
+        const merged = mergeOefPropertiesIntoBuckets({
+          oefProperties: node.properties ?? {},
+          typeDefaults: existing.parsedAttrs.typeProperties,
+          componentDefaults: existingComponentValues,
+          typeSchema,
+          componentSchema,
+          entityId: node.sourceElementId,
+          entityKind: 'node',
+        })
+        allUnmatchedPropertyNames.push(...merged.unmatchedNames)
+        for (const failure of merged.conversionFailures) {
+          warnings.push({
+            code: 'propertyConversionFailed',
+            sourceType: node.sourceType,
+            sourceId: failure.entityId,
+            message: `Property "${failure.propertyName}" value "${failure.rawValue}" is not a valid ${failure.targetType}`,
+          })
+        }
+        const normalizedName = normalizeOefNodeName(node.name)
+        if (normalizedName !== node.name.trim() && node.name.trim()) {
+          warnings.push({
+            code: 'nameTruncated',
+            sourceType: node.sourceType,
+            sourceId: node.sourceElementId,
+            message: `Node name truncated to ${OEF_ENTITY_NAME_MAX_LENGTH} characters for "${node.sourceElementId}"`,
+          })
+        }
+        const nextAttrs = {
+          ...existing.parsedAttrs,
+          typeProperties: merged.typeValues,
+          componentProperties: {
+            ...existing.parsedAttrs.componentProperties,
+            [params.notationId]: {
+              ...(existing.parsedAttrs.componentProperties[params.notationId] ?? {}),
+              [mapped.componentId]: merged.componentValues,
+            },
+          },
+        }
+        request.nodes.update.push({
+          id: existing.id,
+          name: normalizedName || existing.name,
+          nodeTypeId: existing.nodeTypeId,
+          parentNodeId: existing.parentNodeId ?? null,
+          attrs: serializeNodeAttrs(nextAttrs),
+          baseUpdatedAt: existing.updatedAt ?? null,
+        })
+        nodeTempBySourceElementId.set(node.sourceElementId, existing.id)
+        nodesUpdated += 1
+        continue
+      }
+    }
+
     const tempId = makeStableTempId('oef-node', node.sourceElementId, usedIds)
     const typeDefaults = params.nodeTypePropertyDefaultsById?.[mapped.nodeTypeId] ?? {}
     const componentDefaults = params.componentPropertyDefaultsById?.[mapped.componentId] ?? {}
@@ -336,8 +426,8 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       oefProperties: node.properties ?? {},
       typeDefaults,
       componentDefaults,
-      typeSchema: params.nodeTypeCustomPropertiesById?.[mapped.nodeTypeId] ?? [],
-      componentSchema: params.componentCustomPropertiesById?.[mapped.componentId] ?? [],
+      typeSchema,
+      componentSchema,
       entityId: node.sourceElementId,
       entityKind: 'node',
     })
@@ -415,6 +505,60 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       })
       continue
     }
+
+    const linkResolution = matchResult.links[link.sourceRelationshipId]
+    const relationSchema = params.relationCustomPropertiesById?.[mapped.relationId] ?? []
+
+    if (linkResolution?.action === 'reuse' && linkResolution.id) {
+      linkTempBySourceRelationshipId.set(link.sourceRelationshipId, linkResolution.id)
+      linksReused += 1
+      continue
+    }
+
+    if (linkResolution?.action === 'update' && linkResolution.id) {
+      const existing = existingLinkById.get(linkResolution.id)
+      if (existing) {
+        const existingRelationValues =
+          existing.parsedAttrs.relationProperties[params.notationId]?.[mapped.relationId] ?? {}
+        const merged = mergeOefPropertiesIntoRelationValues({
+          oefProperties: link.properties ?? {},
+          relationDefaults: existingRelationValues,
+          relationSchema,
+          entityId: link.sourceRelationshipId,
+        })
+        allUnmatchedPropertyNames.push(...merged.unmatchedNames)
+        for (const failure of merged.conversionFailures) {
+          warnings.push({
+            code: 'propertyConversionFailed',
+            sourceType: link.sourceType,
+            sourceId: failure.entityId,
+            message: `Property "${failure.propertyName}" value "${failure.rawValue}" is not a valid ${failure.targetType}`,
+          })
+        }
+        const nextAttrs = {
+          ...existing.parsedAttrs,
+          relationProperties: {
+            ...existing.parsedAttrs.relationProperties,
+            [params.notationId]: {
+              ...(existing.parsedAttrs.relationProperties[params.notationId] ?? {}),
+              [mapped.relationId]: merged.relationValues,
+            },
+          },
+        }
+        request.links.update.push({
+          id: existing.id,
+          sourceId: existing.sourceId,
+          targetId: existing.targetId,
+          linkTypeId: existing.linkTypeId,
+          attrs: serializeLinkAttrs(nextAttrs),
+          baseUpdatedAt: existing.updatedAt ?? null,
+        })
+        linkTempBySourceRelationshipId.set(link.sourceRelationshipId, existing.id)
+        linksUpdated += 1
+        continue
+      }
+    }
+
     if (params.relationRules !== undefined) {
       const sourceElementType = elementTypeByElementId.get(link.sourceElementId)
       const targetElementType = elementTypeByElementId.get(link.targetElementId)
@@ -468,7 +612,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     const merged = mergeOefPropertiesIntoRelationValues({
       oefProperties: link.properties ?? {},
       relationDefaults,
-      relationSchema: params.relationCustomPropertiesById?.[mapped.relationId] ?? [],
+      relationSchema,
       entityId: link.sourceRelationshipId,
     })
     allUnmatchedPropertyNames.push(...merged.unmatchedNames)
@@ -773,6 +917,12 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         const attrs = parseDiagramAttrs(item.attrs)
         return sum + attrs.instances.edges.length
       }, 0),
+    },
+    reuseCounts: {
+      nodesReused,
+      nodesUpdated,
+      linksReused,
+      linksUpdated,
     },
   }
 }

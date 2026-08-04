@@ -285,4 +285,91 @@ describe('chunkOefBatchSave', () => {
     expect(result.error.message).toContain('chunk nodes 2/2')
     expect(result.error.message).toContain('nodes=2')
   })
+
+  it('plans node update chunks after creates', () => {
+    const request = sampleRequest({ nodes: 2, links: 0, diagrams: 0 })
+    request.nodes.update = [
+      {
+        id: 'existing-1',
+        name: 'A',
+        nodeTypeId: 'nt',
+        parentNodeId: null,
+        attrs: null,
+        baseUpdatedAt: 't1',
+      },
+      {
+        id: 'existing-2',
+        name: 'B',
+        nodeTypeId: 'nt',
+        parentNodeId: null,
+        attrs: null,
+        baseUpdatedAt: 't2',
+      },
+    ]
+    const chunks = planOefBatchSaveChunks(request, { nodeChunkSize: 2 })
+    const nodeChunks = chunks.filter(c => c.kind === 'nodes')
+    expect(nodeChunks).toHaveLength(2)
+    expect(nodeChunks[0]!.request.nodes.create).toHaveLength(2)
+    expect(nodeChunks[0]!.request.nodes.update).toHaveLength(0)
+    expect(nodeChunks[1]!.request.nodes.create).toHaveLength(0)
+    expect(nodeChunks[1]!.request.nodes.update).toHaveLength(2)
+    expect(nodeChunks[1]!.totalOfKind).toBe(2)
+  })
+
+  it('leaves real reused ids intact when remapping link creates', async () => {
+    const calls: BatchSaveRequest[] = []
+    const batchSave = vi.fn(async (_modelId: string, request: BatchSaveRequest) => {
+      calls.push(request)
+      const data: BatchSaveResponse = {
+        nodeIdMap: Object.fromEntries(
+          request.nodes.create.map(node => [node.tempId, `real-${node.tempId}`])
+        ),
+        linkIdMap: Object.fromEntries(
+          request.links.create.map(link => [link.tempId, `real-${link.tempId}`])
+        ),
+        diagramIdMap: {},
+      }
+      return { success: true as const, data }
+    })
+
+    const request: BatchSaveRequest = {
+      nodes: {
+        create: [
+          {
+            tempId: 'oef-node-new',
+            name: 'New',
+            nodeTypeId: 'nt',
+            parentNodeId: null,
+            attrs: null,
+          },
+        ],
+        update: [],
+        delete: [],
+      },
+      links: {
+        create: [
+          {
+            tempId: 'oef-link-1',
+            sourceId: 'existing-node-uuid',
+            targetId: 'oef-node-new',
+            linkTypeId: 'lt',
+            attrs: null,
+          },
+        ],
+        update: [],
+        delete: [],
+      },
+      diagrams: { create: [], update: [], delete: [] },
+    }
+
+    const result = await applyOefBatchSaveChunks({
+      modelId: 'model-1',
+      request,
+      batchSave,
+    })
+    expect(result.success).toBe(true)
+    const linkChunk = calls.find(call => call.links.create.length > 0)
+    expect(linkChunk?.links.create[0]!.sourceId).toBe('existing-node-uuid')
+    expect(linkChunk?.links.create[0]!.targetId).toBe('real-oef-node-new')
+  })
 })

@@ -20,6 +20,8 @@ export type OefChunkProgress = {
   nodesCreated: number
   linksCreated: number
   diagramsCreated: number
+  nodesUpdated: number
+  linksUpdated: number
 }
 
 export type ApplyOefBatchChunksResult = {
@@ -29,6 +31,8 @@ export type ApplyOefBatchChunksResult = {
   nodesCreated: number
   linksCreated: number
   diagramsCreated: number
+  nodesUpdated: number
+  linksUpdated: number
 }
 
 function emptyRequest(force?: boolean): BatchSaveRequest {
@@ -120,26 +124,50 @@ export function planOefBatchSaveChunks(
   const force = request.force === true
   const chunks: OefBatchChunk[] = []
 
-  const nodeChunks = chunkArray(request.nodes.create, nodeChunkSize)
-  nodeChunks.forEach((create, index) => {
+  const nodeCreateChunks = chunkArray(request.nodes.create, nodeChunkSize)
+  const nodeUpdateChunks = chunkArray(request.nodes.update, nodeChunkSize)
+  const nodeTotalOfKind = nodeCreateChunks.length + nodeUpdateChunks.length
+  nodeCreateChunks.forEach((create, index) => {
     const next = emptyRequest(force)
     next.nodes = { create, update: [], delete: [] }
     chunks.push({
       kind: 'nodes',
       index: index + 1,
-      totalOfKind: nodeChunks.length,
+      totalOfKind: nodeTotalOfKind,
+      request: next,
+    })
+  })
+  nodeUpdateChunks.forEach((update, index) => {
+    const next = emptyRequest(force)
+    next.nodes = { create: [], update, delete: [] }
+    chunks.push({
+      kind: 'nodes',
+      index: nodeCreateChunks.length + index + 1,
+      totalOfKind: nodeTotalOfKind,
       request: next,
     })
   })
 
-  const linkChunks = chunkArray(request.links.create, linkChunkSize)
-  linkChunks.forEach((create, index) => {
+  const linkCreateChunks = chunkArray(request.links.create, linkChunkSize)
+  const linkUpdateChunks = chunkArray(request.links.update, linkChunkSize)
+  const linkTotalOfKind = linkCreateChunks.length + linkUpdateChunks.length
+  linkCreateChunks.forEach((create, index) => {
     const next = emptyRequest(force)
     next.links = { create, update: [], delete: [] }
     chunks.push({
       kind: 'links',
       index: index + 1,
-      totalOfKind: linkChunks.length,
+      totalOfKind: linkTotalOfKind,
+      request: next,
+    })
+  })
+  linkUpdateChunks.forEach((update, index) => {
+    const next = emptyRequest(force)
+    next.links = { create: [], update, delete: [] }
+    chunks.push({
+      kind: 'links',
+      index: linkCreateChunks.length + index + 1,
+      totalOfKind: linkTotalOfKind,
       request: next,
     })
   })
@@ -261,6 +289,8 @@ export async function applyOefBatchSaveChunks(options: {
   let nodesCreated = 0
   let linksCreated = 0
   let diagramsCreated = 0
+  let nodesUpdated = 0
+  let linksUpdated = 0
 
   for (const chunk of planned) {
     let request = chunk.request
@@ -319,6 +349,8 @@ export async function applyOefBatchSaveChunks(options: {
     nodesCreated += request.nodes.create.length
     linksCreated += request.links.create.length
     diagramsCreated += request.diagrams.create.length
+    nodesUpdated += request.nodes.update.length
+    linksUpdated += request.links.update.length
 
     options.onProgress?.({
       kind: chunk.kind,
@@ -327,6 +359,8 @@ export async function applyOefBatchSaveChunks(options: {
       nodesCreated,
       linksCreated,
       diagramsCreated,
+      nodesUpdated,
+      linksUpdated,
     })
   }
 
@@ -339,6 +373,8 @@ export async function applyOefBatchSaveChunks(options: {
       nodesCreated,
       linksCreated,
       diagramsCreated,
+      nodesUpdated,
+      linksUpdated,
     },
   }
 }

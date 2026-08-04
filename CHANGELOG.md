@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-08-04
+
+### Added
+- Model tree search shows a filtered hierarchy with ancestor path, mutes non-matching ancestors, and reveals the selected node when clearing search.
+
 ## [0.14.0] - 2026-07-31
 
 ### Added

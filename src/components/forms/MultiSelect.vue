@@ -14,12 +14,15 @@ const props = withDefaults(
     emptyText?: string
     disabled?: boolean
     maxVisibleLabels?: number
+    /** Always show the search field (default: when options.length > 5). */
+    forceSearch?: boolean
   }>(),
   {
     placeholder: '',
     searchPlaceholder: '',
     emptyText: '',
     maxVisibleLabels: 2,
+    forceSearch: false,
   }
 )
 
@@ -30,6 +33,10 @@ const emit = defineEmits<{
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const controlRef = ref<HTMLDivElement | null>(null)
 
+const showSearch = computed(
+  () => props.forceSearch || props.options.length > 5
+)
+
 const {
   isOpen,
   searchQuery,
@@ -38,14 +45,16 @@ const {
 } = useDropdownPanel(controlRef, searchInputRef, {
   panelClass: 'multi-select-panel',
   rootClass: 'multi-select',
-  headerBlockPx: props.options.length > 5 ? DROPDOWN_SEARCH_BLOCK_PX : 6,
+  headerBlockPx: props.forceSearch || props.options.length > 5 ? DROPDOWN_SEARCH_BLOCK_PX : 6,
   preferredMaxListHeight: 160,
 })
 
 const filteredOptions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return props.options
-  return props.options.filter(o => o.label.toLowerCase().includes(query))
+  return props.options.filter(
+    o => o.label.toLowerCase().includes(query) || o.id.toLowerCase().includes(query)
+  )
 })
 
 const selectedSet = computed(() => new Set(props.modelValue))
@@ -96,7 +105,7 @@ const toggleOption = (id: string) => {
         }"
       >
         <input
-          v-if="options.length > 5"
+          v-if="showSearch"
           ref="searchInputRef"
           v-model="searchQuery"
           class="multi-select__search"

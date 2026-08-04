@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
+import MultiSelect from "@/components/forms/MultiSelect.vue"
+import type { MultiSelectOption } from "@/components/forms/MultiSelect.vue"
 import UiIcon from "@/components/ui/UiIcon.vue"
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/composables/useApi"
-import type { PaginatedResponse } from "@/types/entities"
+import type { ModelData, PaginatedResponse } from "@/types/entities"
 import type {
   ApiKey,
   ApiKeyScope,
@@ -23,8 +25,14 @@ const copied = ref(false)
 const newName = ref("")
 const scopeRead = ref(true)
 const scopeWrite = ref(false)
-const modelIdsText = ref("")
+const restrictModels = ref(false)
+const selectedModelIds = ref<string[]>([])
 const showCreateForm = ref(false)
+
+const modelOptions = ref<MultiSelectOption[]>([])
+const modelsById = ref<Map<string, string>>(new Map())
+const isLoadingModels = ref(false)
+const modelsLoaded = ref(false)
 
 const loadKeys = async (): Promise<void> => {
   isLoading.value = true
@@ -38,13 +46,56 @@ const loadKeys = async (): Promise<void> => {
   keys.value = (result.data.items ?? []).filter((k) => !k.revokedAt)
 }
 
-const parseModelIds = (): string[] | undefined => {
-  const raw = modelIdsText.value
-    .split(/[\s,;]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  return raw.length > 0 ? raw : undefined
+const loadModels = async (): Promise<void> => {
+  if (modelsLoaded.value || isLoadingModels.value) return
+  isLoadingModels.value = true
+  const collected: ModelData[] = []
+  let page = 0
+  const size = 100
+  let total = Number.POSITIVE_INFINITY
+
+  while (collected.length < total && page < 20) {
+    const result = await apiGet<PaginatedResponse<ModelData>>(
+      `/models?page=${page}&size=${size}`
+    )
+    if (!result.success) {
+      errorMessage.value = result.error.message
+      isLoadingModels.value = false
+      return
+    }
+    const items = result.data.items ?? result.data.content ?? []
+    collected.push(...items)
+    total = result.data.page?.totalElements ?? result.data.totalElements ?? items.length
+    if (items.length < size) break
+    page += 1
+  }
+
+  const options = collected
+    .map((m) => ({
+      id: m.id,
+      label: `${m.name} · v${m.version}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
+
+  modelOptions.value = options
+  modelsById.value = new Map(options.map((o) => [o.id, o.label]))
+  modelsLoaded.value = true
+  isLoadingModels.value = false
 }
+
+watch(showCreateForm, (open) => {
+  if (open) {
+    void loadModels()
+  }
+})
+
+watch(restrictModels, (enabled) => {
+  if (!enabled) {
+    selectedModelIds.value = []
+  } else {
+    void loadModels()
+  }
+})
 
 const createKey = async (): Promise<void> => {
   const name = newName.value.trim()
@@ -59,6 +110,10 @@ const createKey = async (): Promise<void> => {
     errorMessage.value = t("profile.apiKeysScopeRequired")
     return
   }
+  if (restrictModels.value && selectedModelIds.value.length === 0) {
+    errorMessage.value = t("profile.apiKeysModelsRequired")
+    return
+  }
 
   isCreating.value = true
   errorMessage.value = null
@@ -66,7 +121,7 @@ const createKey = async (): Promise<void> => {
   const body: CreateApiKeyRequest = {
     name,
     scopes,
-    modelIds: parseModelIds() ?? null,
+    modelIds: restrictModels.value ? selectedModelIds.value : null,
   }
   const result = await apiPost<CreateApiKeyResponse>("/api-keys", body)
   isCreating.value = false
@@ -77,7 +132,8 @@ const createKey = async (): Promise<void> => {
 
   createdPlaintext.value = result.data.key
   newName.value = ""
-  modelIdsText.value = ""
+  restrictModels.value = false
+  selectedModelIds.value = []
   scopeRead.value = true
   scopeWrite.value = false
   showCreateForm.value = false
@@ -132,15 +188,28 @@ const formatScopes = (scopes: string[]): string =>
     .map((s) => (s === "models:write" ? t("profile.apiKeysScopeWrite") : t("profile.apiKeysScopeRead")))
     .join(", ")
 
+const formatModelAllowlist = (modelIds: string[] | null | undefined): string => {
+  if (!modelIds?.length) return ""
+  const labels = modelIds.map((id) => modelsById.value.get(id) ?? id.slice(0, 8) + "…")
+  if (labels.length <= 2) return labels.join(", ")
+  return t("profile.apiKeysModelsSelected", {
+    names: labels.slice(0, 2).join(", "),
+    count: labels.length - 2,
+  })
+}
+
+const modelSelectDisabled = computed(() => isLoadingModels.value || isCreating.value)
+
 onMounted(() => {
   void loadKeys()
+  void loadModels()
 })
 </script>
 
 <template>
-  <section class="card api-keys">
+  <section class="api-keys panel">
     <div class="api-keys__header">
-      <div>
+      <div class="api-keys__titles">
         <h2>{{ t("profile.apiKeysTitle") }}</h2>
         <p>{{ t("profile.apiKeysSubtitle") }}</p>
       </div>
@@ -163,7 +232,7 @@ onMounted(() => {
           <UiIcon name="content_copy" />
           {{ copied ? t("profile.apiKeysCopied") : t("profile.apiKeysCopy") }}
         </button>
-        <button type="button" class="btn" @click="dismissCreatedKey">
+        <button type="button" class="btn btn--secondary" @click="dismissCreatedKey">
           {{ t("profile.apiKeysDismiss") }}
         </button>
       </div>
@@ -185,15 +254,29 @@ onMounted(() => {
           {{ t("profile.apiKeysScopeWrite") }}
         </label>
       </div>
-      <label class="field">
-        <span>{{ t("profile.apiKeysModelIds") }}</span>
-        <textarea
-          v-model="modelIdsText"
-          rows="2"
-          :placeholder="t('profile.apiKeysModelIdsPlaceholder')"
+      <div class="field">
+        <label class="api-keys__check api-keys__restrict">
+          <input v-model="restrictModels" type="checkbox" />
+          {{ t("profile.apiKeysRestrictModels") }}
+        </label>
+        <p class="api-keys__hint">{{ t("profile.apiKeysRestrictModelsHint") }}</p>
+        <MultiSelect
+          v-if="restrictModels"
+          v-model="selectedModelIds"
+          :options="modelOptions"
+          :disabled="modelSelectDisabled"
+          force-search
+          :placeholder="
+            isLoadingModels
+              ? t('common.loading')
+              : t('profile.apiKeysModelsPlaceholder')
+          "
+          :search-placeholder="t('profile.apiKeysModelsSearch')"
+          :empty-text="t('profile.apiKeysModelsEmpty')"
+          :max-visible-labels="2"
         />
-      </label>
-      <button type="submit" class="btn btn--primary" :disabled="isCreating">
+      </div>
+      <button type="submit" class="btn btn--primary" :disabled="isCreating || isLoadingModels">
         {{ isCreating ? t("common.saving") : t("profile.apiKeysCreateSubmit") }}
       </button>
     </form>
@@ -209,11 +292,12 @@ onMounted(() => {
           <span class="api-keys__prefix">warchi_ak_{{ key.tokenPrefix }}…</span>
           <span class="api-keys__scopes-text">{{ formatScopes(key.scopes) }}</span>
           <span v-if="key.modelIds?.length" class="api-keys__models">
-            {{ t("profile.apiKeysModelsCount", { count: key.modelIds.length }) }}
+            {{ formatModelAllowlist(key.modelIds) }}
           </span>
+          <span v-else class="api-keys__models">{{ t("profile.apiKeysAllModels") }}</span>
         </div>
         <div class="api-keys__actions">
-          <button type="button" class="btn" @click="renameKey(key)">
+          <button type="button" class="btn btn--secondary" @click="renameKey(key)">
             {{ t("profile.apiKeysRename") }}
           </button>
           <button type="button" class="btn btn--danger" @click="revokeKey(key.id)">
@@ -226,9 +310,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  min-height: 100%;
+}
+
 .api-keys {
-  margin-top: 20px;
-  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .api-keys__header {
@@ -239,12 +332,16 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.api-keys h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
+.api-keys__titles {
+  min-width: 0;
 }
 
-.api-keys p {
+.api-keys h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.api-keys__titles p {
   margin: 0;
   color: var(--text-muted);
   font-size: 13px;
@@ -301,14 +398,13 @@ onMounted(() => {
   gap: 6px;
 }
 
-.field span {
+.field > span {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
 }
 
-.field input,
-.field textarea {
+.field input[type="text"] {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -316,7 +412,6 @@ onMounted(() => {
   color: var(--base-text);
   font-family: inherit;
   font-size: 14px;
-  resize: vertical;
 }
 
 .api-keys__scopes {
@@ -337,6 +432,18 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 14px;
+}
+
+.api-keys__restrict {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.api-keys__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
 }
 
 .msg {

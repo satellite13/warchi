@@ -17,12 +17,6 @@ Report privately to project maintainers and include:
 
 If no private channel exists yet, define one before public release and update this file.
 
-## Response Targets (Best Effort)
-
-- Initial acknowledgment: within 5 business days
-- Triage and impact assessment: within 10 business days
-- Fix timeline: depends on severity and complexity
-
 ## Deployment Security Recommendations
 
 - Use production-safe values for API endpoints and auth configuration

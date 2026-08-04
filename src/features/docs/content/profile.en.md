@@ -20,7 +20,7 @@ The **Profile** section lets users manage personal data used across the UI and m
 Keys are used by the remote wArchi MCP server and other non-browser clients.
 
 - On create, choose scopes: **read models** and/or **write models**.
-- Optionally restrict the key to a list of model UUIDs.
+- Optionally restrict the key to selected models (searchable multi-select in the form).
 - The secret `warchi_ak_…` is shown **once** — store it in your MCP client settings.
 - Revoking a key immediately blocks JWT exchange (`/auth/api-keys/exchange`).
 

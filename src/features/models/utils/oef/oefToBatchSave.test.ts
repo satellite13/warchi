@@ -406,6 +406,8 @@ describe('oefToBatchSave', () => {
     const draft: ImportDraft = {
       sourceModelId: 'src',
       sourceModelName: 'S',
+      sourceElementTypes: ['BusinessService', 'BusinessProcess'],
+      sourceRelationshipTypes: ['Serving'],
       nodes: [
         { sourceElementId: 'e1', sourceType: 'BusinessService', name: 'Alpha' },
         { sourceElementId: 'e2', sourceType: 'BusinessProcess', name: 'Beta' },
@@ -444,6 +446,8 @@ describe('oefToBatchSave', () => {
     const draft: ImportDraft = {
       sourceModelId: 'src',
       sourceModelName: 'S',
+      sourceElementTypes: ['BusinessService', 'BusinessProcess'],
+      sourceRelationshipTypes: ['Serving'],
       nodes: [
         {
           sourceElementId: 'e1',
@@ -504,6 +508,8 @@ describe('oefToBatchSave', () => {
     const draft: ImportDraft = {
       sourceModelId: 'src',
       sourceModelName: 'S',
+      sourceElementTypes: ['BusinessService', 'BusinessProcess'],
+      sourceRelationshipTypes: ['Serving'],
       nodes: [
         { sourceElementId: 'e1', sourceType: 'BusinessService', name: 'Alpha' },
         { sourceElementId: 'e2', sourceType: 'BusinessProcess', name: 'Beta' },

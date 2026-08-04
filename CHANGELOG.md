@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-04
+
+### Added
+- OEF import can reuse matching existing model nodes and links (preview settings: create vs reuse, link match criterion including diagram edge label, reuse id only vs update from OEF).
+- User profile: manage personal API keys for MCP access.
+
+### Changed
+- Profile page layout redesigned around API keys and account sections.
+
 ## [0.14.2] - 2026-08-04
 
 ### Changed

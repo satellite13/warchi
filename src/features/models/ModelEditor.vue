@@ -2832,6 +2832,7 @@ onBeforeUnmount(() => {
             :relations="state.relations"
             :components="state.components"
             :node-types="state.nodeTypes"
+            :link-types="state.linkTypes"
             :relation-rules="state.relationRules"
             :grid-visible="gridVisible"
             :mini-map-visible="miniMapVisible"

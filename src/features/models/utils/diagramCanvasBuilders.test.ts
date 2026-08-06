@@ -8,12 +8,26 @@ import {
   buildNodeIcon as buildNotationNodeIcon,
 } from '@/features/notations/utils/notationElementBuilders'
 import {
+  buildModelEdgeDisplayLabel,
   buildModelEdgeLabelBackground,
   buildModelEdgeLabelConfig,
   buildModelNodeIcon,
   mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
 } from './diagramCanvasBuilders'
+import type { CustomProperty } from '@/domain/attrs/notationAttrs'
+
+function prop(
+  overrides: Partial<CustomProperty> & { id: string; name: string }
+): CustomProperty {
+  return {
+    type: 'string',
+    required: false,
+    min: null,
+    max: null,
+    ...overrides,
+  }
+}
 
 function expectTextLabelOptions(value: string | TextLabelOptions | undefined): TextLabelOptions {
   expect(typeof value).toBe('object')
@@ -147,5 +161,64 @@ describe('diagramCanvasBuilders', () => {
     })
     expect(mergeEffectiveDiagramStyle(bound, undefined)).toEqual(bound)
     expect(mergeEffectiveDiagramStyle(undefined, instance)).toEqual(instance)
+  })
+
+  it('prefers labelTemplate over instance attrs.label for display', () => {
+    const label = buildModelEdgeDisplayLabel({
+      instanceEdgeLabel: 'Custom diagram label',
+      relationName: 'Serving',
+      ds: { labelTemplate: '${name}' },
+      relationProperties: [],
+      linkTypeProperties: [],
+      typeValues: {},
+      relationValues: {},
+    })
+
+    expect(label).toEqual({ text: 'Serving', editableText: 'Serving' })
+  })
+
+  it('resolves template placeholders from link type and relation values', () => {
+    const label = expectTextLabelOptions(
+      buildModelEdgeDisplayLabel({
+        instanceEdgeLabel: 'ignored',
+        relationName: 'Link',
+        ds: { labelTemplate: '#{code} · ${protocol}' },
+        relationProperties: [prop({ id: '2', name: 'protocol' })],
+        linkTypeProperties: [prop({ id: '1', name: 'code' })],
+        typeValues: { code: 'HTTP' },
+        relationValues: { protocol: '2.0' },
+      })
+    )
+
+    expect(label.text).toBe('HTTP · 2.0')
+    expect(label.editableText).toBe('Link')
+  })
+
+  it('falls back to instance edge label when no template is set', () => {
+    expect(
+      buildModelEdgeDisplayLabel({
+        instanceEdgeLabel: '  My label  ',
+        relationName: 'Serving',
+        ds: undefined,
+        relationProperties: [],
+        linkTypeProperties: [],
+        typeValues: {},
+        relationValues: {},
+      })
+    ).toBe('My label')
+  })
+
+  it('returns undefined when showLabel is false', () => {
+    expect(
+      buildModelEdgeDisplayLabel({
+        instanceEdgeLabel: 'Visible',
+        relationName: 'Serving',
+        ds: { showLabel: false, labelTemplate: '${name}' },
+        relationProperties: [],
+        linkTypeProperties: [],
+        typeValues: {},
+        relationValues: {},
+      })
+    ).toBeUndefined()
   })
 })

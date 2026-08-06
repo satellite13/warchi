@@ -39,7 +39,7 @@ import {
   withResolvedScaleSlice,
 } from '@/utils/resolveCustomScaleSlice'
 import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
-import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
+import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
 import {
   parseEntityAttrs,
@@ -67,11 +67,11 @@ import {
   readControlPointsFromAttrs,
   readControlPointsFromEdge,
 } from '../utils/diagramCanvasSync'
-import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
+import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
+  buildModelEdgeDisplayLabel,
   buildModelEdgeLabelBackground,
-  buildModelEdgeLabelConfig,
   buildModelNodeIcon,
   mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
@@ -102,6 +102,7 @@ const props = withDefaults(
     relations: RelationResponse[]
     components: ComponentResponse[]
     nodeTypes: NodeTypeResponse[]
+    linkTypes?: LinkTypeResponse[]
     relationRules?: RelationRuleResponse[]
     selectedModelNodeIds: string[]
     selectedModelLinkId: string | null
@@ -143,6 +144,7 @@ const props = withDefaults(
     lockAnchorsEnabled: true,
     attachToOutlineEnabled: true,
     relationRules: () => [],
+    linkTypes: () => [],
     autoLinkInGroups: true,
     readOnly: false,
     diagramDirty: false,
@@ -771,6 +773,55 @@ const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined
   return undefined
 }
 
+function getLinkTypeCustomProperties(linkTypeId: string): CustomProperty[] {
+  const linkType = props.linkTypes.find(lt => lt.id === linkTypeId)
+  if (!linkType) return []
+  return parseEntityAttrs(linkType.attrs ?? null).customProperties.filter(p => !p.system)
+}
+
+function getRelationCustomProperties(relation: RelationResponse | undefined): CustomProperty[] {
+  if (!relation) return []
+  return parseEntityAttrs(relation.attrs ?? null).customProperties.filter(p => !p.system)
+}
+
+function getRelationScopedPropertyValues(
+  modelLinkId: string,
+  edgeInstanceId?: string
+): Record<string, unknown> {
+  const link = linkById.value.get(modelLinkId)
+  const notationId = activeNotationId.value
+  if (!link || !notationId) return {}
+  const relationId = link.parsedAttrs.notationRelations[notationId]?.relationId
+  if (!relationId) return {}
+  return getDiagramScopedLinkValues({
+    diagram: props.activeDiagram?.parsedAttrs,
+    modelLinkId,
+    notationId,
+    relationId,
+    linkAttrsFallback: link.parsedAttrs,
+    edgeInstanceId,
+  })
+}
+
+function buildEdgeDisplayLabel(
+  edgeInst: DiagramEdgeInstance,
+  modelLink: EditorLink | undefined,
+  relation: RelationResponse | undefined,
+  ds: DiagramStyle | undefined
+): string | TextLabelOptions | undefined {
+  return buildModelEdgeDisplayLabel({
+    instanceEdgeLabel: getInstanceEdgeLabel(edgeInst),
+    relationName: relation?.name,
+    ds,
+    relationProperties: getRelationCustomProperties(relation),
+    linkTypeProperties: modelLink ? getLinkTypeCustomProperties(modelLink.linkTypeId) : [],
+    typeValues: modelLink ? { ...modelLink.parsedAttrs.typeProperties } : {},
+    relationValues: modelLink
+      ? getRelationScopedPropertyValues(modelLink.id, edgeInst.id)
+      : {},
+  })
+}
+
 const getPapEdgeLabelText = (edge: Edge): string =>
   typeof edge.label === 'string'
     ? edge.label
@@ -1370,8 +1421,12 @@ function syncDiagram() {
       applyDiffOverlayToEdgeStyle(styleObj, linkDiffState)
       edgeOpts.style = styleObj as EdgeStyle
     }
-    const edgeLabel = getInstanceEdgeLabel(edge)
-    const edgeLabelConfigRaw = buildModelEdgeLabelConfig(edgeLabel, ds)
+    const edgeLabelConfigRaw = buildEdgeDisplayLabel(
+      edge,
+      modelLink,
+      getBoundRelation(edge.modelLinkId),
+      ds
+    )
     const edgeLabelText =
       typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw?.text
     const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
@@ -1786,6 +1841,9 @@ function detectEdgeLabelChanges() {
 
     const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
+
+    const ds = getEffectiveEdgeStyle(edgeInst)
+    if (ds?.labelTemplate) continue
 
     const nextLabel = getPapEdgeLabelText(papEdge)
     const currentLabel = getInstanceEdgeLabel(edgeInst) ?? ''

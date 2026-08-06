@@ -62,6 +62,7 @@ import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
+import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
   type CustomProperty,
@@ -93,6 +94,7 @@ import {
   ensureAllDiagramAttrsLoaded,
   ensureDiagramAttrsLoaded,
 } from './composables/ensureDiagramAttrs'
+import { useModelEditorRouteNavigation } from './composables/useModelEditorRouteNavigation'
 import {
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
@@ -266,6 +268,10 @@ const activeRightTab = ref('properties')
 const { canShare: canShareModel } = useCanShare(model)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
+const showDiagramCopyWizard = ref(false)
+const sourceDiagramIdForCopy = ref('')
+const diagramCopySuccess = ref(false)
+let diagramCopySuccessTimer: ReturnType<typeof setTimeout> | null = null
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
 const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -2468,15 +2474,52 @@ const copyDiagramJson = () => {
   navigator.clipboard.writeText(diagramJsonContent.value)
 }
 
+function openDiagramCopyWizard(diagramId: string): void {
+  sourceDiagramIdForCopy.value = diagramId
+  showDiagramCopyWizard.value = true
+}
+
+function handleDiagramCopyCommitted(payload: { targetModelId: string; diagramId: string }): void {
+  showDiagramCopyWizard.value = false
+  sourceDiagramIdForCopy.value = ''
+  if (diagramCopySuccessTimer) clearTimeout(diagramCopySuccessTimer)
+  diagramCopySuccess.value = true
+  diagramCopySuccessTimer = setTimeout(() => {
+    diagramCopySuccess.value = false
+    diagramCopySuccessTimer = null
+  }, 5000)
+  void router.push({
+    name: 'model-editor',
+    params: { id: payload.targetModelId },
+    query: { diagramId: payload.diagramId },
+  })
+}
+
 const router = useRouter()
 const route = useRoute()
+const routeModelId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
+const routeDiagramId = computed(() =>
+  typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
+)
 const applyRouteDiagramSelection = () => {
-  const routeDiagramId = typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
-  if (!routeDiagramId) return
-  const target = state.value.diagrams.find(diagram => diagram.id === routeDiagramId && !diagram._isDeleted)
+  if (!routeDiagramId.value) return
+  const target = state.value.diagrams.find(
+    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+  )
   if (!target) return
   applyDiagramSelection(target.id)
 }
+useModelEditorRouteNavigation({
+  modelId: routeModelId,
+  diagramId: routeDiagramId,
+  loadModel,
+  applyRouteDiagramSelection,
+  afterModelLoad: () => {
+    scheduleFetchDocumentsFromApi()
+    scheduleSyncDefaultsOnLoad()
+    void whenBackgroundReady().then(() => fetchWikiDocuments())
+  },
+})
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null
@@ -2547,6 +2590,10 @@ onBeforeUnmount(() => {
   if (uiErrorTimer) {
     clearTimeout(uiErrorTimer)
     uiErrorTimer = null
+  }
+  if (diagramCopySuccessTimer) {
+    clearTimeout(diagramCopySuccessTimer)
+    diagramCopySuccessTimer = null
   }
 })
 </script>
@@ -2620,6 +2667,7 @@ onBeforeUnmount(() => {
             @move-node="handleMoveNode"
             @rename-node="handleRenameNode"
             @rename-diagram="handleRenameDiagram"
+            @copy-diagram-to-model="openDiagramCopyWizard"
           />
         </template>
 
@@ -2891,9 +2939,18 @@ onBeforeUnmount(() => {
 
   <SaveToast
     :saving="isSaving"
-    :success="saveSuccess"
+    :success="saveSuccess || diagramCopySuccess"
+    :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
     :progress="saveProgress"
+  />
+
+  <DiagramCopyWizard
+    :open="showDiagramCopyWizard"
+    :source-model-id="model?.id ?? ''"
+    :source-diagram-id="sourceDiagramIdForCopy"
+    @close="showDiagramCopyWizard = false"
+    @committed="handleDiagramCopyCommitted"
   />
 
   <BatchSaveConflictModal

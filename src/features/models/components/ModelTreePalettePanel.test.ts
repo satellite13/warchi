@@ -1,6 +1,7 @@
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { parseDiagramAttrs } from '../modelAttrs'
 import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
 import type { EditorNode } from '../types'
 
@@ -129,6 +130,38 @@ describe('ModelTreePalettePanel', () => {
     })
 
     expect(wrapper.html().length).toBeGreaterThan(0)
+  })
+
+  it('emits the selected diagram id to open the copy wizard', async () => {
+    const wrapper = mount(ModelTreePalettePanel, {
+      props: {
+        nodes: [],
+        diagrams: [
+          {
+            id: 'diagram-1',
+            name: 'Source diagram',
+            version: '1.0.0',
+            notationId: 'notation-1',
+            ownerId: 'owner-1',
+            modelId: 'model-1',
+            nodeId: null,
+            parsedAttrs: parseDiagramAttrs(null),
+          },
+        ],
+        nodeTypes: [],
+        selectedNodeId: null,
+        selectedDiagramId: null,
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+        },
+      },
+    })
+
+    await wrapper.get('button[title="models.diagramCopy.title"]').trigger('click')
+
+    expect(wrapper.emitted('copyDiagramToModel')).toEqual([['diagram-1']])
   })
 })
 

@@ -91,6 +91,7 @@ import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
 import { ensureDiagramAttrsLoaded } from './composables/ensureDiagramAttrs'
+import { useModelEditorRouteNavigation } from './composables/useModelEditorRouteNavigation'
 import {
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
@@ -2489,13 +2490,29 @@ function handleDiagramCopyCommitted(payload: { targetModelId: string; diagramId:
 
 const router = useRouter()
 const route = useRoute()
+const routeModelId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
+const routeDiagramId = computed(() =>
+  typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
+)
 const applyRouteDiagramSelection = () => {
-  const routeDiagramId = typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
-  if (!routeDiagramId) return
-  const target = state.value.diagrams.find(diagram => diagram.id === routeDiagramId && !diagram._isDeleted)
+  if (!routeDiagramId.value) return
+  const target = state.value.diagrams.find(
+    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+  )
   if (!target) return
   applyDiagramSelection(target.id)
 }
+useModelEditorRouteNavigation({
+  modelId: routeModelId,
+  diagramId: routeDiagramId,
+  loadModel,
+  applyRouteDiagramSelection,
+  afterModelLoad: () => {
+    scheduleFetchDocumentsFromApi()
+    scheduleSyncDefaultsOnLoad()
+    void whenBackgroundReady().then(() => fetchWikiDocuments())
+  },
+})
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null

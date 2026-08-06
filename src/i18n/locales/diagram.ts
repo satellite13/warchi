@@ -118,15 +118,15 @@ export const diagramMessages = {
         _i18nL +
         'name' +
         _i18nR +
-        ' — имя ноды; #' +
+        ' — имя ноды или relation; #' +
         _i18nL +
         'ключ' +
         _i18nR +
-        ' — свойство типа ноды; $' +
+        ' — свойство типа ноды/типа связи; $' +
         _i18nL +
         'ключ' +
         _i18nR +
-        ' — свойство компонента нотации.',
+        ' — свойство компонента/relation.',
       showNotationPalette: 'Показать палитру нотации',
       palette: 'Палитра',
       hidePalette: 'Скрыть палитру',
@@ -169,6 +169,7 @@ export const diagramMessages = {
       end: 'Конец',
       none: 'Нет',
       markerArrow: 'Стрелка',
+      markerStealth: 'Острая',
       markerOpen: 'Открытая',
       markerDiamond: 'Ромб',
       markerCircle: 'Круг',
@@ -426,15 +427,15 @@ export const diagramMessages = {
         _i18nL +
         'name' +
         _i18nR +
-        ' — node name; #' +
+        ' — node or relation name; #' +
         _i18nL +
         'key' +
         _i18nR +
-        ' — node-type custom property; $' +
+        ' — node-type or link-type custom property; $' +
         _i18nL +
         'key' +
         _i18nR +
-        ' — notation component custom property.',
+        ' — notation component or relation custom property.',
       showNotationPalette: 'Show notation palette',
       palette: 'Palette',
       hidePalette: 'Hide palette',
@@ -477,6 +478,7 @@ export const diagramMessages = {
       end: 'End',
       none: 'None',
       markerArrow: 'Arrow',
+      markerStealth: 'Stealth',
       markerOpen: 'Open',
       markerDiamond: 'Diamond',
       markerCircle: 'Circle',

@@ -87,7 +87,7 @@ const props = defineProps<{
 }>();
 
 type EdgeKind = "straight" | "polyline" | "editable-polyline" | "bezier";
-type MarkerKind = "none" | "arrow" | "open" | "diamond" | "circle" | "square";
+type MarkerKind = "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth";
 
 const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
@@ -181,6 +181,10 @@ function confirmSavePreset() {
       endMarkerFillColor: edgeEndMarkerFillColor.value,
       endMarkerFillOpacity: edgeEndMarkerFillOpacity.value
     };
+    const edgeTemplate = edgeLabelTemplate.value.trim();
+    if (edgeTemplate) {
+      style.labelTemplate = edgeTemplate;
+    }
     if (edgeLineStyle.value === "dashed") {
       const pattern = edgeLineDashPattern.value.trim() || "8,4";
       style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
@@ -551,7 +555,8 @@ function toMarkerKind(value: unknown, fallback: MarkerKind): MarkerKind {
     value === "open" ||
     value === "diamond" ||
     value === "circle" ||
-    value === "square"
+    value === "square" ||
+    value === "stealth"
     ? value
     : fallback;
 }
@@ -605,7 +610,7 @@ const compositeValidationIssues = computed(() =>
 
 // --- Edge style state (from composable) ---
 const {
-  edgeLabel, edgeStrokeColor, edgeStrokeOpacity, edgeStrokeWidth,
+  edgeLabel, edgeLabelTemplate, edgeStrokeColor, edgeStrokeOpacity, edgeStrokeWidth,
   edgeLineStyle, edgeLineDashPattern, edgeType, edgeEndMarker, edgeStartMarker,
   edgeOpacity, edgeLabelColor, edgeLabelOpacity, edgeLabelFontSize, edgeLabelInset,
   edgeLabelOffset, edgeLabelPosition, edgeLabelFollowPath, edgeLabelLineGap,
@@ -649,7 +654,11 @@ watch(() => props.selectedElementId, () => {
 }, {immediate: true});
 
 watch(() => props.currentDiagramStyle?.labelTemplate, (val) => {
-  labelTemplate.value = val ?? "";
+  if (elementType.value === "edge") {
+    edgeLabelTemplate.value = val ?? "";
+  } else {
+    labelTemplate.value = val ?? "";
+  }
 });
 watch(() => props.currentDiagramStyle?.showLabel, (val) => {
   showLabel.value = val !== false;
@@ -1311,20 +1320,32 @@ function handleEdgeLabelChange(value: string) {
   edgeLabel.value = value;
   if (!props.selectedElementId || !props.interactionManager) return;
   const resolved = value.replace(/\\n/g, '\n');
+  const templateActive = !!edgeLabelTemplate.value.trim();
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     if (resolved) {
       if (edge.label) {
-        edge.label.text = resolved;
+        // When a template drives display text, keep it and only update the edit buffer.
+        if (templateActive && edge.label.editableText !== undefined) {
+          edge.label.editableText = resolved;
+        } else {
+          edge.label.text = resolved;
+        }
       } else {
         edge.label = new TextLabel({
           text: resolved,
           inset: insetToPlain(edgeLabelInset.value)
         });
       }
-    } else {
+    } else if (!templateActive) {
       edge.label = undefined;
     }
   });
+}
+
+function handleEdgeLabelTemplateChange(value: string) {
+  edgeLabelTemplate.value = value;
+  resetRelationPreset();
+  emitEdgeStyle();
 }
 
 function handleEdgeStrokeColorChange(value: string) {
@@ -1410,7 +1431,7 @@ function handleEdgeTypeChange(value: string) {
 }
 
 function handleEdgeEndMarkerChange(value: string) {
-  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square";
+  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth";
   edgeEndMarker.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1421,7 +1442,7 @@ function handleEdgeEndMarkerChange(value: string) {
 }
 
 function handleEdgeStartMarkerChange(value: string) {
-  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square";
+  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth";
   edgeStartMarker.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1565,7 +1586,7 @@ function handleEdgeLabelLineGapChange(checked: boolean) {
 }
 
 function buildMarkerConfig(
-  type: "none" | "arrow" | "open" | "diamond" | "circle" | "square",
+  type: "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth",
   size: number,
   fillColor: string,
   fillOpacity: number
@@ -1754,6 +1775,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <div class="sp-field">
                   <input class="sp-input sp-input--full" :value="edgeLabel" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
+                <div class="sp-field">
+                  <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
+                  <input
+                    class="sp-input sp-input--full"
+                    :value="edgeLabelTemplate"
+                    :placeholder="t('diagram.compositeLabelPlaceholder')"
+                    @input="handleEdgeLabelTemplateChange(($event.target as HTMLInputElement).value)"
+                  >
+                  <p class="sp-field__hint sp-field__hint--small">{{ t('diagram.compositeLabelSyntax') }}</p>
+                </div>
                 <LabeledFieldRow :label="t('nodeStyle.color')">
                   <ColorWithAlphaField
                     :model-value="edgeLabelColor"
@@ -1878,6 +1909,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <select class="sp-select sp-select--flex" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
+                      <option value="stealth">{{ t("nodeStyle.markerStealth") }}</option>
                       <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
@@ -1904,6 +1936,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <select class="sp-select sp-select--flex" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
+                      <option value="stealth">{{ t("nodeStyle.markerStealth") }}</option>
                       <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef } from "vue"
+import { useVirtualizer } from "@tanstack/vue-virtual"
+import { computed, nextTick, ref, toRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "@/utils/version"
@@ -7,6 +8,13 @@ import { parseTypeAttrs } from "@/domain/attrs/notationAttrs"
 import type { DiagramLockStatusResponse, NodeTypeResponse } from "@/types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 import { useTreeSearch } from "../composables"
+
+/** Fixed row height for virtualization (padding 9+9 + mini-btn 22). */
+const TREE_ROW_HEIGHT = 40
+const TREE_VIRTUAL_OVERSCAN = 10
+const DRAG_SCROLL_EDGE_PX = 40
+const DRAG_SCROLL_STEP_PX = 18
+const EMPTY_DROP_CLASS: Record<string, boolean> = {}
 
 const props = defineProps<{
   nodes: EditorNode[]
@@ -23,10 +31,16 @@ const props = defineProps<{
   navigationOnlyMode?: boolean
 }>()
 
-const diagramLocksResolved = computed(() => props.diagramLocks ?? [])
+const diagramLockById = computed(() => {
+  const map = new Map<string, DiagramLockStatusResponse>()
+  for (const lock of props.diagramLocks ?? []) {
+    if (lock.isLocked) map.set(lock.diagramId, lock)
+  }
+  return map
+})
 
 function diagramLockFor(id: string): DiagramLockStatusResponse | null {
-  return diagramLocksResolved.value.find((l) => l.diagramId === id && l.isLocked) ?? null
+  return diagramLockById.value.get(id) ?? null
 }
 
 function diagramLockBadgeTitle(lock: DiagramLockStatusResponse): string {
@@ -53,6 +67,7 @@ const emit = defineEmits<{
   moveNode: [nodeId: string, targetNodeId: string | null, position: "above" | "below" | "inside"]
   renameNode: [nodeId: string, name: string]
   renameDiagram: [diagramId: string, name: string]
+  copyDiagramToModel: [diagramId: string]
   toggleSyncSelection: []
 }>()
 const { t } = useI18n()
@@ -141,14 +156,15 @@ const {
   filteredChildNodes,
   childNodes,
   toggleNode,
+  collectAncestorIds,
 } = useTreeSearch({
-  nodes: toRef(props, 'nodes'),
-  treeRootNodeId: toRef(props, 'treeRootNodeId'),
+  nodes: toRef(props, "nodes"),
+  treeRootNodeId: toRef(props, "treeRootNodeId"),
   isDirectory,
   nodeIndexById,
   extraNodeMatches: (node, query) => {
     const diagrams = latestDiagramsByNodeId.value.get(node.id)
-    return diagrams?.some(diagram => diagram.name.toLowerCase().includes(query)) ?? false
+    return diagrams?.some((diagram) => diagram.name.toLowerCase().includes(query)) ?? false
   },
 })
 
@@ -221,6 +237,7 @@ const onDragDiagramStart = (event: DragEvent, diagramId: string) => {
   event.dataTransfer?.setData("text/plain", `diagram:${diagramId}`)
 }
 
+const treeScrollEl = ref<HTMLElement | null>(null)
 const dropTarget = ref<{ nodeId: string | null; position: "above" | "below" | "inside" } | null>(null)
 const renamingNodeId = ref<string | null>(null)
 const renamingNodeName = ref("")
@@ -236,11 +253,23 @@ const isDescendant = (nodeId: string, potentialParentId: string): boolean => {
   return false
 }
 
+const maybeAutoScrollTree = (event: DragEvent): void => {
+  const el = treeScrollEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  if (event.clientY < rect.top + DRAG_SCROLL_EDGE_PX) {
+    el.scrollTop -= DRAG_SCROLL_STEP_PX
+  } else if (event.clientY > rect.bottom - DRAG_SCROLL_EDGE_PX) {
+    el.scrollTop += DRAG_SCROLL_STEP_PX
+  }
+}
+
 const onTreeDragOver = (event: DragEvent, targetNodeId: string | null) => {
   const isNodeDrag = event.dataTransfer?.types.includes("application/x-model-node-id")
   const isDiagramDrag = event.dataTransfer?.types.includes("application/x-model-diagram-id")
   if (!isNodeDrag && !isDiagramDrag) return
   event.preventDefault()
+  maybeAutoScrollTree(event)
   if (!targetNodeId) {
     dropTarget.value = { nodeId: null, position: "inside" }
     return
@@ -251,7 +280,7 @@ const onTreeDragOver = (event: DragEvent, targetNodeId: string | null) => {
   const topBand = rect.height * 0.25
   const bottomBand = rect.height * 0.75
 
-  const targetNode = props.nodes.find((n) => n.id === targetNodeId)
+  const targetNode = nodeById.value.get(targetNodeId)
   if (!targetNode) {
     dropTarget.value = null
     return
@@ -291,7 +320,7 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
       emit("moveDiagram", draggedDiagramId, null)
       return
     }
-    const targetNode = props.nodes.find((n) => n.id === targetNodeId)
+    const targetNode = nodeById.value.get(targetNodeId)
     if (!targetNode || !isDirectory(targetNode)) return
     emit("moveDiagram", draggedDiagramId, targetNodeId)
     return
@@ -305,12 +334,12 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   emit("moveNode", draggedNodeId, targetNodeId, targetPosition)
 }
 
-const getDropClass = (nodeId: string) => {
-  if (!dropTarget.value || dropTarget.value.nodeId !== nodeId) return {}
+const getDropClass = (nodeId: string): Record<string, boolean> => {
+  if (!dropTarget.value || dropTarget.value.nodeId !== nodeId) return EMPTY_DROP_CLASS
   return {
     "tree-node__row--drop-above": dropTarget.value.position === "above",
     "tree-node__row--drop-below": dropTarget.value.position === "below",
-    "tree-node__row--drop-inside": dropTarget.value.position === "inside"
+    "tree-node__row--drop-inside": dropTarget.value.position === "inside",
   }
 }
 
@@ -358,26 +387,6 @@ const commitRenameDiagram = (diagram: EditorDiagram) => {
   cancelRenameDiagram()
 }
 
-const expandToNode = (nodeId: string) => {
-  const chain: string[] = []
-  let current = props.nodes.find((n) => n.id === nodeId)
-  while (current?.parentNodeId) {
-    chain.push(current.parentNodeId)
-    current = props.nodes.find((n) => n.id === current!.parentNodeId)
-  }
-  const next = new Set(expandedNodes.value)
-  for (const id of chain) next.add(id)
-  expandedNodes.value = next
-}
-
-const focusNode = (nodeId: string) => {
-  expandToNode(nodeId)
-  nextTick(() => {
-    const row = document.querySelector(`[data-tree-node-id="${nodeId}"]`) as HTMLElement | null
-    row?.scrollIntoView({ block: "nearest", behavior: "smooth" })
-  })
-}
-
 type TreeNodeRow = {
   kind: "node"
   node: EditorNode
@@ -396,56 +405,35 @@ type TreeRow = TreeNodeRow | TreeDiagramRow
 const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   const rows: TreeRow[] = []
   const query = normalizedQuery.value
+  const limit = query ? MAX_SEARCH_TREE_ROWS : Number.POSITIVE_INFINITY
 
-  // Search mode: flat list of direct matches — avoids expanding thousands of folders.
-  if (query) {
-    for (const diagram of visibleRootDiagrams.value) {
-      rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
-      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-        return { rows, truncated: true }
-      }
-    }
-
-    const byId = nodeById.value
-    const matches: EditorNode[] = []
-    for (const id of matchingNodeIds.value) {
-      const node = byId.get(id)
-      if (node && !node._isDeleted) matches.push(node)
-    }
-    matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-
-    for (const node of matches) {
-      rows.push({ kind: "node", node, depth: 0 })
-      if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-        return { rows, truncated: true }
-      }
-      for (const diagram of visibleNodeDiagrams(node.id)) {
-        rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: 1 })
-        if (rows.length >= MAX_SEARCH_TREE_ROWS) {
-          return { rows, truncated: true }
-        }
-      }
-    }
-    return { rows, truncated: false }
+  const pushRow = (row: TreeRow): boolean => {
+    rows.push(row)
+    return rows.length >= limit
   }
 
   for (const diagram of visibleRootDiagrams.value) {
-    rows.push({ kind: "diagram", nodeId: null, diagram, depth: 0 })
+    if (pushRow({ kind: "diagram", nodeId: null, diagram, depth: 0 })) {
+      return { rows, truncated: !!query }
+    }
   }
 
-  const pushNode = (node: EditorNode, depth: number) => {
-    rows.push({ kind: "node", node, depth })
-    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return
+  const pushNode = (node: EditorNode, depth: number): boolean => {
+    if (pushRow({ kind: "node", node, depth })) return true
+    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return false
     for (const diagram of visibleNodeDiagrams(node.id)) {
-      rows.push({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })
+      if (pushRow({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })) return true
     }
     for (const child of visibleChildNodes(node.id)) {
-      pushNode(child, depth + 1)
+      if (pushNode(child, depth + 1)) return true
     }
+    return false
   }
 
   for (const rootNode of visibleRootNodes.value) {
-    pushNode(rootNode, 0)
+    if (pushNode(rootNode, 0)) {
+      return { rows, truncated: !!query }
+    }
   }
   return { rows, truncated: false }
 })
@@ -453,7 +441,96 @@ const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
 const visibleTreeRows = computed(() => treeRows.value.rows)
 const searchResultsTruncated = computed(() => treeRows.value.truncated)
 
-defineExpose({ expandToNode, focusNode })
+const rowVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: visibleTreeRows.value.length,
+    getScrollElement: () => treeScrollEl.value,
+    estimateSize: () => TREE_ROW_HEIGHT,
+    overscan: TREE_VIRTUAL_OVERSCAN,
+    // Fallback until scroll parent is measured (also helps happy-dom tests).
+    initialRect: { width: 320, height: 480 },
+  })),
+)
+
+const virtualTreeItems = computed(() =>
+  rowVirtualizer.value.getVirtualItems().flatMap((vRow) => {
+    const row = visibleTreeRows.value[vRow.index]
+    if (!row) return []
+    return [{ vRow, row }]
+  }),
+)
+
+const expandToNode = (nodeId: string): void => {
+  const chain: string[] = []
+  let current = nodeById.value.get(nodeId)
+  while (current?.parentNodeId) {
+    chain.push(current.parentNodeId)
+    current = nodeById.value.get(current.parentNodeId)
+  }
+  const next = new Set(expandedNodes.value)
+  for (const id of chain) next.add(id)
+  expandedNodes.value = next
+}
+
+const scrollToTreeIndex = (index: number): void => {
+  if (index < 0) return
+  nextTick(() => {
+    rowVirtualizer.value.scrollToIndex(index, { align: "auto" })
+  })
+}
+
+const focusNode = (nodeId: string): void => {
+  expandToNode(nodeId)
+  nextTick(() => {
+    const index = visibleTreeRows.value.findIndex(
+      (row) => row.kind === "node" && row.node.id === nodeId,
+    )
+    scrollToTreeIndex(index)
+  })
+}
+
+const focusDiagram = (diagramId: string): void => {
+  const diagram = props.diagrams.find((d) => d.id === diagramId && !d._isDeleted)
+  if (diagram?.nodeId && !(props.treeRootNodeId && diagram.nodeId === props.treeRootNodeId)) {
+    expandToNode(diagram.nodeId)
+    // Ensure the parent folder itself is expanded so the diagram row is visible
+    const next = new Set(expandedNodes.value)
+    next.add(diagram.nodeId)
+    expandedNodes.value = next
+  }
+  nextTick(() => {
+    const index = visibleTreeRows.value.findIndex(
+      (row) => row.kind === "diagram" && row.diagram.id === diagramId,
+    )
+    scrollToTreeIndex(index)
+  })
+}
+
+watch(normalizedQuery, (query, prev) => {
+  if (query) {
+    const next = new Set(expandedNodes.value)
+    for (const id of collectAncestorIds(matchingNodeIds.value)) {
+      next.add(id)
+    }
+    for (const id of matchingNodeIds.value) {
+      const node = nodeById.value.get(id)
+      if (node && isDirectory(node)) next.add(id)
+    }
+    expandedNodes.value = next
+    return
+  }
+  // Leaving search mode
+  if (!prev) return
+  if (props.selectedNodeId) {
+    focusNode(props.selectedNodeId)
+    return
+  }
+  if (props.selectedDiagramId) {
+    focusDiagram(props.selectedDiagramId)
+  }
+})
+
+defineExpose({ expandToNode, focusNode, focusDiagram })
 </script>
 
 <template>
@@ -507,6 +584,7 @@ defineExpose({ expandToNode, focusNode })
     </div>
 
     <div
+      ref="treeScrollEl"
       class="tree"
       @dragover.self.prevent="onTreeDragOver($event, null)"
       @drop.self.prevent="onTreeDrop($event, null)"
@@ -521,182 +599,202 @@ defineExpose({ expandToNode, focusNode })
       <div v-if="searchResultsTruncated" class="tree__truncated">
         {{ t('models.searchResultsTruncated', { count: MAX_SEARCH_TREE_ROWS }) }}
       </div>
-      <template v-for="row in visibleTreeRows" :key="row.kind === 'node' ? row.node.id : row.diagram.id">
-        <div v-if="row.kind === 'node'" class="tree-node">
-          <div
-            class="tree-node__row tree-node__row--flattened"
-            :class="{ 'tree-node__row--active': selectedNodeId === row.node.id, ...getDropClass(row.node.id) }"
-            :style="{ '--tree-depth': String(row.depth) }"
-            :data-tree-node-id="row.node.id"
-            :draggable="!props.navigationOnlyMode"
-            @dragstart="onDragNodeStart($event, row.node.id)"
-            @dragover.prevent="onTreeDragOver($event, row.node.id)"
-            @dragleave="onTreeDragLeave"
-            @drop.prevent="onTreeDrop($event, row.node.id)"
-          >
-            <button
-              v-if="isDirectory(row.node)"
-              type="button"
-              class="tree-node__toggle"
-              @click="toggleNode(row.node.id)"
+      <div
+        v-if="visibleTreeRows.length > 0"
+        class="tree__virtual"
+        :style="{ height: `${rowVirtualizer.getTotalSize()}px` }"
+      >
+        <div
+          v-for="{ vRow, row } in virtualTreeItems"
+          :key="String(vRow.key)"
+          class="tree__virtual-item"
+          :style="{
+            height: `${vRow.size}px`,
+            transform: `translateY(${vRow.start}px)`,
+          }"
+        >
+          <div v-if="row.kind === 'node'" class="tree-node">
+            <div
+              class="tree-node__row tree-node__row--flattened"
+              :class="{ 'tree-node__row--active': selectedNodeId === row.node.id, ...getDropClass(row.node.id) }"
+              :style="{ '--tree-depth': String(row.depth) }"
+              :data-tree-node-id="row.node.id"
+              :draggable="!props.navigationOnlyMode"
+              @dragstart="onDragNodeStart($event, row.node.id)"
+              @dragover.prevent="onTreeDragOver($event, row.node.id)"
+              @dragleave="onTreeDragLeave"
+              @drop.prevent="onTreeDrop($event, row.node.id)"
             >
-              <UiIcon :name="expandedNodes.has(row.node.id) ? 'expand_more' : 'chevron_right'" />
-            </button>
-            <button
-              type="button"
-              class="tree-node__select"
-              :class="{ 'tree-node__select--unused': !isDirectory(row.node) && !isNodeUsed(row.node.id) }"
-              @click="emit('selectNode', row.node.id)"
-              @dblclick="isDirectory(row.node) && toggleNode(row.node.id)"
-            >
-              <img
-                v-if="nodeTypeIconById.get(row.node.nodeTypeId)"
-                class="tree-node__icon-svg"
-                :src="`/icons/${nodeTypeIconById.get(row.node.nodeTypeId)}.svg`"
-                :alt="row.node.name"
-              >
-              <UiIcon
-                v-else
-                :name="isDirectory(row.node) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
-                class="tree-node__icon-symbol"
-              />
-              <input
-                v-if="renamingNodeId === row.node.id"
-                v-model="renamingNodeName"
-                class="tree-node__rename-input"
-                type="text"
-                @click.stop
-                @keydown.enter.prevent="commitRenameNode(row.node)"
-                @keydown.esc.prevent="cancelRenameNode"
-                @blur="commitRenameNode(row.node)"
-              >
-              <span v-else class="tree-node__name">{{ row.node.name }}</span>
-              <span v-if="!isDirectory(row.node)" class="tree-node__type">{{ nodeTypeNameById.get(row.node.nodeTypeId) }}</span>
-            </button>
-            <div class="tree-node__actions">
               <button
                 v-if="isDirectory(row.node)"
                 type="button"
-                class="mini-btn"
-                :title="t('models.addChildFolder')"
-                @click.stop="emit('createFolder', row.node.id)"
+                class="tree-node__toggle"
+                @click="toggleNode(row.node.id)"
               >
-                <UiIcon name="create_new_folder" />
-              </button>
-              <button
-                v-if="isDirectory(row.node)"
-                type="button"
-                class="mini-btn"
-                :title="t('models.addChildNode')"
-                @click.stop="emit('createNode', row.node.id)"
-              >
-                <UiIcon name="add_box" />
-              </button>
-              <button
-                v-if="isDirectory(row.node)"
-                type="button"
-                class="mini-btn"
-                :title="t('models.createDiagramTitle')"
-                @click.stop="emit('createDiagram', row.node.id)"
-              >
-                <UiIcon name="add_chart" />
-              </button>
-              <button
-                v-if="isDirectory(row.node)"
-                type="button"
-                class="mini-btn"
-                :title="t('models.renameFolder')"
-                @click.stop="startRenameNode(row.node)"
-              >
-                <UiIcon name="edit" />
+                <UiIcon :name="expandedNodes.has(row.node.id) ? 'expand_more' : 'chevron_right'" />
               </button>
               <button
                 type="button"
-                class="mini-btn mini-btn--danger"
-                :title="t('common.delete')"
-                @click.stop="emit('deleteNode', row.node.id)"
+                class="tree-node__select"
+                :class="{ 'tree-node__select--unused': !isDirectory(row.node) && !isNodeUsed(row.node.id) }"
+                @click="emit('selectNode', row.node.id)"
+                @dblclick="isDirectory(row.node) && toggleNode(row.node.id)"
               >
-                <UiIcon name="delete" />
+                <img
+                  v-if="nodeTypeIconById.get(row.node.nodeTypeId)"
+                  class="tree-node__icon-svg"
+                  :src="`/icons/${nodeTypeIconById.get(row.node.nodeTypeId)}.svg`"
+                  :alt="row.node.name"
+                >
+                <UiIcon
+                  v-else
+                  :name="isDirectory(row.node) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"
+                  class="tree-node__icon-symbol"
+                />
+                <input
+                  v-if="renamingNodeId === row.node.id"
+                  v-model="renamingNodeName"
+                  class="tree-node__rename-input"
+                  type="text"
+                  @click.stop
+                  @keydown.enter.prevent="commitRenameNode(row.node)"
+                  @keydown.esc.prevent="cancelRenameNode"
+                  @blur="commitRenameNode(row.node)"
+                >
+                <span
+                  v-else
+                  class="tree-node__name"
+                  :class="{
+                    'tree-node__name--ancestor':
+                      !!normalizedQuery && !matchingNodeIds.has(row.node.id),
+                  }"
+                >{{ row.node.name }}</span>
+                <span v-if="!isDirectory(row.node)" class="tree-node__type">{{ nodeTypeNameById.get(row.node.nodeTypeId) }}</span>
               </button>
+              <div class="tree-node__actions">
+                <button
+                  v-if="isDirectory(row.node)"
+                  type="button"
+                  class="mini-btn"
+                  :title="t('models.addChildFolder')"
+                  @click.stop="emit('createFolder', row.node.id)"
+                >
+                  <UiIcon name="create_new_folder" />
+                </button>
+                <button
+                  v-if="isDirectory(row.node)"
+                  type="button"
+                  class="mini-btn"
+                  :title="t('models.addChildNode')"
+                  @click.stop="emit('createNode', row.node.id)"
+                >
+                  <UiIcon name="add_box" />
+                </button>
+                <button
+                  v-if="isDirectory(row.node)"
+                  type="button"
+                  class="mini-btn"
+                  :title="t('models.createDiagramTitle')"
+                  @click.stop="emit('createDiagram', row.node.id)"
+                >
+                  <UiIcon name="add_chart" />
+                </button>
+                <button
+                  v-if="isDirectory(row.node)"
+                  type="button"
+                  class="mini-btn"
+                  :title="t('models.renameFolder')"
+                  @click.stop="startRenameNode(row.node)"
+                >
+                  <UiIcon name="edit" />
+                </button>
+                <button
+                  type="button"
+                  class="mini-btn mini-btn--danger"
+                  :title="t('common.delete')"
+                  @click.stop="emit('deleteNode', row.node.id)"
+                >
+                  <UiIcon name="delete" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div
-          v-else
-          class="diagram-row diagram-row--flattened"
-          :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
-          :style="{ '--tree-depth': String(row.depth) }"
-          :draggable="!props.navigationOnlyMode"
-          @dragstart="onDragDiagramStart($event, row.diagram.id)"
-        >
-          <button
-            v-if="renamingDiagramId !== row.diagram.id"
-            type="button"
-            class="diagram-row__select"
-            :title="t('models.openDiagramDoubleClick')"
-            @dblclick="emit('openDiagram', row.diagram.id)"
+          <div
+            v-else
+            class="diagram-row diagram-row--flattened"
+            :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
+            :style="{ '--tree-depth': String(row.depth) }"
+            :data-tree-diagram-id="row.diagram.id"
+            :draggable="!props.navigationOnlyMode"
+            @dragstart="onDragDiagramStart($event, row.diagram.id)"
           >
-            <UiIcon name="table_chart" />
-            <span>{{ row.diagram.name }}</span>
-            <span
-              v-if="diagramLockFor(row.diagram.id)"
-              class="diagram-row__lock-pip"
-              :class="{ 'diagram-row__lock-pip--own': isDiagramLockedByCurrentUser(row.diagram.id) }"
-              :title="diagramLockBadgeTitle(diagramLockFor(row.diagram.id)!)"
+            <button
+              v-if="renamingDiagramId !== row.diagram.id"
+              type="button"
+              class="diagram-row__select"
+              :title="t('models.openDiagramDoubleClick')"
+              @dblclick="emit('openDiagram', row.diagram.id)"
             >
-              <svg class="diagram-row__lock-pip-icon" viewBox="0 0 12 12" fill="none">
-                <rect x="2" y="5.5" width="8" height="5.5" rx="1" stroke="currentColor" stroke-width="1.2" />
-                <path d="M3.5 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-              </svg>
-            </span>
-            <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
+              <UiIcon name="table_chart" />
+              <span>{{ row.diagram.name }}</span>
+              <span
+                v-if="diagramLockFor(row.diagram.id)"
+                class="diagram-row__lock-pip"
+                :class="{ 'diagram-row__lock-pip--own': isDiagramLockedByCurrentUser(row.diagram.id) }"
+                :title="diagramLockBadgeTitle(diagramLockFor(row.diagram.id)!)"
+              >
+                <svg class="diagram-row__lock-pip-icon" viewBox="0 0 12 12" fill="none">
+                  <rect x="2" y="5.5" width="8" height="5.5" rx="1" stroke="currentColor" stroke-width="1.2" />
+                  <path d="M3.5 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
+            </button>
+            <div v-else class="diagram-row__select diagram-row__rename-wrap">
+              <UiIcon name="table_chart" />
+              <input
+                v-model="renamingDiagramName"
+                class="diagram-row__rename-input"
+                type="text"
+                @click.stop
+                @keydown.enter.prevent="commitRenameDiagram(row.diagram)"
+                @keydown.esc.prevent="cancelRenameDiagram"
+                @blur="commitRenameDiagram(row.diagram)"
+              >
+            </div>
+            <button
+              v-if="renamingDiagramId !== row.diagram.id"
+              type="button"
+              class="mini-btn diagram-row__edit-btn"
+              :title="t('models.renameDiagram')"
+              @click.stop="startRenameDiagram(row.diagram)"
+            >
+              <UiIcon name="edit" />
+            </button>
+            <button
+              type="button"
+              class="mini-btn mini-btn--danger"
+              @click="emit('deleteDiagram', row.diagram.id)"
+            >
+              <UiIcon name="delete" />
+            </button>
+          <button
+            type="button"
+            class="mini-btn diagram-row__copy-btn"
+            :title="t('models.diagramCopy.title')"
+            @click.stop="emit('copyDiagramToModel', row.diagram.id)"
+          >
+            <UiIcon name="content_copy" />
           </button>
-          <div v-else class="diagram-row__select diagram-row__rename-wrap">
-            <UiIcon name="table_chart" />
-            <input
-              v-model="renamingDiagramName"
-              class="diagram-row__rename-input"
-              type="text"
-              @click.stop
-              @keydown.enter.prevent="commitRenameDiagram(row.diagram)"
-              @keydown.esc.prevent="cancelRenameDiagram"
-              @blur="commitRenameDiagram(row.diagram)"
-            >
           </div>
-          <button
-            v-if="renamingDiagramId !== row.diagram.id"
-            type="button"
-            class="mini-btn diagram-row__edit-btn"
-            :title="t('models.renameDiagram')"
-            @click.stop="startRenameDiagram(row.diagram)"
-          >
-            <UiIcon name="edit" />
-          </button>
-          <button
-            type="button"
-            class="mini-btn mini-btn--danger"
-            @click="emit('deleteDiagram', row.diagram.id)"
-          >
-            <UiIcon name="delete" />
-          </button>
         </div>
-      </template>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -875,6 +973,20 @@ defineExpose({ expandToNode, focusNode })
   overflow: auto;
   padding: 6px;
   border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.tree__virtual {
+  position: relative;
+  width: 100%;
+}
+
+.tree__virtual-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tree__empty {
@@ -919,8 +1031,7 @@ defineExpose({ expandToNode, focusNode })
 .tree-node {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  animation: fadeSlideIn 0.25s ease both;
+  height: 100%;
 }
 
 .tree-node--nested {
@@ -1021,6 +1132,11 @@ defineExpose({ expandToNode, focusNode })
   color: var(--base-text);
 }
 
+.tree-node__name--ancestor {
+  color: var(--text-subtle);
+  font-weight: 400;
+}
+
 .tree-node__rename-input {
   flex: 1;
   min-width: 0;
@@ -1085,6 +1201,7 @@ defineExpose({ expandToNode, focusNode })
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  height: 100%;
   padding: 9px 10px;
   margin-left: 14px;
   border-radius: 8px;
@@ -1107,13 +1224,15 @@ defineExpose({ expandToNode, focusNode })
 }
 
 .diagram-row .mini-btn--danger,
-.diagram-row .diagram-row__edit-btn {
+.diagram-row .diagram-row__edit-btn,
+.diagram-row .diagram-row__copy-btn {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
 .diagram-row:hover .mini-btn--danger,
-.diagram-row:hover .diagram-row__edit-btn {
+.diagram-row:hover .diagram-row__edit-btn,
+.diagram-row:hover .diagram-row__copy-btn {
   opacity: 1;
 }
 

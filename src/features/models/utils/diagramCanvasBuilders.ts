@@ -4,8 +4,10 @@ import type {
   EdgeStyle,
   NodeImageOptions,
   TextLabelOptions,
+  TextStyle,
 } from '@ngroznykh/papirus'
-import type { DiagramStyle } from '@/domain/attrs/notationAttrs'
+import type { CustomProperty, DiagramStyle } from '@/domain/attrs/notationAttrs'
+import { resolveDiagramEdgeLabelTemplate } from './edgeLabelTemplate'
 import {
   buildEdgeLabel as buildNotationEdgeLabel,
   buildEdgeLabelBackground as buildNotationEdgeLabelBackground,
@@ -55,6 +57,77 @@ export function buildModelEdgeLabelConfig(
   const text = labelText?.trim()
   if (!text) return undefined
   return buildNotationEdgeLabel(text, ds)
+}
+
+export type ModelEdgeDisplayLabelInput = {
+  /** Diagram edge attrs.label — ignored for display when labelTemplate is set. */
+  instanceEdgeLabel?: string
+  relationName?: string
+  ds?: DiagramStyle
+  relationProperties: CustomProperty[]
+  linkTypeProperties: CustomProperty[]
+  typeValues: Record<string, unknown>
+  relationValues: Record<string, unknown>
+}
+
+function hasEdgeLabelTemplate(ds?: DiagramStyle): boolean {
+  return !!ds?.labelTemplate?.trim()
+}
+
+export function buildModelEdgeDisplayLabel(
+  input: ModelEdgeDisplayLabelInput
+): string | TextLabelOptions | undefined {
+  const {
+    instanceEdgeLabel,
+    relationName,
+    ds,
+    relationProperties,
+    linkTypeProperties,
+    typeValues,
+    relationValues,
+  } = input
+
+  if (ds?.showLabel === false) {
+    return undefined
+  }
+
+  // Without a template, only diagram attrs.label drives the caption (pre-template behavior).
+  // Do not fall back to relation name — that forced "Association"-style labels on every edge.
+  if (!hasEdgeLabelTemplate(ds)) {
+    return buildModelEdgeLabelConfig(instanceEdgeLabel, ds)
+  }
+
+  const displayText = resolveDiagramEdgeLabelTemplate(ds!.labelTemplate!.trim(), relationName ?? '', {
+    typeProperties: linkTypeProperties,
+    typeValues,
+    relationProperties,
+    relationValues,
+  }).trim()
+  if (!displayText) return undefined
+
+  const labelInset = ds?.labelInset
+  const hasStyle = !!(
+    ds?.labelColor ||
+    ds?.labelOpacity != null ||
+    ds?.labelFontSize ||
+    labelInset != null
+  )
+
+  if (!hasStyle) {
+    return { text: displayText, editableText: relationName ?? '' }
+  }
+
+  const opts: TextLabelOptions = {
+    text: displayText,
+    editableText: relationName ?? '',
+  }
+  const style: TextStyle = {}
+  if (ds?.labelColor) style.color = ds.labelColor
+  if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity
+  if (ds?.labelFontSize) style.fontSize = ds.labelFontSize
+  if (Object.keys(style).length) opts.style = style
+  if (labelInset != null) opts.inset = labelInset
+  return opts
 }
 
 export function buildModelEdgeLabelBackground(

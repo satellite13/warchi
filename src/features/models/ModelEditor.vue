@@ -62,6 +62,7 @@ import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
+import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
   type CustomProperty,
@@ -89,7 +90,11 @@ import type { ValidationIssue } from '@/features/validation-scripts/sandbox/type
 import type { RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
-import { ensureDiagramAttrsLoaded } from './composables/ensureDiagramAttrs'
+import {
+  ensureAllDiagramAttrsLoaded,
+  ensureDiagramAttrsLoaded,
+} from './composables/ensureDiagramAttrs'
+import { useModelEditorRouteNavigation } from './composables/useModelEditorRouteNavigation'
 import {
   validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
 } from './utils/requiredCustomPropertiesValidation'
@@ -263,6 +268,10 @@ const activeRightTab = ref('properties')
 const { canShare: canShareModel } = useCanShare(model)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
+const showDiagramCopyWizard = ref(false)
+const sourceDiagramIdForCopy = ref('')
+const diagramCopySuccess = ref(false)
+let diagramCopySuccessTimer: ReturnType<typeof setTimeout> | null = null
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
 const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -522,6 +531,24 @@ const nodeTypeScopedValues = computed<Record<string, unknown>>(() => {
   const node = selectedNode.value
   if (!node) return {}
   return node.parsedAttrs.typeProperties
+})
+
+const selectedLinkTypeEntity = computed(() => {
+  const link = selectedLink.value
+  if (!link) return null
+  return state.value.linkTypes.find(lt => lt.id === link.linkTypeId) ?? null
+})
+
+const linkTypeCustomProperties = computed<CustomProperty[]>(() => {
+  const lt = selectedLinkTypeEntity.value
+  if (!lt) return []
+  return parseEntityAttrs(lt.attrs ?? null).customProperties.filter(property => !property.system)
+})
+
+const linkTypeScopedValues = computed<Record<string, unknown>>(() => {
+  const link = selectedLink.value
+  if (!link) return {}
+  return link.parsedAttrs.typeProperties
 })
 
 const nodeScopedValues = computed<Record<string, unknown>>(() => {
@@ -890,6 +917,10 @@ async function ensureImportNotationCatalog(notationId: string): Promise<void> {
   })
 }
 
+async function ensureImportDiagramAttrs(): Promise<void> {
+  await ensureAllDiagramAttrsLoaded(() => state.value)
+}
+
 const showLinkDeleteModal = ref(false)
 const pendingDeleteLinkId = ref<string | null>(null)
 const pendingDeleteEdgeInstanceId = ref<string | null>(null)
@@ -1115,6 +1146,12 @@ const bindLinkRelation = (
       link.parsedAttrs.relationProperties[notationId][relationId]!,
       relation.attrs,
     )
+  }
+  const linkType = state.value.linkTypes.find(item => item.id === link.linkTypeId)
+  if (linkType) {
+    applyDefaultCustomPropertyValuesFromAttrs(link.parsedAttrs.typeProperties, linkType.attrs, {
+      skipSystem: true,
+    })
   }
   if (options?.markDirty ?? true) {
     markLinkDirty(link.id)
@@ -2129,6 +2166,15 @@ const setNodeTypePropertyValue = (key: string, value: unknown) => {
   }
 }
 
+const setLinkTypePropertyValue = (key: string, value: unknown) => {
+  const link = selectedLink.value
+  if (!link) return
+  if (!Object.is(link.parsedAttrs.typeProperties[key], value)) {
+    link.parsedAttrs.typeProperties[key] = value
+    markLinkDirty(link.id)
+  }
+}
+
 const setNodeScopedValue = (key: string, value: unknown) => {
   const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
@@ -2461,15 +2507,52 @@ const copyDiagramJson = () => {
   navigator.clipboard.writeText(diagramJsonContent.value)
 }
 
+function openDiagramCopyWizard(diagramId: string): void {
+  sourceDiagramIdForCopy.value = diagramId
+  showDiagramCopyWizard.value = true
+}
+
+function handleDiagramCopyCommitted(payload: { targetModelId: string; diagramId: string }): void {
+  showDiagramCopyWizard.value = false
+  sourceDiagramIdForCopy.value = ''
+  if (diagramCopySuccessTimer) clearTimeout(diagramCopySuccessTimer)
+  diagramCopySuccess.value = true
+  diagramCopySuccessTimer = setTimeout(() => {
+    diagramCopySuccess.value = false
+    diagramCopySuccessTimer = null
+  }, 5000)
+  void router.push({
+    name: 'model-editor',
+    params: { id: payload.targetModelId },
+    query: { diagramId: payload.diagramId },
+  })
+}
+
 const router = useRouter()
 const route = useRoute()
+const routeModelId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
+const routeDiagramId = computed(() =>
+  typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
+)
 const applyRouteDiagramSelection = () => {
-  const routeDiagramId = typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
-  if (!routeDiagramId) return
-  const target = state.value.diagrams.find(diagram => diagram.id === routeDiagramId && !diagram._isDeleted)
+  if (!routeDiagramId.value) return
+  const target = state.value.diagrams.find(
+    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+  )
   if (!target) return
   applyDiagramSelection(target.id)
 }
+useModelEditorRouteNavigation({
+  modelId: routeModelId,
+  diagramId: routeDiagramId,
+  loadModel,
+  applyRouteDiagramSelection,
+  afterModelLoad: () => {
+    scheduleFetchDocumentsFromApi()
+    scheduleSyncDefaultsOnLoad()
+    void whenBackgroundReady().then(() => fetchWikiDocuments())
+  },
+})
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null
@@ -2540,6 +2623,10 @@ onBeforeUnmount(() => {
   if (uiErrorTimer) {
     clearTimeout(uiErrorTimer)
     uiErrorTimer = null
+  }
+  if (diagramCopySuccessTimer) {
+    clearTimeout(diagramCopySuccessTimer)
+    diagramCopySuccessTimer = null
   }
 })
 </script>
@@ -2613,6 +2700,7 @@ onBeforeUnmount(() => {
             @move-node="handleMoveNode"
             @rename-node="handleRenameNode"
             @rename-diagram="handleRenameDiagram"
+            @copy-diagram-to-model="openDiagramCopyWizard"
           />
         </template>
 
@@ -2744,6 +2832,7 @@ onBeforeUnmount(() => {
             :relations="state.relations"
             :components="state.components"
             :node-types="state.nodeTypes"
+            :link-types="state.linkTypes"
             :relation-rules="state.relationRules"
             :grid-visible="gridVisible"
             :mini-map-visible="miniMapVisible"
@@ -2818,6 +2907,8 @@ onBeforeUnmount(() => {
               :node-custom-properties="nodeCustomProperties"
               :node-type-custom-properties="nodeTypeCustomProperties"
               :node-type-scoped-values="nodeTypeScopedValues"
+              :link-type-custom-properties="linkTypeCustomProperties"
+              :link-type-scoped-values="linkTypeScopedValues"
               :node-binding-component-id="nodeBindingComponentId"
               :link-binding-relation-id="linkBindingRelationId"
               :available-components="availableNodeComponents"
@@ -2831,6 +2922,7 @@ onBeforeUnmount(() => {
               @bind-node-component="handleBindNodeComponent"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
               @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
+              @set-link-type-property-value="(k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               @create-document-for-property="
@@ -2884,9 +2976,21 @@ onBeforeUnmount(() => {
 
   <SaveToast
     :saving="isSaving"
-    :success="saveSuccess"
+    :success="saveSuccess || diagramCopySuccess"
+    :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
     :progress="saveProgress"
+  />
+
+  <DiagramCopyWizard
+    :open="showDiagramCopyWizard"
+    :source-model-id="model?.id ?? ''"
+    :source-diagram-id="sourceDiagramIdForCopy"
+    :source-notation-id="
+      state.diagrams.find(d => d.id === sourceDiagramIdForCopy)?.notationId ?? null
+    "
+    @close="showDiagramCopyWizard = false"
+    @committed="handleDiagramCopyCommitted"
   />
 
   <BatchSaveConflictModal
@@ -3356,9 +3460,13 @@ onBeforeUnmount(() => {
     :components="state.components"
     :relations="state.relations"
     :relation-rules="state.relationRules"
+    :existing-nodes="state.nodes"
+    :existing-links="state.links"
+    :existing-diagrams="state.diagrams"
     :import-busy="isImportingOef"
     :import-progress="oefImportProgress"
     :ensure-notation-catalog="ensureImportNotationCatalog"
+    :ensure-diagram-attrs="ensureImportDiagramAttrs"
     @close="showImportWizard = false"
     @submit="handleOefImportSubmit"
   />
@@ -3374,6 +3482,18 @@ onBeforeUnmount(() => {
       <li>{{ t('models.oefImportStatNodes', { count: oefImportReport.nodes }) }}</li>
       <li>{{ t('models.oefImportStatLinks', { count: oefImportReport.links }) }}</li>
       <li>{{ t('models.oefImportStatDiagrams', { count: oefImportReport.diagrams }) }}</li>
+      <li v-if="oefImportReport.nodesReused > 0">
+        {{ t('models.oefImportReportReusedNodes', { count: oefImportReport.nodesReused }) }}
+      </li>
+      <li v-if="oefImportReport.nodesUpdated > 0">
+        {{ t('models.oefImportReportUpdatedNodes', { count: oefImportReport.nodesUpdated }) }}
+      </li>
+      <li v-if="oefImportReport.linksReused > 0">
+        {{ t('models.oefImportReportReusedLinks', { count: oefImportReport.linksReused }) }}
+      </li>
+      <li v-if="oefImportReport.linksUpdated > 0">
+        {{ t('models.oefImportReportUpdatedLinks', { count: oefImportReport.linksUpdated }) }}
+      </li>
       <li>
         {{ t('models.oefImportReportDiagramNodeInstances', { count: oefImportReport.diagramNodeInstances }) }}
       </li>

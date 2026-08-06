@@ -4,6 +4,56 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-08-06
+
+### Fixed
+- Diagram copy wizard defaults the target notation to the source diagram’s notation when it is still available.
+
+## [0.17.0] - 2026-08-06
+
+### Added
+- Label templates for notation relations (edges): `${name}`, `#{link-type props}`, `${relation props}`; model links store `typeProperties` like nodes.
+- Notation Properties/Style UI for relation composite labels; model properties panel for link-type values; templates resolve on notation preview and model diagram canvas.
+
+### Fixed
+- Edge labels no longer fall back to the relation name when the diagram label is empty (no more unwanted «Association» captions).
+- Whitespace-only relation label templates are ignored and not persisted.
+- Style panel Label field no longer sticks on unresolved template fragments such as `${name`.
+- Palette drag-and-drop places new elements under the cursor (uses dragover coordinates and centers by element size).
+
+## [0.16.1] - 2026-08-06
+
+### Added
+- Edge marker type «Stealth» / «Острая»: filled barbed arrowhead with a shallow concave heel.
+
+## [0.16.0] - 2026-08-06
+
+### Added
+- API keys support per-model grants: one MCP key can grant read-only on some models and read/write on others.
+- Admin users page: list and revoke a user’s API keys.
+
+### Changed
+- API key create form: choose all models or selected models with per-model scopes; write always includes read.
+
+## [0.15.0] - 2026-08-04
+
+### Added
+- OEF import can reuse matching existing model nodes and links (preview settings: create vs reuse, link match criterion including diagram edge label, reuse id only vs update from OEF).
+- User profile: manage personal API keys for MCP access.
+
+### Changed
+- Profile page layout redesigned around API keys and account sections.
+
+## [0.14.2] - 2026-08-04
+
+### Changed
+- Model tree virtualizes large expanded hierarchies so expand, scroll, and updates stay responsive.
+
+## [0.14.1] - 2026-08-04
+
+### Added
+- Model tree search shows a filtered hierarchy with ancestor path, mutes non-matching ancestors, and reveals the selected node when clearing search.
+
 ## [0.14.0] - 2026-07-31
 
 ### Added

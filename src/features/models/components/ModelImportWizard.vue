@@ -10,6 +10,7 @@ import type {
   RelationRuleResponse,
 } from '@/types/api'
 import type { NotationData } from '@/types/entities'
+import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import { buildImportDraft } from '../utils/oef/oefDraftBuilder'
 import {
   createInitialImportMappingState,
@@ -26,12 +27,20 @@ import {
   toOefParsedModel,
   type OefNormalizeProgress,
 } from '../utils/oef/oefNormalizeApi'
+import { resolveOefEntityMatches } from '../utils/oef/oefEntityReuse'
 import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
 import {
   collectDisallowedOefLinkGroups,
   type DisallowedOefLinkGroup,
   type OefRelationRuleDecision,
 } from '../utils/oef/oefRelationRuleValidation'
+import {
+  createDefaultOefReuseSettings,
+  loadCachedOefReuseSettings,
+  mergeOefReuseSettings,
+  saveCachedOefReuseSettings,
+  type OefReuseSettings,
+} from '../utils/oef/reuseSettings'
 import type { ImportDraft, ImportIssue, ImportIssueCode } from '../utils/oef/types'
 
 const props = withDefaults(
@@ -44,13 +53,21 @@ const props = withDefaults(
     components: ComponentResponse[]
     relations: RelationResponse[]
     relationRules?: RelationRuleResponse[]
+    existingNodes?: EditorNode[]
+    existingLinks?: EditorLink[]
+    existingDiagrams?: EditorDiagram[]
     importBusy?: boolean
     importProgress?: string | null
     /** Loads components/relations/types for a notation not yet used by model diagrams. */
     ensureNotationCatalog?: (notationId: string) => Promise<void>
+    /** Hydrate pending diagram attrs before label-based link reuse matching. */
+    ensureDiagramAttrs?: () => Promise<void>
   }>(),
   {
     relationRules: () => [],
+    existingNodes: () => [],
+    existingLinks: () => [],
+    existingDiagrams: () => [],
   }
 )
 
@@ -62,6 +79,7 @@ const emit = defineEmits<{
       notationId: string
       mapping: ImportMappingState
       ruleDecisions: Record<string, OefRelationRuleDecision>
+      reuseSettings: OefReuseSettings
     },
   ]
 }>()
@@ -89,6 +107,8 @@ const bulkRelationshipValue = ref('')
 const isLoadingCatalog = ref(false)
 const catalogError = ref<string | null>(null)
 const ruleDecisions = ref<Record<string, OefRelationRuleDecision>>({})
+const reuseSettings = ref<OefReuseSettings>(createDefaultOefReuseSettings())
+const reuseHydrateError = ref<string | null>(null)
 const isStepBusy = ref(false)
 const stepBusyMessage = ref('')
 
@@ -239,7 +259,13 @@ const canMoveToPreview = computed(
     mappedRelationshipsCount.value === (draft.value?.sourceRelationshipTypes.length ?? 0) &&
     allRelationRuleDecisionsMade.value
 )
-const canSubmit = computed(() => currentStep.value === 3 && canMoveToPreview.value && !props.importBusy)
+const canSubmit = computed(
+  () =>
+    currentStep.value === 3 &&
+    canMoveToPreview.value &&
+    !props.importBusy &&
+    !reuseHydrateError.value
+)
 
 const showBusyOverlay = computed(
   () => isStepBusy.value || isLoadingCatalog.value || !!props.importBusy
@@ -309,6 +335,8 @@ function resetState(): void {
   suggestions.value = { elementBySourceType: {}, relationshipBySourceType: {} }
   expandedIssueCodes.value = new Set()
   ruleDecisions.value = {}
+  reuseSettings.value = createDefaultOefReuseSettings()
+  reuseHydrateError.value = null
 }
 
 function setRuleDecision(key: string, decision: OefRelationRuleDecision): void {
@@ -361,6 +389,46 @@ function rebuildMappings(nextDraft: ImportDraft, notationId: string): void {
   })
   mappingState.value = mergeImportMappingState(initial, loadCachedImportMappingState(notationId))
   ruleDecisions.value = {}
+  reuseSettings.value = mergeOefReuseSettings(
+    createDefaultOefReuseSettings(),
+    loadCachedOefReuseSettings(notationId)
+  )
+  reuseHydrateError.value = null
+}
+
+const needsLabelHydrate = computed(
+  () =>
+    reuseSettings.value.linksMode === 'reuseMatching' &&
+    reuseSettings.value.linkMatchCriterion === 'endpointsTypeAndLabel'
+)
+
+const reusePreviewSummary = computed(() => {
+  if (!draft.value || !selectedNotationId.value) {
+    return null
+  }
+  return resolveOefEntityMatches({
+    draft: draft.value,
+    mapping: mappingState.value,
+    notationId: selectedNotationId.value,
+    existingNodes: props.existingNodes,
+    existingLinks: props.existingLinks,
+    existingDiagrams: props.existingDiagrams,
+    settings: reuseSettings.value,
+  }).summary
+})
+
+async function ensureReuseDiagramAttrs(): Promise<boolean> {
+  reuseHydrateError.value = null
+  if (!needsLabelHydrate.value || !props.ensureDiagramAttrs) return true
+  try {
+    await props.ensureDiagramAttrs()
+    return true
+  } catch (error) {
+    reuseHydrateError.value = t('models.oefImportReuseHydrateFailed', {
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
 }
 
 async function ensureCatalogAndRebuild(notationId: string, nextDraft: ImportDraft): Promise<void> {
@@ -606,7 +674,9 @@ async function nextStep(): Promise<void> {
     return
   }
   if (currentStep.value === 2 && canMoveToPreview.value) {
-    await runStepTransition(t('models.oefImportPreparingPreview'), () => {
+    await runStepTransition(t('models.oefImportPreparingPreview'), async () => {
+      const ok = await ensureReuseDiagramAttrs()
+      if (!ok) return
       currentStep.value = 3
     })
   }
@@ -615,14 +685,30 @@ async function nextStep(): Promise<void> {
 async function submitImport(): Promise<void> {
   if (!draft.value || !selectedNotationId.value || !canSubmit.value) return
   if (isStepBusy.value || props.importBusy) return
+  const ok = await ensureReuseDiagramAttrs()
+  if (!ok) return
   saveCachedImportMappingState(selectedNotationId.value, mappingState.value)
+  saveCachedOefReuseSettings(selectedNotationId.value, reuseSettings.value)
   emit('submit', {
     draft: draft.value,
     notationId: selectedNotationId.value,
     mapping: mappingState.value,
     ruleDecisions: { ...ruleDecisions.value },
+    reuseSettings: { ...reuseSettings.value },
   })
 }
+
+watch(
+  () => [
+    reuseSettings.value.linksMode,
+    reuseSettings.value.linkMatchCriterion,
+    currentStep.value,
+  ] as const,
+  async ([, , step]) => {
+    if (step !== 3 || !needsLabelHydrate.value) return
+    await ensureReuseDiagramAttrs()
+  }
+)
 </script>
 
 <template>
@@ -873,6 +959,85 @@ async function submitImport(): Promise<void> {
         <p class="oef-import__hint">
           {{ t('models.oefImportPreviewMapped', { nodes: mappedElementsCount, links: mappedRelationshipsCount }) }}
         </p>
+
+        <div class="oef-import__reuse">
+          <h4>{{ t('models.oefImportReuseTitle') }}</h4>
+          <div class="oef-import__row">
+            <label class="oef-import__label">{{ t('models.oefImportReuseNodesMode') }}</label>
+            <select v-model="reuseSettings.nodesMode" class="oef-import__select">
+              <option value="alwaysCreate">{{ t('models.oefImportReuseAlwaysCreate') }}</option>
+              <option value="reuseMatching">{{ t('models.oefImportReuseMatching') }}</option>
+            </select>
+          </div>
+          <div class="oef-import__row">
+            <label class="oef-import__label">{{ t('models.oefImportReuseLinksMode') }}</label>
+            <select v-model="reuseSettings.linksMode" class="oef-import__select">
+              <option value="alwaysCreate">{{ t('models.oefImportReuseAlwaysCreate') }}</option>
+              <option value="reuseMatching">{{ t('models.oefImportReuseMatching') }}</option>
+            </select>
+          </div>
+          <div class="oef-import__row">
+            <label class="oef-import__label">{{ t('models.oefImportReuseLinkCriterion') }}</label>
+            <select
+              v-model="reuseSettings.linkMatchCriterion"
+              class="oef-import__select"
+              :disabled="reuseSettings.linksMode !== 'reuseMatching'"
+            >
+              <option value="endpointsAndType">
+                {{ t('models.oefImportReuseCriterionEndpointsType') }}
+              </option>
+              <option value="endpointsTypeAndLabel">
+                {{ t('models.oefImportReuseCriterionEndpointsTypeLabel') }}
+              </option>
+            </select>
+          </div>
+          <div class="oef-import__row">
+            <label class="oef-import__label">{{ t('models.oefImportReuseOnNodeMatch') }}</label>
+            <select
+              v-model="reuseSettings.onNodeMatch"
+              class="oef-import__select"
+              :disabled="reuseSettings.nodesMode !== 'reuseMatching'"
+            >
+              <option value="reuseId">{{ t('models.oefImportReuseOnlyId') }}</option>
+              <option value="updateFromOef">{{ t('models.oefImportReuseUpdate') }}</option>
+            </select>
+          </div>
+          <div class="oef-import__row">
+            <label class="oef-import__label">{{ t('models.oefImportReuseOnLinkMatch') }}</label>
+            <select
+              v-model="reuseSettings.onLinkMatch"
+              class="oef-import__select"
+              :disabled="reuseSettings.linksMode !== 'reuseMatching'"
+            >
+              <option value="reuseId">{{ t('models.oefImportReuseOnlyId') }}</option>
+              <option value="updateFromOef">{{ t('models.oefImportReuseUpdate') }}</option>
+            </select>
+          </div>
+          <p v-if="needsLabelHydrate" class="oef-import__hint">
+            {{ t('models.oefImportReuseLabelHydrateHint') }}
+          </p>
+          <p v-if="reuseHydrateError" class="oef-import__error">{{ reuseHydrateError }}</p>
+          <p v-if="reusePreviewSummary" class="oef-import__hint">
+            {{
+              t('models.oefImportReuseSummaryNodes', {
+                create: reusePreviewSummary.nodes.create,
+                reuse: reusePreviewSummary.nodes.reuse,
+                update: reusePreviewSummary.nodes.update,
+                ambiguous: reusePreviewSummary.nodes.ambiguous,
+              })
+            }}
+          </p>
+          <p v-if="reusePreviewSummary" class="oef-import__hint">
+            {{
+              t('models.oefImportReuseSummaryLinks', {
+                create: reusePreviewSummary.links.create,
+                reuse: reusePreviewSummary.links.reuse,
+                update: reusePreviewSummary.links.update,
+                ambiguous: reusePreviewSummary.links.ambiguous,
+              })
+            }}
+          </p>
+        </div>
         <div v-if="groupedIssues.length > 0" class="oef-import__issues">
           <h4>
             {{ t('models.oefImportIssuesTitle') }}
@@ -1042,6 +1207,20 @@ async function submitImport(): Promise<void> {
   color: var(--primary);
   border-color: var(--primary);
   background: var(--primary-soft);
+}
+
+.oef-import__reuse {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e5e2dc);
+}
+
+.oef-import__reuse h4 {
+  margin: 0;
+  font-size: 0.95rem;
 }
 
 .oef-import__panel {

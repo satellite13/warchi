@@ -18,6 +18,9 @@ const props = withDefaults(
     /** Схема свойств типа ноды; значения в `nodeTypeScopedValues` / attrs ноды `typeProperties` */
     nodeTypeCustomProperties?: CustomProperty[]
     nodeTypeScopedValues?: Record<string, unknown>
+    /** Схема свойств типа связи; значения в `linkTypeScopedValues` / attrs связи `typeProperties` */
+    linkTypeCustomProperties?: CustomProperty[]
+    linkTypeScopedValues?: Record<string, unknown>
     nodeBindingComponentId: string | null
     linkBindingRelationId: string | null
     availableComponents: ComponentResponse[]
@@ -42,6 +45,8 @@ const props = withDefaults(
     nodeCustomProperties: () => [],
     nodeTypeCustomProperties: () => [],
     nodeTypeScopedValues: () => ({}),
+    linkTypeCustomProperties: () => [],
+    linkTypeScopedValues: () => ({}),
   }
 )
 
@@ -49,6 +54,7 @@ const emit = defineEmits<{
   bindNodeComponent: [componentId: string]
   bindLinkRelation: [relationId: string]
   setNodeTypePropertyValue: [key: string, value: unknown]
+  setLinkTypePropertyValue: [key: string, value: unknown]
   setNodeScopedValue: [key: string, value: unknown]
   setLinkScopedValue: [key: string, value: unknown]
   createDocumentForProperty: [propertyName: string, scope?: 'nodeType' | 'notationComponent']
@@ -497,6 +503,105 @@ const nodeEditorBlocks = computed(
 
         <!-- LINK binding -->
         <template v-if="currentMode === 'link' && selectedLink">
+          <section v-if="linkTypeCustomProperties.length > 0" class="mp-section">
+            <span class="mp-section__title">{{ t('models.linkTypeProperties') }}</span>
+            <div class="mp-fields">
+              <div
+                v-for="property in linkTypeCustomProperties"
+                :key="`link-type-${property.id}`"
+                class="mp-field"
+              >
+                <label class="mp-field__label mp-field__label--stacked">
+                  <span class="mp-field__label-row">
+                    <span class="mp-field__name">{{ property.name }}</span>
+                    <span class="mp-field__source-badge mp-field__source-badge--type">
+                      {{ t('models.propertySourceBadgeLinkType') }}
+                    </span>
+                  </span>
+                  <span
+                    class="mp-field__diagram-token"
+                    :title="t('models.propertyDiagramLabelTokenHintLink')"
+                  >
+                    {{ '#' + '{' + property.name + '}' }}
+                  </span>
+                </label>
+                <ToggleSwitch
+                  v-if="property.type === 'boolean'"
+                  :model-value="Boolean(linkTypeScopedValues[property.name])"
+                  :disabled="readOnly"
+                  @update:model-value="emit('setLinkTypePropertyValue', property.name, $event)"
+                >
+                  {{
+                    Boolean(linkTypeScopedValues[property.name]) ? t('common.yes') : t('common.no')
+                  }}
+                </ToggleSwitch>
+                <select
+                  v-else-if="property.type === 'enum'"
+                  class="mp-select"
+                  :disabled="readOnly"
+                  :value="
+                    String(
+                      linkTypeScopedValues[property.name] ??
+                        property.enumDefault ??
+                        property.defaultValue ??
+                        ''
+                    )
+                  "
+                  @change="
+                    !readOnly &&
+                      emit(
+                        'setLinkTypePropertyValue',
+                        property.name,
+                        ($event.target as HTMLSelectElement).value
+                      )
+                  "
+                >
+                  <option value="">{{ t('diagram.selectValue') }}</option>
+                  <option
+                    v-for="enumValue in property.enumValues ?? []"
+                    :key="`${property.id}-${enumValue}`"
+                    :value="enumValue"
+                  >
+                    {{ enumValue }}
+                  </option>
+                </select>
+                <div v-else class="mp-field__input-wrap">
+                  <input
+                    class="mp-input"
+                    :class="{
+                      'mp-input--error':
+                        property.type === 'string' &&
+                        regexTest(property, String(linkTypeScopedValues[property.name] ?? '')) ===
+                          false,
+                    }"
+                    :type="property.type === 'number' ? 'number' : 'text'"
+                    :placeholder="property.name"
+                    :readonly="readOnly"
+                    :value="String(linkTypeScopedValues[property.name] ?? '')"
+                    @input="
+                      !readOnly &&
+                        emit(
+                          'setLinkTypePropertyValue',
+                          property.name,
+                          coerceValue(property, ($event.target as HTMLInputElement).value)
+                        )
+                    "
+                  />
+                  <span
+                    v-if="
+                      property.type === 'string' &&
+                      regexTest(property, String(linkTypeScopedValues[property.name] ?? '')) ===
+                        false
+                    "
+                    class="mp-field__error"
+                  >
+                    {{ t('types.regexNoMatch') }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="mp-section">
             <span class="mp-section__title">{{ t('diagram.notationRelation') }}</span>
             <select

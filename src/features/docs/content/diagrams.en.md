@@ -52,6 +52,14 @@ Example scenario:
 4. Apply changes in the new version.
 5. If the result is good, continue in the new version; otherwise, return to the previous version as a stable reference.
 
+### Copying a Diagram to Another Model
+
+The **Copy diagram to another model** action opens a wizard: choose an existing target model, the notation for the new diagram, and optionally change its name, version, and folder.
+
+The wizard first matches elements against the target model: nodes by `stableId`, then by exact name and type; links by `stableId`, then by type and endpoints. You can manually match, create, or skip ambiguous and missing elements. The user chooses the target diagram notation.
+
+In v1, documents and files are not copied.
+
 ### Diagram Version Comparison
 
 For the active diagram, you can open a dedicated version comparison screen.
@@ -127,9 +135,9 @@ To create a link between elements:
 - **Pan canvas** — drag on empty space, middle mouse button, or `Space` + drag
 - **Fit to screen** — toolbar button, scales the canvas to fit all elements
 
-### Node label (composite template)
+### Node and link labels (composite template)
 
-Text on a node shape can be driven by a **template** in the notation component: `${name}` for the node name, `#{…}` for **node type** fields, `${…}` for **component** fields (except the reserved `name`). Values are edited in the node **properties panel** in the [model editor](/docs/models). See [Models](/docs/models) and [Notations → Label templates](/docs/notations).
+Text on a node shape or link can be driven by a **template** in the notation component or relation: `${name}` for the node or relation name, `#{…}` for **node type / link type** fields, `${…}` for **component / relation** fields (except the reserved `name`). Values are edited in the node or link **properties panel** in the [model editor](/docs/models). See [Models](/docs/models) and [Notations → Label templates](/docs/notations).
 
 ## Toolbar
 

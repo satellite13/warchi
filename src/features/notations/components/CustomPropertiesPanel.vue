@@ -168,8 +168,9 @@ const handleLabelTemplateInput = (value: string) => {
     if (!item.parsedAttrs.diagramStyle) {
       item.parsedAttrs.diagramStyle = {}
     }
-    if (value) {
-      item.parsedAttrs.diagramStyle.labelTemplate = value
+    const template = value.trim()
+    if (template) {
+      item.parsedAttrs.diagramStyle.labelTemplate = template
     } else {
       delete item.parsedAttrs.diagramStyle.labelTemplate
     }
@@ -486,9 +487,9 @@ onBeforeUnmount(() => {
         </div>
       </CollapseSection>
 
-      <!-- Label template section (only for components) -->
+      <!-- Label template section (components and relations) -->
       <CollapseSection
-        v-if="selectedItem && !('linkTypeId' in selectedItem)"
+        v-if="selectedItem"
         :label="t('diagram.compositeLabel')"
         :expanded="labelTemplateExpanded"
         @toggle="labelTemplateExpanded = !labelTemplateExpanded"

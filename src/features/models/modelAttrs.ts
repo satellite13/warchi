@@ -24,6 +24,8 @@ export type ModelNodeAttrs = {
 export type ModelLinkAttrs = {
   notationRelations: Record<string, LinkRelationBinding>
   relationProperties: Record<string, Record<string, Record<string, unknown>>>
+  /** Значения кастомных свойств типа связи (общие для модели, не зависят от диаграммы) */
+  typeProperties: Record<string, unknown>
 }
 
 export type ScopedCustomValues = Record<string, Record<string, Record<string, unknown>>>
@@ -213,6 +215,7 @@ export const parseLinkAttrs = (raw: string | null | undefined): ModelLinkAttrs =
   return {
     notationRelations: toLinkBindings(data.notationRelations),
     relationProperties: toScopedMap(data.relationProperties),
+    typeProperties: toClonedRecord(data.typeProperties),
   }
 }
 

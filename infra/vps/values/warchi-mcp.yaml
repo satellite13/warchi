@@ -1,0 +1,25 @@
+replicaCount: 1
+
+image:
+  repository: arch/warchi-mcp
+  pullPolicy: IfNotPresent
+  tag: "0.1.1"
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: arch-redirect-https@kubernetescrd
+  hosts:
+    - host: mcp.warchi.ru
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: warchi-mcp-ru-tls
+      hosts:
+        - mcp.warchi.ru
+
+arepos:
+  baseUrl: "http://arepos-server:8080"

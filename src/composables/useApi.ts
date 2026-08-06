@@ -6,6 +6,7 @@ export {
   apiGet,
   apiPost,
   apiPut,
+  apiPatch,
   apiDelete,
   uploadDiagramSvg,
   createDiagramShareLink,

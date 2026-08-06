@@ -39,7 +39,7 @@ import {
   withResolvedScaleSlice,
 } from '@/utils/resolveCustomScaleSlice'
 import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
-import type { ComponentResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
+import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
 import {
   parseEntityAttrs,
@@ -67,15 +67,16 @@ import {
   readControlPointsFromAttrs,
   readControlPointsFromEdge,
 } from '../utils/diagramCanvasSync'
-import { getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
+import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
+  buildModelEdgeDisplayLabel,
   buildModelEdgeLabelBackground,
-  buildModelEdgeLabelConfig,
   buildModelNodeIcon,
   mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
+import { clientPointForDrop, worldTopLeftCenteredOnCursor } from '../utils/dropCoordinates'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
 import {
   applyStylePropertyBindings,
@@ -102,6 +103,7 @@ const props = withDefaults(
     relations: RelationResponse[]
     components: ComponentResponse[]
     nodeTypes: NodeTypeResponse[]
+    linkTypes?: LinkTypeResponse[]
     relationRules?: RelationRuleResponse[]
     selectedModelNodeIds: string[]
     selectedModelLinkId: string | null
@@ -143,6 +145,7 @@ const props = withDefaults(
     lockAnchorsEnabled: true,
     attachToOutlineEnabled: true,
     relationRules: () => [],
+    linkTypes: () => [],
     autoLinkInGroups: true,
     readOnly: false,
     diagramDirty: false,
@@ -771,6 +774,55 @@ const getInstanceEdgeLabel = (edgeInst: DiagramEdgeInstance): string | undefined
   return undefined
 }
 
+function getLinkTypeCustomProperties(linkTypeId: string): CustomProperty[] {
+  const linkType = props.linkTypes.find(lt => lt.id === linkTypeId)
+  if (!linkType) return []
+  return parseEntityAttrs(linkType.attrs ?? null).customProperties.filter(p => !p.system)
+}
+
+function getRelationCustomProperties(relation: RelationResponse | undefined): CustomProperty[] {
+  if (!relation) return []
+  return parseEntityAttrs(relation.attrs ?? null).customProperties.filter(p => !p.system)
+}
+
+function getRelationScopedPropertyValues(
+  modelLinkId: string,
+  edgeInstanceId?: string
+): Record<string, unknown> {
+  const link = linkById.value.get(modelLinkId)
+  const notationId = activeNotationId.value
+  if (!link || !notationId) return {}
+  const relationId = link.parsedAttrs.notationRelations[notationId]?.relationId
+  if (!relationId) return {}
+  return getDiagramScopedLinkValues({
+    diagram: props.activeDiagram?.parsedAttrs,
+    modelLinkId,
+    notationId,
+    relationId,
+    linkAttrsFallback: link.parsedAttrs,
+    edgeInstanceId,
+  })
+}
+
+function buildEdgeDisplayLabel(
+  edgeInst: DiagramEdgeInstance,
+  modelLink: EditorLink | undefined,
+  relation: RelationResponse | undefined,
+  ds: DiagramStyle | undefined
+): string | TextLabelOptions | undefined {
+  return buildModelEdgeDisplayLabel({
+    instanceEdgeLabel: getInstanceEdgeLabel(edgeInst),
+    relationName: relation?.name,
+    ds,
+    relationProperties: getRelationCustomProperties(relation),
+    linkTypeProperties: modelLink ? getLinkTypeCustomProperties(modelLink.linkTypeId) : [],
+    typeValues: modelLink ? { ...modelLink.parsedAttrs.typeProperties } : {},
+    relationValues: modelLink
+      ? getRelationScopedPropertyValues(modelLink.id, edgeInst.id)
+      : {},
+  })
+}
+
 const getPapEdgeLabelText = (edge: Edge): string =>
   typeof edge.label === 'string'
     ? edge.label
@@ -1370,8 +1422,12 @@ function syncDiagram() {
       applyDiffOverlayToEdgeStyle(styleObj, linkDiffState)
       edgeOpts.style = styleObj as EdgeStyle
     }
-    const edgeLabel = getInstanceEdgeLabel(edge)
-    const edgeLabelConfigRaw = buildModelEdgeLabelConfig(edgeLabel, ds)
+    const edgeLabelConfigRaw = buildEdgeDisplayLabel(
+      edge,
+      modelLink,
+      getBoundRelation(edge.modelLinkId),
+      ds
+    )
     const edgeLabelText =
       typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw?.text
     const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
@@ -1787,8 +1843,12 @@ function detectEdgeLabelChanges() {
     const edgeInst = next.instances.edges.find(edge => edge.id === entity.edgeId)
     if (!edgeInst) continue
 
-    const nextLabel = getPapEdgeLabelText(papEdge)
-    const currentLabel = getInstanceEdgeLabel(edgeInst) ?? ''
+    const ds = getEffectiveEdgeStyle(edgeInst)
+    // Whitespace-only templates are treated as unset (same as buildModelEdgeDisplayLabel).
+    if (ds?.labelTemplate?.trim()) continue
+
+    const nextLabel = getPapEdgeLabelText(papEdge).trim()
+    const currentLabel = (getInstanceEdgeLabel(edgeInst) ?? '').trim()
     if (nextLabel === currentLabel) continue
 
     if (!edgeInst.attrs) edgeInst.attrs = {}
@@ -2760,15 +2820,57 @@ const isAllowedDropEvent = (event: DragEvent): boolean => {
   return false
 }
 
-const normalizeDropCoordinates = (event: DragEvent): { x: number; y: number } => {
+/** Last reliable pointer from dragover (drop event coords are often wrong). */
+let lastDragOverClient: { x: number; y: number } | null = null
+
+const resolveDropSize = (event: DragEvent): { width: number; height: number } => {
+  const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
+  if (componentId) {
+    const component = props.components.find(item => item.id === componentId)
+    const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
+    return {
+      width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
+      height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
+    }
+  }
+  if (event.dataTransfer?.getData('application/x-model-diagram-note') === 'note') {
+    return { width: 220, height: 120 }
+  }
+  if (event.dataTransfer?.getData('application/x-model-diagram-container') === 'container') {
+    return { width: 240, height: 160 }
+  }
+  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
+  if (modelNodeId) {
+    const node = props.nodes.find(item => item.id === modelNodeId)
+    if (node) {
+      const notationId = activeNotationId.value
+      const binding = notationId ? node.parsedAttrs.notationComponents[notationId] : undefined
+      const component = binding
+        ? props.components.find(item => item.id === binding.componentId)
+        : undefined
+      const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
+      return {
+        width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
+        height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
+      }
+    }
+  }
+  return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
+}
+
+const normalizeDropCoordinates = (
+  event: DragEvent,
+  size: { width: number; height: number }
+): { x: number; y: number } => {
   if (!renderer) return { x: 0, y: 0 }
-  const world = renderer.screenToWorld(event.clientX, event.clientY)
+  const client = clientPointForDrop(
+    { x: event.clientX, y: event.clientY },
+    lastDragOverClient
+  )
+  const world = renderer.screenToWorld(client.x, client.y)
   const snapTo = (value: number) =>
     snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
-  return {
-    x: Math.max(24, snapTo(world.x - 70)),
-    y: Math.max(24, snapTo(world.y - 28)),
-  }
+  return worldTopLeftCenteredOnCursor(world, size, snapTo)
 }
 
 const onDragOver = (event: DragEvent) => {
@@ -2806,6 +2908,8 @@ const onDragOver = (event: DragEvent) => {
     }
   }
 
+  lastDragOverClient = { x: event.clientX, y: event.clientY }
+
   if (event.dataTransfer) {
     // Adding existing model entities via DnD creates/reuses data instead of moving DOM elements.
     event.dataTransfer.dropEffect = 'copy'
@@ -2817,7 +2921,9 @@ const onDrop = (event: DragEvent) => {
   if (props.readOnly || props.navigationOnlyMode || !props.activeDiagram) return
   if (!isAllowedDropEvent(event)) return
   event.preventDefault()
-  const { x, y } = normalizeDropCoordinates(event)
+  const size = resolveDropSize(event)
+  const { x, y } = normalizeDropCoordinates(event, size)
+  lastDragOverClient = null
 
   const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) {

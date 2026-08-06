@@ -11,14 +11,15 @@ import { toInsetSides, insetToPlain, getLabelSpacing, type InsetSides } from '..
 export function useEdgeStyleState() {
   // --- Edge style refs ---
   const edgeLabel = ref('')
+  const edgeLabelTemplate = ref('')
   const edgeStrokeColor = ref('#666666')
   const edgeStrokeOpacity = ref(1)
   const edgeStrokeWidth = ref(2)
   const edgeLineStyle = ref<'solid' | 'dashed'>('solid')
   const edgeLineDashPattern = ref('8,4')
   const edgeType = ref<'straight' | 'polyline' | 'editable-polyline' | 'bezier'>('polyline')
-  const edgeEndMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'>('open')
-  const edgeStartMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'>('none')
+  const edgeEndMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'>('open')
+  const edgeStartMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'>('none')
   const edgeOpacity = ref(1)
   const edgeLabelColor = ref('#333333')
   const edgeLabelOpacity = ref(1)
@@ -43,7 +44,14 @@ export function useEdgeStyleState() {
     const styleFromDiagram = currentDiagramStyle
     const edgeRuntime = edge as unknown as ExtendedEdgeProps
 
-    edgeLabel.value = typeof edge.label === 'string' ? edge.label : (edge.label?.text ?? '')
+    // Prefer editableText when a template drives display text — otherwise the Label
+    // field can latch onto an unresolved template fragment (e.g. `${name`) from a
+    // mid-keystroke sync while the canvas already shows the resolved name.
+    edgeLabel.value =
+      typeof edge.label === 'string'
+        ? edge.label
+        : (edge.label?.editableText ?? edge.label?.text ?? '')
+    edgeLabelTemplate.value = styleFromDiagram?.labelTemplate ?? ''
     const style = (edge.style || {}) as ExtendedEdgeStyle
     edgeStrokeColor.value = styleFromDiagram?.strokeColor ?? style.strokeColor ?? '#666666'
     edgeStrokeOpacity.value = styleFromDiagram?.strokeOpacity ?? style.strokeOpacity ?? 1
@@ -57,10 +65,23 @@ export function useEdgeStyleState() {
     edgeLineDashPattern.value = lineDash.length > 0 ? lineDash.join(',') : '8,4'
 
     edgeEndMarker.value = (styleFromDiagram?.endMarkerType ?? edge.endMarker?.type ?? 'none') as
-      'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'
+      | 'none'
+      | 'arrow'
+      | 'open'
+      | 'diamond'
+      | 'circle'
+      | 'square'
+      | 'stealth'
     edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
       edge.startMarker?.type ??
-      'none') as 'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square'
+      'none') as
+      | 'none'
+      | 'arrow'
+      | 'open'
+      | 'diamond'
+      | 'circle'
+      | 'square'
+      | 'stealth'
 
     const eLabelStyle = edge.label?.style as ExtendedTextStyle | undefined
     edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? '#333333'
@@ -126,12 +147,17 @@ export function useEdgeStyleState() {
         .map(s => parseFloat(s.trim()))
         .filter(n => !isNaN(n))
     }
+    const template = edgeLabelTemplate.value.trim()
+    if (template) {
+      style.labelTemplate = template
+    }
     return style
   }
 
   return {
     // Refs
     edgeLabel,
+    edgeLabelTemplate,
     edgeStrokeColor,
     edgeStrokeOpacity,
     edgeStrokeWidth,

@@ -172,7 +172,7 @@ describe('sanitizeDiagramInstancesForModel', () => {
         modelId: 'm',
         ownerId: 'o',
         linkTypeId: 'lt',
-        parsedAttrs: { notationRelations: {}, relationProperties: {} },
+        parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
         _isDeleted: true,
       },
     ]

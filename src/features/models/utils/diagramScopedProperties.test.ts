@@ -101,6 +101,7 @@ describe('diagramScopedProperties', () => {
           },
         },
       },
+      typeProperties: {},
     }
 
     setDiagramScopedLinkValue({

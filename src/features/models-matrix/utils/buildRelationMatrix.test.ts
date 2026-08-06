@@ -33,6 +33,7 @@ const createLink = (
   parsedAttrs: {
     notationRelations: {},
     relationProperties: {},
+    typeProperties: {},
   },
 })
 

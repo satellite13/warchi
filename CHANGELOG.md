@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-08-06
+
+### Added
+- Edge marker type «Stealth» / «Острая»: filled barbed arrowhead with a shallow concave heel.
+
 ## [0.16.0] - 2026-08-06
 
 ### Added

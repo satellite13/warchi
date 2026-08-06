@@ -199,6 +199,7 @@ function makeLinkAttrs(
             },
           }
         : {},
+    typeProperties: {},
   }
 }
 

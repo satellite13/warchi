@@ -20,7 +20,6 @@ const makeRelation = (): EditorRelation => ({
   notationId: 'notation-1',
   ownerId: 'owner-1',
   linkTypeId: 'lt-1',
-  attrs: null,
   parsedAttrs: {
     tags: [],
     customProperties: [],

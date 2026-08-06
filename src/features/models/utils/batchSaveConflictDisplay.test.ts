@@ -358,7 +358,7 @@ describe('computeMissingServerLinksOnCanvas', () => {
       modelId: 'm',
       ownerId: 'o',
       linkTypeId: 'lt1',
-      parsedAttrs: { notationRelations: {}, relationProperties: {} },
+      parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
     })
     const serverIds = new Set<string>()
     const rows = computeMissingServerLinksOnCanvas(st, serverIds)
@@ -439,7 +439,7 @@ describe('computeMissingServerLinksOnCanvas', () => {
       modelId: 'm',
       ownerId: 'o',
       linkTypeId: 'lt1',
-      parsedAttrs: { notationRelations: {}, relationProperties: {} },
+      parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
     })
     const rows = computeMissingServerLinksOnCanvas(st, new Set())
     expect(rows).toHaveLength(1)
@@ -518,7 +518,7 @@ describe('computeMissingServerLinksOnCanvas', () => {
       modelId: 'm',
       ownerId: 'o',
       linkTypeId: 'lt1',
-      parsedAttrs: { notationRelations: {}, relationProperties: {} },
+      parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
     })
     const diag1Id = 'd2222222-2222-2222-2222-222222222222'
     const rows = computeMissingServerLinksOnCanvas(st, new Set(), undefined, diag1Id)
@@ -593,7 +593,7 @@ describe('computeMissingServerLinksOnCanvas', () => {
       modelId: 'm',
       ownerId: 'o',
       linkTypeId: 'lt-dep',
-      parsedAttrs: { notationRelations: {}, relationProperties: {} },
+      parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
     })
     const rows = computeMissingServerLinksOnCanvas(st, new Set())
     expect(rows).toHaveLength(1)
@@ -671,7 +671,7 @@ describe('computeMissingServerLinksOnCanvas', () => {
       modelId: 'm',
       ownerId: 'o',
       linkTypeId: 'lt',
-      parsedAttrs: { notationRelations: {}, relationProperties: {} },
+      parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
     })
     const rows = computeMissingServerLinksOnCanvas(st, new Set())
     expect(rows).toHaveLength(1)

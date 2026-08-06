@@ -99,6 +99,7 @@ const createLink = (): EditorLink => ({
         },
       },
     },
+    typeProperties: {},
   },
 })
 

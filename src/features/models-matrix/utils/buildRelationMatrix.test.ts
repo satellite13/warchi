@@ -28,6 +28,7 @@ const createLink = (id: string, sourceId: string, targetId: string, linkTypeId: 
   parsedAttrs: {
     notationRelations: {},
     relationProperties: {},
+    typeProperties: {},
   },
 })
 

@@ -21,11 +21,19 @@ export async function syncDefaultsOnLoadChunked(state: ModelEditorState): Promis
   const relationByKey = new Map(
     state.relations.map(relation => [`${relation.notationId}:${relation.id}`, relation])
   )
+  const nodeTypeById = new Map(state.nodeTypes.map(nodeType => [nodeType.id, nodeType]))
+  const linkTypeById = new Map(state.linkTypes.map(linkType => [linkType.id, linkType]))
 
   for (let i = 0; i < state.nodes.length; i += CHUNK_SIZE) {
     const slice = state.nodes.slice(i, i + CHUNK_SIZE)
     for (const node of slice) {
       if (node._isDeleted) continue
+      const nodeType = nodeTypeById.get(node.nodeTypeId)
+      if (nodeType) {
+        applyDefaultCustomPropertyValuesFromAttrs(node.parsedAttrs.typeProperties, nodeType.attrs, {
+          skipSystem: true,
+        })
+      }
       for (const [notationId, binding] of Object.entries(node.parsedAttrs.notationComponents)) {
         const componentId = binding.componentId
         if (!componentId) continue
@@ -51,6 +59,12 @@ export async function syncDefaultsOnLoadChunked(state: ModelEditorState): Promis
     const slice = state.links.slice(i, i + CHUNK_SIZE)
     for (const link of slice) {
       if (link._isDeleted) continue
+      const linkType = linkTypeById.get(link.linkTypeId)
+      if (linkType) {
+        applyDefaultCustomPropertyValuesFromAttrs(link.parsedAttrs.typeProperties, linkType.attrs, {
+          skipSystem: true,
+        })
+      }
       for (const [notationId, binding] of Object.entries(link.parsedAttrs.notationRelations)) {
         const relationId = binding.relationId
         if (!relationId) continue

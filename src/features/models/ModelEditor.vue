@@ -533,6 +533,24 @@ const nodeTypeScopedValues = computed<Record<string, unknown>>(() => {
   return node.parsedAttrs.typeProperties
 })
 
+const selectedLinkTypeEntity = computed(() => {
+  const link = selectedLink.value
+  if (!link) return null
+  return state.value.linkTypes.find(lt => lt.id === link.linkTypeId) ?? null
+})
+
+const linkTypeCustomProperties = computed<CustomProperty[]>(() => {
+  const lt = selectedLinkTypeEntity.value
+  if (!lt) return []
+  return parseEntityAttrs(lt.attrs ?? null).customProperties.filter(property => !property.system)
+})
+
+const linkTypeScopedValues = computed<Record<string, unknown>>(() => {
+  const link = selectedLink.value
+  if (!link) return {}
+  return link.parsedAttrs.typeProperties
+})
+
 const nodeScopedValues = computed<Record<string, unknown>>(() => {
   const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
@@ -1128,6 +1146,12 @@ const bindLinkRelation = (
       link.parsedAttrs.relationProperties[notationId][relationId]!,
       relation.attrs,
     )
+  }
+  const linkType = state.value.linkTypes.find(item => item.id === link.linkTypeId)
+  if (linkType) {
+    applyDefaultCustomPropertyValuesFromAttrs(link.parsedAttrs.typeProperties, linkType.attrs, {
+      skipSystem: true,
+    })
   }
   if (options?.markDirty ?? true) {
     markLinkDirty(link.id)
@@ -2142,6 +2166,15 @@ const setNodeTypePropertyValue = (key: string, value: unknown) => {
   }
 }
 
+const setLinkTypePropertyValue = (key: string, value: unknown) => {
+  const link = selectedLink.value
+  if (!link) return
+  if (!Object.is(link.parsedAttrs.typeProperties[key], value)) {
+    link.parsedAttrs.typeProperties[key] = value
+    markLinkDirty(link.id)
+  }
+}
+
 const setNodeScopedValue = (key: string, value: unknown) => {
   const notationId = activeNotationId.value
   const componentId = nodeBindingComponentId.value
@@ -2873,6 +2906,8 @@ onBeforeUnmount(() => {
               :node-custom-properties="nodeCustomProperties"
               :node-type-custom-properties="nodeTypeCustomProperties"
               :node-type-scoped-values="nodeTypeScopedValues"
+              :link-type-custom-properties="linkTypeCustomProperties"
+              :link-type-scoped-values="linkTypeScopedValues"
               :node-binding-component-id="nodeBindingComponentId"
               :link-binding-relation-id="linkBindingRelationId"
               :available-components="availableNodeComponents"
@@ -2886,6 +2921,7 @@ onBeforeUnmount(() => {
               @bind-node-component="handleBindNodeComponent"
               @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
               @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
+              @set-link-type-property-value="(k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               @create-document-for-property="

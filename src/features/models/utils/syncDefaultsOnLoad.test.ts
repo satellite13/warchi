@@ -32,6 +32,7 @@ function makeLink(partial: Partial<EditorLink> & Pick<EditorLink, 'id'>): Editor
     parsedAttrs: partial.parsedAttrs ?? {
       notationRelations: {},
       relationProperties: {},
+      typeProperties: {},
     },
     _isDirty: partial._isDirty,
     _isDeleted: partial._isDeleted,
@@ -89,6 +90,7 @@ describe('syncDefaultsOnLoadChunked', () => {
         parsedAttrs: {
           notationRelations: { 'not-1': { relationId: 'rel-1' } },
           relationProperties: {},
+          typeProperties: {},
         },
       }),
     ]
@@ -139,5 +141,36 @@ describe('syncDefaultsOnLoadChunked', () => {
     expect(state.nodes[0]?.parsedAttrs.componentProperties['not-1']?.['comp-1']).toEqual({
       status: 'done',
     })
+  })
+
+  it('fills missing link-type typeProperties defaults without marking dirty', async () => {
+    const state = createEmptyModelEditorState()
+    state.linkTypes = [
+      {
+        id: 'lt-1',
+        name: 'Serving',
+        ownerId: 'owner-1',
+        attrs: JSON.stringify({
+          customProperties: [
+            { id: 'p1', name: 'code', type: 'string', required: false, defaultValue: 'L1' },
+          ],
+        }),
+      },
+    ]
+    state.links = [
+      makeLink({
+        id: 'l1',
+        parsedAttrs: {
+          notationRelations: {},
+          relationProperties: {},
+          typeProperties: {},
+        },
+      }),
+    ]
+
+    await syncDefaultsOnLoadChunked(state)
+
+    expect(state.links[0]?.parsedAttrs.typeProperties).toEqual({ code: 'L1' })
+    expect(state.links[0]?._isDirty).toBeUndefined()
   })
 })

@@ -418,7 +418,7 @@ describe("useModelEditor — golden save contract", () => {
             modelId: "model-1",
             ownerId: "owner-1",
             linkTypeId: "lt-1",
-            parsedAttrs: { notationRelations: {}, relationProperties: {} },
+            parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
             _isDirty: true
           }
         ],
@@ -528,7 +528,7 @@ describe("useModelEditor — golden save contract", () => {
             modelId: "model-1",
             ownerId: "owner-1",
             linkTypeId: "lt-1",
-            parsedAttrs: { notationRelations: {}, relationProperties: {} },
+            parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
             _isNew: true
           }
         ],
@@ -633,7 +633,7 @@ describe("useModelEditor — golden save contract", () => {
             modelId: "model-1",
             ownerId: "owner-1",
             linkTypeId: "lt-1",
-            parsedAttrs: { notationRelations: {}, relationProperties: {} },
+            parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
             _isNew: true
           }
         ],

@@ -34,7 +34,7 @@ function link(
     createdAt: null,
     updatedAt: null,
     attrs: null,
-    parsedAttrs: { notationRelations: {}, relationProperties: {} },
+    parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
     ...partial,
   } as EditorLink
 }

@@ -266,11 +266,15 @@ export const modelsMessages = {
       newNodePlaceholder: 'Новая нода',
       nodeTypeLabel: 'Тип ноды',
       nodeTypeProperties: 'Свойства типа ноды',
+      linkTypeProperties: 'Свойства типа связи',
       notationComponentProperties: 'Свойства компонента нотации',
       propertySourceBadgeType: 'Тип ноды',
+      propertySourceBadgeLinkType: 'Тип связи',
       propertySourceBadgeComponent: 'Компонент',
       propertyDiagramLabelTokenHint:
         'Шаблон подписи на фигуре: # и ключ свойства — значение типа ноды; $ и ключ — значение компонента нотации. Имя ноды — отдельный плейсхолдер: доллар и слово name.',
+      propertyDiagramLabelTokenHintLink:
+        'Шаблон подписи на связи: # и ключ свойства — значение типа связи; $ и ключ — значение relation. Имя relation — отдельный плейсхолдер: доллар и слово name.',
       selectType: 'Выберите тип',
       typeSearchPlaceholder: 'Поиск типа...',
       directoryTypeHint: 'Будет использован тип Directory.',
@@ -819,11 +823,15 @@ export const modelsMessages = {
       newNodePlaceholder: 'New node',
       nodeTypeLabel: 'Node type',
       nodeTypeProperties: 'Node type properties',
+      linkTypeProperties: 'Link type properties',
       notationComponentProperties: 'Notation component properties',
       propertySourceBadgeType: 'Node type',
+      propertySourceBadgeLinkType: 'Link type',
       propertySourceBadgeComponent: 'Component',
       propertyDiagramLabelTokenHint:
         'Diagram label template: # plus key = node-type property value; $ plus key = notation component property. Node display name uses a separate placeholder: dollar sign and the word name.',
+      propertyDiagramLabelTokenHintLink:
+        'Edge label template: # plus key = link-type property value; $ plus key = relation property. Relation display name uses a separate placeholder: dollar sign and the word name.',
       selectType: 'Select type',
       typeSearchPlaceholder: 'Search type...',
       directoryTypeHint: 'Directory type will be used.',

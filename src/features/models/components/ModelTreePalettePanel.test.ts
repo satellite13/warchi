@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { parseDiagramAttrs } from '../modelAttrs'
 import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
 
 vi.mock('vue-i18n', async (importOriginal) => {
@@ -41,7 +42,11 @@ describe('ModelTreePalettePanel', () => {
             id: 'diagram-1',
             name: 'Source diagram',
             version: '1.0.0',
+            notationId: 'notation-1',
+            ownerId: 'owner-1',
+            modelId: 'model-1',
             nodeId: null,
+            parsedAttrs: parseDiagramAttrs(null),
           },
         ],
         nodeTypes: [],

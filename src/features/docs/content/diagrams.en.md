@@ -52,6 +52,14 @@ Example scenario:
 4. Apply changes in the new version.
 5. If the result is good, continue in the new version; otherwise, return to the previous version as a stable reference.
 
+### Copying a Diagram to Another Model
+
+The **Copy diagram to another model** action opens a wizard: choose an existing target model, the notation for the new diagram, and optionally change its name, version, and folder.
+
+The wizard first matches elements against the target model: nodes by `stableId`, then by exact name and type; links by `stableId`, then by type and endpoints. You can manually match, create, or skip ambiguous and missing elements. The user chooses the target diagram notation.
+
+In v1, documents and files are not copied.
+
 ### Diagram Version Comparison
 
 For the active diagram, you can open a dedicated version comparison screen.

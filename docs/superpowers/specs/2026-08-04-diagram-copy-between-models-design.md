@@ -1,8 +1,8 @@
 # Copy diagram between models — Design Spec
 
-Date: 2026-08-04  
-Status: approved (pending implementation plan)  
-Repos: warchi, arepos-server  
+Date: 2026-08-04
+Status: implemented
+Repos: warchi, arepos-server
 Related:
 
 - arepos-server: `ModelCopyService`, `DiagramAttrsRemapper`, `ModelBatchSaveService`, diagram/notation access checks

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-06
+
+### Added
+- Label templates for notation relations (edges): `${name}`, `#{link-type props}`, `${relation props}`; model links store `typeProperties` like nodes.
+- Notation Properties/Style UI for relation composite labels; model properties panel for link-type values; templates resolve on notation preview and model diagram canvas.
+
+### Fixed
+- Edge labels no longer fall back to the relation name when the diagram label is empty (no more unwanted «Association» captions).
+- Whitespace-only relation label templates are ignored and not persisted.
+- Style panel Label field no longer sticks on unresolved template fragments such as `${name`.
+- Palette drag-and-drop places new elements under the cursor (uses dragover coordinates and centers by element size).
+
 ## [0.16.1] - 2026-08-06
 
 ### Added

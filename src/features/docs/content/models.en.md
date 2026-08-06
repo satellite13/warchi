@@ -124,7 +124,14 @@ The node’s display name on the shape is controlled separately in the composite
 
 Full placeholder syntax is described under [Notations → Label templates](/docs/notations).
 
-For **links**, the Properties tab shows fields from the link type and from the notation relation (bound to the notation in a similar way).
+#### Custom properties for a link (Properties tab)
+
+For a **link** in the model, two separate blocks of fields are shown (when defined in the type catalog and in the notation):
+
+1. **Link type properties** — schema is defined in [Types](/docs/types) for the corresponding link type. Values are **shared for that link across the whole model** (all diagrams). Diagram label placeholder: `#{propertyName}`.
+2. **Relation properties** — schema is defined in the [notation editor](/docs/notations) for the relation. Values are **diagram-scoped** (the same model link can have different values on different diagrams). Label placeholder: `${propertyName}`.
+
+The relation name on the link is controlled separately in the composite label template: **`${name}`** is the reserved relation name in the notation, **not** a relation custom property. When a template is set, displayed text comes from the template; a free-form diagram instance label is not used for display.
 
 #### Style panel field hints
 

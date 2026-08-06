@@ -236,19 +236,30 @@ In the model editor, when this property is filled for a node, the corresponding 
 
 ### Label Templates
 
-For notation components you can set a **composite label template**: what text is shown on the diagram node. The template can include the node name, **node type** fields, and **notation component** fields; users edit values in the [model editor](/docs/models) (node properties panel).
+For notation **components** and **relations** you can set a **composite label template**: what text is shown on a diagram node or link. Field values are edited in the [model editor](/docs/models) (node or link properties panel).
 
 #### Syntax
+
+General rules:
+
+- **`#`** — **type** fields only (node type or link type)
+- **`$`** — reserved **`${name}`** or **component / relation** fields
+
+**On nodes (component):**
 
 - `${name}` — **node name** on the diagram (reserved; not a component custom property)
 - `#{key}` — **node type** custom property value (key as in [Types](/docs/types))
 - `${key}` — **notation component** custom property value (key from the component properties section below)
 
-**Important:** **`#`** is only for node type fields; **`$`** is for the node name (`name`) or component fields.
+**On links (relation):**
 
-If no template is set, the node name is shown (default behavior).
+- `${name}` — **relation name** in the notation (reserved; not a relation custom property)
+- `#{key}` — **link type** custom property value (key as in [Types](/docs/types))
+- `${key}` — **relation** custom property value (key from the relation properties section below)
 
-#### Examples
+If no template is set, nodes show the node name; links show the diagram instance label or the relation name (default behavior).
+
+#### Examples (nodes)
 
 | Template | Result |
 |----------|--------|
@@ -258,25 +269,33 @@ If no template is set, the node name is shown (default behavior).
 | `${protocol}://${name}:${port}` | if `protocol` and `port` are **component** fields — composite text with node name |
 | `${name}\n#{description}` | name on first line, **type** description on second |
 
+#### Examples (links)
+
+| Template | Result |
+|----------|--------|
+| `${name}` | relation name, e.g. `Serving` |
+| `${name} · #{code}` | relation name and **link type** code |
+| `#{code} · ${protocol}` | link type code and **relation** property `protocol` |
+
 #### Line Breaks
 
-For multi-line labels use `\n` in the template. For example, `${name}\n${status}` shows the name on the first line and **component** `status` on the second.
+For multi-line labels use `\n` in the template. For example, `${name}\n${status}` shows the name on the first line and **component** or **relation** `status` on the second.
 
 #### Where to Configure
 
 The label template can be set in two places:
 
-- **Style panel** — "Template" field in the "Label" section when a component is selected on the diagram
+- **Style panel** — "Template" field in the "Label" section when a component or relation is selected on the diagram
 - **Properties panel** — "Composite label" section with input field and result preview
 
 #### Behavior
 
 - If a property from the template is not found — the placeholder is replaced with an empty string
-- When double-clicking a node to rename, only the node name is shown, not the template result
-- In the **model editor**, values come from the node properties panel: **Node type properties** and **Notation component properties**; if missing, defaults from the type and notation schemas apply
-- In the notation editor **preview**, schema defaults are used; for node type fields, type defaults apply (same as in the UI)
-- **Migration:** node type values used to be expressible as `${key}`; use **`#{key}`** for the node type and keep `${key}` for **component** fields only
-- Templates are supported only for nodes (not for links)
+- When double-clicking a node to rename, only the node name is shown, not the template result; on a link with a template, displayed text is built from the relation name and properties, not from a free-form instance label
+- When a template **is set**, the displayed link text does **not** use the instance's `attrs.label` — only the template; without a template, the previous behavior applies (instance label or relation name)
+- In the **model editor**, nodes use **Node type properties** and **Notation component properties**; links use **Link type properties** and **relation properties**; if missing, schema defaults apply
+- In the notation editor **preview**, schema defaults are used
+- **Migration (nodes):** node type values used to be expressible as `${key}`; use **`#{key}`** for the node type and keep `${key}` for **component** fields only
 
 ### Label Alignment
 

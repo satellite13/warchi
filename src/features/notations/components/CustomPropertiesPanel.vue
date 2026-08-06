@@ -168,8 +168,9 @@ const handleLabelTemplateInput = (value: string) => {
     if (!item.parsedAttrs.diagramStyle) {
       item.parsedAttrs.diagramStyle = {}
     }
-    if (value) {
-      item.parsedAttrs.diagramStyle.labelTemplate = value
+    const template = value.trim()
+    if (template) {
+      item.parsedAttrs.diagramStyle.labelTemplate = template
     } else {
       delete item.parsedAttrs.diagramStyle.labelTemplate
     }

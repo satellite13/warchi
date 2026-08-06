@@ -208,6 +208,48 @@ describe('diagramCanvasBuilders', () => {
     ).toBe('My label')
   })
 
+  it('does not fall back to relation name when attrs.label is empty', () => {
+    expect(
+      buildModelEdgeDisplayLabel({
+        instanceEdgeLabel: undefined,
+        relationName: 'Association',
+        ds: undefined,
+        relationProperties: [],
+        linkTypeProperties: [],
+        typeValues: {},
+        relationValues: {},
+      })
+    ).toBeUndefined()
+  })
+
+  it('treats whitespace-only labelTemplate as unset', () => {
+    expect(
+      buildModelEdgeDisplayLabel({
+        instanceEdgeLabel: undefined,
+        relationName: 'Association',
+        ds: { labelTemplate: '   ' },
+        relationProperties: [],
+        linkTypeProperties: [],
+        typeValues: {},
+        relationValues: {},
+      })
+    ).toBeUndefined()
+  })
+
+  it('returns undefined when template resolves to empty text', () => {
+    expect(
+      buildModelEdgeDisplayLabel({
+        instanceEdgeLabel: 'ignored while template is set',
+        relationName: 'Association',
+        ds: { labelTemplate: '#{missing}' },
+        relationProperties: [],
+        linkTypeProperties: [],
+        typeValues: {},
+        relationValues: {},
+      })
+    ).toBeUndefined()
+  })
+
   it('returns undefined when showLabel is false', () => {
     expect(
       buildModelEdgeDisplayLabel({

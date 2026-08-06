@@ -67,6 +67,10 @@ export type ModelEdgeDisplayLabelInput = {
   relationValues: Record<string, unknown>
 }
 
+function hasEdgeLabelTemplate(ds?: DiagramStyle): boolean {
+  return !!ds?.labelTemplate?.trim()
+}
+
 export function buildModelEdgeDisplayLabel(
   input: ModelEdgeDisplayLabelInput
 ): string | TextLabelOptions | undefined {
@@ -84,19 +88,19 @@ export function buildModelEdgeDisplayLabel(
     return undefined
   }
 
-  const hasTemplate = !!ds?.labelTemplate
-  if (!hasTemplate) {
-    const fallback = (instanceEdgeLabel ?? relationName ?? '').trim()
-    if (!fallback) return undefined
-    return buildModelEdgeLabelConfig(fallback, ds)
+  // Without a template, only diagram attrs.label drives the caption (pre-template behavior).
+  // Do not fall back to relation name — that forced "Association"-style labels on every edge.
+  if (!hasEdgeLabelTemplate(ds)) {
+    return buildModelEdgeLabelConfig(instanceEdgeLabel, ds)
   }
 
-  const displayText = resolveDiagramEdgeLabelTemplate(ds!.labelTemplate!, relationName ?? '', {
+  const displayText = resolveDiagramEdgeLabelTemplate(ds!.labelTemplate!.trim(), relationName ?? '', {
     typeProperties: linkTypeProperties,
     typeValues,
     relationProperties,
     relationValues,
-  })
+  }).trim()
+  if (!displayText) return undefined
 
   const labelInset = ds?.labelInset
   const hasStyle = !!(

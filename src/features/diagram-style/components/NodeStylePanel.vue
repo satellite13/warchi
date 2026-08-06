@@ -181,8 +181,9 @@ function confirmSavePreset() {
       endMarkerFillColor: edgeEndMarkerFillColor.value,
       endMarkerFillOpacity: edgeEndMarkerFillOpacity.value
     };
-    if (edgeLabelTemplate.value) {
-      style.labelTemplate = edgeLabelTemplate.value;
+    const edgeTemplate = edgeLabelTemplate.value.trim();
+    if (edgeTemplate) {
+      style.labelTemplate = edgeTemplate;
     }
     if (edgeLineStyle.value === "dashed") {
       const pattern = edgeLineDashPattern.value.trim() || "8,4";
@@ -1319,17 +1320,23 @@ function handleEdgeLabelChange(value: string) {
   edgeLabel.value = value;
   if (!props.selectedElementId || !props.interactionManager) return;
   const resolved = value.replace(/\\n/g, '\n');
+  const templateActive = !!edgeLabelTemplate.value.trim();
   props.interactionManager.changeEdgeProperties(props.selectedElementId, (edge) => {
     if (resolved) {
       if (edge.label) {
-        edge.label.text = resolved;
+        // When a template drives display text, keep it and only update the edit buffer.
+        if (templateActive && edge.label.editableText !== undefined) {
+          edge.label.editableText = resolved;
+        } else {
+          edge.label.text = resolved;
+        }
       } else {
         edge.label = new TextLabel({
           text: resolved,
           inset: insetToPlain(edgeLabelInset.value)
         });
       }
-    } else {
+    } else if (!templateActive) {
       edge.label = undefined;
     }
   });

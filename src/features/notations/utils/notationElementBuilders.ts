@@ -94,10 +94,11 @@ export function buildEdgeLabel(
     return undefined
   }
 
-  const hasTemplate = !!ds?.labelTemplate
+  const template = ds?.labelTemplate?.trim()
+  const hasTemplate = !!template
   const displayText = hasTemplate
     ? resolveLabelTemplate(
-        ds!.labelTemplate!,
+        template,
         name,
         relationProperties ?? [],
         linkTypeProperties ?? [],

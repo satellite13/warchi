@@ -49,7 +49,13 @@ export function useEdgeStyleState() {
     const styleFromDiagram = currentDiagramStyle
     const edgeRuntime = edge as unknown as ExtendedEdgeProps
 
-    edgeLabel.value = typeof edge.label === 'string' ? edge.label : (edge.label?.text ?? '')
+    // Prefer editableText when a template drives display text — otherwise the Label
+    // field can latch onto an unresolved template fragment (e.g. `${name`) from a
+    // mid-keystroke sync while the canvas already shows the resolved name.
+    edgeLabel.value =
+      typeof edge.label === 'string'
+        ? edge.label
+        : (edge.label?.editableText ?? edge.label?.text ?? '')
     edgeLabelTemplate.value = styleFromDiagram?.labelTemplate ?? ''
     const style = (edge.style || {}) as ExtendedEdgeStyle
     edgeStrokeColor.value = styleFromDiagram?.strokeColor ?? style.strokeColor ?? '#666666'
@@ -154,8 +160,9 @@ export function useEdgeStyleState() {
         .map((s) => parseFloat(s.trim()))
         .filter((n) => !isNaN(n))
     }
-    if (edgeLabelTemplate.value) {
-      style.labelTemplate = edgeLabelTemplate.value
+    const template = edgeLabelTemplate.value.trim()
+    if (template) {
+      style.labelTemplate = template
     }
     return style
   }

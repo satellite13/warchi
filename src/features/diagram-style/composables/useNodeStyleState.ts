@@ -175,7 +175,8 @@ export function useNodeStyleState() {
       customScaleSliceRef.value = undefined
     }
 
-    label.value = node.label?.text ?? ''
+    // Prefer editableText when a composite template drives the visible label.
+    label.value = node.label?.editableText ?? node.label?.text ?? ''
     const style = (node.style || {}) as ExtendedNodeStyle
     fillColor.value = style.fillColor || '#ffffff'
     fillOpacity.value = style.fillOpacity ?? 1

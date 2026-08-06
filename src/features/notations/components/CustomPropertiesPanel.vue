@@ -486,9 +486,9 @@ onBeforeUnmount(() => {
         </div>
       </CollapseSection>
 
-      <!-- Label template section (only for components) -->
+      <!-- Label template section (components and relations) -->
       <CollapseSection
-        v-if="selectedItem && !('linkTypeId' in selectedItem)"
+        v-if="selectedItem"
         :label="t('diagram.compositeLabel')"
         :expanded="labelTemplateExpanded"
         @toggle="labelTemplateExpanded = !labelTemplateExpanded"

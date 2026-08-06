@@ -181,6 +181,9 @@ function confirmSavePreset() {
       endMarkerFillColor: edgeEndMarkerFillColor.value,
       endMarkerFillOpacity: edgeEndMarkerFillOpacity.value
     };
+    if (edgeLabelTemplate.value) {
+      style.labelTemplate = edgeLabelTemplate.value;
+    }
     if (edgeLineStyle.value === "dashed") {
       const pattern = edgeLineDashPattern.value.trim() || "8,4";
       style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
@@ -606,7 +609,7 @@ const compositeValidationIssues = computed(() =>
 
 // --- Edge style state (from composable) ---
 const {
-  edgeLabel, edgeStrokeColor, edgeStrokeOpacity, edgeStrokeWidth,
+  edgeLabel, edgeLabelTemplate, edgeStrokeColor, edgeStrokeOpacity, edgeStrokeWidth,
   edgeLineStyle, edgeLineDashPattern, edgeType, edgeEndMarker, edgeStartMarker,
   edgeOpacity, edgeLabelColor, edgeLabelOpacity, edgeLabelFontSize, edgeLabelInset,
   edgeLabelOffset, edgeLabelPosition, edgeLabelFollowPath, edgeLabelLineGap,
@@ -650,7 +653,11 @@ watch(() => props.selectedElementId, () => {
 }, {immediate: true});
 
 watch(() => props.currentDiagramStyle?.labelTemplate, (val) => {
-  labelTemplate.value = val ?? "";
+  if (elementType.value === "edge") {
+    edgeLabelTemplate.value = val ?? "";
+  } else {
+    labelTemplate.value = val ?? "";
+  }
 });
 watch(() => props.currentDiagramStyle?.showLabel, (val) => {
   showLabel.value = val !== false;
@@ -1328,6 +1335,12 @@ function handleEdgeLabelChange(value: string) {
   });
 }
 
+function handleEdgeLabelTemplateChange(value: string) {
+  edgeLabelTemplate.value = value;
+  resetRelationPreset();
+  emitEdgeStyle();
+}
+
 function handleEdgeStrokeColorChange(value: string) {
   edgeStrokeColor.value = value;
   resetRelationPreset();
@@ -1754,6 +1767,16 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           >
                 <div class="sp-field">
                   <input class="sp-input sp-input--full" :value="edgeLabel" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
+                </div>
+                <div class="sp-field">
+                  <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
+                  <input
+                    class="sp-input sp-input--full"
+                    :value="edgeLabelTemplate"
+                    :placeholder="t('diagram.compositeLabelPlaceholder')"
+                    @input="handleEdgeLabelTemplateChange(($event.target as HTMLInputElement).value)"
+                  >
+                  <p class="sp-field__hint sp-field__hint--small">{{ t('diagram.compositeLabelSyntax') }}</p>
                 </div>
                 <LabeledFieldRow :label="t('nodeStyle.color')">
                   <ColorWithAlphaField

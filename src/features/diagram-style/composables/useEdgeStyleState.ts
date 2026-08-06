@@ -16,6 +16,7 @@ import {
 export function useEdgeStyleState() {
   // --- Edge style refs ---
   const edgeLabel = ref('')
+  const edgeLabelTemplate = ref('')
   const edgeStrokeColor = ref('#666666')
   const edgeStrokeOpacity = ref(1)
   const edgeStrokeWidth = ref(2)
@@ -49,6 +50,7 @@ export function useEdgeStyleState() {
     const edgeRuntime = edge as unknown as ExtendedEdgeProps
 
     edgeLabel.value = typeof edge.label === 'string' ? edge.label : (edge.label?.text ?? '')
+    edgeLabelTemplate.value = styleFromDiagram?.labelTemplate ?? ''
     const style = (edge.style || {}) as ExtendedEdgeStyle
     edgeStrokeColor.value = styleFromDiagram?.strokeColor ?? style.strokeColor ?? '#666666'
     edgeStrokeOpacity.value = styleFromDiagram?.strokeOpacity ?? style.strokeOpacity ?? 1
@@ -152,12 +154,16 @@ export function useEdgeStyleState() {
         .map((s) => parseFloat(s.trim()))
         .filter((n) => !isNaN(n))
     }
+    if (edgeLabelTemplate.value) {
+      style.labelTemplate = edgeLabelTemplate.value
+    }
     return style
   }
 
   return {
     // Refs
     edgeLabel,
+    edgeLabelTemplate,
     edgeStrokeColor,
     edgeStrokeOpacity,
     edgeStrokeWidth,

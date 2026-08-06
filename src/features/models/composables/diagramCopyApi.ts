@@ -112,6 +112,17 @@ export async function commitDiagramCopy(
   )
 }
 
+/** Prefer the source diagram's notation when it is still in the catalog. */
+export function pickDefaultTargetNotationId(
+  availableNotations: ReadonlyArray<{ id: string }>,
+  sourceNotationId: string | null | undefined
+): string {
+  if (sourceNotationId && availableNotations.some(notation => notation.id === sourceNotationId)) {
+    return sourceNotationId
+  }
+  return availableNotations[0]?.id ?? ''
+}
+
 export function buildResolutionsFromPreview(
   preview: DiagramCopyPreviewResponse,
   overrides: Map<string, DiagramCopyResolution>

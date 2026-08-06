@@ -7,6 +7,7 @@ import type {
 import {
   buildResolutionsFromPreview,
   commitDiagramCopy,
+  pickDefaultTargetNotationId,
   previewDiagramCopy,
 } from './diagramCopyApi'
 import { apiPost } from '@/composables/useApi'
@@ -139,6 +140,22 @@ describe('buildResolutionsFromPreview', () => {
       { sourceId: 'node-without-action', action: 'CREATE', kind: 'NODE' },
       { sourceId: 'node-without-target', action: 'CREATE', kind: 'NODE' },
     ])
+  })
+})
+
+describe('pickDefaultTargetNotationId', () => {
+  it('prefers source notation when available', () => {
+    expect(
+      pickDefaultTargetNotationId(
+        [{ id: 'n-a' }, { id: 'n-source' }, { id: 'n-b' }],
+        'n-source'
+      )
+    ).toBe('n-source')
+  })
+
+  it('falls back to first available when source notation is missing', () => {
+    expect(pickDefaultTargetNotationId([{ id: 'n-a' }, { id: 'n-b' }], 'gone')).toBe('n-a')
+    expect(pickDefaultTargetNotationId([], 'n-source')).toBe('')
   })
 })
 

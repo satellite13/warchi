@@ -8,6 +8,7 @@ import type { NodeResponse, NodeTypeResponse } from '@/types/api'
 import type { ModelData, NotationData, PaginatedResponse } from '@/types/entities'
 import { paginatedContent } from '@/utils/paginatedResponse'
 import {
+  pickDefaultTargetNotationId,
   type DiagramCopyEntityPreview,
   type DiagramCopyResolutionAction,
 } from '../composables/diagramCopyApi'
@@ -18,6 +19,8 @@ const props = defineProps<{
   open: boolean
   sourceModelId: string
   sourceDiagramId: string
+  /** Notation of the source diagram; used as the default target when still available. */
+  sourceNotationId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -136,9 +139,11 @@ async function initialize(): Promise<void> {
   if (!props.open || !props.sourceDiagramId) return
 
   const firstModel = wizard.availableModels.value[0]
-  const firstNotation = wizard.availableNotations.value[0]
   wizard.targetModelId.value = firstModel?.id ?? ''
-  wizard.targetNotationId.value = firstNotation?.id ?? ''
+  wizard.targetNotationId.value = pickDefaultTargetNotationId(
+    wizard.availableNotations.value,
+    props.sourceNotationId
+  )
   if (wizard.targetModelId.value) await loadFolders(wizard.targetModelId.value)
   await wizard.open(props.sourceDiagramId)
 }

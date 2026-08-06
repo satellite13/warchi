@@ -2986,6 +2986,9 @@ onBeforeUnmount(() => {
     :open="showDiagramCopyWizard"
     :source-model-id="model?.id ?? ''"
     :source-diagram-id="sourceDiagramIdForCopy"
+    :source-notation-id="
+      state.diagrams.find(d => d.id === sourceDiagramIdForCopy)?.notationId ?? null
+    "
     @close="showDiagramCopyWizard = false"
     @committed="handleDiagramCopyCommitted"
   />

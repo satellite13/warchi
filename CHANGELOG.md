@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-08-06
+
+### Fixed
+- Diagram copy wizard defaults the target notation to the source diagram’s notation when it is still available.
+
 ## [0.17.0] - 2026-08-06
 
 ### Added

@@ -2,7 +2,7 @@
 
 Date: 2026-08-06  
 Status: approved for planning  
-Projects: `arepos-server` (source of truth), `warchi` (UI), `warchi-mcp` (docs only; agent still uses one key)
+Projects: `arepos-server` (source of truth), `warchi` (UI), `warchi-mcp` (docs; agent still uses one key)
 
 ## Problem
 
@@ -22,6 +22,8 @@ A single MCP API key has global scopes (`models:read` / `models:write`) and an o
 - Per-diagram or per-notation scopes.
 - Multiple secrets behind one MCP connection.
 - Changing how `warchi-mcp` authenticates (still one key → exchange → JWT).
+- `expiresAt` in the create UI (API may keep the field; profile form omits it in v1).
+- Restricting notations / node-types / link-types / shapes by model grants (they stay owner/Cerbos-scoped so agents can still resolve notation elements for granted models).
 
 ## Data model
 
@@ -63,15 +65,17 @@ or:
 | Scopes | Only `models:read`, `models:write`. Unknown → 400. |
 | Write ⇒ read | If write present, add read (per key or per grant). |
 | Grant modelIds | Distinct UUIDs; empty grant scopes forbidden. |
+| Grant model existence | Each `modelId` must exist; owner of the key must be able to **view** that model (Cerbos/ownership). Otherwise → 400. |
+| Max grants | At most **50** grants per key (keeps JWT small). → 400 if exceeded. |
 | At least one scope | Key or grant must retain read and/or write after normalize. |
 
 ### Persistence (`api_keys`)
 
-- `mode` — text/enum: `all` \| `grants`
+- `mode` — text/enum: `all` \| `grants` (NOT NULL)
 - `scopes` — jsonb, nullable (used when `mode=all`)
 - `grants` — jsonb, nullable (used when `mode=grants`): `[{ "modelId": string, "scopes": string[] }]`
-- Drop / stop using `model_ids`
-- Existing local/dev rows: recreate keys after deploy (no migration of grant semantics required if table can be cleared or column replaced in the same changelog)
+- Drop column `model_ids`
+- Liquibase: clear `api_keys` (or drop/recreate table) in the same changelog, then apply new columns — no dual-read of old rows
 
 ### Exchange JWT claims
 
@@ -81,7 +85,8 @@ or:
 - `grants` when `mode=grants` (same shape as storage)
 - TTL unchanged (~20 minutes)
 
-`ExchangeApiKeyResponse` mirrors these fields (no separate flat `modelIds`).
+`ExchangeApiKeyResponse` mirrors these fields (no separate flat `modelIds`).  
+`warchi-mcp` only needs `accessToken` / `expiresIn` (already `@JsonIgnoreProperties(ignoreUnknown = true)`).
 
 ## Enforcement (arepos-server)
 
@@ -97,18 +102,48 @@ This rejects huge classes of calls early; it does **not** authorize a specific m
 
 ### Precise (`ResourceAccessService`)
 
-When a request is tied to a `modelId`:
+Today `requireMcpModelAllowed` only checks membership in an allowlist. Replace with scope-aware helpers, e.g.:
 
-1. Required MCP scope follows the existing access path: view/list → `models:read`; create/update/delete → `models:write` (aligned with today’s GET vs mutate split in `McpScopeFilter`).
-2. `mode=all` → required scope ∈ key `scopes`; then existing Cerbos/ownership checks.
-3. `mode=grants` → find grant for `modelId`; if missing → `403 model_not_allowed`; if required scope missing on that grant → `403 missing_scope`; then Cerbos/ownership.
+- `requireMcpModelScope(modelId, models:read)` from `requireCanViewModel` / view paths for nodes, links, diagrams, wiki tied to a model
+- `requireMcpModelScope(modelId, models:write)` from `requireCanEditModel` / edit paths (including batch-save)
 
-List/search endpoints that return model-scoped entities:
+Behavior:
 
-- `mode=grants` → filter to modelIds that have `models:read` in their grant.
-- `mode=all` → no model allowlist filter (same as today’s unrestricted key).
+1. `mode=all` → required scope ∈ key `scopes`; then Cerbos/ownership as today.
+2. `mode=grants` → find grant for `modelId`:
+   - missing → `403 model_not_allowed`
+   - scope missing on that grant → `403 missing_scope`
+   - then Cerbos/ownership
 
-Resources without a model (e.g. notation catalog not bound to a model): unchanged from current MCP behavior under unrestricted keys. For `mode=grants`, do not grant new catalog-wide access; only allow when the code path already ties the resource to an allowed model (same spirit as today’s allowlist).
+`mcpModelIdsAllowlist()` becomes “set of modelIds with at least `models:read`” for `mode=grants`, or `null` for `mode=all`.
+
+### List / search filtering
+
+| Endpoint / path | `mode=grants` | `mode=all` |
+|-----------------|---------------|------------|
+| `GET /models`, model hits in `search_catalog` | Only models with read in a grant | Unrestricted (Cerbos only) |
+| `search_model`, get/list nodes/links/diagrams | Precise scope check on `modelId` | Precise scope check on key scopes |
+| Notation hits in `search_catalog`, `list_notations`, `search_notation`, types/shapes | **Not** filtered by grants — owner/Cerbos only | Same |
+
+**Bugfix as part of this work:** `searchCatalog` currently filters Cerbos but not MCP allowlist for model hits; under grants (and formerly allowlist) model hits must be filtered.
+
+### Root creates without a granted model
+
+`POST /models` (and any similar “create top-level model” path) does **not** today call MCP allowlist checks.
+
+| Mode | Policy |
+|------|--------|
+| `mode=all` + `models:write` | Allowed (subject to Cerbos / ownership rules for create). |
+| `mode=all` without write | Forbidden by coarse filter / missing write scope. |
+| `mode=grants` | **Forbidden** for MCP tokens (`403 missing_scope` or dedicated message): new model would be outside grants. Agents work inside already-granted models only. |
+
+Copy/diagram-copy into a target model: target must have write grant (precise check on target `modelId`).
+
+### Non-model catalogs
+
+Notations, components, relations, node/link types, shapes: **not** scoped by grants. Rationale: agents need notation discovery to build diagrams inside granted models; shrinking that surface is a separate feature. Grants only constrain model-bound data and mutations.
+
+Wiki / document refs that resolve to a model: use precise model scope (read for list/get, write for create/update).
 
 ## UI (warchi)
 
@@ -118,34 +153,43 @@ Resources without a model (e.g. notation catalog not bound to a model): unchange
 2. Area radio:
    - **All accessible models** → global Read / Write checkboxes (`mode=all`)
    - **Selected models** → pick models; each row has Read / Write (`mode=grants`)
-3. Write checkbox forces Read on (disabled until write off).
-4. Submit disabled if grants mode has zero models or a model with no scopes.
+3. Write checkbox forces Read on (disabled until write off), including per-row in grants mode.
+4. Submit disabled if grants mode has zero models, a model with no scopes, or more than 50 models.
 5. After create: show plaintext once; list shows summary e.g. `All models · read` or `3 models · mixed scopes`.
-6. Post-create actions in v1: rename, revoke only.
+6. Post-create actions in v1: rename, revoke only (no grant editor; no expiresAt field).
+
+Types: replace `modelIds` with `mode` + `grants` in `src/types/apiKeys.ts` and `ApiKeysSection.vue`.  
+i18n: new strings for area radio, per-model rights, mixed-scopes summary (ru/en).
 
 ## API surface
 
-Management (user session + CSRF), shapes aligned with the data model:
+Management (user session + CSRF):
 
-- `POST /api/v1/api-keys` — body with `mode`, `scopes` \| `grants`
+- `POST /api/v1/api-keys` — body with `mode`, `scopes` \| `grants`, optional `expiresAt`
 - `GET /api/v1/api-keys` — response includes `mode`, `scopes`, `grants`
-- `PATCH /api/v1/api-keys/{id}` — name and/or `expiresAt` only in v1 (no `mode` / `scopes` / `grants` updates)
+- `PATCH /api/v1/api-keys/{id}` — **name and/or `expiresAt` / `clearExpiresAt` only**; remove `scopes`, `modelIds`, `clearModelIds` from `UpdateApiKeyRequest`
 - `DELETE` — revoke (unchanged)
 - `POST /api/v1/auth/api-keys/exchange` — returns JWT + `mode` / `scopes` / `grants`
 
 ## Docs
 
-Update `warchi-mcp` auth docs (ru/en) and any in-app profile help strings to describe `mode` and per-model grants. Agent setup remains: one `warchi_ak_…` secret.
+Update `warchi-mcp` auth docs (ru/en), README security bullets, and profile help copy to describe `mode` and per-model grants. Note: one `warchi_ak_…` secret; tool errors remain `missing_scope` / `model_not_allowed`.
 
 ## Testing
 
 - Normalize: write-only grant → stored as read+write.
+- Create rejects unknown modelId, model owner cannot view, duplicate modelId, >50 grants.
 - `mode=all` write key can mutate any owner-accessible model; read-only cannot.
 - `mode=grants`: read-only model rejects mutate; write grant allows mutate; other model → `model_not_allowed`.
-- List models under grants returns only granted (readable) models.
-- Exchange JWT contains grants; filter rejects MCP token on `/api-keys`.
-- UI unit/smoke: cannot uncheck read while write on; cannot submit empty grants.
+- `mode=grants` + write: `POST /models` → 403.
+- `search_catalog` / `list_models` under grants omit models without read grant.
+- Notation catalog still visible under grants (owner-accessible).
+- Exchange JWT contains `mode` + `grants`; filter rejects MCP token on `/api-keys`.
+- PATCH cannot change scopes/grants.
+- UI: cannot uncheck read while write on (global and per-row); cannot submit empty grants.
 
 ## Rollout
 
-Feature not in prod: replace schema/API in one change across arepos + warchi; recreate any local keys. No dual-read of old `model_ids`.
+- Feature branch with the same name in `arepos-server` and `warchi` (docs touch `warchi-mcp` as needed).
+- Not in prod: Liquibase clears `api_keys`, drops `model_ids`, adds `mode` + `grants`; recreate local keys after deploy.
+- No dual-read of old `model_ids`.

@@ -1,11 +1,18 @@
-export type ApiKeyScope = "models:read" | "models:write"
+export type ApiKeyScope = 'models:read' | 'models:write'
+export type ApiKeyMode = 'all' | 'grants'
+
+export type ApiKeyGrant = {
+  modelId: string
+  scopes: ApiKeyScope[]
+}
 
 export type ApiKey = {
   id: string
   name: string
   tokenPrefix: string
-  scopes: ApiKeyScope[]
-  modelIds: string[] | null
+  mode: ApiKeyMode
+  scopes: ApiKeyScope[] | null
+  grants: ApiKeyGrant[] | null
   expiresAt: string | null
   revokedAt: string | null
   lastUsedAt: string | null
@@ -15,8 +22,9 @@ export type ApiKey = {
 
 export type CreateApiKeyRequest = {
   name: string
-  scopes: ApiKeyScope[]
-  modelIds?: string[] | null
+  mode: ApiKeyMode
+  scopes?: ApiKeyScope[] | null
+  grants?: ApiKeyGrant[] | null
   expiresAt?: string | null
 }
 
@@ -27,7 +35,6 @@ export type CreateApiKeyResponse = {
 
 export type UpdateApiKeyRequest = {
   name?: string
-  scopes?: ApiKeyScope[]
-  modelIds?: string[] | null
-  clearModelIds?: boolean
+  expiresAt?: string | null
+  clearExpiresAt?: boolean
 }

@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue"
-import { useI18n } from "vue-i18n"
-import MultiSelect from "@/components/forms/MultiSelect.vue"
-import type { MultiSelectOption } from "@/components/forms/MultiSelect.vue"
-import UiIcon from "@/components/ui/UiIcon.vue"
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/composables/useApi"
-import type { ModelData, PaginatedResponse } from "@/types/entities"
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import MultiSelect from '@/components/forms/MultiSelect.vue'
+import type { MultiSelectOption } from '@/components/forms/MultiSelect.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/composables/useApi'
+import type { ModelData, PaginatedResponse } from '@/types/entities'
 import type {
   ApiKey,
+  ApiKeyGrant,
+  ApiKeyMode,
   ApiKeyScope,
   CreateApiKeyRequest,
   CreateApiKeyResponse,
-} from "@/types/apiKeys"
+} from '@/types/apiKeys'
+
+const MAX_GRANTS = 50
+
+type GrantFlags = { read: boolean; write: boolean }
 
 const { t } = useI18n()
 
@@ -22,11 +28,12 @@ const errorMessage = ref<string | null>(null)
 const createdPlaintext = ref<string | null>(null)
 const copied = ref(false)
 
-const newName = ref("")
+const newName = ref('')
+const mode = ref<ApiKeyMode>('all')
 const scopeRead = ref(true)
 const scopeWrite = ref(false)
-const restrictModels = ref(false)
 const selectedModelIds = ref<string[]>([])
+const grantFlags = reactive<Record<string, GrantFlags>>({})
 const showCreateForm = ref(false)
 
 const modelOptions = ref<MultiSelectOption[]>([])
@@ -37,7 +44,7 @@ const modelsLoaded = ref(false)
 const loadKeys = async (): Promise<void> => {
   isLoading.value = true
   errorMessage.value = null
-  const result = await apiGet<PaginatedResponse<ApiKey>>("/api-keys")
+  const result = await apiGet<PaginatedResponse<ApiKey>>('/api-keys')
   isLoading.value = false
   if (!result.success) {
     errorMessage.value = result.error.message
@@ -75,12 +82,23 @@ const loadModels = async (): Promise<void> => {
       id: m.id,
       label: `${m.name} · v${m.version}`,
     }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
 
   modelOptions.value = options
   modelsById.value = new Map(options.map((o) => [o.id, o.label]))
   modelsLoaded.value = true
   isLoadingModels.value = false
+}
+
+const resetCreateForm = (): void => {
+  newName.value = ''
+  mode.value = 'all'
+  scopeRead.value = true
+  scopeWrite.value = false
+  selectedModelIds.value = []
+  for (const id of Object.keys(grantFlags)) {
+    delete grantFlags[id]
+  }
 }
 
 watch(showCreateForm, (open) => {
@@ -89,41 +107,131 @@ watch(showCreateForm, (open) => {
   }
 })
 
-watch(restrictModels, (enabled) => {
-  if (!enabled) {
-    selectedModelIds.value = []
-  } else {
+watch(mode, (next) => {
+  if (next === 'grants') {
     void loadModels()
+  } else {
+    selectedModelIds.value = []
+    for (const id of Object.keys(grantFlags)) {
+      delete grantFlags[id]
+    }
   }
+})
+
+watch(scopeWrite, (enabled) => {
+  if (enabled) {
+    scopeRead.value = true
+  }
+})
+
+watch(
+  selectedModelIds,
+  (ids) => {
+    const selected = new Set(ids)
+    for (const id of Object.keys(grantFlags)) {
+      if (!selected.has(id)) {
+        delete grantFlags[id]
+      }
+    }
+    for (const id of ids) {
+      if (!grantFlags[id]) {
+        grantFlags[id] = { read: true, write: false }
+      }
+    }
+  },
+  { deep: true }
+)
+
+const setGrantWrite = (modelId: string, write: boolean): void => {
+  const flags = grantFlags[modelId]
+  if (!flags) return
+  flags.write = write
+  if (write) {
+    flags.read = true
+  }
+}
+
+const setGrantRead = (modelId: string, read: boolean): void => {
+  const flags = grantFlags[modelId]
+  if (!flags || flags.write) return
+  flags.read = read
+}
+
+const buildGrantScopes = (flags: GrantFlags): ApiKeyScope[] => {
+  if (flags.write) return ['models:read', 'models:write']
+  if (flags.read) return ['models:read']
+  return []
+}
+
+const grantRows = computed(() =>
+  selectedModelIds.value.map((modelId) => ({
+    modelId,
+    label: modelsById.value.get(modelId) ?? modelId.slice(0, 8) + '…',
+    flags: grantFlags[modelId] ?? { read: true, write: false },
+  }))
+)
+
+const hasAllScopes = computed(() => scopeWrite.value || scopeRead.value)
+
+const grantsValid = computed(() => {
+  const ids = selectedModelIds.value
+  if (ids.length === 0 || ids.length > MAX_GRANTS) return false
+  return ids.every((id) => {
+    const flags = grantFlags[id]
+    return flags != null && (flags.read || flags.write)
+  })
+})
+
+const canSubmit = computed(() => {
+  if (isCreating.value || isLoadingModels.value) return false
+  if (!newName.value.trim()) return false
+  if (mode.value === 'all') return hasAllScopes.value
+  return grantsValid.value
 })
 
 const createKey = async (): Promise<void> => {
   const name = newName.value.trim()
   if (!name) {
-    errorMessage.value = t("profile.apiKeysNameRequired")
+    errorMessage.value = t('profile.apiKeysNameRequired')
     return
   }
-  const scopes: ApiKeyScope[] = []
-  if (scopeRead.value) scopes.push("models:read")
-  if (scopeWrite.value) scopes.push("models:write")
-  if (scopes.length === 0) {
-    errorMessage.value = t("profile.apiKeysScopeRequired")
-    return
-  }
-  if (restrictModels.value && selectedModelIds.value.length === 0) {
-    errorMessage.value = t("profile.apiKeysModelsRequired")
-    return
+
+  let body: CreateApiKeyRequest
+  if (mode.value === 'all') {
+    if (!hasAllScopes.value) {
+      errorMessage.value = t('profile.apiKeysScopeRequired')
+      return
+    }
+    const scopes: ApiKeyScope[] = scopeWrite.value
+      ? ['models:read', 'models:write']
+      : ['models:read']
+    body = { name, mode: 'all', scopes, grants: null }
+  } else {
+    if (selectedModelIds.value.length === 0) {
+      errorMessage.value = t('profile.apiKeysModelsRequired')
+      return
+    }
+    if (selectedModelIds.value.length > MAX_GRANTS) {
+      errorMessage.value = t('profile.apiKeysGrantsMax')
+      return
+    }
+    const grants: ApiKeyGrant[] = []
+    for (const modelId of selectedModelIds.value) {
+      const flags = grantFlags[modelId] ?? { read: true, write: false }
+      const scopes = buildGrantScopes(flags)
+      if (scopes.length === 0) {
+        errorMessage.value = t('profile.apiKeysGrantScopesRequired')
+        return
+      }
+      grants.push({ modelId, scopes })
+    }
+    body = { name, mode: 'grants', scopes: null, grants }
   }
 
   isCreating.value = true
   errorMessage.value = null
   copied.value = false
-  const body: CreateApiKeyRequest = {
-    name,
-    scopes,
-    modelIds: restrictModels.value ? selectedModelIds.value : null,
-  }
-  const result = await apiPost<CreateApiKeyResponse>("/api-keys", body)
+  const result = await apiPost<CreateApiKeyResponse>('/api-keys', body)
   isCreating.value = false
   if (!result.success) {
     errorMessage.value = result.error.message
@@ -131,17 +239,13 @@ const createKey = async (): Promise<void> => {
   }
 
   createdPlaintext.value = result.data.key
-  newName.value = ""
-  restrictModels.value = false
-  selectedModelIds.value = []
-  scopeRead.value = true
-  scopeWrite.value = false
+  resetCreateForm()
   showCreateForm.value = false
   await loadKeys()
 }
 
 const revokeKey = async (id: string): Promise<void> => {
-  if (!window.confirm(t("profile.apiKeysRevokeConfirm"))) return
+  if (!window.confirm(t('profile.apiKeysRevokeConfirm'))) return
   errorMessage.value = null
   const result = await apiDelete<void>(`/api-keys/${id}`)
   if (!result.success) {
@@ -155,7 +259,7 @@ const revokeKey = async (id: string): Promise<void> => {
 }
 
 const renameKey = async (key: ApiKey): Promise<void> => {
-  const next = window.prompt(t("profile.apiKeysRenamePrompt"), key.name)
+  const next = window.prompt(t('profile.apiKeysRenamePrompt'), key.name)
   if (next == null) return
   const name = next.trim()
   if (!name || name === key.name) return
@@ -174,7 +278,7 @@ const copyCreatedKey = async (): Promise<void> => {
     await navigator.clipboard.writeText(createdPlaintext.value)
     copied.value = true
   } catch {
-    errorMessage.value = t("profile.apiKeysCopyError")
+    errorMessage.value = t('profile.apiKeysCopyError')
   }
 }
 
@@ -183,19 +287,19 @@ const dismissCreatedKey = (): void => {
   copied.value = false
 }
 
-const formatScopes = (scopes: string[]): string =>
-  scopes
-    .map((s) => (s === "models:write" ? t("profile.apiKeysScopeWrite") : t("profile.apiKeysScopeRead")))
-    .join(", ")
-
-const formatModelAllowlist = (modelIds: string[] | null | undefined): string => {
-  if (!modelIds?.length) return ""
-  const labels = modelIds.map((id) => modelsById.value.get(id) ?? id.slice(0, 8) + "…")
-  if (labels.length <= 2) return labels.join(", ")
-  return t("profile.apiKeysModelsSelected", {
-    names: labels.slice(0, 2).join(", "),
-    count: labels.length - 2,
-  })
+const formatKeySummary = (key: ApiKey): string => {
+  if (key.mode === 'all') {
+    const write = key.scopes?.includes('models:write')
+    return write
+      ? t('profile.apiKeysSummaryAllWrite')
+      : t('profile.apiKeysSummaryAllRead')
+  }
+  const n = key.grants?.length ?? 0
+  const allWrite = key.grants?.every((g) => g.scopes.includes('models:write'))
+  const allRead = key.grants?.every((g) => !g.scopes.includes('models:write'))
+  if (allWrite) return t('profile.apiKeysSummaryGrantsWrite', { count: n })
+  if (allRead) return t('profile.apiKeysSummaryGrantsRead', { count: n })
+  return t('profile.apiKeysSummaryGrantsMixed', { count: n })
 }
 
 const modelSelectDisabled = computed(() => isLoadingModels.value || isCreating.value)
@@ -210,8 +314,8 @@ onMounted(() => {
   <section class="api-keys panel">
     <div class="api-keys__header">
       <div class="api-keys__titles">
-        <h2>{{ t("profile.apiKeysTitle") }}</h2>
-        <p>{{ t("profile.apiKeysSubtitle") }}</p>
+        <h2>{{ t('profile.apiKeysTitle') }}</h2>
+        <p>{{ t('profile.apiKeysSubtitle') }}</p>
       </div>
       <button
         type="button"
@@ -220,88 +324,128 @@ onMounted(() => {
         @click="showCreateForm = !showCreateForm"
       >
         <UiIcon name="add" />
-        {{ t("profile.apiKeysCreate") }}
+        {{ t('profile.apiKeysCreate') }}
       </button>
     </div>
 
     <div v-if="createdPlaintext" class="api-keys__created">
-      <p class="api-keys__created-warn">{{ t("profile.apiKeysCreatedOnce") }}</p>
+      <p class="api-keys__created-warn">{{ t('profile.apiKeysCreatedOnce') }}</p>
       <code class="api-keys__secret">{{ createdPlaintext }}</code>
       <div class="api-keys__created-actions">
         <button type="button" class="btn btn--primary" @click="copyCreatedKey">
           <UiIcon name="content_copy" />
-          {{ copied ? t("profile.apiKeysCopied") : t("profile.apiKeysCopy") }}
+          {{ copied ? t('profile.apiKeysCopied') : t('profile.apiKeysCopy') }}
         </button>
         <button type="button" class="btn btn--secondary" @click="dismissCreatedKey">
-          {{ t("profile.apiKeysDismiss") }}
+          {{ t('profile.apiKeysDismiss') }}
         </button>
       </div>
     </div>
 
     <form v-if="showCreateForm" class="api-keys__form" @submit.prevent="createKey">
       <label class="field">
-        <span>{{ t("profile.apiKeysName") }}</span>
+        <span>{{ t('profile.apiKeysName') }}</span>
         <input v-model="newName" type="text" :placeholder="t('profile.apiKeysNamePlaceholder')" />
       </label>
-      <div class="api-keys__scopes">
-        <span class="api-keys__scopes-label">{{ t("profile.apiKeysScopes") }}</span>
+
+      <fieldset class="api-keys__mode">
+        <legend class="api-keys__mode-label">{{ t('profile.apiKeysModeLabel') }}</legend>
         <label class="api-keys__check">
-          <input v-model="scopeRead" type="checkbox" />
-          {{ t("profile.apiKeysScopeRead") }}
+          <input v-model="mode" type="radio" value="all" />
+          {{ t('profile.apiKeysModeAll') }}
+        </label>
+        <label class="api-keys__check">
+          <input v-model="mode" type="radio" value="grants" />
+          {{ t('profile.apiKeysModeGrants') }}
+        </label>
+        <p class="api-keys__hint">
+          {{ mode === 'all' ? t('profile.apiKeysModeAllHint') : t('profile.apiKeysModeGrantsHint') }}
+        </p>
+      </fieldset>
+
+      <div v-if="mode === 'all'" class="api-keys__scopes">
+        <span class="api-keys__scopes-label">{{ t('profile.apiKeysScopes') }}</span>
+        <label class="api-keys__check">
+          <input v-model="scopeRead" type="checkbox" :disabled="scopeWrite" />
+          {{ t('profile.apiKeysScopeRead') }}
         </label>
         <label class="api-keys__check">
           <input v-model="scopeWrite" type="checkbox" />
-          {{ t("profile.apiKeysScopeWrite") }}
+          {{ t('profile.apiKeysScopeWrite') }}
         </label>
+        <p class="api-keys__hint">{{ t('profile.apiKeysWriteImpliesRead') }}</p>
       </div>
-      <div class="field">
-        <label class="api-keys__check api-keys__restrict">
-          <input v-model="restrictModels" type="checkbox" />
-          {{ t("profile.apiKeysRestrictModels") }}
-        </label>
-        <p class="api-keys__hint">{{ t("profile.apiKeysRestrictModelsHint") }}</p>
+
+      <div v-else class="field">
+        <span>{{ t('profile.apiKeysModeGrants') }}</span>
         <MultiSelect
-          v-if="restrictModels"
           v-model="selectedModelIds"
           :options="modelOptions"
           :disabled="modelSelectDisabled"
           force-search
           :placeholder="
-            isLoadingModels
-              ? t('common.loading')
-              : t('profile.apiKeysModelsPlaceholder')
+            isLoadingModels ? t('common.loading') : t('profile.apiKeysModelsPlaceholder')
           "
           :search-placeholder="t('profile.apiKeysModelsSearch')"
           :empty-text="t('profile.apiKeysModelsEmpty')"
           :max-visible-labels="2"
         />
+        <ul v-if="grantRows.length" class="api-keys__grants">
+          <li v-for="row in grantRows" :key="row.modelId" class="api-keys__grant">
+            <span class="api-keys__grant-name" :title="row.label">{{ row.label }}</span>
+            <div class="api-keys__grant-scopes" :aria-label="t('profile.apiKeysGrantRowScopes')">
+              <label class="api-keys__check">
+                <input
+                  type="checkbox"
+                  :checked="row.flags.read"
+                  :disabled="row.flags.write"
+                  @change="
+                    setGrantRead(row.modelId, ($event.target as HTMLInputElement).checked)
+                  "
+                />
+                {{ t('profile.apiKeysScopeRead') }}
+              </label>
+              <label class="api-keys__check">
+                <input
+                  type="checkbox"
+                  :checked="row.flags.write"
+                  @change="
+                    setGrantWrite(row.modelId, ($event.target as HTMLInputElement).checked)
+                  "
+                />
+                {{ t('profile.apiKeysScopeWrite') }}
+              </label>
+            </div>
+          </li>
+        </ul>
+        <p v-if="selectedModelIds.length > MAX_GRANTS" class="api-keys__hint api-keys__hint--error">
+          {{ t('profile.apiKeysGrantsMax') }}
+        </p>
+        <p v-else class="api-keys__hint">{{ t('profile.apiKeysWriteImpliesRead') }}</p>
       </div>
-      <button type="submit" class="btn btn--primary" :disabled="isCreating || isLoadingModels">
-        {{ isCreating ? t("common.saving") : t("profile.apiKeysCreateSubmit") }}
+
+      <button type="submit" class="btn btn--primary" :disabled="!canSubmit">
+        {{ isCreating ? t('common.saving') : t('profile.apiKeysCreateSubmit') }}
       </button>
     </form>
 
     <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
 
-    <p v-if="isLoading" class="api-keys__empty">{{ t("common.loading") }}</p>
-    <p v-else-if="keys.length === 0" class="api-keys__empty">{{ t("profile.apiKeysEmpty") }}</p>
+    <p v-if="isLoading" class="api-keys__empty">{{ t('common.loading') }}</p>
+    <p v-else-if="keys.length === 0" class="api-keys__empty">{{ t('profile.apiKeysEmpty') }}</p>
     <ul v-else class="api-keys__list">
       <li v-for="key in keys" :key="key.id" class="api-keys__item">
         <div class="api-keys__meta">
           <strong>{{ key.name }}</strong>
           <span class="api-keys__prefix">warchi_ak_{{ key.tokenPrefix }}…</span>
-          <span class="api-keys__scopes-text">{{ formatScopes(key.scopes) }}</span>
-          <span v-if="key.modelIds?.length" class="api-keys__models">
-            {{ formatModelAllowlist(key.modelIds) }}
-          </span>
-          <span v-else class="api-keys__models">{{ t("profile.apiKeysAllModels") }}</span>
+          <span class="api-keys__summary">{{ formatKeySummary(key) }}</span>
         </div>
         <div class="api-keys__actions">
           <button type="button" class="btn btn--secondary" @click="renameKey(key)">
-            {{ t("profile.apiKeysRename") }}
+            {{ t('profile.apiKeysRename') }}
           </button>
           <button type="button" class="btn btn--danger" @click="revokeKey(key.id)">
-            {{ t("profile.apiKeysRevoke") }}
+            {{ t('profile.apiKeysRevoke') }}
           </button>
         </div>
       </li>
@@ -404,7 +548,7 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.field input[type="text"] {
+.field input[type='text'] {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -412,6 +556,24 @@ onMounted(() => {
   color: var(--base-text);
   font-family: inherit;
   font-size: 14px;
+}
+
+.api-keys__mode {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.api-keys__mode-label {
+  flex-basis: 100%;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .api-keys__scopes {
@@ -434,16 +596,49 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.api-keys__restrict {
-  font-weight: 600;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
 .api-keys__hint {
   margin: 0;
   font-size: 12px;
   color: var(--text-subtle);
+  flex-basis: 100%;
+}
+
+.api-keys__hint--error {
+  color: var(--danger);
+}
+
+.api-keys__grants {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-keys__grant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.api-keys__grant-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.api-keys__grant-scopes {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
 }
 
 .msg {
@@ -493,8 +688,7 @@ onMounted(() => {
 }
 
 .api-keys__prefix,
-.api-keys__scopes-text,
-.api-keys__models {
+.api-keys__summary {
   font-size: 12px;
   color: var(--text-muted);
 }
@@ -507,7 +701,8 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .api-keys__header,
-  .api-keys__item {
+  .api-keys__item,
+  .api-keys__grant {
     flex-direction: column;
     align-items: stretch;
   }

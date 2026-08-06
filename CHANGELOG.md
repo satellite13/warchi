@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-06
+
+### Added
+- API keys support per-model grants: one MCP key can grant read-only on some models and read/write on others.
+- Admin users page: list and revoke a user’s API keys.
+
+### Changed
+- API key create form: choose all models or selected models with per-model scopes; write always includes read.
+
 ## [0.15.0] - 2026-08-04
 
 ### Added

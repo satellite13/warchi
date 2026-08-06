@@ -10,6 +10,7 @@ import { normalizeUserRole } from '../utils/userRole'
 import AdminAlert from '@/components/admin/AdminAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
+import AdminUserApiKeys from '@/components/admin/AdminUserApiKeys.vue'
 import { useUserProfileEdit, useUserPasswordEdit } from './composables/useUserAdminForms'
 
 type EditableUser = User & {
@@ -36,6 +37,7 @@ const isSavingId = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const searchEmail = ref('')
+const apiKeysUserId = ref<string | null>(null)
 
 const roleOptions: UserRole[] = ['USER', 'ADMIN']
 
@@ -140,6 +142,10 @@ const clearSearch = () => {
   loadUsers()
 }
 
+const toggleApiKeys = (userId: string): void => {
+  apiKeysUserId.value = apiKeysUserId.value === userId ? null : userId
+}
+
 onMounted(() => {
   loadUsers()
 })
@@ -234,18 +240,19 @@ onMounted(() => {
           <th>{{ t('adminUsers.updated') }}</th>
           <th>{{ t('adminUsers.profile') }}</th>
           <th>{{ t('adminUsers.password') }}</th>
+          <th>{{ t('adminUsers.apiKeys') }}</th>
         </tr>
       </template>
-      <TransitionGroup tag="tbody" name="au-row">
-        <tr
-          v-for="user in users"
-          :key="user.id"
-          class="au-table__row"
-          :class="{
-            'au-table__row--saving': isSavingId === user.id,
-            'au-table__row--off': !user.isActive,
-          }"
-        >
+      <tbody>
+        <template v-for="user in users" :key="user.id">
+          <tr
+            class="au-table__row"
+            :class="{
+              'au-table__row--saving': isSavingId === user.id,
+              'au-table__row--off': !user.isActive,
+              'au-table__row--expanded': apiKeysUserId === user.id,
+            }"
+          >
             <!-- User -->
             <td>
               <div class="au-user">
@@ -255,7 +262,7 @@ onMounted(() => {
                 <div class="au-user__meta">
                   <span class="au-user__email">{{ user.email }}</span>
                   <span v-if="user.oidcSub" class="au-user__oidc">
-                    {{ t("adminUsersOidc.linkedAs", { sub: user.oidcSub }) }}
+                    {{ t('adminUsersOidc.linkedAs', { sub: user.oidcSub }) }}
                   </span>
                   <span class="au-user__id">{{ user.id }}</span>
                 </div>
@@ -422,8 +429,31 @@ onMounted(() => {
                 </form>
               </div>
             </td>
-        </tr>
-      </TransitionGroup>
+
+            <!-- API keys -->
+            <td>
+              <button
+                type="button"
+                class="au-btn-inline"
+                :disabled="isSavingId === user.id"
+                @click="toggleApiKeys(user.id)"
+              >
+                {{
+                  apiKeysUserId === user.id
+                    ? t('adminUsers.apiKeysHide')
+                    : t('adminUsers.apiKeysShow')
+                }}
+              </button>
+            </td>
+          </tr>
+
+          <tr v-if="apiKeysUserId === user.id" class="au-table__expand">
+            <td colspan="7">
+              <AdminUserApiKeys :user-id="user.id" />
+            </td>
+          </tr>
+        </template>
+      </tbody>
     </AdminTableShell>
   </div>
 </template>
@@ -715,6 +745,16 @@ onMounted(() => {
     rgba(0, 0, 0, 0.012) 8px,
     rgba(0, 0, 0, 0.012) 16px
   );
+}
+
+.au-table__row--expanded {
+  background: var(--surface-muted);
+}
+
+.au-table__expand td {
+  padding: 8px 18px 16px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
 }
 
 /* ─── User cell ────────────────────────────────── */
@@ -1034,7 +1074,7 @@ onMounted(() => {
   }
 
   .au-table {
-    min-width: 1080px;
+    min-width: 1180px;
   }
 }
 </style>

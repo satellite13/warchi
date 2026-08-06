@@ -86,7 +86,7 @@ export function buildEdgeLabel(
   name: string,
   ds?: DiagramStyle,
   relationProperties?: CustomProperty[],
-  linkTypeProperties?: CustomProperty[],
+  linkTypeProperties?: CustomProperty[]
 ): string | TextLabelOptions | undefined {
   if (ds?.showLabel === false) {
     return undefined
@@ -95,12 +95,7 @@ export function buildEdgeLabel(
   const template = ds?.labelTemplate?.trim()
   const hasTemplate = !!template
   const displayText = hasTemplate
-    ? resolveLabelTemplate(
-        template,
-        name,
-        relationProperties ?? [],
-        linkTypeProperties ?? [],
-      )
+    ? resolveLabelTemplate(template, name, relationProperties ?? [], linkTypeProperties ?? [])
     : name
 
   const labelInset = ds?.labelInset

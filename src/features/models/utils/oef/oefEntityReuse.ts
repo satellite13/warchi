@@ -37,11 +37,7 @@ function emptySummary(): OefReuseSummary {
   }
 }
 
-function bump(
-  summary: OefReuseSummary,
-  kind: 'nodes' | 'links',
-  action: OefResolvedAction
-): void {
+function bump(summary: OefReuseSummary, kind: 'nodes' | 'links', action: OefResolvedAction): void {
   summary[kind][action] += 1
 }
 
@@ -174,8 +170,7 @@ export function resolveOefEntityMatches(params: {
     for (const candidate of activeLinks) {
       if (candidate.sourceId !== sourceRealId || candidate.targetId !== targetRealId) continue
       if (candidate.linkTypeId !== mapped.linkTypeId) continue
-      const relationBinding =
-        candidate.parsedAttrs.notationRelations[params.notationId]?.relationId
+      const relationBinding = candidate.parsedAttrs.notationRelations[params.notationId]?.relationId
       if (relationBinding && relationBinding !== mapped.relationId) continue
 
       if (params.settings.linkMatchCriterion === 'endpointsTypeAndLabel') {

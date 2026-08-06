@@ -149,8 +149,7 @@ export const authMessages = {
       apiKeysLoading: 'Загрузка ключей...',
       apiKeysEmpty: 'У пользователя нет API-ключей',
       apiKeysRevoke: 'Отозвать',
-      apiKeysRevokeConfirm:
-        'Отозвать этот API-ключ? Клиенты с ним сразу потеряют доступ.',
+      apiKeysRevokeConfirm: 'Отозвать этот API-ключ? Клиенты с ним сразу потеряют доступ.',
       apiKeysRevoked: 'Отозван',
     },
     adminDiagramLocks: {
@@ -344,8 +343,7 @@ export const authMessages = {
       apiKeysLoading: 'Loading keys...',
       apiKeysEmpty: 'This user has no API keys',
       apiKeysRevoke: 'Revoke',
-      apiKeysRevokeConfirm:
-        'Revoke this API key? Clients using it will lose access immediately.',
+      apiKeysRevokeConfirm: 'Revoke this API key? Clients using it will lose access immediately.',
       apiKeysRevoked: 'Revoked',
     },
     adminDiagramLocks: {

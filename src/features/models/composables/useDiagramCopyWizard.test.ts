@@ -51,9 +51,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('disables finish when preview.canCommit is false', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
 
     wizard.targetModelId.value = 'target-model'
     wizard.targetNotationId.value = 'target-notation'
@@ -72,9 +70,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('resets resolutions when target model changes', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
 
     wizard.targetModelId.value = 'target-model-1'
     wizard.targetNotationId.value = 'target-notation'
@@ -95,9 +91,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('maps commit success to navigation target', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
     wizard.targetModelId.value = 'target-model'
     wizard.targetNotationId.value = 'target-notation'
     wizard.diagramName.value = 'Copied diagram'

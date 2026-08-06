@@ -97,12 +97,16 @@ export function buildModelEdgeDisplayLabel(
     return buildModelEdgeLabelConfig(instanceEdgeLabel, ds)
   }
 
-  const displayText = resolveDiagramEdgeLabelTemplate(ds!.labelTemplate!.trim(), relationName ?? '', {
-    typeProperties: linkTypeProperties,
-    typeValues,
-    relationProperties,
-    relationValues,
-  }).trim()
+  const displayText = resolveDiagramEdgeLabelTemplate(
+    ds!.labelTemplate!.trim(),
+    relationName ?? '',
+    {
+      typeProperties: linkTypeProperties,
+      typeValues,
+      relationProperties,
+      relationValues,
+    }
+  ).trim()
   if (!displayText) return undefined
 
   const labelInset = ds?.labelInset

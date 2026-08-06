@@ -17,16 +17,10 @@ export type DiagramEdgeLabelTemplateContext = {
 export function resolveDiagramEdgeLabelTemplate(
   template: string,
   relationName: string,
-  ctx: DiagramEdgeLabelTemplateContext,
+  ctx: DiagramEdgeLabelTemplateContext
 ): string {
-  return resolveLabelTemplate(
-    template,
-    relationName,
-    ctx.relationProperties,
-    ctx.typeProperties,
-    {
-      typeValues: ctx.typeValues,
-      componentValues: ctx.relationValues,
-    },
-  )
+  return resolveLabelTemplate(template, relationName, ctx.relationProperties, ctx.typeProperties, {
+    typeValues: ctx.typeValues,
+    componentValues: ctx.relationValues,
+  })
 }

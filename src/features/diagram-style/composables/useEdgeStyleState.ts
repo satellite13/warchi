@@ -18,8 +18,12 @@ export function useEdgeStyleState() {
   const edgeLineStyle = ref<'solid' | 'dashed'>('solid')
   const edgeLineDashPattern = ref('8,4')
   const edgeType = ref<'straight' | 'polyline' | 'editable-polyline' | 'bezier'>('polyline')
-  const edgeEndMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'>('open')
-  const edgeStartMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'>('none')
+  const edgeEndMarker = ref<
+    'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
+  >('open')
+  const edgeStartMarker = ref<
+    'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
+  >('none')
   const edgeOpacity = ref(1)
   const edgeLabelColor = ref('#333333')
   const edgeLabelOpacity = ref(1)
@@ -65,23 +69,10 @@ export function useEdgeStyleState() {
     edgeLineDashPattern.value = lineDash.length > 0 ? lineDash.join(',') : '8,4'
 
     edgeEndMarker.value = (styleFromDiagram?.endMarkerType ?? edge.endMarker?.type ?? 'none') as
-      | 'none'
-      | 'arrow'
-      | 'open'
-      | 'diamond'
-      | 'circle'
-      | 'square'
-      | 'stealth'
+      'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
     edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
       edge.startMarker?.type ??
-      'none') as
-      | 'none'
-      | 'arrow'
-      | 'open'
-      | 'diamond'
-      | 'circle'
-      | 'square'
-      | 'stealth'
+      'none') as 'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
 
     const eLabelStyle = edge.label?.style as ExtendedTextStyle | undefined
     edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? '#333333'

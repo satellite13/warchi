@@ -246,7 +246,7 @@ describe('useTreeSearch', () => {
           makeNode({ id: 'child', name: 'SpecialChild', parentNodeId: 'folder' }),
           makeNode({ id: 'sibling', name: 'Other', parentNodeId: 'folder' }),
         ],
-        'root',
+        'root'
       )
       tree.treeSearchQuery.value = 'special'
       vi.advanceTimersByTime(200)

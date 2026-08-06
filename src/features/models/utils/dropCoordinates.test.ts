@@ -23,11 +23,11 @@ describe('worldTopLeftCenteredOnCursor', () => {
 
   it('applies snap to top-left', () => {
     const snap = (v: number) => Math.round(v / 20) * 20
-    expect(worldTopLeftCenteredOnCursor({ x: 205, y: 98 }, { width: 160, height: 56 }, snap)).toEqual(
-      {
-        x: 120,
-        y: 80,
-      }
-    )
+    expect(
+      worldTopLeftCenteredOnCursor({ x: 205, y: 98 }, { width: 160, height: 56 }, snap)
+    ).toEqual({
+      x: 120,
+      y: 80,
+    })
   })
 })

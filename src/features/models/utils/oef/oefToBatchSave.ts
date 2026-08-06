@@ -35,10 +35,7 @@ import {
 } from './oefEntityName'
 import { resolveOefEntityMatches } from './oefEntityReuse'
 import { buildOrganizationImportPlan } from './organizationImport'
-import {
-  createDefaultOefReuseSettings,
-  type OefReuseSettings,
-} from './reuseSettings'
+import { createDefaultOefReuseSettings, type OefReuseSettings } from './reuseSettings'
 import {
   buildDisallowedOefLinkGroupKey,
   isOefLinkAllowedByRelationRules,

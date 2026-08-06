@@ -407,7 +407,7 @@ export const apiPut = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
 
 export const apiPatch = <T>(path: string, body: unknown): Promise<ApiResult<T>> =>
   apiFetch<T>(path, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(body),
   })
 

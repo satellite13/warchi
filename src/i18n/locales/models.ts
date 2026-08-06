@@ -778,8 +778,7 @@ export const modelsMessages = {
         'Nodes: {create} create · {reuse} reuse · {update} update · {ambiguous} ambiguous',
       oefImportReuseSummaryLinks:
         'Links: {create} create · {reuse} reuse · {update} update · {ambiguous} ambiguous',
-      oefImportReuseLabelHydrateHint:
-        'Diagram contents will be loaded to compare edge labels.',
+      oefImportReuseLabelHydrateHint: 'Diagram contents will be loaded to compare edge labels.',
       oefImportReuseHydrateFailed: 'Failed to load diagrams for label matching: {message}',
       oefImportWarningNodeMatchAmbiguous: 'Multiple matching nodes — picked lowest id',
       oefImportWarningLinkMatchAmbiguous: 'Multiple matching links — picked lowest id',

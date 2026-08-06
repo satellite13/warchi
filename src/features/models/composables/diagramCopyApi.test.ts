@@ -146,10 +146,7 @@ describe('buildResolutionsFromPreview', () => {
 describe('pickDefaultTargetNotationId', () => {
   it('prefers source notation when available', () => {
     expect(
-      pickDefaultTargetNotationId(
-        [{ id: 'n-a' }, { id: 'n-source' }, { id: 'n-b' }],
-        'n-source'
-      )
+      pickDefaultTargetNotationId([{ id: 'n-a' }, { id: 'n-source' }, { id: 'n-b' }], 'n-source')
     ).toBe('n-source')
   })
 

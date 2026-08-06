@@ -30,16 +30,8 @@ import {
   withResolvedScaleSlice,
 } from '@/utils/resolveCustomScaleSlice'
 import type { CustomProperty, DiagramStyle } from '@/domain/attrs/notationAttrs'
-import type {
-  NotationEditorState,
-  EditorComponent,
-  EditorRelation,
-} from '../types'
-import {
-  useNotationStyles,
-  COMPONENT_STYLE,
-  type RelationEdgeStyle,
-} from './useNotationStyles'
+import type { NotationEditorState, EditorComponent, EditorRelation } from '../types'
+import { useNotationStyles, COMPONENT_STYLE, type RelationEdgeStyle } from './useNotationStyles'
 import {
   resolveComponentAnchorPoints,
   buildNodeLabel,
@@ -415,7 +407,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           relation.name,
           ds,
           relationCustomProperties(relation),
-          typeCustomPropertiesForRelation(relation),
+          typeCustomPropertiesForRelation(relation)
         )
         if (newLabel === undefined) {
           existingEdge.label = undefined
@@ -551,8 +543,13 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
       for (const srcNode of newAnchorSources) {
         const relationMeta = relationMetaBySourceId.get(srcNode.id)
         if (!relationMeta) continue
-        const { pairedTarget: tgtNode, edgeStyle, relationName, relationId, diagramStyle: ds } =
-          relationMeta
+        const {
+          pairedTarget: tgtNode,
+          edgeStyle,
+          relationName,
+          relationId,
+          diagramStyle: ds,
+        } = relationMeta
         const relation = activeRelations.find(item => item.id === relationId)
 
         // Position target relative to source

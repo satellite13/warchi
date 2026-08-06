@@ -16,7 +16,7 @@ vi.mock('vue-i18n', async importOriginal => {
 })
 
 function makeNode(
-  overrides: Partial<EditorNode> & { id: string; name: string; nodeTypeId?: string },
+  overrides: Partial<EditorNode> & { id: string; name: string; nodeTypeId?: string }
 ): EditorNode {
   return {
     modelId: 'm1',
@@ -50,7 +50,17 @@ function mockTreeViewport(wrapper: VueWrapper, height = 480, width = 320): void 
   Object.defineProperty(tree, 'offsetWidth', { configurable: true, get: () => width })
   Object.defineProperty(tree, 'scrollHeight', {
     configurable: true,
-    get: () => Math.max(height, Number.parseInt(wrapper.find('.tree__virtual').attributes('style')?.match(/height:\s*(\d+)/)?.[1] ?? '0', 10) || height),
+    get: () =>
+      Math.max(
+        height,
+        Number.parseInt(
+          wrapper
+            .find('.tree__virtual')
+            .attributes('style')
+            ?.match(/height:\s*(\d+)/)?.[1] ?? '0',
+          10
+        ) || height
+      ),
   })
   Object.defineProperty(tree, 'scrollTop', {
     configurable: true,
@@ -190,7 +200,7 @@ describe('ModelTreePalettePanel search', () => {
     await flushTree(wrapper)
 
     const rows = wrapper.findAll('[data-tree-node-id]')
-    const ids = rows.map((r) => r.attributes('data-tree-node-id'))
+    const ids = rows.map(r => r.attributes('data-tree-node-id'))
     expect(ids).toContain('folder')
     expect(ids).toContain('hit')
     expect(ids).not.toContain('miss')
@@ -256,10 +266,10 @@ describe('ModelTreePalettePanel search', () => {
     await flushTree(wrapper)
 
     expect(wrapper.get('[data-tree-node-id="folder"] .tree-node__name').classes()).toContain(
-      'tree-node__name--ancestor',
+      'tree-node__name--ancestor'
     )
     expect(wrapper.get('[data-tree-node-id="hit"] .tree-node__name').classes()).not.toContain(
-      'tree-node__name--ancestor',
+      'tree-node__name--ancestor'
     )
   })
 })
@@ -283,7 +293,7 @@ describe('ModelTreePalettePanel virtualization', () => {
             componentProperties: {},
             typeProperties: {},
           },
-        }),
+        })
       )
     }
 
@@ -315,7 +325,7 @@ describe('ModelTreePalettePanel virtualization', () => {
             componentProperties: {},
             typeProperties: {},
           },
-        }),
+        })
       )
     }
 

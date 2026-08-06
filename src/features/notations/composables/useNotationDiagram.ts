@@ -33,6 +33,7 @@ import type { CustomProperty, DiagramStyle } from "@/domain/attrs/notationAttrs"
 import type {
   NotationEditorState,
   EditorComponent,
+  EditorRelation,
 } from "../types"
 import {
   useNotationStyles,
@@ -155,6 +156,16 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const nt = state.value.nodeTypes.find((n) => n.id === component.nodeTypeId)
     if (!nt) return []
     return (nt.parsedAttrs.customProperties ?? []).filter((p) => !p.system)
+  }
+
+  function typeCustomPropertiesForRelation(relation: EditorRelation): CustomProperty[] {
+    const lt = state.value.linkTypes.find((t) => t.id === relation.linkTypeId)
+    if (!lt) return []
+    return (lt.parsedAttrs.customProperties ?? []).filter((p) => !p.system)
+  }
+
+  function relationCustomProperties(relation: EditorRelation): CustomProperty[] {
+    return relation.parsedAttrs.customProperties.filter((p) => !p.system)
   }
 
   function createComponentNode(
@@ -403,24 +414,24 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         disableTransformerFrame(existingSrc)
         if (existingTgt) disableTransformerFrame(existingTgt)
         const ds = relation.parsedAttrs.diagramStyle
-        // Update label in place — assigning a string recreates TextLabel and drops styles
-        // (then a delayed history flush can persist the wipe after edgeType changes).
-        if (existingEdge.label) {
-          existingEdge.label.text = relation.name
+        const newLabel = buildEdgeLabel(
+          relation.name,
+          ds,
+          relationCustomProperties(relation),
+          typeCustomPropertiesForRelation(relation),
+        )
+        if (newLabel === undefined) {
+          existingEdge.label = undefined
+        } else if (typeof newLabel === 'string') {
+          existingEdge.label = newLabel
+        } else {
+          existingEdge.label = new TextLabel(newLabel)
+        }
+        if (existingEdge.label instanceof TextLabel) {
           existingEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
             existingEdge.label.styleOverrides,
             ds
           )
-        } else {
-          const labelConfig = buildEdgeLabel(relation.name, ds)
-          existingEdge.label =
-            typeof labelConfig === 'string' ? labelConfig : new TextLabel(labelConfig)
-          if (existingEdge.label) {
-            existingEdge.label.style = mergeEdgeLabelStyleFromDiagramStyle(
-              existingEdge.label.styleOverrides,
-              ds
-            )
-          }
         }
         setTextLabelSpacing(existingEdge.label, {
           inset: ds?.labelInset
@@ -543,6 +554,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         const relationMeta = relationMetaBySourceId.get(srcNode.id)
         if (!relationMeta) continue
         const { pairedTarget: tgtNode, edgeStyle, relationName, relationId, diagramStyle: ds } = relationMeta
+        const relation = activeRelations.find((item) => item.id === relationId)
 
         // Position target relative to source
         tgtNode.x = srcNode.x + ANCHOR_GAP
@@ -561,7 +573,12 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           to: { nodeId: tgtNode.id },
           type: edgeTypeVal,
           arrowType: "none",
-          label: buildEdgeLabel(relationName, ds),
+          label: buildEdgeLabel(
+            relationName,
+            ds,
+            relation ? relationCustomProperties(relation) : [],
+            relation ? typeCustomPropertiesForRelation(relation) : [],
+          ),
           labelOffset: ds?.edgeLabelOffset ?? 18,
           ...(ds?.edgeLabelPosition != null ? { labelPosition: ds.edgeLabelPosition } : {}),
           ...(ds?.edgeLabelFollowPath ? { labelFollowPath: true } : {}),

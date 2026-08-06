@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-08-06
+
+### Changed
+- Dashboard entity cards move action buttons into the gradient header; the updated timestamp stays on its own line so card heights stay consistent.
+
 ## [0.17.1] - 2026-08-06
 
 ### Fixed

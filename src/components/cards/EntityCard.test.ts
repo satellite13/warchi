@@ -56,19 +56,19 @@ describe('EntityCard', () => {
 
   it('delete button emits delete', async () => {
     const wrapper = mountCard()
-    await wrapper.find('.model-card__delete').trigger('click')
+    await wrapper.find('[aria-label="common.delete"]').trigger('click')
     expect(wrapper.emitted('delete')).toBeTruthy()
   })
 
   it('rename button emits rename', async () => {
     const wrapper = mountCard()
-    await wrapper.find('.model-card__rename').trigger('click')
+    await wrapper.find('[aria-label="common.rename"]').trigger('click')
     expect(wrapper.emitted('rename')).toBeTruthy()
   })
 
   it('export button emits export when canExport', async () => {
     const wrapper = mountCard({ canExport: true, exportTitle: 'Export package' })
-    const button = wrapper.find('.model-card__export')
+    const button = wrapper.find('[aria-label="Export package"]')
     expect(button.exists()).toBe(true)
     await button.trigger('click')
     expect(wrapper.emitted('export')).toBeTruthy()
@@ -76,7 +76,21 @@ describe('EntityCard', () => {
 
   it('does not show export button when canExport is false', () => {
     const wrapper = mountCard()
-    expect(wrapper.find('.model-card__export').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="common.export"]').exists()).toBe(false)
+  })
+
+  it('keeps action buttons in the gradient header', () => {
+    const wrapper = mountCard({ canExport: true, canShare: true })
+    const actions = wrapper.find('.model-card__gradient .model-card__actions')
+    expect(actions.exists()).toBe(true)
+    expect(actions.findAll('.model-card__action').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('renders updated date on its own line below version', () => {
+    const wrapper = mountCard({ updatedAt: '2026-08-06T11:03:00Z' })
+    const bodyChildren = wrapper.find('.model-card__body').element.children
+    const tags = Array.from(bodyChildren).map(el => el.className)
+    expect(tags.indexOf('model-card__updated')).toBeGreaterThan(tags.indexOf('model-card__version'))
   })
 
   it('version select emits version-change', async () => {

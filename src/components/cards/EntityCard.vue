@@ -60,104 +60,122 @@ const formattedUpdatedAt = computed(() => {
   <div class="model-card-wrap" :class="{ 'model-card-wrap--stacked': isStacked }">
     <div class="model-card" @click="emit('click')">
       <div class="model-card__gradient" :style="{ background: cardColor }">
-      <div class="model-card__icon-wrap">
-        <div class="model-card__icon">
-          <template v-if="icon">
-            <img
-              v-if="icon"
-              class="model-card__icon-img"
-              :src="`/icons/${icon}.svg`"
-              :alt="name"
+        <div class="model-card__icon-wrap">
+          <div class="model-card__icon">
+            <template v-if="icon">
+              <img
+                class="model-card__icon-img"
+                :src="`/icons/${icon}.svg`"
+                :alt="name"
+              >
+            </template>
+            <slot v-else name="icon" />
+          </div>
+          <button
+            v-if="canChangeIcon"
+            type="button"
+            class="model-card__icon-edit"
+            :aria-label="t('common.changeIcon')"
+            :title="t('common.changeIcon')"
+            @click.stop="emit('change-icon')"
+          >
+            <UiIcon name="edit" />
+          </button>
+        </div>
+
+        <div class="model-card__actions" @click.stop>
+          <button
+            v-if="canExport"
+            type="button"
+            class="model-card__action"
+            :aria-label="exportTitle || t('common.export')"
+            :title="exportTitle || t('common.export')"
+            @click="emit('export')"
+          >
+            <UiIcon name="download" :alt="exportTitle || t('common.export')" />
+          </button>
+          <button
+            v-if="showVersionTreeButton && versionTreeI18nPrefix"
+            type="button"
+            class="model-card__action"
+            :aria-label="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+            :title="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+            @click="emit('show-version-tree')"
+          >
+            <UiIcon
+              :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+              name="account_tree"
+            />
+          </button>
+          <button
+            v-if="canShare"
+            type="button"
+            class="model-card__action"
+            :aria-label="t('share.manageAccess')"
+            :title="t('common.share')"
+            @click="emit('share')"
+          >
+            <UiIcon name="share" :alt="t('common.share')" />
+          </button>
+          <button
+            v-if="canRename !== false"
+            type="button"
+            class="model-card__action"
+            :aria-label="t('common.rename')"
+            :title="t('common.rename')"
+            @click="emit('rename')"
+          >
+            <UiIcon name="edit" :alt="t('common.rename')" />
+          </button>
+          <button
+            v-if="canDelete !== false"
+            type="button"
+            class="model-card__action model-card__action--danger"
+            :aria-label="t('common.delete')"
+            :title="t('common.delete')"
+            @click="emit('delete')"
+          >
+            <UiIcon name="delete" :alt="t('common.delete')" />
+          </button>
+        </div>
+      </div>
+
+      <div class="model-card__body">
+        <span class="model-card__title">{{ name }}</span>
+        <div class="model-card__version">
+          <span v-if="!versions || versions.length <= 1" class="model-card__badge">v{{ version }}</span>
+          <label v-else class="model-card__select">
+            <span class="model-card__select-label">{{ t("common.version") }}</span>
+            <select
+              :value="version"
+              @click.stop
+              @change="emit('version-change', ($event.target as HTMLSelectElement).value)"
             >
-          </template>
-          <slot v-else name="icon" />
+              <option v-for="ver in versions" :key="ver" :value="ver">v{{ ver }}</option>
+            </select>
+          </label>
+          <button
+            v-if="showCreateFromVersionButton"
+            type="button"
+            class="model-card__copy-version"
+            :aria-label="t('common.createFromVersion')"
+            :title="t('common.createFromVersion')"
+            @click.stop="emit('create-from-version')"
+          >
+            <UiIcon name="library_add" :alt="t('common.createFromVersion')" />
+          </button>
         </div>
-        <button
-          v-if="canChangeIcon"
-          type="button"
-          class="model-card__icon-edit"
-          :aria-label="t('common.changeIcon')"
-          :title="t('common.changeIcon')"
-          @click.stop="emit('change-icon')"
-        >
-          <UiIcon name="edit" />
-        </button>
-      </div>
-    </div>
-    <div class="model-card__body">
-      <button class="model-card__delete" type="button" :aria-label="t('common.delete')" :title="t('common.delete')"
-              v-if="canDelete !== false"
-              @click.stop="emit('delete')">
-        <UiIcon name="delete" :alt="t('common.delete')" />
-      </button>
-      <button class="model-card__rename" type="button" :aria-label="t('common.rename')" :title="t('common.rename')"
-              v-if="canRename !== false"
-              @click.stop="emit('rename')">
-        <UiIcon name="edit" :alt="t('common.rename')" />
-      </button>
-      <button
-        v-if="canShare"
-        class="model-card__share"
-        type="button"
-        :aria-label="t('share.manageAccess')"
-        :title="t('common.share')"
-        @click.stop="emit('share')"
-      >
-        <UiIcon name="share" :alt="t('common.share')" />
-      </button>
-      <button
-        v-if="canExport"
-        type="button"
-        class="model-card__export"
-        :class="{ 'model-card__export--after-tree': showVersionTreeButton }"
-        :aria-label="exportTitle || t('common.export')"
-        :title="exportTitle || t('common.export')"
-        @click.stop="emit('export')"
-      >
-        <UiIcon name="download" :alt="exportTitle || t('common.export')" />
-      </button>
-      <button
-        v-if="showVersionTreeButton && versionTreeI18nPrefix"
-        class="model-card__version-tree"
-        type="button"
-        :aria-label="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-        :title="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-        @click.stop="emit('show-version-tree')"
-      >
-        <UiIcon :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })" name="account_tree" />
-      </button>
-      <span class="model-card__title">{{ name }}</span>
-      <div class="model-card__version">
-        <span v-if="!versions || versions.length <= 1" class="model-card__badge">v{{ version }}</span>
-        <label v-else class="model-card__select">
-          <span class="model-card__select-label">{{ t("common.version") }}</span>
-          <select :value="version" @click.stop
-                  @change="emit('version-change', ($event.target as HTMLSelectElement).value)">
-            <option v-for="ver in versions" :key="ver" :value="ver">v{{ ver }}</option>
-          </select>
-        </label>
-        <button
-          v-if="showCreateFromVersionButton"
-          type="button"
-          class="model-card__copy-version"
-          :aria-label="t('common.createFromVersion')"
-          :title="t('common.createFromVersion')"
-          @click.stop="emit('create-from-version')"
-        >
-          <UiIcon name="library_add" :alt="t('common.createFromVersion')" />
-        </button>
         <span class="model-card__updated">{{ t("common.updatedAt") }}: {{ formattedUpdatedAt }}</span>
-      </div>
-      <div v-if="accessLabel" class="model-card__access-badge">
-        {{ accessLabel }}
-      </div>
-      <div class="model-card__owner">
-        <UserAvatar :label="ownerEmail" size="md"/>
-        <div class="owner-meta">
-          <span class="owner-email">{{ ownerEmail || t("common.unknownUser") }}</span>
+        <div v-if="accessLabel" class="model-card__access-badge">
+          {{ accessLabel }}
+        </div>
+        <div class="model-card__owner">
+          <UserAvatar :label="ownerEmail" size="md"/>
+          <div class="owner-meta">
+            <span class="owner-email">{{ ownerEmail || t("common.unknownUser") }}</span>
+          </div>
         </div>
       </div>
-    </div>
     </div>
   </div>
 </template>
@@ -227,7 +245,9 @@ const formattedUpdatedAt = computed(() => {
   margin: -1px -1px 0;
   display: flex;
   align-items: center;
-  justify-content: left;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px 0 24px;
   position: relative;
   overflow: hidden;
 }
@@ -237,12 +257,13 @@ const formattedUpdatedAt = computed(() => {
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.15) 100%);
+  pointer-events: none;
 }
 
 .model-card__icon-wrap {
-  margin-left: 24px;
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
 }
 
 .model-card__icon {
@@ -277,7 +298,6 @@ const formattedUpdatedAt = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
   border-radius: 6px;
   background: var(--surface);
   color: var(--text-muted);
@@ -303,90 +323,53 @@ const formattedUpdatedAt = computed(() => {
   border-color: var(--primary);
 }
 
+.model-card__actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.model-card__action {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.model-card__action:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.model-card__action--danger:hover {
+  background: color-mix(in srgb, var(--danger) 72%, #fff);
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
+.model-card__action :deep(.ui-icon),
+.model-card__action :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+
 .model-card__body {
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  position: relative;
-}
-
-.model-card__delete,
-.model-card__rename,
-.model-card__share,
-.model-card__export,
-.model-card__version-tree {
-  position: absolute;
-  top: 12px;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-.model-card__delete {
-  right: 12px;
-}
-
-.model-card__rename {
-  right: 44px;
-}
-
-.model-card__share {
-  right: 76px;
-}
-
-.model-card__version-tree {
-  right: 108px;
-}
-
-.model-card__export {
-  right: 108px;
-}
-
-.model-card__export--after-tree {
-  right: 140px;
-}
-
-.model-card__delete:hover {
-  background: var(--surface-strong);
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.model-card__rename:hover {
-  background: var(--surface-strong);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.model-card__share:hover,
-.model-card__export:hover,
-.model-card__version-tree:hover {
-  background: var(--surface-strong);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.model-card__delete :deep(.ui-icon),
-.model-card__rename :deep(.ui-icon),
-.model-card__share :deep(.ui-icon),
-.model-card__export :deep(.ui-icon),
-.model-card__version-tree :deep(.ui-icon),
-.model-card__delete :deep(svg),
-.model-card__rename :deep(svg),
-.model-card__share :deep(svg),
-.model-card__export :deep(svg),
-.model-card__version-tree :deep(svg) {
-  width: 16px;
-  height: 16px;
 }
 
 .model-card__title {
@@ -395,6 +378,9 @@ const formattedUpdatedAt = computed(() => {
   color: var(--base-text);
   line-height: 1.3;
   letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-card__version {
@@ -490,8 +476,10 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .model-card__updated {
+  display: block;
   font-size: 12px;
   color: var(--text-subtle);
+  line-height: 1.3;
 }
 
 .model-card__access-badge {

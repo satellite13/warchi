@@ -20,6 +20,7 @@ A single MCP API key has global scopes (`models:read` / `models:write`) and an o
 
 - Editing grants after key creation by the owner (revoke + recreate).
 - Admin creating or editing another user’s grants (admin may only list + revoke).
+- Auto-revoke of API keys when a user is deactivated (soft block via `isActive` is enough).
 - Per-diagram or per-notation scopes.
 - Multiple secrets behind one MCP connection.
 - Changing how `warchi-mcp` authenticates (still one key → exchange → JWT).
@@ -28,31 +29,25 @@ A single MCP API key has global scopes (`models:read` / `models:write`) and an o
 
 ## Admin + deactivation (security)
 
-### Current behavior (today)
+### Deactivation (keep current behavior)
 
 | Event | API keys |
 |-------|----------|
-| User deactivated (`isActive=false`) | Keys are **not** revoked (`revokedAt` stays null). |
-| Exchange while inactive | `401` — `User is inactive` (`ApiKeyService.exchange`). |
-| MCP/user JWT while inactive | `JwtAuthenticationFilter` refuses auth if `!user.isActive`. |
-| User reactivated | Previously issued keys work again (exchange succeeds). |
+| User deactivated (`isActive=false`) | Keys are **not** auto-revoked. |
+| Exchange while inactive | `401` — `User is inactive`. |
+| MCP/user JWT while inactive | Filter refuses auth if `!user.isActive`. |
+| User reactivated | Same keys work again. |
 
-So deactivation is a soft block, not a revoke. That is weak for long-lived MCP secrets (leak + temporary disable → key still valid after re-enable).
+No auto-revoke on deactivate in v1 — soft block via `isActive` is enough. To kill a key permanently, owner or admin revokes it explicitly.
 
-### Required in this feature
+### Admin management (required)
 
-1. **Auto-revoke on deactivate**  
-   When an admin sets `isActive` from `true` → `false`, revoke **all** non-revoked API keys of that user (`revokedAt = now`).  
-   Reactivation does **not** restore keys — user must create new ones.  
-   Idempotent if already inactive / keys already revoked.
+Cerbos `admin_panel` / same gate as user admin:
 
-2. **Admin API** (Cerbos `admin_panel` / same gate as user admin):
-   - `GET /api/v1/admin/users/{userId}/api-keys` — list keys for that user (metadata only: id, name, prefix, mode, scopes/grants summary, dates, revokedAt). Never plaintext.
-   - `DELETE /api/v1/admin/users/{userId}/api-keys/{keyId}` — revoke that key (same effect as owner revoke).
+- `GET /api/v1/admin/users/{userId}/api-keys` — list keys (metadata only: id, name, prefix, mode, scopes/grants summary, dates, revokedAt). Never plaintext.
+- `DELETE /api/v1/admin/users/{userId}/api-keys/{keyId}` — revoke that key (same effect as owner revoke).
 
-3. **Admin UI** (`AdminUsersView` or user detail drawer):
-   - Section «API-ключи»: list + «Отозвать» with confirm.
-   - Deactivate toggle copy notes that keys will be revoked.
+**Admin UI** (`AdminUsersView` or user detail): section «API-ключи» — list + «Отозвать» with confirm.
 
 Owner self-service (`/api/v1/api-keys`) unchanged.
 
@@ -202,7 +197,6 @@ Management (user session + CSRF):
 - `DELETE` — revoke (unchanged)
 - `POST /api/v1/auth/api-keys/exchange` — returns JWT + `mode` / `scopes` / `grants`
 - Admin (see above): `GET/DELETE /api/v1/admin/users/{userId}/api-keys[/{keyId}]`
-- User update path that sets `isActive=false` must call key revoke-all for that owner
 
 ## Docs
 
@@ -219,7 +213,7 @@ Update `warchi-mcp` auth docs (ru/en), README security bullets, and profile help
 - Notation catalog still visible under grants (owner-accessible).
 - Exchange JWT contains `mode` + `grants`; filter rejects MCP token on `/api-keys`.
 - PATCH cannot change scopes/grants.
-- Deactivate user → all their keys get `revokedAt`; exchange → 401; reactivate → old key still 401.
+- Deactivated user: exchange → 401; MCP JWT not authenticated; keys remain non-revoked; after reactivate exchange works again.
 - Admin list keys for user; admin revoke one key; non-admin → 403.
 - UI: cannot uncheck read while write on (global and per-row); cannot submit empty grants.
 

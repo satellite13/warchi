@@ -151,6 +151,37 @@ describe('buildEdgeLabel', () => {
     const result = expectTextLabelOptions(buildEdgeLabel('E', ds))
     expect(result.inset).toBe(4)
   })
+
+  it('returns TextLabelOptions with template', () => {
+    const ds: DiagramStyle = { labelTemplate: '<<${name}>>' }
+    const result = expectTextLabelOptions(buildEdgeLabel('Serving', ds))
+    expect(result.text).toBe('<<Serving>>')
+    expect(result.editableText).toBe('Serving')
+  })
+
+  it('resolves #{code}+${protocol} from schemas', () => {
+    const ds: DiagramStyle = { labelTemplate: '#{code}+${protocol}' }
+    const linkTypeProps = [makeCustomProp({ id: 't1', name: 'code', defaultValue: 'HTTP' })]
+    const relationProps = [makeCustomProp({ id: 'r1', name: 'protocol', defaultValue: '1.0' })]
+    const result = expectTextLabelOptions(
+      buildEdgeLabel('Link', ds, relationProps, linkTypeProps)
+    )
+    expect(result.text).toBe('HTTP+1.0')
+    expect(result.editableText).toBe('Link')
+  })
+
+  it('returns TextLabelOptions with editableText for template-only without style', () => {
+    const ds: DiagramStyle = { labelTemplate: '${name}' }
+    const result = expectTextLabelOptions(buildEdgeLabel('Edge', ds))
+    expect(result.text).toBe('Edge')
+    expect(result.editableText).toBe('Edge')
+  })
+
+  it('returns undefined when showLabel is false', () => {
+    expect(buildEdgeLabel('Edge', { showLabel: false })).toBeUndefined()
+    expect(buildEdgeLabel('Edge', { showLabel: false, labelColor: '#f00' })).toBeUndefined()
+    expect(buildEdgeLabel('Edge', { showLabel: false, labelTemplate: '${name}' })).toBeUndefined()
+  })
 })
 
 describe('mergeEdgeLabelStyleFromDiagramStyle', () => {

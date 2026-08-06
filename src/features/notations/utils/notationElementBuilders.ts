@@ -84,12 +84,41 @@ export function buildNodeLabel(
   return opts
 }
 
-export function buildEdgeLabel(name: string, ds?: DiagramStyle): string | TextLabelOptions {
-  const labelInset = ds?.labelInset
-  if (!ds?.labelColor && ds?.labelOpacity == null && !ds?.labelFontSize && labelInset == null) {
-    return name
+export function buildEdgeLabel(
+  name: string,
+  ds?: DiagramStyle,
+  relationProperties?: CustomProperty[],
+  linkTypeProperties?: CustomProperty[],
+): string | TextLabelOptions | undefined {
+  if (ds?.showLabel === false) {
+    return undefined
   }
-  const opts: TextLabelOptions = { text: name }
+
+  const hasTemplate = !!ds?.labelTemplate
+  const displayText = hasTemplate
+    ? resolveLabelTemplate(
+        ds!.labelTemplate!,
+        name,
+        relationProperties ?? [],
+        linkTypeProperties ?? [],
+      )
+    : name
+
+  const labelInset = ds?.labelInset
+  const hasStyle = !!(
+    ds?.labelColor ||
+    ds?.labelOpacity != null ||
+    ds?.labelFontSize ||
+    labelInset != null
+  )
+
+  if (!hasStyle && !hasTemplate) {
+    return displayText
+  }
+  const opts: TextLabelOptions = { text: displayText }
+  if (hasTemplate) {
+    opts.editableText = name
+  }
   const style: TextStyle = {}
   if (ds?.labelColor) style.color = ds.labelColor
   if (ds?.labelOpacity != null) style.opacity = ds.labelOpacity

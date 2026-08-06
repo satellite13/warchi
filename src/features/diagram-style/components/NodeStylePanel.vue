@@ -87,7 +87,7 @@ const props = defineProps<{
 }>();
 
 type EdgeKind = "straight" | "polyline" | "editable-polyline" | "bezier";
-type MarkerKind = "none" | "arrow" | "open" | "diamond" | "circle" | "square";
+type MarkerKind = "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth";
 
 const emit = defineEmits<{
   (e: "style-change", style: DiagramStyle): void;
@@ -551,7 +551,8 @@ function toMarkerKind(value: unknown, fallback: MarkerKind): MarkerKind {
     value === "open" ||
     value === "diamond" ||
     value === "circle" ||
-    value === "square"
+    value === "square" ||
+    value === "stealth"
     ? value
     : fallback;
 }
@@ -1410,7 +1411,7 @@ function handleEdgeTypeChange(value: string) {
 }
 
 function handleEdgeEndMarkerChange(value: string) {
-  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square";
+  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth";
   edgeEndMarker.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1421,7 +1422,7 @@ function handleEdgeEndMarkerChange(value: string) {
 }
 
 function handleEdgeStartMarkerChange(value: string) {
-  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square";
+  const v = value as "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth";
   edgeStartMarker.value = v;
   resetRelationPreset();
   if (!props.selectedElementId || !props.interactionManager) return;
@@ -1565,7 +1566,7 @@ function handleEdgeLabelLineGapChange(checked: boolean) {
 }
 
 function buildMarkerConfig(
-  type: "none" | "arrow" | "open" | "diamond" | "circle" | "square",
+  type: "none" | "arrow" | "open" | "diamond" | "circle" | "square" | "stealth",
   size: number,
   fillColor: string,
   fillOpacity: number
@@ -1878,6 +1879,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <select class="sp-select sp-select--flex" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
+                      <option value="stealth">{{ t("nodeStyle.markerStealth") }}</option>
                       <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>
@@ -1904,6 +1906,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <select class="sp-select sp-select--flex" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
+                      <option value="stealth">{{ t("nodeStyle.markerStealth") }}</option>
                       <option value="open">{{ t("nodeStyle.markerOpen") }}</option>
                       <option value="diamond">{{ t("nodeStyle.markerDiamond") }}</option>
                       <option value="circle">{{ t("nodeStyle.markerCircle") }}</option>

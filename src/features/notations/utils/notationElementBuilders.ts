@@ -164,7 +164,8 @@ export function buildMarker(
     typeStr === 'open' ||
     typeStr === 'diamond' ||
     typeStr === 'circle' ||
-    typeStr === 'square'
+    typeStr === 'square' ||
+    typeStr === 'stealth'
       ? (typeStr as ArrowMarkerType)
       : undefined
   if (!markerType) return undefined

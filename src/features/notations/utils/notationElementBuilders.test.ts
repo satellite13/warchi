@@ -268,7 +268,7 @@ describe('buildMarker', () => {
   })
 
   it('returns marker for all valid types', () => {
-    for (const t of ['arrow', 'open', 'diamond', 'circle', 'square']) {
+    for (const t of ['arrow', 'open', 'diamond', 'circle', 'square', 'stealth']) {
       expect(buildMarker(t, {}, 'end')!.type).toBe(t)
     }
   })

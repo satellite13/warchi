@@ -53,6 +53,7 @@ const emit = defineEmits<{
   moveNode: [nodeId: string, targetNodeId: string | null, position: "above" | "below" | "inside"]
   renameNode: [nodeId: string, name: string]
   renameDiagram: [diagramId: string, name: string]
+  copyDiagramToModel: [diagramId: string]
   toggleSyncSelection: []
 }>()
 const { t } = useI18n()
@@ -675,6 +676,14 @@ defineExpose({ expandToNode, focusNode })
           </button>
           <button
             type="button"
+            class="mini-btn diagram-row__copy-btn"
+            :title="t('models.diagramCopy.title')"
+            @click.stop="emit('copyDiagramToModel', row.diagram.id)"
+          >
+            <UiIcon name="content_copy" />
+          </button>
+          <button
+            type="button"
             class="mini-btn mini-btn--danger"
             @click="emit('deleteDiagram', row.diagram.id)"
           >
@@ -1107,13 +1116,15 @@ defineExpose({ expandToNode, focusNode })
 }
 
 .diagram-row .mini-btn--danger,
-.diagram-row .diagram-row__edit-btn {
+.diagram-row .diagram-row__edit-btn,
+.diagram-row .diagram-row__copy-btn {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
 .diagram-row:hover .mini-btn--danger,
-.diagram-row:hover .diagram-row__edit-btn {
+.diagram-row:hover .diagram-row__edit-btn,
+.diagram-row:hover .diagram-row__copy-btn {
   opacity: 1;
 }
 

@@ -62,6 +62,7 @@ import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
+import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
   type CustomProperty,
@@ -263,6 +264,10 @@ const activeRightTab = ref('properties')
 const { canShare: canShareModel } = useCanShare(model)
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
+const showDiagramCopyWizard = ref(false)
+const sourceDiagramIdForCopy = ref('')
+const diagramCopySuccess = ref(false)
+let diagramCopySuccessTimer: ReturnType<typeof setTimeout> | null = null
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
 const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -2461,6 +2466,27 @@ const copyDiagramJson = () => {
   navigator.clipboard.writeText(diagramJsonContent.value)
 }
 
+function openDiagramCopyWizard(diagramId: string): void {
+  sourceDiagramIdForCopy.value = diagramId
+  showDiagramCopyWizard.value = true
+}
+
+function handleDiagramCopyCommitted(payload: { targetModelId: string; diagramId: string }): void {
+  showDiagramCopyWizard.value = false
+  sourceDiagramIdForCopy.value = ''
+  if (diagramCopySuccessTimer) clearTimeout(diagramCopySuccessTimer)
+  diagramCopySuccess.value = true
+  diagramCopySuccessTimer = setTimeout(() => {
+    diagramCopySuccess.value = false
+    diagramCopySuccessTimer = null
+  }, 5000)
+  void router.push({
+    name: 'model-editor',
+    params: { id: payload.targetModelId },
+    query: { diagramId: payload.diagramId },
+  })
+}
+
 const router = useRouter()
 const route = useRoute()
 const applyRouteDiagramSelection = () => {
@@ -2541,6 +2567,10 @@ onBeforeUnmount(() => {
     clearTimeout(uiErrorTimer)
     uiErrorTimer = null
   }
+  if (diagramCopySuccessTimer) {
+    clearTimeout(diagramCopySuccessTimer)
+    diagramCopySuccessTimer = null
+  }
 })
 </script>
 
@@ -2613,6 +2643,7 @@ onBeforeUnmount(() => {
             @move-node="handleMoveNode"
             @rename-node="handleRenameNode"
             @rename-diagram="handleRenameDiagram"
+            @copy-diagram-to-model="openDiagramCopyWizard"
           />
         </template>
 
@@ -2884,9 +2915,18 @@ onBeforeUnmount(() => {
 
   <SaveToast
     :saving="isSaving"
-    :success="saveSuccess"
+    :success="saveSuccess || diagramCopySuccess"
+    :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
     :progress="saveProgress"
+  />
+
+  <DiagramCopyWizard
+    :open="showDiagramCopyWizard"
+    :source-model-id="model?.id ?? ''"
+    :source-diagram-id="sourceDiagramIdForCopy"
+    @close="showDiagramCopyWizard = false"
+    @committed="handleDiagramCopyCommitted"
   />
 
   <BatchSaveConflictModal

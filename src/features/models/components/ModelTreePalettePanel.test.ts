@@ -31,4 +31,32 @@ describe('ModelTreePalettePanel', () => {
 
     expect(wrapper.html().length).toBeGreaterThan(0)
   })
+
+  it('emits the selected diagram id to open the copy wizard', async () => {
+    const wrapper = mount(ModelTreePalettePanel, {
+      props: {
+        nodes: [],
+        diagrams: [
+          {
+            id: 'diagram-1',
+            name: 'Source diagram',
+            version: '1.0.0',
+            nodeId: null,
+          },
+        ],
+        nodeTypes: [],
+        selectedNodeId: null,
+        selectedDiagramId: null,
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+        },
+      },
+    })
+
+    await wrapper.get('button[title="models.diagramCopy.title"]').trigger('click')
+
+    expect(wrapper.emitted('copyDiagramToModel')).toEqual([['diagram-1']])
+  })
 })

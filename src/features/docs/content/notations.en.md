@@ -54,7 +54,7 @@ For each node type you can configure:
 For link types you configure:
 
 - Line type (solid, dashed, dotted)
-- Arrow style (open, closed, diamond, etc.)
+- Arrow style (`none`, `arrow`, `open`, `diamond`, `circle`, `square`, **stealth**)
 - Color and line width
 
 ### Node Shapes

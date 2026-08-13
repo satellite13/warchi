@@ -13,6 +13,8 @@
 - **Types** — manage node/link types including custom and system properties
 - **Custom properties** — `string`, `number`, `boolean`, `enum` with defaults and validation
 - **Sharing** — ACL sharing for models, notations, types, and shapes with `VIEW`/`EDIT` access levels
+- **Model package and diagram copy** — ZIP transfer between environments and copying a diagram into another model
+- **SSO and MCP** — optional corporate sign-in (OIDC) and API keys for agents (Cursor and others)
 
 ## Application Structure
 

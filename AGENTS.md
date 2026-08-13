@@ -236,7 +236,9 @@ Internal flags (like `_fromType`) are stripped before serialization.
 ### Authentication & Security
 
 - JWT tokens are held in httpOnly cookies; frontend localStorage stores only the user profile for UI state
-  (profile in localStorage is not a security boundary; see in-app docs `/docs/auth`)
+ (profile in localStorage is not a security boundary; see in-app docs `/docs/auth`)
+- Optional OIDC SSO (login button + profile link/unlink) when arepos reports SSO enabled
+- Profile API keys (`warchi_ak_…`) for remote MCP: `mode=all` or per-model `grants`; plaintext shown once; admin can revoke from the user card
 - Automatic cookie-session refresh on 401 responses
 - Custom events for auth state changes (`warchi-auth-updated`, `warchi-auth-cleared`)
 - Router guards check `isAuthenticated` and `requiresAdminPanel` via permission API for admin routes

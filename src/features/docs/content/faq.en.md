@@ -44,6 +44,14 @@ The open model editor uses live sync (WebSocket + polling). Your local unsaved d
 
 In the model editor header: **Relation matrix** and **Import Open Exchange (XML)**. See [Models](/docs/models).
 
+### How do I move a model or copy a diagram?
+
+Export a model ZIP from the card or editor header and import it from the model list (creates a **new** model; a notation with the same name and version may be reused). Copying a diagram into another model is an editor action; wiki and files are not copied in v1. See [Models](/docs/models) and [Diagrams](/docs/diagrams).
+
+### How do I connect an agent (MCP)?
+
+In [Profile](/docs/profile) create an API key (all accessible models or selected ones), store the `warchi_ak_…` secret, and put it in your MCP client. Revoking the key immediately cuts access.
+
 ## Notations
 
 ### Why do I need notations?

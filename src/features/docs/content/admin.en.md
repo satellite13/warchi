@@ -10,7 +10,8 @@ User management supports:
 - role change (`USER` / `ADMIN`);
 - account activation/blocking;
 - profile editing for a user;
-- password reset/change for a user.
+- password reset/change for a user;
+- view and **revoke** the user’s API keys (plaintext is never shown; revoke immediately blocks MCP and key exchange).
 
 Changes are applied immediately after confirmation.
 

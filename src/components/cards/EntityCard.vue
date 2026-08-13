@@ -184,6 +184,14 @@ const formattedUpdatedAt = computed(() => {
 .model-card-wrap {
   position: relative;
   display: block;
+  isolation: isolate;
+  z-index: 0;
+  transition: transform 0.25s ease;
+}
+
+.model-card-wrap:hover {
+  z-index: 1;
+  transform: translateY(-4px);
 }
 
 .model-card-wrap--stacked {
@@ -202,7 +210,7 @@ const formattedUpdatedAt = computed(() => {
   border: 1px solid var(--border);
   background: var(--surface);
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 .model-card-wrap--stacked::before {
@@ -231,12 +239,11 @@ const formattedUpdatedAt = computed(() => {
   cursor: pointer;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.model-card:hover {
+.model-card-wrap:hover .model-card {
   box-shadow: var(--shadow-md), var(--shadow-glow);
-  transform: translateY(-4px);
   border-color: var(--border-strong);
 }
 
@@ -344,7 +351,6 @@ const formattedUpdatedAt = computed(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(6px);
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 

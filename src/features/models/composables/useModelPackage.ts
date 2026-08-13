@@ -1,4 +1,4 @@
-import { apiDownload, apiGet, apiUpload } from '@/api/apiClient'
+import { apiDownload, apiGet, apiPost, apiUpload } from '@/api/apiClient'
 
 export type ModelPackageImportStage =
   | 'UPLOADING'
@@ -19,14 +19,38 @@ export type ModelPackageImportProgress = {
   message?: string | null
 }
 
+export type ModelPackageImportConflict = {
+  entity: 'model' | 'notation' | string
+  name: string
+  version: string
+  suggestedVersion?: string | null
+  details?: string[]
+}
+
+export type ModelPackageImportErrorCode =
+  | 'CONFLICT'
+  | 'MODEL_EXISTS'
+  | 'NOTATION_EXISTS_FORBIDDEN'
+  | 'NOTATION_INCOMPATIBLE'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'BAD_REQUEST'
+  | 'TIMEOUT'
+
 export type ModelPackageImportResult =
   | { ok: true; modelId: string; modelName: string; modelVersion: string; warnings: string[] }
   | {
       ok: false
       status: number
       message: string
-      code?: 'CONFLICT' | 'PAYLOAD_TOO_LARGE' | 'BAD_REQUEST' | 'TIMEOUT'
+      code?: ModelPackageImportErrorCode
+      jobId?: string
+      conflict?: ModelPackageImportConflict
     }
+
+export type ModelPackageImportOverrides = {
+  targetModelName?: string
+  targetModelVersion?: string
+}
 
 type ModelPackageImportAcceptedResponse = {
   jobId: string
@@ -49,20 +73,94 @@ type ModelPackageImportJobStatusResponse = {
     status: number
     message: string
     code?: string | null
+    conflict?: ModelPackageImportConflict | null
   } | null
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 1000
 const DEFAULT_POLL_TIMEOUT_MS = 60 * 60 * 1000
 
+function normalizeConflict(
+  conflict: ModelPackageImportConflict | null | undefined
+): ModelPackageImportConflict | undefined {
+  if (!conflict || typeof conflict !== 'object') return undefined
+  const name = typeof conflict.name === 'string' ? conflict.name : ''
+  const version = typeof conflict.version === 'string' ? conflict.version : ''
+  if (!name || !version) return undefined
+  return {
+    entity: typeof conflict.entity === 'string' ? conflict.entity : 'model',
+    name,
+    version,
+    suggestedVersion:
+      typeof conflict.suggestedVersion === 'string' ? conflict.suggestedVersion : null,
+    details: Array.isArray(conflict.details)
+      ? conflict.details.filter((d): d is string => typeof d === 'string')
+      : [],
+  }
+}
+
 function mapImportError(
   status: number,
   message: string,
-  code?: string | null
+  code?: string | null,
+  options?: { jobId?: string; conflict?: ModelPackageImportConflict | null }
 ): Extract<ModelPackageImportResult, { ok: false }> {
   const normalizedCode = code?.trim().toUpperCase()
-  if (status === 409 || normalizedCode === 'CONFLICT') {
-    return { ok: false, status, message, code: 'CONFLICT' }
+  const conflict = normalizeConflict(options?.conflict)
+  const jobId = options?.jobId
+
+  if (status === 409 || normalizedCode === 'CONFLICT' || normalizedCode === 'MODEL_EXISTS') {
+    if (normalizedCode === 'MODEL_EXISTS' || conflict?.entity === 'model') {
+      return {
+        ok: false,
+        status,
+        message,
+        code: 'MODEL_EXISTS',
+        jobId,
+        conflict,
+      }
+    }
+    if (normalizedCode === 'NOTATION_EXISTS_FORBIDDEN') {
+      return {
+        ok: false,
+        status,
+        message,
+        code: 'NOTATION_EXISTS_FORBIDDEN',
+        jobId,
+        conflict,
+      }
+    }
+    if (normalizedCode === 'NOTATION_INCOMPATIBLE') {
+      return {
+        ok: false,
+        status,
+        message,
+        code: 'NOTATION_INCOMPATIBLE',
+        jobId,
+        conflict,
+      }
+    }
+    return { ok: false, status, message, code: 'CONFLICT', jobId, conflict }
+  }
+  if (normalizedCode === 'NOTATION_EXISTS_FORBIDDEN') {
+    return {
+      ok: false,
+      status,
+      message,
+      code: 'NOTATION_EXISTS_FORBIDDEN',
+      jobId,
+      conflict,
+    }
+  }
+  if (normalizedCode === 'NOTATION_INCOMPATIBLE') {
+    return {
+      ok: false,
+      status,
+      message,
+      code: 'NOTATION_INCOMPATIBLE',
+      jobId,
+      conflict,
+    }
   }
   if (status === 413 || normalizedCode === 'PAYLOAD_TOO_LARGE') {
     return { ok: false, status, message, code: 'PAYLOAD_TOO_LARGE' }
@@ -78,7 +176,7 @@ function mapImportError(
       code: 'TIMEOUT',
     }
   }
-  return { ok: false, status, message }
+  return { ok: false, status, message, jobId, conflict }
 }
 
 function triggerBlobDownload(blob: Blob, fileName: string): void {
@@ -142,7 +240,8 @@ async function pollImportJob(
       return mapImportError(
         error?.status ?? 500,
         error?.message || job.message || 'Import failed',
-        error?.code
+        error?.code,
+        { jobId, conflict: error?.conflict }
       )
     }
 
@@ -216,6 +315,32 @@ export async function uploadModelPackage(
     modelVersion: sync.modelVersion ?? '',
     warnings: Array.isArray(sync.warnings) ? sync.warnings : [],
   }
+}
+
+export async function retryModelPackageImport(
+  jobId: string,
+  overrides: ModelPackageImportOverrides,
+  onProgress?: (progress: ModelPackageImportProgress) => void,
+  options?: { pollIntervalMs?: number; pollTimeoutMs?: number }
+): Promise<ModelPackageImportResult> {
+  const result = await apiPost<ModelPackageImportAcceptedResponse>(
+    `/models/package/jobs/${encodeURIComponent(jobId)}/retry`,
+    {
+      targetModelName: overrides.targetModelName,
+      targetModelVersion: overrides.targetModelVersion,
+    }
+  )
+  if (!result.success) {
+    return mapImportError(result.error.status, result.error.message, undefined, { jobId })
+  }
+
+  onProgress?.({
+    phase: 'processing',
+    percent: 0,
+    stage: 'QUEUED',
+    message: 'Queued',
+  })
+  return pollImportJob(result.data.jobId || jobId, onProgress, options)
 }
 
 export async function downloadNotationExport(notationId: string): Promise<void> {

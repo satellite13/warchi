@@ -42,7 +42,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.8.4",
+    "@ngroznykh/papirus": "file:../papirus",
     "@stomp/stompjs": "^7.3.0",
     "@tanstack/vue-virtual": "^3.13.35",
     "codemirror": "^6.0.2",

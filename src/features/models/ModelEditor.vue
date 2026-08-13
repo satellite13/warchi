@@ -81,6 +81,7 @@ import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
+import { createDiagramHistoryBatcher } from './composables/useDiagramHistoryBatcher'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
 import { downloadModelPackage } from './composables/useModelPackage'
@@ -1055,13 +1056,64 @@ const isDirectoryNoteInstanceId = (instanceId: string): boolean => {
   return instance?.attrs?.isDirectoryNote === true
 }
 
-const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
+const pushDiagramHistory = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
   if (history && typeof history.execute === 'function') {
     history.execute(command)
     return
   }
   command.execute()
+}
+
+const diagramHistoryBatcher = createDiagramHistoryBatcher({
+  executeCommand: pushDiagramHistory,
+})
+
+const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
+  diagramHistoryBatcher.flush()
+  pushDiagramHistory(command)
+}
+
+const recordDiagramHistory = (key: string, command: { execute: () => void; undo: () => void }) => {
+  if (isDiagramReadOnly.value || !activeDiagram.value) return
+  diagramHistoryBatcher.record(key, command)
+}
+
+const commitDiagramHistory = (command: { execute: () => void; undo: () => void }) => {
+  if (isDiagramReadOnly.value || !activeDiagram.value) return
+  diagramHistoryBatcher.commit(command)
+}
+
+type NodeInstanceStyleSnapshot = {
+  width?: number
+  height?: number
+  attrs?: Record<string, unknown>
+}
+
+const applyNodeInstanceStyleSnapshot = (
+  diagramId: string,
+  instanceId: string,
+  snapshot: NodeInstanceStyleSnapshot
+): void => {
+  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+  const instance = diagram?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+  if (!diagram || !instance) return
+  instance.width = snapshot.width
+  instance.height = snapshot.height
+  instance.attrs = snapshot.attrs ? clonePlainDeep(snapshot.attrs) : undefined
+  markDiagramDirty(diagram.id)
+}
+
+const applyEdgeInstanceStyleSnapshot = (
+  diagramId: string,
+  edgeId: string,
+  attrs: Record<string, unknown> | undefined
+): void => {
+  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+  const edge = diagram?.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+  if (!diagram || !edge) return
+  edge.attrs = attrs ? clonePlainDeep(attrs) : undefined
+  markDiagramDirty(diagram.id)
 }
 
 const {
@@ -1105,14 +1157,80 @@ const {
 
 const handleBindNodeComponent = (componentId: string): void => {
   if (isDiagramReadOnly.value) return
+  const diagram = activeDiagram.value
   const instanceId = selectedNodeInstanceId.value
+  const node = selectedNode.value
+  const instance = instanceId
+    ? diagram?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+    : null
+  const beforeNode = node ? clonePlainDeep(node.parsedAttrs) : null
+  const beforeInstance = instance
+    ? clonePlainDeep({
+        width: instance.width,
+        height: instance.height,
+        attrs: instance.attrs,
+      })
+    : null
+
   if (instanceId) {
     bindInstanceComponent(instanceId, componentId)
+  } else if (node) {
+    bindNodeComponent(node, componentId)
+  } else {
     return
   }
-  if (selectedNode.value) {
-    bindNodeComponent(selectedNode.value, componentId)
-  }
+
+  const nodeId = node?.id
+  const afterNode = node ? clonePlainDeep(node.parsedAttrs) : null
+  const afterInstance = instance
+    ? clonePlainDeep({
+        width: instance.width,
+        height: instance.height,
+        attrs: instance.attrs,
+      })
+    : null
+  const diagramId = diagram?.id
+  commitDiagramHistory({
+    execute: () => {
+      const n = nodeId ? state.value.nodes.find(item => item.id === nodeId) : null
+      if (n && afterNode) n.parsedAttrs = clonePlainDeep(afterNode)
+      if (diagramId && instanceId && afterInstance) {
+        applyNodeInstanceStyleSnapshot(diagramId, instanceId, afterInstance)
+      }
+      if (n) markNodeDirty(n.id)
+    },
+    undo: () => {
+      const n = nodeId ? state.value.nodes.find(item => item.id === nodeId) : null
+      if (n && beforeNode) n.parsedAttrs = clonePlainDeep(beforeNode)
+      if (diagramId && instanceId && beforeInstance) {
+        applyNodeInstanceStyleSnapshot(diagramId, instanceId, beforeInstance)
+      }
+      if (n) markNodeDirty(n.id)
+    },
+  })
+}
+
+const bindLinkRelationFromPanel = (relationId: string): void => {
+  const link = selectedLink.value
+  if (!link || isDiagramReadOnly.value) return
+  const before = clonePlainDeep(link.parsedAttrs)
+  bindLinkRelation(link, relationId)
+  const after = clonePlainDeep(link.parsedAttrs)
+  const linkId = link.id
+  commitDiagramHistory({
+    execute: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs = clonePlainDeep(after)
+      markLinkDirty(row.id)
+    },
+    undo: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs = clonePlainDeep(before)
+      markLinkDirty(row.id)
+    },
+  })
 }
 
 const scheduleSyncDefaultsOnLoad = (): void => {
@@ -1384,6 +1502,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     const lockOk = await verifyLockBeforeSave()
     if (!lockOk) return false
 
+    diagramHistoryBatcher.flush()
     diagramCanvasRef.value?.flushCanvasState()
     await nextTick()
     const ok = await saveChanges()
@@ -1592,6 +1711,7 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
 watch(
   () => activeDiagram.value?.id ?? null,
   diagramId => {
+    diagramHistoryBatcher.drop()
     if (!diagramId) {
       selectedCanvasElementId.value = null
     }
@@ -2006,9 +2126,11 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'undo':
+      diagramHistoryBatcher.flush()
       diagramCanvasRef.value?.undo()
       break
     case 'redo':
+      diagramHistoryBatcher.flush()
       diagramCanvasRef.value?.redo()
       break
     case 'zoom-in':
@@ -2160,19 +2282,51 @@ const handleToolbarAction = async (event: string) => {
 const setNodeTypePropertyValue = (key: string, value: unknown) => {
   const node = selectedNode.value
   if (!node) return
-  if (!Object.is(node.parsedAttrs.typeProperties[key], value)) {
-    node.parsedAttrs.typeProperties[key] = value
-    markNodeDirty(node.id)
-  }
+  if (Object.is(node.parsedAttrs.typeProperties[key], value)) return
+  const nodeId = node.id
+  const before = clonePlainDeep(node.parsedAttrs.typeProperties)
+  node.parsedAttrs.typeProperties[key] = value
+  markNodeDirty(node.id)
+  const after = clonePlainDeep(node.parsedAttrs.typeProperties)
+  recordDiagramHistory(`nodeType:${nodeId}`, {
+    execute: () => {
+      const row = state.value.nodes.find(item => item.id === nodeId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(after)
+      markNodeDirty(row.id)
+    },
+    undo: () => {
+      const row = state.value.nodes.find(item => item.id === nodeId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(before)
+      markNodeDirty(row.id)
+    },
+  })
 }
 
 const setLinkTypePropertyValue = (key: string, value: unknown) => {
   const link = selectedLink.value
   if (!link) return
-  if (!Object.is(link.parsedAttrs.typeProperties[key], value)) {
-    link.parsedAttrs.typeProperties[key] = value
-    markLinkDirty(link.id)
-  }
+  if (Object.is(link.parsedAttrs.typeProperties[key], value)) return
+  const linkId = link.id
+  const before = clonePlainDeep(link.parsedAttrs.typeProperties)
+  link.parsedAttrs.typeProperties[key] = value
+  markLinkDirty(link.id)
+  const after = clonePlainDeep(link.parsedAttrs.typeProperties)
+  recordDiagramHistory(`linkType:${linkId}`, {
+    execute: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(after)
+      markLinkDirty(row.id)
+    },
+    undo: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(before)
+      markLinkDirty(row.id)
+    },
+  })
 }
 
 const setNodeScopedValue = (key: string, value: unknown) => {
@@ -2183,6 +2337,11 @@ const setNodeScopedValue = (key: string, value: unknown) => {
   if (!notationId || !componentId || !node) return
 
   if (diagram) {
+    const instanceId = selectedNodeInstanceId.value
+    const instance = instanceId
+      ? diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+      : null
+    const beforeAttrs = clonePlainDeep(instance?.attrs)
     const changed = setDiagramScopedNodeValue({
       diagram: diagram.parsedAttrs,
       modelNodeId: node.id,
@@ -2191,10 +2350,30 @@ const setNodeScopedValue = (key: string, value: unknown) => {
       key,
       value,
       nodeAttrsFallback: node.parsedAttrs,
-      instanceId: selectedNodeInstanceId.value,
+      instanceId,
     })
     if (changed) {
       markDiagramDirty(diagram.id)
+      const afterAttrs = clonePlainDeep(instance?.attrs)
+      const diagramId = diagram.id
+      if (instanceId) {
+        recordDiagramHistory(`nodeScoped:${instanceId}`, {
+          execute: () => {
+            const d = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+            const inst = d?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+            if (!d || !inst) return
+            inst.attrs = afterAttrs ? clonePlainDeep(afterAttrs) : undefined
+            markDiagramDirty(d.id)
+          },
+          undo: () => {
+            const d = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+            const inst = d?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+            if (!d || !inst) return
+            inst.attrs = beforeAttrs ? clonePlainDeep(beforeAttrs) : undefined
+            markDiagramDirty(d.id)
+          },
+        })
+      }
     }
     return
   }
@@ -2218,6 +2397,11 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   const link = selectedLink.value
   const diagram = activeDiagram.value
   if (!notationId || !relationId || !link || !diagram) return
+  const edgeId = selectedLinkEdgeInstanceId.value
+  const edge = edgeId
+    ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+    : null
+  const beforeAttrs = clonePlainDeep(edge?.attrs)
   const changed = setDiagramScopedLinkValue({
     diagram: diagram.parsedAttrs,
     modelLinkId: link.id,
@@ -2226,10 +2410,18 @@ const setLinkScopedValue = (key: string, value: unknown) => {
     key,
     value,
     linkAttrsFallback: link.parsedAttrs,
-    edgeInstanceId: selectedLinkEdgeInstanceId.value,
+    edgeInstanceId: edgeId,
   })
   if (changed) {
     markDiagramDirty(diagram.id)
+    if (edgeId) {
+      const afterAttrs = clonePlainDeep(edge?.attrs)
+      const diagramId = diagram.id
+      recordDiagramHistory(`linkScoped:${edgeId}`, {
+        execute: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, afterAttrs),
+        undo: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, beforeAttrs),
+      })
+    }
   }
 }
 
@@ -2300,12 +2492,31 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   }
 
   if (targetNodeInstance) {
+    const diagramId = diagram.id
+    const instanceId = targetNodeInstance.id
+    const before = clonePlainDeep({
+      width: targetNodeInstance.width,
+      height: targetNodeInstance.height,
+      attrs: targetNodeInstance.attrs,
+    })
     applyDiagramStyleToNodeInstance(targetNodeInstance, style)
     markDiagramDirty(diagram.id)
+    const after = clonePlainDeep({
+      width: targetNodeInstance.width,
+      height: targetNodeInstance.height,
+      attrs: targetNodeInstance.attrs,
+    })
+    recordDiagramHistory(`style:node:${instanceId}`, {
+      execute: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, after),
+      undo: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, before),
+    })
     return
   }
 
   if (targetEdgeInstance) {
+    const diagramId = diagram.id
+    const edgeId = targetEdgeInstance.id
+    const beforeAttrs = clonePlainDeep(targetEdgeInstance.attrs)
     if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
     let bound: DiagramStyle | undefined
     if (targetEdgeInstance.modelLinkId) {
@@ -2341,6 +2552,11 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
       delete targetEdgeInstance.attrs.controlPoints
     }
     markDiagramDirty(diagram.id)
+    const afterAttrs = clonePlainDeep(targetEdgeInstance.attrs)
+    recordDiagramHistory(`style:edge:${edgeId}`, {
+      execute: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, afterAttrs),
+      undo: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, beforeAttrs),
+    })
   }
 }
 
@@ -2458,11 +2674,26 @@ const restoreStyleFromNotation = () => {
       return
     }
 
+    const before = clonePlainDeep({
+      width: instance.width,
+      height: instance.height,
+      attrs: instance.attrs,
+    })
     if (instance.attrs && typeof instance.attrs === 'object') {
       delete instance.attrs.diagramStyle
       if (Object.keys(instance.attrs).length === 0) delete instance.attrs
     }
     markDiagramDirty(diagram.id)
+    const after = clonePlainDeep({
+      width: instance.width,
+      height: instance.height,
+      attrs: instance.attrs,
+    })
+    const diagramId = diagram.id
+    commitDiagramHistory({
+      execute: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, after),
+      undo: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, before),
+    })
     return
   }
 
@@ -2485,11 +2716,18 @@ const restoreStyleFromNotation = () => {
       return
     }
 
+    const beforeAttrs = clonePlainDeep(edge.attrs)
     if (edge.attrs && typeof edge.attrs === 'object') {
       delete edge.attrs.diagramStyle
       if (Object.keys(edge.attrs).length === 0) delete edge.attrs
     }
     markDiagramDirty(diagram.id)
+    const afterAttrs = clonePlainDeep(edge.attrs)
+    const diagramId = diagram.id
+    commitDiagramHistory({
+      execute: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, afterAttrs),
+      undo: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, beforeAttrs),
+    })
   }
 }
 
@@ -2596,6 +2834,19 @@ onBeforeRouteLeave((to) => {
   return true
 })
 
+const onHistoryShortcutCapture = (event: KeyboardEvent) => {
+  if (shouldSkipDeleteHotkey(event)) return
+  const isMod = event.ctrlKey || event.metaKey
+  if (!isMod) return
+  const key = event.code.startsWith('Key')
+    ? event.code.slice(3).toLowerCase()
+    : event.key.toLowerCase()
+  const isUndo = key === 'z' && !event.shiftKey
+  const isRedo = key === 'y' || (key === 'z' && event.shiftKey)
+  if (!isUndo && !isRedo) return
+  diagramHistoryBatcher.flush()
+}
+
 const onBeforeUnload = (event: BeforeUnloadEvent) => {
   if (hasUnsavedChanges.value) {
     event.preventDefault()
@@ -2611,10 +2862,12 @@ onMounted(async () => {
   void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('keydown', onDeleteKeydown)
+  window.addEventListener('keydown', onHistoryShortcutCapture, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener('keydown', onDeleteKeydown)
+  window.removeEventListener('keydown', onHistoryShortcutCapture, true)
   if (documentsFetchTimer) {
     clearTimeout(documentsFetchTimer)
     documentsFetchTimer = null
@@ -2853,6 +3106,7 @@ onBeforeUnmount(() => {
             :selected-instance-ids="selectedInstanceIds"
             :connection-validator="canConnect"
             @update-diagram="setDiagramAttrs"
+            @flush-diagram-history="diagramHistoryBatcher.flush"
             @select-nodes="handleCanvasSelectNodes"
             @select-instance-ids="(ids) => (selectedInstanceIds = ids)"
             @select-edge-instance-id="(id) => (selectedEdgeInstanceId = id)"
@@ -2920,7 +3174,7 @@ onBeforeUnmount(() => {
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
               @bind-node-component="handleBindNodeComponent"
-              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
+              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)"
               @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
               @set-link-type-property-value="(k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"

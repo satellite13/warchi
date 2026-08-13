@@ -145,7 +145,7 @@ Text on a node shape or link can be driven by a **template** in the notation com
 
 | Action | Description |
 |--------|-------------|
-| Undo | Undo last action (`Ctrl+Z`) |
+| Undo | Undo last action (`Ctrl+Z`): diagram edits, figure style, properties panel, resize, and manual polyline bends |
 | Redo | Redo undone action (`Ctrl+Y`) |
 
 ### Zoom and Navigation

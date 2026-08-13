@@ -192,6 +192,7 @@ function applyDiffOverlayToEdgeStyle(
 
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs, options?: { dirty?: boolean }]
+  flushDiagramHistory: []
   selectNodes: [modelNodeIds: string[]]
   selectInstanceIds: [instanceIds: string[]]
   selectLink: [modelLinkId: string | null]
@@ -2014,6 +2015,7 @@ function detectEditablePolylineControlPointChanges() {
 }
 
 function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) {
+  const before = cloneDiagramAttrs()
   const next = cloneDiagramAttrs()
   const edgeInst = next.instances.edges.find(edge => edge.id === edgeInstanceId)
   if (!edgeInst) return
@@ -2039,6 +2041,16 @@ function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) 
   const toNonPolyline = edgeType === 'bezier' || edgeType === 'straight'
   if (fromPolyline && toNonPolyline && edgeInst.attrs.controlPoints) {
     delete edgeInst.attrs.controlPoints
+  }
+  const after = next
+  emit('flushDiagramHistory')
+  const history = interactionManager?.history
+  if (history && typeof history.execute === 'function') {
+    history.execute({
+      execute: () => emit('updateDiagram', after),
+      undo: () => emit('updateDiagram', before),
+    })
+    return
   }
   emit('updateDiagram', next)
 }
@@ -2139,6 +2151,11 @@ function setupInteractionManager(
 }
 
 function bindInteractionEvents(manager: InteractionManager, currentRenderer: DiagramRenderer) {
+  const flushHostHistory = (): void => emit('flushDiagramHistory')
+  manager.drag.on('dragstart', flushHostHistory)
+  manager.resize.on('resizeStart', flushHostHistory)
+  manager.connection.on('controlPointDragStart', flushHostHistory)
+
   // Selection and other interaction events (only when not read-only)
   manager.selection.on('select', (elementIds: string[]) => {
     if (suppressSelectionEvent) return

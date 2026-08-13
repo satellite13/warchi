@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-08-13
+
+### Fixed
+- Production arepos-server memory limit is 2Gi so opening diagrams no longer OOM-kills the API (nginx 502 / «Backend unavailable»).
+
 ## [0.18.0] - 2026-08-13
 
 ### Added

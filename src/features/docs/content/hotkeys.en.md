@@ -25,7 +25,7 @@ Keyboard shortcuts help speed up work with the diagram editor and other wArchi t
 
 | Key | Action |
 |-----|--------|
-| `Shift` + drag from a port/node | Create a connection (see also [Diagrams](/docs/diagrams)) |
+| `+` handle on a node or `Shift` + drag | Create a connection (see also [Diagrams](/docs/diagrams)) |
 
 ### Editing
 

@@ -123,9 +123,11 @@ Elements can be added to the diagram in several ways:
 
 To create a link between elements:
 
-1. Hold `Shift` and click the source element
-2. Drag the line to the target element
-3. Release the mouse button on the target's connection point
+1. Hover the source element — a `+` handle appears on the outline near the cursor (when **Link by contour** is on)
+2. Drag the handle to the target element
+3. Release the mouse button on the target outline
+
+Or hold `Shift` and drag from the element body — Shift is not needed when dragging the handle.
 
 > If the notation does not have relation rules configured for the selected element types, connection will be unavailable.
 

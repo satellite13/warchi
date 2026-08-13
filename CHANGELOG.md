@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-08-13
+
+### Added
+- Contour-link mode shows a `+` handle on the outline near the cursor so a connection can be started without Shift.
+
 ## [0.18.1] - 2026-08-13
 
 ### Fixed

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-13
+
+### Added
+- Diagram undo/redo covers right-panel properties and instance style, node resize, polyline edits, and edge path type from the context menu. Rapid edits of the same field batch into one step.
+
 ## [0.17.2] - 2026-08-06
 
 ### Changed

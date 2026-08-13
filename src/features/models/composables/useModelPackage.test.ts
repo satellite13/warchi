@@ -4,12 +4,14 @@ vi.mock('@/api/apiClient', () => ({
   apiUpload: vi.fn(),
   apiDownload: vi.fn(),
   apiGet: vi.fn(),
+  apiPost: vi.fn(),
 }))
 
-import { apiDownload, apiGet, apiUpload } from '@/api/apiClient'
+import { apiDownload, apiGet, apiPost, apiUpload } from '@/api/apiClient'
 import {
   downloadModelPackage,
   downloadNotationExport,
+  retryModelPackageImport,
   uploadModelPackage,
   type ModelPackageImportProgress,
 } from './useModelPackage'
@@ -18,6 +20,7 @@ describe('uploadModelPackage', () => {
   beforeEach(() => {
     vi.mocked(apiUpload).mockReset()
     vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPost).mockReset()
     vi.useFakeTimers()
   })
 
@@ -124,7 +127,7 @@ describe('uploadModelPackage', () => {
     expect(events.filter(e => e.phase === 'uploading').map(e => e.percent)).toEqual([50, 100])
   })
 
-  it('maps failed job CONFLICT', async () => {
+  it('maps failed job MODEL_EXISTS with conflict and jobId', async () => {
     vi.mocked(apiUpload).mockResolvedValue({
       success: true,
       data: { jobId: 'job-conflict', status: 'QUEUED' },
@@ -136,7 +139,17 @@ describe('uploadModelPackage', () => {
         status: 'FAILED',
         stage: 'CREATING_MODEL',
         progress: 75,
-        error: { status: 409, message: 'Model already exists', code: 'CONFLICT' },
+        error: {
+          status: 409,
+          message: "Model with name 'M' and version '1.0.0' already exists",
+          code: 'MODEL_EXISTS',
+          conflict: {
+            entity: 'model',
+            name: 'M',
+            version: '1.0.0',
+            suggestedVersion: '1.1.0',
+          },
+        },
       },
     })
 
@@ -150,8 +163,59 @@ describe('uploadModelPackage', () => {
     expect(result).toEqual({
       ok: false,
       status: 409,
-      message: 'Model already exists',
-      code: 'CONFLICT',
+      message: "Model with name 'M' and version '1.0.0' already exists",
+      code: 'MODEL_EXISTS',
+      jobId: 'job-conflict',
+      conflict: {
+        entity: 'model',
+        name: 'M',
+        version: '1.0.0',
+        suggestedVersion: '1.1.0',
+        details: [],
+      },
+    })
+  })
+
+  it('retries MODEL_EXISTS job with overrides', async () => {
+    vi.mocked(apiPost).mockResolvedValue({
+      success: true,
+      data: { jobId: 'job-conflict', status: 'QUEUED' },
+    })
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        jobId: 'job-conflict',
+        status: 'SUCCEEDED',
+        stage: 'DONE',
+        progress: 100,
+        result: {
+          modelId: 'new-id',
+          modelName: 'M Copy',
+          modelVersion: '1.0.0',
+          warnings: ["Reused notation 'N' v1.0.0"],
+        },
+      },
+    })
+
+    const promise = retryModelPackageImport(
+      'job-conflict',
+      { targetModelName: 'M Copy', targetModelVersion: '1.0.0' },
+      undefined,
+      { pollIntervalMs: 10, pollTimeoutMs: 5_000 }
+    )
+    await vi.runAllTimersAsync()
+    const result = await promise
+
+    expect(apiPost).toHaveBeenCalledWith('/models/package/jobs/job-conflict/retry', {
+      targetModelName: 'M Copy',
+      targetModelVersion: '1.0.0',
+    })
+    expect(result).toEqual({
+      ok: true,
+      modelId: 'new-id',
+      modelName: 'M Copy',
+      modelVersion: '1.0.0',
+      warnings: ["Reused notation 'N' v1.0.0"],
     })
   })
 

@@ -70,6 +70,15 @@ export const modelsMessages = {
       oefImportTitle: 'Импорт Open Exchange (XML)',
       packageImportConflict:
         'Не удалось импортировать пакет: модель или нотация с таким именем и версией уже существует.',
+      packageImportModelExistsTitle: 'Модель уже существует',
+      packageImportModelExistsHint:
+        'Модель «{name}» версии {version} уже есть. Измените имя и/или версию и повторите импорт без повторной загрузки файла.',
+      packageImportRetry: 'Импортировать',
+      packageImportNotationForbidden:
+        'Нотация «{name}» версии {version} уже существует, но недоступна для просмотра.',
+      packageImportNotationIncompatible:
+        'Существующая нотация «{name}» версии {version} несовместима с пакетом.',
+      packageImportNotationIncompatibleMore: 'и ещё {count}',
       packageImportTooLarge: 'Файл пакета слишком большой.',
       packageImportBadRequest: 'Некорректный или повреждённый файл пакета.',
       packageImportError: 'Не удалось импортировать пакет: {message}',
@@ -628,6 +637,15 @@ export const modelsMessages = {
       oefImportTitle: 'Import Open Exchange (XML)',
       packageImportConflict:
         'Could not import package: a model or notation with the same name and version already exists.',
+      packageImportModelExistsTitle: 'Model already exists',
+      packageImportModelExistsHint:
+        'Model “{name}” version {version} already exists. Change the name and/or version and retry without re-uploading the file.',
+      packageImportRetry: 'Import',
+      packageImportNotationForbidden:
+        'Notation “{name}” version {version} already exists but is not available for viewing.',
+      packageImportNotationIncompatible:
+        'Existing notation “{name}” version {version} is incompatible with the package.',
+      packageImportNotationIncompatibleMore: 'and {count} more',
       packageImportTooLarge: 'The package file is too large.',
       packageImportBadRequest: 'Invalid or corrupted package file.',
       packageImportError: 'Could not import package: {message}',

@@ -8,10 +8,13 @@ import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import {
   downloadModelPackage,
+  retryModelPackageImport,
   uploadModelPackage,
   type ModelPackageImportProgress,
+  type ModelPackageImportResult,
 } from "./composables/useModelPackage";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
+import ModelPackageConflictModal from "./components/ModelPackageConflictModal.vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -19,6 +22,15 @@ const exportError = ref<string | null>(null);
 const actionStatusMessage = ref<string | null>(null);
 const packageInputRef = ref<HTMLInputElement | null>(null);
 const isImporting = ref(false);
+
+const showModelConflictModal = ref(false);
+const conflictJobId = ref<string | null>(null);
+const conflictOriginalName = ref("");
+const conflictOriginalVersion = ref("");
+const conflictName = ref("");
+const conflictVersion = ref("");
+const conflictModalError = ref<string | null>(null);
+const isRetryingConflict = ref(false);
 
 function statusMessageForImportProgress(progress: ModelPackageImportProgress): string {
   if (progress.phase === "uploading") {
@@ -70,6 +82,85 @@ const config: EntityListConfig<ModelData> = {
   })
 };
 
+function formatImportFailure(result: Extract<ModelPackageImportResult, { ok: false }>): string {
+  if (result.code === "MODEL_EXISTS" && result.conflict) {
+    return t("models.packageImportModelExistsHint", {
+      name: result.conflict.name,
+      version: result.conflict.version,
+    });
+  }
+  if (result.code === "NOTATION_EXISTS_FORBIDDEN" && result.conflict) {
+    return t("models.packageImportNotationForbidden", {
+      name: result.conflict.name,
+      version: result.conflict.version,
+    });
+  }
+  if (result.code === "NOTATION_INCOMPATIBLE" && result.conflict) {
+    const details = result.conflict.details ?? [];
+    const shown = details.slice(0, 5);
+    const rest = details.length - shown.length;
+    const detailText = [
+      ...shown,
+      ...(rest > 0 ? [t("models.packageImportNotationIncompatibleMore", { count: rest })] : []),
+    ].join("; ");
+    const base = t("models.packageImportNotationIncompatible", {
+      name: result.conflict.name,
+      version: result.conflict.version,
+    });
+    return detailText ? `${base} ${detailText}` : base;
+  }
+  if (result.code === "CONFLICT") {
+    return t("models.packageImportConflict");
+  }
+  if (result.code === "PAYLOAD_TOO_LARGE") {
+    return t("models.packageImportTooLarge");
+  }
+  if (result.code === "TIMEOUT" || result.status === 504 || result.status === 502) {
+    return t("models.packageImportTimeout");
+  }
+  if (result.code === "BAD_REQUEST") {
+    return result.message?.trim()
+      ? t("models.packageImportError", { message: result.message })
+      : t("models.packageImportBadRequest");
+  }
+  return t("models.packageImportError", { message: result.message });
+}
+
+function openModelConflictModal(result: Extract<ModelPackageImportResult, { ok: false }>) {
+  if (!result.jobId || !result.conflict) {
+    exportError.value = formatImportFailure(result);
+    return;
+  }
+  conflictJobId.value = result.jobId;
+  conflictOriginalName.value = result.conflict.name;
+  conflictOriginalVersion.value = result.conflict.version;
+  conflictName.value = result.conflict.name;
+  conflictVersion.value = result.conflict.suggestedVersion || result.conflict.version;
+  conflictModalError.value = null;
+  showModelConflictModal.value = true;
+}
+
+function closeModelConflictModal() {
+  if (isRetryingConflict.value) return;
+  showModelConflictModal.value = false;
+  conflictJobId.value = null;
+  conflictModalError.value = null;
+}
+
+async function handleImportSuccess(result: Extract<ModelPackageImportResult, { ok: true }>) {
+  if (result.warnings.length > 0) {
+    actionStatusMessage.value =
+      result.warnings.length <= 2
+        ? t("models.packageImportCompletedWithWarningsDetail", {
+            messages: result.warnings.join("; "),
+          })
+        : t("models.packageImportCompletedWithWarnings", { count: result.warnings.length });
+  } else {
+    actionStatusMessage.value = null;
+  }
+  await router.push({ name: "model-editor", params: { id: result.modelId } });
+}
+
 async function handleExport(item: ModelData) {
   exportError.value = null;
   actionStatusMessage.value = null;
@@ -113,39 +204,74 @@ async function onPackageSelected(event: Event) {
 
     if (!result.ok) {
       actionStatusMessage.value = null;
-      if (result.code === "CONFLICT") {
-        exportError.value = t("models.packageImportConflict");
-      } else if (result.code === "PAYLOAD_TOO_LARGE") {
-        exportError.value = t("models.packageImportTooLarge");
-      } else if (result.code === "TIMEOUT" || result.status === 504 || result.status === 502) {
-        exportError.value = t("models.packageImportTimeout");
-      } else if (result.code === "BAD_REQUEST") {
-        exportError.value = result.message?.trim()
-          ? t("models.packageImportError", { message: result.message })
-          : t("models.packageImportBadRequest");
+      if (result.code === "MODEL_EXISTS") {
+        openModelConflictModal(result);
       } else {
-        exportError.value = t("models.packageImportError", { message: result.message });
+        exportError.value = formatImportFailure(result);
       }
       return;
     }
 
-    if (result.warnings.length > 0) {
-      actionStatusMessage.value =
-        result.warnings.length <= 2
-          ? t("models.packageImportCompletedWithWarningsDetail", {
-              messages: result.warnings.join("; "),
-            })
-          : t("models.packageImportCompletedWithWarnings", { count: result.warnings.length });
-    } else {
-      actionStatusMessage.value = null;
-    }
-
-    await router.push({ name: "model-editor", params: { id: result.modelId } });
+    await handleImportSuccess(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     actionStatusMessage.value = null;
     exportError.value = t("models.packageImportError", { message });
   } finally {
+    isImporting.value = false;
+  }
+}
+
+async function submitModelConflictRetry() {
+  const jobId = conflictJobId.value;
+  if (!jobId || isRetryingConflict.value) return;
+
+  const name = conflictName.value.trim();
+  const version = conflictVersion.value.trim();
+  if (!name || !version) return;
+
+  isRetryingConflict.value = true;
+  conflictModalError.value = null;
+  isImporting.value = true;
+  actionStatusMessage.value = t("models.packageImporting");
+  exportError.value = null;
+  try {
+    const result = await retryModelPackageImport(
+      jobId,
+      { targetModelName: name, targetModelVersion: version },
+      progress => {
+        actionStatusMessage.value = statusMessageForImportProgress(progress);
+      }
+    );
+    if (!result.ok) {
+      actionStatusMessage.value = null;
+      if (result.code === "MODEL_EXISTS") {
+        conflictModalError.value = formatImportFailure(result);
+        if (result.conflict) {
+          conflictOriginalName.value = result.conflict.name;
+          conflictOriginalVersion.value = result.conflict.version;
+          conflictVersion.value = result.conflict.suggestedVersion || result.conflict.version;
+        }
+        if (result.jobId) {
+          conflictJobId.value = result.jobId;
+        }
+      } else {
+        showModelConflictModal.value = false;
+        conflictJobId.value = null;
+        exportError.value = formatImportFailure(result);
+      }
+      return;
+    }
+
+    showModelConflictModal.value = false;
+    conflictJobId.value = null;
+    await handleImportSuccess(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    conflictModalError.value = t("models.packageImportError", { message });
+    actionStatusMessage.value = null;
+  } finally {
+    isRetryingConflict.value = false;
     isImporting.value = false;
   }
 }
@@ -174,6 +300,19 @@ async function onPackageSelected(event: Event) {
     :action-busy="isImporting"
     @export="handleExport"
     @import-package="openPackagePicker"
+  />
+  <ModelPackageConflictModal
+    v-if="showModelConflictModal"
+    :original-name="conflictOriginalName"
+    :original-version="conflictOriginalVersion"
+    :name="conflictName"
+    :version="conflictVersion"
+    :is-submitting="isRetryingConflict"
+    :error="conflictModalError"
+    @close="closeModelConflictModal"
+    @submit="submitModelConflictRetry"
+    @update:name="conflictName = $event"
+    @update:version="conflictVersion = $event"
   />
 </template>
 

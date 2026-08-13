@@ -196,7 +196,9 @@ Diagram preview SVGs are **not** included — they are regenerated on save or wh
 
 **Export** is available from the model card menu in the list and from the editor header. **Import** is on the models list (card next to “Create model”): pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). On success, the new model opens in the editor.
 
-If you already have a model or notation with the same **name and version**, import returns **409** and nothing is persisted.
+If a notation with the same **name and version** already exists and you can view it, import **reuses** it (components and relations are matched by name and type). If the notation is inaccessible or structurally incompatible, import fails with a detailed error.
+
+If a model with the same **name and version** already exists, a dialog lets you **rename** the model and/or **change the version** and retry **without re-uploading** the ZIP.
 
 ## Saving
 

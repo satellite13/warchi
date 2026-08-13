@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-08-13
+
+### Fixed
+- Stacked dashboard cards no longer go blank when moving the cursor across the catalog.
+
 ## [0.18.2] - 2026-08-13
 
 ### Added

@@ -23,8 +23,8 @@ The project uses bilingual UI (Russian/English) with Russian as the default lang
 - **I18n**: Vue I18n 11.2+
 - **Testing**: Vitest 4.0+
 - **Canvas Engine**: @ngroznykh/papirus (proprietary rendering library)
-- **UI Icons**: Material Symbols Outlined
-- **Fonts**: Outfit (primary), Material Symbols Outlined (icons)
+- **UI Icons**: Material Symbols Outlined (`@material-symbols/svg-400` → `public/icons/`)
+- **Fonts**: Outfit (primary)
 
 ## Build, Test & Development Commands
 

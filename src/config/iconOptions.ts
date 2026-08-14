@@ -1,5 +1,5 @@
 /**
- * Combined icon list (Archimate + Material) — все лежат в public/icons/ как SVG.
+ * Combined icon list (Archimate + Material Symbols) — все лежат в public/icons/ как SVG.
  * Use COMBINED_ICON_OPTIONS everywhere we select icons.
  */
 import { ARCHIMATE_ICON_OPTIONS } from './availableIcons'

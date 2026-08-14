@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-08-14
+
+### Changed
+- Icon catalog uses Material Symbols Outlined (`@material-symbols/svg-400`) instead of the frozen Material Icons set, so newer icons such as `database` are available. Custom ArchiMate SVGs in `public/icons/` are preserved.
+
 ## [0.19.0] - 2026-08-14
 
 ### Changed

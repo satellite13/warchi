@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-08-14
+
+### Изменено
+- Каталог иконок переведён на Material Symbols Outlined (`@material-symbols/svg-400`) вместо замороженного набора Material Icons — доступны новые глифы вроде `database`. Кастомные ArchiMate SVG в `public/icons/` сохранены.
+
 ## [0.19.0] - 2026-08-14
 
 ### Изменено

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.5] - 2026-08-14
+
+### Fixed
+- Helm chart version is valid YAML again (`0.18.5` instead of a trailing comma).
+
 ## [0.18.4] - 2026-08-14
 
 ### Added

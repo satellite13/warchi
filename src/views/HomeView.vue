@@ -8,7 +8,6 @@ import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
-import { getUserDisplayName } from "../utils/userDisplay"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import CompactEntityRow from "../components/list/CompactEntityRow.vue"
 import EmptyState from "../components/list/EmptyState.vue"
@@ -41,12 +40,17 @@ const greeting = computed(() => {
 })
 
 const userDisplayName = computed(() => {
-  return getUserDisplayName(currentUser.value, t("common.user"))
+  const firstName = currentUser.value?.firstName?.trim()
+  if (firstName) return firstName
+  const email = currentUser.value?.email?.trim()
+  if (email) return email
+  return t("common.user")
 })
 
 const statCards = computed(() => [
   {
     key: "models",
+    icon: DEFAULT_ENTITY_ICONS.model,
     label: t("home.models"),
     value: stats.value.models,
     color: "#7c5cfc",
@@ -54,6 +58,7 @@ const statCards = computed(() => [
   },
   {
     key: "notations",
+    icon: DEFAULT_ENTITY_ICONS.notation,
     label: t("home.notations"),
     value: stats.value.notations,
     color: "#2bb896",
@@ -61,6 +66,7 @@ const statCards = computed(() => [
   },
   {
     key: "nodeTypes",
+    icon: DEFAULT_ENTITY_ICONS.nodeType,
     label: t("home.nodeTypes"),
     value: stats.value.nodeTypes,
     color: "#f59e42",
@@ -68,6 +74,7 @@ const statCards = computed(() => [
   },
   {
     key: "linkTypes",
+    icon: DEFAULT_ENTITY_ICONS.link,
     label: t("home.linkTypes"),
     value: stats.value.linkTypes,
     color: "#e05a9e",
@@ -81,6 +88,14 @@ const quickActions = computed(() => [
     icon: "add_circle",
     label: t("home.quickCreateModel"),
     route: "models" as const,
+    color: "#7c5cfc",
+  },
+  {
+    key: "import-model",
+    icon: "upload",
+    label: t("home.quickImportModel"),
+    route: "models" as const,
+    query: { import: "package" },
     color: "#7c5cfc",
   },
   {
@@ -103,6 +118,20 @@ const quickActions = computed(() => [
     label: t("home.quickTypeEditor"),
     route: "types" as const,
     color: "#f59e42",
+  },
+  {
+    key: "shapes",
+    icon: "hexagon",
+    label: t("home.quickShapes"),
+    route: "shapes" as const,
+    color: "#3d8bfd",
+  },
+  {
+    key: "scripts",
+    icon: "terminal",
+    label: t("home.quickScripts"),
+    route: "validation-scripts" as const,
+    color: "#8b5cf6",
   },
 ])
 
@@ -146,7 +175,10 @@ function handleQuickAction(action: (typeof quickActions.value)[number]) {
     return
   }
   if ("route" in action && action.route) {
-    goTo(action.route)
+    void router.push({
+      name: action.route,
+      query: "query" in action ? action.query : undefined,
+    })
   }
 }
 
@@ -240,10 +272,15 @@ const releaseNotes = computed(() => {
               :style="{ '--stat-color': card.color }"
               @click="goTo(card.route)"
             >
-              <span class="stat-card__value" :class="{ 'stat-card__value--loading': isLoading }">
-                {{ isLoading ? t("common.loadingDash") : card.value }}
-              </span>
-              <span class="stat-card__label">{{ card.label }}</span>
+              <div class="stat-card__icon-wrap">
+                <UiIcon :name="card.icon" class="stat-card__icon" />
+              </div>
+              <div class="stat-card__data">
+                <span class="stat-card__value" :class="{ 'stat-card__value--loading': isLoading }">
+                  {{ isLoading ? t("common.loadingDash") : card.value }}
+                </span>
+                <span class="stat-card__label">{{ card.label }}</span>
+              </div>
             </button>
           </div>
           <div class="hero__decoration">
@@ -254,114 +291,121 @@ const releaseNotes = computed(() => {
         </section>
 
         <div class="main-grid">
-          <section class="section">
-            <div class="section__header">
-              <UiIcon name="schema" class="section__icon" />
-              <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
-              <button type="button" class="section__link" @click="goTo('models')">
-                {{ t("home.sectionAllModels") }}
-                <UiIcon name="arrow_forward" />
-              </button>
-            </div>
-            <div v-if="isLoading" class="skeleton-list">
-              <div v-for="i in 3" :key="i" class="skeleton-item" />
-            </div>
-            <EmptyState
-              v-else-if="recentModels.length === 0"
-              variant="compact"
-              icon="folder_off"
-              :title="t('home.sectionNoModels')"
-            />
-            <div v-else class="entity-list">
-              <CompactEntityRow
-                v-for="item in recentModels"
-                :key="item.id"
-                :id="item.id"
-                :name="item.name"
-                :version="item.version"
-                :meta="formatRelativeDate(item.updatedAt)"
-                @click="router.push({ name: 'model-editor', params: { id: item.id } })"
-              />
-            </div>
-          </section>
+          <div class="main-grid__left">
+            <section class="section section--compact">
+              <div class="section__header">
+                <UiIcon name="bolt" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
+              </div>
+              <div class="actions-grid">
+                <button
+                  v-for="action in quickActions"
+                  :key="action.key"
+                  type="button"
+                  class="action-btn"
+                  :style="{ '--action-color': action.color }"
+                  :disabled="isImportingNotation"
+                  @click="handleQuickAction(action)"
+                >
+                  <span class="action-btn__icon-wrap">
+                    <UiIcon :name="action.icon" class="action-btn__icon" />
+                  </span>
+                  <span class="action-btn__label">{{ action.label }}</span>
+                </button>
+              </div>
+            </section>
 
-          <section class="section">
-            <div class="section__header">
-              <UiIcon name="account_tree" class="section__icon" />
-              <h2 class="section__title">{{ t("home.sectionRecentDiagrams") }}</h2>
-            </div>
-            <div v-if="isLoading" class="skeleton-list">
-              <div v-for="i in 3" :key="i" class="skeleton-item" />
-            </div>
-            <EmptyState
-              v-else-if="recentDiagrams.length === 0"
-              variant="compact"
-              icon="folder_off"
-              :title="t('home.sectionNoDiagrams')"
-            />
-            <div v-else class="entity-list">
-              <CompactEntityRow
-                v-for="item in recentDiagrams"
-                :key="item.id"
-                :id="item.id"
-                :name="item.name"
-                :meta="diagramMeta(item)"
-                @click="openDiagram(item)"
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="account_tree" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionRecentDiagrams") }}</h2>
+              </div>
+              <div v-if="isLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="recentDiagrams.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoDiagrams')"
               />
-            </div>
-          </section>
+              <div v-else class="entity-list">
+                <CompactEntityRow
+                  v-for="item in recentDiagrams"
+                  :key="item.id"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="diagramMeta(item)"
+                  @click="openDiagram(item)"
+                />
+              </div>
+            </section>
+          </div>
 
-          <section class="section">
-            <div class="section__header">
-              <UiIcon name="account_tree" class="section__icon" />
-              <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
-              <button type="button" class="section__link" @click="goTo('notations')">
-                {{ t("home.sectionAllNotations") }}
-                <UiIcon name="arrow_forward" />
-              </button>
-            </div>
-            <div v-if="isLoading" class="skeleton-list">
-              <div v-for="i in 3" :key="i" class="skeleton-item" />
-            </div>
-            <EmptyState
-              v-else-if="recentNotations.length === 0"
-              variant="compact"
-              icon="folder_off"
-              :title="t('home.sectionNoNotations')"
-            />
-            <div v-else class="entity-list">
-              <CompactEntityRow
-                v-for="item in recentNotations"
-                :key="item.id"
-                :id="item.id"
-                :name="item.name"
-                :version="item.version"
-                :meta="formatRelativeDate(item.updatedAt)"
-                @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
+          <div class="main-grid__right">
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="schema" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
+                <button type="button" class="section__link" @click="goTo('models')">
+                  {{ t("home.sectionAllModels") }}
+                  <UiIcon name="arrow_forward" />
+                </button>
+              </div>
+              <div v-if="isLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="recentModels.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoModels')"
               />
-            </div>
-          </section>
+              <div v-else class="entity-list">
+                <CompactEntityRow
+                  v-for="item in recentModels"
+                  :key="item.id"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="formatRelativeDate(item.updatedAt)"
+                  @click="router.push({ name: 'model-editor', params: { id: item.id } })"
+                />
+              </div>
+            </section>
 
-          <section class="section section--compact">
-            <div class="section__header">
-              <UiIcon name="bolt" class="section__icon" />
-              <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
-            </div>
-            <div class="actions-grid">
-              <button
-                v-for="action in quickActions"
-                :key="action.key"
-                type="button"
-                class="action-btn"
-                :style="{ '--action-color': action.color }"
-                :disabled="isImportingNotation"
-                @click="handleQuickAction(action)"
-              >
-                <UiIcon :name="action.icon" class="action-btn__icon" />
-                <span class="action-btn__label">{{ action.label }}</span>
-              </button>
-            </div>
-          </section>
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="account_tree" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
+                <button type="button" class="section__link" @click="goTo('notations')">
+                  {{ t("home.sectionAllNotations") }}
+                  <UiIcon name="arrow_forward" />
+                </button>
+              </div>
+              <div v-if="isLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="recentNotations.length === 0"
+                variant="compact"
+                icon="folder_off"
+                :title="t('home.sectionNoNotations')"
+              />
+              <div v-else class="entity-list">
+                <CompactEntityRow
+                  v-for="item in recentNotations"
+                  :key="item.id"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="formatRelativeDate(item.updatedAt)"
+                  @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
+                />
+              </div>
+            </section>
+          </div>
         </div>
 
         <section class="section release-notes">
@@ -470,8 +514,8 @@ const releaseNotes = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 20px 24px;
+  gap: 24px;
+  padding: 22px 24px;
   min-height: 60px;
   border-radius: var(--radius);
   background: var(--surface);
@@ -508,7 +552,7 @@ const releaseNotes = computed(() => {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -570,24 +614,53 @@ const releaseNotes = computed(() => {
 
 /* ── Stat tiles ── */
 .stat-card {
-  min-width: 76px;
-  padding: 8px 10px;
-  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 132px;
+  padding: 12px 14px;
+  border-radius: 12px;
   background: var(--surface-muted);
   border: 1px solid var(--border);
   cursor: pointer;
   text-align: left;
+  transition: all 0.25s ease;
 }
 
 .stat-card:hover {
   border-color: var(--stat-color);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--stat-color) 12%, transparent);
+  transform: translateY(-2px);
+}
+
+.stat-card__icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--stat-color) 10%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-card__icon {
+  width: 22px;
+  height: 22px;
+  color: var(--stat-color);
+}
+
+.stat-card__data {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .stat-card__value {
-  display: block;
-  font-size: 18px;
+  font-size: 26px;
   font-weight: 700;
-  color: var(--stat-color);
+  color: var(--base-text);
+  letter-spacing: -0.03em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -597,9 +670,9 @@ const releaseNotes = computed(() => {
 }
 
 .stat-card__label {
-  display: block;
-  font-size: 10px;
-  color: var(--text-subtle);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
   margin-top: 3px;
 }
 
@@ -610,6 +683,14 @@ const releaseNotes = computed(() => {
   gap: 20px;
   align-items: start;
   animation: slideUp 0.5s ease 0.16s both;
+}
+
+.main-grid__left,
+.main-grid__right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
 }
 
 /* ── Section ── */
@@ -702,40 +783,66 @@ const releaseNotes = computed(() => {
 
 /* ── Quick Actions ── */
 .actions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .action-btn {
+  width: 76px;
+  height: 76px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  border-radius: var(--radius-sm);
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface-muted);
   cursor: pointer;
   transition: all 0.2s ease;
-  text-align: left;
+  text-align: center;
 }
 
-.action-btn:hover {
+.action-btn:hover:not(:disabled) {
   border-color: var(--action-color);
   background: color-mix(in srgb, var(--action-color) 6%, var(--surface));
-  transform: translateX(2px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--action-color) 12%, transparent);
+  transform: translateY(-2px);
+}
+
+.action-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.action-btn__icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--action-color) 12%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .action-btn__icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   color: var(--action-color);
 }
 
 .action-btn__label {
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 500;
+  line-height: 1.25;
   color: var(--base-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ── Skeletons ── */

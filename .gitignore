@@ -45,6 +45,7 @@ infra/state.*.env
 .env.local
 # Local brainstorm / agent scratch
 .superpowers/
+docs/superpowers/
 
 # Git worktrees (local isolated checkouts)
 .worktrees/

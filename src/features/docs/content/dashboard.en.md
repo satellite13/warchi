@@ -4,9 +4,9 @@ The dashboard is the default landing page after login. It gives a quick status s
 
 ## What you see
 
-- **Greeting** and compact stats for models, notations, node types, and link types in one plaque.
-- **Recent models** and **recent diagrams** — the two main entry points to continue work.
-- **Recent notations** and **quick actions** (create model, create notation, **import a notation** from a JSON export, open types editor).
+- **Greeting** and stats for models, notations, node types, and link types in one plaque (with icons).
+- Left: **quick actions** (create/import model, create/import notation, types editor, shapes, scripts) and **recent diagrams** (name, version, model, and date).
+- Right: **recent models** and **recent notations**.
 - **Release notes for current app version** (parsed from changelog).
 
 ## Recommended workflow

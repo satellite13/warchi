@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { nextTick, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import type { ModelData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
@@ -15,8 +15,10 @@ import {
 } from "./composables/useModelPackage";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 import ModelPackageConflictModal from "./components/ModelPackageConflictModal.vue";
+import { shouldOpenModelPackageImport } from "./utils/modelPackageImportQuery";
 
 const { t } = useI18n();
+const route = useRoute();
 const router = useRouter();
 const exportError = ref<string | null>(null);
 const actionStatusMessage = ref<string | null>(null);
@@ -187,6 +189,19 @@ function openPackagePicker() {
     input.click();
   }
 }
+
+async function consumeImportQuery() {
+  if (!shouldOpenModelPackageImport(route.query)) return;
+  const nextQuery = { ...route.query };
+  delete nextQuery.import;
+  await router.replace({ name: "models", query: nextQuery });
+  await nextTick();
+  openPackagePicker();
+}
+
+onMounted(() => {
+  void consumeImportQuery();
+});
 
 async function onPackageSelected(event: Event) {
   const input = event.target as HTMLInputElement;

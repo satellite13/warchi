@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-08-14
+
+### Added
+- ArchiMate junction icons `and` and `or` in the icon picker.
+
 ## [0.19.1] - 2026-08-14
 
 ### Changed

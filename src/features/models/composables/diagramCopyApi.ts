@@ -57,6 +57,7 @@ export interface DiagramCopyEdgeBlocker {
   modelLinkId: string | null
   sourceModelNodeId: string | null
   targetModelNodeId: string | null
+  code?: string | null
   reason: string
 }
 

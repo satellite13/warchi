@@ -4,7 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-14
+
 ### Changed
+- Home dashboard greeting uses the first name, recent diagrams show version, and the layout is quick actions plus diagrams on the left and models plus notations on the right.
+- Quick actions add model-package import, shapes, and validation scripts; tiles wrap to the next row when the column is narrow.
 - Refreshed in-app help to match current catalog, editor, admin trash, and guest-docs behavior.
 
 ## [0.18.5] - 2026-08-14

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import UiIcon from '@/components/ui/UiIcon.vue'
+import SearchInput from '@/components/forms/SearchInput.vue'
 
 const searchQuery = defineModel<string>('searchQuery', { default: '' })
 
@@ -10,23 +10,21 @@ withDefaults(
     count?: number
     isLoading?: boolean
     searchPlaceholder?: string
+    fill?: boolean
   }>(),
   {
     count: 0,
     isLoading: false,
     searchPlaceholder: '',
+    fill: false,
   },
 )
 
 const { t } = useI18n()
-
-function clearSearch(): void {
-  searchQuery.value = ''
-}
 </script>
 
 <template>
-  <aside class="ess">
+  <aside class="ess" :class="{ 'ess--fill': fill }">
     <div class="ess__header">
       <div class="ess__title-row">
         <h3 class="ess__title">{{ title }}</h3>
@@ -38,25 +36,15 @@ function clearSearch(): void {
     </div>
 
     <div class="ess__search">
-      <div class="ess__search-wrap">
-        <UiIcon name="search" class="ess__search-icon" />
-        <input
-          v-model="searchQuery"
-          class="ess__search-input"
-          type="text"
-          :placeholder="searchPlaceholder || t('common.search')"
-        >
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="ess__clear-btn"
-          :title="t('common.clearSearch')"
-          @click="clearSearch"
-        >
-          <UiIcon name="close" />
-        </button>
-      </div>
+      <SearchInput
+        v-model="searchQuery"
+        compact
+        :placeholder="searchPlaceholder || t('common.search')"
+      />
+      <slot name="search-extra" />
     </div>
+
+    <slot name="below-search" />
 
     <div class="ess__list">
       <div v-if="isLoading" class="ess__loading">
@@ -80,6 +68,13 @@ function clearSearch(): void {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+}
+
+.ess--fill {
+  width: auto;
+  flex: 1;
+  height: 100%;
+  border-right: none;
 }
 
 .ess__header {
@@ -124,82 +119,15 @@ function clearSearch(): void {
 .ess__search {
   display: flex;
   align-items: center;
+  gap: 6px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.ess__search-wrap {
-  position: relative;
-  min-width: 0;
+.ess__search :deep(.search-box) {
   flex: 1;
-}
-
-.ess__search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: var(--text-subtle);
-  pointer-events: none;
-}
-
-.ess__search-input {
-  width: 100%;
-  padding: 7px 10px 7px 34px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  box-sizing: border-box;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.ess__search-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
-}
-
-.ess__search-input::placeholder {
-  color: var(--text-subtle);
-}
-
-.ess__clear-btn {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--surface-strong);
-  color: var(--text-subtle);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.ess__clear-btn .ui-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.ess__clear-btn:hover {
-  background: var(--border-strong);
-  color: var(--base-text);
+  min-width: 0;
 }
 
 .ess__list {

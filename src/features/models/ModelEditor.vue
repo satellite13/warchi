@@ -6,6 +6,8 @@ import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
+import ConfirmModal from '@/components/modals/ConfirmModal.vue'
+import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
@@ -863,10 +865,7 @@ const {
   directoryNodeType,
   nodeTypeDefaultDirectoryById,
   createNodeModalTitle,
-  nodeTypeSearchQuery,
-  nodeTypeDropdownOpen,
-  filteredNodeTypes,
-  selectedNodeTypeName,
+  nonDirectoryNodeTypes,
   treeRootNodeId,
   canCreateNodeFromModal,
   getNextTreeOrderForParent,
@@ -3288,47 +3287,16 @@ onBeforeUnmount(() => {
           @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
         />
       </label>
-      <div v-if="createNodeModal.kind === 'node'" class="node-type-dropdown">
-        <span class="node-type-dropdown__label">{{ t('models.nodeTypeLabel') }}</span>
-        <div
-          class="node-type-dropdown__control"
-          @click="nodeTypeDropdownOpen = !nodeTypeDropdownOpen"
-        >
-          <span class="node-type-dropdown__value">{{
-            selectedNodeTypeName || t('models.selectType')
-          }}</span>
-          <UiIcon :name="nodeTypeDropdownOpen ? 'expand_less' : 'expand_more'" class="node-type-dropdown__arrow" />
-        </div>
-        <div v-if="nodeTypeDropdownOpen" class="node-type-dropdown__panel">
-          <input
-            v-model="nodeTypeSearchQuery"
-            class="node-type-dropdown__search"
-            type="text"
-            :placeholder="t('models.typeSearchPlaceholder')"
-            @click.stop
-          />
-          <div class="node-type-dropdown__list">
-            <button
-              v-for="typeItem in filteredNodeTypes"
-              :key="typeItem.id"
-              type="button"
-              class="node-type-dropdown__item"
-              :class="{ 'node-type-dropdown__item--active': newNodeTypeId === typeItem.id }"
-              @click="
-                () => {
-                  newNodeTypeId = typeItem.id
-                  nodeTypeDropdownOpen = false
-                }
-              "
-            >
-              {{ typeItem.name }}
-            </button>
-            <div v-if="filteredNodeTypes.length === 0" class="node-type-dropdown__empty">
-              {{ t('common.nothingFound') }}
-            </div>
-          </div>
-        </div>
-      </div>
+      <label v-if="createNodeModal.kind === 'node'">
+        <span>{{ t('models.nodeTypeLabel') }}</span>
+        <SearchableSelect
+          v-model="newNodeTypeId"
+          :options="nonDirectoryNodeTypes.map((typeItem) => ({ id: typeItem.id, label: typeItem.name }))"
+          :placeholder="t('models.selectType')"
+          :search-placeholder="t('models.typeSearchPlaceholder')"
+          :empty-text="t('common.nothingFound')"
+        />
+      </label>
       <div v-else class="form-hint">{{ t('models.directoryTypeHint') }}</div>
     </div>
     <template #footer>
@@ -3594,26 +3562,16 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
-  <BaseModal
+  <ConfirmModal
     v-if="showDiagramDeleteModal"
     :title="t('models.deleteDiagramTitle')"
-    max-width="500px"
+    :message="
+      t('models.deleteDiagramConfirm', { name: pendingDeleteDiagramName || t('common.unnamed') })
+    "
+    danger
     @close="cancelDiagramDelete"
-  >
-    <p class="leave-text">
-      {{
-        t('models.deleteDiagramConfirm', { name: pendingDeleteDiagramName || t('common.unnamed') })
-      }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">
-        {{ t('common.cancel') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">
-        {{ t('common.delete') }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmDiagramDelete"
+  />
 
   <BaseModal
     v-if="showLinkDeleteModal"
@@ -3642,24 +3600,17 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
-  <BaseModal
+  <ConfirmModal
     v-if="showLeaveDialog"
     :title="t('models.unsavedChangesTitle')"
+    :message="t('models.leaveUnsavedText')"
+    :cancel-label="t('models.stay')"
+    :confirm-label="t('models.leave')"
+    danger
     max-width="400px"
     @close="cancelLeave"
-  >
-    <p class="leave-text">
-      {{ t('models.leaveUnsavedText') }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLeave">
-        {{ t('models.stay') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmLeave">
-        {{ t('models.leave') }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmLeave"
+  />
 
   <BaseModal
     v-if="showDiagramJson"
@@ -4252,107 +4203,6 @@ onBeforeUnmount(() => {
 
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
-}
-
-.node-type-dropdown {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  position: relative;
-}
-
-.node-type-dropdown__label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.node-type-dropdown__control {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-  cursor: pointer;
-  background: var(--surface);
-}
-
-.node-type-dropdown__control:hover {
-  border-color: var(--primary);
-}
-
-.node-type-dropdown__value {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.node-type-dropdown__arrow {
-  width: 18px;
-  height: 18px;
-  color: var(--text-subtle);
-}
-
-.node-type-dropdown__panel {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  margin-top: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.node-type-dropdown__search {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  box-sizing: border-box;
-  background: var(--surface-muted);
-}
-
-.node-type-dropdown__list {
-  max-height: 160px;
-  overflow: auto;
-  padding: 4px;
-}
-
-.node-type-dropdown__item {
-  width: 100%;
-  border: none;
-  background: transparent;
-  text-align: left;
-  padding: 7px 8px;
-  font-size: 13px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.node-type-dropdown__item:hover {
-  background: var(--surface-strong);
-}
-
-.node-type-dropdown__item--active {
-  background: var(--primary-soft);
-  color: var(--primary);
-  font-weight: 500;
-}
-
-.node-type-dropdown__empty {
-  padding: 8px;
-  font-size: 12px;
-  color: var(--text-subtle);
-  text-align: center;
 }
 
 </style>

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
+import EmptyState from '@/components/list/EmptyState.vue'
 import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 
 const props = defineProps<{
@@ -62,16 +63,24 @@ const usageCount = computed(() =>
         <span class="type-aside__count">{{ usageCount }}</span>
       </template>
 
-      <div v-if="isLoadingUsages" class="type-aside__empty">
-        <span class="loading-pulse" />
-        {{ t('common.loading') }}
-      </div>
-      <div v-else-if="isNewType" class="type-aside__empty">
-        {{ t('types.saveTypeToSeeUsage') }}
-      </div>
-      <div v-else-if="typeUsages.length === 0" class="type-aside__empty">
-        {{ t('types.notUsed') }}
-      </div>
+      <EmptyState
+        v-if="isLoadingUsages"
+        variant="compact"
+        icon="progress_activity"
+        :title="t('common.loading')"
+      />
+      <EmptyState
+        v-else-if="isNewType"
+        variant="compact"
+        icon="info"
+        :title="t('types.saveTypeToSeeUsage')"
+      />
+      <EmptyState
+        v-else-if="typeUsages.length === 0"
+        variant="compact"
+        icon="link_off"
+        :title="t('types.notUsed')"
+      />
       <div v-else class="usages-groups">
         <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
           <div class="usage-group__header">

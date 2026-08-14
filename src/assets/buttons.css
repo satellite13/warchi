@@ -76,6 +76,16 @@
   font-size: 12px;
 }
 
+.btn--toolbar {
+  height: 34px;
+  padding: 0 12px;
+}
+
+.btn.btn--toolbar .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
 /* ─── Ghost ──────────────────────────────────── */
 .btn--ghost {
   background: var(--surface-muted);

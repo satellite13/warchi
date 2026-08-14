@@ -67,4 +67,11 @@ describe('SearchInput', () => {
     const input = wrapper.find('input')
     expect(input.attributes('placeholder')).toBe('Find items...')
   })
+
+  it('applies compact class when compact is set', () => {
+    const wrapper = mount(SearchInput, {
+      props: { compact: true },
+    })
+    expect(wrapper.find('.search-box--compact').exists()).toBe(true)
+  })
 })

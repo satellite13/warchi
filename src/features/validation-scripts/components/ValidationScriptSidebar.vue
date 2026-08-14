@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { ValidationScriptResponse } from '@/types/api'
 import { canEditByAccessPermission } from '@/utils/accessPermission'
 import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
+import SidebarListItem from '@/components/list/SidebarListItem.vue'
 
 const props = defineProps<{
   scripts: ValidationScriptResponse[]
@@ -68,38 +69,18 @@ const totalCount = computed(() => props.scripts.length)
       {{ t('common.nothingFound') }}
     </div>
     <ul v-else class="validation-script-sidebar__items">
-      <li
+      <SidebarListItem
         v-for="(script, idx) in sortedScripts"
         :key="script.id"
-        class="validation-script-sidebar__item"
-        :class="{ 'validation-script-sidebar__item--active': selectedScriptId === script.id }"
-        :style="{ animationDelay: `${idx * 30}ms` }"
-        role="button"
-        tabindex="0"
+        :title="script.name || t('common.unnamed')"
+        :subtitle="script.description || ''"
+        icon="terminal"
+        :active="selectedScriptId === script.id"
+        :locked="!canEditByAccessPermission(script.accessPermission)"
+        :lock-title="t('validationScripts.noEditRights')"
+        :animation-index="idx"
         @click="emit('selectScript', script.id)"
-        @keydown.enter.prevent="emit('selectScript', script.id)"
-        @keydown.space.prevent="emit('selectScript', script.id)"
-      >
-        <UiIcon name="terminal" class="validation-script-sidebar__item-icon" />
-        <div class="validation-script-sidebar__item-info">
-          <span class="validation-script-sidebar__item-name">
-            {{ script.name || t('common.unnamed') }}
-          </span>
-          <span
-            v-if="script.description"
-            class="validation-script-sidebar__item-desc"
-          >
-            {{ script.description }}
-          </span>
-        </div>
-        <span
-          v-if="!canEditByAccessPermission(script.accessPermission)"
-          class="validation-script-sidebar__item-lock"
-          :title="t('validationScripts.noEditRights')"
-        >
-          <UiIcon name="lock" />
-        </span>
-      </li>
+      />
     </ul>
   </EditorSidebarShell>
 </template>
@@ -112,106 +93,5 @@ const totalCount = computed(() => props.scripts.length)
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.validation-script-sidebar__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 9px 10px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  transition:
-    background 0.15s ease,
-    border-left-color 0.15s ease;
-  border-left: 3px solid transparent;
-  box-sizing: border-box;
-  animation: validationScriptSidebarFadeIn 0.25s ease both;
-}
-
-.validation-script-sidebar__item:hover {
-  background: var(--surface-strong);
-}
-
-.validation-script-sidebar__item:not(.validation-script-sidebar__item--active):hover {
-  border-left-color: rgba(124, 92, 252, 0.3);
-}
-
-.validation-script-sidebar__item--active {
-  background: var(--primary-soft);
-  border-left-color: var(--primary);
-}
-
-.validation-script-sidebar__item--active:hover {
-  background: var(--primary-soft);
-}
-
-.validation-script-sidebar__item:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
-}
-
-@keyframes validationScriptSidebarFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.validation-script-sidebar__item-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--text-subtle);
-  flex-shrink: 0;
-}
-
-.validation-script-sidebar__item--active .validation-script-sidebar__item-icon {
-  color: var(--primary);
-}
-
-.validation-script-sidebar__item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
-}
-
-.validation-script-sidebar__item-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--base-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.validation-script-sidebar__item-desc {
-  font-size: 11px;
-  color: var(--text-subtle);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.validation-script-sidebar__item-lock {
-  color: var(--text-subtle);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-
-.validation-script-sidebar__item-lock .ui-icon {
-  width: 16px;
-  height: 16px;
 }
 </style>

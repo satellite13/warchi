@@ -8,6 +8,8 @@ import type { DocumentWikiItem } from '@/composables/useWikiDocuments'
 import { coercePropertyValue, regexTestProperty } from '@/utils/propertyUtils'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
+import EmptyState from '@/components/list/EmptyState.vue'
+import PropertyValueField from '@/components/properties/PropertyValueField.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -205,43 +207,13 @@ const nodeEditorBlocks = computed(
 <template>
   <div class="mp">
     <!-- Empty state -->
-    <div v-if="currentMode === 'empty'" class="mp-empty">
-      <div class="mp-empty__graphic">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect
-            x="10"
-            y="14"
-            width="12"
-            height="10"
-            rx="2.5"
-            stroke="currentColor"
-            stroke-width="1.4"
-            opacity="0.25"
-          />
-          <rect
-            x="26"
-            y="24"
-            width="12"
-            height="10"
-            rx="2.5"
-            stroke="currentColor"
-            stroke-width="1.4"
-            opacity="0.25"
-          />
-          <path
-            d="M22 22L26 26"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-            stroke-dasharray="3 2"
-            opacity="0.18"
-          />
-          <circle cx="24" cy="24" r="2" fill="currentColor" opacity="0.15" />
-        </svg>
-      </div>
-      <span class="mp-empty__text">{{ t('diagram.selectElement') }}</span>
-      <span class="mp-empty__hint">{{ t('diagram.selectElementHint') }}</span>
-    </div>
+    <EmptyState
+      v-if="currentMode === 'empty'"
+      variant="panel"
+      icon="ads_click"
+      :title="t('diagram.selectElement')"
+      :description="t('diagram.selectElementHint')"
+    />
 
     <template v-else>
       <!-- Type badge -->
@@ -626,68 +598,17 @@ const nodeEditorBlocks = computed(
             <div class="mp-fields">
               <div v-for="property in linkProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
-                <ToggleSwitch
-                  v-if="property.type === 'boolean'"
-                  :model-value="Boolean(linkScopedValues[property.name])"
+                <PropertyValueField
+                  :property="property"
+                  :model-value="linkScopedValues[property.name]"
                   :disabled="readOnly"
+                  :invalid="
+                    property.type === 'string' &&
+                    regexTest(property, String(linkScopedValues[property.name] ?? '')) === false
+                  "
+                  :error-text="t('types.regexNoMatch')"
                   @update:model-value="emit('setLinkScopedValue', property.name, $event)"
-                >
-                  {{ Boolean(linkScopedValues[property.name]) ? t('common.yes') : t('common.no') }}
-                </ToggleSwitch>
-                <select
-                  v-else-if="property.type === 'enum'"
-                  class="mp-select"
-                  :disabled="readOnly"
-                  :value="
-                    String(
-                      linkScopedValues[property.name] ??
-                        property.enumDefault ??
-                        property.defaultValue ??
-                        ''
-                    )
-                  "
-                  @change="
-                    !readOnly &&
-                      emit(
-                        'setLinkScopedValue',
-                        property.name,
-                        ($event.target as HTMLSelectElement).value
-                      )
-                  "
-                >
-                  <option value="">{{ t('diagram.selectValue') }}</option>
-                  <option
-                    v-for="enumValue in property.enumValues ?? []"
-                    :key="`${property.id}-${enumValue}`"
-                    :value="enumValue"
-                  >
-                    {{ enumValue }}
-                  </option>
-                </select>
-                <div v-else class="mp-field__input-wrap">
-                  <input
-                    class="mp-input"
-                    :class="{ 'mp-input--error': property.type === 'string' && regexTest(property, String(linkScopedValues[property.name] ?? '')) === false }"
-                    :type="property.type === 'number' ? 'number' : 'text'"
-                    :placeholder="property.name"
-                    :readonly="readOnly"
-                    :value="String(linkScopedValues[property.name] ?? '')"
-                    @input="
-                      !readOnly &&
-                        emit(
-                          'setLinkScopedValue',
-                          property.name,
-                          coerceValue(property, ($event.target as HTMLInputElement).value)
-                        )
-                    "
-                  />
-                  <span
-                    v-if="property.type === 'string' && regexTest(property, String(linkScopedValues[property.name] ?? '')) === false"
-                    class="mp-field__error"
-                  >
-                    {{ t('types.regexNoMatch') }}
-                  </span>
-                </div>
+                />
               </div>
             </div>
           </section>

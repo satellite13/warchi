@@ -239,7 +239,7 @@ function handleExport(group: {
         <div class="catalog-toolbar__actions">
           <button
             type="button"
-            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            class="btn btn--secondary btn--xs btn--toolbar"
             :title="t(`${i18nPrefix}.createDescription`)"
             @click="openCreateModal"
           >
@@ -249,7 +249,7 @@ function handleExport(group: {
           <button
             v-if="canImportPackage"
             type="button"
-            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            class="btn btn--secondary btn--xs btn--toolbar"
             :title="t(`${i18nPrefix}.packageImportDescription`)"
             :disabled="actionBusy"
             @click="emit('importPackage')"
@@ -443,16 +443,6 @@ function handleExport(group: {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.catalog-toolbar__btn {
-  height: 34px;
-  padding: 0 12px;
-}
-
-.catalog-toolbar__btn .ui-icon {
-  width: 16px;
-  height: 16px;
 }
 
 .catalog-toolbar__search {

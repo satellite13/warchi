@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import BaseModal from "@/components/modals/BaseModal.vue"
+import NameVersionForm from "@/components/forms/NameVersionForm.vue"
 import SearchableSelect from "@/components/forms/SearchableSelect.vue"
 import TagSuggestions from "./TagSuggestions.vue"
 import type { EditorNodeType, EditorLinkType } from "../types"
@@ -71,22 +72,14 @@ const stylePresetSelectOptions = computed(() => [
       class="modal-form"
       @submit.prevent="emit('submit')"
     >
-      <label class="modal-label">
-        {{ nameLabel }}
-        <input
-          v-model="nameModel"
-          type="text"
-          :placeholder="namePlaceholder"
-        >
-      </label>
-      <label class="modal-label">
-        {{ versionLabel || 'Версия' }}
-        <input
-          v-model="versionModel"
-          type="text"
-          :placeholder="versionPlaceholder || '1.0.0'"
-        >
-      </label>
+      <NameVersionForm
+        v-model:name="nameModel"
+        v-model:version="versionModel"
+        :name-label="nameLabel"
+        :version-label="versionLabel || t('common.version')"
+        :name-placeholder="namePlaceholder"
+        :version-placeholder="versionPlaceholder || '1.0.0'"
+      />
       <label class="modal-label">
         {{ tagsLabel }}
         <input
@@ -157,14 +150,14 @@ const stylePresetSelectOptions = computed(() => [
         class="btn btn--secondary"
         @click="emit('close')"
       >
-        Отмена
+        {{ t('common.cancel') }}
       </button>
       <button
         type="submit"
         :form="formId"
         class="btn btn--primary"
       >
-        Добавить
+        {{ t('common.create') }}
       </button>
     </template>
   </BaseModal>

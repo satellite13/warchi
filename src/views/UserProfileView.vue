@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import AppFooter from "../components/layout/AppFooter.vue"
 import AppHeader from "../components/layout/AppHeader.vue"
+import UserAvatar from "../components/layout/UserAvatar.vue"
 import ApiKeysSection from "@/components/profile/ApiKeysSection.vue"
 import UiIcon from "@/components/ui/UiIcon.vue"
 import { apiGet } from "../composables/useApi"
@@ -32,12 +33,6 @@ const savedPosition = ref("")
 const displayName = computed(() => {
   const parts = [firstName.value, lastName.value].map((s) => s.trim()).filter(Boolean)
   return parts.length > 0 ? parts.join(" ") : (currentUser.value?.email ?? "—")
-})
-
-const avatarLetter = computed(() => {
-  const fromName = firstName.value.trim() || lastName.value.trim()
-  const source = fromName || currentUser.value?.email || "?"
-  return source.slice(0, 1).toLocaleUpperCase()
 })
 
 const applyUser = (user: User): void => {
@@ -153,9 +148,7 @@ onMounted(async () => {
             <p>{{ t("profile.subtitle") }}</p>
           </div>
           <div class="profile-shell__identity">
-            <div class="profile-shell__avatar" aria-hidden="true">
-              {{ avatarLetter }}
-            </div>
+            <UserAvatar :label="displayName" size="lg" />
             <div class="profile-shell__identity-meta">
               <strong>{{ displayName }}</strong>
               <span v-if="currentUser?.email">{{ currentUser.email }}</span>
@@ -295,18 +288,6 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-}
-
-.profile-shell__avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  color: var(--primary);
-  font-weight: 700;
-  font-size: 16px;
 }
 
 .profile-shell__identity-meta {

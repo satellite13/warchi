@@ -6,6 +6,7 @@ import { apiUpload } from '@/api/apiClient'
 import AdminAlert from '@/components/admin/AdminAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
+import ListHeader from '@/components/list/ListHeader.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { useLibraryIcons } from '@/composables/useLibraryIcons'
 import { svgToDataUrl, type LibraryIconRecord } from '@/utils/libraryIconResolve'
@@ -191,55 +192,30 @@ async function importBundle(bundle: Bundle): Promise<void> {
 
 <template>
   <div class="admin-icons">
-    <AdminPageHeader :title="t('adminIcons.title')" :subtitle="t('adminIcons.subtitle')">
-      <template #badge>
-        <span class="admin-icons__count">{{ count }}</span>
-      </template>
-      <template #toolbar>
-        <div class="admin-icons__search">
-          <svg class="admin-icons__search-icon" viewBox="0 0 20 20" fill="none">
-            <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" />
-            <path
-              d="M13 13l4 4"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
-          </svg>
-          <input
-            v-model="searchQuery"
-            class="admin-icons__search-input"
-            type="search"
-            :placeholder="t('adminIcons.searchPlaceholder')"
-          >
-          <button
-            v-if="searchQuery"
-            type="button"
-            class="admin-icons__search-clear"
-            :aria-label="t('common.cancel')"
-            @click="searchQuery = ''"
-          >
-            <svg viewBox="0 0 16 16" fill="none">
-              <path
-                d="M4 4l8 8M12 4l-8 8"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-        </div>
-        <button type="button" class="btn btn--secondary" @click="fileInput?.click()">
-          {{ t('adminIcons.upload') }}
+    <AdminPageHeader :title="t('adminIcons.title')" :subtitle="t('adminIcons.subtitle')" />
+    <div class="admin-icons__toolbar">
+      <div class="admin-icons__actions">
+        <button type="button" class="btn btn--secondary btn--xs btn--toolbar" @click="fileInput?.click()">
+          <UiIcon name="upload" />
+          <span>{{ t('adminIcons.upload') }}</span>
         </button>
-        <button type="button" class="btn btn--secondary" @click="jsonInput?.click()">
-          {{ t('adminIcons.importJson') }}
+        <button type="button" class="btn btn--secondary btn--xs btn--toolbar" @click="jsonInput?.click()">
+          <UiIcon name="upload_file" />
+          <span>{{ t('adminIcons.importJson') }}</span>
         </button>
-        <button type="button" class="btn btn--secondary" @click="exportBundle">
-          {{ t('adminIcons.exportBundle') }}
+        <button type="button" class="btn btn--secondary btn--xs btn--toolbar" @click="exportBundle">
+          <UiIcon name="download" />
+          <span>{{ t('adminIcons.exportBundle') }}</span>
         </button>
-      </template>
-    </AdminPageHeader>
+      </div>
+      <ListHeader
+        v-model="searchQuery"
+        class="admin-icons__search"
+        :placeholder="t('adminIcons.searchPlaceholder')"
+        :count="count"
+        :loading="loading"
+      />
+    </div>
 
     <input
       ref="fileInput"
@@ -343,75 +319,24 @@ async function importBundle(bundle: Bundle): Promise<void> {
   flex-direction: column;
   gap: 20px;
 }
+.admin-icons__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.admin-icons__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .admin-icons__search {
-  position: relative;
+  flex: 1;
+  min-width: 220px;
   display: flex;
-  align-items: center;
-}
-.admin-icons__search-icon {
-  position: absolute;
-  left: 12px;
-  width: 15px;
-  height: 15px;
-  color: var(--text-subtle);
-  pointer-events: none;
-}
-.admin-icons__search:focus-within .admin-icons__search-icon {
-  color: var(--primary);
-}
-.admin-icons__search-input {
-  width: 220px;
-  padding: 8px 30px 8px 34px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--base-text);
-  outline: none;
-}
-.admin-icons__search-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
-.admin-icons__search-input::-webkit-search-decoration,
-.admin-icons__search-input::-webkit-search-cancel-button {
-  appearance: none;
-}
-.admin-icons__search-clear {
-  position: absolute;
-  right: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.admin-icons__search-clear svg {
-  width: 11px;
-  height: 11px;
-}
-.admin-icons__search-clear:hover {
-  background: var(--border);
-}
-.admin-icons__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  padding: 5px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--primary);
-  background: var(--primary-soft);
-  border-radius: 20px;
-  font-variant-numeric: tabular-nums;
+  justify-content: flex-end;
 }
 .admin-icons__grid {
   display: grid;

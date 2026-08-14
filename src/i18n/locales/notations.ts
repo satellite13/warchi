@@ -138,6 +138,15 @@ export const notationsMessages = {
         'Отношение с таким именем и версией уже есть в этой нотации',
       boundEntityNameVersionConflict:
         'В нотации уже есть {entity} «{name}» версии {version}. Задайте уникальное имя или версию.',
+      elementsTitle: 'Элементы',
+      addComponent: 'Добавить компонент',
+      addRelation: 'Добавить отношение',
+      syncSelectionOn: 'Включить синхронизацию выбора',
+      syncSelectionOff: 'Отключить синхронизацию выбора',
+      sortList: 'Сортировка списка',
+      sortAlphaAsc: 'А-Я',
+      sortAlphaDesc: 'Я-А',
+      sortByType: 'По типу',
     },
   },
   en: {
@@ -279,6 +288,15 @@ export const notationsMessages = {
         'A relation with this name and version already exists in this notation',
       boundEntityNameVersionConflict:
         'This notation already has {entity} "{name}" version {version}. Use a unique name or version.',
+      elementsTitle: 'Elements',
+      addComponent: 'Add component',
+      addRelation: 'Add relation',
+      syncSelectionOn: 'Enable selection sync',
+      syncSelectionOff: 'Disable selection sync',
+      sortList: 'Sort list',
+      sortAlphaAsc: 'A-Z',
+      sortAlphaDesc: 'Z-A',
+      sortByType: 'By type',
     },
   },
 }

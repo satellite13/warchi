@@ -8,7 +8,8 @@ import type { CompositeSerializedCComponent } from "@/domain/attrs/notationAttrs
 import { resolveCompositeBoundIconName } from "@/features/diagram-style/utils/compositeBindings";
 import { findNameVersionConflict } from "../utils/nameVersionUniqueness";
 import EmptyState from "@/components/list/EmptyState.vue";
-import LazyIconImg from "@/components/forms/LazyIconImg.vue";
+import EditorSidebarShell from "@/components/list/EditorSidebarShell.vue";
+import SidebarListItem from "@/components/list/SidebarListItem.vue";
 
 const { t } = useI18n();
 
@@ -199,158 +200,156 @@ const commitRename = (item: ListItem) => {
 
 <template>
   <div class="component-list">
-    <div class="component-list__header">
-      <div class="component-list__title-row">
-        <h3 class="component-list__title">Элементы</h3>
-        <span class="component-list__count">{{ items.length }}</span>
-      </div>
-      <div class="component-list__actions">
+    <EditorSidebarShell
+      v-model:search-query="searchQuery"
+      fill
+      :title="t('notations.elementsTitle')"
+      :count="items.length"
+      :search-placeholder="t('common.search')"
+    >
+      <template #actions>
         <button
           type="button"
-          class="add-btn"
-          :class="{ 'add-btn--active': !!syncSelectionEnabled }"
-          :title="syncSelectionEnabled ? 'Отключить синхронизацию выбора' : 'Включить синхронизацию выбора'"
+          class="ess-action-btn"
+          :class="{ 'ess-action-btn--active': !!syncSelectionEnabled }"
+          :title="syncSelectionEnabled ? t('notations.syncSelectionOff') : t('notations.syncSelectionOn')"
           @click="emit('toggle-sync-selection')"
         >
           <UiIcon name="swap_horiz" />
         </button>
-        <button type="button" class="add-btn" title="Добавить компонент" @click="emit('create-component')">
+        <button
+          type="button"
+          class="ess-action-btn"
+          :title="t('notations.addComponent')"
+          @click="emit('create-component')"
+        >
           <UiIcon :name="DEFAULT_ENTITY_ICONS.component" />
         </button>
-        <button type="button" class="add-btn" title="Добавить отношение" @click="emit('create-relation')">
+        <button
+          type="button"
+          class="ess-action-btn"
+          :title="t('notations.addRelation')"
+          @click="emit('create-relation')"
+        >
           <UiIcon :name="DEFAULT_ENTITY_ICONS.link" />
         </button>
-      </div>
-    </div>
+      </template>
 
-    <div class="component-list__search">
-      <div class="component-list__search-input-wrap">
-        <UiIcon name="search" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          class="search-input"
-          placeholder="Поиск..."
+      <template #search-extra>
+        <select
+          class="sort-select"
+          :value="sortMode"
+          :title="t('notations.sortList')"
+          @change="sortMode = ($event.target as HTMLSelectElement).value as SortMode"
         >
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="clear-btn"
-          @click="searchQuery = ''"
-        >
-          <UiIcon name="close" />
-        </button>
-      </div>
-      <select
-        class="sort-select"
-        :value="sortMode"
-        title="Сортировка списка"
-        @change="sortMode = ($event.target as HTMLSelectElement).value as SortMode"
-      >
-        <option value="alpha-asc">А-Я</option>
-        <option value="alpha-desc">Я-А</option>
-        <option value="type">По типу</option>
-      </select>
-    </div>
+          <option value="alpha-asc">{{ t('notations.sortAlphaAsc') }}</option>
+          <option value="alpha-desc">{{ t('notations.sortAlphaDesc') }}</option>
+          <option value="type">{{ t('notations.sortByType') }}</option>
+        </select>
+      </template>
 
-    <div v-if="allTags.length > 0" class="component-list__tags-section">
-      <button type="button" class="tags-toggle" @click="tagsExpanded = !tagsExpanded">
-        <span class="tags-toggle__label">Теги</span>
-        <span v-if="selectedTags.size > 0" class="tags-toggle__count">{{ selectedTags.size }}</span>
-        <UiIcon name="expand_more" class="tags-toggle__icon" :class="{ 'tags-toggle__icon--collapsed': !tagsExpanded }" />
-      </button>
-      <div v-if="tagsExpanded" class="component-list__tags">
-        <button
-          v-for="tag in allTags"
-          :key="tag"
-          type="button"
-          class="tag-chip"
-          :class="{ 'tag-chip--active': selectedTags.has(tag) }"
-          @click="toggleTag(tag)"
-        >
-          {{ tag }}
-        </button>
-      </div>
-    </div>
-
-    <div ref="itemsContainer" class="component-list__items">
-      <div
-        v-for="item in items"
-        :key="item.id"
-        :data-id="item.id"
-        class="component-item"
-        role="button"
-        tabindex="0"
-        :class="{
-          'component-item--active': selectedId === item.id,
-          'component-item--relation': item.kind === 'relation',
-          'component-item--renaming': renamingId === item.id
-        }"
-        @click="renamingId !== item.id && emit('select', item.kind, item.id)"
-        @keydown.enter.prevent="renamingId !== item.id && emit('select', item.kind, item.id)"
-        @keydown.space.prevent="renamingId !== item.id && emit('select', item.kind, item.id)"
-      >
-        <UiIcon
-          v-if="item.kind === 'relation'"
-          :name="DEFAULT_ENTITY_ICONS.link"
-          class="component-item__icon"
-        />
-        <LazyIconImg
-          v-else
-          :icon-id="item.paletteIcon"
-          :alt="item.name"
-          img-class="component-item__icon-img"
-          eager
-        />
-        <div class="component-item__info">
-          <template v-if="renamingId === item.id">
-            <input
-              ref="renameInputRef"
-              v-model="renamingName"
-              type="text"
-              class="component-item__rename-input"
-              :class="{ 'component-item__rename-input--error': renameError }"
-              :aria-label="t('common.rename')"
-              @click.stop
-              @keydown.enter.prevent="commitRename(item)"
-              @keydown.esc.prevent="cancelRename"
-              @blur="commitRename(item)"
+      <template #below-search>
+        <div v-if="allTags.length > 0" class="component-list__tags-section">
+          <button type="button" class="tags-toggle" @click="tagsExpanded = !tagsExpanded">
+            <span class="tags-toggle__label">{{ t('notations.tagsLabel') }}</span>
+            <span v-if="selectedTags.size > 0" class="tags-toggle__count">{{ selectedTags.size }}</span>
+            <UiIcon name="expand_more" class="tags-toggle__icon" :class="{ 'tags-toggle__icon--collapsed': !tagsExpanded }" />
+          </button>
+          <div v-if="tagsExpanded" class="component-list__tags">
+            <button
+              v-for="tag in allTags"
+              :key="tag"
+              type="button"
+              class="tag-chip"
+              :class="{ 'tag-chip--active': selectedTags.has(tag) }"
+              @click="toggleTag(tag)"
             >
-            <span v-if="renameError" class="component-item__rename-error">{{ renameError }}</span>
-          </template>
-          <template v-else>
-            <span class="component-item__name">{{ item.name }}</span>
-            <span v-if="item.typeLabel" class="component-item__type">{{ item.typeLabel }}</span>
-          </template>
+              {{ tag }}
+            </button>
+          </div>
         </div>
-        <div class="component-item__actions">
-          <button
-            v-if="renamingId !== item.id"
-            type="button"
-            class="component-item__action"
-            :title="t('common.rename')"
-            @click.stop="startRename(item)"
-          >
-            <UiIcon name="edit" />
-          </button>
-          <button
-            type="button"
-            class="component-item__action component-item__action--danger"
-            :title="t('common.delete')"
-            @click.stop="emit('remove-item', item.kind, item.id)"
-          >
-            <UiIcon name="delete" />
-          </button>
-        </div>
-      </div>
+      </template>
 
-      <EmptyState
-        v-if="items.length === 0"
-        variant="compact"
-        :icon="searchQuery ? 'search_off' : 'inventory_2'"
-        :title="searchQuery ? t('common.nothingFound') : t('common.noItems')"
-      />
-    </div>
+      <div ref="itemsContainer" class="component-list__items">
+        <template v-for="item in items" :key="item.id">
+          <div
+            v-if="renamingId === item.id"
+            :data-id="item.id"
+            class="component-item component-item--renaming"
+            :class="{
+              'component-item--active': selectedId === item.id,
+              'component-item--relation': item.kind === 'relation',
+            }"
+          >
+            <div class="component-item__info">
+              <input
+                ref="renameInputRef"
+                v-model="renamingName"
+                type="text"
+                class="component-item__rename-input"
+                :class="{ 'component-item__rename-input--error': renameError }"
+                :aria-label="t('common.rename')"
+                @click.stop
+                @keydown.enter.prevent="commitRename(item)"
+                @keydown.esc.prevent="cancelRename"
+                @blur="commitRename(item)"
+              >
+              <span v-if="renameError" class="component-item__rename-error">{{ renameError }}</span>
+            </div>
+            <div class="component-item__actions">
+              <button
+                type="button"
+                class="component-item__action component-item__action--danger"
+                :title="t('common.delete')"
+                @click.stop="emit('remove-item', item.kind, item.id)"
+              >
+                <UiIcon name="delete" />
+              </button>
+            </div>
+          </div>
+          <SidebarListItem
+            v-else
+            as="div"
+            :data-id="item.id"
+            :title="item.name"
+            :subtitle="item.typeLabel"
+            :icon-id="item.kind === 'relation' ? '' : item.paletteIcon"
+            :icon="item.kind === 'relation' ? DEFAULT_ENTITY_ICONS.link : ''"
+            :tone="item.kind === 'relation' ? 'accent' : 'primary'"
+            :active="selectedId === item.id"
+            @click="emit('select', item.kind, item.id)"
+          >
+            <template #trailing>
+              <div class="component-item__actions">
+                <button
+                  type="button"
+                  class="component-item__action"
+                  :title="t('common.rename')"
+                  @click.stop="startRename(item)"
+                >
+                  <UiIcon name="edit" />
+                </button>
+                <button
+                  type="button"
+                  class="component-item__action component-item__action--danger"
+                  :title="t('common.delete')"
+                  @click.stop="emit('remove-item', item.kind, item.id)"
+                >
+                  <UiIcon name="delete" />
+                </button>
+              </div>
+            </template>
+          </SidebarListItem>
+        </template>
+
+        <EmptyState
+          v-if="items.length === 0"
+          variant="compact"
+          :icon="searchQuery ? 'search_off' : 'inventory_2'"
+          :title="searchQuery ? t('common.nothingFound') : t('common.noItems')"
+        />
+      </div>
+    </EditorSidebarShell>
   </div>
 </template>
 
@@ -363,35 +362,6 @@ const commitRename = (item: ListItem) => {
   min-width: 0;
   margin-left: 50px;
   overflow-x: hidden;
-}
-
-.component-list__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.component-list__title {
-  margin: 0;
-  font-size: var(--heading-font-size);
-  font-weight: 600;
-  color: var(--base-text);
-  letter-spacing: var(--heading-letter-spacing);
-}
-
-.component-list__title-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.component-list__actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .sort-select {
@@ -412,126 +382,6 @@ const commitRename = (item: ListItem) => {
 
 .sort-select:focus {
   border-color: var(--primary);
-}
-
-.component-list__count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--primary);
-  background: var(--primary-soft);
-  padding: 2px 9px;
-  border-radius: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.add-btn .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.add-btn:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
-.add-btn--active {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
-.component-list__search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.component-list__search-input-wrap {
-  position: relative;
-  min-width: 0;
-  flex: 1;
-}
-
-.search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: var(--text-subtle);
-  pointer-events: none;
-}
-
-.search-input {
-  width: 100%;
-  padding: 7px 10px 7px 34px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  box-sizing: border-box;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.search-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
-}
-
-.search-input::placeholder {
-  color: var(--text-subtle);
-}
-
-.clear-btn {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--surface-strong);
-  color: var(--text-subtle);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.clear-btn .ui-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.clear-btn:hover {
-  background: var(--border-strong);
-  color: var(--base-text);
 }
 
 .component-list__tags-section {
@@ -615,37 +465,29 @@ const commitRename = (item: ListItem) => {
 }
 
 .component-list__items {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.component-list :deep(.sli .component-item__actions) {
+  opacity: 0;
+}
+
+.component-list :deep(.sli:hover .component-item__actions),
+.component-list :deep(.sli--active .component-item__actions) {
+  opacity: 1;
 }
 
 .component-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: auto;
   min-width: 0;
   padding: 9px 10px;
-  border: none;
   border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  transition: background 0.15s ease, border-left-color 0.15s ease;
   border-left: 3px solid transparent;
   box-sizing: border-box;
-}
-
-.component-item:hover {
-  background: var(--surface-strong);
-}
-
-.component-item:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
 }
 
 .component-item--active {
@@ -653,52 +495,9 @@ const commitRename = (item: ListItem) => {
   border-left-color: var(--primary);
 }
 
-.component-item--active:hover {
-  background: var(--primary-soft);
-}
-
 .component-item--relation.component-item--active {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   border-left-color: var(--accent);
-}
-
-.component-item--relation.component-item--active:hover {
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
-}
-
-.component-item:not(.component-item--relation):not(.component-item--active):hover {
-  border-left-color: rgba(124, 92, 252, 0.3);
-}
-
-.component-item--relation:not(.component-item--active):hover {
-  border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.component-item__icon,
-.component-item__icon-img {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.component-item__icon {
-  color: var(--text-subtle);
-}
-
-.component-item__icon-img {
-  object-fit: contain;
-}
-
-.component-item--active .component-item__icon {
-  color: var(--primary);
-}
-
-.component-item--relation .component-item__icon {
-  color: var(--accent);
-}
-
-.component-item--relation.component-item--active .component-item__icon {
-  color: var(--accent);
 }
 
 .component-item__info {
@@ -707,23 +506,6 @@ const commitRename = (item: ListItem) => {
   gap: 1px;
   min-width: 0;
   flex: 1;
-}
-
-.component-item__name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--base-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.component-item__type {
-  font-size: 11px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .component-item__rename-input {
@@ -763,8 +545,6 @@ const commitRename = (item: ListItem) => {
   transition: opacity 0.15s ease;
 }
 
-.component-item:hover .component-item__actions,
-.component-item--active .component-item__actions,
 .component-item--renaming .component-item__actions {
   opacity: 1;
 }
@@ -799,23 +579,5 @@ const commitRename = (item: ListItem) => {
   color: var(--danger);
   border-color: var(--danger);
   background: var(--danger-soft);
-}
-
-.component-list__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 32px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-subtle);
-  margin: 0;
-}
-
-.component-list__empty-icon {
-  width: 28px;
-  height: 28px;
-  color: var(--border-strong);
 }
 </style>

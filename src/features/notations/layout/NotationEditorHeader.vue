@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import AppLogo from "@/components/layout/AppLogo.vue"
-import UnsavedBadge from "@/components/UnsavedBadge.vue"
-import IconToolbar, { type ToolbarButton } from "./IconToolbar.vue"
+import UnsavedBadge from '@/components/UnsavedBadge.vue'
+import DiagramEditorHeaderShell from '@/components/layout/DiagramEditorHeaderShell.vue'
+import IconToolbar, { type ToolbarButton } from './IconToolbar.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -41,7 +41,7 @@ const props = withDefaults(
     hideToolbar: false,
     isAdmin: false,
     showWikiButton: true,
-  }
+  },
 )
 
 const router = useRouter()
@@ -122,28 +122,22 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="canvasMode" class="notation-header-canvas">
-    <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
-  </div>
-  <header v-else class="notation-header" :class="{ 'notation-header--no-toolbar': hideToolbar }">
-    <div class="notation-header__left">
-      <button
-        type="button"
-        class="back-btn"
-        :title="t('toolbar.backToNotations')"
-        @click="router.push({ name: 'notations' })"
-      >
-        <UiIcon name="arrow_back" />
-      </button>
-      <AppLogo size="sm" />
-      <span class="notation-header__divider">/</span>
+  <DiagramEditorHeaderShell
+    :canvas-mode="canvasMode"
+    :hide-toolbar="hideToolbar"
+    :version="notationVersion"
+    :back-title="t('toolbar.backToNotations')"
+    @back="router.push({ name: 'notations' })"
+  >
+    <template #title>
       <span class="notation-header__title">{{ notationName || t('toolbar.notationEditor') }}</span>
-      <span v-if="notationVersion" class="notation-header__version">{{ notationVersion }}</span>
+    </template>
+    <template #left-extra>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button
         v-if="canShare"
         type="button"
-        class="share-btn"
+        class="deh-icon-btn"
         :title="t('toolbar.shareAccess')"
         @click="emit('share')"
       >
@@ -152,136 +146,23 @@ const emit = defineEmits<{
       <button
         v-if="showWikiButton"
         type="button"
-        class="share-btn"
+        class="deh-icon-btn"
         :title="t('notations.documentation')"
         @click="emit('action', 'open-notation-doc')"
       >
         <UiIcon name="article" />
       </button>
-    </div>
-    <div v-if="!hideToolbar" class="notation-header__center">
+    </template>
+    <template #toolbar>
       <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
-    </div>
-    <div v-if="!hideToolbar" class="notation-header__right-spacer" />
-  </header>
+    </template>
+  </DiagramEditorHeaderShell>
 </template>
 
 <style scoped>
-.notation-header {
-  display: grid;
-  grid-template-columns: minmax(620px, max-content) minmax(0, 1fr) 360px;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.notation-header--no-toolbar {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.notation-header-canvas {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
-}
-
-.notation-header-canvas :deep(.icon-toolbar) {
-  padding: 2px 3px;
-  border-radius: 7px;
-}
-
-.notation-header__left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 12px 16px;
-}
-
-.back-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.back-btn .ui-icon {
-  font-size: 16px;
-}
-
-.back-btn:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
-.notation-header__divider {
-  color: var(--border-strong);
-  font-size: 16px;
-  font-weight: 300;
-}
-
 .notation-header__title {
   font-size: 14px;
   color: var(--text-muted);
   white-space: nowrap;
-}
-
-.notation-header__version {
-  font-size: 12px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  color: var(--text-subtle);
-  background: var(--surface-strong);
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-
-.notation-header__center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  padding: 12px 16px;
-}
-
-.notation-header__right-spacer {
-  min-width: 0;
-}
-
-.share-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.share-btn .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.share-btn:hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
 }
 </style>

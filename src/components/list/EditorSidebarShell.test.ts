@@ -54,14 +54,21 @@ describe('EditorSidebarShell', () => {
     expect(wrapper.find('.slot-list').exists()).toBe(false)
   })
 
-  it('supports v-model:searchQuery and clear', async () => {
+  it('supports v-model:searchQuery and clear via SearchInput', async () => {
     const wrapper = mountShell({ searchQuery: 'abc' })
 
-    const input = wrapper.find('.ess__search-input')
+    const input = wrapper.find('.search-input')
     expect((input.element as HTMLInputElement).value).toBe('abc')
+    expect(wrapper.find('.search-box--compact').exists()).toBe(true)
 
-    await wrapper.find('.ess__clear-btn').trigger('click')
+    await wrapper.find('.clear-button').trigger('click')
     expect(wrapper.emitted('update:searchQuery')?.at(-1)).toEqual([''])
+  })
+
+  it('renders search-extra and applies fill class', () => {
+    const wrapper = mountShell({ fill: true }, { 'search-extra': '<select class="sort-extra"></select>' })
+    expect(wrapper.find('.ess--fill').exists()).toBe(true)
+    expect(wrapper.find('.sort-extra').exists()).toBe(true)
   })
 
   it('renders footer slot', () => {

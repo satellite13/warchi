@@ -4,9 +4,13 @@ import { useI18n } from "vue-i18n";
 const model = defineModel<string>({ default: "" });
 const { t } = useI18n();
 
-defineProps<{
-  placeholder?: string;
-}>();
+withDefaults(
+  defineProps<{
+    placeholder?: string
+    compact?: boolean
+  }>(),
+  { placeholder: '', compact: false },
+)
 
 const clear = () => {
   model.value = "";
@@ -14,7 +18,7 @@ const clear = () => {
 </script>
 
 <template>
-  <div class="search-box">
+  <div class="search-box" :class="{ 'search-box--compact': compact }">
     <UiIcon name="search" class="search-icon" />
     <input v-model="model" type="text" class="search-input" :placeholder="placeholder || t('common.search')">
     <button v-if="model" type="button" class="clear-button" @click="clear">
@@ -96,5 +100,36 @@ const clear = () => {
 .clear-button svg {
   width: 16px;
   height: 16px;
+}
+
+.search-box--compact {
+  max-width: none;
+  width: 100%;
+}
+
+.search-box--compact .search-icon {
+  left: 10px;
+  width: 18px;
+  height: 18px;
+}
+
+.search-box--compact .search-input {
+  padding: 7px 10px 7px 34px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.search-box--compact .search-input:focus {
+  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
+}
+
+.search-box--compact .clear-button {
+  width: 20px;
+  height: 20px;
+}
+
+.search-box--compact .clear-button :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
 }
 </style>

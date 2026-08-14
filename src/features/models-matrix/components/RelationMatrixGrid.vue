@@ -3,6 +3,7 @@ import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import type { RelationMatrixResult } from "../types"
 import { relationMatrixCellKey } from "../utils/buildRelationMatrix"
+import { matrixHeatColor } from "@/utils/matrixHeatColor"
 
 const props = defineProps<{
   matrix: RelationMatrixResult
@@ -22,13 +23,8 @@ const { t } = useI18n()
 const columns = computed(() => props.matrix.columns)
 const rows = computed(() => props.matrix.rows)
 
-const heatColor = (total: number): string => {
-  if (total <= 0) return "transparent"
-  if (!props.heatmapEnabled || props.matrix.maxCellTotal <= 0) return "var(--primary-soft)"
-  const ratio = total / props.matrix.maxCellTotal
-  const alpha = 0.08 + ratio * 0.52
-  return `rgba(124, 92, 252, ${alpha.toFixed(3)})`
-}
+const heatColor = (total: number): string =>
+  matrixHeatColor(total, props.matrix.maxCellTotal, props.heatmapEnabled)
 
 const cellTitle = (rowId: string, columnId: string): string => {
   const cell = props.matrix.cells[relationMatrixCellKey(rowId, columnId)]

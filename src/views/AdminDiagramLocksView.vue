@@ -120,31 +120,11 @@ onBeforeUnmount(() => {
         <div v-if="lockCount > 0" class="dl__count">{{ lockCount }}</div>
         <button
           type="button"
-          class="dl-refresh"
+          class="btn btn--secondary btn--xs btn--toolbar"
           :disabled="loading"
           @click="loadLocks"
         >
-          <svg
-            class="dl-refresh__icon"
-            :class="{ 'dl-refresh__icon--spin': loading }"
-            viewBox="0 0 16 16"
-            fill="none"
-          >
-            <path
-              d="M13.5 2.5v4h-4"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M12.3 10a5 5 0 11-1-6.3L13.5 6.5"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <UiIcon name="sync" :class="{ 'dl-refresh-spin': loading }" />
           {{ t('adminDiagramLocks.refresh') }}
         </button>
       </template>
@@ -313,53 +293,18 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 12px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── Refresh button ───────────────────────────── */
-.dl-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--text-muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
-}
-
-.dl-refresh:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  color: var(--base-text);
-  box-shadow: var(--shadow-sm);
-}
-
-.dl-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.dl-refresh__icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  transition: transform 0.3s ease;
-}
-
-.dl-refresh__icon--spin {
+:deep(.dl-refresh-spin) {
   animation: dl-spin 0.7s linear infinite;
 }
 

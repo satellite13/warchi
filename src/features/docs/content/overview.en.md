@@ -11,8 +11,9 @@
 - **Diagram baselines** — create a new diagram version from current state and switch between versions
 - **Version comparison** — visual comparison for model versions and diagram versions with highlights and property table
 - **Types** — manage node/link types including custom and system properties
+- **Scripts** — JavaScript model checks with a sandbox and issues report (no data changes)
 - **Custom properties** — `string`, `number`, `boolean`, `enum` with defaults and validation
-- **Sharing** — ACL sharing for models, notations, types, and shapes with `VIEW`/`EDIT` access levels
+- **Sharing** — ACL sharing for models, notations, types, shapes, and scripts with `VIEW`/`EDIT` access levels
 - **Model package and diagram copy** — ZIP transfer between environments and copying a diagram into another model
 - **SSO and MCP** — optional corporate sign-in (OIDC) and API keys for agents (Cursor and others)
 
@@ -27,10 +28,13 @@ The application consists of several main sections available through the navigati
 | Notations | Notation list, visual editor for components/relations, and relation rules |
 | Types | Node/link type editor with fields (`icon`, `defaultDirectoryPath`, custom properties) |
 | Shapes | Custom node shape catalog with visual outline editor |
-| Documentation | Product help section |
-| Wiki | Entity-linked pages for model, notation, type, and shape documentation |
+| [Scripts](/docs/validationScripts) | JavaScript model checks (report-only, no data changes) |
+| Documentation | Product help section (available without signing in) |
+| Wiki | Entity-linked pages for models, notations, types, shapes, and other entities |
 
 ## Documentation Section
+
+The **Documentation** section is available without signing in: guests see help in the header plus **Sign in**. After login, the workspace sections appear in the menu.
 
 This section includes focused pages:
 
@@ -60,7 +64,7 @@ The system uses a combination of roles and policy/ACL permissions:
 
 - **ADMIN** — access to the admin panel (`ADMIN_PANEL:VIEW`): users, deleted resources, and force-releasing diagram edit locks. Access to workspace resources is still governed by ownership and sharing (policy/ACL).
 - **USER** — works with their own resources and those shared with them.
-- Sharing of top-level entities (models, notations, types, shapes) supports two levels:
+- Sharing of top-level entities (models, notations, types, shapes, scripts) supports two levels:
   - **VIEW** — view only;
   - **EDIT** — edit access.
 
@@ -74,5 +78,5 @@ Model access does not replace notation sharing: in the model editor, notation da
 2. On the home page you will see an overview of your models and notations
 3. Go to **Types** and create node/link types; add custom and system properties when needed
 4. Create a **notation** by adding components and relations based on types, then configure styles and relation rules
-5. Create a **model**, select a notation, and build a diagram by dragging elements from the palette
+5. Create a **model**, then a **diagram** (you pick the notation when creating the diagram) and drag elements from the palette
 6. Before major diagram refactoring, create a **baseline** to keep a stable reference version and experiment safely

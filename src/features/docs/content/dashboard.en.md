@@ -7,7 +7,7 @@ The dashboard is the default landing page after login. It gives a quick status s
 - **Greeting** and current user context.
 - **Stats cards** for models, notations, node types, and link types.
 - **Recent models** and **recent notations** with direct navigation to editors.
-- **Quick actions** (create model, create notation, open types editor).
+- **Quick actions** (create model, create notation, **import a notation** from a JSON export, open types editor).
 - **Recent activity feed** (INSERT/UPDATE/DELETE across key entities).
 - **Release notes for current app version** (parsed from changelog).
 

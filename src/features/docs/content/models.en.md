@@ -8,12 +8,11 @@ The **Models** page displays a list of all created models. Models are grouped by
 
 ### Creating a Model
 
-1. Click the **Create** button in the list header
+1. Click **Create model** in the list toolbar
 2. Enter the model name
-3. Select the notation to be used in the model
-4. Click **Create** to confirm
+3. Click **Create** to confirm
 
-A new model is created with version `1.0.0`. The notation defines which component and link types are available in the palette and on diagrams.
+A new model is created with version `1.0.0`. You pick a notation later — **when creating a diagram**. One model can have diagrams with different notations.
 
 ### Renaming a Model
 
@@ -57,11 +56,12 @@ How to open it:
 1. Open the target model in the editor.
 2. Click **Compare with version** (the `compare_arrows` icon) in the header.
 3. Select left and right versions.
-4. If needed, choose the diagram name to match between versions.
+4. If needed, choose the diagram name in the **searchable** list.
 
 How to read the result:
 
 - the screen renders two diagrams side by side in read-only mode;
+- the **Sync** toggle links pan and zoom on both sides (on by default, remembered in the browser);
 - one side is treated as **base**, the other as **changes**;
 - use **Switch base** to invert change interpretation;
 - when you click a node or link, the bottom table shows **was/became** properties;
@@ -77,7 +77,7 @@ Comparison covers both node/link presence and properties, including diagram-scop
 
 ## Model Editor
 
-The model editor includes several areas:
+The model editor includes several areas. The header also has **model validation scripts** — see [Scripts](/docs/validationScripts).
 
 ### Model Tree (left panel)
 
@@ -87,15 +87,20 @@ The left panel displays the hierarchical structure of the model:
 - **Components** — architecture elements (services, modules, databases, etc.)
 - **Diagrams** — graphical representations of the model
 
-Available actions via context menu:
+Use **search** above the tree: the list narrows to matches and their ancestor path, and non-matching ancestors are muted. Clearing search keeps the selected node in view.
 
-- Create folder, component, or diagram
-- Rename element
-- Delete element
+Actions are toolbar buttons and per-row mini-buttons (there is no context menu):
+
+- create a folder, component, or diagram;
+- rename or delete an item;
+- copy a diagram into another model;
+- see who holds the canvas lock.
+
+A panel-header toggle syncs selection between the tree and the canvas.
 
 ### Palette
 
-The palette panel contains available element types defined in the model's notation. Drag an element from the palette onto the diagram to add a new component.
+The palette lists element types from the **active diagram’s notation**. Drag an element from the palette onto the diagram to add a new component.
 
 ### Properties Panel (right panel)
 
@@ -182,7 +187,7 @@ The editor header also offers the **Import Open Exchange (XML)** wizard to load 
 3. **Preview** — review import volume (nodes, links, diagrams) and warnings. Also configure **reuse**: always create nodes/links or match existing ones in the model (node: name + type; link: endpoints + type, optionally diagram edge label). On match — reuse id only or update properties from OEF. Diagrams and organization folders are always created anew.
 4. Click **Import** — entities are created/updated in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically).
 
-If required properties are still empty after import, fill them in the properties panel before the next save.
+After import a **report** may open: unmatched or unconverted properties, relation-rule notes, and required fields still empty. Fill required properties in the properties panel before the next save.
 
 ### Model package (export / import)
 
@@ -194,7 +199,7 @@ A model ZIP package moves a model between environments, users, or serves as a ba
 
 Diagram preview SVGs are **not** included — they are regenerated on save or when publishing a diagram share link from the editor.
 
-**Export** is available from the model card menu in the list and from the editor header. **Import** is on the models list (card next to “Create model”): pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). On success, the new model opens in the editor.
+**Export** is available from the model card in the list (download icon) and from the editor header. **Import** is the **Import model package** button in the list toolbar: pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). While the job runs, the UI shows stages (queued, validating, notations, files, model, document refs). On success, the new model opens in the editor; warnings, if any, appear after import.
 
 If a notation with the same **name and version** already exists and you can view it, import **reuses** it (components and relations are matched by name and type). If the notation is inaccessible or structurally incompatible, import fails with a detailed error.
 
@@ -236,4 +241,4 @@ The model editor uses live sync for shared models:
 
 ## Deleting a Model
 
-To delete a model, use the delete button in the model list. Deletion is irreversible and affects all model data.
+To delete a model, use the delete button in the model list. This is a **soft delete**: the model leaves the catalog and remains until an administrator runs **permanent delete** under [Administration → Deleted](/docs/admin). There is no restore-from-trash action in the UI.

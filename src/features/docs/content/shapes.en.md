@@ -30,6 +30,7 @@ The outline editor supports core operations:
 - drag a point to change contour;
 - double-click an edge to add a point;
 - double-click a point to remove it (minimum 3 points);
+- right-click an edge to convert it to a Bezier curve or back to a line;
 - zoom controls: `+`, `-`, and reset `1:1`.
 
 A **preview** is always available on the right: drag the resize handles to see how the outline looks at a different aspect ratio.
@@ -49,7 +50,7 @@ Without this setting the outline still stretches uniformly with width and height
 
 ### Create a shape
 
-1. Click **Add shape**.
+1. Click **+** in the sidebar (**Add shape**).
 2. A new shape is created with a basic rectangle outline.
 3. Update name and outline.
 4. Click **Save**.
@@ -60,10 +61,14 @@ Without this setting the outline still stretches uniformly with width and height
 2. Click **Delete**.
 3. Confirm action in the dialog.
 
+Catalog delete is a **soft delete**: the shape appears under [Administration → Deleted](/docs/admin).
+
 ## Access control
 
+- The owner can grant `VIEW` / `EDIT` via **Share**.
 - If the user has no edit permission, the shape opens in read-only mode.
 - In read-only mode fields are disabled and save/delete actions are unavailable.
+- A Wiki page can be attached to a shape.
 
 ## Using shapes in notation
 

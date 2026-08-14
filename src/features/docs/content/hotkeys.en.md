@@ -31,7 +31,7 @@ Keyboard shortcuts help speed up work with the diagram editor and other wArchi t
 
 | Key | Action |
 |-----|--------|
-| `Ctrl/Cmd` + `Z` | Undo last action (diagram geometry, figure style, properties panel) |
+| `Ctrl/Cmd` + `Z` | Undo last action (geometry, style, properties panel, resize, polyline bends, edge path type) |
 | `Ctrl/Cmd` + `Y` | Redo undone action |
 | `Ctrl/Cmd` + `Shift` + `Z` | Redo undone action (alternative) |
 | `Ctrl/Cmd` + `C` | Copy selected **diagram elements** |

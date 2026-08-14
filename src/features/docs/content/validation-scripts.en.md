@@ -205,4 +205,4 @@ if (!ctx.diagram) {
 
 ## Catalog and sharing
 
-In the **Scripts** menu, create script versions, edit source, and grant `VIEW` / `EDIT` via sharing — same pattern as other catalog entities.
+In the **Scripts** menu, create a script with **+** in the sidebar, edit the source, and grant `VIEW` / `EDIT` via sharing — same pattern as other catalog entities. A script is a single entity **without** semver versions. Run it from the model editor (you need view access to both the script and the model).

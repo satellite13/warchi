@@ -6,10 +6,9 @@ A diagram is a graphical representation of an architectural model. Each model ca
 
 ### Creating a Diagram
 
-1. Open the context menu in the model tree
-2. Select **Create diagram**
-3. Enter the name and select the notation
-4. Version is selected automatically — if a diagram with this name already exists, the minor version is incremented
+1. In the tree panel, click the create-diagram button
+2. Enter the name and select the notation
+3. Version is selected automatically — if a diagram with this name already exists, the minor version is incremented
 
 ### Switching Between Diagrams
 
@@ -54,7 +53,7 @@ Example scenario:
 
 ### Copying a Diagram to Another Model
 
-The **Copy diagram to another model** action opens a wizard: choose an existing target model, the notation for the new diagram, and optionally change its name, version, and folder.
+The **Copy diagram to another model** action (tree row and editor) opens a wizard: choose an existing target model, the notation for the new diagram, and optionally change its name, version, and folder. If preview returns a known issue, the wizard shows a localized blocker or warning.
 
 The wizard first matches elements against the target model: nodes by `stableId`, then by exact name and type; links by `stableId`, then by type and endpoints. You can manually match, create, or skip ambiguous and missing elements. The user chooses the target diagram notation.
 
@@ -75,6 +74,7 @@ Comparison behavior:
 - comparison is scoped to one diagram name (for example, `Context` versions `1.0.0` and `1.1.0`);
 - both sides are rendered in read-only mode;
 - you can switch the base side via **Switch base**;
+- the **Sync** toggle links pan and zoom on both sides (on by default, remembered in the browser);
 - clicking an element opens a **was/became** property table at the bottom;
 - link route and link properties are also compared.
 
@@ -87,7 +87,7 @@ When this is useful:
 ### Closing and Deleting
 
 - **Close** — button on the toolbar. The diagram remains in the model but is closed in the editor
-- **Delete** — context menu in the tree. The diagram will be deleted when saving
+- **Delete** — row action in the tree. The diagram will be deleted when saving
 
 ## Diagram Editor
 
@@ -111,6 +111,7 @@ Elements can be added to the diagram in several ways:
 
 1. **Drag from palette** — drag an element type from the palette onto the canvas
 2. **From model tree** — drag an existing component from the model tree
+3. **Note or container** — from the canvas context menu (diagram-only; no new node in the model tree)
 
 ### Moving and Resizing
 
@@ -123,7 +124,7 @@ Elements can be added to the diagram in several ways:
 
 To create a link between elements:
 
-1. Hover the source element — a `+` handle appears on the outline near the cursor (when **Link by contour** is on)
+1. Hover the source element — a `+` handle appears on the outline near the cursor (when **Link by contour** is on; toolbar button, on by default)
 2. Drag the handle to the target element
 3. Release the mouse button on the target outline
 
@@ -147,7 +148,7 @@ Text on a node shape or link can be driven by a **template** in the notation com
 
 | Action | Description |
 |--------|-------------|
-| Undo | Undo last action (`Ctrl+Z`): diagram edits, figure style, properties panel, resize, and manual polyline bends |
+| Undo | Undo last action (`Ctrl+Z`): diagram edits, figure style, properties panel, resize, manual polyline bends, and edge path type |
 | Redo | Redo undone action (`Ctrl+Y`) |
 
 ### Zoom and Navigation
@@ -158,7 +159,7 @@ Text on a node shape or link can be driven by a **template** in the notation com
 | Zoom out | Decrease canvas scale |
 | Fit to screen | Scale canvas to fit all elements |
 | Zoom to selection | Scale to fit selected elements |
-| Auto-layout nodes | Automatically arrange nodes on canvas |
+| Auto-layout | Opens a preview: **layered** (ELK) and **remove overlaps**; apply only after you review the result |
 | Reset zoom | Restore scale and position to default |
 
 ### Display
@@ -168,6 +169,9 @@ Text on a node shape or link can be driven by a **template** in the notation com
 | Grid | Show/hide grid on canvas |
 | Minimap | Show/hide minimap in canvas corner |
 | Snap to grid | Enable/disable element snapping to grid when moving |
+| Link by contour | Show a `+` handle on the node outline so you can start a link without Shift |
+| Smart guides / rulers | Alignment guides while dragging and rulers along the canvas |
+| Navigation mode | Pan the canvas without accidentally moving elements |
 | Lock link anchors | Fix connection points (links don't move when nodes move) |
 
 ## Diagram Settings
@@ -208,7 +212,7 @@ You can get a link to the diagram preview as SVG. Use it to share with colleague
    - **This diagram version** — the link will always show the current snapshot (good for a fixed view).
    - **Always latest version by name** — the link will show the latest saved version of the diagram with this name (the image updates after you save).
 4. Click **Get link** — the current view is uploaded as preview and the link is generated.
-5. Click **Copy link** and paste it where needed.
+5. Click **Copy link** or **Open link**. The dialog stays open after copy.
 
 The preview is also uploaded automatically when you save the model, so an "always latest" link will show the current state after you save.
 

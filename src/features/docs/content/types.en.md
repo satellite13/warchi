@@ -21,7 +21,7 @@ A node type defines the **component semantics** (what the entity is), while visu
 ### Creating a Node Type
 
 1. Go to the **Types** section
-2. In the node types panel, click **Add**
+2. In the node types panel, click **+** (**Add node type**)
 3. Enter the type name
 4. (Optional) select a type icon
 5. (Optional) set default directory path
@@ -41,9 +41,13 @@ Additionally:
 
 If a node type is not linked to a notation component, it cannot be fully used on diagrams.
 
+### System-marked types
+
+A type marked as system (`attrs.system`) is **view-only**: edit, delete, and share are unavailable. The form shows the banner “System type — view only”.
+
 ### Deleting a Node Type
 
-A type can be deleted via the context menu or delete button. Before deleting, ensure the type is not used in notations and models.
+Delete a type with the button in the form header (not a context menu). The button is hidden while the type is in use. Catalog delete is a **soft delete**: the entity appears under [Administration → Deleted](/docs/admin).
 
 ### Updating a Node Type
 
@@ -67,7 +71,7 @@ A link type defines the **relation semantics** (what the link means), while visu
 ### Creating a Link Type
 
 1. Go to the **Types** section
-2. In the link types panel, click **Add**
+2. In the link types panel, click **+** (**Add link type**)
 3. Enter the link type name
 4. Save changes
 
@@ -83,7 +87,7 @@ Without relation rules in notation, interactive linking on diagrams may be unava
 ### Updating and Deleting a Link Type
 
 - Renaming a link type affects all places where it is used (notations, rules, models).
-- Before deletion, ensure the type is not used in notations and existing models; otherwise related editing flows may become unavailable.
+- Delete from the form header; the button is hidden while the type is in use. Catalog delete is a **soft delete** (see [Administration](/docs/admin)).
 
 ## Custom Properties
 
@@ -112,15 +116,15 @@ System properties are used for special editor logic. A common example is `group`
 
 ## Relation Rules
 
-Relation rules define which node types can be connected by which link types. This ensures correctness of architectural models.
-
-### Configuring Rules
+Relation rules are configured **in the notation editor**, not in Types: in the component properties and in the toolbar **rules matrix**. They define which node types a relation may connect.
 
 For each rule you specify:
 
-- **Relation** — link type the rule applies to
+- **Relation** — the notation relation the rule applies to
 - **Source** — allowed source component type
 - **Target** — allowed target component type
+
+See [Notations](/docs/notations).
 
 ## Types and Notations
 

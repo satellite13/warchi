@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Refreshed in-app help to match current catalog, editor, admin trash, and guest-docs behavior.
+
 ## [0.18.5] - 2026-08-14
 
 ### Fixed

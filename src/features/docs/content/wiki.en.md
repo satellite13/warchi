@@ -10,13 +10,13 @@ The **Wiki** section aggregates documents linked to domain entities: models, not
 
 ## How to navigate
 
-1. Select an entity group in the left sidebar (for example `Model`, `NodeType`, `Diagram`).
+1. Select an entity group in the left sidebar (localized headings: model, node type, link type, notation, component, relation, shape, diagram, node, unscoped). Groups can be collapsed.
 2. Open a document from the group list.
 3. Read the content in the right panel.
 
 ## Where documents come from
 
-Documents are created via contextual actions in editors (model/diagram/type/shape documentation actions). After save, they become visible in Wiki.
+Documents are created via contextual actions in editors (model, diagram, node, notation, component, relation, type, shape). After save, they become visible in Wiki. The Wiki section is read-only.
 
 ## Recommended use
 

@@ -23,6 +23,7 @@ After a successful sign-up, a session is created and the app navigates to the ho
 
 - Protected pages are unavailable without an active session.
 - Opening a protected route while unauthenticated redirects to login.
+- The **Documentation** section (`/docs`) is available **without signing in**. Guests see help in the header and a **Sign in** button (after login, the same page opens).
 - Admin routes are guarded by permission checks (`ADMIN_PANEL:VIEW`) via policy-based authorization.
 
 ## Session refresh

@@ -24,7 +24,7 @@ const changelogRaw = computed(() => {
   return changelogEn
 })
 const { currentUser } = useAuth()
-const { isLoading, stats, totalVersions, recentModels, recentNotations, recentActivity } = useDashboard()
+const { isLoading, stats, recentModels, recentNotations, recentDiagrams } = useDashboard()
 const appVersion = import.meta.env.APP_VERSION ?? "dev"
 
 const notationPackageInputRef = ref<HTMLInputElement | null>(null)
@@ -47,37 +47,29 @@ const userDisplayName = computed(() => {
 const statCards = computed(() => [
   {
     key: "models",
-    icon: DEFAULT_ENTITY_ICONS.model,
     label: t("home.models"),
     value: stats.value.models,
-    sub: t("home.versions", { count: totalVersions.value.models }),
     color: "#7c5cfc",
     route: "models"
   },
   {
     key: "notations",
-    icon: DEFAULT_ENTITY_ICONS.notation,
     label: t("home.notations"),
     value: stats.value.notations,
-    sub: t("home.versions", { count: totalVersions.value.notations }),
     color: "#2bb896",
     route: "notations"
   },
   {
     key: "nodeTypes",
-    icon: DEFAULT_ENTITY_ICONS.nodeType,
     label: t("home.nodeTypes"),
     value: stats.value.nodeTypes,
-    sub: t("home.definitions"),
     color: "#f59e42",
     route: "types"
   },
   {
     key: "linkTypes",
-    icon: DEFAULT_ENTITY_ICONS.link,
     label: t("home.linkTypes"),
     value: stats.value.linkTypes,
-    sub: t("home.definitions"),
     color: "#e05a9e",
     route: "types"
   }
@@ -115,10 +107,23 @@ const quickActions = computed(() => [
 ])
 
 
-const { formatRelativeDate, operationLabel, operationIcon, operationColor, tableLabel } =
-  useActivityFormatting(t, locale)
+const { formatRelativeDate } = useActivityFormatting(t, locale)
 
 const goTo = (name: string) => router.push({ name })
+
+function diagramMeta(item: { modelName: string; updatedAt: string | null }): string {
+  const time = formatRelativeDate(item.updatedAt)
+  if (item.modelName && time) return `${item.modelName} · ${time}`
+  return item.modelName || time
+}
+
+function openDiagram(item: { id: string; modelId: string }): void {
+  void router.push({
+    name: "model-editor",
+    params: { id: item.modelId },
+    query: { diagramId: item.id },
+  })
+}
 
 function openNotationPackagePicker() {
   if (isImportingNotation.value) return
@@ -220,13 +225,26 @@ const releaseNotes = computed(() => {
             {{ importStatusMessage || t("notations.packageImporting") }}
           </p>
         </div>
-        <!-- Hero -->
         <section class="hero">
           <div class="hero__content">
             <h1 class="hero__greeting">
               {{ greeting }}<span class="hero__name">, {{ userDisplayName }}</span>
             </h1>
-            <p class="hero__subtitle">{{ t("home.subtitle") }}</p>
+          </div>
+          <div class="hero__stats">
+            <button
+              v-for="card in statCards"
+              :key="card.key"
+              type="button"
+              class="stat-card"
+              :style="{ '--stat-color': card.color }"
+              @click="goTo(card.route)"
+            >
+              <span class="stat-card__value" :class="{ 'stat-card__value--loading': isLoading }">
+                {{ isLoading ? t("common.loadingDash") : card.value }}
+              </span>
+              <span class="stat-card__label">{{ card.label }}</span>
+            </button>
           </div>
           <div class="hero__decoration">
             <div class="hero__orb hero__orb--1" />
@@ -235,175 +253,135 @@ const releaseNotes = computed(() => {
           </div>
         </section>
 
-        <!-- Stats -->
-        <section class="stats-row">
-          <button
-            v-for="card in statCards"
-            :key="card.key"
-            type="button"
-            class="stat-card"
-            :style="{ '--stat-color': card.color }"
-            @click="goTo(card.route)"
-          >
-            <div class="stat-card__icon-wrap">
-              <UiIcon :name="card.icon" class="stat-card__icon" />
-            </div>
-            <div class="stat-card__data">
-              <span class="stat-card__value" :class="{ 'stat-card__value--loading': isLoading }">
-                {{ isLoading ? t("common.loadingDash") : card.value }}
-              </span>
-              <span class="stat-card__label">{{ card.label }}</span>
-              <span class="stat-card__sub">{{ isLoading ? '' : card.sub }}</span>
-            </div>
-          </button>
-        </section>
-
-        <!-- Main Grid -->
         <div class="main-grid">
-          <!-- Left: recent items -->
-          <div class="main-grid__left">
-            <!-- Recent Models -->
-            <section class="section">
-              <div class="section__header">
-                <UiIcon name="schema" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
-                <button type="button" class="section__link" @click="goTo('models')">
-                  {{ t("home.sectionAllModels") }}
-                  <UiIcon name="arrow_forward" />
-                </button>
-              </div>
-              <div v-if="isLoading" class="skeleton-list">
-                <div v-for="i in 3" :key="i" class="skeleton-item" />
-              </div>
-              <EmptyState
-                v-else-if="recentModels.length === 0"
-                variant="compact"
-                icon="folder_off"
-                :title="t('home.sectionNoModels')"
+          <section class="section">
+            <div class="section__header">
+              <UiIcon name="schema" class="section__icon" />
+              <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
+              <button type="button" class="section__link" @click="goTo('models')">
+                {{ t("home.sectionAllModels") }}
+                <UiIcon name="arrow_forward" />
+              </button>
+            </div>
+            <div v-if="isLoading" class="skeleton-list">
+              <div v-for="i in 3" :key="i" class="skeleton-item" />
+            </div>
+            <EmptyState
+              v-else-if="recentModels.length === 0"
+              variant="compact"
+              icon="folder_off"
+              :title="t('home.sectionNoModels')"
+            />
+            <div v-else class="entity-list">
+              <CompactEntityRow
+                v-for="item in recentModels"
+                :key="item.id"
+                :id="item.id"
+                :name="item.name"
+                :version="item.version"
+                :meta="formatRelativeDate(item.updatedAt)"
+                @click="router.push({ name: 'model-editor', params: { id: item.id } })"
               />
-              <div v-else class="entity-list">
-                <CompactEntityRow
-                  v-for="item in recentModels"
-                  :key="item.id"
-                  :id="item.id"
-                  :name="item.name"
-                  :version="item.version"
-                  :meta="formatRelativeDate(item.updatedAt)"
-                  @click="router.push({ name: 'model-editor', params: { id: item.id } })"
-                />
-              </div>
-            </section>
+            </div>
+          </section>
 
-            <!-- Recent Notations -->
-            <section class="section">
-              <div class="section__header">
-                <UiIcon name="account_tree" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
-                <button type="button" class="section__link" @click="goTo('notations')">
-                  {{ t("home.sectionAllNotations") }}
-                  <UiIcon name="arrow_forward" />
-                </button>
-              </div>
-              <div v-if="isLoading" class="skeleton-list">
-                <div v-for="i in 3" :key="i" class="skeleton-item" />
-              </div>
-              <EmptyState
-                v-else-if="recentNotations.length === 0"
-                variant="compact"
-                icon="folder_off"
-                :title="t('home.sectionNoNotations')"
+          <section class="section">
+            <div class="section__header">
+              <UiIcon name="account_tree" class="section__icon" />
+              <h2 class="section__title">{{ t("home.sectionRecentDiagrams") }}</h2>
+            </div>
+            <div v-if="isLoading" class="skeleton-list">
+              <div v-for="i in 3" :key="i" class="skeleton-item" />
+            </div>
+            <EmptyState
+              v-else-if="recentDiagrams.length === 0"
+              variant="compact"
+              icon="folder_off"
+              :title="t('home.sectionNoDiagrams')"
+            />
+            <div v-else class="entity-list">
+              <CompactEntityRow
+                v-for="item in recentDiagrams"
+                :key="item.id"
+                :id="item.id"
+                :name="item.name"
+                :meta="diagramMeta(item)"
+                @click="openDiagram(item)"
               />
-              <div v-else class="entity-list">
-                <CompactEntityRow
-                  v-for="item in recentNotations"
-                  :key="item.id"
-                  :id="item.id"
-                  :name="item.name"
-                  :version="item.version"
-                  :meta="formatRelativeDate(item.updatedAt)"
-                  @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
-                />
-              </div>
-            </section>
+            </div>
+          </section>
 
-            <section class="section release-notes">
-              <div class="section__header">
-                <UiIcon name="new_releases" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionReleaseNotes", { version: appVersion }) }}</h2>
-              </div>
-              <ul v-if="releaseNotes.length > 0" class="release-notes__list">
-                <li v-for="(item, index) in releaseNotes" :key="`${index}-${item}`" class="release-notes__item">
-                  {{ item }}
-                </li>
-              </ul>
-              <EmptyState
-                v-else
-                variant="compact"
-                icon="description"
-                :title="t('home.sectionReleaseNotesEmpty')"
-                class="section__empty--compact"
+          <section class="section">
+            <div class="section__header">
+              <UiIcon name="account_tree" class="section__icon" />
+              <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>
+              <button type="button" class="section__link" @click="goTo('notations')">
+                {{ t("home.sectionAllNotations") }}
+                <UiIcon name="arrow_forward" />
+              </button>
+            </div>
+            <div v-if="isLoading" class="skeleton-list">
+              <div v-for="i in 3" :key="i" class="skeleton-item" />
+            </div>
+            <EmptyState
+              v-else-if="recentNotations.length === 0"
+              variant="compact"
+              icon="folder_off"
+              :title="t('home.sectionNoNotations')"
+            />
+            <div v-else class="entity-list">
+              <CompactEntityRow
+                v-for="item in recentNotations"
+                :key="item.id"
+                :id="item.id"
+                :name="item.name"
+                :version="item.version"
+                :meta="formatRelativeDate(item.updatedAt)"
+                @click="router.push({ name: 'notation-editor', params: { id: item.id } })"
               />
-            </section>
-          </div>
+            </div>
+          </section>
 
-          <!-- Right: activity + quick actions -->
-          <div class="main-grid__right">
-            <!-- Quick Actions -->
-            <section class="section section--compact">
-              <div class="section__header">
-                <UiIcon name="bolt" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
-              </div>
-              <div class="actions-grid">
-                <button
-                  v-for="action in quickActions"
-                  :key="action.key"
-                  type="button"
-                  class="action-btn"
-                  :style="{ '--action-color': action.color }"
-                  :disabled="isImportingNotation"
-                  @click="handleQuickAction(action)"
-                >
-                  <UiIcon :name="action.icon" class="action-btn__icon" />
-                  <span class="action-btn__label">{{ action.label }}</span>
-                </button>
-              </div>
-            </section>
-
-            <!-- Activity Feed -->
-            <section class="section section--grow">
-              <div class="section__header">
-                <UiIcon name="history" class="section__icon" />
-                <h2 class="section__title">{{ t("home.sectionRecentActivity") }}</h2>
-              </div>
-              <div v-if="isLoading" class="skeleton-list">
-                <div v-for="i in 5" :key="i" class="skeleton-item skeleton-item--sm" />
-              </div>
-              <EmptyState
-                v-else-if="recentActivity.length === 0"
-                variant="compact"
-                icon="hourglass_empty"
-                :title="t('home.sectionNoActivity')"
-              />
-              <div v-else class="activity-feed">
-                <div
-                  v-for="log in recentActivity"
-                  :key="log.id"
-                  class="activity-item"
-                >
-                  <div class="activity-item__icon" :style="{ color: operationColor(log.operation) }">
-                    <UiIcon :name="operationIcon(log.operation)" />
-                  </div>
-                  <div class="activity-item__body">
-                    <span class="activity-item__op">{{ operationLabel(log.operation) }}</span>
-                    <span class="activity-item__entity">{{ tableLabel(log.tableName) }}</span>
-                  </div>
-                  <span class="activity-item__time">{{ formatRelativeDate(log.changedAt) }}</span>
-                </div>
-              </div>
-            </section>
-          </div>
+          <section class="section section--compact">
+            <div class="section__header">
+              <UiIcon name="bolt" class="section__icon" />
+              <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
+            </div>
+            <div class="actions-grid">
+              <button
+                v-for="action in quickActions"
+                :key="action.key"
+                type="button"
+                class="action-btn"
+                :style="{ '--action-color': action.color }"
+                :disabled="isImportingNotation"
+                @click="handleQuickAction(action)"
+              >
+                <UiIcon :name="action.icon" class="action-btn__icon" />
+                <span class="action-btn__label">{{ action.label }}</span>
+              </button>
+            </div>
+          </section>
         </div>
+
+        <section class="section release-notes">
+          <div class="section__header">
+            <UiIcon name="new_releases" class="section__icon" />
+            <h2 class="section__title">{{ t("home.sectionReleaseNotes", { version: appVersion }) }}</h2>
+          </div>
+          <ul v-if="releaseNotes.length > 0" class="release-notes__list">
+            <li v-for="(item, index) in releaseNotes" :key="`${index}-${item}`" class="release-notes__item">
+              {{ item }}
+            </li>
+          </ul>
+          <EmptyState
+            v-else
+            variant="compact"
+            icon="description"
+            :title="t('home.sectionReleaseNotesEmpty')"
+            class="section__empty--compact"
+          />
+        </section>
 
       </div>
     </template>
@@ -489,18 +467,22 @@ const releaseNotes = computed(() => {
 /* ── Hero ── */
 .hero {
   position: relative;
-  padding: 36px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
   min-height: 60px;
   border-radius: var(--radius);
   background: var(--surface);
   border: 1px solid var(--border);
   overflow: hidden;
+  animation: slideUp 0.5s ease both;
 }
 
 .hero__content {
   position: relative;
   z-index: 1;
-  max-width: min(100%, 760px);
 }
 
 .hero__greeting {
@@ -522,12 +504,12 @@ const releaseNotes = computed(() => {
   overflow-wrap: anywhere;
 }
 
-.hero__subtitle {
-  margin: 6px 0 0;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
+.hero__stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .hero__decoration {
@@ -586,60 +568,26 @@ const releaseNotes = computed(() => {
   50% { transform: translate(10px, 8px); }
 }
 
-/* ── Stats Row ── */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-}
-
+/* ── Stat tiles ── */
 .stat-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: var(--radius);
-  background: var(--surface);
+  min-width: 76px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-muted);
   border: 1px solid var(--border);
   cursor: pointer;
-  transition: all 0.25s ease;
   text-align: left;
 }
 
 .stat-card:hover {
   border-color: var(--stat-color);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--stat-color) 12%, transparent);
-  transform: translateY(-2px);
-}
-
-.stat-card__icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--stat-color) 10%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-card__icon {
-  width: 22px;
-  height: 22px;
-  color: var(--stat-color);
-}
-
-.stat-card__data {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 
 .stat-card__value {
-  font-size: 28px;
+  display: block;
+  font-size: 18px;
   font-weight: 700;
-  color: var(--base-text);
-  letter-spacing: -0.03em;
+  color: var(--stat-color);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -649,39 +597,19 @@ const releaseNotes = computed(() => {
 }
 
 .stat-card__label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.stat-card__sub {
-  font-size: 11px;
+  display: block;
+  font-size: 10px;
   color: var(--text-subtle);
-  margin-top: 1px;
+  margin-top: 3px;
 }
 
 /* ── Main Grid ── */
 .main-grid {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
   align-items: start;
-  min-height: 0;
-}
-
-.main-grid__left {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 0;
-}
-
-.main-grid__right {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 0;
+  animation: slideUp 0.5s ease 0.16s both;
 }
 
 /* ── Section ── */
@@ -696,13 +624,6 @@ const releaseNotes = computed(() => {
 
 .section--compact {
   padding: 16px 20px;
-}
-
-.section--grow {
-  flex: 0 0 320px;
-  min-height: 320px;
-  max-height: 320px;
-  overflow: hidden;
 }
 
 .section__header {
@@ -781,8 +702,8 @@ const releaseNotes = computed(() => {
 
 /* ── Quick Actions ── */
 .actions-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
@@ -817,74 +738,6 @@ const releaseNotes = computed(() => {
   color: var(--base-text);
 }
 
-/* ── Activity Feed ── */
-.activity-feed {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.activity-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 6px;
-  border-radius: 8px;
-  transition: background 0.15s;
-}
-
-.activity-item:hover {
-  background: var(--surface-muted);
-}
-
-.activity-item__icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: var(--surface-strong);
-}
-
-.activity-item__icon .ui-icon {
-  width: 15px;
-  height: 15px;
-}
-
-.activity-item__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.activity-item__op {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--base-text);
-}
-
-.activity-item__entity {
-  font-size: 12px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.activity-item__time {
-  font-size: 11px;
-  color: var(--text-subtle);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* ── Skeletons ── */
 .skeleton-list {
   display: flex;
@@ -909,19 +762,6 @@ const releaseNotes = computed(() => {
   100% { background-position: -200% 0; }
 }
 
-/* ── Entry animations ── */
-.hero {
-  animation: slideUp 0.5s ease both;
-}
-
-.stats-row {
-  animation: slideUp 0.5s ease 0.08s both;
-}
-
-.main-grid {
-  animation: slideUp 0.5s ease 0.16s both;
-}
-
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -935,21 +775,18 @@ const releaseNotes = computed(() => {
 
 /* ── Responsive ── */
 @media (max-width: 1100px) {
-  .stats-row {
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero__stats {
+    display: grid;
     grid-template-columns: repeat(2, 1fr);
   }
 
   .main-grid {
     grid-template-columns: 1fr;
-  }
-
-  .main-grid__right {
-    flex-direction: row;
-    gap: 20px;
-  }
-
-  .section--grow {
-    max-height: 360px;
   }
 }
 
@@ -958,16 +795,8 @@ const releaseNotes = computed(() => {
     padding: 16px;
   }
 
-  .stats-row {
-    grid-template-columns: 1fr;
-  }
-
   .hero__greeting {
     font-size: 20px;
-  }
-
-  .main-grid__right {
-    flex-direction: column;
   }
 }
 </style>

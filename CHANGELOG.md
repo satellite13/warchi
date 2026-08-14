@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-15
+
+### Changed
+- Editors now share the same form, search, chip, and alert chrome instead of each keeping a local copy.
+- Sidebar and model-tree icon buttons match the notation header: ghost 24px controls that show a border only on hover.
+- Chrome icons are remapped to clearer Material Symbols (models, diagrams, links, toolbar, and common actions).
+
+### Removed
+- Duplicate notation and type document panels that the shared editor shells already cover.
+
 ## [0.20.0] - 2026-08-14
 
 ### Added

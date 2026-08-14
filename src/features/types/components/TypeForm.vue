@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import type { CustomProperty } from "@/domain/attrs/notationAttrs"
 import IconPicker from "@/components/forms/IconPicker.vue"
+import SearchInput from "@/components/forms/SearchInput.vue"
 import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import PropertyRow from "@/components/properties/PropertyRow.vue"
@@ -153,24 +154,12 @@ watch(
           </button>
         </div>
 
-        <div v-if="selectedType.parsedAttrs.customProperties?.length" class="properties-search">
-          <UiIcon name="search" class="properties-search__icon" />
-          <input
-            v-model="propertySearchQuery"
-            class="properties-search__input"
-            type="text"
-            :placeholder="t('types.filterByPropertyName')"
-          >
-          <button
-            v-if="propertySearchQuery"
-            type="button"
-            class="properties-search__clear"
-            :title="t('types.clearFilter')"
-            @click="propertySearchQuery = ''"
-          >
-            <UiIcon name="close" />
-          </button>
-        </div>
+        <SearchInput
+          v-if="selectedType.parsedAttrs.customProperties?.length"
+          v-model="propertySearchQuery"
+          compact
+          :placeholder="t('types.filterByPropertyName')"
+        />
 
         <div
           v-if="!selectedType.parsedAttrs.customProperties?.length"
@@ -438,57 +427,4 @@ watch(
   gap: 6px;
 }
 
-.properties-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-}
-
-.properties-search__icon {
-  font-size: 18px;
-  color: var(--text-subtle);
-  flex-shrink: 0;
-}
-
-.properties-search__input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--base-text);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-}
-
-.properties-search__input::placeholder {
-  color: var(--text-subtle);
-}
-
-.properties-search__clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-subtle);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.properties-search__clear:hover {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.properties-search__clear .ui-icon {
-  font-size: 16px;
-}
 </style>

@@ -1,7 +1,9 @@
 /* ─── Form inputs ─────────────────────────────── */
-.form-input {
+.form-input,
+.form-textarea {
   flex: 1;
   min-width: 0;
+  width: 100%;
   padding: 8px 12px;
   font-size: 13px;
   font-family: inherit;
@@ -10,39 +12,58 @@
   background: var(--surface-muted);
   color: var(--base-text);
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   box-sizing: border-box;
 }
 
-.form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.45;
 }
 
-.form-input::placeholder {
+.form-input:focus,
+.form-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+  background: var(--surface);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
   color: var(--text-subtle);
 }
 
-.form-input:disabled {
+.form-input:disabled,
+.form-textarea:disabled {
   opacity: 0.6;
+  cursor: not-allowed;
 }
 
-/* Small — for CustomPropertiesPanel */
-.form-input--sm {
+/* Small — inspector / dense panels */
+.form-input--sm,
+.form-textarea--sm,
+.form-select--sm {
   padding: 5px 8px;
   border-radius: 6px;
   background: var(--surface);
 }
 
-/* Large — for EntityRenameModal */
-.form-input--lg {
+/* Large — create / rename modals, profile */
+.form-input--lg,
+.form-textarea--lg,
+.form-select--lg {
   padding: 10px 12px;
   font-size: 14px;
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
-/* Compact — for AdminUsersView */
+.form-textarea--lg {
+  min-height: 140px;
+}
+
+/* Compact — admin tables */
 .form-input--compact {
   padding: 7px 10px;
   font-size: 12px;
@@ -64,8 +85,21 @@
   background: var(--surface-strong);
 }
 
+/* Validation */
+.form-input--error,
+.form-textarea--error {
+  border-color: var(--danger);
+}
+
+.form-input--error:focus,
+.form-textarea--error:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
 /* ─── Form selects ────────────────────────────── */
 .form-select {
+  width: 100%;
   padding: 8px 12px;
   font-size: 13px;
   font-family: inherit;
@@ -75,18 +109,19 @@
   color: var(--base-text);
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-sizing: border-box;
 }
 
 .form-select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-soft);
+  background: var(--surface);
 }
 
-.form-select--sm {
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: var(--surface);
+.form-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ─── Form labels ─────────────────────────────── */
@@ -97,12 +132,22 @@
   white-space: nowrap;
 }
 
-/* ─── Form errors ─────────────────────────────── */
-.form-error {
+/* ─── Form messages ───────────────────────────── */
+.form-error,
+.form-success {
   padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
   border-radius: var(--radius-sm);
   font-size: 14px;
+}
+
+.form-error {
+  background: var(--danger-soft);
+  color: var(--danger);
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.form-success {
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
 }

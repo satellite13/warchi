@@ -247,34 +247,4 @@ const { t } = useI18n()
   color: var(--text-subtle);
   line-height: 1.45;
 }
-
-.form-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--base-text);
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.form-input--readonly {
-  background: var(--surface-muted);
-  color: var(--text-muted);
-}
-
-.form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
-}
-
-.form-input:disabled {
-  background: var(--surface-muted);
-  color: var(--text-subtle);
-  cursor: not-allowed;
-}
 </style>

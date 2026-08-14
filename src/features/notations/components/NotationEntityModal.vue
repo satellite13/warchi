@@ -84,6 +84,7 @@ const stylePresetSelectOptions = computed(() => [
         {{ tagsLabel }}
         <input
           v-model="tagsModel"
+          class="form-input form-input--lg"
           type="text"
           :placeholder="tagsPlaceholder"
         >
@@ -123,6 +124,7 @@ const stylePresetSelectOptions = computed(() => [
         {{ newTypeLabel }}
         <input
           v-model="newTypeNameModel"
+          class="form-input form-input--lg"
           type="text"
           :placeholder="newTypePlaceholder"
         >
@@ -181,22 +183,6 @@ const stylePresetSelectOptions = computed(() => [
   text-transform: uppercase;
 }
 
-.modal-label input,
-.modal-label select {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--base-text);
-  background: var(--surface-muted);
-  box-sizing: border-box;
-  height: 40px;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-  text-transform: none;
-}
-
 .modal-label :deep(.searchable-select__control) {
   height: 40px;
   min-height: 40px;
@@ -221,24 +207,7 @@ const stylePresetSelectOptions = computed(() => [
   height: 16px;
 }
 
-.modal-label input:focus,
-.modal-label select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
-  background: var(--surface);
-}
-
-.modal-label input::placeholder {
-  color: var(--text-subtle);
-}
-
 .form-error {
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  border: 1px solid rgba(220, 53, 69, 0.15);
   text-transform: none;
 }
 

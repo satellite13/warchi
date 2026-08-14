@@ -333,7 +333,12 @@ onMounted(() => {
     <form v-if="showCreateForm" class="api-keys__form" @submit.prevent="createKey">
       <label class="field">
         <span>{{ t('profile.apiKeysName') }}</span>
-        <input v-model="newName" type="text" :placeholder="t('profile.apiKeysNamePlaceholder')" />
+        <input
+          v-model="newName"
+          class="form-input form-input--lg"
+          type="text"
+          :placeholder="t('profile.apiKeysNamePlaceholder')"
+        />
       </label>
 
       <fieldset class="api-keys__mode">
@@ -536,15 +541,6 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.field input[type='text'] {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--base-text);
-  font-family: inherit;
-  font-size: 14px;
-}
 
 .api-keys__mode {
   margin: 0;

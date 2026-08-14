@@ -59,13 +59,13 @@ describe('EntityRenameModal', () => {
 
   it('shows error message when error prop set', () => {
     const wrapper = mountModal({ error: 'Name already exists' })
-    expect(wrapper.find('.rename-form__error').exists()).toBe(true)
-    expect(wrapper.find('.rename-form__error').text()).toBe('Name already exists')
+    expect(wrapper.find('.form-error').exists()).toBe(true)
+    expect(wrapper.find('.form-error').text()).toBe('Name already exists')
   })
 
   it('does not show error when error is null', () => {
     const wrapper = mountModal({ error: null })
-    expect(wrapper.find('.rename-form__error').exists()).toBe(false)
+    expect(wrapper.find('.form-error').exists()).toBe(false)
   })
 
   it('disables submit when name is empty', () => {

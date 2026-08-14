@@ -18,6 +18,7 @@ import LabeledFieldRow from "./LabeledFieldRow.vue";
 import LabeledNumberInput from "./LabeledNumberInput.vue";
 import NodeStyleSection from "./NodeStyleSection.vue";
 import LazyIconImg from "@/components/forms/LazyIconImg.vue";
+import EmptyState from "@/components/list/EmptyState.vue";
 import SearchableSelect from "@/components/forms/SearchableSelect.vue";
 import InsetSidesInput from "@/components/forms/InsetSidesInput.vue";
 import ToggleSwitch from "@/components/forms/ToggleSwitch.vue";
@@ -1661,16 +1662,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 <template>
   <div class="sp">
     <!-- Empty state -->
-    <div v-if="!selectedElementId" class="sp-empty">
-      <div class="sp-empty__graphic">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect x="8" y="12" width="32" height="24" rx="4" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.3"/>
-          <circle cx="24" cy="24" r="3" fill="currentColor" opacity="0.2"/>
-          <path d="M24 18v-4M24 34v-4M18 24h-4M34 24h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.15"/>
-        </svg>
-      </div>
-      <span class="sp-empty__text">{{ t("diagram.selectElementToEditProperties") }}</span>
-    </div>
+    <EmptyState
+      v-if="!selectedElementId"
+      variant="panel"
+      icon="ads_click"
+      :title="t('diagram.selectElementToEditProperties')"
+    />
 
     <template v-else>
       <!-- Header with type indicator -->
@@ -1702,7 +1699,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
       <!-- Preset bar -->
       <div class="sp-preset">
         <select
-          class="sp-select sp-select--preset"
+          class="form-select form-select--sm"
           :value="elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset"
           @change="elementType === 'edge'
             ? (applyEdgePreset(($event.target as HTMLSelectElement).value), selectedRelationPreset = ($event.target as HTMLSelectElement).value)
@@ -1746,7 +1743,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
         <div v-if="showSavePresetForm" class="sp-save-form">
           <input
             v-model="newPresetName"
-            class="sp-input sp-save-form__input"
+            class="form-input form-input--sm sp-save-form__input"
             :placeholder="t('nodeStyle.presetNamePlaceholder')"
             @keyup.enter="confirmSavePreset"
             @keyup.escape="cancelSavePreset"
@@ -1773,12 +1770,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
             @toggle="toggleSection(edgeSection, 'label')"
           >
                 <div class="sp-field">
-                  <input class="sp-input sp-input--full" :value="edgeLabel" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
+                  <input class="form-input form-input--sm" :value="edgeLabel" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleEdgeLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field">
                   <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
                   <input
-                    class="sp-input sp-input--full"
+                    class="form-input form-input--sm"
                     :value="edgeLabelTemplate"
                     :placeholder="t('diagram.compositeLabelPlaceholder')"
                     @input="handleEdgeLabelTemplateChange(($event.target as HTMLInputElement).value)"
@@ -1794,7 +1791,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   />
                 </LabeledFieldRow>
                 <LabeledFieldRow :label="t('nodeStyle.size')">
-                  <input type="number" class="sp-input sp-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
+                  <input type="number" class="form-input form-input--sm" :value="edgeLabelFontSize" min="8" max="72" step="1" @input="handleEdgeLabelFontSizeChange(($event.target as HTMLInputElement).value)">
                 </LabeledFieldRow>
                 <InsetSidesInput
                   :model-value="edgeLabelInset"
@@ -1804,7 +1801,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   @update:model-value="handleEdgeLabelInsetChange"
                 />
                 <LabeledFieldRow :label="t('nodeStyle.offset')">
-                  <input type="number" class="sp-input sp-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
+                  <input type="number" class="form-input form-input--sm" :value="edgeLabelOffset" min="-100" max="100" step="1" @input="handleEdgeLabelOffsetChange(($event.target as HTMLInputElement).value)">
                 </LabeledFieldRow>
                 <LabeledFieldRow :label="t('nodeStyle.labelPosition')">
                   <input type="range" class="sp-range" :value="edgeLabelPosition" min="0" max="1" step="0.05" @input="handleEdgeLabelPositionChange(($event.target as HTMLInputElement).value)">
@@ -1878,7 +1875,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </LabeledFieldRow>
                 <LabeledFieldRow v-if="edgeLineStyle === 'dashed'" :label="t('nodeStyle.pattern')">
-                  <input type="text" class="sp-input sp-input--flex" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
+                  <input type="text" class="form-input form-input--sm" :value="edgeLineDashPattern" placeholder="8,4" @change="handleEdgeLineDashChange(($event.target as HTMLInputElement).value)">
                 </LabeledFieldRow>
                 <LabeledFieldRow :label="t('nodeStyle.type')">
                   <div class="sp-segmented">
@@ -1906,7 +1903,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <!-- Start marker -->
                 <div class="sp-marker-group">
                   <LabeledFieldRow :label="t('nodeStyle.start')">
-                    <select class="sp-select sp-select--flex" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
+                    <select class="form-select form-select--sm" :value="edgeStartMarker" @change="handleEdgeStartMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
                       <option value="stealth">{{ t("nodeStyle.markerStealth") }}</option>
@@ -1918,7 +1915,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </LabeledFieldRow>
                   <template v-if="edgeStartMarker !== 'none'">
                     <LabeledFieldRow :label="t('nodeStyle.size')" indent>
-                      <input type="number" class="sp-input sp-input--sm" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
+                      <input type="number" class="form-input form-input--sm" :value="edgeStartMarkerSize" min="4" max="40" step="1" @input="handleEdgeStartMarkerSizeChange(($event.target as HTMLInputElement).value)">
                     </LabeledFieldRow>
                     <LabeledFieldRow :label="t('nodeStyle.fill')" indent>
                       <ColorWithAlphaField
@@ -1933,7 +1930,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <!-- End marker -->
                 <div class="sp-marker-group">
                   <LabeledFieldRow :label="t('nodeStyle.end')">
-                    <select class="sp-select sp-select--flex" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
+                    <select class="form-select form-select--sm" :value="edgeEndMarker" @change="handleEdgeEndMarkerChange(($event.target as HTMLSelectElement).value)">
                       <option value="none">{{ t("nodeStyle.none") }}</option>
                       <option value="arrow">{{ t("nodeStyle.markerArrow") }}</option>
                       <option value="stealth">{{ t("nodeStyle.markerStealth") }}</option>
@@ -1945,7 +1942,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </LabeledFieldRow>
                   <template v-if="edgeEndMarker !== 'none'">
                     <LabeledFieldRow :label="t('nodeStyle.size')" indent>
-                      <input type="number" class="sp-input sp-input--sm" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
+                      <input type="number" class="form-input form-input--sm" :value="edgeEndMarkerSize" min="4" max="40" step="1" @input="handleEdgeEndMarkerSizeChange(($event.target as HTMLInputElement).value)">
                     </LabeledFieldRow>
                     <LabeledFieldRow :label="t('nodeStyle.fill')" indent>
                       <ColorWithAlphaField
@@ -1974,12 +1971,12 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <ToggleSwitch :model-value="showLabel" @update:model-value="handleShowLabelChange" />
                 </LabeledFieldRow>
                 <div class="sp-field">
-                  <input class="sp-input sp-input--full" :value="label" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleLabelChange(($event.target as HTMLInputElement).value)">
+                  <input class="form-input form-input--sm" :value="label" :placeholder="t('nodeStyle.labelTextPlaceholder')" @input="handleLabelChange(($event.target as HTMLInputElement).value)">
                 </div>
                 <div class="sp-field">
                   <span class="sp-field__label">{{ t("nodeStyle.template") }}</span>
                   <input
-                    class="sp-input sp-input--full"
+                    class="form-input form-input--sm"
                     :value="labelTemplate"
                     :placeholder="t('diagram.compositeLabelPlaceholder')"
                     @input="handleLabelTemplateChange(($event.target as HTMLInputElement).value)"
@@ -2012,14 +2009,14 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   @update:model-value="handleLabelInsetChange"
                 />
                 <LabeledFieldRow :label="t('nodeStyle.align')">
-                  <select class="sp-select sp-select--flex" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
+                  <select class="form-select form-select--sm" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="center">{{ t("nodeStyle.alignCenter") }}</option>
                     <option value="left">{{ t("nodeStyle.alignLeft") }}</option>
                     <option value="right">{{ t("nodeStyle.alignRight") }}</option>
                   </select>
                 </LabeledFieldRow>
                 <LabeledFieldRow :label="t('nodeStyle.verticalAlign')">
-                  <select class="sp-select sp-select--flex" :value="labelVerticalAlign" @change="handleLabelVerticalAlignChange(($event.target as HTMLSelectElement).value)">
+                  <select class="form-select form-select--sm" :value="labelVerticalAlign" @change="handleLabelVerticalAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="top">{{ t("nodeStyle.positionTop") }}</option>
                     <option value="middle">{{ t("nodeStyle.alignCenter") }}</option>
                     <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
@@ -2066,7 +2063,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   class="sp-field--custom-shapes"
                 >
                   <select
-                    class="sp-select sp-select--flex"
+                    class="form-select form-select--sm"
                     :value="customShapeIdRef ?? ''"
                     @change="handleCustomShapeSelectByValue(($event.target as HTMLSelectElement).value)"
                   >
@@ -2082,7 +2079,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <div class="sp-field-grid sp-field-grid--2">
                     <LabeledFieldRow :label="t('nodeStyle.compositeShapeType')">
                       <select
-                        class="sp-select sp-select--flex"
+                        class="form-select form-select--sm"
                         :value="compositeShapeType"
                         @change="compositeShapeType = ($event.target as HTMLSelectElement).value as 'rectangle' | 'circle' | 'diamond' | 'custom'; if (compositeShapeType === 'custom') ensureCatalogShapesLoaded(); emitNodeStyle()"
                       >
@@ -2097,7 +2094,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       :label="t('nodeStyle.customShape')"
                     >
                       <select
-                        class="sp-select sp-select--flex"
+                        class="form-select form-select--sm"
                         :value="customShapeIdRef ?? ''"
                         @change="handleCustomShapeSelectByValue(($event.target as HTMLSelectElement).value)"
                       >
@@ -2172,7 +2169,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <template v-else>
                     <LabeledFieldRow :label="t('nodeStyle.compositeContentJson')">
                       <textarea
-                        class="sp-textarea sp-textarea--code"
+                        class="form-textarea form-textarea--sm sp-textarea--code"
                         :value="compositeContentJson"
                         rows="7"
                         @input="handleCompositeContentInput(($event.target as HTMLTextAreaElement).value)"
@@ -2182,7 +2179,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <div class="sp-help-text">{{ compositeJsonError || t('nodeStyle.compositeJsonHint') }}</div>
                     <LabeledFieldRow :label="t('nodeStyle.compositeBindingsJson')">
                       <textarea
-                        class="sp-textarea sp-textarea--code"
+                        class="form-textarea form-textarea--sm sp-textarea--code"
                         :value="styleBindingsJson"
                         rows="6"
                         @input="handleStyleBindingsInput(($event.target as HTMLTextAreaElement).value)"
@@ -2325,7 +2322,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   </div>
                 </LabeledFieldRow>
                 <LabeledFieldRow v-if="lineStyle === 'dashed'" :label="t('nodeStyle.pattern')">
-                  <input type="text" class="sp-input sp-input--flex" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
+                  <input type="text" class="form-input form-input--sm" :value="lineDashPattern" placeholder="8,4" @change="handleLineDashChange(($event.target as HTMLInputElement).value)">
                 </LabeledFieldRow>
           </NodeStyleSection>
 
@@ -2372,7 +2369,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 </LabeledFieldRow>
                 <template v-if="iconName">
                   <LabeledFieldRow :label="t('nodeStyle.position')">
-                    <select class="sp-select sp-select--flex" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
+                    <select class="form-select form-select--sm" :value="iconPlacement" @change="handleIconPlacementChange(($event.target as HTMLSelectElement).value)">
                       <option value="top-left">{{ t("nodeStyle.positionTopLeft") }}</option>
                       <option value="top-right">{{ t("nodeStyle.positionTopRight") }}</option>
                       <option value="bottom-left">{{ t("nodeStyle.positionBottomLeft") }}</option>
@@ -2451,28 +2448,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   background: var(--surface-panel);
   font-size: 12px;
   color: var(--base-text);
-}
-
-/* ---- Empty state ---- */
-.sp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 48px 24px;
-  flex: 1;
-}
-
-.sp-empty__graphic {
-  color: var(--border-strong);
-  opacity: 0.6;
-}
-
-.sp-empty__text {
-  font-size: 12px;
-  color: var(--text-subtle);
-  letter-spacing: 0.01em;
 }
 
 /* ---- Header ---- */
@@ -2558,7 +2533,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   flex-shrink: 0;
 }
 
-.sp-preset .sp-select--preset {
+.sp-preset .form-select {
   flex: 1;
   min-width: 0;
 }
@@ -2696,7 +2671,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
 }
 
-/* ---- Inputs ---- */
+/* ---- Tiny numeric next to sliders ---- */
 .sp-input {
   height: var(--sp-h);
   padding: 0 7px;
@@ -2716,59 +2691,11 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
-.sp-input--full {
-  width: 100%;
-}
-
-.sp-input--flex {
-  flex: 1;
-  min-width: 0;
-}
-
-.sp-input--sm {
-  width: 100%;
-}
-
 .sp-input--tiny {
   width: 48px;
   flex-shrink: 0;
   text-align: center;
   padding: 0 3px;
-}
-
-.sp-input--hex {
-  flex: 1;
-  min-width: 0;
-  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-  font-size: 11px;
-  letter-spacing: -0.01em;
-}
-
-/* ---- Selects ---- */
-.sp-select {
-  height: var(--sp-h);
-  padding: 0 6px;
-  font-size: 12px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: var(--sp-radius);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  cursor: pointer;
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  min-width: 0;
-}
-
-.sp-select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-soft);
-}
-
-.sp-select--flex {
-  flex: 1;
-  min-width: 0;
 }
 
 /* ---- Range slider ---- */
@@ -2907,7 +2834,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
   min-width: 0;
 }
 
-.sp-icon-select .sp-select {
+.sp-icon-select .form-select {
   flex: 1;
   min-width: 0;
 }
@@ -2981,16 +2908,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
 .sp-body::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong);
-}
-
-.sp-textarea {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: var(--surface);
-  color: var(--base-text);
-  resize: vertical;
 }
 
 .sp-textarea--code {

@@ -9,6 +9,8 @@ import type { DiagramLockStatusResponse, NodeTypeResponse } from "@/types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 import { useTreeSearch } from "../composables"
 import LazyIconImg from "@/components/forms/LazyIconImg.vue"
+import SearchInput from "@/components/forms/SearchInput.vue"
+import EmptyState from "@/components/list/EmptyState.vue"
 
 /** Fixed row height for virtualization (padding 9+9 + mini-btn 22). */
 const TREE_ROW_HEIGHT = 40
@@ -564,24 +566,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
     </div>
 
     <div class="panel__search">
-      <div class="panel__search-wrap">
-        <UiIcon name="search" class="panel__search-icon" />
-        <input
-          v-model="treeSearchQuery"
-          type="text"
-          class="panel__search-input"
-          :placeholder="t('common.search')"
-        >
-        <button
-          v-if="treeSearchQuery"
-          type="button"
-          class="panel__search-clear"
-          :title="t('common.clearSearch')"
-          @click="treeSearchQuery = ''"
-        >
-          <UiIcon name="close" />
-        </button>
-      </div>
+      <SearchInput v-model="treeSearchQuery" compact :placeholder="t('common.search')" />
     </div>
 
     <div
@@ -590,13 +575,13 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
       @dragover.self.prevent="onTreeDragOver($event, null)"
       @drop.self.prevent="onTreeDrop($event, null)"
     >
-      <div v-if="visibleTreeRows.length === 0" class="tree__empty">
-        <UiIcon name="account_tree" class="tree__empty-icon" />
-        <span class="tree__empty-text">{{
-          normalizedQuery ? t('models.noSearchResults') : t('models.noNodes')
-        }}</span>
-        <span v-if="!normalizedQuery" class="tree__empty-hint">{{ t("models.createFolderOrNodeHint") }}</span>
-      </div>
+      <EmptyState
+        v-if="visibleTreeRows.length === 0"
+        variant="compact"
+        icon="account_tree"
+        :title="normalizedQuery ? t('models.noSearchResults') : t('models.noNodes')"
+        :description="normalizedQuery ? '' : t('models.createFolderOrNodeHint')"
+      />
       <div v-if="searchResultsTruncated" class="tree__truncated">
         {{ t('models.searchResultsTruncated', { count: MAX_SEARCH_TREE_ROWS }) }}
       </div>
@@ -900,73 +885,8 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   flex-shrink: 0;
 }
 
-.panel__search-wrap {
-  position: relative;
-  min-width: 0;
-  flex: 1;
-}
-
-.panel__search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: var(--text-subtle);
-  pointer-events: none;
-}
-
-.panel__search-input {
+.panel__search :deep(.search-box) {
   width: 100%;
-  padding: 7px 10px 7px 34px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  box-sizing: border-box;
-  background: var(--surface-muted);
-  color: var(--base-text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.panel__search-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
-}
-
-.panel__search-input::placeholder {
-  color: var(--text-subtle);
-}
-
-.panel__search-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: var(--surface-strong);
-  color: var(--text-subtle);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.panel__search-clear .ui-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.panel__search-clear:hover {
-  background: var(--border-strong);
-  color: var(--base-text);
 }
 
 .tree {
@@ -989,36 +909,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   left: 0;
   width: 100%;
   box-sizing: border-box;
-}
-
-.tree__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 32px 16px;
-  text-align: center;
-  animation: fadeIn 0.4s ease;
-}
-
-.tree__empty-icon {
-  width: 28px;
-  height: 28px;
-  color: var(--border-strong);
-}
-
-.tree__empty-text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.tree__empty-hint {
-  font-size: 12px;
-  color: var(--text-subtle);
-  margin: 0;
 }
 
 .tree__truncated {

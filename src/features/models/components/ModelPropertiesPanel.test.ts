@@ -136,4 +136,52 @@ describe('ModelPropertiesPanel', () => {
 
     expect(wrapper.emitted('setLinkTypePropertyValue')).toEqual([['code', 'NEW']])
   })
+
+  it('uses SearchableSelect for notation component binding', async () => {
+    const wrapper = mount(ModelPropertiesPanel, {
+      props: {
+        activeNotationId: 'not-1',
+        selectedNode: {
+          id: 'node-1',
+          name: 'App',
+          modelId: 'm1',
+          ownerId: 'u1',
+          nodeTypeId: 'nt-1',
+          parsedAttrs: {
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: {},
+          },
+        },
+        selectedLink: null,
+        nodeBindingComponentId: 'cmp-1',
+        linkBindingRelationId: null,
+        availableComponents: [
+          { id: 'cmp-1', name: 'Application Component', notationId: 'not-1' },
+          { id: 'cmp-2', name: 'Application Service', notationId: 'not-1' },
+        ],
+        availableRelations: [],
+        nodeScopedValues: {},
+        linkScopedValues: {},
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+          ToggleSwitch: true,
+        },
+      },
+    })
+
+    const select = wrapper.findComponent({ name: 'SearchableSelect' })
+    expect(select.exists()).toBe(true)
+    expect(select.props('modelValue')).toBe('cmp-1')
+    expect(select.props('options')).toEqual([
+      { id: 'cmp-1', label: 'Application Component' },
+      { id: 'cmp-2', label: 'Application Service' },
+    ])
+    expect(wrapper.find('select').exists()).toBe(false)
+
+    await select.vm.$emit('update:modelValue', 'cmp-2')
+    expect(wrapper.emitted('bindNodeComponent')).toEqual([['cmp-2']])
+  })
 })

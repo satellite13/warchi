@@ -184,7 +184,7 @@ describe('ModelTreePalettePanel search', () => {
     })
     await flushTree(wrapper)
 
-    const input = wrapper.get('.panel__search-input')
+    const input = wrapper.get('.search-input')
     await input.setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
@@ -211,7 +211,7 @@ describe('ModelTreePalettePanel search', () => {
     })
     await flushTree(wrapper)
 
-    const input = wrapper.get('.panel__search-input')
+    const input = wrapper.get('.search-input')
     await input.setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
@@ -233,7 +233,7 @@ describe('ModelTreePalettePanel search', () => {
       ],
     })
     await flushTree(wrapper)
-    const input = wrapper.get('.panel__search-input')
+    const input = wrapper.get('.search-input')
     await input.setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
@@ -251,7 +251,7 @@ describe('ModelTreePalettePanel search', () => {
       ],
     })
     await flushTree(wrapper)
-    await wrapper.get('.panel__search-input').setValue('special')
+    await wrapper.get('.search-input').setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
 

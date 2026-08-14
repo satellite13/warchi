@@ -137,7 +137,7 @@ watch(shareWithAllUsers, (enabled) => {
               <div class="batch-share__inline">
                 <input
                   v-model="userSearchEmail"
-                  class="batch-share__input"
+                  class="form-input"
                   type="text"
                   placeholder="user@example.com"
                   :disabled="shareWithAllUsers"
@@ -306,13 +306,6 @@ watch(shareWithAllUsers, (enabled) => {
   gap: 4px;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.batch-share__input {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
 }
 
 .batch-share__inline {

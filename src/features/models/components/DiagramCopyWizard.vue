@@ -290,11 +290,11 @@ watch(wizard.targetModelId, modelId => {
         <div class="diagram-copy__field-grid">
           <label class="diagram-copy__field">
             <span>{{ t('models.diagramCopy.diagramName') }}</span>
-            <input v-model="wizard.diagramName.value" type="text" />
+            <input v-model="wizard.diagramName.value" class="form-input" type="text" />
           </label>
           <label class="diagram-copy__field">
             <span>{{ t('models.diagramCopy.diagramVersion') }}</span>
-            <input v-model="wizard.diagramVersion.value" type="text" />
+            <input v-model="wizard.diagramVersion.value" class="form-input" type="text" />
           </label>
         </div>
         <label class="diagram-copy__field">
@@ -362,6 +362,7 @@ watch(wizard.targetModelId, modelId => {
             </div>
             <select
               v-if="entity.effectiveAction === 'MATCH'"
+              class="form-select"
               :value="entity.effectiveTargetId ?? ''"
               @change="setMatchTarget(entity, ($event.target as HTMLSelectElement).value)"
             >
@@ -542,16 +543,6 @@ watch(wizard.targetModelId, modelId => {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr);
   gap: 12px;
-}
-
-.diagram-copy__field input,
-.diagram-copy__entity select {
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--base-text);
-  font: inherit;
 }
 
 .diagram-copy__entity {

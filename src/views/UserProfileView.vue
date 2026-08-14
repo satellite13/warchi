@@ -168,24 +168,44 @@ onMounted(async () => {
                 <div class="form__row">
                   <label class="field">
                     <span>{{ t("auth.labelFirstName") }}</span>
-                    <input v-model="firstName" type="text" :disabled="isLoading || isSaving" />
+                    <input
+                      v-model="firstName"
+                      class="form-input form-input--lg"
+                      type="text"
+                      :disabled="isLoading || isSaving"
+                    />
                   </label>
                   <label class="field">
                     <span>{{ t("auth.labelLastName") }}</span>
-                    <input v-model="lastName" type="text" :disabled="isLoading || isSaving" />
+                    <input
+                      v-model="lastName"
+                      class="form-input form-input--lg"
+                      type="text"
+                      :disabled="isLoading || isSaving"
+                    />
                   </label>
                 </div>
                 <label class="field">
                   <span>{{ t("profile.middleName") }}</span>
-                  <input v-model="middleName" type="text" :disabled="isLoading || isSaving" />
+                  <input
+                    v-model="middleName"
+                    class="form-input form-input--lg"
+                    type="text"
+                    :disabled="isLoading || isSaving"
+                  />
                 </label>
                 <label class="field">
                   <span>{{ t("profile.position") }}</span>
-                  <input v-model="position" type="text" :disabled="isLoading || isSaving" />
+                  <input
+                    v-model="position"
+                    class="form-input form-input--lg"
+                    type="text"
+                    :disabled="isLoading || isSaving"
+                  />
                 </label>
 
-                <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
-                <div v-if="successMessage" class="msg msg--success">{{ successMessage }}</div>
+                <div v-if="errorMessage" class="form-error">{{ errorMessage }}</div>
+                <div v-if="successMessage" class="form-success">{{ successMessage }}</div>
 
                 <div class="form__actions">
                   <button
@@ -379,47 +399,10 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
-.field input {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  font-family: inherit;
-  font-size: 14px;
-}
-
-.field input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
-
 .form__actions {
   display: flex;
   justify-content: flex-start;
   margin-top: 4px;
-}
-
-.msg {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-}
-
-.msg--error {
-  border: 1px solid rgba(220, 53, 69, 0.12);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.msg--success {
-  border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-  color: var(--success);
 }
 
 .sso-linked,

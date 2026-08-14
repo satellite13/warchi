@@ -86,7 +86,7 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
         <select
           id="source-version"
           v-model="sourceVersionModel"
-          class="source-version-field__select"
+          class="form-select form-select--lg"
           :disabled="isSubmitting"
         >
           <option value="">{{ props.sourceEmptyLabel ?? t("common.emptyNotation") }}</option>
@@ -142,47 +142,6 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
   color: var(--text-muted);
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-.source-version-field__select {
-  box-sizing: border-box;
-  height: 44px;
-  padding: 12px 16px;
-  font-size: 15px;
-  line-height: 1.2;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.source-version-field__select:hover:not(:disabled) {
-  border-color: var(--primary);
-}
-
-.source-version-field__select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
-  background: var(--surface);
-}
-
-.source-version-field__select:disabled {
-  background: var(--surface-strong);
-  color: var(--text-subtle);
-  cursor: not-allowed;
-}
-
-.form-error {
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .form-actions {

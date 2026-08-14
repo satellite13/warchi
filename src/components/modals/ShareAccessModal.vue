@@ -113,7 +113,7 @@ onMounted(load);
             <div class="share-modal__inline">
               <input
                 v-model="userSearchEmail"
-                class="share-modal__input"
+                class="form-input"
                 type="text"
                 placeholder="user@example.com"
                 :disabled="isSubmitting || shareWithAllUsers"
@@ -253,13 +253,6 @@ onMounted(load);
   gap: 4px;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.share-modal__input {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
 }
 
 .share-modal__inline {

@@ -81,13 +81,4 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
   color: var(--danger) !important;
   font-size: 14px;
 }
-
-.form-error {
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
 </style>

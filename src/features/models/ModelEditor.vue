@@ -960,6 +960,18 @@ const pendingDeleteNodeSingleName = computed(() => {
   if (isEdgeAnchorModelNodeId(nodeId)) return t('models.edgeAnchorName')
   return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
 })
+const nodeDeleteConfirmMessage = computed(() => {
+  const name = pendingDeleteNodeSingleName.value || t('common.unnamed')
+  const count = pendingDeleteNodeCount.value
+  if (pendingDeleteNodeSource.value === 'canvas') {
+    return count === 1
+      ? t('models.deleteNodeFromDiagramSingle', { name })
+      : t('models.deleteNodeFromDiagramMultiple', { count })
+  }
+  return count === 1
+    ? t('models.deleteNodeFromModelSingle', { name })
+    : t('models.deleteNodeFromModelMultiple', { count })
+})
 const pendingDeleteDiagramName = computed(() => {
   const diagramId = pendingDeleteDiagramId.value
   if (!diagramId) return ''
@@ -3278,7 +3290,7 @@ onBeforeUnmount(() => {
         <span>{{ t('common.name') }}</span>
         <input
           v-model="newNodeName"
-          class="field-input"
+          class="form-input"
           :placeholder="
             createNodeModal.kind === 'folder'
               ? t('models.newFolderPlaceholder')
@@ -3374,7 +3386,7 @@ onBeforeUnmount(() => {
         <span>{{ t('models.noteTextLabel') }}</span>
         <textarea
           v-model="noteEditorText"
-          class="field-textarea"
+          class="form-textarea form-textarea--lg"
           rows="8"
           :placeholder="t('models.noteTextPlaceholder')"
         />
@@ -3401,23 +3413,23 @@ onBeforeUnmount(() => {
         <span>{{ t('common.name') }}</span>
         <input
           v-model="newDiagramName"
-          class="field-input"
+          class="form-input"
           :placeholder="t('models.newDiagramPlaceholder')"
         />
       </label>
       <label>
         <span>{{ t('common.version') }}</span>
-        <input v-model="newDiagramVersion" class="field-input" placeholder="1.0.0" />
+        <input v-model="newDiagramVersion" class="form-input" placeholder="1.0.0" />
       </label>
       <label>
         <span>{{ t('models.notationLabel') }}</span>
-        <select v-model="newDiagramNotationId" class="field-input">
+        <select v-model="newDiagramNotationId" class="form-select">
           <option v-for="notation in state.notations" :key="notation.id" :value="notation.id">
             {{ notation.name }} ({{ notation.version }})
           </option>
         </select>
       </label>
-      <div v-if="hasDiagramNameVersionConflict" class="form-error-text">
+      <div v-if="hasDiagramNameVersionConflict" class="form-error">
         {{ t('models.diagramConflictMessage') }}
       </div>
     </div>
@@ -3520,47 +3532,14 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
-  <BaseModal
+  <ConfirmModal
     v-if="showNodeDeleteModal"
     :title="t('models.deleteNodeTitle')"
-    max-width="500px"
+    :message="nodeDeleteConfirmMessage"
+    danger
     @close="cancelNodeDelete"
-  >
-    <p class="leave-text">
-      <template v-if="pendingDeleteNodeSource === 'canvas'">
-        <template v-if="pendingDeleteNodeCount === 1">
-          {{
-            t('models.deleteNodeFromDiagramSingle', {
-              name: pendingDeleteNodeSingleName || t('common.unnamed'),
-            })
-          }}
-        </template>
-        <template v-else>
-          {{ t('models.deleteNodeFromDiagramMultiple', { count: pendingDeleteNodeCount }) }}
-        </template>
-      </template>
-      <template v-else>
-        <template v-if="pendingDeleteNodeCount === 1">
-          {{
-            t('models.deleteNodeFromModelSingle', {
-              name: pendingDeleteNodeSingleName || t('common.unnamed'),
-            })
-          }}
-        </template>
-        <template v-else>
-          {{ t('models.deleteNodeFromModelMultiple', { count: pendingDeleteNodeCount }) }}
-        </template>
-      </template>
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">
-        {{ t('common.cancel') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">
-        {{ t('common.delete') }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmNodeDelete"
+  />
 
   <ConfirmModal
     v-if="showDiagramDeleteModal"
@@ -3818,32 +3797,6 @@ onBeforeUnmount(() => {
   gap: 4px;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.field-input {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-}
-
-.field-textarea {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-  min-height: 140px;
-}
-
-.form-error-text {
-  font-size: 12px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  border: 1px solid rgba(220, 53, 69, 0.2);
-  border-radius: 8px;
-  padding: 8px 10px;
 }
 
 .form-hint {

@@ -108,12 +108,14 @@ const router = createRouter({
     },
     {
       path: "/docs",
-      redirect: "/docs/overview"
+      redirect: "/docs/overview",
+      meta: { requiresAuth: false }
     },
     {
       path: "/docs/:section",
       name: "docs-section",
-      component: () => import("../views/DocsView.vue")
+      component: () => import("../views/DocsView.vue"),
+      meta: { requiresAuth: false }
     },
     {
       path: "/",

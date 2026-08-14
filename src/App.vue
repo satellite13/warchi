@@ -15,7 +15,7 @@ const { outage, isOutage, isRetrying, retryNow } = useAvailabilityGuard();
 const { showNewVersionToast, newVersion } = useVersionCheck();
 
 const handleAuthCleared = () => {
-  if (route.name === "login") return;
+  if (route.name === "login" || route.meta.requiresAuth === false) return;
   router.push({
     name: "login",
     query: { redirect: route.fullPath }

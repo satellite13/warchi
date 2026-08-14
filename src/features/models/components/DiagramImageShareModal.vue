@@ -102,11 +102,6 @@ const copyToClipboard = async () => {
   }
 }
 
-const openShareUrl = () => {
-  if (!shareUrl.value || typeof window === 'undefined') return
-  window.open(shareUrl.value, '_blank', 'noopener,noreferrer')
-}
-
 watch(
   () => props.visible,
   visible => {
@@ -164,14 +159,15 @@ onUnmounted(() => {
         >
           {{ copied ? t('diagramShare.copied') : t('diagramShare.copyLink') }}
         </button>
-        <button
+        <a
           v-if="shareUrl"
-          type="button"
           class="diagram-share-modal__btn diagram-share-modal__btn--secondary"
-          @click="openShareUrl"
+          :href="shareUrl"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           {{ t('diagramShare.openLink') }}
-        </button>
+        </a>
       </div>
       <a
         v-if="shareUrl"
@@ -233,12 +229,16 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 .diagram-share-modal__btn {
+  display: inline-block;
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid var(--text-subtle);
   background: var(--surface);
   cursor: pointer;
   font-size: 0.9rem;
+  color: inherit;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .diagram-share-modal__btn:disabled {
   opacity: 0.6;

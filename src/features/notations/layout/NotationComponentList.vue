@@ -46,7 +46,6 @@ type ListItem = {
   kind: "component" | "relation";
   name: string;
   version: string;
-  typeLabel: string;
   tags: string[];
   /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
   paletteIcon: string;
@@ -95,7 +94,6 @@ const items = computed<ListItem[]>(() => {
       kind: "component" as const,
       name: c.name,
       version: c.version,
-      typeLabel: props.state.nodeTypes.find(t => t.id === c.nodeTypeId)?.name || "",
       tags: c.parsedAttrs.tags,
       paletteIcon: getPaletteIcon(c.parsedAttrs)
     }));
@@ -107,7 +105,6 @@ const items = computed<ListItem[]>(() => {
       kind: "relation" as const,
       name: r.name,
       version: r.version,
-      typeLabel: props.state.linkTypes.find(t => t.id === r.linkTypeId)?.name || "",
       tags: r.parsedAttrs.tags,
       paletteIcon: getPaletteIcon(r.parsedAttrs)
     }));
@@ -312,7 +309,6 @@ const commitRename = (item: ListItem) => {
             as="div"
             :data-id="item.id"
             :title="item.name"
-            :subtitle="item.typeLabel"
             :icon-id="item.kind === 'relation' ? '' : item.paletteIcon"
             :icon="item.kind === 'relation' ? DEFAULT_ENTITY_ICONS.link : ''"
             :tone="item.kind === 'relation' ? 'accent' : 'primary'"

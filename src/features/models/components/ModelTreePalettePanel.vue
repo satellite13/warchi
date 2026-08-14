@@ -656,7 +656,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                       !!normalizedQuery && !matchingNodeIds.has(row.node.id),
                   }"
                 >{{ row.node.name }}</span>
-                <span v-if="!isDirectory(row.node)" class="tree-node__type">{{ nodeTypeNameById.get(row.node.nodeTypeId) }}</span>
               </button>
               <div class="tree-node__actions">
                 <button
@@ -1009,15 +1008,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 .tree-node__row--active .tree-node__icon-symbol,
 .tree-node__row--active .tree-node__icon-svg {
   color: var(--primary);
-}
-
-.tree-node__type {
-  font-size: 11px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .tree-node__actions {

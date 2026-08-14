@@ -199,6 +199,17 @@ describe('ModelTreePalettePanel', () => {
     expect(wrapper.find('.mini-btn').exists()).toBe(false)
     expect(wrapper.find('.diagram-row .btn--icon--danger').exists()).toBe(true)
   })
+
+  it('does not show the node type name as a tree caption', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'n1', name: 'CRM' })],
+    })
+    await flushTree(wrapper)
+
+    expect(wrapper.get('[data-tree-node-id="n1"] .tree-node__name').text()).toBe('CRM')
+    expect(wrapper.find('.tree-node__type').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Application Component')
+  })
 })
 
 describe('ModelTreePalettePanel search', () => {

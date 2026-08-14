@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
+import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 
 const props = defineProps<{
   attrsJson: string
@@ -74,19 +75,20 @@ const usageCount = computed(() =>
       <div v-else class="usages-groups">
         <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
           <div class="usage-group__header">
-            <img
+            <LazyIconImg
               v-if="group.notationIcon"
-              :src="`/icons/${group.notationIcon}.svg`"
+              :icon-id="group.notationIcon"
               :alt="group.notationName"
-              class="usage-group__icon-img"
-            >
+              img-class="usage-group__icon-img"
+              eager
+            />
             <UiIcon v-else name="account_tree" class="usage-group__icon" />
             <span class="usage-group__name">{{ group.notationName }}</span>
             <span class="usage-group__count">{{ group.elements.length }}</span>
           </div>
           <ul class="usage-group__list">
             <li v-for="el in group.elements" :key="el.id" class="usage-item">
-              <img :src="`/icons/${el.icon}.svg`" :alt="el.name" class="usage-item__icon-img">
+              <LazyIconImg :icon-id="el.icon" :alt="el.name" img-class="usage-item__icon-img" eager />
               <span class="usage-item__name">{{ el.name }}</span>
               <span class="usage-item__version">{{ el.version }}</span>
             </li>

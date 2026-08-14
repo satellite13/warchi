@@ -47,3 +47,14 @@ Available actions:
 - **force-release** a lock after confirmation — when an editor session is stuck or the canvas must be handed over urgently.
 
 Normal collaborative locking is described in [Diagrams](/docs/diagrams). Admin force-release is an exceptional tool; after release, another user with EDIT access can acquire the canvas again.
+
+## Icons
+
+The **Icons** section (`/admin/icons`) is the instance-wide SVG library.
+
+- upload one or more SVGs;
+- export and import a `warchi-icon-bundle`;
+- import icons from a notation export JSON (`icons[]` only — the notation is not created);
+- delete an icon (notation references will stop resolving).
+
+Regular users only pick these icons in the picker. Notation import does not add icons to the library.

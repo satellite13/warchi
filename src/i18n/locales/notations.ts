@@ -52,6 +52,12 @@ export const notationsMessages = {
       importMergeKeepLocal: 'Оставить',
       importMergeDeleteLocal: 'Удалить',
       importMergeCancel: 'Отмена',
+      importIconResolveTitle: 'Импорт: иконки библиотеки',
+      importIconResolveText:
+        'В файле есть иконки, которых нет в каталоге и в библиотеке этого инстанса. Выберите замену или отмените импорт и попросите администратора загрузить SVG.',
+      importIconResolveAskAdmin:
+        'Администратор может загрузить иконки на странице Админка → Иконки (из этого же JSON).',
+      importIconResolveConfirm: 'Продолжить с заменами',
       importShapeResolveTitle: 'Импорт: кастомные формы',
       importShapeResolveText:
         'В файле есть формы с теми же именами, что уже доступны вам. Можно использовать существующую или создать новую.',
@@ -187,6 +193,12 @@ export const notationsMessages = {
       importMergeKeepLocal: 'Keep',
       importMergeDeleteLocal: 'Delete',
       importMergeCancel: 'Cancel',
+      importIconResolveTitle: 'Import: library icons',
+      importIconResolveText:
+        'This file references icons that are not in the catalog or this instance library. Choose a replacement or cancel and ask an administrator to upload the SVGs.',
+      importIconResolveAskAdmin:
+        'An administrator can load the icons from Admin → Icons (from this same JSON).',
+      importIconResolveConfirm: 'Continue with replacements',
       importShapeResolveTitle: 'Import: custom shapes',
       importShapeResolveText:
         'The file includes shapes with the same names as shapes already available to you. Reuse an existing one or create a new copy.',

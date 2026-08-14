@@ -10,14 +10,9 @@ export type NotationExportImportResult =
       code?: 'CONFLICT' | 'BAD_REQUEST'
     }
 
-export async function uploadNotationExportJson(file: File): Promise<NotationExportImportResult> {
-  let document: unknown
-  try {
-    document = JSON.parse(await file.text())
-  } catch {
-    return { ok: false, status: 400, message: 'Invalid JSON', code: 'BAD_REQUEST' }
-  }
-
+export async function uploadNotationExportDocument(
+  document: unknown,
+): Promise<NotationExportImportResult> {
   const result = await apiPost<NotationImportApiResponse>('/notations/import', document)
   if (!result.success) {
     const status = result.error.status
@@ -38,4 +33,14 @@ export async function uploadNotationExportJson(file: File): Promise<NotationExpo
     return { ok: false, status: 0, message: 'Invalid response', code: 'BAD_REQUEST' }
   }
   return { ok: true, notationId: result.data.notationId }
+}
+
+export async function uploadNotationExportJson(file: File): Promise<NotationExportImportResult> {
+  let document: unknown
+  try {
+    document = JSON.parse(await file.text())
+  } catch {
+    return { ok: false, status: 400, message: 'Invalid JSON', code: 'BAD_REQUEST' }
+  }
+  return uploadNotationExportDocument(document)
 }

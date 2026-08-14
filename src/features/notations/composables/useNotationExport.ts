@@ -24,6 +24,9 @@ import type { NodeShapeResponse } from "@/types/api";
 import type {NotationData} from "@/types/entities";
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 import type { NotationEditorState } from "../types";
+import { collectIconNames } from "@/utils/collectIconNames";
+import { useLibraryIcons } from "@/composables/useLibraryIcons";
+import { useNotationIconImport } from "./useNotationIconImport";
 
 type NotationExportPayloadV2 = {
   format: "warchi-notation-export";
@@ -36,6 +39,7 @@ type NotationExportPayloadV2 = {
   };
   state: NotationEditorState;
   shapes: ExportedNodeShape[];
+  icons: { name: string; svg: string }[];
 };
 
 const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -52,6 +56,8 @@ export function useNotationExport(
 ) {
   const {t} = useI18n();
   const { fetchById } = useNodeShapes();
+  const { icons: libraryIcons, ensureLoaded: ensureLibraryIcons } = useLibraryIcons();
+  const iconImport = useNotationIconImport();
 
   const showAttrsJson = ref(false);
   const attrsJsonContent = ref("");
@@ -109,6 +115,12 @@ export function useNotationExport(
       fetchById,
     });
 
+    await ensureLibraryIcons();
+    const usedNames = new Set(collectIconNames(exportState, shapes));
+    const icons = libraryIcons.value
+      .filter((icon) => usedNames.has(icon.name))
+      .map((icon) => ({ name: icon.name, svg: icon.svg }));
+
     const payload: NotationExportPayloadV2 = {
       format: "warchi-notation-export",
       version: 2,
@@ -120,6 +132,7 @@ export function useNotationExport(
       },
       state: exportState,
       shapes,
+      icons,
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -280,6 +293,11 @@ export function useNotationExport(
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
+      const prepared = await iconImport.prepareDocument(parsed);
+      if (prepared === "resolve") {
+        return;
+      }
+      const document = prepared;
 
       let catalog: NodeShapeResponse[];
       try {
@@ -298,25 +316,25 @@ export function useNotationExport(
       }
 
       importCatalogShapes.value = catalog;
-      const importedShapes = collectImportShapesFromRaw(parsed, t);
+      const importedShapes = collectImportShapesFromRaw(document, t);
       const conflicts = analyzeImportShapeConflicts(importedShapes, catalog);
 
       if (conflicts.length > 0) {
-        pendingImportRaw.value = parsed;
+        pendingImportRaw.value = document;
         importShapeConflicts.value = conflicts;
         importShapeResolutions.value = defaultShapeImportResolutions(conflicts);
         showImportShapeResolveDialog.value = true;
         return;
       }
 
-      const summary = analyzeNotationImportLocalOnly(parsed, state.value, t);
+      const summary = analyzeNotationImportLocalOnly(document, state.value, t);
       if (summary.total > 0) {
-        pendingImportRaw.value = parsed;
+        pendingImportRaw.value = document;
         importMergeSummary.value = summary;
         showImportMergeDialog.value = true;
         return;
       }
-      applyNotationImport(parsed, "keep", []);
+      applyNotationImport(document, "keep", []);
     } catch (error) {
       clearPendingImport();
       saveError.value =
@@ -419,6 +437,17 @@ export function useNotationExport(
     cancelImportMerge,
     confirmImportShapeResolve,
     cancelImportShapeResolve,
+    showImportIconResolve: iconImport.showIconResolve,
+    importMissingIcons: iconImport.missingIcons,
+    confirmImportIconResolve: (remap: Record<string, string>) => {
+      const document = iconImport.applyRemap(remap);
+      const file = new File([JSON.stringify(document)], "import.json", {
+        type: "application/json",
+      });
+      const event = { target: { files: [file] } } as unknown as Event;
+      void handleNotationImportChange(event);
+    },
+    cancelImportIconResolve: iconImport.cancelResolve,
     openAttrsJson,
     copyAttrsJson
   };

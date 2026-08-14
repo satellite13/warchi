@@ -2,6 +2,7 @@
 import {computed} from "vue";
 import { useI18n } from "vue-i18n";
 import UserAvatar from "../layout/UserAvatar.vue";
+import LazyIconImg from "../forms/LazyIconImg.vue";
 import { getGradient } from "@/utils/gradientColors";
 import { formatDate } from "@/utils/formatDate";
 
@@ -63,11 +64,13 @@ const formattedUpdatedAt = computed(() => {
         <div class="model-card__icon-wrap">
           <div class="model-card__icon">
             <template v-if="icon">
-              <img
+              <LazyIconImg
                 class="model-card__icon-img"
-                :src="`/icons/${icon}.svg`"
+                :icon-id="icon"
                 :alt="name"
-              >
+                img-class="model-card__icon-img"
+                eager
+              />
             </template>
             <slot v-else name="icon" />
           </div>

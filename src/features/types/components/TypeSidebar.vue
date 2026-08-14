@@ -5,6 +5,7 @@ import { DEFAULT_ENTITY_ICONS } from '@/config/iconOptions'
 import type { TypeItem } from '../composables/useTypeEditor'
 import { toAccessLabel } from '@/utils/accessPermission'
 import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
+import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 
 const props = defineProps<{
   nodeTypes: TypeItem[]
@@ -161,12 +162,13 @@ const linkTypesExpanded = ref(true)
               tabindex="-1"
               @click.stop="handleItemClick(typeItem.id)"
             >
-            <img
+            <LazyIconImg
               v-if="typeItem.parsedAttrs?.icon"
-              class="type-sidebar__item-icon type-sidebar__item-icon--svg"
-              :src="`/icons/${typeItem.parsedAttrs.icon}.svg`"
+              :icon-id="typeItem.parsedAttrs.icon"
               :alt="typeItem.name ?? ''"
-            >
+              img-class="type-sidebar__item-icon type-sidebar__item-icon--svg"
+              eager
+            />
             <UiIcon
               v-else
               :name="DEFAULT_ENTITY_ICONS.nodeType"
@@ -236,12 +238,13 @@ const linkTypesExpanded = ref(true)
               tabindex="-1"
               @click.stop="handleItemClick(typeItem.id)"
             >
-            <img
+            <LazyIconImg
               v-if="typeItem.parsedAttrs?.icon"
-              class="type-sidebar__item-icon type-sidebar__item-icon--svg"
-              :src="`/icons/${typeItem.parsedAttrs.icon}.svg`"
+              :icon-id="typeItem.parsedAttrs.icon"
               :alt="typeItem.name ?? ''"
-            >
+              img-class="type-sidebar__item-icon type-sidebar__item-icon--svg"
+              eager
+            />
             <UiIcon v-else :name="DEFAULT_ENTITY_ICONS.link" class="type-sidebar__item-icon" />
             <div class="type-sidebar__item-info">
               <span class="type-sidebar__item-name">{{

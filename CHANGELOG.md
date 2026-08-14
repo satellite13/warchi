@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Instance-wide SVG icon library: only an administrator can upload (`/admin/icons`); everyone can pick those icons. Notation export includes `icons[]` for the admin to import; notation import does not create icons — missing names require a replacement or cancel.
+
 ## [0.19.2] - 2026-08-14
 
 ### Added

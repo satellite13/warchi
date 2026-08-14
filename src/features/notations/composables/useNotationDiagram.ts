@@ -54,6 +54,7 @@ import {
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
 } from "@/features/diagram-style/utils/compositeBindings"
+import { useLibraryIcons } from "@/composables/useLibraryIcons"
 
 export type EntityKind = "component" | "relation"
 
@@ -135,6 +136,8 @@ function compareComponentsForLayout(a: EditorComponent, b: EditorComponent): num
 }
 
 export function useNotationDiagram(options: NotationDiagramOptions) {
+  const { byName: libraryByName, ensureLoaded: ensureLibraryIcons } = useLibraryIcons()
+  void ensureLibraryIcons()
   const { state, selectedId, onSelect } = options
 
   const rendererRef = shallowRef<DiagramRenderer | null>(null)
@@ -178,7 +181,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
     const shape = resolveDiagramNodeShape(ds)
     const componentProperties = item.parsedAttrs.customProperties.filter((p) => !p.system)
     const nodeTypeProperties = typeCustomPropertiesForComponent(item)
-    const icon = buildNodeIcon(ds)
+    const icon = buildNodeIcon(ds, libraryByName.value)
     let composite:
       | {
           content: CContainer
@@ -198,6 +201,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         displayName: item.name,
         notationIconName: ds?.iconName,
         propertyValues: { ...nodeTypeValues, ...componentValues },
+        libraryByName: libraryByName.value,
       })
       const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
         componentProperties,
@@ -335,7 +339,7 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
           existing.setPathFactory((w, h) => factory.path(w, h, cut))
           existing.setSvgPath((w, h) => factory.svgPath(w, h, cut))
         }
-        existing.icon = buildNodeIcon(ds)
+        existing.icon = buildNodeIcon(ds, libraryByName.value)
         applyContentInsetFromStyle(existing, ds)
         if (ds?.labelPlacement) {
           ;(existing as DiagramNode & { labelPlacement?: string }).labelPlacement = ds.labelPlacement

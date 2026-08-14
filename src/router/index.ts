@@ -48,6 +48,11 @@ const router = createRouter({
           path: "diagram-locks",
           name: "admin-diagram-locks",
           component: () => import("../views/AdminDiagramLocksView.vue")
+        },
+        {
+          path: "icons",
+          name: "admin-icons",
+          component: () => import("../views/AdminIconsView.vue")
         }
       ]
     },

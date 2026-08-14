@@ -9,6 +9,7 @@ import { createId } from '@/domain/attrs/notationAttrs'
 import { copyRelationRulesFromComponent } from '../utils/copyRelationRules'
 import type { CopyRelationRulesMode } from '../utils/copyRelationRules'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
+import { useLibraryIcons } from '@/composables/useLibraryIcons'
 
 const props = defineProps<{
   selectedItem: EditorComponent | EditorRelation | null
@@ -21,6 +22,8 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const { srcFor, ensureLoaded } = useLibraryIcons()
+void ensureLoaded()
 
 const relationRulesExpanded = ref(false)
 const showCopyModal = ref(false)
@@ -119,11 +122,7 @@ const componentIconMap = computed(() => {
   return map
 })
 
-const buildIconUrl = (iconName: string): string => {
-  if (iconName.startsWith('/')) return iconName
-  if (iconName.toLowerCase().endsWith('.svg')) return `/icons/${iconName}`
-  return `/icons/${iconName}.svg`
-}
+const buildIconUrl = (iconName: string): string => srcFor(iconName) || '/icons/widgets.svg'
 
 const activeRelations = computed(() =>
   (props.allRelations ?? []).filter(item => !item._isDeleted && !isUntypedRelation(item))

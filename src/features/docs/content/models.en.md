@@ -199,7 +199,7 @@ A model ZIP package moves a model between environments, users, or serves as a ba
 
 Diagram preview SVGs are **not** included — they are regenerated on save or when publishing a diagram share link from the editor.
 
-**Export** is available from the model card in the list (download icon) and from the editor header. **Import** is the **Import model package** button in the list toolbar: pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). While the job runs, the UI shows stages (queued, validating, notations, files, model, document refs). On success, the new model opens in the editor; warnings, if any, appear after import.
+**Export** is available from the model card in the list (download icon) and from the editor header. **Import** is the **Import model package** button in the list toolbar: pick a ZIP file and the server creates a **new** model owned by the current user (merging into an existing model is not supported). While the job runs, the UI shows stages (queued, validating, notations, files, model, document refs). On success, the new model opens in the editor; warnings, if any, appear after import. Package import **does not** add SVGs to the icon library: if notations name icons that are missing from the catalog and the instance library, a warning appears — an administrator uploads them on [Admin → Icons](/docs/admin).
 
 If a notation with the same **name and version** already exists and you can view it, import **reuses** it (components and relations are matched by name and type). If the notation is inaccessible or structurally incompatible, import fails with a detailed error.
 

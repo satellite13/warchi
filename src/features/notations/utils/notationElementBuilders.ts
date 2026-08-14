@@ -7,6 +7,7 @@ import type {
 } from '@ngroznykh/papirus'
 import { resolveLabelTemplate } from '@/domain/attrs/labelTemplate'
 import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
+import { resolveIconMarkup } from '@/utils/libraryIconResolve'
 
 const DEFAULT_COMPONENT_ANCHORS = { top: 3, right: 1, bottom: 3, left: 1 }
 
@@ -151,7 +152,10 @@ export function buildEdgeLabelBackground(ds?: DiagramStyle) {
   }
 }
 
-export function buildNodeIcon(ds?: DiagramStyle) {
+export function buildNodeIcon(
+  ds?: DiagramStyle,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+) {
   if (!ds?.iconName) return undefined
   const placement = ds.iconPlacement
   const resolvedPlacement: NodeImageOptions['placement'] =
@@ -168,7 +172,7 @@ export function buildNodeIcon(ds?: DiagramStyle) {
       : 'top-left'
   const iconInset = ds.iconInset ?? ds.iconPadding ?? ds.iconMargin ?? ds.iconGap
   return {
-    source: `/icons/${ds.iconName}.svg`,
+    source: resolveIconMarkup(ds.iconName, libraryByName),
     placement: resolvedPlacement,
     width: ds.iconWidth ?? 20,
     height: ds.iconHeight ?? 20,

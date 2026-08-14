@@ -9,17 +9,18 @@ import {
   iconSelectRequiresMinSearch,
 } from '@/config/iconOptions'
 import type { IconOption } from '@/config/iconOptions'
+import { useLibraryIcons } from '@/composables/useLibraryIcons'
 
 const props = withDefaults(
   defineProps<{
     modelValue: string
-    /** Options (id = filename in public/icons/ without .svg). Default: COMBINED_ICON_OPTIONS */
+    /** Options (id = filename in public/icons/ without .svg). Default: library + COMBINED_ICON_OPTIONS */
     options?: IconOption[]
     placeholder?: string
     emptyLabel?: string
   }>(),
   {
-    options: () => COMBINED_ICON_OPTIONS,
+    options: undefined,
     placeholder: '',
     emptyLabel: undefined,
   }
@@ -30,6 +31,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { icons: libraryIcons, ensureLoaded } = useLibraryIcons()
+void ensureLoaded()
+
+const libraryOptions = computed<IconOption[]>(() =>
+  libraryIcons.value.map((icon) => ({
+    id: icon.name,
+    label: icon.name.replace(/_/g, ' '),
+  }))
+)
 
 const effectiveEmptyLabel = computed(() => props.emptyLabel ?? t('types.iconClear'))
 
@@ -46,7 +56,8 @@ function onPreviewError(id: string): void {
 
 const sanitizedOptions = computed(() => {
   const seen = new Set<string>()
-  return (props.options ?? []).filter((option) => {
+  const merged = props.options ?? [...libraryOptions.value, ...COMBINED_ICON_OPTIONS]
+  return merged.filter((option) => {
     const id = option.id?.trim()
     if (!id || seen.has(id)) return false
     seen.add(id)

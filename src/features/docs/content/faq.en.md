@@ -68,7 +68,7 @@ Yes, one notation can be used in multiple models.
 
 ### How do I import/export a notation?
 
-JSON export (`warchi-notation-export` v2) is available from the catalog card and the editor header. Import a new notation from the catalog toolbar (and the [dashboard](/docs/dashboard) quick action); merge into an open notation from the editor header. See [Notations](/docs/notations).
+JSON export (`warchi-notation-export` v2) is available from the catalog card and the editor header. Import a new notation from the catalog toolbar (and the [dashboard](/docs/dashboard) quick action); merge into an open notation from the editor header. Import **does not** create library icons: if a name is missing from the catalog and the instance library, pick a replacement or ask an administrator to upload the SVG on [Admin → Icons](/docs/admin). See [Notations](/docs/notations).
 
 ## Diagrams
 

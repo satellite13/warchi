@@ -38,8 +38,11 @@ export type ModelEdgeOptions = Partial<{
   labelLineGap: boolean
 }>
 
-export function buildModelNodeIcon(ds?: DiagramStyle): NodeImageOptions | undefined {
-  const icon = buildNodeIcon(ds)
+export function buildModelNodeIcon(
+  ds?: DiagramStyle,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+): NodeImageOptions | undefined {
+  const icon = buildNodeIcon(ds, libraryByName)
   if (!icon) return undefined
   if (ds?.iconPlacement && VALID_ICON_PLACEMENTS.has(ds.iconPlacement as NodeImageOptions['placement'])) {
     return icon

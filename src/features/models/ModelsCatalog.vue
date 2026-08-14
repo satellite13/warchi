@@ -16,6 +16,7 @@ import {
 import { sanitizeFileName } from "@/utils/sanitizeFileName";
 import ModelPackageConflictModal from "./components/ModelPackageConflictModal.vue";
 import { shouldOpenModelPackageImport } from "./utils/modelPackageImportQuery";
+import { findMissingIconsAfterModelImport } from "./utils/missingPackageIcons";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -150,13 +151,22 @@ function closeModelConflictModal() {
 }
 
 async function handleImportSuccess(result: Extract<ModelPackageImportResult, { ok: true }>) {
-  if (result.warnings.length > 0) {
+  const warnings = [...result.warnings];
+  try {
+    const missingIcons = await findMissingIconsAfterModelImport(result.modelId);
+    if (missingIcons.length > 0) {
+      warnings.push(t("models.packageImportMissingIcons", { names: missingIcons.join(", ") }));
+    }
+  } catch {
+    // Import already succeeded; missing-icon check is best-effort.
+  }
+  if (warnings.length > 0) {
     actionStatusMessage.value =
-      result.warnings.length <= 2
+      warnings.length <= 2
         ? t("models.packageImportCompletedWithWarningsDetail", {
-            messages: result.warnings.join("; "),
+            messages: warnings.join("; "),
           })
-        : t("models.packageImportCompletedWithWarnings", { count: result.warnings.length });
+        : t("models.packageImportCompletedWithWarnings", { count: warnings.length });
   } else {
     actionStatusMessage.value = null;
   }

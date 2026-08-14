@@ -36,10 +36,8 @@ import {
   resolveCustomScaleSlice,
 } from "@/utils/resolveCustomScaleSlice";
 import { useNodeShapes } from "@/composables/useNodeShapes";
-import {
-  COMBINED_ICON_OPTIONS,
-  ICON_SELECT_MIN_SEARCH_LENGTH,
-} from "@/config/iconOptions";
+import { ICON_SELECT_MIN_SEARCH_LENGTH } from "@/config/iconOptions";
+import { useLibraryIcons } from "@/composables/useLibraryIcons";
 import {
   getAllComponentPresets,
   getAllRelationPresets,
@@ -94,6 +92,8 @@ const emit = defineEmits<{
   (e: "restore-style"): void;
 }>();
 const { t } = useI18n();
+const { selectOptions: iconSelectOptions, markupFor, ensureLoaded: ensureLibraryIcons } = useLibraryIcons();
+void ensureLibraryIcons();
 const panelMode = computed(() => props.mode ?? 'default');
 
 // NodeShape type imported from useNodeStyleState composable
@@ -570,7 +570,7 @@ function textStyleWith(
 
 function iconConfig() {
   return {
-    source: `/icons/${iconName.value}.svg`,
+    source: iconName.value ? markupFor(iconName.value) : '',
     placement: iconPlacement.value,
     width: iconWidth.value,
     height: iconHeight.value,
@@ -2340,7 +2340,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   <div class="sp-icon-select">
                     <SearchableSelect
                       :model-value="iconName"
-                      :options="COMBINED_ICON_OPTIONS"
+                      :options="iconSelectOptions"
                       allow-empty
                       :empty-label="t('nodeStyle.none')"
                       :placeholder="t('nodeStyle.none')"

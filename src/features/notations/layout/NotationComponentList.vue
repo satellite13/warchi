@@ -8,6 +8,7 @@ import type { CompositeSerializedCComponent } from "@/domain/attrs/notationAttrs
 import { resolveCompositeBoundIconName } from "@/features/diagram-style/utils/compositeBindings";
 import { findNameVersionConflict } from "../utils/nameVersionUniqueness";
 import EmptyState from "@/components/list/EmptyState.vue";
+import LazyIconImg from "@/components/forms/LazyIconImg.vue";
 
 const { t } = useI18n();
 
@@ -294,12 +295,13 @@ const commitRename = (item: ListItem) => {
           :name="DEFAULT_ENTITY_ICONS.link"
           class="component-item__icon"
         />
-        <img
+        <LazyIconImg
           v-else
-          :src="`/icons/${item.paletteIcon}.svg`"
+          :icon-id="item.paletteIcon"
           :alt="item.name"
-          class="component-item__icon-img"
-        >
+          img-class="component-item__icon-img"
+          eager
+        />
         <div class="component-item__info">
           <template v-if="renamingId === item.id">
             <input

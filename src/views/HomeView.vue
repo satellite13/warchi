@@ -11,7 +11,9 @@ import { useActivityFormatting } from "../composables/useActivityFormatting"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import CompactEntityRow from "../components/list/CompactEntityRow.vue"
 import EmptyState from "../components/list/EmptyState.vue"
-import { uploadNotationExportJson } from "@/features/notations/composables/uploadNotationExport"
+import { uploadNotationExportDocument } from "@/features/notations/composables/uploadNotationExport"
+import { useNotationIconImport } from "@/features/notations/composables/useNotationIconImport"
+import NotationImportIconResolveDialog from "@/features/notations/components/NotationImportIconResolveDialog.vue"
 import changelogRu from "../../CHANGELOG.ru.md?raw"
 import changelogEn from "../../CHANGELOG.md?raw"
 
@@ -30,6 +32,8 @@ const notationPackageInputRef = ref<HTMLInputElement | null>(null)
 const isImportingNotation = ref(false)
 const importStatusMessage = ref<string | null>(null)
 const importErrorMessage = ref<string | null>(null)
+const { showIconResolve, missingIcons, prepareDocument, applyRemap, cancelResolve } =
+  useNotationIconImport()
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -193,7 +197,20 @@ async function onNotationPackageSelected(event: Event) {
   importStatusMessage.value = t("notations.packageImporting")
   try {
     importStatusMessage.value = t("notations.packageImportProcessing")
-    const result = await uploadNotationExportJson(file)
+    let document: unknown
+    try {
+      document = JSON.parse(await file.text())
+    } catch {
+      importStatusMessage.value = null
+      importErrorMessage.value = t("notations.packageImportBadRequest")
+      return
+    }
+    const prepared = await prepareDocument(document)
+    if (prepared === "resolve") {
+      importStatusMessage.value = null
+      return
+    }
+    const result = await uploadNotationExportDocument(prepared)
 
     if (!result.ok) {
       importStatusMessage.value = null
@@ -217,6 +234,24 @@ async function onNotationPackageSelected(event: Event) {
     const message = err instanceof Error ? err.message : String(err)
     importStatusMessage.value = null
     importErrorMessage.value = t("notations.packageImportError", { message })
+  } finally {
+    isImportingNotation.value = false
+  }
+}
+
+async function confirmIconResolve(remap: Record<string, string>): Promise<void> {
+  const document = applyRemap(remap)
+  isImportingNotation.value = true
+  importStatusMessage.value = t("notations.packageImportProcessing")
+  try {
+    const result = await uploadNotationExportDocument(document)
+    if (!result.ok) {
+      importStatusMessage.value = null
+      importErrorMessage.value = t("notations.packageImportError", { message: result.message })
+      return
+    }
+    importStatusMessage.value = null
+    await router.push({ name: "notation-editor", params: { id: result.notationId } })
   } finally {
     isImportingNotation.value = false
   }
@@ -433,6 +468,12 @@ const releaseNotes = computed(() => {
       <AppFooter />
     </template>
   </MainLayout>
+  <NotationImportIconResolveDialog
+    v-if="showIconResolve"
+    :missing="missingIcons"
+    @confirm="confirmIconResolve"
+    @cancel="cancelResolve"
+  />
 </template>
 
 <style scoped>

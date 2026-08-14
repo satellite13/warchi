@@ -23,7 +23,7 @@ When working with shared resources, available actions are determined by the gran
 
 ### Exporting and importing a notation
 
-**Export** is available from the notation card in the list (download icon) and from the notation editor header. Both download the **same** JSON document (`warchi-notation-export` v2) — types, components, relations, rules, and shapes.
+**Export** is available from the notation card in the list (download icon) and from the notation editor header. Both download the **same** JSON document (`warchi-notation-export` v2) — types, components, relations, rules, shapes, and used library icons (`icons[]`). Notation import **does not** create icons from `icons[]`; an administrator loads them on [Admin → Icons](/docs/admin). If the file names icons that are missing from the catalog and the instance library, import asks you to pick a replacement or cancel and ask an admin to upload the SVGs.
 
 **Import from the list** — the **Import notation JSON** button in the catalog toolbar (the same action is on the [dashboard](/docs/dashboard)): pick the same JSON export file; the server creates a **new** notation owned by the current user. On success, the new notation opens in the editor. If a notation with the same **name and version** already exists, import returns **409** and nothing is persisted.
 

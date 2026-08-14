@@ -8,6 +8,7 @@ import { parseTypeAttrs } from "@/domain/attrs/notationAttrs"
 import type { DiagramLockStatusResponse, NodeTypeResponse } from "@/types/api"
 import type { EditorDiagram, EditorNode } from "../types"
 import { useTreeSearch } from "../composables"
+import LazyIconImg from "@/components/forms/LazyIconImg.vue"
 
 /** Fixed row height for virtualization (padding 9+9 + mini-btn 22). */
 const TREE_ROW_HEIGHT = 40
@@ -640,12 +641,13 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 @click="emit('selectNode', row.node.id)"
                 @dblclick="isDirectory(row.node) && toggleNode(row.node.id)"
               >
-                <img
+                <LazyIconImg
                   v-if="nodeTypeIconById.get(row.node.nodeTypeId)"
-                  class="tree-node__icon-svg"
-                  :src="`/icons/${nodeTypeIconById.get(row.node.nodeTypeId)}.svg`"
+                  :icon-id="nodeTypeIconById.get(row.node.nodeTypeId)!"
                   :alt="row.node.name"
-                >
+                  img-class="tree-node__icon-svg"
+                  eager
+                />
                 <UiIcon
                   v-else
                   :name="isDirectory(row.node) ? DEFAULT_ENTITY_ICONS.folder : DEFAULT_ENTITY_ICONS.node"

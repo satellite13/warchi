@@ -106,6 +106,8 @@ export const modelsMessages = {
       packageImportCompletedWithWarnings: 'Пакет импортирован с предупреждениями: {count}',
       packageImportCompletedWithWarningsDetail:
         'Пакет импортирован. Предупреждения: {messages}',
+      packageImportMissingIcons:
+        'Иконки отсутствуют в каталоге и библиотеке инстанса: {names}. Обратитесь к администратору.',
       oefImportTargetNotation: 'Целевая нотация',
       oefImportSourceFile: 'Файл импорта (.xml)',
       oefImportSelectedFile: 'Выбран файл: {name}',
@@ -681,6 +683,8 @@ export const modelsMessages = {
       packageExportFailed: 'Could not export model package: {message}',
       packageImportCompletedWithWarnings: 'Package imported with warnings: {count}',
       packageImportCompletedWithWarningsDetail: 'Package imported. Warnings: {messages}',
+      packageImportMissingIcons:
+        'Icons missing from the catalog and instance library: {names}. Ask an administrator to upload them.',
       oefImportTargetNotation: 'Target notation',
       oefImportSourceFile: 'Import file (.xml)',
       oefImportSelectedFile: 'Selected file: {name}',

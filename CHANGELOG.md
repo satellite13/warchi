@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-08-15
+
+### Changed
+- Model and notation trees no longer show the type name next to each item.
+
 ## [0.21.0] - 2026-08-15
 
 ### Changed

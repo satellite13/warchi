@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
+import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import BaseModal from "./BaseModal.vue"
 import { apiPost } from "../../composables/useApi"
 import { useUserSearch } from "../../composables/useUserSearch"
@@ -111,7 +112,7 @@ watch(shareWithAllUsers, (enabled) => {
         <h4 class="batch-share__subtitle">{{ t("share.batchShareHint") }}</h4>
         <div class="batch-share__items">
           <div v-for="item in items" :key="item.id" class="batch-share__item">
-            <UiIcon :name="item.resourceType === 'LINK_TYPE' ? 'link' : 'category'" class="batch-share__item-icon" />
+            <UiIcon :name="item.resourceType === 'LINK_TYPE' ? DEFAULT_ENTITY_ICONS.link : DEFAULT_ENTITY_ICONS.nodeType" class="batch-share__item-icon" />
             <span class="batch-share__item-name">{{ item.name }}</span>
           </div>
         </div>
@@ -432,11 +433,5 @@ watch(shareWithAllUsers, (enabled) => {
 
 .batch-share__done-icon--warning {
   color: var(--warning);
-}
-
-.btn {
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
 }
 </style>

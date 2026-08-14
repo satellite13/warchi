@@ -812,11 +812,11 @@ const rightPanelTabs = computed(() => {
     tabs.push({ id: 'properties', label: t('models.propertiesTab'), icon: 'tune' })
   }
   if (canShowTraceabilityTab.value) {
-    tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'account_tree' })
+    tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'device_hub' })
   }
   if (canShowStyleTab.value) {
     if (selectedElementIsComposite.value) {
-      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'account_tree' })
+      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'dashboard_customize' })
     } else {
       tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
     }
@@ -3808,20 +3808,6 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
 }
 
-.btn {
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-}
-
-.btn--secondary {
-  background: var(--surface-strong);
-}
-
 .choice-list {
   display: flex;
   flex-direction: column;
@@ -3835,50 +3821,6 @@ onBeforeUnmount(() => {
   padding: 9px 10px;
   text-align: left;
   cursor: pointer;
-}
-
-.choice-item--primary {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.reuse-link-option {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.reuse-link-option__title {
-  font-weight: 600;
-  color: var(--base-text);
-}
-
-.reuse-link-option__meta {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.reuse-link-option__props {
-  margin-top: 2px;
-  padding-top: 4px;
-  border-top: 1px dashed var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-}
-
-.reuse-link-option__props-title {
-  color: var(--text-muted);
-}
-
-.reuse-link-option__prop {
-  color: var(--base-text);
-}
-
-.reuse-link-option__empty {
-  color: var(--text-subtle);
 }
 
 .leave-text {

@@ -495,7 +495,7 @@ const rightPanelTabs = computed(() => {
     tabs.push({
       id: 'composite-style',
       label: t('notations.compositeFigureStyleTab'),
-      icon: 'account_tree',
+      icon: 'dashboard_customize',
     })
   } else {
     tabs.push({ id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' })

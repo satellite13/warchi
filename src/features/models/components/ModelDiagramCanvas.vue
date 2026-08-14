@@ -2568,7 +2568,7 @@ function initRenderer(
         items.push(
           {
             label: t('diagram.linkType'),
-            icon: 'cable',
+            icon: 'conversion_path',
             items: [
               {
                 label: t('diagram.linkTypeStraight'),

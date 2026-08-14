@@ -33,12 +33,12 @@ describe('EditorSidebarShell', () => {
   it('renders title, optional count, and action slot', () => {
     const wrapper = mountShell(
       { count: 3 },
-      { actions: '<button class="ess-action-btn" type="button">+</button>' },
+      { actions: '<button class="btn--icon" type="button">+</button>' },
     )
 
     expect(wrapper.find('.ess__title').text()).toBe('Types')
     expect(wrapper.find('.ess__count').text()).toBe('3')
-    expect(wrapper.find('.ess-action-btn').exists()).toBe(true)
+    expect(wrapper.find('.btn--icon').exists()).toBe(true)
   })
 
   it('hides count when zero or omitted', () => {

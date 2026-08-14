@@ -210,16 +210,16 @@ const commitRename = (item: ListItem) => {
       <template #actions>
         <button
           type="button"
-          class="ess-action-btn"
-          :class="{ 'ess-action-btn--active': !!syncSelectionEnabled }"
+          class="btn--icon"
+          :class="{ 'btn--icon--active': !!syncSelectionEnabled }"
           :title="syncSelectionEnabled ? t('notations.syncSelectionOff') : t('notations.syncSelectionOn')"
           @click="emit('toggle-sync-selection')"
         >
-          <UiIcon name="swap_horiz" />
+          <UiIcon name="sync_alt" />
         </button>
         <button
           type="button"
-          class="ess-action-btn"
+          class="btn--icon"
           :title="t('notations.addComponent')"
           @click="emit('create-component')"
         >
@@ -227,7 +227,7 @@ const commitRename = (item: ListItem) => {
         </button>
         <button
           type="button"
-          class="ess-action-btn"
+          class="btn--icon"
           :title="t('notations.addRelation')"
           @click="emit('create-relation')"
         >
@@ -260,8 +260,8 @@ const commitRename = (item: ListItem) => {
               v-for="tag in allTags"
               :key="tag"
               type="button"
-              class="tag-chip"
-              :class="{ 'tag-chip--active': selectedTags.has(tag) }"
+              class="chip"
+              :class="{ 'chip--active': selectedTags.has(tag) }"
               @click="toggleTag(tag)"
             >
               {{ tag }}
@@ -439,31 +439,6 @@ const commitRename = (item: ListItem) => {
   padding: 0 12px 8px;
 }
 
-.tag-chip {
-  padding: 2px 10px;
-  font-size: 12px;
-  font-family: inherit;
-  font-weight: 500;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  white-space: nowrap;
-}
-
-.tag-chip:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.tag-chip--active {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
 .component-list__items {
   display: flex;
   flex-direction: column;
@@ -514,14 +489,14 @@ const commitRename = (item: ListItem) => {
   height: 26px;
   padding: 2px 8px;
   border: 1px solid var(--primary);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--surface);
   color: var(--base-text);
   font-size: 13px;
   font-family: inherit;
   font-weight: 500;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
+  box-shadow: var(--focus-ring-sm);
 }
 
 .component-item__rename-input--error {

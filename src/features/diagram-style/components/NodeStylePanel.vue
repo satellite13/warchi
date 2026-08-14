@@ -1734,7 +1734,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
           :title="t('nodeStyle.deletePreset')"
           @click="handleDeleteUserPreset(elementType === 'edge' ? selectedRelationPreset : selectedComponentPreset, elementType === 'edge' ? 'relation' : 'component')"
         >
-          <UiIcon name="delete_outline" />
+          <UiIcon name="delete" />
         </button>
       </div>
 
@@ -2665,10 +2665,6 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
 
 .sp-field-grid--4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.sp-field-grid--dims {
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
 }
 
 /* ---- Tiny numeric next to sliders ---- */

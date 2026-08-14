@@ -55,7 +55,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   { icon: 'fit_screen', event: 'fit-screen', title: t('toolbar.fitScreen') },
   { icon: 'center_focus_strong', event: 'zoom-selection', title: t('toolbar.zoomSelection') },
   {
-    icon: 'format_align_center',
+    icon: 'auto_awesome_mosaic',
     event: 'auto-layout-components',
     title: t('toolbar.autoLayoutComponents'),
   },
@@ -69,13 +69,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     active: props.miniMapVisible,
   },
   {
-    icon: 'my_location',
+    icon: 'grid_3x3',
     event: 'toggle-snap',
     title: t('toolbar.snapToGrid'),
     active: props.snapEnabled,
   },
   {
-    icon: 'align_horizontal_left',
+    icon: 'align_justify_center',
     event: 'toggle-align',
     title: t('toolbar.smartAlign'),
     active: props.alignEnabled,
@@ -94,7 +94,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   },
   { icon: 'separator', event: 'sep3b', separator: true },
   { icon: 'image', event: 'export-diagram-png', title: t('toolbar.exportDiagramPng') },
-  { icon: 'description', event: 'export-diagram-svg', title: t('toolbar.exportDiagramSvg') },
+  { icon: 'code', event: 'export-diagram-svg', title: t('toolbar.exportDiagramSvg') },
   { icon: 'separator', event: 'sep4', separator: true },
   { icon: 'download', event: 'export-notation', title: t('toolbar.exportNotation') },
   { icon: 'upload', event: 'import-notation', title: t('toolbar.importNotation') },

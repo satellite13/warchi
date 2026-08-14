@@ -49,7 +49,7 @@ export const sections: DocSection[] = [
   { id: "dashboard", title: "Главная", icon: "space_dashboard" },
   { id: "auth", title: "Авторизация", icon: "lock" },
   { id: "profile", title: "Профиль", icon: "account_circle" },
-  { id: "models", title: "Модели", icon: "schema" },
+  { id: "models", title: "Модели", icon: "lan" },
   { id: "versionTree", title: "Дерево версий", icon: "device_hub" },
   { id: "notations", title: "Нотации", icon: "account_tree" },
   { id: "diagrams", title: "Диаграммы", icon: "dashboard" },

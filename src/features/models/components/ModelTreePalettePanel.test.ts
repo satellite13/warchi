@@ -163,6 +163,42 @@ describe('ModelTreePalettePanel', () => {
 
     expect(wrapper.emitted('copyDiagramToModel')).toEqual([['diagram-1']])
   })
+
+  it('uses shared btn--icon for header and row actions', async () => {
+    const wrapper = mount(ModelTreePalettePanel, {
+      props: {
+        nodes: [],
+        diagrams: [
+          {
+            id: 'diagram-1',
+            name: 'Source diagram',
+            version: '1.0.0',
+            notationId: 'notation-1',
+            ownerId: 'owner-1',
+            modelId: 'model-1',
+            nodeId: null,
+            parsedAttrs: parseDiagramAttrs(null),
+          },
+        ],
+        nodeTypes: [],
+        selectedNodeId: null,
+        selectedDiagramId: null,
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+        },
+      },
+    })
+
+    const headerButtons = wrapper.findAll('.panel__header-actions button')
+    expect(headerButtons.length).toBe(4)
+    for (const button of headerButtons) {
+      expect(button.classes()).toContain('btn--icon')
+    }
+    expect(wrapper.find('.mini-btn').exists()).toBe(false)
+    expect(wrapper.find('.diagram-row .btn--icon--danger').exists()).toBe(true)
+  })
 })
 
 describe('ModelTreePalettePanel search', () => {
@@ -296,7 +332,7 @@ describe('ModelTreePalettePanel virtualization', () => {
 
     const rendered = wrapper.findAll('[data-tree-node-id]')
     expect(rendered.length).toBeGreaterThan(0)
-    // Viewport 480 / row 40 ≈ 12 + overscan 10*2 ≈ well under 300
+    // Viewport 480 / row 42 ≈ 12 + overscan 10*2 ≈ well under 300
     expect(rendered.length).toBeLessThan(80)
     expect(rendered.length).toBeLessThan(nodes.length)
   })

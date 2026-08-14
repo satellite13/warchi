@@ -352,7 +352,7 @@ const releaseNotes = computed(() => {
 
             <section class="section">
               <div class="section__header">
-                <UiIcon name="account_tree" class="section__icon" />
+                <UiIcon name="dashboard" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionRecentDiagrams") }}</h2>
               </div>
               <div v-if="isLoading" class="skeleton-list">
@@ -381,7 +381,7 @@ const releaseNotes = computed(() => {
           <div class="main-grid__right">
             <section class="section">
               <div class="section__header">
-                <UiIcon name="schema" class="section__icon" />
+                <UiIcon name="lan" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionRecentModels") }}</h2>
                 <button type="button" class="section__link" @click="goTo('models')">
                   {{ t("home.sectionAllModels") }}

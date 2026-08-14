@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MultiSelect from '@/components/forms/MultiSelect.vue'
 import type { MultiSelectOption } from '@/components/forms/MultiSelect.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/composables/useApi'
 import type { ModelData, PaginatedResponse } from '@/types/entities'
@@ -422,7 +423,9 @@ onMounted(() => {
       </button>
     </form>
 
-    <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
+    <div v-if="errorMessage" class="api-keys__alert">
+      <AppAlert type="error" :message="errorMessage" />
+    </div>
 
     <p v-if="isLoading" class="api-keys__empty">{{ t('common.loading') }}</p>
     <p v-else-if="keys.length === 0" class="api-keys__empty">{{ t('profile.apiKeysEmpty') }}</p>
@@ -625,17 +628,8 @@ onMounted(() => {
   gap: 10px;
 }
 
-.msg {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+.api-keys__alert {
   margin-bottom: 12px;
-}
-
-.msg--error {
-  border: 1px solid rgba(220, 53, 69, 0.12);
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 
 .api-keys__empty {

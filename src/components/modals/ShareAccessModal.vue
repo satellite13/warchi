@@ -194,7 +194,7 @@ onMounted(load);
             </div>
             <button
               type="button"
-              class="btn btn--danger"
+              class="btn btn--soft-danger"
               :disabled="isSubmitting"
               @click="revoke(share.id)"
             >
@@ -354,16 +354,5 @@ onMounted(load);
 .share-modal__empty {
   font-size: 13px;
   color: var(--text-subtle);
-}
-
-.btn {
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-.btn--danger {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 </style>

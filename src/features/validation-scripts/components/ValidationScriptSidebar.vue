@@ -54,7 +54,7 @@ const totalCount = computed(() => props.scripts.length)
     <template #actions>
       <button
         type="button"
-        class="ess-action-btn"
+        class="btn--icon"
         :title="t('validationScripts.addScript')"
         @click="emit('addScript')"
       >

@@ -36,7 +36,7 @@ export const COMBINED_ICON_OPTIONS: IconOption[] = sanitizeIconOptions([
 /** Иконки по умолчанию для сущностей. */
 export const DEFAULT_ENTITY_ICONS = {
   /** Модель (каталог, главная, навигация). */
-  model: 'schema',
+  model: 'lan',
   /** Нотация (каталог, главная, навигация). */
   notation: 'account_tree',
   /** Тип узла (редактор типов: список, форма, использование). */
@@ -44,9 +44,9 @@ export const DEFAULT_ENTITY_ICONS = {
   /** Компонент нотации (список элементов, кнопка «добавить компонент»). */
   component: 'widgets',
   /** Узел в дереве модели, общий «узел» где не различаем тип/компонент. */
-  node: 'category',
+  node: 'deployed_code',
   /** Тип связи, отношение, элемент списка типов (связь). */
-  link: 'cable',
+  link: 'conversion_path',
   /** Папка в дереве модели. */
   folder: 'folder',
 } as const

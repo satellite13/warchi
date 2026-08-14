@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
             v-for="tag in selectedItem.parsedAttrs.tags"
             :key="`tag-${tag}`"
             type="button"
-            class="properties-panel__tag-chip"
+            class="chip chip--dismiss"
             @click="removeTag(tag)"
           >
             {{ tag }}
@@ -743,19 +743,6 @@ onBeforeUnmount(() => {
   min-width: 140px;
 }
 
-.properties-panel__palette-icon-option,
-.properties-panel__palette-icon-selected {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.properties-panel__palette-icon-preview {
-  font-size: 20px;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
 .properties-panel__name-error {
   margin: 6px 0 0;
   color: var(--danger);
@@ -767,31 +754,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.properties-panel__tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border);
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
-  line-height: 1.2;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.properties-panel__tag-chip .ui-icon {
-  font-size: 14px;
-}
-
-.properties-panel__tag-chip:hover {
-  color: var(--danger);
-  border-color: rgba(220, 53, 69, 0.35);
-  background: rgba(220, 53, 69, 0.08);
 }
 
 .properties-panel__label-template {

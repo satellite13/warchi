@@ -327,16 +327,6 @@ onMounted(() => {
   max-width: 100%;
 }
 
-.wiki-view__item-type {
-  font-size: 11px;
-  color: var(--text-subtle);
-}
-
-.wiki-view__item--active .wiki-view__item-type {
-  color: var(--primary);
-  opacity: 0.9;
-}
-
 .wiki-view__content {
   flex: 1;
   min-width: 0;
@@ -346,24 +336,6 @@ onMounted(() => {
   overflow-y: auto;
   padding: 32px 48px;
   background: var(--surface);
-}
-
-.wiki-view__placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 200px;
-  color: var(--text-subtle);
-  font-size: 14px;
-}
-
-.wiki-view__placeholder-icon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
 }
 
 .wiki-view__content-loading {

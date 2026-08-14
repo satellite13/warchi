@@ -50,7 +50,7 @@ const totalCount = computed(() => props.shapes.length)
     <template #actions>
       <button
         type="button"
-        class="ess-action-btn"
+        class="btn--icon"
         :title="t('shapes.addShape')"
         @click="emit('addShape')"
       >

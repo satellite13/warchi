@@ -148,6 +148,7 @@ describe('ModelPropertiesPanel', () => {
           ownerId: 'u1',
           nodeTypeId: 'nt-1',
           parsedAttrs: {
+            treeOrder: 0,
             notationComponents: {},
             componentProperties: {},
             typeProperties: {},
@@ -157,8 +158,22 @@ describe('ModelPropertiesPanel', () => {
         nodeBindingComponentId: 'cmp-1',
         linkBindingRelationId: null,
         availableComponents: [
-          { id: 'cmp-1', name: 'Application Component', notationId: 'not-1' },
-          { id: 'cmp-2', name: 'Application Service', notationId: 'not-1' },
+          {
+            id: 'cmp-1',
+            name: 'Application Component',
+            notationId: 'not-1',
+            nodeTypeId: 'nt-1',
+            version: '1.0.0',
+            ownerId: 'u1',
+          },
+          {
+            id: 'cmp-2',
+            name: 'Application Service',
+            notationId: 'not-1',
+            nodeTypeId: 'nt-1',
+            version: '1.0.0',
+            ownerId: 'u1',
+          },
         ],
         availableRelations: [],
         nodeScopedValues: {},
@@ -183,5 +198,131 @@ describe('ModelPropertiesPanel', () => {
 
     await select.vm.$emit('update:modelValue', 'cmp-2')
     expect(wrapper.emitted('bindNodeComponent')).toEqual([['cmp-2']])
+  })
+
+  it('uses SearchableSelect for notation relation binding', async () => {
+    const wrapper = mount(ModelPropertiesPanel, {
+      props: {
+        activeNotationId: 'not-1',
+        selectedNode: null,
+        selectedLink: {
+          id: 'link-1',
+          sourceId: 'n1',
+          targetId: 'n2',
+          modelId: 'm1',
+          ownerId: 'u1',
+          linkTypeId: 'lt-1',
+          parsedAttrs: {
+            notationRelations: {},
+            relationProperties: {},
+            typeProperties: {},
+          },
+        },
+        nodeBindingComponentId: null,
+        linkBindingRelationId: 'rel-1',
+        availableComponents: [],
+        availableRelations: [
+          {
+            id: 'rel-1',
+            name: 'Serving',
+            notationId: 'not-1',
+            linkTypeId: 'lt-1',
+            version: '1.0.0',
+            ownerId: 'u1',
+          },
+          {
+            id: 'rel-2',
+            name: 'Aggregation',
+            notationId: 'not-1',
+            linkTypeId: 'lt-1',
+            version: '1.0.0',
+            ownerId: 'u1',
+          },
+        ],
+        nodeScopedValues: {},
+        linkScopedValues: {},
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+          ToggleSwitch: true,
+        },
+      },
+    })
+
+    const select = wrapper.findComponent({ name: 'SearchableSelect' })
+    expect(select.exists()).toBe(true)
+    expect(select.props('modelValue')).toBe('rel-1')
+    expect(select.props('options')).toEqual([
+      { id: 'rel-1', label: 'Serving' },
+      { id: 'rel-2', label: 'Aggregation' },
+    ])
+    expect(wrapper.find('select').exists()).toBe(false)
+
+    await select.vm.$emit('update:modelValue', 'rel-2')
+    expect(wrapper.emitted('bindLinkRelation')).toEqual([['rel-2']])
+  })
+
+  it('uses SearchableSelect for interactive diagram property', async () => {
+    const wrapper = mount(ModelPropertiesPanel, {
+      props: {
+        activeNotationId: 'not-1',
+        selectedNode: {
+          id: 'node-1',
+          name: 'App',
+          modelId: 'm1',
+          ownerId: 'u1',
+          nodeTypeId: 'nt-1',
+          parsedAttrs: {
+            treeOrder: 0,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: { target: 'd1' },
+          },
+        },
+        selectedLink: null,
+        nodeBindingComponentId: null,
+        linkBindingRelationId: null,
+        availableComponents: [],
+        availableRelations: [],
+        nodeScopedValues: {},
+        linkScopedValues: {},
+        nodeTypeCustomProperties: [
+          {
+            id: 'p-diag',
+            name: 'target',
+            type: 'string',
+            required: false,
+            min: null,
+            max: null,
+            interactive: true,
+            interactiveKind: 'diagram',
+          },
+        ],
+        nodeTypeScopedValues: { target: 'd1' },
+        diagrams: [
+          { id: 'd1', label: 'Overview 1.0.0' },
+          { id: 'd2', label: 'Landscape 1.0.0' },
+        ],
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+          ToggleSwitch: true,
+        },
+      },
+    })
+
+    const selects = wrapper.findAllComponents({ name: 'SearchableSelect' })
+    const diagramSelect = selects.find(item =>
+      (item.props('options') as { id: string }[]).some(option => option.id === 'd1')
+    )
+    expect(diagramSelect).toBeDefined()
+    expect(diagramSelect!.props('modelValue')).toBe('d1')
+    expect(diagramSelect!.props('allowEmpty')).toBe(true)
+    expect(wrapper.find('select').exists()).toBe(false)
+
+    await diagramSelect!.vm.$emit('update:modelValue', 'd2')
+    expect(wrapper.emitted('setNodeTypePropertyValue')).toEqual([['target', 'd2']])
   })
 })

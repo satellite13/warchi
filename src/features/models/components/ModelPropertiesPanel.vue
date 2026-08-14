@@ -116,6 +116,14 @@ const componentSelectOptions = computed(() =>
   props.availableComponents.map(component => ({ id: component.id, label: component.name }))
 )
 
+const relationSelectOptions = computed(() =>
+  props.availableRelations.map(relation => ({ id: relation.id, label: relation.name }))
+)
+
+const diagramSelectOptions = computed(() =>
+  props.diagrams.map(diagram => ({ id: diagram.id, label: diagram.label }))
+)
+
 type NodePropSectionKey = 'node-type' | 'notation-component'
 
 const nodePropertyDisplaySections = computed(() => {
@@ -282,7 +290,7 @@ const nodeEditorBlocks = computed(
                 :search-placeholder="t('common.search')"
                 :empty-text="t('common.nothingFound')"
                 :disabled="readOnly || !activeNotationId || availableComponents.length === 0"
-                class="mp-component-select"
+                class="mp-search-select"
                 @update:model-value="emit('bindNodeComponent', $event)"
               />
             </section>
@@ -323,34 +331,26 @@ const nodeEditorBlocks = computed(
                       {{ nodePropertyDiagramToken(block.section.key, property.name) }}
                     </span>
                   </label>
-                  <select
+                  <SearchableSelect
                     v-if="
                       property.interactive &&
                       property.interactiveKind === 'diagram' &&
                       property.type === 'string' &&
                       diagrams.length > 0
                     "
-                    class="form-select form-select--sm"
+                    :model-value="String(block.section.values[property.name] ?? '')"
+                    :options="diagramSelectOptions"
+                    :placeholder="t('diagram.selectDiagram')"
+                    :search-placeholder="t('common.search')"
+                    :empty-text="t('common.nothingFound')"
                     :disabled="readOnly"
-                    :value="String(block.section.values[property.name] ?? '')"
-                    @change="
-                      !readOnly &&
-                        emitNodePropertyChange(
-                          block.section.key,
-                          property.name,
-                          ($event.target as HTMLSelectElement).value
-                        )
+                    allow-empty
+                    :empty-label="t('diagram.selectDiagram')"
+                    class="mp-search-select"
+                    @update:model-value="
+                      !readOnly && emitNodePropertyChange(block.section.key, property.name, $event)
                     "
-                  >
-                    <option value="">{{ t('diagram.selectDiagram') }}</option>
-                    <option
-                      v-for="d in diagrams"
-                      :key="d.id"
-                      :value="d.id"
-                    >
-                      {{ d.label }}
-                    </option>
-                  </select>
+                  />
                   <div
                     v-else-if="
                       property.interactive &&
@@ -450,21 +450,16 @@ const nodeEditorBlocks = computed(
 
           <section class="mp-section">
             <span class="mp-section__title">{{ t('diagram.notationRelation') }}</span>
-            <select
-              class="form-select form-select--sm"
+            <SearchableSelect
+              :model-value="linkBindingRelationId || ''"
+              :options="relationSelectOptions"
+              :placeholder="t('diagram.selectRelation')"
+              :search-placeholder="t('common.search')"
+              :empty-text="t('common.nothingFound')"
               :disabled="readOnly || !activeNotationId || availableRelations.length === 0"
-              :value="linkBindingRelationId || ''"
-              @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="" disabled>{{ t('diagram.selectRelation') }}</option>
-              <option
-                v-for="relation in availableRelations"
-                :key="relation.id"
-                :value="relation.id"
-              >
-                {{ relation.name }}
-              </option>
-            </select>
+              class="mp-search-select"
+              @update:model-value="emit('bindLinkRelation', $event)"
+            />
           </section>
 
           <section v-if="linkProperties.length > 0" class="mp-section">
@@ -511,33 +506,6 @@ const nodeEditorBlocks = computed(
   flex-direction: column;
   font-size: 12px;
   color: var(--base-text);
-}
-
-/* ---- Empty state ---- */
-.mp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 48px 24px;
-  flex: 1;
-}
-
-.mp-empty__graphic {
-  color: var(--border-strong);
-  opacity: 0.6;
-}
-
-.mp-empty__text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.mp-empty__hint {
-  font-size: 11px;
-  color: var(--text-subtle);
 }
 
 /* ---- Type badge ---- */
@@ -615,13 +583,12 @@ const nodeEditorBlocks = computed(
   letter-spacing: 0.04em;
 }
 
-.mp-field__input-wrap :deep(.form-input),
 .mp-section > .form-select,
 .mp-field > .form-select {
   font-size: 12px;
 }
 
-.mp-component-select :deep(.searchable-select__control) {
+.mp-search-select :deep(.searchable-select__control) {
   padding: 5px 8px;
   font-size: 12px;
 }
@@ -689,17 +656,6 @@ const nodeEditorBlocks = computed(
   font-size: 10px;
   color: var(--text-subtle);
   user-select: all;
-}
-
-.mp-field__input-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mp-field__error {
-  font-size: 11px;
-  color: var(--danger);
 }
 
 .mp-doc-pick {

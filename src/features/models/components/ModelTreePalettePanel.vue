@@ -12,8 +12,8 @@ import LazyIconImg from "@/components/forms/LazyIconImg.vue"
 import SearchInput from "@/components/forms/SearchInput.vue"
 import EmptyState from "@/components/list/EmptyState.vue"
 
-/** Fixed row height for virtualization (padding 9+9 + mini-btn 22). */
-const TREE_ROW_HEIGHT = 40
+/** Fixed row height for virtualization (padding 9+9 + btn--icon 24). */
+const TREE_ROW_HEIGHT = 42
 const TREE_VIRTUAL_OVERSCAN = 10
 const DRAG_SCROLL_EDGE_PX = 40
 const DRAG_SCROLL_STEP_PX = 18
@@ -546,21 +546,21 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
       <div class="panel__header-actions">
         <button
           type="button"
-          class="mini-btn"
-          :class="{ 'mini-btn--active': !!syncSelectionEnabled }"
+          class="btn--icon"
+          :class="{ 'btn--icon--active': !!syncSelectionEnabled }"
           :title="syncSelectionEnabled ? t('models.disableSelectionSync') : t('models.enableSelectionSync')"
           @click="emit('toggleSyncSelection')"
         >
-          <UiIcon name="swap_horiz" />
+          <UiIcon name="sync_alt" />
         </button>
-        <button type="button" class="mini-btn" :title="t('models.addRootFolder')" @click="emit('createFolder', null)">
+        <button type="button" class="btn--icon" :title="t('models.addRootFolder')" @click="emit('createFolder', null)">
           <UiIcon name="create_new_folder" />
         </button>
-        <button type="button" class="mini-btn" :title="t('models.addRootNode')" @click="emit('createNode', null)">
+        <button type="button" class="btn--icon" :title="t('models.addRootNode')" @click="emit('createNode', null)">
           <UiIcon name="add_box" />
         </button>
-        <button type="button" class="mini-btn" :title="t('models.createDiagramTitle')" @click="emit('createDiagram', null)">
-          <UiIcon name="add_chart" />
+        <button type="button" class="btn--icon" :title="t('models.createDiagramTitle')" @click="emit('createDiagram', null)">
+          <UiIcon name="dashboard" />
         </button>
       </div>
     </div>
@@ -662,7 +662,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 <button
                   v-if="isDirectory(row.node)"
                   type="button"
-                  class="mini-btn"
+                  class="btn--icon"
                   :title="t('models.addChildFolder')"
                   @click.stop="emit('createFolder', row.node.id)"
                 >
@@ -671,7 +671,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 <button
                   v-if="isDirectory(row.node)"
                   type="button"
-                  class="mini-btn"
+                  class="btn--icon"
                   :title="t('models.addChildNode')"
                   @click.stop="emit('createNode', row.node.id)"
                 >
@@ -680,16 +680,16 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 <button
                   v-if="isDirectory(row.node)"
                   type="button"
-                  class="mini-btn"
+                  class="btn--icon"
                   :title="t('models.createDiagramTitle')"
                   @click.stop="emit('createDiagram', row.node.id)"
                 >
-                  <UiIcon name="add_chart" />
+                  <UiIcon name="dashboard" />
                 </button>
                 <button
                   v-if="isDirectory(row.node)"
                   type="button"
-                  class="mini-btn"
+                  class="btn--icon"
                   :title="t('models.renameFolder')"
                   @click.stop="startRenameNode(row.node)"
                 >
@@ -697,7 +697,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 </button>
                 <button
                   type="button"
-                  class="mini-btn mini-btn--danger"
+                  class="btn--icon btn--icon--danger"
                   :title="t('common.delete')"
                   @click.stop="emit('deleteNode', row.node.id)"
                 >
@@ -723,7 +723,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
               :title="t('models.openDiagramDoubleClick')"
               @dblclick="emit('openDiagram', row.diagram.id)"
             >
-              <UiIcon name="table_chart" />
+              <UiIcon name="dashboard" />
               <span>{{ row.diagram.name }}</span>
               <span
                 v-if="diagramLockFor(row.diagram.id)"
@@ -739,7 +739,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
               <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
             </button>
             <div v-else class="diagram-row__select diagram-row__rename-wrap">
-              <UiIcon name="table_chart" />
+              <UiIcon name="dashboard" />
               <input
                 v-model="renamingDiagramName"
                 class="diagram-row__rename-input"
@@ -753,7 +753,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
             <button
               v-if="renamingDiagramId !== row.diagram.id"
               type="button"
-              class="mini-btn diagram-row__edit-btn"
+              class="btn--icon diagram-row__edit-btn"
               :title="t('models.renameDiagram')"
               @click.stop="startRenameDiagram(row.diagram)"
             >
@@ -761,14 +761,14 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
             </button>
             <button
               type="button"
-              class="mini-btn mini-btn--danger"
+              class="btn--icon btn--icon--danger"
               @click="emit('deleteDiagram', row.diagram.id)"
             >
               <UiIcon name="delete" />
             </button>
           <button
             type="button"
-            class="mini-btn diagram-row__copy-btn"
+            class="btn--icon diagram-row__copy-btn"
             :title="t('models.diagramCopy.title')"
             @click.stop="emit('copyDiagramToModel', row.diagram.id)"
           >
@@ -782,12 +782,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 </template>
 
 <style scoped>
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 .panel {
   display: flex;
   flex-direction: column;
@@ -834,47 +828,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.icon-btn,
-.mini-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.icon-btn .ui-icon,
-.mini-btn .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.icon-btn:hover,
-.mini-btn:hover {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.mini-btn--danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-soft);
-}
-
-.mini-btn--active {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: var(--primary-soft);
 }
 
 .panel__search {
@@ -924,10 +877,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-
-.tree-node--nested {
-  margin-left: 14px;
 }
 
 .tree-node__row {
@@ -1043,7 +992,10 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 }
 
 .tree-node__icon-symbol,
-.tree-node__icon-svg {
+.tree-node__icon-svg,
+.tree-node__select :deep(.tree-node__icon-symbol),
+.diagram-row__select :deep(.ui-icon),
+.diagram-row__rename-wrap :deep(.ui-icon) {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
@@ -1080,13 +1032,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   opacity: 1;
 }
 
-.tree-node__children {
-  margin-left: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .diagram-row {
   display: flex;
   align-items: center;
@@ -1115,14 +1060,14 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   border-left-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
-.diagram-row .mini-btn--danger,
+.diagram-row .btn--icon--danger,
 .diagram-row .diagram-row__edit-btn,
 .diagram-row .diagram-row__copy-btn {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.diagram-row:hover .mini-btn--danger,
+.diagram-row:hover .btn--icon--danger,
 .diagram-row:hover .diagram-row__edit-btn,
 .diagram-row:hover .diagram-row__copy-btn {
   opacity: 1;

@@ -405,13 +405,6 @@ function setWhenBoolean(groupIdx: number, branchIdx: number, value: boolean): vo
 }
 
 /* ── Shared controls ───────────────────────────────────────────── */
-.a5__row {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
 .a5 select,
 .a5 input[type="text"],
 .a5 input[type="number"] {
@@ -490,12 +483,5 @@ function setWhenBoolean(groupIdx: number, branchIdx: number, value: boolean): vo
   font-size: 10px;
 }
 
-/* ── Action row ────────────────────────────────────────────────── */
-.a5__btn-row {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
 </style>
 

@@ -157,7 +157,7 @@ const emit = defineEmits<{
   transition: all 0.15s ease;
 }
 
-.deh-icon-btn .ui-icon {
+button.deh-icon-btn .ui-icon {
   width: 16px;
   height: 16px;
 }

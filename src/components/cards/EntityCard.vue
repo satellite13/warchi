@@ -107,7 +107,7 @@ const formattedUpdatedAt = computed(() => {
           >
             <UiIcon
               :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-              name="account_tree"
+              name="device_hub"
             />
           </button>
           <button

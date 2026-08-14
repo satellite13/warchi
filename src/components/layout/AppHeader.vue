@@ -39,7 +39,7 @@ const handleLogout = async () => {
         <span class="user-email">{{ userDisplayName }}</span>
         <span v-if="currentUser?.role" class="user-role">{{ currentUser.role }}</span>
         <button class="logout-button" type="button" @click="handleLogout">
-          <UiIcon name="exit_to_app" />
+          <UiIcon name="logout" />
         </button>
       </template>
       <RouterLink

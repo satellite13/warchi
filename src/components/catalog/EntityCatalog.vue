@@ -20,6 +20,7 @@ import ShareAccessModal from "../modals/ShareAccessModal.vue";
 import BaseModal from "../modals/BaseModal.vue";
 import IconPicker from "../forms/IconPicker.vue";
 import VersionTreeModal from "../modals/VersionTreeModal.vue";
+import AppAlert from "@/components/ui/AppAlert.vue";
 
 const props = defineProps<{
   entityListConfig: EntityListConfig<VersionedEntity & { attrs?: string | null }>
@@ -268,9 +269,16 @@ function handleExport(group: {
       </div>
     </header>
 
-    <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
-    <div v-if="actionStatusMessage && !actionBusy" class="catalog-action-status">
-      {{ actionStatusMessage }}
+    <div
+      v-if="actionErrorMessage || (actionStatusMessage && !actionBusy)"
+      class="catalog-banners"
+    >
+      <AppAlert v-if="actionErrorMessage" type="error" :message="actionErrorMessage" />
+      <AppAlert
+        v-if="actionStatusMessage && !actionBusy"
+        type="info"
+        :message="actionStatusMessage"
+      />
     </div>
 
     <section class="model-grid" :aria-busy="actionBusy || undefined">
@@ -281,7 +289,7 @@ function handleExport(group: {
         </p>
       </div>
       <CardSkeleton v-else-if="isLoading" :count="4" />
-      <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
+      <AppAlert v-else-if="errorMessage" type="error" :message="errorMessage" />
       <EmptyState
         v-else-if="filteredItems.length === 0"
         :title="t(`${i18nPrefix}.notFoundTitle`)"
@@ -463,30 +471,11 @@ function handleExport(group: {
   margin: -8px;
 }
 
-.catalog-action-error,
-.error-state {
-  width: 100%;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.catalog-action-error,
-.catalog-action-status {
+.catalog-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 12px;
-}
-
-.catalog-action-status {
-  width: 100%;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  font-size: 14px;
-  border: 1px solid var(--border-strong);
 }
 
 .catalog-busy {

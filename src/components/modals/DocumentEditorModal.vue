@@ -243,7 +243,7 @@ function formatSize(bytes: number): string {
             </button>
 
             <button type="button" class="doc-modal__close" @click="handleClose">
-              <UiIcon name="cancel" />
+              <UiIcon name="close" />
             </button>
           </div>
         </div>

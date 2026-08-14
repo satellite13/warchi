@@ -61,7 +61,7 @@ const clear = () => {
 
 .search-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
+  box-shadow: var(--focus-ring);
   background: var(--surface);
 }
 
@@ -116,11 +116,11 @@ const clear = () => {
 .search-box--compact .search-input {
   padding: 7px 10px 7px 34px;
   font-size: 13px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .search-box--compact .search-input:focus {
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.12);
+  box-shadow: var(--focus-ring-sm);
 }
 
 .search-box--compact .clear-button {

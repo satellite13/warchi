@@ -168,43 +168,8 @@ const { t } = useI18n()
 }
 </style>
 
-<!-- Shared classes for action buttons / empty rows placed in slots -->
+<!-- Shared empty-row class for lists placed in the default slot -->
 <style>
-.ess-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.ess-action-btn .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.ess-action-btn:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
-.ess-action-btn--active {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
 .ess-empty {
   padding: 12px 10px;
   font-size: 13px;

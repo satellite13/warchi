@@ -153,7 +153,7 @@ const saveTitle = computed(() =>
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
   {
-    icon: 'open_with',
+    icon: 'pan_tool',
     event: 'toggle-navigation-mode',
     title: t('toolbar.navigationMode'),
     active: props.navigationOnlyMode,
@@ -198,7 +198,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   {
-    icon: 'format_align_center',
+    icon: 'auto_awesome_mosaic',
     event: 'auto-layout-nodes',
     title: t('toolbar.autoLayoutNodes'),
     disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
@@ -217,13 +217,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   {
-    icon: 'description',
+    icon: 'code',
     event: 'export-diagram-svg',
     title: t('toolbar.exportDiagramSvg'),
     disabled: !props.hasActiveDiagram,
   },
   {
-    icon: 'link',
+    icon: 'ios_share',
     event: 'share-diagram-image',
     title: t('toolbar.shareDiagramImage'),
     disabled: !props.hasActiveDiagram,
@@ -457,7 +457,7 @@ function spectatorInitials(name: string): string {
             :disabled="!canCreateBaseline"
             @click="emit('createBaseline')"
           >
-            <UiIcon name="add_box" />
+            <UiIcon name="bookmark_add" />
           </button>
           <button
             v-if="modelId"
@@ -466,7 +466,7 @@ function spectatorInitials(name: string): string {
             :title="t('models.compareDiagramVersions')"
             @click="goToDiagramCompare"
           >
-            <UiIcon name="compare" />
+            <UiIcon name="compare_arrows" />
           </button>
           <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
         </template>

@@ -85,14 +85,14 @@ export function useModelToolbarState(
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: 'my_location',
+      icon: 'grid_3x3',
       event: 'toggle-snap',
       title: t('toolbar.snapToGrid'),
       active: snapEnabled.value,
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: 'align_horizontal_left',
+      icon: 'align_justify_center',
       event: 'toggle-align',
       title: t('toolbar.smartAlign'),
       active: alignEnabled.value,
@@ -106,7 +106,7 @@ export function useModelToolbarState(
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: 'commit',
+      icon: 'push_pin',
       event: 'toggle-lock-anchors',
       title: t('toolbar.lockLinkAnchors'),
       active: lockAnchorsEnabled.value,
@@ -120,7 +120,7 @@ export function useModelToolbarState(
       disabled: !hasActiveDiagram.value,
     },
     {
-      icon: 'account_tree',
+      icon: 'join_inner',
       event: 'toggle-auto-link-in-groups',
       title: t('models.autoLinkInGroups'),
       active: autoLinkInGroups.value,

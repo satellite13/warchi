@@ -86,6 +86,51 @@
   height: 16px;
 }
 
+/* ─── Icon (sidebar / tree; same chrome as .deh-icon-btn; do not combine with .btn) ─── */
+.btn--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  appearance: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+button.btn--icon .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.btn--icon:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn--icon--active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn--icon--danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
 /* ─── Ghost ──────────────────────────────────── */
 .btn--ghost {
   background: var(--surface-muted);

@@ -89,8 +89,8 @@ const linkTypesExpanded = ref(true)
     <template #actions>
       <button
         type="button"
-        class="ess-action-btn"
-        :class="{ 'ess-action-btn--active': selectionMode }"
+        class="btn--icon"
+        :class="{ 'btn--icon--active': selectionMode }"
         :title="t('types.selectMode')"
         @click="emit('toggleSelectionMode')"
       >
@@ -99,7 +99,7 @@ const linkTypesExpanded = ref(true)
       <button
         v-if="!selectionMode"
         type="button"
-        class="ess-action-btn"
+        class="btn--icon"
         :title="t('types.addNodeType')"
         @click="emit('addType', 'node')"
       >
@@ -108,7 +108,7 @@ const linkTypesExpanded = ref(true)
       <button
         v-if="!selectionMode"
         type="button"
-        class="ess-action-btn"
+        class="btn--icon"
         :title="t('types.addLinkType')"
         @click="emit('addType', 'link')"
       >

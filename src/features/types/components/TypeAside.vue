@@ -66,7 +66,7 @@ const usageCount = computed(() =>
       <EmptyState
         v-if="isLoadingUsages"
         variant="compact"
-        icon="progress_activity"
+        icon="sync"
         :title="t('common.loading')"
       />
       <EmptyState
@@ -138,15 +138,6 @@ const usageCount = computed(() =>
   }
 }
 
-@keyframes pulseGlow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
 
 .type-aside {
   width: 280px;
@@ -203,24 +194,6 @@ const usageCount = computed(() =>
 .type-aside__expand-btn:hover {
   background: var(--primary-soft);
   color: var(--primary);
-}
-
-.type-aside__empty {
-  font-size: 13px;
-  color: var(--text-subtle);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.loading-pulse {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--primary);
-  animation: pulseGlow 1s ease-in-out infinite;
-  flex-shrink: 0;
 }
 
 .json-preview {

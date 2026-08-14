@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed} from "vue";
-import {useRouter} from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {useAuth} from "../../composables/useAuth";
 import {getUserDisplayName} from "../../utils/userDisplay";
@@ -10,9 +10,15 @@ import NavigationMenu from "../menu/NavigationMenu.vue";
 import LanguageSwitcher from "./LanguageSwitcher.vue";
 
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 const {currentUser, logout} = useAuth();
+const isSignedIn = computed(() => currentUser.value != null);
 const userDisplayName = computed(() => getUserDisplayName(currentUser.value, t("common.user")));
+const signInTo = computed(() => ({
+  name: "login",
+  query: { redirect: route.fullPath },
+}));
 
 const handleLogout = async () => {
   await logout();
@@ -28,12 +34,22 @@ const handleLogout = async () => {
     </div>
     <div class="user-info">
       <LanguageSwitcher />
-      <UserAvatar :label="userDisplayName" size="sm"/>
-      <span class="user-email">{{ userDisplayName }}</span>
-      <span v-if="currentUser?.role" class="user-role">{{ currentUser.role }}</span>
-      <button class="logout-button" type="button" @click="handleLogout">
-        <UiIcon name="exit_to_app" />
-      </button>
+      <template v-if="isSignedIn">
+        <UserAvatar :label="userDisplayName" size="sm"/>
+        <span class="user-email">{{ userDisplayName }}</span>
+        <span v-if="currentUser?.role" class="user-role">{{ currentUser.role }}</span>
+        <button class="logout-button" type="button" @click="handleLogout">
+          <UiIcon name="exit_to_app" />
+        </button>
+      </template>
+      <RouterLink
+        v-else
+        :to="signInTo"
+        class="btn btn--primary btn--sm"
+        data-testid="header-sign-in"
+      >
+        {{ t("auth.submitLogin") }}
+      </RouterLink>
     </div>
   </header>
 </template>

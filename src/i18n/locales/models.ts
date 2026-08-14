@@ -41,7 +41,16 @@ export const modelsMessages = {
         actionCreate: 'Создать',
         actionSkip: 'Пропустить',
         blockersTitle: 'Блокирующие проблемы',
+        blockers: {
+          UNRESOLVED_EDGE_ENDPOINT:
+            'Не разрешён конец связи или сама связь. Сопоставьте или создайте связанные ноды и связи, не пропускайте их.',
+        },
         warningsTitle: 'Предупреждения',
+        warnings: {
+          DOCUMENT_NOT_COPIED: 'Вложение-документ не было скопировано.',
+          NOTATION_COMPONENT_NOT_MAPPED: 'Компонент нотации не удалось сопоставить.',
+          NOTATION_RELATION_NOT_MAPPED: 'Relation нотации не удалось сопоставить.',
+        },
         confirmSummary: 'Что будет скопировано',
         finish: 'Завершить',
         back: 'Назад',
@@ -608,7 +617,16 @@ export const modelsMessages = {
         actionCreate: 'Create',
         actionSkip: 'Skip',
         blockersTitle: 'Blocking issues',
+        blockers: {
+          UNRESOLVED_EDGE_ENDPOINT:
+            'An edge endpoint or link is unresolved. Match or create the related nodes and links instead of skipping them.',
+        },
         warningsTitle: 'Warnings',
+        warnings: {
+          DOCUMENT_NOT_COPIED: 'Document attachment was not copied.',
+          NOTATION_COMPONENT_NOT_MAPPED: 'A notation component could not be mapped.',
+          NOTATION_RELATION_NOT_MAPPED: 'A notation relation could not be mapped.',
+        },
         confirmSummary: 'Copy summary',
         finish: 'Finish',
         back: 'Back',

@@ -9,9 +9,15 @@ import type { ModelData, NotationData, PaginatedResponse } from '@/types/entitie
 import { paginatedContent } from '@/utils/paginatedResponse'
 import {
   pickDefaultTargetNotationId,
+  type DiagramCopyEdgeBlocker,
   type DiagramCopyEntityPreview,
   type DiagramCopyResolutionAction,
+  type DiagramCopyWarning,
 } from '../composables/diagramCopyApi'
+import {
+  diagramCopyBlockerI18nKey,
+  diagramCopyWarningI18nKey,
+} from '../composables/diagramCopyIssueText'
 import { fetchAllByModelId } from '../composables/modelEditorLoadModel'
 import { useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
 
@@ -28,7 +34,7 @@ const emit = defineEmits<{
   committed: [payload: { targetModelId: string; diagramId: string }]
 }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const wizard = useDiagramCopyWizard({
   sourceModelId: computed(() => props.sourceModelId),
 })
@@ -77,6 +83,16 @@ const resolvedLinks = computed(
 
 function isEditableModel(model: ModelData): boolean {
   return model.accessPermission !== 'VIEW'
+}
+
+function formatBlocker(blocker: DiagramCopyEdgeBlocker): string {
+  const key = diagramCopyBlockerI18nKey(blocker)
+  return key && te(key) ? t(key) : blocker.reason
+}
+
+function formatWarning(warning: DiagramCopyWarning): string {
+  const key = diagramCopyWarningI18nKey(warning)
+  return te(key) ? t(key) : warning.message
 }
 
 async function loadCatalog(): Promise<void> {
@@ -360,7 +376,7 @@ watch(wizard.targetModelId, modelId => {
           <h4>{{ t('models.diagramCopy.blockersTitle') }}</h4>
           <ul>
             <li v-for="blocker in wizard.preview.value.blockers" :key="blocker.edgeInstanceId">
-              {{ blocker.reason }}
+              {{ formatBlocker(blocker) }}
             </li>
           </ul>
         </section>
@@ -406,7 +422,7 @@ watch(wizard.targetModelId, modelId => {
           <h4>{{ t('models.diagramCopy.warningsTitle') }}</h4>
           <ul>
             <li v-for="warning in wizard.preview.value.warnings" :key="`${warning.code}-${warning.message}`">
-              {{ warning.message }}
+              {{ formatWarning(warning) }}
             </li>
           </ul>
         </section>
@@ -428,7 +444,7 @@ watch(wizard.targetModelId, modelId => {
           <h4>{{ t('models.diagramCopy.blockersTitle') }}</h4>
           <ul>
             <li v-for="blocker in wizard.preview.value.blockers" :key="blocker.edgeInstanceId">
-              {{ blocker.reason }}
+              {{ formatBlocker(blocker) }}
             </li>
           </ul>
         </section>

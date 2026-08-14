@@ -4,13 +4,22 @@ import { pagedListParams } from "@/api/queryHelpers"
 import { paginatedContent } from "@/utils/paginatedResponse"
 import type { PaginatedResponse } from "../types/entities"
 import type { ModelData, NotationData } from "../types/entities"
-import type { NodeTypeResponse, LinkTypeResponse, AuditLogResponse } from "../types/api"
+import type { NodeTypeResponse, LinkTypeResponse, DiagramResponse } from "../types/api"
 
 export interface DashboardStats {
   models: number
   notations: number
   nodeTypes: number
   linkTypes: number
+}
+
+export interface DashboardRecentDiagram {
+  id: string
+  name: string
+  version: string
+  modelId: string
+  modelName: string
+  updatedAt: string | null
 }
 
 interface DashboardStatsApiResponse {
@@ -35,14 +44,7 @@ interface DashboardRecentApiResponse {
     ownerId: string
     updatedAt: string | null
   }>
-  activity: Array<{
-    id: string
-    tableName: string
-    operation: string
-    rowId: string
-    changedById: string | null
-    changedAt: string | null
-  }>
+  diagrams: DashboardRecentDiagram[]
 }
 
 function isValidDashboardStats(data: unknown): data is DashboardStatsApiResponse {
@@ -59,7 +61,7 @@ function isValidDashboardStats(data: unknown): data is DashboardStatsApiResponse
 function isValidDashboardRecent(data: unknown): data is DashboardRecentApiResponse {
   if (!data || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
-  return Array.isArray(d.models) && Array.isArray(d.notations) && Array.isArray(d.activity)
+  return Array.isArray(d.models) && Array.isArray(d.notations) && Array.isArray(d.diagrams)
 }
 
 function sortByDateDesc<T>(items: T[], getDate: (item: T) => string | null | undefined): T[] {
@@ -76,7 +78,7 @@ export function useDashboard() {
   const notations = ref<NotationData[]>([])
   const nodeTypes = ref<NodeTypeResponse[]>([])
   const linkTypes = ref<LinkTypeResponse[]>([])
-  const auditLogs = ref<AuditLogResponse[]>([])
+  const diagrams = ref<DashboardRecentDiagram[]>([])
   const statsOverride = ref<DashboardStats | null>(null)
 
   const stats = computed<DashboardStats>(() => {
@@ -102,8 +104,8 @@ export function useDashboard() {
     sortByDateDesc(notations.value, (n) => n.updatedAt).slice(0, 5)
   )
 
-  const recentActivity = computed(() =>
-    sortByDateDesc(auditLogs.value, (a) => a.changedAt).slice(0, 12)
+  const recentDiagrams = computed(() =>
+    sortByDateDesc(diagrams.value, (d) => d.updatedAt).slice(0, 5)
   )
 
   const loadAll = async () => {
@@ -123,7 +125,7 @@ export function useDashboard() {
       statsOverride.value = dashStatsRes.data
       models.value = dashRecentRes.data.models as ModelData[]
       notations.value = dashRecentRes.data.notations as NotationData[]
-      auditLogs.value = dashRecentRes.data.activity as AuditLogResponse[]
+      diagrams.value = dashRecentRes.data.diagrams
       nodeTypes.value = []
       linkTypes.value = []
       isLoading.value = false
@@ -135,20 +137,32 @@ export function useDashboard() {
     const notationsQuery = pagedListParams(0)
     const nodeTypesQuery = pagedListParams(0)
     const linkTypesQuery = pagedListParams(0)
+    const diagramsQuery = pagedListParams(0, 5)
 
-    const [modelsRes, notationsRes, nodeTypesRes, linkTypesRes, auditRes] = await Promise.all([
+    const [modelsRes, notationsRes, nodeTypesRes, linkTypesRes, diagramsRes] = await Promise.all([
       apiGet<PaginatedResponse<ModelData>>(`/models?${modelsQuery.toString()}`),
       apiGet<PaginatedResponse<NotationData>>(`/notations?${notationsQuery.toString()}`),
       apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
       apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${linkTypesQuery.toString()}`),
-      apiGet<PaginatedResponse<AuditLogResponse>>("/audit-log?page=0&size=20")
+      apiGet<PaginatedResponse<DiagramResponse>>(`/diagrams?${diagramsQuery.toString()}`),
     ])
 
     if (modelsRes.success) models.value = paginatedContent(modelsRes.data)
     if (notationsRes.success) notations.value = paginatedContent(notationsRes.data)
     if (nodeTypesRes.success) nodeTypes.value = paginatedContent(nodeTypesRes.data)
     if (linkTypesRes.success) linkTypes.value = paginatedContent(linkTypesRes.data)
-    if (auditRes.success) auditLogs.value = paginatedContent(auditRes.data)
+
+    const modelNameById = new Map(models.value.map((m) => [m.id, m.name]))
+    if (diagramsRes.success) {
+      diagrams.value = paginatedContent(diagramsRes.data).map((d) => ({
+        id: d.id,
+        name: d.name,
+        version: d.version,
+        modelId: d.modelId,
+        modelName: modelNameById.get(d.modelId) ?? '',
+        updatedAt: d.updatedAt ?? null,
+      }))
+    }
 
     isLoading.value = false
   }
@@ -161,6 +175,6 @@ export function useDashboard() {
     totalVersions,
     recentModels,
     recentNotations,
-    recentActivity
+    recentDiagrams,
   }
 }

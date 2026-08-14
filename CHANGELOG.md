@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-08-14
+
+### Added
+- Guests can open in-app documentation; the header shows Sign in instead of a fake user.
+
+### Changed
+- Diagram copy wizard shows localized blocker and warning texts when the preview returns a known issue code.
+
 ## [0.18.3] - 2026-08-13
 
 ### Fixed

@@ -105,6 +105,30 @@ describe('useModelBatchSave', () => {
     expect(request.diagrams.delete).toEqual(['diagram-delete'])
   })
 
+  it('omits canvas attrs when a dirty diagram is still pending hydration', () => {
+    const request = buildBatchSaveRequest(
+      [],
+      [],
+      [
+        createDiagram({
+          id: 'diagram-moved',
+          nodeId: 'folder-1',
+          _isDirty: true,
+          _attrsPending: true,
+          updatedAt: '2026-01-03T00:00:00.000Z',
+        }),
+      ]
+    )
+
+    expect(request.diagrams.update).toEqual([
+      expect.objectContaining({
+        id: 'diagram-moved',
+        nodeId: 'folder-1',
+        attrs: null,
+      }),
+    ])
+  })
+
   it('detects whether a batch request contains changes', () => {
     const emptyRequest = buildBatchSaveRequest([], [], [])
     const changedRequest = buildBatchSaveRequest([createNode({ _isNew: true })], [], [])

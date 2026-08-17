@@ -20,10 +20,15 @@ const mocks = vi.hoisted(() => ({
   saveLinks: vi.fn(),
   saveModelMetadata: vi.fn(),
   saveNodes: vi.fn(),
+  ensureDirtyPendingDiagramAttrsLoaded: vi.fn(),
 }))
 
 vi.mock('../utils/sanitizeDiagramInstances', () => ({
   applyDiagramGarbageSanitizeToState: mocks.applyDiagramGarbageSanitizeToState,
+}))
+
+vi.mock('./ensureDiagramAttrs', () => ({
+  ensureDirtyPendingDiagramAttrsLoaded: mocks.ensureDirtyPendingDiagramAttrsLoaded,
 }))
 
 vi.mock('./useModelBatchSave', () => ({
@@ -140,6 +145,7 @@ describe('executeModelEditorSave', () => {
       data: { id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1', attrs: null },
     })
     mocks.refreshBatchSavedEntityTimestamps.mockResolvedValue(undefined)
+    mocks.ensureDirtyPendingDiagramAttrsLoaded.mockResolvedValue(undefined)
     mocks.batchSave.mockResolvedValue({
       success: true,
       data: { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} },
@@ -195,6 +201,7 @@ describe('executeModelEditorSave', () => {
     })
 
     expect(result).toBe(true)
+    expect(mocks.ensureDirtyPendingDiagramAttrsLoaded).toHaveBeenCalled()
     expect(mocks.applyDiagramGarbageSanitizeToState).toHaveBeenCalled()
     expect(mocks.buildBatchSaveRequest).toHaveBeenCalled()
     expect(mocks.batchSave).not.toHaveBeenCalled()

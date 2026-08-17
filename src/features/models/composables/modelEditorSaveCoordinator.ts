@@ -22,6 +22,7 @@ import {
   saveModelMetadata,
   saveNodes,
 } from './modelEditorSavePipeline'
+import { ensureDirtyPendingDiagramAttrsLoaded } from './ensureDiagramAttrs'
 
 type ExecuteModelEditorSaveOptions = {
   model: Ref<ModelData | null>
@@ -81,6 +82,7 @@ export async function executeModelEditorSave(
     const forceBatch = options.pendingForceBatch.value
     options.pendingForceBatch.value = false
 
+    await ensureDirtyPendingDiagramAttrsLoaded(() => options.state.value)
     applyDiagramGarbageSanitizeToState(options.state.value)
 
     const blankNamedNodes = findBlankNamedBatchNodes(nodes)

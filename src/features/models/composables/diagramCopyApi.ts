@@ -114,6 +114,27 @@ export async function commitDiagramCopy(
 }
 
 /** Prefer the source diagram's notation when it is still in the catalog. */
+export function canMatchDiagramCopyEntity(
+  entity: Pick<DiagramCopyEntityPreview, 'candidates' | 'autoMatchTargetId'>
+): boolean {
+  return entity.candidates.length > 0 || entity.autoMatchTargetId != null
+}
+
+export function diagramCopyMatchCandidates(
+  entity: DiagramCopyEntityPreview
+): DiagramCopyCandidate[] {
+  if (entity.candidates.length > 0) return entity.candidates
+  if (!entity.autoMatchTargetId) return []
+  return [
+    {
+      id: entity.autoMatchTargetId,
+      label: entity.label,
+      stableId: entity.stableId,
+      typeId: entity.typeId,
+    },
+  ]
+}
+
 export function pickDefaultTargetNotationId(
   availableNotations: ReadonlyArray<{ id: string }>,
   sourceNotationId: string | null | undefined

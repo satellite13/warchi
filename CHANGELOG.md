@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-08-17
+
+### Fixed
+- Hidden Diagram-only nodes are removed when their last diagram is deleted.
+- Moving an imported diagram into a folder no longer wipes the canvas on save.
+- The diagram-copy wizard can match an entity that already has an automatic match.
+
 ## [0.21.1] - 2026-08-15
 
 ### Changed

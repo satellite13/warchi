@@ -429,6 +429,7 @@ onMounted(() => {
 .au {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 20px;
   min-height: 0;
 }

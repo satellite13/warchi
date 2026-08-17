@@ -61,6 +61,7 @@ withDefaults(
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
 }
 
 .admin-table-shell__toolbar {
@@ -100,7 +101,9 @@ withDefaults(
 }
 
 .admin-table-shell__card {
-  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);

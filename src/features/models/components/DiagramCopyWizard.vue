@@ -9,6 +9,8 @@ import type { ModelData, NotationData, PaginatedResponse } from '@/types/entitie
 import { paginatedContent } from '@/utils/paginatedResponse'
 import {
   pickDefaultTargetNotationId,
+  canMatchDiagramCopyEntity,
+  diagramCopyMatchCandidates,
   type DiagramCopyEdgeBlocker,
   type DiagramCopyEntityPreview,
   type DiagramCopyResolutionAction,
@@ -173,7 +175,9 @@ function closeWizard(): void {
 function setAction(entity: DiagramCopyEntityPreview, action: DiagramCopyResolutionAction): void {
   const targetId =
     action === 'MATCH'
-      ? (entity.effectiveTargetId ?? entity.autoMatchTargetId ?? entity.candidates[0]?.id)
+      ? (entity.effectiveTargetId ??
+          entity.autoMatchTargetId ??
+          diagramCopyMatchCandidates(entity)[0]?.id)
       : undefined
   if (action === 'MATCH' && !targetId) return
   wizard.setResolution(entity.sourceId, {
@@ -336,7 +340,7 @@ watch(wizard.targetModelId, modelId => {
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
                   :checked="entity.effectiveAction === 'MATCH'"
-                  :disabled="entity.candidates.length === 0"
+                  :disabled="!canMatchDiagramCopyEntity(entity)"
                   @change="setAction(entity, 'MATCH')"
                 />
                 {{ t('models.diagramCopy.actionMatch') }}
@@ -366,7 +370,11 @@ watch(wizard.targetModelId, modelId => {
               :value="entity.effectiveTargetId ?? ''"
               @change="setMatchTarget(entity, ($event.target as HTMLSelectElement).value)"
             >
-              <option v-for="candidate in entity.candidates" :key="candidate.id" :value="candidate.id">
+              <option
+                v-for="candidate in diagramCopyMatchCandidates(entity)"
+                :key="candidate.id"
+                :value="candidate.id"
+              >
                 {{ candidate.label }}
               </option>
             </select>

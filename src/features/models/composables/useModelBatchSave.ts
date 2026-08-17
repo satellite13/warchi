@@ -157,7 +157,9 @@ export function buildBatchSaveRequest(
           version: d.version,
           notationId: d.notationId,
           nodeId: d.nodeId ?? null,
-          attrs: serializeDiagramAttrs(d.parsedAttrs),
+          // Unhydrated list rows have empty parsedAttrs — omit canvas so the
+          // server keeps the stored instances (folder move / rename only).
+          attrs: d._attrsPending ? null : serializeDiagramAttrs(d.parsedAttrs),
           baseUpdatedAt: d.updatedAt ?? null,
         })),
       delete: diagrams.filter(d => d._isDeleted && !d._isNew).map(d => d.id),

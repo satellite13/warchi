@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiGet } from '@/composables/useApi'
 import { createEmptyModelEditorState } from '../types'
-import { ensureDiagramAttrsLoaded } from './ensureDiagramAttrs'
+import {
+  ensureDiagramAttrsLoaded,
+  ensureDirtyPendingDiagramAttrsLoaded,
+} from './ensureDiagramAttrs'
 import { toEditorDiagram, toEditorDiagramPreservingLocalAttrs } from './modelEditorMappers'
 
 vi.mock('@/composables/useApi', () => ({
@@ -74,6 +77,107 @@ describe('ensureDiagramAttrsLoaded', () => {
 
     await ensureDiagramAttrsLoaded(state, 'diagram-1')
     expect(apiGet).not.toHaveBeenCalled()
+  })
+
+  it('keeps a local folder move when hydrating a dirty pending diagram', async () => {
+    const state = createEmptyModelEditorState()
+    state.diagrams = [
+      {
+        ...toEditorDiagram({
+          id: 'diagram-1',
+          name: 'D',
+          version: '1.0.0',
+          modelId: 'model-1',
+          ownerId: 'owner-1',
+          notationId: 'notation-1',
+          nodeId: null,
+          attrs: null,
+          createdAt: null,
+          updatedAt: null,
+        }),
+        nodeId: 'folder-1',
+        _isDirty: true,
+      },
+    ]
+
+    vi.mocked(apiGet).mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'diagram-1',
+        name: 'D',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: '{"instances":{"nodes":[{"id":"i1","modelNodeId":"n1"}],"edges":[]}}',
+        createdAt: null,
+        updatedAt: null,
+      },
+    })
+
+    const hydrated = await ensureDiagramAttrsLoaded(() => state, 'diagram-1')
+
+    expect(hydrated?.nodeId).toBe('folder-1')
+    expect(hydrated?._isDirty).toBe(true)
+    expect(hydrated?.parsedAttrs.instances.nodes).toHaveLength(1)
+    expect(state.diagrams[0]?.nodeId).toBe('folder-1')
+  })
+
+  it('ensureDirtyPendingDiagramAttrsLoaded hydrates only dirty pending diagrams', async () => {
+    const state = createEmptyModelEditorState()
+    state.diagrams = [
+      {
+        ...toEditorDiagram({
+          id: 'dirty-pending',
+          name: 'A',
+          version: '1.0.0',
+          modelId: 'model-1',
+          ownerId: 'owner-1',
+          notationId: 'notation-1',
+          nodeId: null,
+          attrs: null,
+          createdAt: null,
+          updatedAt: null,
+        }),
+        _isDirty: true,
+      },
+      toEditorDiagram({
+        id: 'clean-pending',
+        name: 'B',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: null,
+        createdAt: null,
+        updatedAt: null,
+      }),
+    ]
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'dirty-pending',
+        name: 'A',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: '{"instances":{"nodes":[{"id":"i1","modelNodeId":"n1"}],"edges":[]}}',
+        createdAt: null,
+        updatedAt: null,
+      },
+    })
+
+    await ensureDirtyPendingDiagramAttrsLoaded(() => state)
+
+    expect(apiGet).toHaveBeenCalledTimes(1)
+    expect(apiGet).toHaveBeenCalledWith('/diagrams/dirty-pending')
+    expect(state.diagrams[0]?._attrsPending).toBe(false)
+    expect(state.diagrams[1]?._attrsPending).toBe(true)
   })
 })
 

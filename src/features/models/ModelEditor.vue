@@ -45,6 +45,7 @@ import {
   isEdgeAnchorInstance,
   isEdgeAnchorModelNodeId,
 } from './utils/diagramOnlyInstances'
+import { canvasModelNodeIds, orphanedUntypedNodeIds } from './utils/orphanedDiagramOnlyNodes'
 import { removeOrphanEdgeAnchors } from './utils/edgeAnchorSync'
 import {
   getDiagramScopedLinkValues,
@@ -891,6 +892,9 @@ const {
   },
   markNodeDirty,
   markDiagramDirty,
+  ensureDiagramAttrsLoaded: diagramId => {
+    void ensureDiagramAttrsLoaded(() => state.value, diagramId)
+  },
 })
 
 const {
@@ -1378,6 +1382,7 @@ const markNodeDeleted = (nodeId: string) => {
 const markDiagramDeleted = (diagramId: string) => {
   const row = state.value.diagrams.find(item => item.id === diagramId)
   if (!row) return
+  const deletedCanvasNodeIds = canvasModelNodeIds(row.parsedAttrs.instances)
   if (row._isNew) {
     state.value.diagrams = state.value.diagrams.filter(item => item.id !== diagramId)
   } else {
@@ -1385,6 +1390,21 @@ const markDiagramDeleted = (diagramId: string) => {
     row._isDirty = true
   }
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
+
+  const remainingCanvasNodeIds = state.value.diagrams
+    .filter(diagram => diagram.id !== diagramId && !diagram._isDeleted)
+    .flatMap(diagram => canvasModelNodeIds(diagram.parsedAttrs.instances))
+  const untypedNodeTypeIds = new Set(
+    state.value.nodeTypes.filter(type => isUntypedTypeName(type.name)).map(type => type.id),
+  )
+  for (const nodeId of orphanedUntypedNodeIds({
+    deletedCanvasNodeIds,
+    remainingCanvasNodeIds,
+    nodes: state.value.nodes,
+    untypedNodeTypeIds,
+  })) {
+    markNodeDeleted(nodeId)
+  }
 }
 
 const openNodeDeleteDialog = (

@@ -6,7 +6,9 @@ import type {
 } from './diagramCopyApi'
 import {
   buildResolutionsFromPreview,
+  canMatchDiagramCopyEntity,
   commitDiagramCopy,
+  diagramCopyMatchCandidates,
   pickDefaultTargetNotationId,
   previewDiagramCopy,
 } from './diagramCopyApi'
@@ -190,5 +192,42 @@ describe('diagram copy API', () => {
       '/models/model%2Fwith%20space/diagram-copies/commit',
       commitRequest
     )
+  })
+})
+
+describe('canMatchDiagramCopyEntity', () => {
+  it('allows match when only an auto-match target exists', () => {
+    expect(
+      canMatchDiagramCopyEntity({
+        autoMatchTargetId: 'target-1',
+        candidates: [],
+      })
+    ).toBe(true)
+  })
+
+  it('disallows match when there is neither a candidate nor an auto-match', () => {
+    expect(canMatchDiagramCopyEntity({ autoMatchTargetId: null, candidates: [] })).toBe(false)
+  })
+})
+
+describe('diagramCopyMatchCandidates', () => {
+  it('synthesizes a candidate from the auto-match when the list is empty', () => {
+    expect(
+      diagramCopyMatchCandidates(
+        createEntityPreview({
+          label: 'Техник',
+          autoMatchTargetId: 'target-1',
+          autoMatchReason: 'NAME_AND_TYPE',
+          candidates: [],
+        })
+      )
+    ).toEqual([
+      {
+        id: 'target-1',
+        label: 'Техник',
+        stableId: null,
+        typeId: null,
+      },
+    ])
   })
 })

@@ -53,6 +53,13 @@ export async function ensureDiagramAttrsLoaded(
         _isDirty: previous._isDirty,
         _isDeleted: previous._isDeleted,
       }
+      // Tree move / rename can happen while GET is in flight — keep local placement.
+      if (previous._isDirty || previous._isNew) {
+        next.nodeId = previous.nodeId
+        next.name = previous.name
+        next.version = previous.version
+        next.notationId = previous.notationId
+      }
       const diagrams = [...latest.diagrams]
       diagrams[writeIndex] = next
       latest.diagrams = diagrams
@@ -71,6 +78,25 @@ export async function ensureAllDiagramAttrsLoaded(stateSource: StateSource): Pro
   const state = resolveState(stateSource)
   const pendingIds = state.diagrams
     .filter(diagram => !diagram._isDeleted && diagram._attrsPending)
+    .map(diagram => diagram.id)
+  for (const id of pendingIds) {
+    await ensureDiagramAttrsLoaded(stateSource, id)
+  }
+}
+
+/**
+ * Dirty persisted diagrams are listed without canvas JSON. Hydrate before save
+ * so a folder move does not overwrite the server canvas with empty instances.
+ */
+export async function ensureDirtyPendingDiagramAttrsLoaded(
+  stateSource: StateSource
+): Promise<void> {
+  const state = resolveState(stateSource)
+  const pendingIds = state.diagrams
+    .filter(
+      diagram =>
+        !diagram._isDeleted && !diagram._isNew && diagram._isDirty && diagram._attrsPending
+    )
     .map(diagram => diagram.id)
   for (const id of pendingIds) {
     await ensureDiagramAttrsLoaded(stateSource, id)

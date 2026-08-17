@@ -41,20 +41,25 @@ verification guards. Скрипт сам выполняет обязательн
 
 ```bash
 bash infra/vps/tests/verify-bundle.sh
-DRY_RUN=1 infra/vps/deploy.sh
-infra/vps/deploy.sh
+DRY_RUN=1 AREPOS_VERSION=x.y.z WARCHI_VERSION=x.y.z SITE_VERSION=x.y.z infra/vps/deploy.sh
+REUSE_EXISTING_IMAGES=1 AREPOS_VERSION=x.y.z WARCHI_VERSION=x.y.z SITE_VERSION=x.y.z infra/vps/deploy.sh
 ```
+
+Обычный инкрементальный прод — это почти всегда «новые теги только у части сервисов». Без
+`REUSE_EXISTING_IMAGES=1` `deploy.sh` после обязательного backup падает с
+`Refusing to overwrite immutable image tag` на уже существующем
+`arch/arepos-server:…` / `arch/warchi:…` / `arch/warchi-site:…`. Не запускай сначала «чистый»
+`infra/vps/deploy.sh` и не жди этого отказа: сразу ставь `REUSE_EXISTING_IMAGES=1`.
+
+Режим принимает решение отдельно для каждого образа: verified exact-tag images переиспользуются,
+absent exact-tag release images собираются. Частичное наличие или несовпадение digest останавливает
+запуск; переиспользуемые теги никогда не перезаписываются. Все остальные guards те же: clean
+source на exact release tags, обязательный backup, DNS/CNAME, certificates, Helm atomic upgrade.
 
 Реальный последний запуск требует явного запроса пользователя на production-деплой wArchi. Не
 передавай секреты в аргументах, командах, логах или ответах. Не читай и не печатай `secrets.env`.
 Не включай shell tracing. Ротация credentials отложена; не меняй credentials или Kubernetes
 Secrets без отдельного явного одобрения.
-
-`REUSE_EXISTING_IMAGES=1 infra/vps/deploy.sh` допустим только для emergency recovery по README и
-принимает решение отдельно для каждого образа: verified exact-tag images можно переиспользовать,
-а absent exact-tag release images — собрать. Частичное наличие или несовпадение digest останавливает
-запуск; переиспользуемые теги никогда не перезаписываются. Режим по-прежнему требует clean source
-на exact release tags, обязательный backup и все остальные guards.
 
 ## Условия завершения
 

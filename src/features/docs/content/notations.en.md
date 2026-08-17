@@ -8,7 +8,7 @@ The **Notations** page displays a list of all notations, grouped by name. Each n
 
 ### Creating a Notation
 
-1. Click the **Create** button in the list header
+1. Click **Create notation** in the list toolbar
 2. Enter the notation name
 3. Click **Create** to confirm
 
@@ -23,9 +23,11 @@ When working with shared resources, available actions are determined by the gran
 
 ### Exporting and importing a notation
 
-**Export** is available from the notation card menu in the list and from the notation editor header. Both download the **same** JSON document (`warchi-notation-export` v2) — types, components, relations, rules, and shapes.
+**Export** is available from the notation card in the list (download icon) and from the notation editor header. Both download the **same** JSON document (`warchi-notation-export` v2) — types, components, relations, rules, shapes, and used library icons (`icons[]`). Notation import **does not** create icons from `icons[]`; an administrator loads them on [Admin → Icons](/docs/admin). If the file names icons that are missing from the catalog and the instance library, import asks you to pick a replacement or cancel and ask an admin to upload the SVGs.
 
-**Import from the list** — card next to “Create notation”: pick the same JSON export file; the server creates a **new** notation owned by the current user. On success, the new notation opens in the editor. If a notation with the same **name and version** already exists, import returns **409** and nothing is persisted.
+**Import from the list** — the **Import notation JSON** button in the catalog toolbar (the same action is on the [dashboard](/docs/dashboard)): pick the same JSON export file; the server creates a **new** notation owned by the current user. On success, the new notation opens in the editor. If a notation with the same **name and version** already exists, import returns **409** and nothing is persisted.
+
+Deleting a notation from the catalog is a **soft delete**: the entity appears under [Administration → Deleted](/docs/admin).
 
 **Import in the editor** — from the editor header: choose a JSON file with the full notation description to merge into the current notation.
 
@@ -54,7 +56,7 @@ For each node type you can configure:
 For link types you configure:
 
 - Line type (solid, dashed, dotted)
-- Arrow style (open, closed, diamond, etc.)
+- Arrow style (`none`, `arrow`, `open`, `diamond`, `circle`, `square`, **stealth**)
 - Color and line width
 
 ### Node Shapes

@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
+import EmptyState from '@/components/list/EmptyState.vue'
+import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 
 const props = defineProps<{
   attrsJson: string
@@ -61,32 +63,41 @@ const usageCount = computed(() =>
         <span class="type-aside__count">{{ usageCount }}</span>
       </template>
 
-      <div v-if="isLoadingUsages" class="type-aside__empty">
-        <span class="loading-pulse" />
-        {{ t('common.loading') }}
-      </div>
-      <div v-else-if="isNewType" class="type-aside__empty">
-        {{ t('types.saveTypeToSeeUsage') }}
-      </div>
-      <div v-else-if="typeUsages.length === 0" class="type-aside__empty">
-        {{ t('types.notUsed') }}
-      </div>
+      <EmptyState
+        v-if="isLoadingUsages"
+        variant="compact"
+        icon="sync"
+        :title="t('common.loading')"
+      />
+      <EmptyState
+        v-else-if="isNewType"
+        variant="compact"
+        icon="info"
+        :title="t('types.saveTypeToSeeUsage')"
+      />
+      <EmptyState
+        v-else-if="typeUsages.length === 0"
+        variant="compact"
+        icon="link_off"
+        :title="t('types.notUsed')"
+      />
       <div v-else class="usages-groups">
         <div v-for="group in typeUsages" :key="group.notationId" class="usage-group">
           <div class="usage-group__header">
-            <img
+            <LazyIconImg
               v-if="group.notationIcon"
-              :src="`/icons/${group.notationIcon}.svg`"
+              :icon-id="group.notationIcon"
               :alt="group.notationName"
-              class="usage-group__icon-img"
-            >
+              img-class="usage-group__icon-img"
+              eager
+            />
             <UiIcon v-else name="account_tree" class="usage-group__icon" />
             <span class="usage-group__name">{{ group.notationName }}</span>
             <span class="usage-group__count">{{ group.elements.length }}</span>
           </div>
           <ul class="usage-group__list">
             <li v-for="el in group.elements" :key="el.id" class="usage-item">
-              <img :src="`/icons/${el.icon}.svg`" :alt="el.name" class="usage-item__icon-img">
+              <LazyIconImg :icon-id="el.icon" :alt="el.name" img-class="usage-item__icon-img" eager />
               <span class="usage-item__name">{{ el.name }}</span>
               <span class="usage-item__version">{{ el.version }}</span>
             </li>
@@ -127,15 +138,6 @@ const usageCount = computed(() =>
   }
 }
 
-@keyframes pulseGlow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
 
 .type-aside {
   width: 280px;
@@ -192,24 +194,6 @@ const usageCount = computed(() =>
 .type-aside__expand-btn:hover {
   background: var(--primary-soft);
   color: var(--primary);
-}
-
-.type-aside__empty {
-  font-size: 13px;
-  color: var(--text-subtle);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.loading-pulse {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--primary);
-  animation: pulseGlow 1s ease-in-out infinite;
-  flex-shrink: 0;
 }
 
 .json-preview {

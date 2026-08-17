@@ -7,7 +7,8 @@ import SketchColorField from '../../SketchColorField.vue'
 import LazyIconImg from '@/components/forms/LazyIconImg.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
-import { COMBINED_ICON_OPTIONS, ICON_SELECT_MIN_SEARCH_LENGTH } from '@/config/iconOptions'
+import { ICON_SELECT_MIN_SEARCH_LENGTH } from '@/config/iconOptions'
+import { useLibraryIcons } from '@/composables/useLibraryIcons'
 import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
@@ -18,6 +19,8 @@ const emit = defineEmits<{
   (e: 'update:field', field: string, value: unknown): void
 }>()
 const { t } = useI18n()
+const { selectOptions: iconSelectOptions, ensureLoaded } = useLibraryIcons()
+void ensureLoaded()
 
 /** Extract icon ID from path like "/icons/widgets.svg" → "widgets" */
 const sourceIconId = computed(() => {
@@ -33,7 +36,7 @@ const sourceIconId = computed(() => {
       <div class="ico-props__icon-select">
         <SearchableSelect
           :model-value="sourceIconId"
-          :options="COMBINED_ICON_OPTIONS"
+          :options="iconSelectOptions"
           allow-empty
           :empty-label="t('nodeStyle.none')"
           :placeholder="t('nodeStyle.none')"

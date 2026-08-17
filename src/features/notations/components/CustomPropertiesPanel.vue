@@ -355,8 +355,8 @@ onBeforeUnmount(() => {
       >
         <input
           id="entity-name-input"
-          class="properties-panel__name-input"
-          :class="{ 'properties-panel__name-input--error': nameError }"
+          class="form-input form-input--sm"
+          :class="{ 'form-input--error': nameError }"
           :value="nameDraft"
           :placeholder="nameLabel"
           @input="handleNameInput(($event.target as HTMLInputElement).value)"
@@ -466,7 +466,7 @@ onBeforeUnmount(() => {
       >
         <input
           id="entity-tags-input"
-          class="properties-panel__tags-input"
+          class="form-input form-input--sm"
           :value="tagsDraft"
           :placeholder="t('diagram.tagsPlaceholder')"
           @input="handleTagsInput(($event.target as HTMLInputElement).value)"
@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
             v-for="tag in selectedItem.parsedAttrs.tags"
             :key="`tag-${tag}`"
             type="button"
-            class="properties-panel__tag-chip"
+            class="chip chip--dismiss"
             @click="removeTag(tag)"
           >
             {{ tag }}
@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
         @toggle="labelTemplateExpanded = !labelTemplateExpanded"
       >
         <textarea
-          class="properties-panel__label-template-input"
+          class="form-textarea form-textarea--sm properties-panel__label-template"
           :value="labelTemplateValue"
           :placeholder="t('diagram.compositeLabelPlaceholder')"
           rows="2"
@@ -743,49 +743,6 @@ onBeforeUnmount(() => {
   min-width: 140px;
 }
 
-.properties-panel__palette-icon-option,
-.properties-panel__palette-icon-selected {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.properties-panel__palette-icon-preview {
-  font-size: 20px;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.properties-panel__name-input,
-.properties-panel__tags-input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 34px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
-}
-
-.properties-panel__name-input:focus,
-.properties-panel__tags-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
-  background: var(--surface);
-}
-
-.properties-panel__name-input--error {
-  border-color: var(--danger);
-}
-
 .properties-panel__name-error {
   margin: 6px 0 0;
   color: var(--danger);
@@ -799,54 +756,9 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
-.properties-panel__tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border);
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
-  line-height: 1.2;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.properties-panel__tag-chip .ui-icon {
-  font-size: 14px;
-}
-
-.properties-panel__tag-chip:hover {
-  color: var(--danger);
-  border-color: rgba(220, 53, 69, 0.35);
-  background: rgba(220, 53, 69, 0.08);
-}
-
-.properties-panel__label-template-input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 48px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  font-size: 13px;
+.properties-panel__label-template {
   font-family: monospace;
-  outline: none;
-  resize: vertical;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
-}
-
-.properties-panel__label-template-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
-  background: var(--surface);
+  min-height: 48px;
 }
 
 .properties-panel__label-template-syntax {

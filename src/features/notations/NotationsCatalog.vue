@@ -7,7 +7,9 @@ import type { EntityListConfig } from "@/composables/useEntityList";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { downloadNotationExport } from "@/features/models/composables/useModelPackage";
-import { uploadNotationExportJson } from "./composables/uploadNotationExport";
+import { uploadNotationExportDocument } from "./composables/uploadNotationExport";
+import { useNotationIconImport } from "./composables/useNotationIconImport";
+import NotationImportIconResolveDialog from "./components/NotationImportIconResolveDialog.vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -15,6 +17,8 @@ const exportError = ref<string | null>(null);
 const actionStatusMessage = ref<string | null>(null);
 const packageInputRef = ref<HTMLInputElement | null>(null);
 const isImporting = ref(false);
+const { showIconResolve, missingIcons, prepareDocument, applyRemap, cancelResolve } =
+  useNotationIconImport();
 
 const config: EntityListConfig<NotationData> = {
   endpoint: "notations",
@@ -76,30 +80,55 @@ async function onPackageSelected(event: Event) {
   actionStatusMessage.value = t("notations.packageImporting");
   try {
     actionStatusMessage.value = t("notations.packageImportProcessing");
-    const result = await uploadNotationExportJson(file);
-
-    if (!result.ok) {
-      actionStatusMessage.value = null;
-      if (result.code === "CONFLICT") {
-        exportError.value = t("notations.packageImportConflict");
-      } else if (result.status === 504 || result.status === 502) {
-        exportError.value = t("notations.packageImportTimeout");
-      } else if (result.code === "BAD_REQUEST") {
-        exportError.value = result.message?.trim()
-          ? t("notations.packageImportError", { message: result.message })
-          : t("notations.packageImportBadRequest");
-      } else {
-        exportError.value = t("notations.packageImportError", { message: result.message });
-      }
-      return;
+    let document: unknown
+    try {
+      document = JSON.parse(await file.text())
+    } catch {
+      actionStatusMessage.value = null
+      exportError.value = t("notations.packageImportBadRequest")
+      return
     }
-
-    actionStatusMessage.value = null;
-    await router.push({ name: "notation-editor", params: { id: result.notationId } });
+    const prepared = await prepareDocument(document)
+    if (prepared === "resolve") {
+      actionStatusMessage.value = null
+      return
+    }
+    await finishCatalogImport(prepared);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     actionStatusMessage.value = null;
     exportError.value = t("notations.packageImportError", { message });
+  } finally {
+    isImporting.value = false;
+  }
+}
+
+async function finishCatalogImport(document: unknown): Promise<void> {
+  const result = await uploadNotationExportDocument(document);
+  if (!result.ok) {
+    actionStatusMessage.value = null;
+    if (result.code === "CONFLICT") {
+      exportError.value = t("notations.packageImportConflict");
+    } else if (result.status === 504 || result.status === 502) {
+      exportError.value = t("notations.packageImportTimeout");
+    } else if (result.code === "BAD_REQUEST") {
+      exportError.value = result.message?.trim()
+        ? t("notations.packageImportError", { message: result.message })
+        : t("notations.packageImportBadRequest");
+    } else {
+      exportError.value = t("notations.packageImportError", { message: result.message });
+    }
+    return;
+  }
+  actionStatusMessage.value = null;
+  await router.push({ name: "notation-editor", params: { id: result.notationId } });
+}
+
+async function confirmIconResolve(remap: Record<string, string>): Promise<void> {
+  const document = applyRemap(remap);
+  isImporting.value = true;
+  try {
+    await finishCatalogImport(document);
   } finally {
     isImporting.value = false;
   }
@@ -129,6 +158,12 @@ async function onPackageSelected(event: Event) {
     :action-busy="isImporting"
     @export="handleExport"
     @import-package="openPackagePicker"
+  />
+  <NotationImportIconResolveDialog
+    v-if="showIconResolve"
+    :missing="missingIcons"
+    @confirm="confirmIconResolve"
+    @cancel="cancelResolve"
   />
 </template>
 

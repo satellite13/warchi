@@ -155,7 +155,7 @@ function handleApply() {
         <div class="layout-preview__fields">
           <label v-if="isLayered" class="layout-preview__field">
             <span class="layout-preview__label">{{ t('toolbar.layoutPreviewDirection') }}</span>
-            <select v-model="ui.direction" class="layout-preview__input">
+            <select v-model="ui.direction" class="form-select">
               <option value="AUTO">{{ t('toolbar.layoutPreviewDirectionAuto') }}</option>
               <option value="RIGHT">{{ t('toolbar.layoutPreviewDirectionRight') }}</option>
               <option value="DOWN">{{ t('toolbar.layoutPreviewDirectionDown') }}</option>
@@ -171,7 +171,7 @@ function handleApply() {
               type="number"
               min="0"
               step="4"
-              class="layout-preview__input"
+              class="form-input"
             />
           </label>
 
@@ -182,13 +182,13 @@ function handleApply() {
               type="number"
               min="0"
               step="4"
-              class="layout-preview__input"
+              class="form-input"
             />
           </label>
 
           <label class="layout-preview__field">
             <span class="layout-preview__label">{{ t('toolbar.layoutPreviewEdgeRouting') }}</span>
-            <select v-model="ui.edgeRouting" class="layout-preview__input">
+            <select v-model="ui.edgeRouting" class="form-select">
               <option value="ORTHOGONAL">{{ t('toolbar.layoutPreviewEdgeRoutingOrthogonal') }}</option>
               <option value="POLYLINE">{{ t('toolbar.layoutPreviewEdgeRoutingPolyline') }}</option>
             </select>
@@ -206,12 +206,12 @@ function handleApply() {
           <div class="layout-preview__fields layout-preview__fields--advanced">
             <label v-if="isLayered" class="layout-preview__field">
               <span class="layout-preview__label">{{ t('toolbar.layoutPreviewPadding') }}</span>
-              <input v-model="ui.padding" type="text" class="layout-preview__input" />
+              <input v-model="ui.padding" type="text" class="form-input" />
             </label>
 
             <label v-if="isLayered" class="layout-preview__field">
               <span class="layout-preview__label">{{ t('toolbar.layoutPreviewCrossing') }}</span>
-              <select v-model="ui.crossingStrategy" class="layout-preview__input">
+              <select v-model="ui.crossingStrategy" class="form-select">
                 <option value="">{{ t('toolbar.layoutPreviewCrossingDefault') }}</option>
                 <option value="LAYER_SWEEP">{{ t('toolbar.layoutPreviewCrossingLayerSweep') }}</option>
                 <option value="INTERACTIVE">{{ t('toolbar.layoutPreviewCrossingInteractive') }}</option>
@@ -225,7 +225,7 @@ function handleApply() {
                 type="number"
                 min="0"
                 step="4"
-                class="layout-preview__input"
+                class="form-input"
                 @input="
                   ui.edgeNodeSpacing =
                     ($event.target as HTMLInputElement).value === ''
@@ -397,22 +397,6 @@ function handleApply() {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
-}
-
-.layout-preview__input {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 14px;
-  color: var(--base-text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  transition: border-color 0.15s ease;
-}
-
-.layout-preview__input:focus {
-  outline: none;
-  border-color: var(--primary);
 }
 
 .layout-preview__checkbox {

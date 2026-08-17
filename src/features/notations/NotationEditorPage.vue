@@ -21,6 +21,7 @@ import NotationComponentList from '@/features/notations/layout/NotationComponent
 import NotationDiagramCanvas from '@/features/notations/components/NotationDiagramCanvas.vue'
 import NotationEntityModal from '@/features/notations/components/NotationEntityModal.vue'
 import NotationImportShapeResolveDialog from '@/features/notations/components/NotationImportShapeResolveDialog.vue'
+import NotationImportIconResolveDialog from '@/features/notations/components/NotationImportIconResolveDialog.vue'
 import CustomPropertiesPanel from '@/features/notations/components/CustomPropertiesPanel.vue'
 import RelationRulesMatrixOverlay from '@/features/notations/components/RelationRulesMatrixOverlay.vue'
 import NodeStylePanel from '@/features/diagram-style/components/NodeStylePanel.vue'
@@ -448,6 +449,10 @@ const {
   cancelImportMerge,
   confirmImportShapeResolve,
   cancelImportShapeResolve,
+  showImportIconResolve,
+  importMissingIcons,
+  confirmImportIconResolve,
+  cancelImportIconResolve,
   openAttrsJson,
   copyAttrsJson,
 } = useNotationExport(
@@ -478,7 +483,7 @@ const rightPanelTabs = computed(() => {
     tabs.push({
       id: 'composite-style',
       label: t('notations.compositeFigureStyleTab'),
-      icon: 'account_tree',
+      icon: 'dashboard_customize',
     })
   } else {
     tabs.push({ id: 'style', label: t('notations.figureStyleTab'), icon: 'palette' })
@@ -1070,6 +1075,13 @@ onBeforeUnmount(() => {
       </button>
     </template>
   </BaseModal>
+
+  <NotationImportIconResolveDialog
+    v-if="showImportIconResolve"
+    :missing="importMissingIcons"
+    @confirm="confirmImportIconResolve"
+    @cancel="cancelImportIconResolve"
+  />
 
   <NotationImportShapeResolveDialog
     v-if="showImportShapeResolveDialog"

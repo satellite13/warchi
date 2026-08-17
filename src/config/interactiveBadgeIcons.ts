@@ -1,7 +1,7 @@
 /**
  * Material Symbols Outlined icon names for interactive property badges on diagram.
  * Used in CustomPropertiesPanel (notation editor) and for building badge icon URLs.
- * List is generated from @material-design-icons/svg/outlined (run npm run generate:badge-icon-names).
+ * List is generated from @material-symbols/svg-400/outlined (run npm run generate:badge-icon-names).
  */
 import { MATERIAL_SYMBOLS_OUTLINED_NAMES } from './materialSymbolsOutlinedNames.generated'
 

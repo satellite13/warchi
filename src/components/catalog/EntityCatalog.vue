@@ -20,6 +20,7 @@ import ShareAccessModal from "../modals/ShareAccessModal.vue";
 import BaseModal from "../modals/BaseModal.vue";
 import IconPicker from "../forms/IconPicker.vue";
 import VersionTreeModal from "../modals/VersionTreeModal.vue";
+import AppAlert from "@/components/ui/AppAlert.vue";
 
 const props = defineProps<{
   entityListConfig: EntityListConfig<VersionedEntity & { attrs?: string | null }>
@@ -239,7 +240,7 @@ function handleExport(group: {
         <div class="catalog-toolbar__actions">
           <button
             type="button"
-            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            class="btn btn--secondary btn--xs btn--toolbar"
             :title="t(`${i18nPrefix}.createDescription`)"
             @click="openCreateModal"
           >
@@ -249,7 +250,7 @@ function handleExport(group: {
           <button
             v-if="canImportPackage"
             type="button"
-            class="btn btn--secondary btn--xs catalog-toolbar__btn"
+            class="btn btn--secondary btn--xs btn--toolbar"
             :title="t(`${i18nPrefix}.packageImportDescription`)"
             :disabled="actionBusy"
             @click="emit('importPackage')"
@@ -268,9 +269,16 @@ function handleExport(group: {
       </div>
     </header>
 
-    <div v-if="actionErrorMessage" class="catalog-action-error">{{ actionErrorMessage }}</div>
-    <div v-if="actionStatusMessage && !actionBusy" class="catalog-action-status">
-      {{ actionStatusMessage }}
+    <div
+      v-if="actionErrorMessage || (actionStatusMessage && !actionBusy)"
+      class="catalog-banners"
+    >
+      <AppAlert v-if="actionErrorMessage" type="error" :message="actionErrorMessage" />
+      <AppAlert
+        v-if="actionStatusMessage && !actionBusy"
+        type="info"
+        :message="actionStatusMessage"
+      />
     </div>
 
     <section class="model-grid" :aria-busy="actionBusy || undefined">
@@ -281,7 +289,7 @@ function handleExport(group: {
         </p>
       </div>
       <CardSkeleton v-else-if="isLoading" :count="4" />
-      <div v-else-if="errorMessage" class="error-state">{{ errorMessage }}</div>
+      <AppAlert v-else-if="errorMessage" type="error" :message="errorMessage" />
       <EmptyState
         v-else-if="filteredItems.length === 0"
         :title="t(`${i18nPrefix}.notFoundTitle`)"
@@ -445,16 +453,6 @@ function handleExport(group: {
   flex-shrink: 0;
 }
 
-.catalog-toolbar__btn {
-  height: 34px;
-  padding: 0 12px;
-}
-
-.catalog-toolbar__btn .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
 .catalog-toolbar__search {
   flex: 1;
   min-width: 220px;
@@ -473,30 +471,11 @@ function handleExport(group: {
   margin: -8px;
 }
 
-.catalog-action-error,
-.error-state {
-  width: 100%;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.catalog-action-error,
-.catalog-action-status {
+.catalog-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 12px;
-}
-
-.catalog-action-status {
-  width: 100%;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-  color: var(--base-text);
-  font-size: 14px;
-  border: 1px solid var(--border-strong);
 }
 
 .catalog-busy {

@@ -5,9 +5,10 @@ import type { ComponentResponse, RelationResponse } from '@/types/api'
 import type { EditorLink, EditorNode } from '../types'
 import { parseEntityAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { DocumentWikiItem } from '@/composables/useWikiDocuments'
-import { coercePropertyValue, regexTestProperty } from '@/utils/propertyUtils'
+import { regexTestProperty } from '@/utils/propertyUtils'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
-import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
+import EmptyState from '@/components/list/EmptyState.vue'
+import PropertyValueField from '@/components/properties/PropertyValueField.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -91,7 +92,6 @@ const currentMode = computed<'node' | 'link' | 'empty'>(() => {
   return 'empty'
 })
 
-const coerceValue = coercePropertyValue
 const regexTest = regexTestProperty
 
 function documentDisplayLabel(item: DocumentWikiItem): string {
@@ -111,6 +111,18 @@ const documentSelectOptions = computed(() => {
   }
   return Array.from(byId.entries(), ([id, label]) => ({ id, label }))
 })
+
+const componentSelectOptions = computed(() =>
+  props.availableComponents.map(component => ({ id: component.id, label: component.name }))
+)
+
+const relationSelectOptions = computed(() =>
+  props.availableRelations.map(relation => ({ id: relation.id, label: relation.name }))
+)
+
+const diagramSelectOptions = computed(() =>
+  props.diagrams.map(diagram => ({ id: diagram.id, label: diagram.label }))
+)
 
 type NodePropSectionKey = 'node-type' | 'notation-component'
 
@@ -205,43 +217,13 @@ const nodeEditorBlocks = computed(
 <template>
   <div class="mp">
     <!-- Empty state -->
-    <div v-if="currentMode === 'empty'" class="mp-empty">
-      <div class="mp-empty__graphic">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect
-            x="10"
-            y="14"
-            width="12"
-            height="10"
-            rx="2.5"
-            stroke="currentColor"
-            stroke-width="1.4"
-            opacity="0.25"
-          />
-          <rect
-            x="26"
-            y="24"
-            width="12"
-            height="10"
-            rx="2.5"
-            stroke="currentColor"
-            stroke-width="1.4"
-            opacity="0.25"
-          />
-          <path
-            d="M22 22L26 26"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-            stroke-dasharray="3 2"
-            opacity="0.18"
-          />
-          <circle cx="24" cy="24" r="2" fill="currentColor" opacity="0.15" />
-        </svg>
-      </div>
-      <span class="mp-empty__text">{{ t('diagram.selectElement') }}</span>
-      <span class="mp-empty__hint">{{ t('diagram.selectElementHint') }}</span>
-    </div>
+    <EmptyState
+      v-if="currentMode === 'empty'"
+      variant="panel"
+      icon="ads_click"
+      :title="t('diagram.selectElement')"
+      :description="t('diagram.selectElementHint')"
+    />
 
     <template v-else>
       <!-- Type badge -->
@@ -301,21 +283,16 @@ const nodeEditorBlocks = computed(
               class="mp-section"
             >
               <span class="mp-section__title">{{ t('diagram.notationComponent') }}</span>
-              <select
-                class="mp-select"
+              <SearchableSelect
+                :model-value="nodeBindingComponentId || ''"
+                :options="componentSelectOptions"
+                :placeholder="t('diagram.selectComponent')"
+                :search-placeholder="t('common.search')"
+                :empty-text="t('common.nothingFound')"
                 :disabled="readOnly || !activeNotationId || availableComponents.length === 0"
-                :value="nodeBindingComponentId || ''"
-                @change="emit('bindNodeComponent', ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="" disabled>{{ t('diagram.selectComponent') }}</option>
-                <option
-                  v-for="component in availableComponents"
-                  :key="component.id"
-                  :value="component.id"
-                >
-                  {{ component.name }}
-                </option>
-              </select>
+                class="mp-search-select"
+                @update:model-value="emit('bindNodeComponent', $event)"
+              />
             </section>
 
             <section
@@ -354,34 +331,26 @@ const nodeEditorBlocks = computed(
                       {{ nodePropertyDiagramToken(block.section.key, property.name) }}
                     </span>
                   </label>
-                  <select
+                  <SearchableSelect
                     v-if="
                       property.interactive &&
                       property.interactiveKind === 'diagram' &&
                       property.type === 'string' &&
                       diagrams.length > 0
                     "
-                    class="mp-select"
+                    :model-value="String(block.section.values[property.name] ?? '')"
+                    :options="diagramSelectOptions"
+                    :placeholder="t('diagram.selectDiagram')"
+                    :search-placeholder="t('common.search')"
+                    :empty-text="t('common.nothingFound')"
                     :disabled="readOnly"
-                    :value="String(block.section.values[property.name] ?? '')"
-                    @change="
-                      !readOnly &&
-                        emitNodePropertyChange(
-                          block.section.key,
-                          property.name,
-                          ($event.target as HTMLSelectElement).value
-                        )
+                    allow-empty
+                    :empty-label="t('diagram.selectDiagram')"
+                    class="mp-search-select"
+                    @update:model-value="
+                      !readOnly && emitNodePropertyChange(block.section.key, property.name, $event)
                     "
-                  >
-                    <option value="">{{ t('diagram.selectDiagram') }}</option>
-                    <option
-                      v-for="d in diagrams"
-                      :key="d.id"
-                      :value="d.id"
-                    >
-                      {{ d.label }}
-                    </option>
-                  </select>
+                  />
                   <div
                     v-else-if="
                       property.interactive &&
@@ -414,83 +383,21 @@ const nodeEditorBlocks = computed(
                       {{ t('diagram.newDocument') }}
                     </button>
                   </div>
-                  <ToggleSwitch
-                    v-else-if="property.type === 'boolean'"
-                    :model-value="Boolean(block.section.values[property.name])"
+                  <PropertyValueField
+                    v-else
+                    :property="property"
+                    :model-value="block.section.values[property.name]"
                     :disabled="readOnly"
+                    :invalid="
+                      property.type === 'string' &&
+                      regexTest(property, String(block.section.values[property.name] ?? '')) ===
+                        false
+                    "
+                    :error-text="t('types.regexNoMatch')"
                     @update:model-value="
                       emitNodePropertyChange(block.section.key, property.name, $event)
                     "
-                  >
-                    {{ Boolean(block.section.values[property.name]) ? t('common.yes') : t('common.no') }}
-                  </ToggleSwitch>
-                  <select
-                    v-else-if="property.type === 'enum'"
-                    class="mp-select"
-                    :disabled="readOnly"
-                    :value="
-                      String(
-                        block.section.values[property.name] ??
-                          property.enumDefault ??
-                          property.defaultValue ??
-                          ''
-                      )
-                    "
-                    @change="
-                      !readOnly &&
-                        emitNodePropertyChange(
-                          block.section.key,
-                          property.name,
-                          ($event.target as HTMLSelectElement).value
-                        )
-                    "
-                  >
-                    <option value="">{{ t('diagram.selectValue') }}</option>
-                    <option
-                      v-for="enumValue in property.enumValues ?? []"
-                      :key="`${property.id}-${enumValue}`"
-                      :value="enumValue"
-                    >
-                      {{ enumValue }}
-                    </option>
-                  </select>
-                  <div v-else class="mp-field__input-wrap">
-                    <input
-                      class="mp-input"
-                      :class="{
-                        'mp-input--error':
-                          property.type === 'string' &&
-                          regexTest(
-                            property,
-                            String(block.section.values[property.name] ?? '')
-                          ) === false,
-                      }"
-                      :type="property.type === 'number' ? 'number' : 'text'"
-                      :placeholder="property.name"
-                      :readonly="readOnly"
-                      :value="String(block.section.values[property.name] ?? '')"
-                      @input="
-                        !readOnly &&
-                          emitNodePropertyChange(
-                            block.section.key,
-                            property.name,
-                            coerceValue(property, ($event.target as HTMLInputElement).value)
-                          )
-                      "
-                    />
-                    <span
-                      v-if="
-                        property.type === 'string' &&
-                        regexTest(
-                          property,
-                          String(block.section.values[property.name] ?? '')
-                        ) === false
-                      "
-                      class="mp-field__error"
-                    >
-                      {{ t('types.regexNoMatch') }}
-                    </span>
-                  </div>
+                  />
                 </div>
               </div>
             </section>
@@ -525,100 +432,34 @@ const nodeEditorBlocks = computed(
                     {{ '#' + '{' + property.name + '}' }}
                   </span>
                 </label>
-                <ToggleSwitch
-                  v-if="property.type === 'boolean'"
-                  :model-value="Boolean(linkTypeScopedValues[property.name])"
+                <PropertyValueField
+                  :property="property"
+                  :model-value="linkTypeScopedValues[property.name]"
                   :disabled="readOnly"
+                  :invalid="
+                    property.type === 'string' &&
+                    regexTest(property, String(linkTypeScopedValues[property.name] ?? '')) ===
+                      false
+                  "
+                  :error-text="t('types.regexNoMatch')"
                   @update:model-value="emit('setLinkTypePropertyValue', property.name, $event)"
-                >
-                  {{
-                    Boolean(linkTypeScopedValues[property.name]) ? t('common.yes') : t('common.no')
-                  }}
-                </ToggleSwitch>
-                <select
-                  v-else-if="property.type === 'enum'"
-                  class="mp-select"
-                  :disabled="readOnly"
-                  :value="
-                    String(
-                      linkTypeScopedValues[property.name] ??
-                        property.enumDefault ??
-                        property.defaultValue ??
-                        ''
-                    )
-                  "
-                  @change="
-                    !readOnly &&
-                      emit(
-                        'setLinkTypePropertyValue',
-                        property.name,
-                        ($event.target as HTMLSelectElement).value
-                      )
-                  "
-                >
-                  <option value="">{{ t('diagram.selectValue') }}</option>
-                  <option
-                    v-for="enumValue in property.enumValues ?? []"
-                    :key="`${property.id}-${enumValue}`"
-                    :value="enumValue"
-                  >
-                    {{ enumValue }}
-                  </option>
-                </select>
-                <div v-else class="mp-field__input-wrap">
-                  <input
-                    class="mp-input"
-                    :class="{
-                      'mp-input--error':
-                        property.type === 'string' &&
-                        regexTest(property, String(linkTypeScopedValues[property.name] ?? '')) ===
-                          false,
-                    }"
-                    :type="property.type === 'number' ? 'number' : 'text'"
-                    :placeholder="property.name"
-                    :readonly="readOnly"
-                    :value="String(linkTypeScopedValues[property.name] ?? '')"
-                    @input="
-                      !readOnly &&
-                        emit(
-                          'setLinkTypePropertyValue',
-                          property.name,
-                          coerceValue(property, ($event.target as HTMLInputElement).value)
-                        )
-                    "
-                  />
-                  <span
-                    v-if="
-                      property.type === 'string' &&
-                      regexTest(property, String(linkTypeScopedValues[property.name] ?? '')) ===
-                        false
-                    "
-                    class="mp-field__error"
-                  >
-                    {{ t('types.regexNoMatch') }}
-                  </span>
-                </div>
+                />
               </div>
             </div>
           </section>
 
           <section class="mp-section">
             <span class="mp-section__title">{{ t('diagram.notationRelation') }}</span>
-            <select
-              class="mp-select"
+            <SearchableSelect
+              :model-value="linkBindingRelationId || ''"
+              :options="relationSelectOptions"
+              :placeholder="t('diagram.selectRelation')"
+              :search-placeholder="t('common.search')"
+              :empty-text="t('common.nothingFound')"
               :disabled="readOnly || !activeNotationId || availableRelations.length === 0"
-              :value="linkBindingRelationId || ''"
-              @change="emit('bindLinkRelation', ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="" disabled>{{ t('diagram.selectRelation') }}</option>
-              <option
-                v-for="relation in availableRelations"
-                :key="relation.id"
-                :value="relation.id"
-              >
-                {{ relation.name }}
-              </option>
-            </select>
+              class="mp-search-select"
+              @update:model-value="emit('bindLinkRelation', $event)"
+            />
           </section>
 
           <section v-if="linkProperties.length > 0" class="mp-section">
@@ -626,68 +467,17 @@ const nodeEditorBlocks = computed(
             <div class="mp-fields">
               <div v-for="property in linkProperties" :key="property.id" class="mp-field">
                 <label class="mp-field__label">{{ property.name }}</label>
-                <ToggleSwitch
-                  v-if="property.type === 'boolean'"
-                  :model-value="Boolean(linkScopedValues[property.name])"
+                <PropertyValueField
+                  :property="property"
+                  :model-value="linkScopedValues[property.name]"
                   :disabled="readOnly"
+                  :invalid="
+                    property.type === 'string' &&
+                    regexTest(property, String(linkScopedValues[property.name] ?? '')) === false
+                  "
+                  :error-text="t('types.regexNoMatch')"
                   @update:model-value="emit('setLinkScopedValue', property.name, $event)"
-                >
-                  {{ Boolean(linkScopedValues[property.name]) ? t('common.yes') : t('common.no') }}
-                </ToggleSwitch>
-                <select
-                  v-else-if="property.type === 'enum'"
-                  class="mp-select"
-                  :disabled="readOnly"
-                  :value="
-                    String(
-                      linkScopedValues[property.name] ??
-                        property.enumDefault ??
-                        property.defaultValue ??
-                        ''
-                    )
-                  "
-                  @change="
-                    !readOnly &&
-                      emit(
-                        'setLinkScopedValue',
-                        property.name,
-                        ($event.target as HTMLSelectElement).value
-                      )
-                  "
-                >
-                  <option value="">{{ t('diagram.selectValue') }}</option>
-                  <option
-                    v-for="enumValue in property.enumValues ?? []"
-                    :key="`${property.id}-${enumValue}`"
-                    :value="enumValue"
-                  >
-                    {{ enumValue }}
-                  </option>
-                </select>
-                <div v-else class="mp-field__input-wrap">
-                  <input
-                    class="mp-input"
-                    :class="{ 'mp-input--error': property.type === 'string' && regexTest(property, String(linkScopedValues[property.name] ?? '')) === false }"
-                    :type="property.type === 'number' ? 'number' : 'text'"
-                    :placeholder="property.name"
-                    :readonly="readOnly"
-                    :value="String(linkScopedValues[property.name] ?? '')"
-                    @input="
-                      !readOnly &&
-                        emit(
-                          'setLinkScopedValue',
-                          property.name,
-                          coerceValue(property, ($event.target as HTMLInputElement).value)
-                        )
-                    "
-                  />
-                  <span
-                    v-if="property.type === 'string' && regexTest(property, String(linkScopedValues[property.name] ?? '')) === false"
-                    class="mp-field__error"
-                  >
-                    {{ t('types.regexNoMatch') }}
-                  </span>
-                </div>
+                />
               </div>
             </div>
           </section>
@@ -716,33 +506,6 @@ const nodeEditorBlocks = computed(
   flex-direction: column;
   font-size: 12px;
   color: var(--base-text);
-}
-
-/* ---- Empty state ---- */
-.mp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 48px 24px;
-  flex: 1;
-}
-
-.mp-empty__graphic {
-  color: var(--border-strong);
-  opacity: 0.6;
-}
-
-.mp-empty__text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.mp-empty__hint {
-  font-size: 11px;
-  color: var(--text-subtle);
 }
 
 /* ---- Type badge ---- */
@@ -820,34 +583,14 @@ const nodeEditorBlocks = computed(
   letter-spacing: 0.04em;
 }
 
-/* ---- Inputs & Selects ---- */
-.mp-select,
-.mp-input {
-  width: 100%;
-  height: var(--mp-h);
-  box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: var(--mp-radius);
-  background: var(--surface-muted);
-  color: var(--base-text);
+.mp-section > .form-select,
+.mp-field > .form-select {
   font-size: 12px;
-  font-family: inherit;
-  padding: 0 8px;
-  outline: none;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
 }
 
-.mp-select:focus,
-.mp-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-soft);
-}
-
-.mp-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.mp-search-select :deep(.searchable-select__control) {
+  padding: 5px 8px;
+  font-size: 12px;
 }
 
 /* ---- Fields list ---- */
@@ -913,21 +656,6 @@ const nodeEditorBlocks = computed(
   font-size: 10px;
   color: var(--text-subtle);
   user-select: all;
-}
-
-.mp-field__input-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mp-input--error {
-  border-color: var(--danger);
-}
-
-.mp-field__error {
-  font-size: 11px;
-  color: var(--danger);
 }
 
 .mp-doc-pick {

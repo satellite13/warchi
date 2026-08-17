@@ -4,6 +4,76 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-08-15
+
+### Changed
+- Model and notation trees no longer show the type name next to each item.
+
+## [0.21.0] - 2026-08-15
+
+### Changed
+- Editors now share the same form, search, chip, and alert chrome instead of each keeping a local copy.
+- Sidebar and model-tree icon buttons match the notation header: ghost 24px controls that show a border only on hover.
+- Chrome icons are remapped to clearer Material Symbols (models, diagrams, links, toolbar, and common actions).
+
+### Removed
+- Duplicate notation and type document panels that the shared editor shells already cover.
+
+## [0.20.0] - 2026-08-14
+
+### Added
+- Instance-wide SVG icon library: only an administrator can upload (`/admin/icons`); everyone can pick those icons. Notation export includes `icons[]` for the admin to import; notation import does not create icons — missing names require a replacement or cancel.
+
+## [0.19.2] - 2026-08-14
+
+### Added
+- ArchiMate junction icons `and` and `or` in the icon picker.
+
+## [0.19.1] - 2026-08-14
+
+### Changed
+- Icon catalog uses Material Symbols Outlined (`@material-symbols/svg-400`) instead of the frozen Material Icons set, so newer icons such as `database` are available. Custom ArchiMate SVGs in `public/icons/` are preserved.
+
+## [0.19.0] - 2026-08-14
+
+### Changed
+- Home dashboard greeting uses the first name, recent diagrams show version, and the layout is quick actions plus diagrams on the left and models plus notations on the right.
+- Quick actions add model-package import, shapes, and validation scripts; tiles wrap to the next row when the column is narrow.
+- Refreshed in-app help to match current catalog, editor, admin trash, and guest-docs behavior.
+
+## [0.18.5] - 2026-08-14
+
+### Fixed
+- Helm chart version is valid YAML again (`0.18.5` instead of a trailing comma).
+
+## [0.18.4] - 2026-08-14
+
+### Added
+- Guests can open in-app documentation; the header shows Sign in instead of a fake user.
+
+### Changed
+- Diagram copy wizard shows localized blocker and warning texts when the preview returns a known issue code.
+
+## [0.18.3] - 2026-08-13
+
+### Fixed
+- Stacked dashboard cards no longer go blank when moving the cursor across the catalog.
+
+## [0.18.2] - 2026-08-13
+
+### Added
+- Contour-link mode shows a `+` handle on the outline near the cursor so a connection can be started without Shift.
+
+## [0.18.1] - 2026-08-13
+
+### Fixed
+- Production arepos-server memory limit is 2Gi so opening diagrams no longer OOM-kills the API (nginx 502 / «Backend unavailable»).
+
+## [0.18.0] - 2026-08-13
+
+### Added
+- Diagram undo/redo covers right-panel properties and instance style, node resize, polyline edits, and edge path type from the context menu. Rapid edits of the same field batch into one step.
+
 ## [0.17.2] - 2026-08-06
 
 ### Changed

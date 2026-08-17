@@ -17,11 +17,25 @@ defineProps<{
   <div class="name-version-form">
     <div class="form-field">
       <label :for="nameId">{{ nameLabel }}</label>
-      <input :id="nameId" v-model="nameModel" type="text" :placeholder="namePlaceholder" :disabled="disabled">
+      <input
+        :id="nameId"
+        v-model="nameModel"
+        class="form-input form-input--lg"
+        type="text"
+        :placeholder="namePlaceholder"
+        :disabled="disabled"
+      >
     </div>
     <div class="form-field">
       <label :for="versionId">{{ versionLabel }}</label>
-      <input :id="versionId" v-model="versionModel" type="text" :placeholder="versionPlaceholder" :disabled="disabled">
+      <input
+        :id="versionId"
+        v-model="versionModel"
+        class="form-input form-input--lg"
+        type="text"
+        :placeholder="versionPlaceholder"
+        :disabled="disabled"
+      >
     </div>
   </div>
 </template>
@@ -45,33 +59,5 @@ defineProps<{
   color: var(--text-muted);
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-.form-field input {
-  padding: 12px 16px;
-  font-size: 15px;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-  background: var(--surface-muted);
-  color: var(--base-text);
-}
-
-.form-field input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
-  background: var(--surface);
-}
-
-.form-field input::placeholder {
-  color: var(--text-subtle);
-}
-
-.form-field input:disabled {
-  background: var(--surface-strong);
-  color: var(--text-subtle);
-  cursor: not-allowed;
 }
 </style>

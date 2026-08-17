@@ -6,6 +6,8 @@ import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
+import ConfirmModal from '@/components/modals/ConfirmModal.vue'
+import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
@@ -81,6 +83,7 @@ import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
+import { createDiagramHistoryBatcher } from './composables/useDiagramHistoryBatcher'
 import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
 import { downloadModelPackage } from './composables/useModelPackage'
@@ -809,11 +812,11 @@ const rightPanelTabs = computed(() => {
     tabs.push({ id: 'properties', label: t('models.propertiesTab'), icon: 'tune' })
   }
   if (canShowTraceabilityTab.value) {
-    tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'account_tree' })
+    tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'device_hub' })
   }
   if (canShowStyleTab.value) {
     if (selectedElementIsComposite.value) {
-      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'account_tree' })
+      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'dashboard_customize' })
     } else {
       tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
     }
@@ -862,10 +865,7 @@ const {
   directoryNodeType,
   nodeTypeDefaultDirectoryById,
   createNodeModalTitle,
-  nodeTypeSearchQuery,
-  nodeTypeDropdownOpen,
-  filteredNodeTypes,
-  selectedNodeTypeName,
+  nonDirectoryNodeTypes,
   treeRootNodeId,
   canCreateNodeFromModal,
   getNextTreeOrderForParent,
@@ -959,6 +959,18 @@ const pendingDeleteNodeSingleName = computed(() => {
   if (isDiagramContainerModelNodeId(nodeId)) return t('models.containerName')
   if (isEdgeAnchorModelNodeId(nodeId)) return t('models.edgeAnchorName')
   return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
+})
+const nodeDeleteConfirmMessage = computed(() => {
+  const name = pendingDeleteNodeSingleName.value || t('common.unnamed')
+  const count = pendingDeleteNodeCount.value
+  if (pendingDeleteNodeSource.value === 'canvas') {
+    return count === 1
+      ? t('models.deleteNodeFromDiagramSingle', { name })
+      : t('models.deleteNodeFromDiagramMultiple', { count })
+  }
+  return count === 1
+    ? t('models.deleteNodeFromModelSingle', { name })
+    : t('models.deleteNodeFromModelMultiple', { count })
 })
 const pendingDeleteDiagramName = computed(() => {
   const diagramId = pendingDeleteDiagramId.value
@@ -1055,13 +1067,64 @@ const isDirectoryNoteInstanceId = (instanceId: string): boolean => {
   return instance?.attrs?.isDirectoryNote === true
 }
 
-const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
+const pushDiagramHistory = (command: { execute: () => void; undo: () => void }) => {
   const history = diagramInteractionManager.value?.history
   if (history && typeof history.execute === 'function') {
     history.execute(command)
     return
   }
   command.execute()
+}
+
+const diagramHistoryBatcher = createDiagramHistoryBatcher({
+  executeCommand: pushDiagramHistory,
+})
+
+const executeDiagramHistoryCommand = (command: { execute: () => void; undo: () => void }) => {
+  diagramHistoryBatcher.flush()
+  pushDiagramHistory(command)
+}
+
+const recordDiagramHistory = (key: string, command: { execute: () => void; undo: () => void }) => {
+  if (isDiagramReadOnly.value || !activeDiagram.value) return
+  diagramHistoryBatcher.record(key, command)
+}
+
+const commitDiagramHistory = (command: { execute: () => void; undo: () => void }) => {
+  if (isDiagramReadOnly.value || !activeDiagram.value) return
+  diagramHistoryBatcher.commit(command)
+}
+
+type NodeInstanceStyleSnapshot = {
+  width?: number
+  height?: number
+  attrs?: Record<string, unknown>
+}
+
+const applyNodeInstanceStyleSnapshot = (
+  diagramId: string,
+  instanceId: string,
+  snapshot: NodeInstanceStyleSnapshot
+): void => {
+  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+  const instance = diagram?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+  if (!diagram || !instance) return
+  instance.width = snapshot.width
+  instance.height = snapshot.height
+  instance.attrs = snapshot.attrs ? clonePlainDeep(snapshot.attrs) : undefined
+  markDiagramDirty(diagram.id)
+}
+
+const applyEdgeInstanceStyleSnapshot = (
+  diagramId: string,
+  edgeId: string,
+  attrs: Record<string, unknown> | undefined
+): void => {
+  const diagram = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+  const edge = diagram?.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+  if (!diagram || !edge) return
+  edge.attrs = attrs ? clonePlainDeep(attrs) : undefined
+  markDiagramDirty(diagram.id)
 }
 
 const {
@@ -1105,14 +1168,80 @@ const {
 
 const handleBindNodeComponent = (componentId: string): void => {
   if (isDiagramReadOnly.value) return
+  const diagram = activeDiagram.value
   const instanceId = selectedNodeInstanceId.value
+  const node = selectedNode.value
+  const instance = instanceId
+    ? diagram?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+    : null
+  const beforeNode = node ? clonePlainDeep(node.parsedAttrs) : null
+  const beforeInstance = instance
+    ? clonePlainDeep({
+        width: instance.width,
+        height: instance.height,
+        attrs: instance.attrs,
+      })
+    : null
+
   if (instanceId) {
     bindInstanceComponent(instanceId, componentId)
+  } else if (node) {
+    bindNodeComponent(node, componentId)
+  } else {
     return
   }
-  if (selectedNode.value) {
-    bindNodeComponent(selectedNode.value, componentId)
-  }
+
+  const nodeId = node?.id
+  const afterNode = node ? clonePlainDeep(node.parsedAttrs) : null
+  const afterInstance = instance
+    ? clonePlainDeep({
+        width: instance.width,
+        height: instance.height,
+        attrs: instance.attrs,
+      })
+    : null
+  const diagramId = diagram?.id
+  commitDiagramHistory({
+    execute: () => {
+      const n = nodeId ? state.value.nodes.find(item => item.id === nodeId) : null
+      if (n && afterNode) n.parsedAttrs = clonePlainDeep(afterNode)
+      if (diagramId && instanceId && afterInstance) {
+        applyNodeInstanceStyleSnapshot(diagramId, instanceId, afterInstance)
+      }
+      if (n) markNodeDirty(n.id)
+    },
+    undo: () => {
+      const n = nodeId ? state.value.nodes.find(item => item.id === nodeId) : null
+      if (n && beforeNode) n.parsedAttrs = clonePlainDeep(beforeNode)
+      if (diagramId && instanceId && beforeInstance) {
+        applyNodeInstanceStyleSnapshot(diagramId, instanceId, beforeInstance)
+      }
+      if (n) markNodeDirty(n.id)
+    },
+  })
+}
+
+const bindLinkRelationFromPanel = (relationId: string): void => {
+  const link = selectedLink.value
+  if (!link || isDiagramReadOnly.value) return
+  const before = clonePlainDeep(link.parsedAttrs)
+  bindLinkRelation(link, relationId)
+  const after = clonePlainDeep(link.parsedAttrs)
+  const linkId = link.id
+  commitDiagramHistory({
+    execute: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs = clonePlainDeep(after)
+      markLinkDirty(row.id)
+    },
+    undo: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs = clonePlainDeep(before)
+      markLinkDirty(row.id)
+    },
+  })
 }
 
 const scheduleSyncDefaultsOnLoad = (): void => {
@@ -1384,6 +1513,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     const lockOk = await verifyLockBeforeSave()
     if (!lockOk) return false
 
+    diagramHistoryBatcher.flush()
     diagramCanvasRef.value?.flushCanvasState()
     await nextTick()
     const ok = await saveChanges()
@@ -1592,6 +1722,7 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
 watch(
   () => activeDiagram.value?.id ?? null,
   diagramId => {
+    diagramHistoryBatcher.drop()
     if (!diagramId) {
       selectedCanvasElementId.value = null
     }
@@ -2006,9 +2137,11 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'undo':
+      diagramHistoryBatcher.flush()
       diagramCanvasRef.value?.undo()
       break
     case 'redo':
+      diagramHistoryBatcher.flush()
       diagramCanvasRef.value?.redo()
       break
     case 'zoom-in':
@@ -2160,19 +2293,51 @@ const handleToolbarAction = async (event: string) => {
 const setNodeTypePropertyValue = (key: string, value: unknown) => {
   const node = selectedNode.value
   if (!node) return
-  if (!Object.is(node.parsedAttrs.typeProperties[key], value)) {
-    node.parsedAttrs.typeProperties[key] = value
-    markNodeDirty(node.id)
-  }
+  if (Object.is(node.parsedAttrs.typeProperties[key], value)) return
+  const nodeId = node.id
+  const before = clonePlainDeep(node.parsedAttrs.typeProperties)
+  node.parsedAttrs.typeProperties[key] = value
+  markNodeDirty(node.id)
+  const after = clonePlainDeep(node.parsedAttrs.typeProperties)
+  recordDiagramHistory(`nodeType:${nodeId}`, {
+    execute: () => {
+      const row = state.value.nodes.find(item => item.id === nodeId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(after)
+      markNodeDirty(row.id)
+    },
+    undo: () => {
+      const row = state.value.nodes.find(item => item.id === nodeId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(before)
+      markNodeDirty(row.id)
+    },
+  })
 }
 
 const setLinkTypePropertyValue = (key: string, value: unknown) => {
   const link = selectedLink.value
   if (!link) return
-  if (!Object.is(link.parsedAttrs.typeProperties[key], value)) {
-    link.parsedAttrs.typeProperties[key] = value
-    markLinkDirty(link.id)
-  }
+  if (Object.is(link.parsedAttrs.typeProperties[key], value)) return
+  const linkId = link.id
+  const before = clonePlainDeep(link.parsedAttrs.typeProperties)
+  link.parsedAttrs.typeProperties[key] = value
+  markLinkDirty(link.id)
+  const after = clonePlainDeep(link.parsedAttrs.typeProperties)
+  recordDiagramHistory(`linkType:${linkId}`, {
+    execute: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(after)
+      markLinkDirty(row.id)
+    },
+    undo: () => {
+      const row = state.value.links.find(item => item.id === linkId)
+      if (!row) return
+      row.parsedAttrs.typeProperties = clonePlainDeep(before)
+      markLinkDirty(row.id)
+    },
+  })
 }
 
 const setNodeScopedValue = (key: string, value: unknown) => {
@@ -2183,6 +2348,11 @@ const setNodeScopedValue = (key: string, value: unknown) => {
   if (!notationId || !componentId || !node) return
 
   if (diagram) {
+    const instanceId = selectedNodeInstanceId.value
+    const instance = instanceId
+      ? diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+      : null
+    const beforeAttrs = clonePlainDeep(instance?.attrs)
     const changed = setDiagramScopedNodeValue({
       diagram: diagram.parsedAttrs,
       modelNodeId: node.id,
@@ -2191,10 +2361,30 @@ const setNodeScopedValue = (key: string, value: unknown) => {
       key,
       value,
       nodeAttrsFallback: node.parsedAttrs,
-      instanceId: selectedNodeInstanceId.value,
+      instanceId,
     })
     if (changed) {
       markDiagramDirty(diagram.id)
+      const afterAttrs = clonePlainDeep(instance?.attrs)
+      const diagramId = diagram.id
+      if (instanceId) {
+        recordDiagramHistory(`nodeScoped:${instanceId}`, {
+          execute: () => {
+            const d = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+            const inst = d?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+            if (!d || !inst) return
+            inst.attrs = afterAttrs ? clonePlainDeep(afterAttrs) : undefined
+            markDiagramDirty(d.id)
+          },
+          undo: () => {
+            const d = state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+            const inst = d?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+            if (!d || !inst) return
+            inst.attrs = beforeAttrs ? clonePlainDeep(beforeAttrs) : undefined
+            markDiagramDirty(d.id)
+          },
+        })
+      }
     }
     return
   }
@@ -2218,6 +2408,11 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   const link = selectedLink.value
   const diagram = activeDiagram.value
   if (!notationId || !relationId || !link || !diagram) return
+  const edgeId = selectedLinkEdgeInstanceId.value
+  const edge = edgeId
+    ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+    : null
+  const beforeAttrs = clonePlainDeep(edge?.attrs)
   const changed = setDiagramScopedLinkValue({
     diagram: diagram.parsedAttrs,
     modelLinkId: link.id,
@@ -2226,10 +2421,18 @@ const setLinkScopedValue = (key: string, value: unknown) => {
     key,
     value,
     linkAttrsFallback: link.parsedAttrs,
-    edgeInstanceId: selectedLinkEdgeInstanceId.value,
+    edgeInstanceId: edgeId,
   })
   if (changed) {
     markDiagramDirty(diagram.id)
+    if (edgeId) {
+      const afterAttrs = clonePlainDeep(edge?.attrs)
+      const diagramId = diagram.id
+      recordDiagramHistory(`linkScoped:${edgeId}`, {
+        execute: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, afterAttrs),
+        undo: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, beforeAttrs),
+      })
+    }
   }
 }
 
@@ -2300,12 +2503,31 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
   }
 
   if (targetNodeInstance) {
+    const diagramId = diagram.id
+    const instanceId = targetNodeInstance.id
+    const before = clonePlainDeep({
+      width: targetNodeInstance.width,
+      height: targetNodeInstance.height,
+      attrs: targetNodeInstance.attrs,
+    })
     applyDiagramStyleToNodeInstance(targetNodeInstance, style)
     markDiagramDirty(diagram.id)
+    const after = clonePlainDeep({
+      width: targetNodeInstance.width,
+      height: targetNodeInstance.height,
+      attrs: targetNodeInstance.attrs,
+    })
+    recordDiagramHistory(`style:node:${instanceId}`, {
+      execute: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, after),
+      undo: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, before),
+    })
     return
   }
 
   if (targetEdgeInstance) {
+    const diagramId = diagram.id
+    const edgeId = targetEdgeInstance.id
+    const beforeAttrs = clonePlainDeep(targetEdgeInstance.attrs)
     if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
     let bound: DiagramStyle | undefined
     if (targetEdgeInstance.modelLinkId) {
@@ -2341,6 +2563,11 @@ const handleDiagramElementStyleChange = (style: DiagramStyle) => {
       delete targetEdgeInstance.attrs.controlPoints
     }
     markDiagramDirty(diagram.id)
+    const afterAttrs = clonePlainDeep(targetEdgeInstance.attrs)
+    recordDiagramHistory(`style:edge:${edgeId}`, {
+      execute: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, afterAttrs),
+      undo: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, beforeAttrs),
+    })
   }
 }
 
@@ -2458,11 +2685,26 @@ const restoreStyleFromNotation = () => {
       return
     }
 
+    const before = clonePlainDeep({
+      width: instance.width,
+      height: instance.height,
+      attrs: instance.attrs,
+    })
     if (instance.attrs && typeof instance.attrs === 'object') {
       delete instance.attrs.diagramStyle
       if (Object.keys(instance.attrs).length === 0) delete instance.attrs
     }
     markDiagramDirty(diagram.id)
+    const after = clonePlainDeep({
+      width: instance.width,
+      height: instance.height,
+      attrs: instance.attrs,
+    })
+    const diagramId = diagram.id
+    commitDiagramHistory({
+      execute: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, after),
+      undo: () => applyNodeInstanceStyleSnapshot(diagramId, instanceId, before),
+    })
     return
   }
 
@@ -2485,11 +2727,18 @@ const restoreStyleFromNotation = () => {
       return
     }
 
+    const beforeAttrs = clonePlainDeep(edge.attrs)
     if (edge.attrs && typeof edge.attrs === 'object') {
       delete edge.attrs.diagramStyle
       if (Object.keys(edge.attrs).length === 0) delete edge.attrs
     }
     markDiagramDirty(diagram.id)
+    const afterAttrs = clonePlainDeep(edge.attrs)
+    const diagramId = diagram.id
+    commitDiagramHistory({
+      execute: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, afterAttrs),
+      undo: () => applyEdgeInstanceStyleSnapshot(diagramId, edgeId, beforeAttrs),
+    })
   }
 }
 
@@ -2596,6 +2845,19 @@ onBeforeRouteLeave((to) => {
   return true
 })
 
+const onHistoryShortcutCapture = (event: KeyboardEvent) => {
+  if (shouldSkipDeleteHotkey(event)) return
+  const isMod = event.ctrlKey || event.metaKey
+  if (!isMod) return
+  const key = event.code.startsWith('Key')
+    ? event.code.slice(3).toLowerCase()
+    : event.key.toLowerCase()
+  const isUndo = key === 'z' && !event.shiftKey
+  const isRedo = key === 'y' || (key === 'z' && event.shiftKey)
+  if (!isUndo && !isRedo) return
+  diagramHistoryBatcher.flush()
+}
+
 const onBeforeUnload = (event: BeforeUnloadEvent) => {
   if (hasUnsavedChanges.value) {
     event.preventDefault()
@@ -2611,10 +2873,12 @@ onMounted(async () => {
   void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('keydown', onDeleteKeydown)
+  window.addEventListener('keydown', onHistoryShortcutCapture, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener('keydown', onDeleteKeydown)
+  window.removeEventListener('keydown', onHistoryShortcutCapture, true)
   if (documentsFetchTimer) {
     clearTimeout(documentsFetchTimer)
     documentsFetchTimer = null
@@ -2853,6 +3117,7 @@ onBeforeUnmount(() => {
             :selected-instance-ids="selectedInstanceIds"
             :connection-validator="canConnect"
             @update-diagram="setDiagramAttrs"
+            @flush-diagram-history="diagramHistoryBatcher.flush"
             @select-nodes="handleCanvasSelectNodes"
             @select-instance-ids="(ids) => (selectedInstanceIds = ids)"
             @select-edge-instance-id="(id) => (selectedEdgeInstanceId = id)"
@@ -2920,7 +3185,7 @@ onBeforeUnmount(() => {
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
               @bind-node-component="handleBindNodeComponent"
-              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelation(selectedLink, id)"
+              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)"
               @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
               @set-link-type-property-value="(k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)"
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
@@ -3025,7 +3290,7 @@ onBeforeUnmount(() => {
         <span>{{ t('common.name') }}</span>
         <input
           v-model="newNodeName"
-          class="field-input"
+          class="form-input"
           :placeholder="
             createNodeModal.kind === 'folder'
               ? t('models.newFolderPlaceholder')
@@ -3034,47 +3299,16 @@ onBeforeUnmount(() => {
           @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
         />
       </label>
-      <div v-if="createNodeModal.kind === 'node'" class="node-type-dropdown">
-        <span class="node-type-dropdown__label">{{ t('models.nodeTypeLabel') }}</span>
-        <div
-          class="node-type-dropdown__control"
-          @click="nodeTypeDropdownOpen = !nodeTypeDropdownOpen"
-        >
-          <span class="node-type-dropdown__value">{{
-            selectedNodeTypeName || t('models.selectType')
-          }}</span>
-          <UiIcon :name="nodeTypeDropdownOpen ? 'expand_less' : 'expand_more'" class="node-type-dropdown__arrow" />
-        </div>
-        <div v-if="nodeTypeDropdownOpen" class="node-type-dropdown__panel">
-          <input
-            v-model="nodeTypeSearchQuery"
-            class="node-type-dropdown__search"
-            type="text"
-            :placeholder="t('models.typeSearchPlaceholder')"
-            @click.stop
-          />
-          <div class="node-type-dropdown__list">
-            <button
-              v-for="typeItem in filteredNodeTypes"
-              :key="typeItem.id"
-              type="button"
-              class="node-type-dropdown__item"
-              :class="{ 'node-type-dropdown__item--active': newNodeTypeId === typeItem.id }"
-              @click="
-                () => {
-                  newNodeTypeId = typeItem.id
-                  nodeTypeDropdownOpen = false
-                }
-              "
-            >
-              {{ typeItem.name }}
-            </button>
-            <div v-if="filteredNodeTypes.length === 0" class="node-type-dropdown__empty">
-              {{ t('common.nothingFound') }}
-            </div>
-          </div>
-        </div>
-      </div>
+      <label v-if="createNodeModal.kind === 'node'">
+        <span>{{ t('models.nodeTypeLabel') }}</span>
+        <SearchableSelect
+          v-model="newNodeTypeId"
+          :options="nonDirectoryNodeTypes.map((typeItem) => ({ id: typeItem.id, label: typeItem.name }))"
+          :placeholder="t('models.selectType')"
+          :search-placeholder="t('models.typeSearchPlaceholder')"
+          :empty-text="t('common.nothingFound')"
+        />
+      </label>
       <div v-else class="form-hint">{{ t('models.directoryTypeHint') }}</div>
     </div>
     <template #footer>
@@ -3152,7 +3386,7 @@ onBeforeUnmount(() => {
         <span>{{ t('models.noteTextLabel') }}</span>
         <textarea
           v-model="noteEditorText"
-          class="field-textarea"
+          class="form-textarea form-textarea--lg"
           rows="8"
           :placeholder="t('models.noteTextPlaceholder')"
         />
@@ -3179,23 +3413,23 @@ onBeforeUnmount(() => {
         <span>{{ t('common.name') }}</span>
         <input
           v-model="newDiagramName"
-          class="field-input"
+          class="form-input"
           :placeholder="t('models.newDiagramPlaceholder')"
         />
       </label>
       <label>
         <span>{{ t('common.version') }}</span>
-        <input v-model="newDiagramVersion" class="field-input" placeholder="1.0.0" />
+        <input v-model="newDiagramVersion" class="form-input" placeholder="1.0.0" />
       </label>
       <label>
         <span>{{ t('models.notationLabel') }}</span>
-        <select v-model="newDiagramNotationId" class="field-input">
+        <select v-model="newDiagramNotationId" class="form-select">
           <option v-for="notation in state.notations" :key="notation.id" :value="notation.id">
             {{ notation.name }} ({{ notation.version }})
           </option>
         </select>
       </label>
-      <div v-if="hasDiagramNameVersionConflict" class="form-error-text">
+      <div v-if="hasDiagramNameVersionConflict" class="form-error">
         {{ t('models.diagramConflictMessage') }}
       </div>
     </div>
@@ -3298,68 +3532,25 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
-  <BaseModal
+  <ConfirmModal
     v-if="showNodeDeleteModal"
     :title="t('models.deleteNodeTitle')"
-    max-width="500px"
+    :message="nodeDeleteConfirmMessage"
+    danger
     @close="cancelNodeDelete"
-  >
-    <p class="leave-text">
-      <template v-if="pendingDeleteNodeSource === 'canvas'">
-        <template v-if="pendingDeleteNodeCount === 1">
-          {{
-            t('models.deleteNodeFromDiagramSingle', {
-              name: pendingDeleteNodeSingleName || t('common.unnamed'),
-            })
-          }}
-        </template>
-        <template v-else>
-          {{ t('models.deleteNodeFromDiagramMultiple', { count: pendingDeleteNodeCount }) }}
-        </template>
-      </template>
-      <template v-else>
-        <template v-if="pendingDeleteNodeCount === 1">
-          {{
-            t('models.deleteNodeFromModelSingle', {
-              name: pendingDeleteNodeSingleName || t('common.unnamed'),
-            })
-          }}
-        </template>
-        <template v-else>
-          {{ t('models.deleteNodeFromModelMultiple', { count: pendingDeleteNodeCount }) }}
-        </template>
-      </template>
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNodeDelete">
-        {{ t('common.cancel') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmNodeDelete">
-        {{ t('common.delete') }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmNodeDelete"
+  />
 
-  <BaseModal
+  <ConfirmModal
     v-if="showDiagramDeleteModal"
     :title="t('models.deleteDiagramTitle')"
-    max-width="500px"
+    :message="
+      t('models.deleteDiagramConfirm', { name: pendingDeleteDiagramName || t('common.unnamed') })
+    "
+    danger
     @close="cancelDiagramDelete"
-  >
-    <p class="leave-text">
-      {{
-        t('models.deleteDiagramConfirm', { name: pendingDeleteDiagramName || t('common.unnamed') })
-      }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramDelete">
-        {{ t('common.cancel') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmDiagramDelete">
-        {{ t('common.delete') }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmDiagramDelete"
+  />
 
   <BaseModal
     v-if="showLinkDeleteModal"
@@ -3388,24 +3579,17 @@ onBeforeUnmount(() => {
     </template>
   </BaseModal>
 
-  <BaseModal
+  <ConfirmModal
     v-if="showLeaveDialog"
     :title="t('models.unsavedChangesTitle')"
+    :message="t('models.leaveUnsavedText')"
+    :cancel-label="t('models.stay')"
+    :confirm-label="t('models.leave')"
+    danger
     max-width="400px"
     @close="cancelLeave"
-  >
-    <p class="leave-text">
-      {{ t('models.leaveUnsavedText') }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLeave">
-        {{ t('models.stay') }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="confirmLeave">
-        {{ t('models.leave') }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmLeave"
+  />
 
   <BaseModal
     v-if="showDiagramJson"
@@ -3615,32 +3799,6 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-.field-input {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-}
-
-.field-textarea {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-  min-height: 140px;
-}
-
-.form-error-text {
-  font-size: 12px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  border: 1px solid rgba(220, 53, 69, 0.2);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
 .form-hint {
   font-size: 12px;
   color: var(--text-muted);
@@ -3648,20 +3806,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
-}
-
-.btn {
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-}
-
-.btn--secondary {
-  background: var(--surface-strong);
 }
 
 .choice-list {
@@ -3677,50 +3821,6 @@ onBeforeUnmount(() => {
   padding: 9px 10px;
   text-align: left;
   cursor: pointer;
-}
-
-.choice-item--primary {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.reuse-link-option {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.reuse-link-option__title {
-  font-weight: 600;
-  color: var(--base-text);
-}
-
-.reuse-link-option__meta {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.reuse-link-option__props {
-  margin-top: 2px;
-  padding-top: 4px;
-  border-top: 1px dashed var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-}
-
-.reuse-link-option__props-title {
-  color: var(--text-muted);
-}
-
-.reuse-link-option__prop {
-  color: var(--base-text);
-}
-
-.reuse-link-option__empty {
-  color: var(--text-subtle);
 }
 
 .leave-text {
@@ -3998,107 +4098,6 @@ onBeforeUnmount(() => {
 
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
-}
-
-.node-type-dropdown {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  position: relative;
-}
-
-.node-type-dropdown__label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.node-type-dropdown__control {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-  cursor: pointer;
-  background: var(--surface);
-}
-
-.node-type-dropdown__control:hover {
-  border-color: var(--primary);
-}
-
-.node-type-dropdown__value {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.node-type-dropdown__arrow {
-  width: 18px;
-  height: 18px;
-  color: var(--text-subtle);
-}
-
-.node-type-dropdown__panel {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  margin-top: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.node-type-dropdown__search {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  box-sizing: border-box;
-  background: var(--surface-muted);
-}
-
-.node-type-dropdown__list {
-  max-height: 160px;
-  overflow: auto;
-  padding: 4px;
-}
-
-.node-type-dropdown__item {
-  width: 100%;
-  border: none;
-  background: transparent;
-  text-align: left;
-  padding: 7px 8px;
-  font-size: 13px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.node-type-dropdown__item:hover {
-  background: var(--surface-strong);
-}
-
-.node-type-dropdown__item--active {
-  background: var(--primary-soft);
-  color: var(--primary);
-  font-weight: 500;
-}
-
-.node-type-dropdown__empty {
-  padding: 8px;
-  font-size: 12px;
-  color: var(--text-subtle);
-  text-align: center;
 }
 
 </style>

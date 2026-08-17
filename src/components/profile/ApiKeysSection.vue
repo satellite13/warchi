@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MultiSelect from '@/components/forms/MultiSelect.vue'
 import type { MultiSelectOption } from '@/components/forms/MultiSelect.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/composables/useApi'
 import type { ModelData, PaginatedResponse } from '@/types/entities'
@@ -14,6 +15,7 @@ import type {
   CreateApiKeyRequest,
   CreateApiKeyResponse,
 } from '@/types/apiKeys'
+import { formatApiKeySummary } from '@/utils/apiKeySummary'
 
 const MAX_GRANTS = 50
 
@@ -287,20 +289,7 @@ const dismissCreatedKey = (): void => {
   copied.value = false
 }
 
-const formatKeySummary = (key: ApiKey): string => {
-  if (key.mode === 'all') {
-    const write = key.scopes?.includes('models:write')
-    return write
-      ? t('profile.apiKeysSummaryAllWrite')
-      : t('profile.apiKeysSummaryAllRead')
-  }
-  const n = key.grants?.length ?? 0
-  const allWrite = key.grants?.every((g) => g.scopes.includes('models:write'))
-  const allRead = key.grants?.every((g) => !g.scopes.includes('models:write'))
-  if (allWrite) return t('profile.apiKeysSummaryGrantsWrite', { count: n })
-  if (allRead) return t('profile.apiKeysSummaryGrantsRead', { count: n })
-  return t('profile.apiKeysSummaryGrantsMixed', { count: n })
-}
+const formatKeySummary = (key: ApiKey): string => formatApiKeySummary(key, t)
 
 const modelSelectDisabled = computed(() => isLoadingModels.value || isCreating.value)
 
@@ -345,7 +334,12 @@ onMounted(() => {
     <form v-if="showCreateForm" class="api-keys__form" @submit.prevent="createKey">
       <label class="field">
         <span>{{ t('profile.apiKeysName') }}</span>
-        <input v-model="newName" type="text" :placeholder="t('profile.apiKeysNamePlaceholder')" />
+        <input
+          v-model="newName"
+          class="form-input form-input--lg"
+          type="text"
+          :placeholder="t('profile.apiKeysNamePlaceholder')"
+        />
       </label>
 
       <fieldset class="api-keys__mode">
@@ -429,7 +423,9 @@ onMounted(() => {
       </button>
     </form>
 
-    <div v-if="errorMessage" class="msg msg--error">{{ errorMessage }}</div>
+    <div v-if="errorMessage" class="api-keys__alert">
+      <AppAlert type="error" :message="errorMessage" />
+    </div>
 
     <p v-if="isLoading" class="api-keys__empty">{{ t('common.loading') }}</p>
     <p v-else-if="keys.length === 0" class="api-keys__empty">{{ t('profile.apiKeysEmpty') }}</p>
@@ -548,15 +544,6 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.field input[type='text'] {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--base-text);
-  font-family: inherit;
-  font-size: 14px;
-}
 
 .api-keys__mode {
   margin: 0;
@@ -641,17 +628,8 @@ onMounted(() => {
   gap: 10px;
 }
 
-.msg {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+.api-keys__alert {
   margin-bottom: 12px;
-}
-
-.msg--error {
-  border: 1px solid rgba(220, 53, 69, 0.12);
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 
 .api-keys__empty {

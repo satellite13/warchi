@@ -94,6 +94,7 @@ import {
 } from '../utils/diagramOnlyInstances'
 import { syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
 import { buildEdgeAnchorLookup, resolveDiagramEdgeEndpoint } from '../utils/resolveDiagramEdgeEndpoint'
+import { useLibraryIcons } from '@/composables/useLibraryIcons'
 
 const props = withDefaults(
   defineProps<{
@@ -192,6 +193,7 @@ function applyDiffOverlayToEdgeStyle(
 
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs, options?: { dirty?: boolean }]
+  flushDiagramHistory: []
   selectNodes: [modelNodeIds: string[]]
   selectInstanceIds: [instanceIds: string[]]
   selectLink: [modelLinkId: string | null]
@@ -251,6 +253,8 @@ const emit = defineEmits<{
   viewportChange: [viewport: ViewportState]
 }>()
 const { t } = useI18n()
+const { byName: libraryByName, srcFor, ensureLoaded: ensureLibraryIcons } = useLibraryIcons()
+void ensureLibraryIcons()
 
 // ── Refs ──
 const containerRef = ref<HTMLElement | null>(null)
@@ -1162,6 +1166,7 @@ function resolveInstanceComposite(
     displayName: nodeName,
     notationIconName: ds?.iconName,
     propertyValues: { ...nodeTypeValues, ...componentValues },
+    libraryByName: libraryByName.value,
   })
   const bindingResult = applyStylePropertyBindings(ds, contentWithNameAndIcon, {
     componentProperties,
@@ -1199,7 +1204,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
   if (diffState) applyDiffOverlayToNodeStyle(visual.style, diffState)
   const shape = resolveDiagramNodeShape(ds)
   const nodeName = getInstanceDisplayName(instance)
-  const icon = buildModelNodeIcon(ds)
+  const icon = buildModelNodeIcon(ds, libraryByName.value)
   let specialRectangleShape: 'sticky-note' | 'folder-tab' | undefined
   if (shape === 'rectangle' && isDirectoryNoteInstance(instance)) {
     specialRectangleShape = 'folder-tab'
@@ -1345,7 +1350,7 @@ function syncDiagram() {
         existing.setPathFactory((w, h) => factory.path(w, h, cut))
         existing.setSvgPath((w, h) => factory.svgPath(w, h, cut))
       }
-      existing.icon = buildModelNodeIcon(ds)
+      existing.icon = buildModelNodeIcon(ds, libraryByName.value)
       ;(existing as DiagramNode & { badges: Array<{ id: string; iconUrl: string }> }).badges =
         getInteractiveBadgesForInstance(instance)
       applyContentInsetFromStyle(existing, ds, getBoundComponentStyle(instance))
@@ -2014,6 +2019,7 @@ function detectEditablePolylineControlPointChanges() {
 }
 
 function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) {
+  const before = cloneDiagramAttrs()
   const next = cloneDiagramAttrs()
   const edgeInst = next.instances.edges.find(edge => edge.id === edgeInstanceId)
   if (!edgeInst) return
@@ -2039,6 +2045,16 @@ function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) 
   const toNonPolyline = edgeType === 'bezier' || edgeType === 'straight'
   if (fromPolyline && toNonPolyline && edgeInst.attrs.controlPoints) {
     delete edgeInst.attrs.controlPoints
+  }
+  const after = next
+  emit('flushDiagramHistory')
+  const history = interactionManager?.history
+  if (history && typeof history.execute === 'function') {
+    history.execute({
+      execute: () => emit('updateDiagram', after),
+      undo: () => emit('updateDiagram', before),
+    })
+    return
   }
   emit('updateDiagram', next)
 }
@@ -2139,6 +2155,11 @@ function setupInteractionManager(
 }
 
 function bindInteractionEvents(manager: InteractionManager, currentRenderer: DiagramRenderer) {
+  const flushHostHistory = (): void => emit('flushDiagramHistory')
+  manager.drag.on('dragstart', flushHostHistory)
+  manager.resize.on('resizeStart', flushHostHistory)
+  manager.connection.on('controlPointDragStart', flushHostHistory)
+
   // Selection and other interaction events (only when not read-only)
   manager.selection.on('select', (elementIds: string[]) => {
     if (suppressSelectionEvent) return
@@ -2479,7 +2500,7 @@ function initRenderer(
   // Context menu only when editable (not read-only baseline view)
   if (!props.readOnly) {
   r.enableContextMenu({
-    iconToUrl: (name: string) => `/icons/${name}.svg`,
+    iconToUrl: (name: string) => srcFor(name) || '/icons/widgets.svg',
     menu: {
       node: (target: ContextMenuTarget) => {
         if (target.type !== 'node') return []
@@ -2547,7 +2568,7 @@ function initRenderer(
         items.push(
           {
             label: t('diagram.linkType'),
-            icon: 'cable',
+            icon: 'conversion_path',
             items: [
               {
                 label: t('diagram.linkTypeStraight'),
@@ -3039,9 +3060,7 @@ const paletteEntries = computed((): PaletteEntry[] => {
 const buildIconUrl = (iconName: string): string => {
   const normalized = iconName.trim()
   if (!normalized) return '/icons/component.svg'
-  if (normalized.startsWith('/')) return normalized
-  if (normalized.toLowerCase().endsWith('.svg')) return `/icons/${normalized}`
-  return `/icons/${normalized}.svg`
+  return srcFor(normalized) || '/icons/component.svg'
 }
 
 const handlePaletteIconError = (event: Event, iconName: string) => {

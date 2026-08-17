@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useLibraryIcons } from '@/composables/useLibraryIcons'
 
 const props = withDefaults(
   defineProps<{
@@ -73,8 +74,11 @@ watch(
   }
 )
 
+const { srcFor, ensureLoaded } = useLibraryIcons()
+void ensureLoaded()
+
 const src = computed(() =>
-  shouldLoad.value && props.iconId ? `/icons/${props.iconId}.svg` : undefined
+  shouldLoad.value && props.iconId ? srcFor(props.iconId) : undefined
 )
 
 function onError(): void {

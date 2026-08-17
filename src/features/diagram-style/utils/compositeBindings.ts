@@ -1,8 +1,5 @@
-import type {
-  CustomProperty,
-  CompositeSerializedCComponent,
-  DiagramStyle,
-} from '@/domain/attrs/notationAttrs'
+import type { CustomProperty, CompositeSerializedCComponent, DiagramStyle } from '@/domain/attrs/notationAttrs'
+import { normalizeIconName, resolveIconMarkup } from '@/utils/libraryIconResolve'
 
 const OUTER_TARGET_ID = '__compositeOuter__'
 
@@ -40,7 +37,7 @@ function readPropertyType(
   ctx: CompositeBindingContext
 ): PropertyType | undefined {
   const list = source === 'component' ? ctx.componentProperties : ctx.nodeTypeProperties
-  return list.find(p => p.name === propertyName)?.type
+  return list.find((p) => p.name === propertyName)?.type
 }
 
 function readPropertyValue(
@@ -60,9 +57,7 @@ function evalWhen(when: Record<string, unknown>, value: unknown): boolean {
     case 'equals':
       return value === when.value
     case 'contains':
-      return (
-        typeof value === 'string' && typeof when.value === 'string' && value.includes(when.value)
-      )
+      return typeof value === 'string' && typeof when.value === 'string' && value.includes(when.value)
     case 'matchesRegex':
       if (typeof value !== 'string' || typeof when.value !== 'string') return false
       try {
@@ -164,7 +159,7 @@ export function applyStylePropertyBindings(
     const propType = readPropertyType(group.valueSource, group.propertyName, ctx)
     const raw = readPropertyValue(group.valueSource, group.propertyName, ctx)
     const value = normalizeMissingValue(propType, raw)
-    const match = group.branches.find(branch =>
+    const match = group.branches.find((branch) =>
       evalWhen(branch.when as unknown as Record<string, unknown>, value)
     )
     if (!match) continue
@@ -195,7 +190,8 @@ export function injectCompositeNameAndIcon(
     displayName: string
     notationIconName?: string
     propertyValues?: Record<string, unknown>
-  }
+    libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
+  },
 ): CompositeSerializedCComponent {
   const next = clone(base)
   const propValues = options.propertyValues ?? {}
@@ -209,8 +205,14 @@ export function injectCompositeNameAndIcon(
         node.text = val != null ? String(val) : ''
       }
     }
-    if (node.type === 'icon' && node.bindsNotationIcon === true && options.notationIconName) {
-      node.source = `/icons/${options.notationIconName}.svg`
+    if (node.type === 'icon') {
+      const boundName =
+        node.bindsNotationIcon === true && options.notationIconName
+          ? options.notationIconName
+          : normalizeIconName(node.source ?? '')
+      if (boundName) {
+        node.source = resolveIconMarkup(boundName, options.libraryByName)
+      }
     }
     if (node.content) visit(node.content)
     if (Array.isArray(node.children)) {
@@ -259,7 +261,7 @@ export function countCompositeNodeMatches(
  * Returns the icon id (e.g. "widgets") or undefined if not found.
  */
 export function resolveCompositeBoundIconName(
-  root: CompositeSerializedCComponent | undefined
+  root: CompositeSerializedCComponent | undefined,
 ): string | undefined {
   if (!root) return undefined
   let found: string | undefined
@@ -282,3 +284,4 @@ export function resolveCompositeBoundIconName(
   visit(root)
   return found
 }
+

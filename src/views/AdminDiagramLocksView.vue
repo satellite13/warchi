@@ -120,31 +120,11 @@ onBeforeUnmount(() => {
         <div v-if="lockCount > 0" class="dl__count">{{ lockCount }}</div>
         <button
           type="button"
-          class="dl-refresh"
+          class="btn btn--secondary btn--xs btn--toolbar"
           :disabled="loading"
           @click="loadLocks"
         >
-          <svg
-            class="dl-refresh__icon"
-            :class="{ 'dl-refresh__icon--spin': loading }"
-            viewBox="0 0 16 16"
-            fill="none"
-          >
-            <path
-              d="M13.5 2.5v4h-4"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M12.3 10a5 5 0 11-1-6.3L13.5 6.5"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <UiIcon name="sync" :class="{ 'dl-refresh-spin': loading }" />
           {{ t('adminDiagramLocks.refresh') }}
         </button>
       </template>
@@ -241,36 +221,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 960px;
-}
-
-/* ─── Header ───────────────────────────────────── */
-.dl__header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.dl__heading {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--base-text);
-  letter-spacing: -0.03em;
-}
-
-.dl__sub {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.dl__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 /* ─── Live indicator ───────────────────────────── */
@@ -314,53 +264,18 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 12px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── Refresh button ───────────────────────────── */
-.dl-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--text-muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
-}
-
-.dl-refresh:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  color: var(--base-text);
-  box-shadow: var(--shadow-sm);
-}
-
-.dl-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.dl-refresh__icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  transition: transform 0.3s ease;
-}
-
-.dl-refresh__icon--spin {
+:deep(.dl-refresh-spin) {
   animation: dl-spin 0.7s linear infinite;
 }
 
@@ -370,105 +285,13 @@ onBeforeUnmount(() => {
   }
 }
 
-/* ─── Error message ────────────────────────────── */
-.dl-msg {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.dl-msg--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 16%, transparent);
-}
-
-.dl-msg__icon {
-  width: 17px;
-  height: 17px;
-  flex-shrink: 0;
-}
-
-.dl-msg-enter-active,
-.dl-msg-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.dl-msg-enter-from,
-.dl-msg-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-
-/* ─── Placeholder ──────────────────────────────── */
-.dl-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px 20px;
-  color: var(--text-subtle);
-  font-size: 13px;
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: 14px;
-}
-
 .dl-placeholder__icon {
   width: 48px;
   height: 48px;
   color: var(--text-subtle);
 }
 
-.dl-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2.5px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: dl-spin 0.7s linear infinite;
-}
-
-/* ─── Card ─────────────────────────────────────── */
-.dl-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: auto;
-}
-
 /* ─── Table ────────────────────────────────────── */
-.dl-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.dl-table thead th {
-  padding: 12px 18px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border);
-}
-
-.dl-table tbody td {
-  padding: 12px 18px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  vertical-align: middle;
-}
-
-.dl-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
 .dl-table__row {
   transition: background 0.15s;
 }

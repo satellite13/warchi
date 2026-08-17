@@ -53,6 +53,12 @@ export const notationsMessages = {
       importMergeKeepLocal: 'Оставить',
       importMergeDeleteLocal: 'Удалить',
       importMergeCancel: 'Отмена',
+      importIconResolveTitle: 'Импорт: иконки библиотеки',
+      importIconResolveText:
+        'В файле есть иконки, которых нет в каталоге и в библиотеке этого инстанса. Выберите замену или отмените импорт и попросите администратора загрузить SVG.',
+      importIconResolveAskAdmin:
+        'Администратор может загрузить иконки на странице Админка → Иконки (из этого же JSON).',
+      importIconResolveConfirm: 'Продолжить с заменами',
       importShapeResolveTitle: 'Импорт: кастомные формы',
       importShapeResolveText:
         'В файле есть формы с теми же именами, что уже доступны вам. Можно использовать существующую или создать новую.',
@@ -131,6 +137,15 @@ export const notationsMessages = {
       relationNameVersionConflict: 'Отношение с таким именем и версией уже есть в этой нотации',
       boundEntityNameVersionConflict:
         'В нотации уже есть {entity} «{name}» версии {version}. Задайте уникальное имя или версию.',
+      elementsTitle: 'Элементы',
+      addComponent: 'Добавить компонент',
+      addRelation: 'Добавить отношение',
+      syncSelectionOn: 'Включить синхронизацию выбора',
+      syncSelectionOff: 'Отключить синхронизацию выбора',
+      sortList: 'Сортировка списка',
+      sortAlphaAsc: 'А-Я',
+      sortAlphaDesc: 'Я-А',
+      sortByType: 'По типу',
     },
   },
   en: {
@@ -187,6 +202,12 @@ export const notationsMessages = {
       importMergeKeepLocal: 'Keep',
       importMergeDeleteLocal: 'Delete',
       importMergeCancel: 'Cancel',
+      importIconResolveTitle: 'Import: library icons',
+      importIconResolveText:
+        'This file references icons that are not in the catalog or this instance library. Choose a replacement or cancel and ask an administrator to upload the SVGs.',
+      importIconResolveAskAdmin:
+        'An administrator can load the icons from Admin → Icons (from this same JSON).',
+      importIconResolveConfirm: 'Continue with replacements',
       importShapeResolveTitle: 'Import: custom shapes',
       importShapeResolveText:
         'The file includes shapes with the same names as shapes already available to you. Reuse an existing one or create a new copy.',
@@ -264,6 +285,15 @@ export const notationsMessages = {
         'A relation with this name and version already exists in this notation',
       boundEntityNameVersionConflict:
         'This notation already has {entity} "{name}" version {version}. Use a unique name or version.',
+      elementsTitle: 'Elements',
+      addComponent: 'Add component',
+      addRelation: 'Add relation',
+      syncSelectionOn: 'Enable selection sync',
+      syncSelectionOff: 'Disable selection sync',
+      sortList: 'Sort list',
+      sortAlphaAsc: 'A-Z',
+      sortAlphaDesc: 'Z-A',
+      sortByType: 'By type',
     },
   },
 }

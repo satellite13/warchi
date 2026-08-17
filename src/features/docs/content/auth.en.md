@@ -17,12 +17,13 @@ After a successful sign-up, a session is created and the app navigates to the ho
 ## Roles
 
 - **USER** — works with owned resources and shared resources.
-- **ADMIN** — has additional administration capabilities (user management, deleted resources, force-releasing diagram locks).
+- **ADMIN** — has additional administration capabilities (user management, including revoking a user’s API keys, deleted resources, force-releasing diagram locks).
 
 ## Route protection
 
 - Protected pages are unavailable without an active session.
 - Opening a protected route while unauthenticated redirects to login.
+- The **Documentation** section (`/docs`) is available **without signing in**. Guests see help in the header and a **Sign in** button (after login, the same page opens).
 - Admin routes are guarded by permission checks (`ADMIN_PANEL:VIEW`) via policy-based authorization.
 
 ## Session refresh
@@ -32,6 +33,8 @@ When the cookie session expires, the client attempts to refresh it via `/auth/re
 ## Sign out
 
 Sign-out first calls the server logout endpoint so httpOnly cookies can be removed. Local session state is cleared after the server confirms logout.
+
+MCP API keys are created in [Profile](/docs/profile) and do not replace the browser cookie session.
 
 ## Service unavailable
 

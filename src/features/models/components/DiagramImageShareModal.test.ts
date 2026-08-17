@@ -168,4 +168,18 @@ describe('DiagramImageShareModal', () => {
     expect(wrapper.emitted('close')).toBeUndefined()
     expect(wrapper.find('.diagram-share-modal__btn--secondary').text()).toBe('diagramShare.copied')
   })
+
+  it('opens share url as a real link instead of window.open', async () => {
+    const wrapper = mountModal()
+    await wrapper.find('.diagram-share-modal__btn--primary').trigger('click')
+    await flushPromises()
+
+    const openLink = wrapper
+      .findAll('.diagram-share-modal__btn--secondary')
+      .find(node => node.text() === 'diagramShare.openLink')
+    expect(openLink?.element.tagName).toBe('A')
+    expect(openLink?.attributes('href')).toBe(ABSOLUTE_SHARE_URL)
+    expect(openLink?.attributes('target')).toBe('_blank')
+    expect(openLink?.attributes('rel')).toContain('noopener')
+  })
 })

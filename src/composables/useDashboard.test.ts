@@ -12,7 +12,7 @@ vi.mock('vue-i18n', () => ({
 
 let capturedOnMounted: (() => void) | null = null
 
-vi.mock('vue', async importOriginal => {
+vi.mock('vue', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -24,7 +24,16 @@ vi.mock('vue', async importOriginal => {
 
 import { useDashboard } from '@/composables/useDashboard'
 import type { ModelData, NotationData } from '@/types/entities'
-import type { NodeTypeResponse, LinkTypeResponse, AuditLogResponse } from '@/types/api'
+import type { NodeTypeResponse, LinkTypeResponse, DiagramResponse } from '@/types/api'
+
+interface DashboardRecentDiagram {
+  id: string
+  name: string
+  version: string
+  modelId: string
+  modelName: string
+  updatedAt: string | null
+}
 
 function makeModel(id: string, name: string, updatedAt?: string): ModelData {
   return { id, name, version: '1.0.0', ownerId: 'u1', updatedAt }
@@ -42,8 +51,60 @@ function makeLinkType(id: string, name: string): LinkTypeResponse {
   return { id, name, ownerId: 'u1' }
 }
 
-function makeAuditLog(id: string, changedAt?: string): AuditLogResponse {
-  return { id, tableName: 'models', operation: 'UPDATE', rowId: id, changedAt }
+function makeDiagramResponse(
+  id: string,
+  name: string,
+  modelId: string,
+  updatedAt?: string,
+): DiagramResponse {
+  return {
+    id,
+    name,
+    version: '1.0.0',
+    ownerId: 'u1',
+    modelId,
+    notationId: 'n1',
+    updatedAt,
+  }
+}
+
+function makeRecentDiagram(
+  id: string,
+  name: string,
+  modelId: string,
+  modelName: string,
+  updatedAt?: string,
+): DashboardRecentDiagram {
+  return { id, name, version: '1.0.0', modelId, modelName, updatedAt: updatedAt ?? null }
+}
+
+function mockDashboardSuccess(
+  overrides: {
+    stats?: { models: number; notations: number; nodeTypes: number; linkTypes: number }
+    models?: ModelData[]
+    notations?: NotationData[]
+    diagrams?: DashboardRecentDiagram[]
+  } = {},
+) {
+  mockApiGet.mockImplementation((url: string) => {
+    if (url.startsWith('/dashboard/stats')) {
+      return Promise.resolve({
+        success: true,
+        data: overrides.stats ?? { models: 1, notations: 1, nodeTypes: 1, linkTypes: 1 },
+      })
+    }
+    if (url.startsWith('/dashboard/recent')) {
+      return Promise.resolve({
+        success: true,
+        data: {
+          models: overrides.models ?? [],
+          notations: overrides.notations ?? [],
+          diagrams: overrides.diagrams ?? [],
+        },
+      })
+    }
+    return Promise.resolve({ success: true, data: { content: [] } })
+  })
 }
 
 function mockAllSuccess(
@@ -52,8 +113,8 @@ function mockAllSuccess(
     notations?: NotationData[]
     nodeTypes?: NodeTypeResponse[]
     linkTypes?: LinkTypeResponse[]
-    auditLogs?: AuditLogResponse[]
-  } = {}
+    diagrams?: DiagramResponse[]
+  } = {},
 ) {
   mockApiGet.mockImplementation((url: string) => {
     if (url.startsWith('/models'))
@@ -64,8 +125,8 @@ function mockAllSuccess(
       return Promise.resolve({ success: true, data: { content: overrides.nodeTypes ?? [] } })
     if (url.startsWith('/link-types'))
       return Promise.resolve({ success: true, data: { content: overrides.linkTypes ?? [] } })
-    if (url.startsWith('/audit-log'))
-      return Promise.resolve({ success: true, data: { content: overrides.auditLogs ?? [] } })
+    if (url.startsWith('/diagrams'))
+      return Promise.resolve({ success: true, data: { content: overrides.diagrams ?? [] } })
     return Promise.resolve({ success: true, data: { content: [] } })
   })
 }
@@ -143,7 +204,7 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(recentModels.value).toHaveLength(5)
-      expect(recentModels.value.map(m => m.id)).toEqual(['4', '6', '2', '5', '3'])
+      expect(recentModels.value.map((m) => m.id)).toEqual(['4', '6', '2', '5', '3'])
     })
 
     it('treats missing updatedAt as oldest', async () => {
@@ -157,7 +218,7 @@ describe('useDashboard', () => {
       const { recentModels } = useDashboard()
       await callLoadAll()
 
-      expect(recentModels.value.map(m => m.id)).toEqual(['2', '3', '1'])
+      expect(recentModels.value.map((m) => m.id)).toEqual(['2', '3', '1'])
     })
   })
 
@@ -178,27 +239,7 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(recentNotations.value).toHaveLength(5)
-      expect(recentNotations.value.map(n => n.id)).toEqual(['4', '6', '2', '5', '3'])
-    })
-  })
-
-  describe('recentActivity sorting', () => {
-    it('returns top 12 audit logs sorted by changedAt descending', async () => {
-      const logs = Array.from({ length: 15 }, (_, i) => {
-        const day = String(i + 1).padStart(2, '0')
-        return makeAuditLog(`log-${i + 1}`, `2025-03-${day}T00:00:00Z`)
-      })
-      mockAllSuccess({ auditLogs: logs })
-
-      const { recentActivity } = useDashboard()
-      await callLoadAll()
-
-      expect(recentActivity.value).toHaveLength(12)
-
-      const ids = recentActivity.value.map(a => a.id)
-      expect(ids[0]).toBe('log-15')
-      expect(ids[1]).toBe('log-14')
-      expect(ids[11]).toBe('log-4')
+      expect(recentNotations.value.map((n) => n.id)).toEqual(['4', '6', '2', '5', '3'])
     })
   })
 
@@ -216,7 +257,8 @@ describe('useDashboard', () => {
       expect(mockApiGet).toHaveBeenCalledWith('/notations?page=0&size=50')
       expect(mockApiGet).toHaveBeenCalledWith('/node-types?page=0&size=50')
       expect(mockApiGet).toHaveBeenCalledWith('/link-types?page=0&size=50')
-      expect(mockApiGet).toHaveBeenCalledWith('/audit-log?page=0&size=20')
+      expect(mockApiGet).toHaveBeenCalledWith('/diagrams?page=0&size=5')
+      expect(mockApiGet).not.toHaveBeenCalledWith('/audit-log?page=0&size=20')
     })
 
     it('sets isLoading to false after completion', async () => {
@@ -228,6 +270,44 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(isLoading.value).toBe(false)
+    })
+  })
+
+  describe('dashboard recent happy path', () => {
+    it('reads diagrams from /dashboard/recent and does not hit fallback lists', async () => {
+      mockDashboardSuccess({
+        diagrams: [makeRecentDiagram('d1', 'Landscape', 'm1', 'Enterprise', '2026-08-01T00:00:00Z')],
+        models: [makeModel('m1', 'Enterprise', '2026-08-01T00:00:00Z')],
+      })
+      const { recentDiagrams, recentModels } = useDashboard()
+      await callLoadAll()
+      expect(recentDiagrams.value).toHaveLength(1)
+      expect(recentDiagrams.value[0]).toMatchObject({
+        id: 'd1',
+        name: 'Landscape',
+        modelId: 'm1',
+        modelName: 'Enterprise',
+      })
+      expect(recentModels.value.map((m) => m.id)).toEqual(['m1'])
+      expect(mockApiGet).toHaveBeenCalledTimes(2)
+      expect(mockApiGet).not.toHaveBeenCalledWith(expect.stringMatching(/^\/diagrams/))
+    })
+  })
+
+  describe('recentDiagrams fallback', () => {
+    it('maps /diagrams and resolves modelName from loaded models', async () => {
+      mockAllSuccess({
+        models: [makeModel('m1', 'Enterprise', '2026-08-01T00:00:00Z')],
+        diagrams: [makeDiagramResponse('d1', 'Landscape', 'm1', '2026-08-02T00:00:00Z')],
+      })
+      const { recentDiagrams } = useDashboard()
+      await callLoadAll()
+      expect(recentDiagrams.value[0]).toMatchObject({
+        id: 'd1',
+        name: 'Landscape',
+        modelId: 'm1',
+        modelName: 'Enterprise',
+      })
     })
   })
 
@@ -254,15 +334,15 @@ describe('useDashboard', () => {
             success: false,
             error: { status: 404, message: 'Not found' },
           })
-        if (url.startsWith('/audit-log'))
+        if (url.startsWith('/diagrams'))
           return Promise.resolve({
             success: true,
-            data: { content: [makeAuditLog('a1', '2025-01-01T00:00:00Z')] },
+            data: { content: [makeDiagramResponse('d1', 'Landscape', 'm1', '2025-01-01T00:00:00Z')] },
           })
         return Promise.resolve({ success: true, data: { content: [] } })
       })
 
-      const { stats, totalVersions, recentActivity, isLoading } = useDashboard()
+      const { stats, totalVersions, recentDiagrams, isLoading } = useDashboard()
       await callLoadAll()
 
       expect(isLoading.value).toBe(false)
@@ -271,7 +351,7 @@ describe('useDashboard', () => {
       expect(stats.value.nodeTypes).toBe(1)
       expect(stats.value.linkTypes).toBe(0)
       expect(totalVersions.value.notations).toBe(0)
-      expect(recentActivity.value).toHaveLength(1)
+      expect(recentDiagrams.value).toHaveLength(1)
     })
   })
 })

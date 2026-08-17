@@ -2,6 +2,7 @@
 import {computed} from "vue";
 import { useI18n } from "vue-i18n";
 import UserAvatar from "../layout/UserAvatar.vue";
+import LazyIconImg from "../forms/LazyIconImg.vue";
 import { getGradient } from "@/utils/gradientColors";
 import { formatDate } from "@/utils/formatDate";
 
@@ -63,11 +64,13 @@ const formattedUpdatedAt = computed(() => {
         <div class="model-card__icon-wrap">
           <div class="model-card__icon">
             <template v-if="icon">
-              <img
+              <LazyIconImg
                 class="model-card__icon-img"
-                :src="`/icons/${icon}.svg`"
+                :icon-id="icon"
                 :alt="name"
-              >
+                img-class="model-card__icon-img"
+                eager
+              />
             </template>
             <slot v-else name="icon" />
           </div>
@@ -104,7 +107,7 @@ const formattedUpdatedAt = computed(() => {
           >
             <UiIcon
               :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-              name="account_tree"
+              name="device_hub"
             />
           </button>
           <button
@@ -184,6 +187,14 @@ const formattedUpdatedAt = computed(() => {
 .model-card-wrap {
   position: relative;
   display: block;
+  isolation: isolate;
+  z-index: 0;
+  transition: transform 0.25s ease;
+}
+
+.model-card-wrap:hover {
+  z-index: 1;
+  transform: translateY(-4px);
 }
 
 .model-card-wrap--stacked {
@@ -202,7 +213,7 @@ const formattedUpdatedAt = computed(() => {
   border: 1px solid var(--border);
   background: var(--surface);
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 .model-card-wrap--stacked::before {
@@ -231,12 +242,11 @@ const formattedUpdatedAt = computed(() => {
   cursor: pointer;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.model-card:hover {
+.model-card-wrap:hover .model-card {
   box-shadow: var(--shadow-md), var(--shadow-glow);
-  transform: translateY(-4px);
   border-color: var(--border-strong);
 }
 
@@ -344,7 +354,6 @@ const formattedUpdatedAt = computed(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(6px);
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 

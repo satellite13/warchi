@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n"
 import type { TypeItem } from "../composables/useTypeEditor"
 import type { CustomProperty } from "@/domain/attrs/notationAttrs"
 import IconPicker from "@/components/forms/IconPicker.vue"
+import SearchInput from "@/components/forms/SearchInput.vue"
 import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import PropertyRow from "@/components/properties/PropertyRow.vue"
@@ -153,24 +154,12 @@ watch(
           </button>
         </div>
 
-        <div v-if="selectedType.parsedAttrs.customProperties?.length" class="properties-search">
-          <UiIcon name="search" class="properties-search__icon" />
-          <input
-            v-model="propertySearchQuery"
-            class="properties-search__input"
-            type="text"
-            :placeholder="t('types.filterByPropertyName')"
-          >
-          <button
-            v-if="propertySearchQuery"
-            type="button"
-            class="properties-search__clear"
-            :title="t('types.clearFilter')"
-            @click="propertySearchQuery = ''"
-          >
-            <UiIcon name="close" />
-          </button>
-        </div>
+        <SearchInput
+          v-if="selectedType.parsedAttrs.customProperties?.length"
+          v-model="propertySearchQuery"
+          compact
+          :placeholder="t('types.filterByPropertyName')"
+        />
 
         <div
           v-if="!selectedType.parsedAttrs.customProperties?.length"
@@ -227,126 +216,6 @@ watch(
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.4;
-}
-
-.type-form__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  gap: 12px;
-}
-
-.type-form__title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.type-form__kind-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--primary-soft);
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.type-form__kind-icon .ui-icon {
-  font-size: 20px;
-}
-
-.type-form__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--base-text);
-  white-space: nowrap;
-  letter-spacing: -0.01em;
-}
-
-.type-form__help-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--btn-height);
-  padding: 0 20px;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 14px;
-  font-family: inherit;
-  font-weight: 500;
-  transition: color 0.15s ease, background 0.15s ease;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-
-.type-form__help-link:hover {
-  color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.type-form__help-link .ui-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.type-form__doc-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
-  flex-shrink: 0;
-}
-
-.type-form__doc-btn:hover {
-  color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.type-form__doc-btn-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.type-form__doc-badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--success);
-  color: #fff;
-  font-size: 10px;
-}
-
-.type-form__doc-badge .ui-icon {
-  width: 10px;
-  height: 10px;
-}
-
-.type-form__actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 .type-form__body {
@@ -438,57 +307,4 @@ watch(
   gap: 6px;
 }
 
-.properties-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-}
-
-.properties-search__icon {
-  font-size: 18px;
-  color: var(--text-subtle);
-  flex-shrink: 0;
-}
-
-.properties-search__input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--base-text);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-}
-
-.properties-search__input::placeholder {
-  color: var(--text-subtle);
-}
-
-.properties-search__clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-subtle);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.properties-search__clear:hover {
-  background: var(--surface-strong);
-  color: var(--base-text);
-}
-
-.properties-search__clear .ui-icon {
-  font-size: 16px;
-}
 </style>

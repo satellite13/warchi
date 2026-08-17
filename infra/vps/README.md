@@ -119,7 +119,7 @@ must already be `Bound` with an exact `20Gi` request and capacity and a valid St
 storage expansion is attempted during deployment.
 
 The VPS values retain the verified production sizing for the arepos-server container: requests
-are `300m` CPU and `512Mi` memory, while limits are `1000m` CPU and `1Gi` memory. The local bundle
+are `300m` CPU and `512Mi` memory, while limits are `1000m` CPU and `2Gi` memory. The local bundle
 test renders the Deployment and checks these exact values as a preflight, preventing a chart
 default with insufficient memory from reaching an atomic Helm upgrade.
 

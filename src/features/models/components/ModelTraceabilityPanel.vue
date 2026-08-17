@@ -304,7 +304,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 @selectstart.prevent
                 @dblclick.prevent="emit('open-diagram', diagram.id)"
               >
-                <UiIcon name="table_chart" class="tp-diagram__icon" />
+                <UiIcon name="dashboard" class="tp-diagram__icon" />
                 <span class="tp-diagram__name">{{ diagram.name }}</span>
                 <span class="tp-diagram__version">{{ diagram.version }}</span>
               </div>

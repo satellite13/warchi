@@ -34,7 +34,7 @@ test.describe('Model editor', () => {
 
     // --- Verify the left tree panel is visible ---
     await expect(page.locator('.panel')).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('.panel__search-input')).toBeVisible()
+    await expect(page.locator('.panel__search .search-input')).toBeVisible()
 
     // --- Verify the tree shows empty state or existing nodes ---
     const treeNode = page.locator('.tree-node')
@@ -45,14 +45,14 @@ test.describe('Model editor', () => {
 
     // --- Add a root folder via the create_new_folder button ---
     // Button order in .panel__header-actions: [0] = sync toggle, [1] = create folder, [2] = add node
-    const addFolderBtn = page.locator('.panel__header-actions .mini-btn').nth(1)
+    const addFolderBtn = page.locator('.panel__header-actions .btn--icon').nth(1)
     await addFolderBtn.click()
 
     // Create folder modal with a name input
     await expect(page.locator('.modal-overlay')).toBeVisible({ timeout: 5000 })
 
     // Fill in the folder name
-    const folderNameInput = page.locator('.modal-overlay .field-input')
+    const folderNameInput = page.locator('.modal-overlay .form-input')
     await folderNameInput.fill('E2E Test Folder')
 
     // Primary action in the modal footer (Create)

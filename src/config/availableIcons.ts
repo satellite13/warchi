@@ -3,6 +3,7 @@
  */
 export const ARCHIMATE_ICONS = [
   'actor',
+  'and',
   'artifact',
   'assessment',
   'capability',
@@ -35,6 +36,7 @@ export const ARCHIMATE_ICONS = [
   'node',
   'object',
   'octagon',
+  'or',
   'outcome',
   'path',
   'plateau',

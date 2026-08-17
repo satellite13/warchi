@@ -570,7 +570,7 @@ arepos_resources="$(
   ' "${TMP_DIR}/arepos.yaml"
 )"
 assert_equal \
-  $'          resources:\n            limits:\n              cpu: 1000m\n              memory: 1Gi\n            requests:\n              cpu: 300m\n              memory: 512Mi' \
+  $'          resources:\n            limits:\n              cpu: 1000m\n              memory: 2Gi\n            requests:\n              cpu: 300m\n              memory: 512Mi' \
   "${arepos_resources}" \
   "rendered arepos-server production resources"
 assert_not_contains "${TMP_DIR}/arepos.yaml" 'kind: Ingress'

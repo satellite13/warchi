@@ -44,7 +44,7 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
           autofocus
         >
       </label>
-      <div v-if="error" class="rename-form__error">{{ error }}</div>
+      <div v-if="error" class="form-error">{{ error }}</div>
       <div class="rename-form__actions">
         <button
           type="button"
@@ -83,15 +83,6 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
   font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
-}
-
-.rename-form__error {
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .rename-form__actions {

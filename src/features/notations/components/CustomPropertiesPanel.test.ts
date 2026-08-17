@@ -70,6 +70,6 @@ describe('CustomPropertiesPanel', () => {
     })
 
     expect(wrapper.text()).toContain('diagram.compositeLabel')
-    expect(wrapper.find('.properties-panel__label-template-input').exists()).toBe(true)
+    expect(wrapper.find('.form-textarea').exists()).toBe(true)
   })
 })

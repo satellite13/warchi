@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MATERIAL_SYMBOLS_OUTLINED_NAMES } from './materialSymbolsOutlinedNames.generated'
 import { sanitizeIconOptions, type IconOption } from './iconOptions'
 
 describe('sanitizeIconOptions', () => {
@@ -27,5 +28,11 @@ describe('sanitizeIconOptions', () => {
       { id: 'event', label: 'archimate event' },
       { id: 'circle', label: 'archimate circle' },
     ])
+  })
+})
+
+describe('MATERIAL_SYMBOLS_OUTLINED_NAMES', () => {
+  it('includes icons from Material Symbols that were missing in Material Icons', () => {
+    expect(MATERIAL_SYMBOLS_OUTLINED_NAMES).toContain('database')
   })
 })

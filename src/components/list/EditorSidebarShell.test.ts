@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import EditorSidebarShell from './EditorSidebarShell.vue'
 
-vi.mock('vue-i18n', async importOriginal => {
+vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -33,12 +33,12 @@ describe('EditorSidebarShell', () => {
   it('renders title, optional count, and action slot', () => {
     const wrapper = mountShell(
       { count: 3 },
-      { actions: '<button class="ess-action-btn" type="button">+</button>' }
+      { actions: '<button class="btn--icon" type="button">+</button>' },
     )
 
     expect(wrapper.find('.ess__title').text()).toBe('Types')
     expect(wrapper.find('.ess__count').text()).toBe('3')
-    expect(wrapper.find('.ess-action-btn').exists()).toBe(true)
+    expect(wrapper.find('.btn--icon').exists()).toBe(true)
   })
 
   it('hides count when zero or omitted', () => {
@@ -54,14 +54,21 @@ describe('EditorSidebarShell', () => {
     expect(wrapper.find('.slot-list').exists()).toBe(false)
   })
 
-  it('supports v-model:searchQuery and clear', async () => {
+  it('supports v-model:searchQuery and clear via SearchInput', async () => {
     const wrapper = mountShell({ searchQuery: 'abc' })
 
-    const input = wrapper.find('.ess__search-input')
+    const input = wrapper.find('.search-input')
     expect((input.element as HTMLInputElement).value).toBe('abc')
+    expect(wrapper.find('.search-box--compact').exists()).toBe(true)
 
-    await wrapper.find('.ess__clear-btn').trigger('click')
+    await wrapper.find('.clear-button').trigger('click')
     expect(wrapper.emitted('update:searchQuery')?.at(-1)).toEqual([''])
+  })
+
+  it('renders search-extra and applies fill class', () => {
+    const wrapper = mountShell({ fill: true }, { 'search-extra': '<select class="sort-extra"></select>' })
+    expect(wrapper.find('.ess--fill').exists()).toBe(true)
+    expect(wrapper.find('.sort-extra').exists()).toBe(true)
   })
 
   it('renders footer slot', () => {

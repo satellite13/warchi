@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiGet, apiPut } from '../composables/useApi'
 import { pagedListParams } from '../api/queryHelpers'
@@ -11,6 +11,8 @@ import AdminAlert from '@/components/admin/AdminAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import AdminUserApiKeys from '@/components/admin/AdminUserApiKeys.vue'
+import SearchInput from '@/components/forms/SearchInput.vue'
+import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import { useUserProfileEdit, useUserPasswordEdit } from './composables/useUserAdminForms'
 
 type EditableUser = User & {
@@ -110,10 +112,6 @@ const handleRoleChange = async (user: EditableUser, event: Event): Promise<void>
   await updateUser(user.id, { role })
 }
 
-const handleActiveToggle = async (user: EditableUser): Promise<void> => {
-  await updateUser(user.id, { isActive: !user.isActive })
-}
-
 const fullName = (user: EditableUser): string => {
   const parts = [user.lastName, user.firstName, user.middleName]
     .map((part) => part?.trim())
@@ -137,14 +135,17 @@ const {
   submitPasswordChange,
 } = useUserPasswordEdit(isSavingId, errorMessage, successMessage, updateUser)
 
-const clearSearch = () => {
-  searchEmail.value = ''
-  loadUsers()
-}
-
 const toggleApiKeys = (userId: string): void => {
   apiKeysUserId.value = apiKeysUserId.value === userId ? null : userId
 }
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+watch(searchEmail, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    void loadUsers()
+  }, 300)
+})
 
 onMounted(() => {
   loadUsers()
@@ -155,39 +156,11 @@ onMounted(() => {
   <div class="au">
     <AdminPageHeader :title="t('adminUsers.title')" :subtitle="t('adminUsers.subtitle')">
       <template #toolbar>
-        <form class="au-search" @submit.prevent="loadUsers">
-          <div class="au-search__wrap">
-            <svg class="au-search__icon" viewBox="0 0 20 20" fill="none">
-              <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" />
-              <path
-                d="M13 13l4 4"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-              />
-            </svg>
-            <input
-              v-model="searchEmail"
-              class="au-search__input"
-              type="text"
-              :placeholder="t('adminUsers.searchByEmail')"
-              :disabled="isLoading"
-            />
-            <button v-if="searchEmail" type="button" class="au-search__clear" @click="clearSearch">
-              <svg viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M4 4l8 8M12 4l-8 8"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
-          </div>
-          <button type="submit" class="btn btn--primary btn--sm" :disabled="isLoading">
-            {{ t('common.find') }}
-          </button>
-        </form>
+        <SearchInput
+          v-model="searchEmail"
+          class="au-search"
+          :placeholder="t('adminUsers.searchByEmail')"
+        />
       </template>
     </AdminPageHeader>
 
@@ -290,20 +263,13 @@ onMounted(() => {
 
             <!-- Status -->
             <td>
-              <button
-                type="button"
-                class="au-toggle"
-                :class="{ 'au-toggle--on': user.isActive }"
+              <ToggleSwitch
+                :model-value="user.isActive"
                 :disabled="isSavingId === user.id"
-                @click="handleActiveToggle(user)"
+                @update:model-value="updateUser(user.id, { isActive: $event })"
               >
-                <span class="au-toggle__track">
-                  <span class="au-toggle__thumb"></span>
-                </span>
-                <span class="au-toggle__text">{{
-                  user.isActive ? t('adminUsers.statusActive') : t('adminUsers.statusBlocked')
-                }}</span>
-              </button>
+                {{ user.isActive ? t('adminUsers.statusActive') : t('adminUsers.statusBlocked') }}
+              </ToggleSwitch>
             </td>
 
             <!-- Updated -->
@@ -463,105 +429,13 @@ onMounted(() => {
 .au {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 20px;
   min-height: 0;
 }
 
-/* ─── Header ───────────────────────────────────── */
-.au__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-}
-
-.au__heading {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--base-text);
-  letter-spacing: -0.03em;
-}
-
-.au__sub {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-/* ─── Search ───────────────────────────────────── */
 .au-search {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.au-search__wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.au-search__icon {
-  position: absolute;
-  left: 12px;
-  width: 15px;
-  height: 15px;
-  color: var(--text-subtle);
-  pointer-events: none;
-  transition: color 0.2s;
-}
-
-.au-search__wrap:focus-within .au-search__icon {
-  color: var(--primary);
-}
-
-.au-search__input {
-  width: 220px;
-  padding: 8px 30px 8px 34px;
-  font-size: 13px;
-  font-family: inherit;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--base-text);
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.au-search__input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
-}
-
-.au-search__input::placeholder {
-  color: var(--text-subtle);
-}
-
-.au-search__clear {
-  position: absolute;
-  right: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--surface-strong);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.au-search__clear svg {
-  width: 11px;
-  height: 11px;
-}
-
-.au-search__clear:hover {
-  background: var(--border);
+  width: min(360px, 100%);
 }
 
 /* ─── Stats ────────────────────────────────────── */
@@ -641,46 +515,6 @@ onMounted(() => {
   letter-spacing: 0.04em;
 }
 
-/* ─── Alerts ───────────────────────────────────── */
-.au-alert {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.au-alert--error {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 16%, transparent);
-}
-
-.au-alert--success {
-  background: var(--success-soft);
-  color: var(--success);
-  border: 1px solid color-mix(in srgb, var(--success) 20%, transparent);
-}
-
-.au-alert__icon {
-  width: 17px;
-  height: 17px;
-  flex-shrink: 0;
-}
-
-.au-alert-enter-active,
-.au-alert-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.au-alert-enter-from,
-.au-alert-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-
 /* ─── Table wrapper ────────────────────────────── */
 .au-table-wrap {
   flex: 1;
@@ -694,36 +528,6 @@ onMounted(() => {
 }
 
 /* ─── Table ────────────────────────────────────── */
-.au-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.au-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px 18px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border);
-}
-
-.au-table tbody td {
-  padding: 12px 18px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  vertical-align: middle;
-}
-
-.au-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
 .au-table__row {
   transition: background 0.15s;
 }
@@ -856,65 +660,6 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* ─── Toggle ───────────────────────────────────── */
-.au-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.au-toggle:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.au-toggle__track {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
-  background: var(--border-strong);
-  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
-}
-
-.au-toggle--on .au-toggle__track {
-  background: var(--accent);
-}
-
-.au-toggle__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.au-toggle--on .au-toggle__thumb {
-  transform: translateX(16px);
-}
-
-.au-toggle__text {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  transition: color 0.2s;
-  white-space: nowrap;
-}
-
-.au-toggle--on .au-toggle__text {
-  color: var(--accent);
-}
-
 /* ─── Date ─────────────────────────────────────── */
 .au-date {
   font-size: 12px;
@@ -1000,81 +745,20 @@ onMounted(() => {
   gap: 5px;
 }
 
-/* ─── Empty / loading ──────────────────────────── */
-.au-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 56px 20px;
-  color: var(--text-subtle);
-  font-size: 13px;
-}
-
 .au-empty__icon {
   width: 48px;
   height: 48px;
   color: var(--text-subtle);
 }
 
-.au-spinner {
-  width: 22px;
-  height: 22px;
-  border: 2.5px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: au-spin 0.7s linear infinite;
-}
-
-@keyframes au-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ─── Row transitions ──────────────────────────── */
-.au-row-enter-active {
-  transition: all 0.3s ease;
-}
-
-.au-row-leave-active {
-  transition: all 0.2s ease;
-}
-
-.au-row-enter-from {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-
-.au-row-leave-to {
-  opacity: 0;
-}
-
 /* ─── Responsive ───────────────────────────────── */
 @media (max-width: 768px) {
-  .au__header {
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .au-search {
-    width: 100%;
-  }
-
-  .au-search__input {
-    width: 100%;
-  }
-
   .au-stats {
     grid-template-columns: repeat(2, 1fr);
   }
 
   .au-table-wrap {
     overflow: auto;
-  }
-
-  .au-table {
-    min-width: 1180px;
   }
 }
 </style>

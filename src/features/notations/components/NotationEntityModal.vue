@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import BaseModal from "@/components/modals/BaseModal.vue"
+import NameVersionForm from "@/components/forms/NameVersionForm.vue"
 import SearchableSelect from "@/components/forms/SearchableSelect.vue"
 import TagSuggestions from "./TagSuggestions.vue"
 import type { EditorNodeType, EditorLinkType } from "../types"
@@ -71,26 +72,19 @@ const stylePresetSelectOptions = computed(() => [
       class="modal-form"
       @submit.prevent="emit('submit')"
     >
-      <label class="modal-label">
-        {{ nameLabel }}
-        <input
-          v-model="nameModel"
-          type="text"
-          :placeholder="namePlaceholder"
-        >
-      </label>
-      <label class="modal-label">
-        {{ versionLabel || 'Версия' }}
-        <input
-          v-model="versionModel"
-          type="text"
-          :placeholder="versionPlaceholder || '1.0.0'"
-        >
-      </label>
+      <NameVersionForm
+        v-model:name="nameModel"
+        v-model:version="versionModel"
+        :name-label="nameLabel"
+        :version-label="versionLabel || t('common.version')"
+        :name-placeholder="namePlaceholder"
+        :version-placeholder="versionPlaceholder || '1.0.0'"
+      />
       <label class="modal-label">
         {{ tagsLabel }}
         <input
           v-model="tagsModel"
+          class="form-input form-input--lg"
           type="text"
           :placeholder="tagsPlaceholder"
         >
@@ -130,6 +124,7 @@ const stylePresetSelectOptions = computed(() => [
         {{ newTypeLabel }}
         <input
           v-model="newTypeNameModel"
+          class="form-input form-input--lg"
           type="text"
           :placeholder="newTypePlaceholder"
         >
@@ -157,14 +152,14 @@ const stylePresetSelectOptions = computed(() => [
         class="btn btn--secondary"
         @click="emit('close')"
       >
-        Отмена
+        {{ t('common.cancel') }}
       </button>
       <button
         type="submit"
         :form="formId"
         class="btn btn--primary"
       >
-        Добавить
+        {{ t('common.create') }}
       </button>
     </template>
   </BaseModal>
@@ -186,22 +181,6 @@ const stylePresetSelectOptions = computed(() => [
   color: var(--text-muted);
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-.modal-label input,
-.modal-label select {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--base-text);
-  background: var(--surface-muted);
-  box-sizing: border-box;
-  height: 40px;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-  text-transform: none;
 }
 
 .modal-label :deep(.searchable-select__control) {
@@ -228,24 +207,7 @@ const stylePresetSelectOptions = computed(() => [
   height: 16px;
 }
 
-.modal-label input:focus,
-.modal-label select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
-  background: var(--surface);
-}
-
-.modal-label input::placeholder {
-  color: var(--text-subtle);
-}
-
 .form-error {
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  border: 1px solid rgba(220, 53, 69, 0.15);
   text-transform: none;
 }
 

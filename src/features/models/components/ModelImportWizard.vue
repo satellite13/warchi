@@ -727,7 +727,7 @@ watch(
       <div v-if="currentStep === 1" class="oef-import__panel">
         <div class="oef-import__row">
           <label class="oef-import__label">{{ t('models.oefImportTargetNotation') }}</label>
-          <select v-model="selectedNotationId" class="oef-import__select">
+          <select v-model="selectedNotationId" class="form-select">
             <option v-for="notation in notations" :key="notation.id" :value="notation.id">
               {{ notation.name }} ({{ notation.version }})
             </option>
@@ -831,7 +831,7 @@ watch(
           <h4>{{ t('models.oefImportElementMappings') }}</h4>
           <p class="oef-import__hint">{{ t('models.oefImportElementMappingHint') }}</p>
           <div class="oef-import__bulk">
-            <select v-model="bulkElementValue" class="oef-import__select">
+            <select v-model="bulkElementValue" class="form-select">
               <option value="">{{ t('models.oefImportBulkSelect') }}</option>
               <option v-for="option in bulkElementOptions" :key="`bulk-el-${option.value}`" :value="option.value">
                 {{ option.label }}
@@ -849,7 +849,7 @@ watch(
             <span class="oef-import__source">{{ sourceType }}</span>
             <select
               :value="elementMappingValue(sourceType)"
-              class="oef-import__select"
+              class="form-select"
               :aria-label="t('models.oefImportColNodeTypeComponent')"
               @change="onSelectElementMapping(sourceType, ($event.target as HTMLSelectElement).value)"
             >
@@ -865,7 +865,7 @@ watch(
           <h4>{{ t('models.oefImportRelationshipMappings') }}</h4>
           <p class="oef-import__hint">{{ t('models.oefImportRelationshipMappingHint') }}</p>
           <div class="oef-import__bulk">
-            <select v-model="bulkRelationshipValue" class="oef-import__select">
+            <select v-model="bulkRelationshipValue" class="form-select">
               <option value="">{{ t('models.oefImportBulkSelect') }}</option>
               <option v-for="option in bulkRelationshipOptions" :key="`bulk-rel-${option.value}`" :value="option.value">
                 {{ option.label }}
@@ -883,7 +883,7 @@ watch(
             <span class="oef-import__source">{{ sourceType }}</span>
             <select
               :value="relationshipMappingValue(sourceType)"
-              class="oef-import__select"
+              class="form-select"
               :aria-label="t('models.oefImportColLinkTypeRelation')"
               @change="onSelectRelationshipMapping(sourceType, ($event.target as HTMLSelectElement).value)"
             >
@@ -964,14 +964,14 @@ watch(
           <h4>{{ t('models.oefImportReuseTitle') }}</h4>
           <div class="oef-import__row">
             <label class="oef-import__label">{{ t('models.oefImportReuseNodesMode') }}</label>
-            <select v-model="reuseSettings.nodesMode" class="oef-import__select">
+            <select v-model="reuseSettings.nodesMode" class="form-select">
               <option value="alwaysCreate">{{ t('models.oefImportReuseAlwaysCreate') }}</option>
               <option value="reuseMatching">{{ t('models.oefImportReuseMatching') }}</option>
             </select>
           </div>
           <div class="oef-import__row">
             <label class="oef-import__label">{{ t('models.oefImportReuseLinksMode') }}</label>
-            <select v-model="reuseSettings.linksMode" class="oef-import__select">
+            <select v-model="reuseSettings.linksMode" class="form-select">
               <option value="alwaysCreate">{{ t('models.oefImportReuseAlwaysCreate') }}</option>
               <option value="reuseMatching">{{ t('models.oefImportReuseMatching') }}</option>
             </select>
@@ -980,7 +980,7 @@ watch(
             <label class="oef-import__label">{{ t('models.oefImportReuseLinkCriterion') }}</label>
             <select
               v-model="reuseSettings.linkMatchCriterion"
-              class="oef-import__select"
+              class="form-select"
               :disabled="reuseSettings.linksMode !== 'reuseMatching'"
             >
               <option value="endpointsAndType">
@@ -995,7 +995,7 @@ watch(
             <label class="oef-import__label">{{ t('models.oefImportReuseOnNodeMatch') }}</label>
             <select
               v-model="reuseSettings.onNodeMatch"
-              class="oef-import__select"
+              class="form-select"
               :disabled="reuseSettings.nodesMode !== 'reuseMatching'"
             >
               <option value="reuseId">{{ t('models.oefImportReuseOnlyId') }}</option>
@@ -1006,7 +1006,7 @@ watch(
             <label class="oef-import__label">{{ t('models.oefImportReuseOnLinkMatch') }}</label>
             <select
               v-model="reuseSettings.onLinkMatch"
-              class="oef-import__select"
+              class="form-select"
               :disabled="reuseSettings.linksMode !== 'reuseMatching'"
             >
               <option value="reuseId">{{ t('models.oefImportReuseOnlyId') }}</option>
@@ -1242,7 +1242,6 @@ watch(
   color: var(--text-muted);
 }
 
-.oef-import__select,
 .oef-import__file {
   border: 1px solid var(--border);
   border-radius: 8px;

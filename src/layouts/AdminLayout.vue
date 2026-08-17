@@ -72,6 +72,31 @@ const { t } = useI18n()
           </svg>
           {{ t('admin.tabDiagramLocks') }}
         </RouterLink>
+        <RouterLink
+          to="/admin/icons"
+          class="admin-tabs__link"
+          :class="{ 'admin-tabs__link--active': route.path.startsWith('/admin/icons') }"
+        >
+          <svg class="admin-tabs__icon" viewBox="0 0 18 18" fill="none">
+            <rect
+              x="3"
+              y="3"
+              width="12"
+              height="12"
+              rx="2"
+              stroke="currentColor"
+              stroke-width="1.3"
+            />
+            <path
+              d="M6 11.5l2-2.5 1.5 1.5 2.5-3.5"
+              stroke="currentColor"
+              stroke-width="1.3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          {{ t('admin.tabIcons') }}
+        </RouterLink>
       </nav>
       <div class="admin-content">
         <RouterView />

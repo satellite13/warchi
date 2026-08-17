@@ -20,7 +20,7 @@ const html = computed(() => {
 <template>
   <div class="docs-content">
     <div v-if="isLoading" class="docs-content__loading">
-      <UiIcon name="progress_activity" class="docs-content__spinner" />
+      <UiIcon name="sync" class="docs-content__spinner" />
       {{ t("common.loading") }}
     </div>
     <!-- eslint-disable-next-line vue/no-v-html -->

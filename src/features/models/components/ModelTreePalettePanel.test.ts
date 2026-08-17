@@ -173,6 +173,53 @@ describe('ModelTreePalettePanel', () => {
 
     expect(wrapper.emitted('copyDiagramToModel')).toEqual([['diagram-1']])
   })
+
+  it('uses shared btn--icon for header and row actions', async () => {
+    const wrapper = mount(ModelTreePalettePanel, {
+      props: {
+        nodes: [],
+        diagrams: [
+          {
+            id: 'diagram-1',
+            name: 'Source diagram',
+            version: '1.0.0',
+            notationId: 'notation-1',
+            ownerId: 'owner-1',
+            modelId: 'model-1',
+            nodeId: null,
+            parsedAttrs: parseDiagramAttrs(null),
+          },
+        ],
+        nodeTypes: [],
+        selectedNodeId: null,
+        selectedDiagramId: null,
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+        },
+      },
+    })
+
+    const headerButtons = wrapper.findAll('.panel__header-actions button')
+    expect(headerButtons.length).toBe(4)
+    for (const button of headerButtons) {
+      expect(button.classes()).toContain('btn--icon')
+    }
+    expect(wrapper.find('.mini-btn').exists()).toBe(false)
+    expect(wrapper.find('.diagram-row .btn--icon--danger').exists()).toBe(true)
+  })
+
+  it('does not show the node type name as a tree caption', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'n1', name: 'CRM' })],
+    })
+    await flushTree(wrapper)
+
+    expect(wrapper.get('[data-tree-node-id="n1"] .tree-node__name').text()).toBe('CRM')
+    expect(wrapper.find('.tree-node__type').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Application Component')
+  })
 })
 
 describe('ModelTreePalettePanel search', () => {
@@ -194,7 +241,7 @@ describe('ModelTreePalettePanel search', () => {
     })
     await flushTree(wrapper)
 
-    const input = wrapper.get('.panel__search-input')
+    const input = wrapper.get('.search-input')
     await input.setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
@@ -221,7 +268,7 @@ describe('ModelTreePalettePanel search', () => {
     })
     await flushTree(wrapper)
 
-    const input = wrapper.get('.panel__search-input')
+    const input = wrapper.get('.search-input')
     await input.setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
@@ -243,7 +290,7 @@ describe('ModelTreePalettePanel search', () => {
       ],
     })
     await flushTree(wrapper)
-    const input = wrapper.get('.panel__search-input')
+    const input = wrapper.get('.search-input')
     await input.setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
@@ -261,7 +308,7 @@ describe('ModelTreePalettePanel search', () => {
       ],
     })
     await flushTree(wrapper)
-    await wrapper.get('.panel__search-input').setValue('special')
+    await wrapper.get('.search-input').setValue('special')
     vi.advanceTimersByTime(200)
     await flushTree(wrapper)
 
@@ -306,7 +353,7 @@ describe('ModelTreePalettePanel virtualization', () => {
 
     const rendered = wrapper.findAll('[data-tree-node-id]')
     expect(rendered.length).toBeGreaterThan(0)
-    // Viewport 480 / row 40 ≈ 12 + overscan 10*2 ≈ well under 300
+    // Viewport 480 / row 42 ≈ 12 + overscan 10*2 ≈ well under 300
     expect(rendered.length).toBeLessThan(80)
     expect(rendered.length).toBeLessThan(nodes.length)
   })

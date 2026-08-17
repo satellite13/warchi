@@ -8,6 +8,16 @@ describe('NameVersionForm', () => {
     versionLabel: 'Version',
   }
 
+  it('uses shared form-input classes on both fields', () => {
+    const wrapper = mount(NameVersionForm, { props: defaultProps })
+    const inputs = wrapper.findAll('input[type="text"]')
+    expect(inputs).toHaveLength(2)
+    for (const input of inputs) {
+      expect(input.classes()).toContain('form-input')
+      expect(input.classes()).toContain('form-input--lg')
+    }
+  })
+
   it('renders both labels', () => {
     const wrapper = mount(NameVersionForm, { props: defaultProps })
     const labels = wrapper.findAll('label')

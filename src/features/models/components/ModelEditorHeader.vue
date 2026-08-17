@@ -2,8 +2,8 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import AppLogo from "@/components/layout/AppLogo.vue"
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShell.vue"
 import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
 
 import type { EditorDiagram } from '../types'
@@ -153,7 +153,7 @@ const saveTitle = computed(() =>
 
 const toolbarButtons = computed<ToolbarButton[]>(() => [
   {
-    icon: 'open_with',
+    icon: 'pan_tool',
     event: 'toggle-navigation-mode',
     title: t('toolbar.navigationMode'),
     active: props.navigationOnlyMode,
@@ -198,7 +198,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   {
-    icon: 'format_align_center',
+    icon: 'auto_awesome_mosaic',
     event: 'auto-layout-nodes',
     title: t('toolbar.autoLayoutNodes'),
     disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
@@ -217,13 +217,13 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   {
-    icon: 'description',
+    icon: 'code',
     event: 'export-diagram-svg',
     title: t('toolbar.exportDiagramSvg'),
     disabled: !props.hasActiveDiagram,
   },
   {
-    icon: 'link',
+    icon: 'ios_share',
     event: 'share-diagram-image',
     title: t('toolbar.shareDiagramImage'),
     disabled: !props.hasActiveDiagram,
@@ -302,8 +302,17 @@ function spectatorInitials(name: string): string {
 </script>
 
 <template>
-  <div v-if="canvasMode" class="model-header-canvas">
-    <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+  <DiagramEditorHeaderShell
+    :canvas-mode="canvasMode"
+    :hide-toolbar="hideToolbar"
+    :version="modelVersion"
+    :back-title="t('toolbar.backToModels')"
+    @back="router.push({ name: 'models' })"
+  >
+    <template #toolbar>
+      <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+    </template>
+    <template #canvas-extra>
     <div
       v-if="hasActiveDiagram && !diagramLockBlockedByOther && (diagramSpectators?.length ?? 0) > 0"
       class="model-header__spectators"
@@ -358,19 +367,8 @@ function spectatorInitials(name: string): string {
       <UiIcon name="visibility" class="model-header__readonly-icon" />
       <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
     </span>
-  </div>
-  <header v-else class="model-header" :class="{ 'model-header--no-toolbar': hideToolbar }">
-    <div class="model-header__left">
-      <button
-        type="button"
-        class="back-btn"
-        :title="t('toolbar.backToModels')"
-        @click="router.push({ name: 'models' })"
-      >
-        <UiIcon name="arrow_back" />
-      </button>
-      <AppLogo size="sm" />
-      <span class="model-header__divider">/</span>
+    </template>
+    <template #title>
       <div class="model-header__title-wrap">
         <input
           v-if="isRenamingModel"
@@ -393,11 +391,12 @@ function spectatorInitials(name: string): string {
           <UiIcon v-if="canEditModel" name="edit" class="model-header__title-edit-icon" />
         </button>
       </div>
-      <span v-if="modelVersion" class="model-header__version">{{ modelVersion }}</span>
+    </template>
+    <template #left-extra>
       <button
         v-if="showCompareButton"
         type="button"
-        class="share-btn"
+        class="deh-icon-btn"
         :title="t('models.compareWithVersion')"
         @click="emit('compare')"
       >
@@ -406,7 +405,7 @@ function spectatorInitials(name: string): string {
       <button
         v-if="modelId"
         type="button"
-        class="share-btn"
+        class="deh-icon-btn"
         :title="t('models.relationMatrixOpen')"
         @click="emit('openRelationMatrix')"
       >
@@ -416,7 +415,7 @@ function spectatorInitials(name: string): string {
       <button
         v-if="canShare"
         type="button"
-        class="share-btn"
+        class="deh-icon-btn"
         :title="t('toolbar.shareAccess')"
         @click="emit('share')"
       >
@@ -425,14 +424,14 @@ function spectatorInitials(name: string): string {
       <button
         v-if="showModelWikiButton"
         type="button"
-        class="share-btn"
+        class="deh-icon-btn"
         :title="t('models.documentation')"
         @click="emit('action', 'open-model-doc')"
       >
         <UiIcon name="article" />
       </button>
-    </div>
-    <div v-if="hideToolbar" class="model-header__info">
+    </template>
+    <template #info>
       <template v-if="diagramName">
         <span class="model-header__info-label">{{ t('toolbar.diagramLabel') }}:</span>
         <span class="model-header__info-value model-header__info-value--diagram">{{ diagramName }}</span>
@@ -458,7 +457,7 @@ function spectatorInitials(name: string): string {
             :disabled="!canCreateBaseline"
             @click="emit('createBaseline')"
           >
-            <UiIcon name="add_box" />
+            <UiIcon name="bookmark_add" />
           </button>
           <button
             v-if="modelId"
@@ -467,7 +466,7 @@ function spectatorInitials(name: string): string {
             :title="t('models.compareDiagramVersions')"
             @click="goToDiagramCompare"
           >
-            <UiIcon name="compare" />
+            <UiIcon name="compare_arrows" />
           </button>
           <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
         </template>
@@ -494,9 +493,8 @@ function spectatorInitials(name: string): string {
       </template>
       <span v-if="notationOwnerInfo" class="model-header__info-owner">{{ notationOwnerInfo }}</span>
       <span v-if="!diagramName" class="model-header__info-muted">{{ t('models.noDiagramSelected') }}</span>
-    </div>
-    <div v-if="!hideToolbar" class="model-header__center">
-      <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+    </template>
+    <template #center-extra>
       <div
         v-if="isDiagramReadOnly && diagramLockBlockedByOther"
         class="model-header__diagram-lock-group"
@@ -533,36 +531,11 @@ function spectatorInitials(name: string): string {
         <UiIcon name="visibility" class="model-header__readonly-icon" />
         <span class="model-header__readonly-text">{{ t('models.viewOnly') }}</span>
       </span>
-    </div>
-    <div v-if="!hideToolbar" class="model-header__right-spacer" />
-  </header>
+    </template>
+  </DiagramEditorHeaderShell>
 </template>
 
 <style scoped>
-.model-header {
-  display: grid;
-  grid-template-columns: minmax(620px, max-content) minmax(0, 1fr) 360px;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.model-header--no-toolbar {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.model-header-canvas {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px 10px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
-}
-
 .model-header__spectators {
   display: inline-flex;
   align-items: center;
@@ -617,7 +590,7 @@ function spectatorInitials(name: string): string {
 
 /* (lock-reload-btn styles above) */
 
-.model-header-canvas :deep(.icon-toolbar) {
+:deep(.deh-canvas .icon-toolbar) {
   padding: 2px 3px;
   border-radius: 7px;
 }
@@ -676,23 +649,6 @@ function spectatorInitials(name: string): string {
   color: var(--danger);
   margin-left: 2px;
   cursor: help;
-}
-
-.model-header__left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 12px 16px;
-}
-
-.model-header__info {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 0 12px 0 0;
 }
 
 .model-header__info-label {
@@ -802,15 +758,6 @@ function spectatorInitials(name: string): string {
   box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
-.model-header__center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px 16px;
-}
-
 .model-header__readonly-indicator {
   display: inline-flex;
   align-items: center;
@@ -912,35 +859,6 @@ function spectatorInitials(name: string): string {
   flex-shrink: 0;
 }
 
-.model-header__right-spacer {
-  min-width: 0;
-}
-
-.back-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.back-btn:hover {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.model-header__divider {
-  color: var(--border-strong);
-  font-size: 16px;
-  font-weight: 300;
-}
-
 .model-header__version {
   font-size: 12px;
   font-family: 'SF Mono', 'Fira Code', monospace;
@@ -950,29 +868,4 @@ function spectatorInitials(name: string): string {
   border-radius: 6px;
 }
 
-.share-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.share-btn .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.share-btn:hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
-}
 </style>

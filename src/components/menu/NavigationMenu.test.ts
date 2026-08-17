@@ -42,7 +42,7 @@ describe('NavigationMenu', () => {
 
   it('shows only documentation to guests', () => {
     const wrapper = mountMenu()
-    const destinations = wrapper.findAllComponents(RouterLinkStub).map((link) => link.props('to'))
+    const destinations = wrapper.findAllComponents(RouterLinkStub).map(link => link.props('to'))
 
     expect(destinations).toEqual(['/docs'])
   })
@@ -54,7 +54,7 @@ describe('NavigationMenu', () => {
     const wrapper = mountMenu()
     await flushPromises()
 
-    const destinations = wrapper.findAllComponents(RouterLinkStub).map((link) => link.props('to'))
+    const destinations = wrapper.findAllComponents(RouterLinkStub).map(link => link.props('to'))
     expect(destinations).toContain('/models')
     expect(destinations).toContain('/docs')
     expect(destinations).toContain('/wiki')

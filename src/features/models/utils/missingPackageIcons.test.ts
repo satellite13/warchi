@@ -9,8 +9,8 @@ describe('missingIconsFromImportedEntities', () => {
           { attrs: JSON.stringify({ diagramStyle: { iconName: 'acme-app' } }) },
           { attrs: JSON.stringify({ diagramStyle: { iconName: 'widgets' } }) },
         ],
-        [],
-      ),
+        []
+      )
     ).toEqual(['acme-app'])
   })
 
@@ -18,8 +18,8 @@ describe('missingIconsFromImportedEntities', () => {
     expect(
       missingIconsFromImportedEntities(
         [{ attrs: JSON.stringify({ iconName: 'acme-app' }) }],
-        ['acme-app'],
-      ),
+        ['acme-app']
+      )
     ).toEqual([])
   })
 })

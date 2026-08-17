@@ -147,7 +147,7 @@ export function buildEdgeLabelBackground(ds?: DiagramStyle) {
 
 export function buildNodeIcon(
   ds?: DiagramStyle,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ) {
   if (!ds?.iconName) return undefined
   const placement = ds.iconPlacement

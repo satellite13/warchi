@@ -16,11 +16,11 @@ function parseJsonAttr(raw: string | null | undefined): unknown {
 
 export function missingIconsFromImportedEntities(
   entities: Array<{ attrs?: string | null }>,
-  libraryNames: Iterable<string>,
+  libraryNames: Iterable<string>
 ): string[] {
   return analyzeImportIconGaps(
-    entities.map((entity) => parseJsonAttr(entity.attrs)),
-    libraryNames,
+    entities.map(entity => parseJsonAttr(entity.attrs)),
+    libraryNames
   )
 }
 
@@ -29,8 +29,8 @@ export async function findMissingIconsAfterModelImport(modelId: string): Promise
     fetchAllByModelId<DiagramResponse>('/diagrams', modelId, undefined, { includeAttrs: 'true' }),
     apiGet<LibraryIconRecord[]>('/library-icons'),
   ])
-  const notationIds = [...new Set(diagrams.map((diagram) => diagram.notationId).filter(Boolean))]
+  const notationIds = [...new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))]
   const components = await fetchAllComponentsByNotationIds(notationIds, { modelId })
-  const libraryNames = libraryResult.success ? libraryResult.data.map((icon) => icon.name) : []
+  const libraryNames = libraryResult.success ? libraryResult.data.map(icon => icon.name) : []
   return missingIconsFromImportedEntities([...diagrams, ...components], libraryNames)
 }

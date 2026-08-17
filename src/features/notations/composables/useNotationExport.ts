@@ -1,229 +1,229 @@
-import {ref, type Ref} from "vue";
-import {useI18n} from "vue-i18n";
-import {ImageExporter, SvgExporter, type DiagramRenderer} from "@ngroznykh/papirus";
-import { fetchAllPages } from "@/api/fetchAllPages";
-import { serializeEntityAttrs, serializeTypeAttrs } from "@/domain/attrs/notationAttrs";
-import { useNodeShapes } from "@/composables/useNodeShapes";
-import { buildExportShapes } from "@/features/notations/utils/buildExportShapes";
-import type { ExportedNodeShape } from "@/features/notations/utils/exportedNodeShape";
-import { applyShapeImportResolutions } from "@/features/notations/utils/applyShapeImportResolutions";
+import { ref, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ImageExporter, SvgExporter, type DiagramRenderer } from '@ngroznykh/papirus'
+import { fetchAllPages } from '@/api/fetchAllPages'
+import { serializeEntityAttrs, serializeTypeAttrs } from '@/domain/attrs/notationAttrs'
+import { useNodeShapes } from '@/composables/useNodeShapes'
+import { buildExportShapes } from '@/features/notations/utils/buildExportShapes'
+import type { ExportedNodeShape } from '@/features/notations/utils/exportedNodeShape'
+import { applyShapeImportResolutions } from '@/features/notations/utils/applyShapeImportResolutions'
 import {
   analyzeImportShapeConflicts,
   defaultShapeImportResolutions,
   type ShapeImportConflict,
   type ShapeImportResolution,
-} from "@/features/notations/utils/importShapeConflicts";
+} from '@/features/notations/utils/importShapeConflicts'
 import {
   analyzeNotationImportLocalOnly,
   collectImportShapesFromRaw,
   normalizeNotationImport,
   type LocalOnlyPolicy,
   type NotationImportLocalOnlySummary,
-} from "@/features/notations/utils/normalizeNotationImport";
-import type { NodeShapeResponse } from "@/types/api";
-import type {NotationData} from "@/types/entities";
-import { sanitizeFileName } from "@/utils/sanitizeFileName";
-import type { NotationEditorState } from "../types";
-import { collectIconNames } from "@/utils/collectIconNames";
-import { useLibraryIcons } from "@/composables/useLibraryIcons";
-import { useNotationIconImport } from "./useNotationIconImport";
+} from '@/features/notations/utils/normalizeNotationImport'
+import type { NodeShapeResponse } from '@/types/api'
+import type { NotationData } from '@/types/entities'
+import { sanitizeFileName } from '@/utils/sanitizeFileName'
+import type { NotationEditorState } from '../types'
+import { collectIconNames } from '@/utils/collectIconNames'
+import { useLibraryIcons } from '@/composables/useLibraryIcons'
+import { useNotationIconImport } from './useNotationIconImport'
 
 type NotationExportPayloadV2 = {
-  format: "warchi-notation-export";
-  version: 2;
-  exportedAt: string;
+  format: 'warchi-notation-export'
+  version: 2
+  exportedAt: string
   notation: {
-    id: string;
-    name: string;
-    version: string;
-  };
-  state: NotationEditorState;
-  shapes: ExportedNodeShape[];
-  icons: { name: string; svg: string }[];
-};
+    id: string
+    name: string
+    version: string
+  }
+  state: NotationEditorState
+  shapes: ExportedNodeShape[]
+  icons: { name: string; svg: string }[]
+}
 
-const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 export function useNotationExport(
   notation: Ref<NotationData | null>,
   state: Ref<NotationEditorState>,
   pendingShapes: Ref<ExportedNodeShape[]>,
-  selectedEntity: Ref<{ kind: "component" | "relation"; id: string } | null>,
+  selectedEntity: Ref<{ kind: 'component' | 'relation'; id: string } | null>,
   diagramRenderer: Ref<DiagramRenderer | null>,
   saveError: Ref<string | null>,
   saveSuccess: Ref<boolean>,
   importNotationInputRef: Ref<HTMLInputElement | null>
 ) {
-  const {t} = useI18n();
-  const { fetchById } = useNodeShapes();
-  const { icons: libraryIcons, ensureLoaded: ensureLibraryIcons } = useLibraryIcons();
-  const iconImport = useNotationIconImport();
+  const { t } = useI18n()
+  const { fetchById } = useNodeShapes()
+  const { icons: libraryIcons, ensureLoaded: ensureLibraryIcons } = useLibraryIcons()
+  const iconImport = useNotationIconImport()
 
-  const showAttrsJson = ref(false);
-  const attrsJsonContent = ref("");
-  const showImportMergeDialog = ref(false);
-  const showImportShapeResolveDialog = ref(false);
-  const importMergeSummary = ref<NotationImportLocalOnlySummary | null>(null);
-  const importShapeConflicts = ref<ShapeImportConflict[]>([]);
-  const importShapeResolutions = ref<ShapeImportResolution[]>([]);
-  const importCatalogShapes = ref<NodeShapeResponse[]>([]);
-  const pendingImportRaw = ref<unknown>(null);
-  const importInFlight = ref(false);
+  const showAttrsJson = ref(false)
+  const attrsJsonContent = ref('')
+  const showImportMergeDialog = ref(false)
+  const showImportShapeResolveDialog = ref(false)
+  const importMergeSummary = ref<NotationImportLocalOnlySummary | null>(null)
+  const importShapeConflicts = ref<ShapeImportConflict[]>([])
+  const importShapeResolutions = ref<ShapeImportResolution[]>([])
+  const importCatalogShapes = ref<NodeShapeResponse[]>([])
+  const pendingImportRaw = ref<unknown>(null)
+  const importInFlight = ref(false)
 
   const buildExportState = (): NotationEditorState => {
-    const source = cloneJson(state.value);
-    const components = source.components.filter((component) => !component._isDeleted);
-    const relations = source.relations.filter((relation) => !relation._isDeleted);
+    const source = cloneJson(state.value)
+    const components = source.components.filter(component => !component._isDeleted)
+    const relations = source.relations.filter(relation => !relation._isDeleted)
 
-    const componentIds = new Set(components.map((component) => component.id));
-    const relationIds = new Set(relations.map((relation) => relation.id));
-    const usedNodeTypeIds = new Set(components.map((component) => component.nodeTypeId));
-    const usedLinkTypeIds = new Set(relations.map((relation) => relation.linkTypeId));
+    const componentIds = new Set(components.map(component => component.id))
+    const relationIds = new Set(relations.map(relation => relation.id))
+    const usedNodeTypeIds = new Set(components.map(component => component.nodeTypeId))
+    const usedLinkTypeIds = new Set(relations.map(relation => relation.linkTypeId))
 
     const relationRules = source.relationRules
       .filter(
-        (rule) =>
+        rule =>
           !rule._isDeleted &&
           componentIds.has(rule.fromComponentId) &&
           componentIds.has(rule.toComponentId)
       )
-      .map((rule) => ({
+      .map(rule => ({
         ...rule,
         allowedRelationIds: Array.from(
-          new Set(rule.allowedRelationIds.filter((relationId) => relationIds.has(relationId)))
-        )
+          new Set(rule.allowedRelationIds.filter(relationId => relationIds.has(relationId)))
+        ),
       }))
-      .filter((rule) => rule.allowedRelationIds.length > 0);
+      .filter(rule => rule.allowedRelationIds.length > 0)
 
     return {
       ...source,
-      nodeTypes: source.nodeTypes.filter((typeItem) => usedNodeTypeIds.has(typeItem.id)),
-      linkTypes: source.linkTypes.filter((typeItem) => usedLinkTypeIds.has(typeItem.id)),
+      nodeTypes: source.nodeTypes.filter(typeItem => usedNodeTypeIds.has(typeItem.id)),
+      linkTypes: source.linkTypes.filter(typeItem => usedLinkTypeIds.has(typeItem.id)),
       components,
       relations,
-      relationRules
-    };
-  };
+      relationRules,
+    }
+  }
 
   const exportNotation = async () => {
-    const currentNotation = notation.value;
-    const fallbackNotationId = state.value.notationId || "notation";
-    const exportState = buildExportState();
+    const currentNotation = notation.value
+    const fallbackNotationId = state.value.notationId || 'notation'
+    const exportState = buildExportState()
     const shapes = await buildExportShapes({
       components: exportState.components,
       pendingShapes: pendingShapes.value,
       fetchById,
-    });
+    })
 
-    await ensureLibraryIcons();
-    const usedNames = new Set(collectIconNames(exportState, shapes));
+    await ensureLibraryIcons()
+    const usedNames = new Set(collectIconNames(exportState, shapes))
     const icons = libraryIcons.value
-      .filter((icon) => usedNames.has(icon.name))
-      .map((icon) => ({ name: icon.name, svg: icon.svg }));
+      .filter(icon => usedNames.has(icon.name))
+      .map(icon => ({ name: icon.name, svg: icon.svg }))
 
     const payload: NotationExportPayloadV2 = {
-      format: "warchi-notation-export",
+      format: 'warchi-notation-export',
       version: 2,
       exportedAt: new Date().toISOString(),
       notation: {
         id: currentNotation?.id ?? fallbackNotationId,
-        name: currentNotation?.name ?? "Notation",
-        version: currentNotation?.version ?? "1.0.0"
+        name: currentNotation?.name ?? 'Notation',
+        version: currentNotation?.version ?? '1.0.0',
       },
       state: exportState,
       shapes,
       icons,
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json;charset=utf-8"
-    });
-    const url = URL.createObjectURL(blob);
-    const fileNameBase = sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || "notation";
-    const fileName = `${fileNameBase}-export.json`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const getDiagramExportBaseName = () => {
-    const currentNotation = notation.value;
-    const fallbackNotationId = state.value.notationId || "notation";
-    return sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || "notation";
-  };
-
-  const getDiagramExportBackgroundColor = () =>
-    getComputedStyle(document.documentElement).getPropertyValue("--base-bg").trim() || "#ffffff";
-
-  const exportDiagramAsPng = async () => {
-    const renderer = diagramRenderer.value;
-    if (!renderer) {
-      saveError.value = t("notations.diagramNotReady");
-      return;
     }
 
-    const exporter = new ImageExporter(renderer);
-    const fileName = `${getDiagramExportBaseName()}.png`;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const fileNameBase = sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || 'notation'
+    const fileName = `${fileNameBase}-export.json`
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const getDiagramExportBaseName = () => {
+    const currentNotation = notation.value
+    const fallbackNotationId = state.value.notationId || 'notation'
+    return sanitizeFileName(currentNotation?.name ?? fallbackNotationId) || 'notation'
+  }
+
+  const getDiagramExportBackgroundColor = () =>
+    getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
+
+  const exportDiagramAsPng = async () => {
+    const renderer = diagramRenderer.value
+    if (!renderer) {
+      saveError.value = t('notations.diagramNotReady')
+      return
+    }
+
+    const exporter = new ImageExporter(renderer)
+    const fileName = `${getDiagramExportBaseName()}.png`
     await exporter.download(fileName, {
       scale: 2,
       padding: 24,
-      backgroundColor: getDiagramExportBackgroundColor()
-    });
-  };
+      backgroundColor: getDiagramExportBackgroundColor(),
+    })
+  }
 
   const exportDiagramAsSvg = () => {
-    const renderer = diagramRenderer.value;
+    const renderer = diagramRenderer.value
     if (!renderer) {
-      saveError.value = t("notations.diagramNotReady");
-      return;
+      saveError.value = t('notations.diagramNotReady')
+      return
     }
 
-    const exporter = new SvgExporter(renderer);
-    const fileName = `${getDiagramExportBaseName()}.svg`;
+    const exporter = new SvgExporter(renderer)
+    const fileName = `${getDiagramExportBaseName()}.svg`
     exporter.download(fileName, {
       includeBackground: true,
       backgroundColor: getDiagramExportBackgroundColor(),
-      padding: 24
-    });
-  };
+      padding: 24,
+    })
+  }
 
   const triggerNotationImport = () => {
-    if (importInFlight.value) return;
-    const input = importNotationInputRef.value;
-    if (!input) return;
-    input.value = "";
-    const inputWithShowPicker = input as HTMLInputElement & { showPicker?: () => void };
-    if (typeof inputWithShowPicker.showPicker === "function") {
-      inputWithShowPicker.showPicker();
-      return;
+    if (importInFlight.value) return
+    const input = importNotationInputRef.value
+    if (!input) return
+    input.value = ''
+    const inputWithShowPicker = input as HTMLInputElement & { showPicker?: () => void }
+    if (typeof inputWithShowPicker.showPicker === 'function') {
+      inputWithShowPicker.showPicker()
+      return
     }
-    input.click();
-  };
+    input.click()
+  }
 
   const resetImportInput = () => {
     if (importNotationInputRef.value) {
-      importNotationInputRef.value.value = "";
+      importNotationInputRef.value.value = ''
     }
-  };
+  }
 
   const clearPendingImport = () => {
-    pendingImportRaw.value = null;
-    importMergeSummary.value = null;
-    showImportMergeDialog.value = false;
-    showImportShapeResolveDialog.value = false;
-    importShapeConflicts.value = [];
-    importShapeResolutions.value = [];
-    importCatalogShapes.value = [];
-  };
+    pendingImportRaw.value = null
+    importMergeSummary.value = null
+    showImportMergeDialog.value = false
+    showImportShapeResolveDialog.value = false
+    importShapeConflicts.value = []
+    importShapeResolutions.value = []
+    importCatalogShapes.value = []
+  }
 
   const hideShapeResolveKeepPending = () => {
-    showImportShapeResolveDialog.value = false;
-    importShapeConflicts.value = [];
-  };
+    showImportShapeResolveDialog.value = false
+    importShapeConflicts.value = []
+  }
 
   const applyNotationImport = (
     raw: unknown,
@@ -236,188 +236,203 @@ export function useNotationExport(
       baseState: state.value,
       localOnlyPolicy,
       t,
-    });
+    })
 
-    const catalogById = new Map(importCatalogShapes.value.map((shape) => [shape.id, shape]));
+    const catalogById = new Map(importCatalogShapes.value.map(shape => [shape.id, shape]))
     const resolvedPending = applyShapeImportResolutions({
       components: nextState.components,
       pendingShapes: nextShapes,
       resolutions,
       catalogById,
-    });
+    })
 
-    state.value = nextState;
-    pendingShapes.value = resolvedPending;
-    saveError.value = null;
-    saveSuccess.value = false;
-    clearPendingImport();
-  };
+    state.value = nextState
+    pendingShapes.value = resolvedPending
+    saveError.value = null
+    saveSuccess.value = false
+    clearPendingImport()
+  }
 
   const continueAfterShapeResolve = (raw: unknown, resolutions: ShapeImportResolution[]) => {
-    const summary = analyzeNotationImportLocalOnly(raw, state.value, t);
+    const summary = analyzeNotationImportLocalOnly(raw, state.value, t)
     if (summary.total > 0) {
-      pendingImportRaw.value = raw;
-      importMergeSummary.value = summary;
-      hideShapeResolveKeepPending();
-      importShapeResolutions.value = resolutions;
-      showImportMergeDialog.value = true;
-      return;
+      pendingImportRaw.value = raw
+      importMergeSummary.value = summary
+      hideShapeResolveKeepPending()
+      importShapeResolutions.value = resolutions
+      showImportMergeDialog.value = true
+      return
     }
-    applyNotationImport(raw, "keep", resolutions);
-  };
+    applyNotationImport(raw, 'keep', resolutions)
+  }
 
   const confirmImportShapeResolve = () => {
-    const raw = pendingImportRaw.value;
-    if (raw === null) return;
+    const raw = pendingImportRaw.value
+    if (raw === null) return
     try {
-      continueAfterShapeResolve(raw, importShapeResolutions.value);
+      continueAfterShapeResolve(raw, importShapeResolutions.value)
     } catch (error) {
-      clearPendingImport();
+      clearPendingImport()
       saveError.value =
         error instanceof Error
-          ? t("notations.importError", {message: error.message})
-          : t("notations.importReadError");
+          ? t('notations.importError', { message: error.message })
+          : t('notations.importReadError')
     }
-  };
+  }
 
   const cancelImportShapeResolve = () => {
-    clearPendingImport();
-  };
+    clearPendingImport()
+  }
 
   const handleNotationImportChange = async (event: Event) => {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    if (importInFlight.value) return;
-    importInFlight.value = true;
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    if (importInFlight.value) return
+    importInFlight.value = true
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as unknown;
-      const prepared = await iconImport.prepareDocument(parsed);
-      if (prepared === "resolve") {
-        return;
+      const text = await file.text()
+      const parsed = JSON.parse(text) as unknown
+      const prepared = await iconImport.prepareDocument(parsed)
+      if (prepared === 'resolve') {
+        return
       }
-      const document = prepared;
+      const document = prepared
 
-      let catalog: NodeShapeResponse[];
+      let catalog: NodeShapeResponse[]
       try {
-        catalog = await fetchAllPages<NodeShapeResponse>(
-          "/node-shapes",
-          undefined,
-          { pageSize: 200, errorLabel: t("notations.importShapeResolveCatalogError") }
-        );
+        catalog = await fetchAllPages<NodeShapeResponse>('/node-shapes', undefined, {
+          pageSize: 200,
+          errorLabel: t('notations.importShapeResolveCatalogError'),
+        })
       } catch (error) {
-        clearPendingImport();
+        clearPendingImport()
         saveError.value =
           error instanceof Error
-            ? t("notations.importError", { message: error.message })
-            : t("notations.importShapeResolveCatalogError");
-        return;
+            ? t('notations.importError', { message: error.message })
+            : t('notations.importShapeResolveCatalogError')
+        return
       }
 
-      importCatalogShapes.value = catalog;
-      const importedShapes = collectImportShapesFromRaw(document, t);
-      const conflicts = analyzeImportShapeConflicts(importedShapes, catalog);
+      importCatalogShapes.value = catalog
+      const importedShapes = collectImportShapesFromRaw(document, t)
+      const conflicts = analyzeImportShapeConflicts(importedShapes, catalog)
 
       if (conflicts.length > 0) {
-        pendingImportRaw.value = document;
-        importShapeConflicts.value = conflicts;
-        importShapeResolutions.value = defaultShapeImportResolutions(conflicts);
-        showImportShapeResolveDialog.value = true;
-        return;
+        pendingImportRaw.value = document
+        importShapeConflicts.value = conflicts
+        importShapeResolutions.value = defaultShapeImportResolutions(conflicts)
+        showImportShapeResolveDialog.value = true
+        return
       }
 
-      const summary = analyzeNotationImportLocalOnly(document, state.value, t);
+      const summary = analyzeNotationImportLocalOnly(document, state.value, t)
       if (summary.total > 0) {
-        pendingImportRaw.value = document;
-        importMergeSummary.value = summary;
-        showImportMergeDialog.value = true;
-        return;
+        pendingImportRaw.value = document
+        importMergeSummary.value = summary
+        showImportMergeDialog.value = true
+        return
       }
-      applyNotationImport(document, "keep", []);
+      applyNotationImport(document, 'keep', [])
     } catch (error) {
-      clearPendingImport();
+      clearPendingImport()
       saveError.value =
         error instanceof Error
-          ? t("notations.importError", {message: error.message})
-          : t("notations.importReadError");
+          ? t('notations.importError', { message: error.message })
+          : t('notations.importReadError')
     } finally {
-      importInFlight.value = false;
-      resetImportInput();
+      importInFlight.value = false
+      resetImportInput()
     }
-  };
+  }
 
   const confirmImportMergeKeep = () => {
-    const raw = pendingImportRaw.value;
-    if (raw === null) return;
+    const raw = pendingImportRaw.value
+    if (raw === null) return
     try {
-      applyNotationImport(raw, "keep", importShapeResolutions.value);
+      applyNotationImport(raw, 'keep', importShapeResolutions.value)
     } catch (error) {
-      clearPendingImport();
+      clearPendingImport()
       saveError.value =
         error instanceof Error
-          ? t("notations.importError", {message: error.message})
-          : t("notations.importReadError");
+          ? t('notations.importError', { message: error.message })
+          : t('notations.importReadError')
     }
-  };
+  }
 
   const confirmImportMergeDelete = () => {
-    const raw = pendingImportRaw.value;
-    if (raw === null) return;
+    const raw = pendingImportRaw.value
+    if (raw === null) return
     try {
-      applyNotationImport(raw, "delete", importShapeResolutions.value);
+      applyNotationImport(raw, 'delete', importShapeResolutions.value)
     } catch (error) {
-      clearPendingImport();
+      clearPendingImport()
       saveError.value =
         error instanceof Error
-          ? t("notations.importError", {message: error.message})
-          : t("notations.importReadError");
+          ? t('notations.importError', { message: error.message })
+          : t('notations.importReadError')
     }
-  };
+  }
 
   const cancelImportMerge = () => {
-    clearPendingImport();
-  };
+    clearPendingImport()
+  }
 
   const openAttrsJson = () => {
-    const entity = selectedEntity.value;
+    const entity = selectedEntity.value
     if (!entity) {
       const data = {
         nodeTypes: state.value.nodeTypes.map(t => ({
-          id: t.id, name: t.name,
-          attrs: JSON.parse(serializeTypeAttrs(t.parsedAttrs))
+          id: t.id,
+          name: t.name,
+          attrs: JSON.parse(serializeTypeAttrs(t.parsedAttrs)),
         })),
         linkTypes: state.value.linkTypes.map(t => ({
-          id: t.id, name: t.name,
-          attrs: JSON.parse(serializeTypeAttrs(t.parsedAttrs))
+          id: t.id,
+          name: t.name,
+          attrs: JSON.parse(serializeTypeAttrs(t.parsedAttrs)),
         })),
-        components: state.value.components.filter(c => !c._isDeleted).map(c => ({
-          id: c.id, name: c.name,
-          attrs: JSON.parse(serializeEntityAttrs(c.parsedAttrs))
-        })),
-        relations: state.value.relations.filter(r => !r._isDeleted).map(r => ({
-          id: r.id, name: r.name,
-          attrs: JSON.parse(serializeEntityAttrs(r.parsedAttrs))
-        }))
-      };
-      attrsJsonContent.value = JSON.stringify(data, null, 2);
-    } else if (entity.kind === "component") {
-      const item = state.value.components.find(c => c.id === entity.id);
+        components: state.value.components
+          .filter(c => !c._isDeleted)
+          .map(c => ({
+            id: c.id,
+            name: c.name,
+            attrs: JSON.parse(serializeEntityAttrs(c.parsedAttrs)),
+          })),
+        relations: state.value.relations
+          .filter(r => !r._isDeleted)
+          .map(r => ({
+            id: r.id,
+            name: r.name,
+            attrs: JSON.parse(serializeEntityAttrs(r.parsedAttrs)),
+          })),
+      }
+      attrsJsonContent.value = JSON.stringify(data, null, 2)
+    } else if (entity.kind === 'component') {
+      const item = state.value.components.find(c => c.id === entity.id)
       if (item) {
-        attrsJsonContent.value = JSON.stringify(JSON.parse(serializeEntityAttrs(item.parsedAttrs)), null, 2);
+        attrsJsonContent.value = JSON.stringify(
+          JSON.parse(serializeEntityAttrs(item.parsedAttrs)),
+          null,
+          2
+        )
       }
     } else {
-      const item = state.value.relations.find(r => r.id === entity.id);
+      const item = state.value.relations.find(r => r.id === entity.id)
       if (item) {
-        attrsJsonContent.value = JSON.stringify(JSON.parse(serializeEntityAttrs(item.parsedAttrs)), null, 2);
+        attrsJsonContent.value = JSON.stringify(
+          JSON.parse(serializeEntityAttrs(item.parsedAttrs)),
+          null,
+          2
+        )
       }
     }
-    showAttrsJson.value = true;
-  };
+    showAttrsJson.value = true
+  }
 
   const copyAttrsJson = () => {
-    navigator.clipboard.writeText(attrsJsonContent.value);
-  };
+    navigator.clipboard.writeText(attrsJsonContent.value)
+  }
 
   return {
     showAttrsJson,
@@ -440,15 +455,15 @@ export function useNotationExport(
     showImportIconResolve: iconImport.showIconResolve,
     importMissingIcons: iconImport.missingIcons,
     confirmImportIconResolve: (remap: Record<string, string>) => {
-      const document = iconImport.applyRemap(remap);
-      const file = new File([JSON.stringify(document)], "import.json", {
-        type: "application/json",
-      });
-      const event = { target: { files: [file] } } as unknown as Event;
-      void handleNotationImportChange(event);
+      const document = iconImport.applyRemap(remap)
+      const file = new File([JSON.stringify(document)], 'import.json', {
+        type: 'application/json',
+      })
+      const event = { target: { files: [file] } } as unknown as Event
+      void handleNotationImportChange(event)
     },
     cancelImportIconResolve: iconImport.cancelResolve,
     openAttrsJson,
-    copyAttrsJson
-  };
+    copyAttrsJson,
+  }
 }

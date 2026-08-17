@@ -1,7 +1,7 @@
 export function matrixHeatColor(
   total: number,
   maxCellTotal: number,
-  heatmapEnabled = true,
+  heatmapEnabled = true
 ): string {
   if (total <= 0) return 'transparent'
   if (!heatmapEnabled || maxCellTotal <= 0) return 'var(--primary-soft)'

@@ -24,7 +24,7 @@ export function svgToDataUrl(svg: string): string {
 
 function librarySvg(
   id: string,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): string | undefined {
   if (!libraryByName) return undefined
   if ('get' in libraryByName && typeof libraryByName.get === 'function') {
@@ -35,7 +35,7 @@ function librarySvg(
 
 export function resolveIconSrc(
   name: string,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): string {
   const id = normalizeIconName(name)
   if (!id) return ''
@@ -46,7 +46,7 @@ export function resolveIconSrc(
 
 export function resolveIconMarkup(
   name: string,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): string {
   const id = normalizeIconName(name)
   if (!id) return ''
@@ -56,7 +56,7 @@ export function resolveIconMarkup(
 }
 
 export function libraryNameMap(
-  icons: ReadonlyArray<{ name: string; svg: string }>,
+  icons: ReadonlyArray<{ name: string; svg: string }>
 ): Map<string, string> {
   const map = new Map<string, string>()
   for (const icon of icons) {

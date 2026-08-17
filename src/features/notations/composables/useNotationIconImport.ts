@@ -15,7 +15,7 @@ export function useNotationIconImport() {
     await ensureLoaded()
     const gaps = analyzeImportIconGaps(
       raw,
-      icons.value.map((icon) => icon.name),
+      icons.value.map(icon => icon.name)
     )
     if (gaps.length === 0) return raw
     pendingDocument.value = raw

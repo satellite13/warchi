@@ -40,7 +40,7 @@ export type ModelEdgeOptions = Partial<{
 
 export function buildModelNodeIcon(
   ds?: DiagramStyle,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): NodeImageOptions | undefined {
   const icon = buildNodeIcon(ds, libraryByName)
   if (!icon) return undefined

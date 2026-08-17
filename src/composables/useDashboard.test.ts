@@ -12,7 +12,7 @@ vi.mock('vue-i18n', () => ({
 
 let capturedOnMounted: (() => void) | null = null
 
-vi.mock('vue', async (importOriginal) => {
+vi.mock('vue', async importOriginal => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -55,7 +55,7 @@ function makeDiagramResponse(
   id: string,
   name: string,
   modelId: string,
-  updatedAt?: string,
+  updatedAt?: string
 ): DiagramResponse {
   return {
     id,
@@ -73,7 +73,7 @@ function makeRecentDiagram(
   name: string,
   modelId: string,
   modelName: string,
-  updatedAt?: string,
+  updatedAt?: string
 ): DashboardRecentDiagram {
   return { id, name, version: '1.0.0', modelId, modelName, updatedAt: updatedAt ?? null }
 }
@@ -84,7 +84,7 @@ function mockDashboardSuccess(
     models?: ModelData[]
     notations?: NotationData[]
     diagrams?: DashboardRecentDiagram[]
-  } = {},
+  } = {}
 ) {
   mockApiGet.mockImplementation((url: string) => {
     if (url.startsWith('/dashboard/stats')) {
@@ -114,7 +114,7 @@ function mockAllSuccess(
     nodeTypes?: NodeTypeResponse[]
     linkTypes?: LinkTypeResponse[]
     diagrams?: DiagramResponse[]
-  } = {},
+  } = {}
 ) {
   mockApiGet.mockImplementation((url: string) => {
     if (url.startsWith('/models'))
@@ -204,7 +204,7 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(recentModels.value).toHaveLength(5)
-      expect(recentModels.value.map((m) => m.id)).toEqual(['4', '6', '2', '5', '3'])
+      expect(recentModels.value.map(m => m.id)).toEqual(['4', '6', '2', '5', '3'])
     })
 
     it('treats missing updatedAt as oldest', async () => {
@@ -218,7 +218,7 @@ describe('useDashboard', () => {
       const { recentModels } = useDashboard()
       await callLoadAll()
 
-      expect(recentModels.value.map((m) => m.id)).toEqual(['2', '3', '1'])
+      expect(recentModels.value.map(m => m.id)).toEqual(['2', '3', '1'])
     })
   })
 
@@ -239,7 +239,7 @@ describe('useDashboard', () => {
       await callLoadAll()
 
       expect(recentNotations.value).toHaveLength(5)
-      expect(recentNotations.value.map((n) => n.id)).toEqual(['4', '6', '2', '5', '3'])
+      expect(recentNotations.value.map(n => n.id)).toEqual(['4', '6', '2', '5', '3'])
     })
   })
 
@@ -276,7 +276,9 @@ describe('useDashboard', () => {
   describe('dashboard recent happy path', () => {
     it('reads diagrams from /dashboard/recent and does not hit fallback lists', async () => {
       mockDashboardSuccess({
-        diagrams: [makeRecentDiagram('d1', 'Landscape', 'm1', 'Enterprise', '2026-08-01T00:00:00Z')],
+        diagrams: [
+          makeRecentDiagram('d1', 'Landscape', 'm1', 'Enterprise', '2026-08-01T00:00:00Z'),
+        ],
         models: [makeModel('m1', 'Enterprise', '2026-08-01T00:00:00Z')],
       })
       const { recentDiagrams, recentModels } = useDashboard()
@@ -288,7 +290,7 @@ describe('useDashboard', () => {
         modelId: 'm1',
         modelName: 'Enterprise',
       })
-      expect(recentModels.value.map((m) => m.id)).toEqual(['m1'])
+      expect(recentModels.value.map(m => m.id)).toEqual(['m1'])
       expect(mockApiGet).toHaveBeenCalledTimes(2)
       expect(mockApiGet).not.toHaveBeenCalledWith(expect.stringMatching(/^\/diagrams/))
     })
@@ -337,7 +339,9 @@ describe('useDashboard', () => {
         if (url.startsWith('/diagrams'))
           return Promise.resolve({
             success: true,
-            data: { content: [makeDiagramResponse('d1', 'Landscape', 'm1', '2025-01-01T00:00:00Z')] },
+            data: {
+              content: [makeDiagramResponse('d1', 'Landscape', 'm1', '2025-01-01T00:00:00Z')],
+            },
           })
         return Promise.resolve({ success: true, data: { content: [] } })
       })

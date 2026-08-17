@@ -1,10 +1,10 @@
-import { ref, computed, onMounted } from "vue"
-import { apiGet } from "./useApi"
-import { pagedListParams } from "@/api/queryHelpers"
-import { paginatedContent } from "@/utils/paginatedResponse"
-import type { PaginatedResponse } from "../types/entities"
-import type { ModelData, NotationData } from "../types/entities"
-import type { NodeTypeResponse, LinkTypeResponse, DiagramResponse } from "../types/api"
+import { ref, computed, onMounted } from 'vue'
+import { apiGet } from './useApi'
+import { pagedListParams } from '@/api/queryHelpers'
+import { paginatedContent } from '@/utils/paginatedResponse'
+import type { PaginatedResponse } from '../types/entities'
+import type { ModelData, NotationData } from '../types/entities'
+import type { NodeTypeResponse, LinkTypeResponse, DiagramResponse } from '../types/api'
 
 export interface DashboardStats {
   models: number
@@ -93,19 +93,17 @@ export function useDashboard() {
 
   const totalVersions = computed(() => ({
     models: models.value.length,
-    notations: notations.value.length
+    notations: notations.value.length,
   }))
 
-  const recentModels = computed(() =>
-    sortByDateDesc(models.value, (m) => m.updatedAt).slice(0, 5)
-  )
+  const recentModels = computed(() => sortByDateDesc(models.value, m => m.updatedAt).slice(0, 5))
 
   const recentNotations = computed(() =>
-    sortByDateDesc(notations.value, (n) => n.updatedAt).slice(0, 5)
+    sortByDateDesc(notations.value, n => n.updatedAt).slice(0, 5)
   )
 
   const recentDiagrams = computed(() =>
-    sortByDateDesc(diagrams.value, (d) => d.updatedAt).slice(0, 5)
+    sortByDateDesc(diagrams.value, d => d.updatedAt).slice(0, 5)
   )
 
   const loadAll = async () => {
@@ -152,9 +150,9 @@ export function useDashboard() {
     if (nodeTypesRes.success) nodeTypes.value = paginatedContent(nodeTypesRes.data)
     if (linkTypesRes.success) linkTypes.value = paginatedContent(linkTypesRes.data)
 
-    const modelNameById = new Map(models.value.map((m) => [m.id, m.name]))
+    const modelNameById = new Map(models.value.map(m => [m.id, m.name]))
     if (diagramsRes.success) {
-      diagrams.value = paginatedContent(diagramsRes.data).map((d) => ({
+      diagrams.value = paginatedContent(diagramsRes.data).map(d => ({
         id: d.id,
         name: d.name,
         version: d.version,

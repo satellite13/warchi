@@ -16,6 +16,7 @@ import {
 } from "./useModelBatchSave"
 import { withoutDeleted } from "./modelEditorMappers"
 import { remapNodeIds, saveDiagrams, saveLinks, saveModelMetadata, saveNodes } from "./modelEditorSavePipeline"
+import { ensureDirtyPendingDiagramAttrsLoaded } from "./ensureDiagramAttrs"
 
 type ExecuteModelEditorSaveOptions = {
   model: Ref<ModelData | null>
@@ -63,6 +64,7 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
     const forceBatch = options.pendingForceBatch.value
     options.pendingForceBatch.value = false
 
+    await ensureDirtyPendingDiagramAttrsLoaded(() => options.state.value)
     applyDiagramGarbageSanitizeToState(options.state.value)
 
     const blankNamedNodes = findBlankNamedBatchNodes(nodes)

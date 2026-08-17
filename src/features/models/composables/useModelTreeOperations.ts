@@ -15,6 +15,7 @@ export function useModelTreeOperations(options: {
   clearUiError: () => void
   markNodeDirty: (nodeId: string) => void
   markDiagramDirty: (diagramId: string) => void
+  ensureDiagramAttrsLoaded?: (diagramId: string) => void
 }) {
   const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
     parentNodeId: null,
@@ -362,6 +363,7 @@ export function useModelTreeOperations(options: {
     if (diagram.nodeId === resolvedNodeId) return
     diagram.nodeId = resolvedNodeId
     options.markDiagramDirty(diagram.id)
+    options.ensureDiagramAttrsLoaded?.(diagram.id)
   }
 
   const handleRenameNode = (nodeId: string, newName: string) => {

@@ -892,6 +892,9 @@ const {
   },
   markNodeDirty,
   markDiagramDirty,
+  ensureDiagramAttrsLoaded: diagramId => {
+    void ensureDiagramAttrsLoaded(() => state.value, diagramId)
+  },
 })
 
 const {

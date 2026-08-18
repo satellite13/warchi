@@ -58,6 +58,8 @@ export const modelsMessages = {
         cancel: 'Отмена',
         success: 'Диаграмма скопирована',
         error: 'Не удалось скопировать диаграмму',
+        nameVersionExists:
+          'Диаграмма с таким именем и версией уже есть в целевой модели. Поднимите версию или переименуйте — сопоставление узлов не заменяет существующую диаграмму.',
         folderError: 'Не удалось загрузить папки целевой модели',
         loading: 'Подготавливаем копирование…',
         search: 'Поиск…',
@@ -636,6 +638,8 @@ export const modelsMessages = {
         cancel: 'Cancel',
         success: 'Diagram copied',
         error: 'Failed to copy diagram',
+        nameVersionExists:
+          'A diagram with this name and version already exists in the target model. Bump the version or rename it — matching nodes does not replace the existing diagram.',
         folderError: 'Failed to load target model folders',
         loading: 'Preparing diagram copy…',
         search: 'Search…',

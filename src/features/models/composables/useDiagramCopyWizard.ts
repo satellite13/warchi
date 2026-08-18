@@ -14,6 +14,10 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
+export function isDiagramNameVersionConflict(message: string): boolean {
+  return /already exists in the target model/i.test(message)
+}
+
 export function useDiagramCopyWizard(options: {
   sourceModelId: SourceModelId
   getSourceDiagramId?: () => string | null
@@ -140,6 +144,8 @@ export function useDiagramCopyWizard(options: {
   watch([targetModelId, targetNotationId], () => {
     if (!show.value || !hasPreviewData()) return
     resolutions.value = new Map()
+    diagramName.value = ''
+    diagramVersion.value = ''
     void refreshPreview()
   })
 

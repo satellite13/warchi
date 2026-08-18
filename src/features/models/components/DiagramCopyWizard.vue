@@ -21,7 +21,7 @@ import {
   diagramCopyWarningI18nKey,
 } from '../composables/diagramCopyIssueText'
 import { fetchAllByModelId } from '../composables/modelEditorLoadModel'
-import { useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
+import { isDiagramNameVersionConflict, useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
 
 const props = defineProps<{
   open: boolean
@@ -95,6 +95,10 @@ function formatBlocker(blocker: DiagramCopyEdgeBlocker): string {
 function formatWarning(warning: DiagramCopyWarning): string {
   const key = diagramCopyWarningI18nKey(warning)
   return te(key) ? t(key) : warning.message
+}
+
+function formatWizardError(message: string): string {
+  return isDiagramNameVersionConflict(message) ? t('models.diagramCopy.nameVersionExists') : message
 }
 
 async function loadCatalog(): Promise<void> {
@@ -266,7 +270,7 @@ watch(wizard.targetModelId, modelId => {
         {{ t('models.diagramCopy.loading') }}
       </p>
       <p v-if="catalogError" class="diagram-copy__error">{{ catalogError }}</p>
-      <p v-if="wizard.error.value" class="diagram-copy__error">{{ wizard.error.value }}</p>
+      <p v-if="wizard.error.value" class="diagram-copy__error">{{ formatWizardError(wizard.error.value) }}</p>
 
       <div v-if="wizard.step.value === 1" class="diagram-copy__panel">
         <label class="diagram-copy__field">

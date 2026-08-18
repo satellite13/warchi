@@ -1,7 +1,7 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiagramCopyPreviewResponse } from './diagramCopyApi'
-import { useDiagramCopyWizard } from './useDiagramCopyWizard'
+import { isDiagramNameVersionConflict, useDiagramCopyWizard } from './useDiagramCopyWizard'
 
 const { commitDiagramCopyMock, previewDiagramCopyMock } = vi.hoisted(() => ({
   commitDiagramCopyMock: vi.fn(),
@@ -67,6 +67,41 @@ describe('useDiagramCopyWizard', () => {
     await wizard.refreshPreview()
 
     expect(wizard.canFinish.value).toBe(false)
+    scope.stop()
+  })
+
+  it('detects a target name and version conflict', () => {
+    expect(
+      isDiagramNameVersionConflict(
+        "Diagram 'Use-Case 1' version '1.0.1' already exists in the target model"
+      )
+    ).toBe(true)
+    expect(isDiagramNameVersionConflict('Operation conflicts with existing data')).toBe(false)
+  })
+
+  it('resets name and version suggestions when the target model changes', async () => {
+    const scope = effectScope()
+    const wizard = scope.run(() =>
+      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
+    )!
+
+    wizard.targetModelId.value = 'target-model-1'
+    wizard.targetNotationId.value = 'target-notation'
+    await wizard.open('source-diagram')
+    await flushWatcher()
+    wizard.diagramName.value = 'Use-Case 1'
+    wizard.diagramVersion.value = '1.0.1'
+
+    previewDiagramCopyMock.mockResolvedValueOnce({
+      success: true,
+      data: createPreview({ suggestedName: 'Use-Case 1', suggestedVersion: '1.0.2' }),
+    })
+    wizard.targetModelId.value = 'target-model-2'
+    await vi.waitFor(() => {
+      expect(wizard.diagramVersion.value).toBe('1.0.2')
+    })
+
+    expect(wizard.diagramName.value).toBe('Use-Case 1')
     scope.stop()
   })
 

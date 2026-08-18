@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.4] - 2026-08-18
+
+### Changed
+- In contour-connect mode the floating port appears only close to the real shape outline, including non-rectangular figures, and no longer blocks corner resize.
+
 ## [0.21.3] - 2026-08-18
 
 ### Fixed

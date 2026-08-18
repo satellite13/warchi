@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.21.3] - 2026-08-18
+
+### Fixed
+- Copying a diagram into a model that already had a deleted diagram with the same name and version now suggests the next free version instead of failing with a generic conflict.
+
 ## [0.21.2] - 2026-08-17
 
 ### Fixed

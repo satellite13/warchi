@@ -136,7 +136,9 @@ export type DiagramStyle = {
   labelOpacity?: number
   labelFontSize?: number
   labelInset?: number | InsetSides
-  labelPlacement?: string
+  labelPlacement?: 'auto' | 'center' | 'top' | 'bottom' | 'left' | 'right'
+  /** Gap in px between the shape and an external label (`top`/`bottom`/`left`/`right`). */
+  labelGap?: number
   labelAlign?: string
   labelVerticalAlign?: string
   contentInset?: number | InsetSides
@@ -180,6 +182,11 @@ export type DiagramStyle = {
   // Node dimensions
   width?: number
   height?: number
+  /**
+   * When true, the model-canvas transformer cannot resize instances of this component.
+   * Default (absent/false): resize is allowed.
+   */
+  lockTransform?: boolean
   // Node anchor points
   portsTop?: number
   portsBottom?: number
@@ -393,7 +400,22 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.labelFontSize === 'number') style.labelFontSize = value.labelFontSize
   if (typeof value.labelInset === 'number') style.labelInset = value.labelInset
   else if (isInsetSides(value.labelInset)) style.labelInset = normalizeInsetSides(value.labelInset)
-  if (typeof value.labelPlacement === 'string') style.labelPlacement = value.labelPlacement
+  if (
+    value.labelPlacement === 'auto' ||
+    value.labelPlacement === 'center' ||
+    value.labelPlacement === 'top' ||
+    value.labelPlacement === 'bottom' ||
+    value.labelPlacement === 'left' ||
+    value.labelPlacement === 'right'
+  ) {
+    style.labelPlacement = value.labelPlacement
+  }
+  if (typeof value.labelGap === 'number' && Number.isFinite(value.labelGap) && value.labelGap >= 0) {
+    style.labelGap = value.labelGap
+  }
+  if (value.lockTransform === true) {
+    style.lockTransform = true
+  }
   if (typeof value.labelAlign === 'string') style.labelAlign = value.labelAlign
   if (typeof value.labelVerticalAlign === 'string') style.labelVerticalAlign = value.labelVerticalAlign
   if (typeof value.contentInset === 'number') style.contentInset = value.contentInset
@@ -560,7 +582,7 @@ export type EntityAttrs = {
   diagramStyle?: DiagramStyle
   /** Группа в палитре (0 = note). По умолчанию 0. */
   paletteGroup?: number
-  /** Имя символа Material Symbols для палитры (только при отсутствии diagramStyle.iconName) */
+  /** Иконка палитры; если задана, перекрывает иконку фигуры только в палитре */
   paletteMaterialIcon?: string
   /** UUID файла markdown-документации */
   documentFileId?: string

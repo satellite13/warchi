@@ -30,10 +30,26 @@ export type ModelLinkAttrs = {
 
 export type ScopedCustomValues = Record<string, Record<string, Record<string, unknown>>>
 
+export type BoundaryAttach = {
+  hostInstanceId: string
+  param: number
+}
+
 export type DiagramNodeInstanceAttrs = JsonObject & {
   componentProperties?: ScopedCustomValues
   /** Visual (notation component) for this diagram instance; falls back to node binding. */
   notationComponentId?: string
+  /** Guest glued to a host outline (BPMN boundary event). */
+  boundaryAttach?: BoundaryAttach
+}
+
+export const parseBoundaryAttach = (value: unknown): BoundaryAttach | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const hostInstanceId = typeof record.hostInstanceId === 'string' ? record.hostInstanceId.trim() : ''
+  const param = record.param
+  if (!hostInstanceId || typeof param !== 'number' || !Number.isFinite(param)) return undefined
+  return { hostInstanceId, param }
 }
 
 export type DiagramEdgeInstanceAttrs = JsonObject & {
@@ -144,6 +160,9 @@ const toDiagramNodeAttrs = (value: unknown): DiagramNodeInstanceAttrs => {
   } else if ('notationComponentId' in attrs) {
     delete attrs.notationComponentId
   }
+  const boundaryAttach = parseBoundaryAttach(attrs.boundaryAttach)
+  if (boundaryAttach) attrs.boundaryAttach = boundaryAttach
+  else delete attrs.boundaryAttach
   return attrs
 }
 

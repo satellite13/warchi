@@ -55,6 +55,36 @@ export function resolveIconMarkup(
   return catalogIconUrl(id)
 }
 
+/** Icon name from a catalog path or bare id. Empty for inline SVG / data URLs. */
+export function iconNameFromSource(source: string): string {
+  const trimmed = source.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('<') || /^data:/i.test(trimmed)) return ''
+  return normalizeIconName(trimmed)
+}
+
+/**
+ * Name to show in the icon select: path/id from the node source, or the
+ * persisted diagramStyle.iconName when the canvas stores resolved SVG markup.
+ */
+export function resolveStoredIconName(
+  source: string | undefined,
+  styleIconName?: string,
+): string {
+  if (!source?.trim()) return ''
+  return iconNameFromSource(source) || styleIconName?.trim() || ''
+}
+
+export function matchIconOptionId(
+  value: string,
+  options: ReadonlyArray<{ id: string }>,
+): string {
+  if (!value) return ''
+  if (options.some((option) => option.id === value)) return value
+  const norm = normalizeIconName(value)
+  return options.find((option) => normalizeIconName(option.id) === norm)?.id ?? value
+}
+
 export function libraryNameMap(
   icons: ReadonlyArray<{ name: string; svg: string }>,
 ): Map<string, string> {

@@ -124,6 +124,24 @@ describe('buildResolutionsFromPreview', () => {
     ])
   })
 
+  it('can omit unresolved entities instead of defaulting them to create', () => {
+    const result = buildResolutionsFromPreview(
+      createPreview({
+        nodes: [
+          createEntityPreview({ sourceId: 'node-without-action' }),
+          createEntityPreview({
+            sourceId: 'node-create',
+            effectiveAction: 'CREATE',
+          }),
+        ],
+      }),
+      new Map(),
+      { fillUnresolvedWithCreate: false }
+    )
+
+    expect(result).toEqual([{ sourceId: 'node-create', action: 'CREATE', kind: 'NODE' }])
+  })
+
   it('creates unresolved entities, including matches without a target', () => {
     const result = buildResolutionsFromPreview(
       createPreview({

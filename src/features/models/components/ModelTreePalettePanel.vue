@@ -1011,15 +1011,15 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 }
 
 .tree-node__actions {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  flex-shrink: 0;
 }
 
+.tree-node__row--active .tree-node__actions,
 .tree-node__row:hover .tree-node__actions {
-  opacity: 1;
+  display: flex;
 }
 
 .diagram-row {
@@ -1053,14 +1053,17 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 .diagram-row .btn--icon--danger,
 .diagram-row .diagram-row__edit-btn,
 .diagram-row .diagram-row__copy-btn {
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  display: none;
+  flex-shrink: 0;
 }
 
+.diagram-row--active .btn--icon--danger,
+.diagram-row--active .diagram-row__edit-btn,
+.diagram-row--active .diagram-row__copy-btn,
 .diagram-row:hover .btn--icon--danger,
 .diagram-row:hover .diagram-row__edit-btn,
 .diagram-row:hover .diagram-row__copy-btn {
-  opacity: 1;
+  display: flex;
 }
 
 .diagram-row--active {

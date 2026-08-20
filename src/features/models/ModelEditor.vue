@@ -71,6 +71,8 @@ import {
   type CustomProperty,
   type DiagramStyle,
 } from '@/domain/attrs/notationAttrs'
+import { hasSystemBooleanDefault } from '@/domain/attrs/systemBooleanProperty'
+import { listBoundaryLinksToGuest } from './utils/boundaryAttach'
 import {
   applyDiagramStyleToNodeInstance,
   withInstanceDimensions,
@@ -1298,9 +1300,11 @@ const {
   reuseLinkOptions,
   startConnectNodes,
   connectNodeToEdge,
+  reconnectEdgeToHost,
   finalizeConnection,
   handleCreateNewLinkFromReuseModal,
   handleRequestAutoLink,
+  handleRequestBoundaryAutoLink,
   handleSelectExistingLink,
   placeTraceLinkOnDiagram,
   canConnect,
@@ -1538,7 +1542,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
-      diagramInteractionManager.value?.history?.clear?.()
+      diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
         void uploadDiagramPreview()
       }
@@ -2091,6 +2095,101 @@ const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
   selectedModelLinkId.value = linkId
   selectedEdgeInstanceId.value = edgeInstanceId ?? null
   openLinkDeleteDialog(linkId, edgeInstanceId)
+}
+
+const boundaryRelationIds = (notationId: string): Set<string> =>
+  new Set(
+    state.value.relations
+      .filter(
+        relation =>
+          relation.notationId === notationId &&
+          hasSystemBooleanDefault(
+            parseEntityAttrs(relation.attrs ?? null).customProperties,
+            'boundary',
+          ),
+      )
+      .map(relation => relation.id),
+  )
+
+const guestBoundaryLinks = (guestModelNodeId: string, hostModelNodeId?: string | null) => {
+  const notationId = activeNotationId.value
+  if (!notationId) return []
+  return listBoundaryLinksToGuest({
+    links: state.value.links,
+    boundaryRelationIds: boundaryRelationIds(notationId),
+    notationId,
+    guestModelNodeId,
+    hostModelNodeId,
+  })
+}
+
+const removeBoundaryLinkEdges = (linkId: string, guestInstanceId: string): void => {
+  for (const diagram of state.value.diagrams) {
+    if (diagram._isDeleted) continue
+    const initial = diagram.parsedAttrs.instances.edges.length
+    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+      edge =>
+        !(
+          edge.modelLinkId === linkId &&
+          (edge.targetInstanceId === guestInstanceId || edge.sourceInstanceId === guestInstanceId)
+        ),
+    )
+    if (diagram.parsedAttrs.instances.edges.length !== initial) {
+      markDiagramDirty(diagram.id)
+    }
+  }
+}
+
+const handleRequestBoundaryDetach = (
+  guestModelNodeId: string,
+  guestInstanceId: string,
+  oldHostModelNodeId?: string | null,
+) => {
+  if (isDiagramReadOnly.value) return
+  for (const link of guestBoundaryLinks(guestModelNodeId, oldHostModelNodeId)) {
+    removeBoundaryLinkEdges(link.id, guestInstanceId)
+    markLinkDeleted(link.id)
+  }
+}
+
+const handleRequestBoundaryRebind = (
+  guestModelNodeId: string,
+  guestInstanceId: string,
+  newHostModelNodeId: string,
+  _newHostInstanceId: string,
+  oldHostModelNodeId?: string | null,
+) => {
+  if (isDiagramReadOnly.value) return
+  const diagram = activeDiagram.value
+  if (!diagram) return
+
+  const linksOnNewHost = guestBoundaryLinks(guestModelNodeId, newHostModelNodeId)
+  const linksOnOldHost = guestBoundaryLinks(guestModelNodeId, oldHostModelNodeId)
+  const linksToKeep = linksOnNewHost.length > 0 ? linksOnNewHost : linksOnOldHost
+  if (linksToKeep.length === 0) return
+
+  if (linksOnNewHost.length > 0) {
+    for (const link of linksOnOldHost) {
+      if (linksOnNewHost.some(item => item.id === link.id)) continue
+      removeBoundaryLinkEdges(link.id, guestInstanceId)
+      markLinkDeleted(link.id)
+    }
+  } else {
+    for (const link of linksOnOldHost) {
+      if (link.sourceId === newHostModelNodeId) continue
+      link.sourceId = newHostModelNodeId
+      markLinkDirty(link.id)
+    }
+  }
+
+  const keepIds = new Set(linksToKeep.map(link => link.id))
+  const beforeEdges = diagram.parsedAttrs.instances.edges.length
+  diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+    edge => !keepIds.has(edge.modelLinkId),
+  )
+  if (diagram.parsedAttrs.instances.edges.length !== beforeEdges) {
+    markDiagramDirty(diagram.id)
+  }
 }
 
 const confirmNodeDelete = () => {
@@ -3158,7 +3257,11 @@ onBeforeUnmount(() => {
             @connect-nodes="startConnectNodes"
             @connect-node-to-edge="connectNodeToEdge"
             @request-auto-link="handleRequestAutoLink"
+            @request-boundary-auto-link="handleRequestBoundaryAutoLink"
+            @request-boundary-detach="handleRequestBoundaryDetach"
+            @request-boundary-rebind="handleRequestBoundaryRebind"
             @reconnect-edge="handleReconnectEdge"
+            @reconnect-edge-to-host="reconnectEdgeToHost"
             @find-in-tree="handleFindInTree"
             @node-label-change="handleNodeLabelChange"
             @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"

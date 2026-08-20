@@ -241,6 +241,52 @@ describe('useModelDiagramConnections', () => {
     expect(connections.relationChoiceOptions.value).toMatchObject([{ id: 'relation' }])
   })
 
+  it('creates a boundary auto-link immediately when only one relation is allowed', () => {
+    const { connections, state, diagram } = createHarness()
+
+    connections.handleRequestBoundaryAutoLink(
+      'source',
+      'target',
+      'source-instance',
+      'target-instance',
+      createState().relations,
+      []
+    )
+
+    expect(connections.showRelationChoiceModal.value).toBe(false)
+    expect(state.value.links).toHaveLength(1)
+    expect(state.value.links[0]).toMatchObject({ sourceId: 'source', targetId: 'target' })
+    expect(diagram.value.parsedAttrs.instances.edges).toHaveLength(0)
+  })
+
+  it('reuses an existing boundary link silently without placing it on the diagram', () => {
+    const state = createState()
+    state.links.push({
+      id: 'existing-boundary',
+      sourceId: 'source',
+      targetId: 'target',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      linkTypeId: 'link-type',
+      parsedAttrs: parseLinkAttrs(null),
+    })
+    const { connections, diagram, state: reactiveState } = createHarness(state)
+
+    connections.handleRequestBoundaryAutoLink(
+      'source',
+      'target',
+      'source-instance',
+      'target-instance',
+      createState().relations,
+      reactiveState.value.links
+    )
+
+    expect(connections.showReuseLinkModal.value).toBe(false)
+    expect(connections.showRelationChoiceModal.value).toBe(false)
+    expect(reactiveState.value.links).toHaveLength(1)
+    expect(diagram.value.parsedAttrs.instances.edges).toHaveLength(0)
+  })
+
   it('creates a new link after declining reuse', () => {
     const state = createState()
     state.links.push({
@@ -303,6 +349,57 @@ describe('useModelDiagramConnections', () => {
       },
     })
     expect(noteEdge?.modelLinkId).toMatch(/^__diagram-note-edge__:/)
+  })
+
+  it('moves an existing edge-anchor onto another host relation', () => {
+    const { diagram, connections } = createHarness()
+    diagram.value.parsedAttrs.instances.nodes.push({
+      id: 'anchor-1',
+      modelNodeId: '__diagram-edge-anchor__:anchor-1',
+      x: 0,
+      y: 0,
+      width: 8,
+      height: 8,
+      attrs: {
+        isEdgeAnchor: true,
+        hostEdgeInstanceId: 'host-edge',
+        pathParam: 0.4,
+      },
+    })
+    diagram.value.parsedAttrs.instances.edges.push(
+      {
+        id: 'host-edge',
+        modelLinkId: 'existing-relation-link',
+        sourceInstanceId: 'source-instance',
+        targetInstanceId: 'target-instance',
+      },
+      {
+        id: 'host-edge-2',
+        modelLinkId: 'other-relation-link',
+        sourceInstanceId: 'source-instance',
+        targetInstanceId: 'target-instance',
+      },
+      {
+        id: 'junction',
+        modelLinkId: '__diagram-note-edge__:j1',
+        sourceInstanceId: 'note-instance',
+        targetInstanceId: 'anchor-1',
+        attrs: { isDiagramOnly: true },
+      }
+    )
+
+    connections.reconnectEdgeToHost('junction', 'end', 'host-edge-2', 0.55)
+
+    const anchor = diagram.value.parsedAttrs.instances.nodes.find(node => node.id === 'anchor-1')
+    expect(anchor?.attrs).toMatchObject({
+      isEdgeAnchor: true,
+      hostEdgeInstanceId: 'host-edge-2',
+      pathParam: 0.55,
+    })
+    expect(
+      diagram.value.parsedAttrs.instances.edges.find(edge => edge.id === 'junction')
+        ?.targetInstanceId
+    ).toBe('anchor-1')
   })
 
   it('clears note-edge selection when undoing its creation', () => {

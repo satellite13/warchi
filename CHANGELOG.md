@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Notation node label position can sit outside the shape (top/bottom/left/right + gap). Applies to both simple shapes and composite nodes (the inner `__name__` text is hidden so the name is not duplicated).
+- Notation style flag **Lock size** (`lockTransform`): when on, the model-canvas transformer cannot resize instances of that component.
+- The notation **palette icon** can override the figure icon: when set, palettes and lists use it even if the component already has an icon.
+- Saved notation style presets now include content insets (T/R/B/L), label position, lock-size, and width/height, and apply them to the next component.
+- Notation system flags `boundary` / `boundaryAllow`: a guest snaps to a host outline (BPMN boundary events), keeps a hidden Traceability link, and can be slid, reattached, or pulled off.
+
+### Fixed
+- Changing the target model in the diagram-copy wizard no longer keeps «Match» targets from the previous model (that produced `invalid match target` on commit).
+- Diagram copy now defaults unmatched nodes and links to **Create** when there is no match candidate, instead of leaving every row empty and blocking the wizard.
+- Custom property rows no longer collapse the name field into a square next to the type select and Required/System toggles.
+- Re-attaching a boundary guest no longer asks to reuse a link and then draws that structural `boundary` arrow on the diagram. The link stays in Traceability only. Save after moving a boundary to another host no longer stays dirty until a second click.
+- A diagram-only arrow from a nested child (E inside B inside A) can land on a visible C–D relation that crosses the group fill; the container no longer shows a lock or becomes the target. Snap uses the closest path within 40px, including when the stroke crosses a sibling node.
+- The junction end of a diagram-only arrow can be dragged onto another relation (or along the same stroke), not only onto nodes.
+- A normal relation can be reconnected to another component even when a diagram-only arrow is or was attached to it; edge-anchor synchronization no longer overwrites the new endpoint with the old one.
+- A normal relation can be reconnected to another component even when a diagram-only arrow is or was attached to it; edge-anchor synchronization no longer overwrites the new endpoint with the old one.
+- Choosing an imported library icon in figure styles no longer resets the select to None after the canvas applies the SVG markup.
+- Model and notation tree action icons no longer reserve width on every row, so unselected names are not truncated.
+
 ## [0.21.4] - 2026-08-18
 
 ### Changed

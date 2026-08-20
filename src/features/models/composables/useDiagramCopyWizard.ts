@@ -79,7 +79,9 @@ export function useDiagramCopyWizard(options: {
         sourceDiagramId: sourceId,
         targetNotationId: notationId,
         resolutions: currentPreview
-          ? buildResolutionsFromPreview(currentPreview, resolutions.value)
+          ? buildResolutionsFromPreview(currentPreview, resolutions.value, {
+              fillUnresolvedWithCreate: false,
+            })
           : [],
       })
       if (!result.success) {
@@ -144,6 +146,7 @@ export function useDiagramCopyWizard(options: {
   watch([targetModelId, targetNotationId], () => {
     if (!show.value || !hasPreviewData()) return
     resolutions.value = new Map()
+    preview.value = null
     diagramName.value = ''
     diagramVersion.value = ''
     void refreshPreview()

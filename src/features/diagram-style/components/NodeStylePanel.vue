@@ -39,6 +39,7 @@ import {
 import { useNodeShapes } from "@/composables/useNodeShapes";
 import { ICON_SELECT_MIN_SEARCH_LENGTH } from "@/config/iconOptions";
 import { useLibraryIcons } from "@/composables/useLibraryIcons";
+import { matchIconOptionId } from "@/utils/libraryIconResolve";
 import {
   getAllComponentPresets,
   getAllRelationPresets,
@@ -193,56 +194,7 @@ function confirmSavePreset() {
     saveUserRelationPreset({ name, label, style });
     selectedRelationPreset.value = name;
   } else {
-    const style: import("@/domain/attrs/notationAttrs").DiagramStyle = {
-      nodeShape: nodeShape.value,
-      fillColor: fillColor.value,
-      fillOpacity: fillOpacity.value,
-      strokeColor: strokeColor.value,
-      strokeOpacity: strokeOpacity.value,
-      strokeWidth: strokeWidth.value,
-      cornerRadius: cornerRadius.value,
-      ...(nodeShape.value === "beveled-rectangle" ||
-      (nodeShape.value === "composite" && compositeShapeType.value === "beveled-rectangle")
-        ? { cornerCut: cornerCut.value }
-        : {}),
-      opacity: opacity.value,
-      labelColor: labelColor.value,
-      labelOpacity: labelOpacity.value,
-      labelFontSize: labelFontSize.value,
-      labelInset: insetToPlain(labelInset.value),
-      labelAlign: labelAlign.value,
-      labelVerticalAlign: labelVerticalAlign.value,
-      showLabel: showLabel.value,
-      width: nodeWidth.value,
-      height: nodeHeight.value,
-      contentInset: insetToPlain(contentInset.value),
-      ...(contentInsetScale.value.top ||
-      contentInsetScale.value.right ||
-      contentInsetScale.value.bottom ||
-      contentInsetScale.value.left
-        ? { contentInsetScale: { ...contentInsetScale.value } }
-        : {}),
-      portsTop: nodePortsTop.value,
-      portsBottom: nodePortsBottom.value,
-      portsLeft: nodePortsLeft.value,
-      portsRight: nodePortsRight.value,
-      ...(iconName.value
-        ? {
-            iconName: iconName.value,
-            iconPlacement: iconPlacement.value,
-            iconWidth: iconWidth.value,
-            iconHeight: iconHeight.value,
-            iconInset: iconInset.value,
-            iconStrokeColor: iconStrokeColor.value,
-            iconFillColor: iconFillColor.value
-          }
-        : {})
-    };
-    if (lineStyle.value === "dashed") {
-      const pattern = lineDashPattern.value.trim() || "8,4";
-      style.lineDash = pattern.split(",").map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-    }
-    saveUserComponentPreset({ name, label, style });
+    saveUserComponentPreset({ name, label, style: buildNodeStyle() });
     selectedComponentPreset.value = name;
   }
 
@@ -274,18 +226,14 @@ function applyComponentPreset(presetName: string) {
   const style = preset.style;
   
   // Update all node style refs (preserve current width/height if not in preset)
-  nodeShape.value =
-    style.nodeShape === "custom"
-      ? "custom"
-      : NODE_SHAPE_OPTIONS.some((option) => option.value === style.nodeShape)
-        ? (style.nodeShape as NodeShape)
-        : "rectangle";
-  if (nodeShape.value === "custom") {
+  if (style.nodeShape === "custom") {
+    nodeShape.value = "custom";
     customOutlineRef.value = style.customOutline ?? undefined;
     customShapeIdRef.value = style.customShapeId ?? null;
     customScaleSliceRef.value =
       style.customScaleSlice ?? resolveCustomScaleSlice(style) ?? undefined;
-  } else {
+  } else if (NODE_SHAPE_OPTIONS.some((option) => option.value === style.nodeShape)) {
+    nodeShape.value = style.nodeShape as NodeShape;
     customOutlineRef.value = undefined;
     customShapeIdRef.value = null;
     customScaleSliceRef.value = undefined;
@@ -302,11 +250,28 @@ function applyComponentPreset(presetName: string) {
   labelOpacity.value = style.labelOpacity ?? 1;
   labelFontSize.value = style.labelFontSize ?? 14;
   labelInset.value = toInsetSides(style.labelInset, 8);
+  if (style.labelAlign === "left" || style.labelAlign === "right" || style.labelAlign === "center") {
+    labelAlign.value = style.labelAlign;
+  }
   labelVerticalAlign.value = (style.labelVerticalAlign as "top" | "middle" | "bottom") ?? "middle";
+  if (
+    style.labelPlacement === "top" ||
+    style.labelPlacement === "bottom" ||
+    style.labelPlacement === "left" ||
+    style.labelPlacement === "right" ||
+    style.labelPlacement === "center" ||
+    style.labelPlacement === "auto"
+  ) {
+    labelPlacement.value = style.labelPlacement === "auto" ? "center" : style.labelPlacement;
+  }
+  if (typeof style.labelGap === "number" && Number.isFinite(style.labelGap)) {
+    labelGap.value = style.labelGap;
+  }
   showLabel.value = style.showLabel !== false;
   // Only update dimensions if explicitly specified in preset
   if (style.width !== undefined) nodeWidth.value = style.width;
   if (style.height !== undefined) nodeHeight.value = style.height;
+  lockTransform.value = style.lockTransform === true;
   contentInset.value = toInsetSides(style.contentInset, 0);
   contentInsetScale.value = { ...(style.contentInsetScale ?? {}) };
   nodePortsTop.value = style.portsTop ?? 3;
@@ -370,9 +335,12 @@ function applyComponentPreset(presetName: string) {
       height: nodeHeight.value,
     });
     
-    // Apply dimensions and corner radius
+    // Apply dimensions, label placement, and corner radius
     node.width = nodeWidth.value;
     node.height = nodeHeight.value;
+    node.labelPlacement = labelPlacement.value;
+    node.labelGap = labelGap.value;
+    node.resizeHandlesEnabled = !lockTransform.value;
     nodeRuntime.cornerRadius = cornerRadius.value;
     nodeRuntime.anchorPoints = {
       top: nodePortsTop.value,
@@ -587,7 +555,7 @@ const {
   iconName, iconPlacement, iconWidth, iconHeight, iconInset, iconStrokeColor, iconFillColor,
   nodeShape, label, fillColor, fillOpacity, strokeColor, strokeOpacity, strokeWidth,
   cornerRadius, cornerCut, opacity, lineStyle, lineDashPattern, labelTemplate, showLabel, labelColor, labelOpacity,
-  labelFontSize, labelInset, labelAlign, labelVerticalAlign, nodeWidth, nodeHeight, contentInset,
+  labelFontSize, labelInset, labelAlign, labelVerticalAlign, labelPlacement, labelGap, nodeWidth, nodeHeight, lockTransform, contentInset,
   contentInsetScale,
   nodePortsTop, nodePortsBottom, nodePortsLeft, nodePortsRight,
   customOutlineRef, customShapeIdRef, customScaleSliceRef,
@@ -596,6 +564,7 @@ const {
   compositeShapeType, compositeAutoSize, compositeMinWidth, compositeMinHeight,
   loadNodeProps: loadNodePropsFromComposable, buildNodeStyle,
 } = useNodeStyleState();
+const iconSelectValue = computed(() => matchIconOptionId(iconName.value, iconSelectOptions.value));
 const componentPropsForA5 = computed(() => props.componentProperties ?? []);
 const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? []);
 const compositeValidationIssues = computed(() =>
@@ -1198,6 +1167,36 @@ function handleLabelVerticalAlignChange(value: string) {
   props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
     if (node.label) node.label.style = textStyleWith(node.label.style, { verticalAlign: v });
   });
+  emitNodeStyle();
+}
+
+function handleLabelPlacementChange(value: string) {
+  const v =
+    value === "top" || value === "bottom" || value === "left" || value === "right"
+      ? value
+      : "center";
+  labelPlacement.value = v;
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    node.labelPlacement = v;
+  });
+  emitNodeStyle();
+}
+
+function handleLabelGapChange(value: string) {
+  const v = parseFloat(value);
+  if (!Number.isFinite(v) || v < 0) return;
+  labelGap.value = v;
+  if (!props.selectedElementId || !props.interactionManager) return;
+  props.interactionManager.changeNodeProperties(props.selectedElementId, (node) => {
+    node.labelGap = v;
+  });
+  emitNodeStyle();
+}
+
+function handleLockTransformChange(value: boolean) {
+  lockTransform.value = value;
+  resetComponentPreset();
   emitNodeStyle();
 }
 
@@ -2008,6 +2007,24 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                   :step="1"
                   @update:model-value="handleLabelInsetChange"
                 />
+                <LabeledFieldRow :label="t('nodeStyle.position')">
+                  <select class="form-select form-select--sm" :value="labelPlacement" @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)">
+                    <option value="center">{{ t("nodeStyle.labelPlacementInside") }}</option>
+                    <option value="top">{{ t("nodeStyle.positionTop") }}</option>
+                    <option value="bottom">{{ t("nodeStyle.positionBottom") }}</option>
+                    <option value="left">{{ t("nodeStyle.positionLeft") }}</option>
+                    <option value="right">{{ t("nodeStyle.positionRight") }}</option>
+                  </select>
+                </LabeledFieldRow>
+                <LabeledNumberInput
+                  v-if="labelPlacement !== 'center'"
+                  :label="t('nodeStyle.gap')"
+                  :model-value="labelGap"
+                  :min="0"
+                  :max="80"
+                  :step="1"
+                  @update:model-value="handleLabelGapChange"
+                />
                 <LabeledFieldRow :label="t('nodeStyle.align')">
                   <select class="form-select form-select--sm" :value="labelAlign" @change="handleLabelAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="center">{{ t("nodeStyle.alignCenter") }}</option>
@@ -2015,7 +2032,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     <option value="right">{{ t("nodeStyle.alignRight") }}</option>
                   </select>
                 </LabeledFieldRow>
-                <LabeledFieldRow :label="t('nodeStyle.verticalAlign')">
+                <LabeledFieldRow v-if="labelPlacement === 'center'" :label="t('nodeStyle.verticalAlign')">
                   <select class="form-select form-select--sm" :value="labelVerticalAlign" @change="handleLabelVerticalAlignChange(($event.target as HTMLSelectElement).value)">
                     <option value="top">{{ t("nodeStyle.positionTop") }}</option>
                     <option value="middle">{{ t("nodeStyle.alignCenter") }}</option>
@@ -2075,6 +2092,13 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                     >{{ opt.label }}</option>
                   </select>
                 </LabeledFieldRow>
+                <LabeledFieldRow :label="t('nodeStyle.lockTransform')">
+                  <ToggleSwitch
+                    :model-value="lockTransform"
+                    @update:model-value="handleLockTransformChange"
+                  />
+                </LabeledFieldRow>
+                <p class="sp-help-text">{{ t('nodeStyle.lockTransformHint') }}</p>
                 <template v-if="showCompositeEditor">
                   <div class="sp-field-grid sp-field-grid--2">
                     <LabeledFieldRow :label="t('nodeStyle.compositeShapeType')">
@@ -2156,7 +2180,13 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                       @update:model-value="handleCompositeTreeUpdate"
                       @target-options="(targets) => { compositeTreeTargets = targets }"
                     />
-                    <CompositeLivePreview :content="compositeContentDraft" />
+                    <CompositeLivePreview
+                      :content="compositeContentDraft"
+                      :label="label"
+                      :label-placement="labelPlacement"
+                      :label-gap="labelGap"
+                      :shape-type="compositeShapeType"
+                    />
                     <A5BindingsEditor
                       :model-value="styleBindingsDraft"
                       :component-properties="componentPropsForA5"
@@ -2336,7 +2366,7 @@ function handleEdgeEndMarkerFillOpacityChange(value: string) {
                 <LabeledFieldRow :label="t('nodeStyle.icon')">
                   <div class="sp-icon-select">
                     <SearchableSelect
-                      :model-value="iconName"
+                      :model-value="iconSelectValue"
                       :options="iconSelectOptions"
                       allow-empty
                       :empty-label="t('nodeStyle.none')"

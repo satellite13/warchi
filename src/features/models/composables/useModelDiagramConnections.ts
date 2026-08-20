@@ -11,6 +11,7 @@ import {
   DIAGRAM_EDGE_ANCHOR_NODE_PREFIX,
   DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
   EDGE_ANCHOR_SIZE,
+  isEdgeAnchorInstance,
 } from '../utils/diagramOnlyInstances'
 import type { DiagramNodeInstance } from '../modelAttrs'
 
@@ -75,6 +76,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
   const showReuseLinkModal = ref(false)
   const reuseLinkOptions = ref<EditorLink[]>([])
   const pendingRelationId = ref<string | null>(null)
+  const pendingOmitDiagramEdge = ref(false)
   const setTranslatedUiError = (key: string) => options.setUiError(options.t(key))
 
   const normalizeTypeName = (value: string | undefined): string => value?.trim().toLowerCase() ?? ''
@@ -327,6 +329,89 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     })
   }
 
+  const reconnectEdgeToHost = (
+    edgeInstanceId: string,
+    endpoint: 'start' | 'end',
+    hostEdgeInstanceId: string,
+    pathParam: number
+  ) => {
+    const diagram = options.activeDiagram.value
+    if (!diagram || options.isDiagramReadOnly.value) return
+    if (edgeInstanceId === hostEdgeInstanceId) return
+    if (!diagram.parsedAttrs.instances.edges.some(edge => edge.id === hostEdgeInstanceId)) {
+      return
+    }
+
+    const edgeInst = diagram.parsedAttrs.instances.edges.find(edge => edge.id === edgeInstanceId)
+    if (!edgeInst) return
+
+    const path = Number.isFinite(pathParam) ? Math.min(1, Math.max(0, pathParam)) : 0.5
+    const currentInstanceId =
+      endpoint === 'start' ? edgeInst.sourceInstanceId : edgeInst.targetInstanceId
+    const current = diagram.parsedAttrs.instances.nodes.find(node => node.id === currentInstanceId)
+    const prevHost =
+      current && isEdgeAnchorInstance(current)
+        ? {
+            hostEdgeInstanceId: current.attrs?.hostEdgeInstanceId,
+            pathParam: current.attrs?.pathParam,
+          }
+        : null
+    const createdAnchor: DiagramNodeInstance | null = current && isEdgeAnchorInstance(current)
+      ? null
+      : {
+          id: createId(),
+          modelNodeId: `${DIAGRAM_EDGE_ANCHOR_NODE_PREFIX}${createId()}`,
+          x: 0,
+          y: 0,
+          width: EDGE_ANCHOR_SIZE,
+          height: EDGE_ANCHOR_SIZE,
+          attrs: {
+            isEdgeAnchor: true,
+            hostEdgeInstanceId,
+            pathParam: path,
+            diagramStyle: { ...DEFAULT_EDGE_ANCHOR_DIAGRAM_STYLE },
+          },
+        }
+    const prevSourceId = edgeInst.sourceInstanceId
+    const prevTargetId = edgeInst.targetInstanceId
+
+    options.executeDiagramHistoryCommand({
+      execute: () => {
+        if (current && isEdgeAnchorInstance(current)) {
+          if (!current.attrs) current.attrs = {}
+          current.attrs.hostEdgeInstanceId = hostEdgeInstanceId
+          current.attrs.pathParam = path
+        } else if (createdAnchor) {
+          if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === createdAnchor.id)) {
+            diagram.parsedAttrs.instances.nodes.push(deepClone(createdAnchor))
+          }
+          if (endpoint === 'start') {
+            edgeInst.sourceInstanceId = createdAnchor.id
+          } else {
+            edgeInst.targetInstanceId = createdAnchor.id
+          }
+        }
+        options.markDiagramDirty(diagram.id)
+      },
+      undo: () => {
+        if (current && isEdgeAnchorInstance(current) && prevHost) {
+          if (!current.attrs) current.attrs = {}
+          if (typeof prevHost.hostEdgeInstanceId === 'string') {
+            current.attrs.hostEdgeInstanceId = prevHost.hostEdgeInstanceId
+          }
+          current.attrs.pathParam = prevHost.pathParam
+        } else if (createdAnchor) {
+          edgeInst.sourceInstanceId = prevSourceId
+          edgeInst.targetInstanceId = prevTargetId
+          diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
+            item => item.id !== createdAnchor.id
+          )
+        }
+        options.markDiagramDirty(diagram.id)
+      },
+    })
+  }
+
   const startConnectNodes = (
     sourceModelNodeId: string,
     targetModelNodeId: string,
@@ -341,6 +426,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       setTranslatedUiError('models.relationRulesLoadingConnectBlocked')
       return
     }
+    pendingOmitDiagramEdge.value = false
     const diagram = options.activeDiagram.value
     if (!diagram) return
     const connection: PendingConnection = {
@@ -384,6 +470,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       linkTypeId: relation.linkTypeId,
     }))
     if (allowed.sourceIsUntyped) {
+      pendingOmitDiagramEdge.value = false
       if (allowed.relations.length === 1) finalizeConnection(allowed.relations[0]!.id)
       else showRelationChoiceModal.value = true
       return
@@ -410,7 +497,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     if (!options.state.value.relations.some(item => item.id === relationId)) return
     showRelationChoiceModal.value = false
     pendingRelationId.value = relationId
-    createOrReuseLink(null)
+    createOrReuseLink(null, { omitDiagramEdge: pendingOmitDiagramEdge.value })
   }
 
   const handleCreateNewLinkFromReuseModal = () => {
@@ -431,6 +518,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     existingLinksNotOnDiagram: EditorLink[]
   ) => {
     if (!options.activeDiagram.value) return
+    pendingOmitDiagramEdge.value = false
     setPendingConnection(sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId)
     relationChoiceOptions.value = availableRelations.map(relation => ({
       id: relation.id,
@@ -445,6 +533,37 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     showRelationChoiceModal.value = true
   }
 
+  const handleRequestBoundaryAutoLink = (
+    sourceModelNodeId: string,
+    targetModelNodeId: string,
+    sourceInstanceId: string,
+    targetInstanceId: string,
+    availableRelations: RelationResponse[],
+    existingLinksNotOnDiagram: EditorLink[]
+  ) => {
+    if (!options.activeDiagram.value) return
+    // The structural boundary link lives in Traceability. Never prompt to
+    // place it on the canvas — reuse stays silent, and a new link has no edge.
+    if (existingLinksNotOnDiagram.length > 0) {
+      return
+    }
+    setPendingConnection(sourceModelNodeId, targetModelNodeId, sourceInstanceId, targetInstanceId)
+    relationChoiceOptions.value = availableRelations.map(relation => ({
+      id: relation.id,
+      name: relation.name,
+      linkTypeId: relation.linkTypeId,
+    }))
+    if (availableRelations.length === 1) {
+      pendingRelationId.value = availableRelations[0]!.id
+      createOrReuseLink(null, { omitDiagramEdge: true })
+      return
+    }
+    if (availableRelations.length > 1) {
+      pendingOmitDiagramEdge.value = true
+      showRelationChoiceModal.value = true
+    }
+  }
+
   const handleSelectExistingLink = (linkId: string) => {
     const notationId = options.activeNotationId.value
     const link = options.state.value.links.find(item => item.id === linkId)
@@ -457,10 +576,15 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     createOrReuseLink(linkId)
   }
 
-  const createOrReuseLink = (linkId: string | null) => {
+  const createOrReuseLink = (
+    linkId: string | null,
+    optionsOverride?: { omitDiagramEdge?: boolean }
+  ) => {
     const diagram = options.activeDiagram.value
     const connection = pendingConnection.value
     const relationId = pendingRelationId.value
+    const omitDiagramEdge = optionsOverride?.omitDiagramEdge === true
+    pendingOmitDiagramEdge.value = false
     if (!diagram || !connection || !relationId) return
     const relation = options.state.value.relations.find(item => item.id === relationId)
     if (!relation) return
@@ -495,18 +619,20 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     if (connection.targetPortId) attrs.toPortId = connection.targetPortId
     if (connection.sourceOutlineParam !== undefined) attrs.fromOutlineParam = connection.sourceOutlineParam
     if (connection.targetOutlineParam !== undefined) attrs.toOutlineParam = connection.targetOutlineParam
-    const edge = {
-      id: createId(),
-      modelLinkId: resolvedLinkId,
-      sourceInstanceId: connection.sourceInstanceId,
-      targetInstanceId: connection.targetInstanceId,
-      attrs,
-    }
+    const edge = omitDiagramEdge
+      ? null
+      : {
+          id: createId(),
+          modelLinkId: resolvedLinkId,
+          sourceInstanceId: connection.sourceInstanceId,
+          targetInstanceId: connection.targetInstanceId,
+          attrs,
+        }
 
     options.executeDiagramHistoryCommand({
       execute: () => {
         if (isUntypedRelation) {
-          if (!diagram.parsedAttrs.instances.edges.some(item => item.id === edge.id)) {
+          if (edge && !diagram.parsedAttrs.instances.edges.some(item => item.id === edge.id)) {
             diagram.parsedAttrs.instances.edges.push(deepClone(edge))
           }
           options.markDiagramDirty(diagram.id)
@@ -519,15 +645,17 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
         }
         if (!link) return
         options.bindLinkRelation(link, relation.id)
-        if (!diagram.parsedAttrs.instances.edges.some(item => item.id === edge.id)) {
+        if (edge && !diagram.parsedAttrs.instances.edges.some(item => item.id === edge.id)) {
           diagram.parsedAttrs.instances.edges.push(deepClone(edge))
         }
         options.markDiagramDirty(diagram.id)
       },
       undo: () => {
-        diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          item => item.id !== edge.id
-        )
+        if (edge) {
+          diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
+            item => item.id !== edge.id
+          )
+        }
         if (isUntypedRelation) {
           options.markDiagramDirty(diagram.id)
           return
@@ -594,9 +722,11 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     pendingRelationId,
     startConnectNodes,
     connectNodeToEdge,
+    reconnectEdgeToHost,
     finalizeConnection,
     handleCreateNewLinkFromReuseModal,
     handleRequestAutoLink,
+    handleRequestBoundaryAutoLink,
     handleSelectExistingLink,
     createOrReuseLink,
     canConnect,

@@ -342,7 +342,10 @@ export function useNotationDiagram(options: NotationDiagramOptions) {
         existing.icon = buildNodeIcon(ds, libraryByName.value)
         applyContentInsetFromStyle(existing, ds)
         if (ds?.labelPlacement) {
-          ;(existing as DiagramNode & { labelPlacement?: string }).labelPlacement = ds.labelPlacement
+          existing.labelPlacement = ds.labelPlacement
+        }
+        if (typeof ds?.labelGap === 'number') {
+          existing.labelGap = ds.labelGap
         }
       } else {
         componentNodes.push(createComponentNode(component, 0, 0))

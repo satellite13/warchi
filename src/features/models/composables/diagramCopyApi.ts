@@ -147,26 +147,31 @@ export function pickDefaultTargetNotationId(
 
 export function buildResolutionsFromPreview(
   preview: DiagramCopyPreviewResponse,
-  overrides: Map<string, DiagramCopyResolution>
+  overrides: Map<string, DiagramCopyResolution>,
+  options?: { fillUnresolvedWithCreate?: boolean }
 ): DiagramCopyResolution[] {
-  return [...preview.nodes, ...preview.links].map(entity => {
+  const fillUnresolvedWithCreate = options?.fillUnresolvedWithCreate ?? true
+  return [...preview.nodes, ...preview.links].flatMap(entity => {
     const override = overrides.get(entity.sourceId)
-    if (override) return override
+    if (override) return [override]
 
     if (entity.effectiveAction === 'MATCH' && entity.effectiveTargetId) {
-      return {
-        sourceId: entity.sourceId,
-        action: 'MATCH',
-        targetId: entity.effectiveTargetId,
-        kind: entity.kind,
-      }
+      return [
+        {
+          sourceId: entity.sourceId,
+          action: 'MATCH' as const,
+          targetId: entity.effectiveTargetId,
+          kind: entity.kind,
+        },
+      ]
     }
     if (entity.effectiveAction === 'CREATE') {
-      return { sourceId: entity.sourceId, action: 'CREATE', kind: entity.kind }
+      return [{ sourceId: entity.sourceId, action: 'CREATE' as const, kind: entity.kind }]
     }
     if (entity.effectiveAction === 'SKIP') {
-      return { sourceId: entity.sourceId, action: 'SKIP', kind: entity.kind }
+      return [{ sourceId: entity.sourceId, action: 'SKIP' as const, kind: entity.kind }]
     }
-    return { sourceId: entity.sourceId, action: 'CREATE', kind: entity.kind }
+    if (!fillUnresolvedWithCreate) return []
+    return [{ sourceId: entity.sourceId, action: 'CREATE' as const, kind: entity.kind }]
   })
 }

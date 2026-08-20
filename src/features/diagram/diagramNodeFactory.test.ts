@@ -1,9 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
   CircleNode,
+  CompositeNode,
   CustomShapeNode,
   DiamondNode,
   RectangleNode,
+  container,
+  text,
 } from '@ngroznykh/papirus'
 import {
   createDiagramNode,
@@ -109,5 +112,52 @@ describe('diagramNodeFactory', () => {
     expect(getDiagramNodeShape(note)).toBe('rectangle')
     expect(note).toMatchObject({ noteShape: true })
     expect(folder).toMatchObject({ folderShape: true })
+  })
+
+  it('applies external label placement to simple and composite nodes', () => {
+    const simple = createDiagramNode({
+      ...baseNodeOptions,
+      label: 'Start',
+      diagramStyle: { nodeShape: 'circle', labelPlacement: 'bottom', labelGap: 6 },
+    })
+    expect(simple).toBeInstanceOf(CircleNode)
+    expect(simple.labelPlacement).toBe('bottom')
+    expect(simple.labelGap).toBe(6)
+
+    const composite = createDiagramNode({
+      ...baseNodeOptions,
+      label: 'Start',
+      diagramStyle: {
+        nodeShape: 'composite',
+        labelPlacement: 'bottom',
+        labelGap: 6,
+        compositeShapeType: 'circle',
+      },
+      composite: {
+        content: container({
+          children: [text({ text: 'Start', bindToProperty: '__name__' })],
+        }),
+      },
+    })
+    expect(composite).toBeInstanceOf(CompositeNode)
+    expect(composite.labelPlacement).toBe('bottom')
+    expect(composite.labelGap).toBe(6)
+    expect(composite.label?.text).toBe('Start')
+  })
+
+  it('disables resize handles when lockTransform is set', () => {
+    const node = createDiagramNode({
+      ...baseNodeOptions,
+      diagramStyle: { nodeShape: 'circle', lockTransform: true },
+    })
+    expect(node.resizeHandlesEnabled).toBe(false)
+  })
+
+  it('keeps resize handles when lockTransform is absent', () => {
+    const node = createDiagramNode({
+      ...baseNodeOptions,
+      diagramStyle: { nodeShape: 'circle' },
+    })
+    expect(node.resizeHandlesEnabled).toBe(true)
   })
 })

@@ -27,6 +27,7 @@ import type {
 } from "@/types/api"
 import type { AccessPermission, PaginatedResponse, NotationData } from "@/types/entities"
 import { paginatedContent } from "@/utils/paginatedResponse"
+import { resolvePaletteIconName, type PaletteIconAttrs } from "@/utils/paletteIcon"
 
 export type TypeKind = "node" | "link"
 
@@ -350,23 +351,11 @@ export function useTypeEditor() {
     }
   }
 
-  /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
+  /** Иконка для палитры: paletteMaterialIcon ?? diagramStyle.iconName ?? widgets */
   function parsePaletteIconFromAttrs(attrs: string | null | undefined): string {
     if (attrs == null) return "widgets"
     try {
-      const parsed = JSON.parse(attrs) as {
-        diagramStyle?: { iconName?: string }
-        paletteMaterialIcon?: string
-      }
-      const fromStyle =
-        typeof parsed?.diagramStyle?.iconName === "string" && parsed.diagramStyle.iconName.trim()
-          ? parsed.diagramStyle.iconName.trim()
-          : undefined
-      const fromPalette =
-        typeof parsed?.paletteMaterialIcon === "string" && parsed.paletteMaterialIcon.trim()
-          ? parsed.paletteMaterialIcon.trim()
-          : undefined
-      return fromStyle ?? fromPalette ?? "widgets"
+      return resolvePaletteIconName(JSON.parse(attrs) as PaletteIconAttrs)
     } catch {
       return "widgets"
     }
@@ -376,7 +365,7 @@ export function useTypeEditor() {
     id: string
     name: string
     version: string
-    /** Иконка для палитры (diagramStyle.iconName ?? paletteMaterialIcon ?? widgets) */
+    /** Иконка для палитры (paletteMaterialIcon ?? diagramStyle.iconName ?? widgets) */
     icon: string
   }
 

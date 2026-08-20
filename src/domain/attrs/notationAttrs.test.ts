@@ -33,6 +33,32 @@ describe('notationAttrs composite schema', () => {
     expect(parsed.diagramStyle?.stylePropertyBindings?.[0]?.propertyName).toBe('status')
   })
 
+  it('round-trips external label placement on diagramStyle', () => {
+    const parsed = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: {
+          labelPlacement: 'bottom',
+          labelGap: 6,
+        },
+      }),
+    )
+    expect(parsed.diagramStyle?.labelPlacement).toBe('bottom')
+    expect(parsed.diagramStyle?.labelGap).toBe(6)
+  })
+
+  it('round-trips lockTransform on diagramStyle', () => {
+    const parsed = parseEntityAttrs(
+      serializeEntityAttrs({
+        tags: [],
+        customProperties: [],
+        diagramStyle: { lockTransform: true, width: 50, height: 50 },
+      }),
+    )
+    expect(parsed.diagramStyle?.lockTransform).toBe(true)
+  })
+
   it('round-trips cornerCut on diagramStyle', () => {
     const parsed = parseEntityAttrs(
       serializeEntityAttrs({

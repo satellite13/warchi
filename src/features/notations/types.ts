@@ -50,7 +50,7 @@ export interface EntityParsedAttrs {
   diagramStyle?: DiagramStyle
   /** Группа в палитре (0 = note). По умолчанию 0. */
   paletteGroup?: number
-  /** Имя символа Material Symbols для палитры (только при отсутствии diagramStyle.iconName) */
+  /** Иконка палитры; если задана, перекрывает иконку фигуры только в палитре */
   paletteMaterialIcon?: string
   /** UUID файла markdown-документации */
   documentFileId?: string

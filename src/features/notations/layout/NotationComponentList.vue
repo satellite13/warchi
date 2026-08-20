@@ -4,8 +4,7 @@ import { useI18n } from "vue-i18n";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
-import type { CompositeSerializedCComponent } from "@/domain/attrs/notationAttrs";
-import { resolveCompositeBoundIconName } from "@/features/diagram-style/utils/compositeBindings";
+import { resolvePaletteIconName } from "@/utils/paletteIcon";
 import { findNameVersionConflict } from "../utils/nameVersionUniqueness";
 import EmptyState from "@/components/list/EmptyState.vue";
 import EditorSidebarShell from "@/components/list/EditorSidebarShell.vue";
@@ -47,16 +46,9 @@ type ListItem = {
   name: string;
   version: string;
   tags: string[];
-  /** Иконка для палитры: diagramStyle.iconName ?? paletteMaterialIcon ?? widgets */
+  /** Иконка для палитры: paletteMaterialIcon ?? diagramStyle.iconName ?? widgets */
   paletteIcon: string;
 };
-
-function getPaletteIcon(parsedAttrs: { diagramStyle?: { iconName?: string; compositeContent?: CompositeSerializedCComponent }; paletteMaterialIcon?: string }): string {
-  const fromStyle = parsedAttrs.diagramStyle?.iconName?.trim();
-  const fromComposite = resolveCompositeBoundIconName(parsedAttrs.diagramStyle?.compositeContent);
-  const fromPalette = parsedAttrs.paletteMaterialIcon?.trim();
-  return fromStyle ?? fromComposite ?? fromPalette ?? "widgets";
-}
 
 const allTags = computed<string[]>(() => {
   const tagSet = new Set<string>();
@@ -95,7 +87,7 @@ const items = computed<ListItem[]>(() => {
       name: c.name,
       version: c.version,
       tags: c.parsedAttrs.tags,
-      paletteIcon: getPaletteIcon(c.parsedAttrs)
+      paletteIcon: resolvePaletteIconName(c.parsedAttrs)
     }));
 
   const relations: ListItem[] = props.state.relations
@@ -106,7 +98,7 @@ const items = computed<ListItem[]>(() => {
       name: r.name,
       version: r.version,
       tags: r.parsedAttrs.tags,
-      paletteIcon: getPaletteIcon(r.parsedAttrs)
+      paletteIcon: resolvePaletteIconName(r.parsedAttrs)
     }));
 
   let all = [...components, ...relations];
@@ -442,12 +434,12 @@ const commitRename = (item: ListItem) => {
 }
 
 .component-list :deep(.sli .component-item__actions) {
-  opacity: 0;
+  display: none;
 }
 
 .component-list :deep(.sli:hover .component-item__actions),
 .component-list :deep(.sli--active .component-item__actions) {
-  opacity: 1;
+  display: flex;
 }
 
 .component-item {
@@ -507,17 +499,15 @@ const commitRename = (item: ListItem) => {
 }
 
 .component-item__actions {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
   margin-left: auto;
-  opacity: 0;
-  transition: opacity 0.15s ease;
 }
 
 .component-item--renaming .component-item__actions {
-  opacity: 1;
+  display: flex;
 }
 
 .component-item__action {

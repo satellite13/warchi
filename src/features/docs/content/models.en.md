@@ -100,7 +100,7 @@ A panel-header toggle syncs selection between the tree and the canvas.
 
 ### Palette
 
-The palette lists element types from the **active diagram’s notation**. Drag an element from the palette onto the diagram to add a new component.
+The palette lists element types from the **active diagram’s notation**. Drag an element from the palette onto the diagram to add a new component. The palette icon comes from the notation component’s **Palette icon** field when set; otherwise from the figure icon.
 
 ### Properties Panel (right panel)
 

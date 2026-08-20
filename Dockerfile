@@ -14,6 +14,11 @@ WORKDIR /app
 # Supports package.json "file:../papirus" via: docker build --build-context papirus=../papirus
 COPY --from=papirus . /papirus
 COPY package*.json ./
+# A local file dependency resolves through its prebuilt dist/. Rebuild it inside
+# the image so source edits cannot be silently replaced by a stale bundle.
+RUN if node -e "const d=require('./package.json').dependencies['@ngroznykh/papirus']; process.exit(d?.startsWith('file:') ? 0 : 1)"; then \
+      cd /papirus && npm ci --no-audit --fund=false && npm run build; \
+    fi
 RUN npm ci --no-audit --fund=false
 COPY . .
 RUN npm run build

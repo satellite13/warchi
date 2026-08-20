@@ -24,6 +24,7 @@ import {
 import { createDefaultCompositeContent } from '@/features/diagram-style/utils/compositeBindings'
 import { resolveCustomScaleSlice } from '@/utils/resolveCustomScaleSlice'
 import { DEFAULT_CORNER_CUT_PX } from '@/utils/diagramShapes'
+import { resolveStoredIconName } from '@/utils/libraryIconResolve'
 
 export type NodeShape =
   | 'rectangle'
@@ -73,8 +74,11 @@ export function useNodeStyleState() {
   const labelInset = ref<InsetSides>({ top: 8, right: 8, bottom: 8, left: 8 })
   const labelAlign = ref<'center' | 'left' | 'right'>('center')
   const labelVerticalAlign = ref<'top' | 'middle' | 'bottom'>('middle')
+  const labelPlacement = ref<'center' | 'top' | 'bottom' | 'left' | 'right'>('center')
+  const labelGap = ref(4)
   const nodeWidth = ref(140)
   const nodeHeight = ref(50)
+  const lockTransform = ref(false)
   const contentInset = ref<InsetSides>({ top: 0, right: 0, bottom: 0, left: 0 })
   const contentInsetScale = ref<InsetScaleSides>({})
   const nodePortsTop = ref(3)
@@ -112,8 +116,7 @@ export function useNodeStyleState() {
     const iconOptions = getNodeIconOptions(nodeRuntime)
     const iconSource = iconOptions?.source
     if (iconSource && typeof iconSource === 'string') {
-      const match = iconSource.match(/\/icons\/(.+)\.svg$/)
-      iconName.value = match?.[1] ?? ''
+      iconName.value = resolveStoredIconName(iconSource, currentDiagramStyle?.iconName)
     } else {
       iconName.value = ''
     }
@@ -205,6 +208,15 @@ export function useNodeStyleState() {
     labelAlign.value = (labelStyle?.align as 'center' | 'left' | 'right') ?? 'center'
     labelVerticalAlign.value =
       labelStyle?.verticalAlign ?? 'middle'
+    const placement = currentDiagramStyle?.labelPlacement ?? node.labelPlacement
+    labelPlacement.value =
+      placement === 'top' ||
+      placement === 'bottom' ||
+      placement === 'left' ||
+      placement === 'right'
+        ? placement
+        : 'center'
+    labelGap.value = currentDiagramStyle?.labelGap ?? node.labelGap ?? 4
     labelTemplate.value = currentDiagramStyle?.labelTemplate ?? ''
     showLabel.value = currentDiagramStyle?.showLabel !== false
     compositeContentJson.value = currentDiagramStyle?.compositeContent
@@ -230,6 +242,7 @@ export function useNodeStyleState() {
     // Load node dimensions
     nodeWidth.value = Math.round(node.width ?? 140)
     nodeHeight.value = Math.round(node.height ?? 50)
+    lockTransform.value = currentDiagramStyle?.lockTransform === true
     contentInset.value = toInsetSides(
       nodeRuntime.contentInset ?? currentDiagramStyle?.contentInset,
       0,
@@ -280,6 +293,8 @@ export function useNodeStyleState() {
       labelInset: insetToPlain(labelInset.value),
       labelAlign: labelAlign.value,
       labelVerticalAlign: labelVerticalAlign.value,
+      labelPlacement: labelPlacement.value,
+      ...(labelPlacement.value !== 'center' ? { labelGap: labelGap.value } : {}),
       showLabel: showLabel.value,
       ...(labelTemplate.value ? { labelTemplate: labelTemplate.value } : {}),
       ...(nodeShape.value === 'composite' && compositeContent ? { compositeContent } : {}),
@@ -305,6 +320,7 @@ export function useNodeStyleState() {
         : {}),
       width: nodeWidth.value,
       height: nodeHeight.value,
+      ...(lockTransform.value ? { lockTransform: true } : {}),
       contentInset: insetToPlain(contentInset.value),
       ...(contentInsetScale.value.top ||
       contentInsetScale.value.right ||
@@ -367,8 +383,11 @@ export function useNodeStyleState() {
     labelInset,
     labelAlign,
     labelVerticalAlign,
+    labelPlacement,
+    labelGap,
     nodeWidth,
     nodeHeight,
+    lockTransform,
     contentInset,
     contentInsetScale,
     nodePortsTop,

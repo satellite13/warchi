@@ -33,6 +33,13 @@ import {
   resolveCustomScaleSlice,
 } from '@/utils/resolveCustomScaleSlice'
 import { DEFAULT_CORNER_CUT_PX } from '@/utils/diagramShapes'
+import {
+  getAllComponentPresets,
+  getUserComponentPresets,
+  saveUserComponentPreset,
+  deleteUserComponentPreset,
+  subscribeStylePresetsChanges,
+} from '@/features/diagram-style/styles/stylePresets'
 
 const props = defineProps<{
   currentDiagramStyle?: DiagramStyle
@@ -67,6 +74,7 @@ const compositeMinHeight = ref(0)
 // Dimensions
 const nodeWidth = ref(140)
 const nodeHeight = ref(80)
+const lockTransform = ref(false)
 const cornerRadius = ref(0)
 const cornerCut = ref(DEFAULT_CORNER_CUT_PX)
 const contentInset = ref<InsetSides>({ top: 0, right: 0, bottom: 0, left: 0 })
@@ -79,6 +87,8 @@ const strokeColor = ref('#333333')
 const strokeOpacity = ref(1)
 const strokeWidth = ref(1)
 const opacity = ref(1)
+const labelPlacement = ref<'center' | 'top' | 'bottom' | 'left' | 'right'>('center')
+const labelGap = ref(4)
 
 // Ports
 const portsTop = ref(0)
@@ -124,11 +134,16 @@ function handleNodeShapesChanged() {
   invalidateNodeShapeScaleSliceCatalog()
   void fetchNodeShapes({ size: 200 })
 }
+const presetVersion = ref(0)
+const stopStylePresetUpdates = subscribeStylePresetsChanges(() => {
+  presetVersion.value += 1
+})
 onMounted(() => {
   window.addEventListener('warchi-node-shapes-changed', handleNodeShapesChanged)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('warchi-node-shapes-changed', handleNodeShapesChanged)
+  stopStylePresetUpdates()
 })
 const customShapeId = ref<string | null>(null)
 const customOutline = ref<OutlineSegment[] | undefined>(undefined)
@@ -185,6 +200,7 @@ const compositeValidationIssues = computed(() =>
 // Section states
 const sectionOpen = ref({
   shape: true,
+  label: true,
   tree: true,
   fill: true,
   dimensions: false,
@@ -208,6 +224,7 @@ function loadFromStyle() {
 
   nodeWidth.value = ds.width ?? 140
   nodeHeight.value = ds.height ?? 80
+  lockTransform.value = ds.lockTransform === true
   cornerRadius.value = ds.cornerRadius ?? 0
   cornerCut.value = ds.cornerCut ?? DEFAULT_CORNER_CUT_PX
   contentInset.value = toInsetSides(ds.contentInset, 0)
@@ -219,6 +236,14 @@ function loadFromStyle() {
   strokeOpacity.value = ds.strokeOpacity ?? 1
   strokeWidth.value = ds.strokeWidth ?? 1
   opacity.value = ds.opacity ?? 1
+  labelPlacement.value =
+    ds.labelPlacement === 'top' ||
+    ds.labelPlacement === 'bottom' ||
+    ds.labelPlacement === 'left' ||
+    ds.labelPlacement === 'right'
+      ? ds.labelPlacement
+      : 'center'
+  labelGap.value = ds.labelGap ?? 4
 
   portsTop.value = ds.portsTop ?? 0
   portsBottom.value = ds.portsBottom ?? 0
@@ -279,6 +304,7 @@ function emitStyle() {
     opacity: opacity.value,
     width: nodeWidth.value,
     height: nodeHeight.value,
+    ...(lockTransform.value ? { lockTransform: true } : {}),
     contentInset: insetToPlain(contentInset.value),
     ...(contentInsetScale.value.top ||
     contentInsetScale.value.right ||
@@ -297,6 +323,8 @@ function emitStyle() {
     labelInset: props.currentDiagramStyle?.labelInset,
     labelAlign: props.currentDiagramStyle?.labelAlign,
     labelVerticalAlign: props.currentDiagramStyle?.labelVerticalAlign,
+    labelPlacement: labelPlacement.value,
+    ...(labelPlacement.value !== 'center' ? { labelGap: labelGap.value } : {}),
     labelTemplate: props.currentDiagramStyle?.labelTemplate,
     showLabel: props.currentDiagramStyle?.showLabel,
     // Preserve icon fields from original style
@@ -309,6 +337,101 @@ function emitStyle() {
     iconFillColor: props.currentDiagramStyle?.iconFillColor,
   }
   emit('style-change', style)
+}
+
+const selectedComponentPreset = ref('custom')
+const showSavePresetForm = ref(false)
+const newPresetName = ref('')
+const userComponentPresets = computed(() => {
+  void presetVersion.value
+  return getUserComponentPresets()
+})
+const builtInComponentPresets = computed(() => {
+  void presetVersion.value
+  return getAllComponentPresets().filter((preset) => !preset._isUser)
+})
+
+function openSavePresetForm() {
+  newPresetName.value = ''
+  showSavePresetForm.value = true
+}
+
+function cancelSavePreset() {
+  showSavePresetForm.value = false
+  newPresetName.value = ''
+}
+
+function confirmSavePreset() {
+  const label = newPresetName.value.trim()
+  if (!label) return
+  const name = `user_${Date.now()}`
+  const style: DiagramStyle = {
+    fillColor: fillColor.value,
+    fillOpacity: fillOpacity.value,
+    strokeColor: strokeColor.value,
+    strokeOpacity: strokeOpacity.value,
+    strokeWidth: strokeWidth.value,
+    cornerRadius: cornerRadius.value,
+    ...(compositeShapeType.value === 'beveled-rectangle' ? { cornerCut: cornerCut.value } : {}),
+    opacity: opacity.value,
+    width: nodeWidth.value,
+    height: nodeHeight.value,
+    ...(lockTransform.value ? { lockTransform: true } : {}),
+    contentInset: insetToPlain(contentInset.value),
+    ...(contentInsetScale.value.top ||
+    contentInsetScale.value.right ||
+    contentInsetScale.value.bottom ||
+    contentInsetScale.value.left
+      ? { contentInsetScale: { ...contentInsetScale.value } }
+      : {}),
+    labelPlacement: labelPlacement.value,
+    ...(labelPlacement.value !== 'center' ? { labelGap: labelGap.value } : {}),
+  }
+  saveUserComponentPreset({ name, label, style })
+  selectedComponentPreset.value = name
+  presetVersion.value += 1
+  showSavePresetForm.value = false
+  newPresetName.value = ''
+}
+
+function applyComponentPreset(presetName: string) {
+  const preset = getAllComponentPresets().find((item) => item.name === presetName)
+  if (!preset) return
+  const style = preset.style
+  if (typeof style.width === 'number') nodeWidth.value = style.width
+  if (typeof style.height === 'number') nodeHeight.value = style.height
+  lockTransform.value = style.lockTransform === true
+  if (style.contentInset !== undefined) {
+    contentInset.value = toInsetSides(style.contentInset, 0)
+    contentInsetScale.value = { ...(style.contentInsetScale ?? {}) }
+  }
+  if (
+    style.labelPlacement === 'top' ||
+    style.labelPlacement === 'bottom' ||
+    style.labelPlacement === 'left' ||
+    style.labelPlacement === 'right' ||
+    style.labelPlacement === 'center' ||
+    style.labelPlacement === 'auto'
+  ) {
+    labelPlacement.value = style.labelPlacement === 'auto' ? 'center' : style.labelPlacement
+  }
+  if (typeof style.labelGap === 'number' && Number.isFinite(style.labelGap)) {
+    labelGap.value = style.labelGap
+  }
+  if (style.fillColor) fillColor.value = style.fillColor
+  if (style.fillOpacity !== undefined) fillOpacity.value = style.fillOpacity
+  if (style.strokeColor) strokeColor.value = style.strokeColor
+  if (style.strokeOpacity !== undefined) strokeOpacity.value = style.strokeOpacity
+  if (typeof style.strokeWidth === 'number') strokeWidth.value = style.strokeWidth
+  if (typeof style.cornerRadius === 'number') cornerRadius.value = style.cornerRadius
+  if (typeof style.opacity === 'number') opacity.value = style.opacity
+  emitStyle()
+}
+
+function handleDeleteUserPreset(presetName: string) {
+  deleteUserComponentPreset(presetName)
+  if (selectedComponentPreset.value === presetName) selectedComponentPreset.value = 'custom'
+  presetVersion.value += 1
 }
 
 function handleCompositeTreeUpdate(next: CompositeSerializedCComponent) {
@@ -337,6 +460,14 @@ function applyCompositeContentJson() {
   } catch (e) {
     compositeJsonError.value = String(e)
   }
+}
+
+function handleLabelPlacementChange(value: string) {
+  labelPlacement.value =
+    value === 'top' || value === 'bottom' || value === 'left' || value === 'right'
+      ? value
+      : 'center'
+  emitStyle()
 }
 
 function applyStyleBindingsJson() {
@@ -376,6 +507,59 @@ function applyStyleBindingsJson() {
           <UiIcon name="restart_alt" />
         </button>
       </div>
+    </div>
+    <div class="csp__preset">
+      <select
+        class="form-select form-select--sm"
+        :value="selectedComponentPreset"
+        @change="
+          applyComponentPreset(($event.target as HTMLSelectElement).value);
+          selectedComponentPreset = ($event.target as HTMLSelectElement).value
+        "
+      >
+        <option value="custom">{{ t('nodeStyle.customPreset') }}</option>
+        <optgroup :label="t('nodeStyle.builtInPresets')">
+          <option
+            v-for="preset in builtInComponentPresets"
+            :key="preset.name"
+            :value="preset.name"
+          >{{ preset.label }}</option>
+        </optgroup>
+        <optgroup v-if="userComponentPresets.length" :label="t('nodeStyle.myPresets')">
+          <option
+            v-for="preset in userComponentPresets"
+            :key="preset.name"
+            :value="preset.name"
+          >{{ preset.label }}</option>
+        </optgroup>
+      </select>
+      <button type="button" class="csp__preset-btn" :title="t('nodeStyle.saveAsPreset')" @click="openSavePresetForm">
+        <UiIcon name="bookmark_add" />
+      </button>
+      <button
+        v-if="userComponentPresets.some((preset) => preset.name === selectedComponentPreset)"
+        type="button"
+        class="csp__preset-btn csp__preset-btn--danger"
+        :title="t('nodeStyle.deletePreset')"
+        @click="handleDeleteUserPreset(selectedComponentPreset)"
+      >
+        <UiIcon name="delete" />
+      </button>
+    </div>
+    <div v-if="showSavePresetForm" class="csp__save-form">
+      <input
+        v-model="newPresetName"
+        class="form-input form-input--sm"
+        :placeholder="t('nodeStyle.presetNamePlaceholder')"
+        @keyup.enter="confirmSavePreset"
+        @keyup.escape="cancelSavePreset"
+      >
+      <button type="button" class="csp__preset-btn" @click="confirmSavePreset">
+        <UiIcon name="check" />
+      </button>
+      <button type="button" class="csp__preset-btn" @click="cancelSavePreset">
+        <UiIcon name="close" />
+      </button>
     </div>
 
     <!-- Composite-level settings -->
@@ -419,6 +603,16 @@ function applyStyleBindingsJson() {
           >{{ opt.label }}</option>
         </select>
       </LabeledFieldRow>
+      <LabeledFieldRow :label="t('nodeStyle.lockTransform')">
+        <ToggleSwitch
+          :model-value="lockTransform"
+          @update:model-value="
+            lockTransform = $event;
+            emitStyle()
+          "
+        />
+      </LabeledFieldRow>
+      <p class="csp__hint">{{ t('nodeStyle.lockTransformHint') }}</p>
       <LabeledFieldRow :label="t('nodeStyle.compositeAutoSize')">
         <ToggleSwitch
           :model-value="compositeAutoSize"
@@ -563,6 +757,39 @@ function applyStyleBindingsJson() {
       </div>
     </StyleSection>
 
+    <StyleSection
+      :title="t('nodeStyle.label')"
+      :open="sectionOpen.label"
+      @toggle="toggleSection('label')"
+    >
+      <LabeledFieldRow :label="t('nodeStyle.position')">
+        <select
+          class="form-select form-select--sm"
+          :value="labelPlacement"
+          @change="handleLabelPlacementChange(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="center">{{ t('nodeStyle.labelPlacementInside') }}</option>
+          <option value="top">{{ t('nodeStyle.positionTop') }}</option>
+          <option value="bottom">{{ t('nodeStyle.positionBottom') }}</option>
+          <option value="left">{{ t('nodeStyle.positionLeft') }}</option>
+          <option value="right">{{ t('nodeStyle.positionRight') }}</option>
+        </select>
+      </LabeledFieldRow>
+      <LabeledNumberInput
+        v-if="labelPlacement !== 'center'"
+        :label="t('nodeStyle.gap')"
+        :model-value="labelGap"
+        :min="0"
+        :max="80"
+        :step="1"
+        @update:model-value="
+          labelGap = Number($event);
+          emitStyle()
+        "
+      />
+      <p class="csp__hint">{{ t('nodeStyle.labelPlacementCompositeHint') }}</p>
+    </StyleSection>
+
     <!-- Fill & Stroke -->
     <StyleSection
       :title="t('nodeStyle.fillAndStroke')"
@@ -692,6 +919,9 @@ function applyStyleBindingsJson() {
           :content="compositeContentDraft"
           :height="120"
           :selected-node-id="treeSelectedNodeId"
+          :label-placement="labelPlacement"
+          :label-gap="labelGap"
+          :shape-type="compositeShapeType"
         />
       </template>
 
@@ -818,6 +1048,50 @@ function applyStyleBindingsJson() {
 }
 
 .csp__header-btn :deep(.ui-icon) {
+  width: 16px;
+  height: 16px;
+}
+
+.csp__preset,
+.csp__save-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.csp__preset .form-select,
+.csp__save-form .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.csp__preset-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.csp__preset-btn:hover {
+  background: var(--surface-strong);
+  color: var(--base-text);
+}
+
+.csp__preset-btn--danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.csp__preset-btn :deep(.ui-icon) {
   width: 16px;
   height: 16px;
 }

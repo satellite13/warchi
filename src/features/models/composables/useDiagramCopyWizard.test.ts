@@ -8,11 +8,14 @@ const { commitDiagramCopyMock, previewDiagramCopyMock } = vi.hoisted(() => ({
   previewDiagramCopyMock: vi.fn(),
 }))
 
-vi.mock('./diagramCopyApi', () => ({
-  buildResolutionsFromPreview: vi.fn(() => []),
-  commitDiagramCopy: commitDiagramCopyMock,
-  previewDiagramCopy: previewDiagramCopyMock,
-}))
+vi.mock('./diagramCopyApi', async importOriginal => {
+  const actual = await importOriginal<typeof import('./diagramCopyApi')>()
+  return {
+    ...actual,
+    commitDiagramCopy: commitDiagramCopyMock,
+    previewDiagramCopy: previewDiagramCopyMock,
+  }
+})
 
 function createPreview(
   overrides: Partial<DiagramCopyPreviewResponse> = {}
@@ -102,6 +105,60 @@ describe('useDiagramCopyWizard', () => {
     })
 
     expect(wizard.diagramName.value).toBe('Use-Case 1')
+    scope.stop()
+  })
+
+  it('does not replay match targets from the previous model preview', async () => {
+    const scope = effectScope()
+    const wizard = scope.run(() =>
+      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
+    )!
+
+    const firstPreview = createPreview({
+      nodes: [
+        {
+          sourceId: '015b5538-39a8-4f4b-9ec9-d7b214108919',
+          kind: 'NODE',
+          label: 'Start Event',
+          stableId: null,
+          typeId: 'bpmn-start',
+          autoMatchTargetId: 'old-model-node',
+          autoMatchReason: 'NAME_AND_TYPE',
+          candidates: [{ id: 'old-model-node', label: 'Start Event', stableId: null, typeId: 'bpmn-start' }],
+          effectiveAction: 'MATCH',
+          effectiveTargetId: 'old-model-node',
+          isEndpointOfEdge: false,
+        },
+      ],
+    })
+    previewDiagramCopyMock.mockResolvedValue({ success: true, data: firstPreview })
+    wizard.targetModelId.value = 'other-bpmn-model'
+    wizard.targetNotationId.value = 'target-notation'
+    await wizard.open('source-diagram')
+    await vi.waitFor(() => {
+      expect(wizard.preview.value?.nodes).toHaveLength(1)
+    })
+
+    previewDiagramCopyMock.mockClear()
+    previewDiagramCopyMock.mockResolvedValue({ success: true, data: createPreview() })
+    wizard.targetModelId.value = 'project-1'
+    await vi.waitFor(() => {
+      expect(previewDiagramCopyMock).toHaveBeenCalled()
+    })
+
+    expect(previewDiagramCopyMock).toHaveBeenCalledWith(
+      'project-1',
+      expect.objectContaining({
+        sourceDiagramId: 'source-diagram',
+        resolutions: [],
+      })
+    )
+    expect(
+      previewDiagramCopyMock.mock.calls.some(call =>
+        JSON.stringify(call[1]).includes('old-model-node')
+      )
+    ).toBe(false)
+
     scope.stop()
   })
 

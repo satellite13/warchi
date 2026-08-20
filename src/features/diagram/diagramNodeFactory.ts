@@ -6,6 +6,7 @@ import {
   RectangleNode,
   Node as DiagramNode,
   type CContainer,
+  type LabelPlacement,
   type NodeImageOptions,
   type TextLabelOptions,
 } from '@ngroznykh/papirus'
@@ -53,7 +54,6 @@ export interface CreateDiagramNodeOptions {
   specialRectangleShape?: SpecialRectangleShape
 }
 
-type NodeWithLabelPlacement = DiagramNode & { labelPlacement?: string }
 type ShapeMarkedNode = CustomShapeNode & { noteShape?: boolean; folderShape?: boolean }
 type CompositeShapeType = 'rectangle' | 'circle' | 'diamond' | 'custom'
 
@@ -111,6 +111,9 @@ export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNod
     style: options.style,
     ...(options.anchorPoints ? { anchorPoints: options.anchorPoints } : {}),
     ...(options.badges ? { badges: options.badges } : {}),
+    ...(ds?.labelPlacement ? { labelPlacement: ds.labelPlacement as LabelPlacement } : {}),
+    ...(typeof ds?.labelGap === 'number' ? { labelGap: ds.labelGap } : {}),
+    ...(ds?.lockTransform === true ? { resizeHandlesEnabled: false } : {}),
   }
   const commonOptions = {
     ...commonBase,
@@ -168,9 +171,6 @@ export function createDiagramNode(options: CreateDiagramNodeOptions): DiagramNod
 
   if (node instanceof CustomShapeNode) {
     node.shapeType = shape
-  }
-  if (ds?.labelPlacement) {
-    ;(node as NodeWithLabelPlacement).labelPlacement = ds.labelPlacement
   }
   const insetStyle: DiagramStyle = {
     ...(ds ?? {}),
@@ -232,6 +232,7 @@ function createCompositeDiagramNode(
 
   return new CompositeNode({
     ...commonBase,
+    ...(options.label != null ? { label: options.label } : {}),
     style: {
       ...commonBase.style,
       ...composite.stylePatch,

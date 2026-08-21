@@ -24,6 +24,7 @@ import { discardUnsavedModelChanges } from './discardUnsavedModelChanges'
 import { executeModelEditorSave } from './modelEditorSaveCoordinator'
 import { useModelBatchConflictResolution } from './useModelBatchConflictResolution'
 import { useModelEditorStateHelpers } from './useModelEditorStateHelpers'
+import { useModelPartialStore } from './useModelPartialStore'
 import { useNotationRelationsAndRulesLoader } from './useNotationRelationsAndRulesLoader'
 import { resetLoadedNotationCatalogIds } from './ensureNotationImportCatalog'
 
@@ -47,7 +48,7 @@ type ModelEditorReturn = {
   whenCatalogReady: () => Promise<void>
   /** Wait until links and other background model extras finished. */
   whenBackgroundReady: () => Promise<void>
-  /** false until whenBackgroundReady resolves for the current load. */
+  /** Becomes true once model metadata, root children and slim diagrams form a usable shell. */
   initialSnapshotReady: Ref<boolean>
   saveChanges: () => Promise<boolean>
   /** Show saving toast before heavy pre-save work (flush/validate). */
@@ -73,6 +74,7 @@ type ModelEditorReturn = {
   resolveBatchSaveOverwrite: () => Promise<boolean>
   /** Закрыть диалог конфликта без действия */
   dismissBatchSaveConflict: () => void
+  partialStore: ReturnType<typeof useModelPartialStore>
 }
 
 export const useModelEditor = (): ModelEditorReturn => {
@@ -91,6 +93,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const modelDirty = ref(false)
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
+  const partialStore = useModelPartialStore(state)
   let catalogReadyPromise: Promise<void> = Promise.resolve()
   let backgroundReadyPromise: Promise<void> = Promise.resolve()
   let loadGeneration = 0
@@ -175,6 +178,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     isLoading.value = true
     initialSnapshotReady.value = false
     errorMessage.value = null
+    // Cancel child-page requests from the previous load before starting a new shell.
+    partialStore.resetPartialScopes(modelId)
     const progressTracker = createModelEditorLoadProgressTracker({ generation, modelId })
     loadProgress.value = progressTracker.current()
     let notationIds: string[]
@@ -207,7 +212,14 @@ export const useModelEditor = (): ModelEditorReturn => {
       resetLoadedNotationIds([])
       resetLoadedNotationCatalogIds([])
       state.value = shell.state
+      partialStore.resetPartialScopes(modelId, {
+        scope: { kind: 'root' },
+        page: shell.rootChildrenPage,
+      })
       isLoading.value = false
+      // A usable initial snapshot is model metadata + root tree page + slim diagrams.
+      // Catalog and the temporary full-link background path are independent readiness tracks.
+      initialSnapshotReady.value = true
       progressTracker.setBlocking(false)
       loadProgress.value = progressTracker.current()
       // Let Vue paint the tree and handle expand clicks before catalog/links work.
@@ -231,48 +243,50 @@ export const useModelEditor = (): ModelEditorReturn => {
       return
     }
 
-    try {
-      // Catalog first: needed to render/open diagrams (must not wait for huge links).
-      const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
-      if (!isLoadSessionActive(generation, modelId)) {
-        settleStaleSession()
-        return
+    const catalogTask = (async (): Promise<void> => {
+      try {
+        const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
+        if (!isLoadSessionActive(generation, modelId)) return
+        state.value = {
+          ...state.value,
+          nodeTypes: catalog.nodeTypes,
+          linkTypes: catalog.linkTypes,
+          components: catalog.components,
+          relations: catalog.relations,
+          relationRules: catalog.relationRules,
+        }
+        resetLoadedNotationIds(notationIds)
+        resetLoadedNotationCatalogIds(notationIds)
+      } catch (error) {
+        if (isLoadSessionActive(generation, modelId)) {
+          errorMessage.value =
+            error instanceof Error ? error.message : 'Не удалось догрузить каталог модели.'
+        }
+      } finally {
+        resolveCatalogReady()
       }
+    })()
 
-      state.value = {
-        ...state.value,
-        nodeTypes: catalog.nodeTypes,
-        linkTypes: catalog.linkTypes,
-        components: catalog.components,
-        relations: catalog.relations,
-        relationRules: catalog.relationRules,
+    const linksTask = (async (): Promise<void> => {
+      try {
+        // Safe ordering: keep the existing full-link background load until diagram scope
+        // replaces its canvas dependency in Task 6. It is not part of the usable shell.
+        const links = await loadModelEditorLinks(modelId, cancellation)
+        if (!isLoadSessionActive(generation, modelId)) return
+        partialStore.mergeFullLinks(links)
+      } catch (error) {
+        if (isLoadSessionActive(generation, modelId)) {
+          errorMessage.value =
+            error instanceof Error ? error.message : 'Не удалось догрузить связи модели.'
+        }
+      } finally {
+        markBackgroundReady(resolveBackgroundReady, generation, modelId)
       }
-      resetLoadedNotationIds(notationIds)
-      resetLoadedNotationCatalogIds(notationIds)
-      resolveCatalogReady()
+    })()
 
-      // Links are large and only needed for connections/traceability.
-      const links = await loadModelEditorLinks(modelId, cancellation)
-      if (!isLoadSessionActive(generation, modelId)) {
-        settleStaleSession()
-        return
-      }
-      state.value = {
-        ...state.value,
-        links,
-      }
+    await Promise.all([catalogTask, linksTask])
+    if (isLoadSessionActive(generation, modelId)) {
       loadProgress.value = progressTracker.update({ kind: 'complete' })
-      markBackgroundReady(resolveBackgroundReady, generation, modelId)
-    } catch (error) {
-      if (!isLoadSessionActive(generation, modelId)) {
-        settleStaleSession()
-        return
-      }
-      resolveCatalogReady()
-      markBackgroundReady(resolveBackgroundReady, generation, modelId)
-      loadProgress.value = null
-      // Tree is already visible; surface catalog/links failure without blanking the editor.
-      errorMessage.value = error instanceof Error ? error.message : 'Не удалось догрузить данные модели.'
     }
   }
 
@@ -386,5 +400,6 @@ export const useModelEditor = (): ModelEditorReturn => {
     resolveBatchSaveReload,
     resolveBatchSaveOverwrite,
     dismissBatchSaveConflict,
+    partialStore,
   }
 }

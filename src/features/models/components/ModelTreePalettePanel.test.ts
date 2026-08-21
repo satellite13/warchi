@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { parseDiagramAttrs } from '../modelAttrs'
 import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
-import type { EditorNode } from '../types'
+import type { ChildrenPageState, EditorNode } from '../types'
 
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
@@ -94,6 +94,10 @@ function mountPanel(props: {
   nodes: EditorNode[]
   selectedNodeId?: string | null
   selectedDiagramId?: string | null
+  loadedChildrenFor?: Set<string>
+  childrenPages?: Map<string, ChildrenPageState>
+  childrenLoading?: Set<string>
+  childrenErrors?: Map<string, string>
 }) {
   return mount(ModelTreePalettePanel, {
     props: {
@@ -105,6 +109,10 @@ function mountPanel(props: {
       ],
       selectedNodeId: props.selectedNodeId ?? null,
       selectedDiagramId: props.selectedDiagramId ?? null,
+      loadedChildrenFor: props.loadedChildrenFor,
+      childrenPages: props.childrenPages,
+      childrenLoading: props.childrenLoading,
+      childrenErrors: props.childrenErrors,
     },
     // Needed so focusNode/focusDiagram and querySelector work against document
     attachTo: document.body,
@@ -209,6 +217,69 @@ describe('ModelTreePalettePanel', () => {
     expect(wrapper.get('[data-tree-node-id="n1"] .tree-node__name').text()).toBe('CRM')
     expect(wrapper.find('.tree-node__type').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Application Component')
+  })
+
+  it('requests children on first expand but not for a complete scope', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],
+    })
+    await flushTree(wrapper)
+
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    expect(wrapper.emitted('loadChildren')).toEqual([[{ kind: 'node', nodeId: 'folder' }]])
+
+    await wrapper.setProps({ loadedChildrenFor: new Set(['node:folder']) })
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    expect(wrapper.emitted('loadChildren')).toHaveLength(1)
+  })
+
+  it('hides the expand toggle when scoped hasChildren is false', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: false })],
+    })
+    await flushTree(wrapper)
+
+    expect(wrapper.find('[data-tree-node-id="folder"] .tree-node__toggle').exists()).toBe(false)
+  })
+
+  it('renders non-draggable local loading, error and load-more rows', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],
+      childrenLoading: new Set(['node:folder']),
+      childrenErrors: new Map([['node:folder', 'branch failed']]),
+      childrenPages: new Map([
+        [
+          'node:folder',
+          { loadedPages: new Set([0]), nextPage: 1, totalElements: 501 },
+        ],
+      ]),
+    })
+    await flushTree(wrapper)
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    await flushTree(wrapper)
+
+    for (const selector of ['[data-tree-loading]', '[data-tree-error]', '[data-tree-load-more]']) {
+      expect(wrapper.get(selector).attributes('draggable')).not.toBe('true')
+    }
+    await wrapper.get('[data-tree-load-more] button').trigger('click')
+    expect(wrapper.emitted('loadNextChildrenPage')).toEqual([
+      [{ kind: 'node', nodeId: 'folder' }],
+    ])
+  })
+
+  it('pages a wide root scope with a root load-more row', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'root-child', name: 'Root child' })],
+      childrenPages: new Map([
+        ['root', { loadedPages: new Set([0]), nextPage: 1, totalElements: 501 }],
+      ]),
+    })
+    await flushTree(wrapper)
+
+    await wrapper.get('[data-tree-load-more] button').trigger('click')
+
+    expect(wrapper.emitted('loadNextChildrenPage')).toEqual([[{ kind: 'root' }]])
   })
 })
 
@@ -373,7 +444,11 @@ describe('ModelTreePalettePanel virtualization', () => {
 
     expect(wrapper.find('[data-tree-node-id="n-70"]').exists()).toBe(false)
 
-    ;(wrapper.vm as unknown as { focusNode: (id: string) => void }).focusNode('n-70')
+    const focusing = (
+      wrapper.vm as unknown as { focusNode: (id: string) => Promise<void> }
+    ).focusNode('n-70')
+    expect(focusing).toBeInstanceOf(Promise)
+    await focusing
     await flushTree(wrapper)
 
     expect(wrapper.find('[data-tree-node-id="n-70"]').exists()).toBe(true)

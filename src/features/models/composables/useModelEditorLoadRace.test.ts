@@ -61,6 +61,10 @@ function shell(modelId: string) {
     modelCatalog: [],
     state: editorState(modelId),
     loadedNotationIds: [],
+    rootChildrenPage: {
+      content: [],
+      page: { number: 0, size: 500, totalElements: 0, totalPages: 0 },
+    },
   }
 }
 
@@ -113,10 +117,41 @@ describe('useModelEditor load sessions', () => {
     await Promise.all([loadA, readyA])
 
     expect(editor.state.value.modelId).toBe('model-b')
-    expect(editor.initialSnapshotReady.value).toBe(false)
+    // Model B already has a usable shell; catalog readiness is intentionally independent.
+    expect(editor.initialSnapshotReady.value).toBe(true)
 
     catalogB.resolve(emptyCatalog)
     await loadB
+    scope.stop()
+  })
+
+  it('marks the usable shell ready before independent catalog and full-link background work', async () => {
+    const catalog = deferred<typeof emptyCatalog>()
+    const links = deferred<never[]>()
+    loadModelEditorShellMock.mockResolvedValue(shell('model-a'))
+    loadModelEditorCatalogMock.mockReturnValue(catalog.promise)
+    loadModelEditorLinksMock.mockReturnValue(links.promise)
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    const loading = editor.loadModel()
+
+    await vi.waitFor(() => {
+      expect(editor.initialSnapshotReady.value).toBe(true)
+      expect(loadModelEditorCatalogMock).toHaveBeenCalledWith(
+        'model-a',
+        [],
+        expect.objectContaining({ isCancelled: expect.any(Function) })
+      )
+      expect(loadModelEditorLinksMock).toHaveBeenCalledWith(
+        'model-a',
+        expect.objectContaining({ isCancelled: expect.any(Function) })
+      )
+    })
+
+    catalog.resolve(emptyCatalog)
+    links.resolve([])
+    await loading
     scope.stop()
   })
 

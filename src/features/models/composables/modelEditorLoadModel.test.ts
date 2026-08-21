@@ -7,6 +7,7 @@ import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
 } from './modelNotationRelationsApi'
+import { fetchNodeChildren } from './modelScopedApi'
 import { fetchAllByModelId, loadModelEditorData } from './modelEditorLoadModel'
 
 vi.mock('@/composables/useApi', () => ({
@@ -20,6 +21,10 @@ vi.mock('./modelNotationRelationsApi', () => ({
 
 vi.mock('./modelNotationComponentsApi', () => ({
   fetchAllComponentsByNotationIds: vi.fn(),
+}))
+
+vi.mock('./modelScopedApi', () => ({
+  fetchNodeChildren: vi.fn(),
 }))
 
 vi.mock('@/api/queryHelpers', async () => {
@@ -317,6 +322,7 @@ describe('fetchAllByModelId', () => {
 describe('loadModelEditorData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(fetchNodeChildren).mockResolvedValue(ok(page([])))
     vi.mocked(fetchAllRelationRulesByNotationIds).mockResolvedValue([])
     vi.mocked(fetchAllRelationsByNotationId).mockResolvedValue([
       {
@@ -496,5 +502,48 @@ describe('loadModelEditorData', () => {
     ])
     expect(shell.state.links).toEqual([])
     expect(shell.state.components).toEqual([])
+  })
+
+  it('loads the normal shell from the scoped root without unscoped nodes or links', async () => {
+    const { loadModelEditorShell } = await import('./modelEditorLoadModel')
+    vi.mocked(fetchNodeChildren).mockResolvedValue(
+      ok(
+        page([
+          {
+            id: 'root-child',
+            name: 'Root child',
+            modelId: 'model-1',
+            ownerId: 'owner-1',
+            nodeTypeId: 'nt-dir',
+            parentNodeId: 'hidden-root',
+            attrs: null,
+            hasChildren: true,
+          },
+        ])
+      )
+    )
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path === '/models/model-1') {
+        return ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' })
+      }
+      if (path.startsWith('/models?')) return ok(listResponse([]))
+      if (path.startsWith('/diagrams?')) return ok(page([]))
+      if (path.startsWith('/notations?')) return ok(page([]))
+      if (path.startsWith('/node-types?')) return ok(page([]))
+      throw new Error(`Unscoped shell request: ${path}`)
+    })
+
+    const shell = await loadModelEditorShell('model-1')
+
+    expect(fetchNodeChildren).toHaveBeenCalledWith(
+      'model-1',
+      { kind: 'root' },
+      expect.objectContaining({ page: 0 })
+    )
+    expect(shell.state.nodes.map(row => row.id)).toEqual(['root-child'])
+    expect(shell.rootChildrenPage.content?.map(row => row.id)).toEqual(['root-child'])
+    const paths = vi.mocked(apiGet).mock.calls.map(call => String(call[0]))
+    expect(paths.some(path => path.startsWith('/nodes?'))).toBe(false)
+    expect(paths.some(path => path.startsWith('/links?'))).toBe(false)
   })
 })

@@ -32,12 +32,14 @@ import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
 } from "./modelNotationRelationsApi"
+import { fetchNodeChildren } from './modelScopedApi'
 
-type LoadModelEditorDataResult = {
+export type LoadModelEditorDataResult = {
   model: ModelData
   modelCatalog: ModelData[]
   state: ModelEditorState
   loadedNotationIds: string[]
+  rootChildrenPage: PaginatedResponse<NodeResponse>
 }
 
 export type ModelEditorCatalog = {
@@ -280,7 +282,7 @@ export type LoadModelEditorShellOptions = {
   diagramIncludeAttrs?: boolean
 } & ModelEditorLoadCancellationOptions
 
-/** Critical path for the tree: model + nodes + light diagrams (no attrs) + node types. */
+/** Critical path: model metadata + scoped root children + light diagrams and folder types. */
 export async function loadModelEditorShell(
   modelId: string,
   options?: LoadModelEditorShellOptions
@@ -290,11 +292,19 @@ export async function loadModelEditorShell(
   nodeTypesQuery.set('modelId', modelId)
   const diagramIncludeAttrs = options?.diagramIncludeAttrs === true
 
-  const [modelResult, modelsResult, nodes, diagramResponses, notationsResult, nodeTypesResult] =
+  const [
+    modelResult,
+    modelsResult,
+    rootChildrenResult,
+    diagramResponses,
+    notationsResult,
+    nodeTypesResult,
+  ] =
     await Promise.all([
       apiGet<ModelData>(`/models/${modelId}`),
       apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
-      fetchAllByModelId<NodeResponse>('/nodes', modelId, PAGE_SIZE_MODEL_NODES, undefined, options),
+      // Normal opening must stay parent-scoped. The full helper below remains for detached callers.
+      fetchNodeChildren(modelId, { kind: 'root' }, { page: 0 }),
       fetchAllByModelId<DiagramResponse>('/diagrams', modelId, PAGE_SIZE_MODEL_DIAGRAMS, {
         includeAttrs: diagramIncludeAttrs ? 'true' : 'false',
       }, options),
@@ -305,6 +315,11 @@ export async function loadModelEditorShell(
 
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   const model = requireModel(modelResult)
+  if (!rootChildrenResult.success) {
+    throw new Error(`Ошибка загрузки корня модели: ${rootChildrenResult.error.message}`)
+  }
+  const rootChildrenPage = rootChildrenResult.data
+  const nodes = paginatedContent(rootChildrenPage)
   // includeAttrs=false → attrs null → _attrsPending; hydrate on open via GET /diagrams/{id}
   const diagrams = diagramResponses.map(row =>
     toEditorDiagram(row, diagramIncludeAttrs ? { attrsPending: false } : undefined)
@@ -336,6 +351,7 @@ export async function loadModelEditorShell(
     modelCatalog: modelsResult.success ? paginatedContent(modelsResult.data) : [],
     state,
     loadedNotationIds: notationIds,
+    rootChildrenPage,
   }
 }
 
@@ -429,12 +445,18 @@ export async function loadModelEditorData(
   options?: LoadModelEditorShellOptions
 ): Promise<LoadModelEditorDataResult> {
   const shell = await loadModelEditorShell(modelId, options)
-  const extras = await loadModelEditorExtras(modelId, shell.loadedNotationIds, options)
+  // Full escape hatch intentionally keeps full nodes and links for detached/legacy consumers.
+  // Do not route normal editor opening through this function.
+  const [allNodes, extras] = await Promise.all([
+    fetchAllByModelId<NodeResponse>('/nodes', modelId, PAGE_SIZE_MODEL_NODES, undefined, options),
+    loadModelEditorExtras(modelId, shell.loadedNotationIds, options),
+  ])
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   return {
     ...shell,
     state: {
       ...shell.state,
+      nodes: await mapInChunks(allNodes, toEditorNode, options),
       links: extras.links,
       nodeTypes: extras.nodeTypes,
       linkTypes: extras.linkTypes,

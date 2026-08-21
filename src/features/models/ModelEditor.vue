@@ -140,7 +140,11 @@ const {
   resolveBatchSaveReload,
   resolveBatchSaveOverwrite,
   dismissBatchSaveConflict,
+  partialStore,
 } = useModelEditor()
+
+const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
+const childrenPages = computed(() => partialStore.store.childrenPages)
 
 const modelLiveSyncEnabled = computed(
   () => !!model.value && !isLoading.value && !errorMessage.value
@@ -3077,7 +3081,13 @@ onBeforeUnmount(() => {
             :model-name="model?.name"
             :sync-selection-enabled="selectionSyncEnabled"
             :navigation-only-mode="diagramNavigationOnlyMode"
+            :loaded-children-for="loadedChildrenFor"
+            :children-pages="childrenPages"
+            :children-loading="partialStore.childrenLoading.value"
+            :children-errors="partialStore.childrenErrors.value"
             @select-node="handleTreeSelectNode"
+            @load-children="partialStore.loadChildren"
+            @load-next-children-page="partialStore.loadNextChildrenPage"
             @toggle-sync-selection="toggleSelectionSync"
             @open-diagram="selectDiagram"
             @create-folder="openCreateFolder"

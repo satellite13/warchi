@@ -3,6 +3,7 @@ import { defineComponent, ref, type Ref } from 'vue'
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { refreshAccessToken, type ApiResult } from '@/api/apiClient'
 import { apiFetch, apiGet } from '@/composables/useApi'
+import type { NodeResponse } from '@/types/api'
 import type { ModelData } from '@/types/entities'
 import { createEmptyModelEditorState } from '../types'
 import { ModelPartialStore } from '../utils/modelPartialStore'
@@ -516,7 +517,7 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(modelGets).toBe(1)
+    expect(modelGets).toBe(2)
     expect(nodePulls).toBe(0)
     expect(linkPulls).toBe(0)
     wrapper.unmount()
@@ -648,7 +649,7 @@ describe('useModelLiveSync snapshot pull', () => {
 
     expect(state.value.nodes).toEqual([])
     expect(currentModel.value?.id).toBe('model-2')
-    expect(modelTwoPulls).toBe(1)
+    expect(modelTwoPulls).toBe(2)
     wrapper.unmount()
   })
 
@@ -1005,6 +1006,268 @@ describe('useModelLiveSync snapshot pull', () => {
     expect(currentModel.value?.name).toBe('Model')
     expect(fetchSlimDiagrams).not.toHaveBeenCalled()
     expect(onRemoteSnapshotApplied).not.toHaveBeenCalled()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(fetchModel).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('keeps remote model metadata pending while dirty and applies it when dirty clears', async () => {
+    const modelDirty = ref(true)
+    const currentModel = ref<ModelData | null>(
+      model({ name: 'local edit', updatedAt: '2026-01-01T00:00:00.000Z' })
+    )
+    const fetchModel = vi.fn(async () => ({
+      success: true as const,
+      data: model({
+        name: 'remote metadata',
+        ownerId: 'owner-2',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      }),
+    }))
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state: ref(createEmptyModelEditorState()),
+            model: currentModel,
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: ref(true),
+            isSaving: ref(false),
+            modelDirty,
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'poll',
+            boundedSync: {
+              materializedScopes: () => [],
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: {
+                fetchModel,
+                fetchSlimDiagrams: vi.fn(async () => ({ success: true as const, data: [] })),
+              },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.waitFor(() => expect(fetchModel).toHaveBeenCalledTimes(2))
+    expect(currentModel.value?.name).toBe('local edit')
+    expect(currentModel.value?.updatedAt).toBe('2026-01-01T00:00:00.000Z')
+
+    modelDirty.value = false
+    await flushPromises()
+
+    expect(currentModel.value?.name).toBe('remote metadata')
+    expect(currentModel.value?.ownerId).toBe('owner-2')
+    expect(currentModel.value?.updatedAt).toBe('2026-01-02T00:00:00.000Z')
+    wrapper.unmount()
+  })
+
+  it('rejects a bounded updatedAt older than the current accepted model metadata', async () => {
+    const currentModel = ref<ModelData | null>(
+      model({ name: 'newer granular', updatedAt: '2026-01-03T00:00:00.000Z' })
+    )
+    const fetchSlimDiagrams = vi.fn(async () => ({ success: true as const, data: [] }))
+    const fetchModel = vi.fn(async () => ({
+      success: true as const,
+      data: model({ name: 'older bounded', updatedAt: '2026-01-02T00:00:00.000Z' }),
+    }))
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state: ref(createEmptyModelEditorState()),
+            model: currentModel,
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: ref(true),
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'poll',
+            boundedSync: {
+              materializedScopes: () => [],
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: { fetchModel, fetchSlimDiagrams },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.waitFor(() => expect(fetchModel).toHaveBeenCalledTimes(1))
+
+    expect(currentModel.value?.name).toBe('newer granular')
+    expect(fetchSlimDiagrams).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('drops coalesced granular events on auth clear before the initial snapshot becomes ready', async () => {
+    const snapshotReady = ref(false)
+    const state = ref(createEmptyModelEditorState())
+    state.value.modelId = 'model-1'
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [
+        toEditorNode({
+          id: 'node-1',
+          name: 'old',
+          modelId: 'model-1',
+          ownerId: 'owner-1',
+          nodeTypeId: 'node-type-1',
+          attrs: null,
+        }),
+      ],
+      { kind: 'partial' }
+    )
+    const fetchNode = vi.fn()
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state,
+            model: ref(model()),
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: snapshotReady,
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'ws',
+            granularSync: {
+              store,
+              publishMaterializedRows: vi.fn(),
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: {
+                fetchNode,
+                fetchLink: vi.fn(),
+                fetchDiagram: vi.fn(),
+                fetchModel: vi.fn(),
+              },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+    const client = stompMock.clients.at(-1)
+    client?.options.onConnect()
+    client?.subscriptions.get('/topic/models/model-1')?.({
+      body: JSON.stringify({
+        type: 'model_changed',
+        modelId: 'model-1',
+        actorUserId: 'other-user',
+        eventId: 'pending-before-logout',
+        events: [{ type: 'node_updated', entity: 'node', id: 'node-1', revision: 2 }],
+      }),
+    })
+
+    window.dispatchEvent(new Event('warchi-auth-cleared'))
+    snapshotReady.value = true
+    await flushPromises()
+
+    expect(fetchNode).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('aborts an active granular point request on auth clear and ignores its late response', async () => {
+    const state = ref(createEmptyModelEditorState())
+    state.value.modelId = 'model-1'
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [
+        toEditorNode({
+          id: 'node-1',
+          name: 'old',
+          modelId: 'model-1',
+          ownerId: 'owner-1',
+          nodeTypeId: 'node-type-1',
+          attrs: null,
+        }),
+      ],
+      { kind: 'partial' }
+    )
+    state.value.nodes = store.nodes
+    const response = deferred<ApiResult<NodeResponse>>()
+    let pointSignal: AbortSignal | undefined
+    const fetchNode = vi.fn(async (_id: string, signal: AbortSignal) => {
+      pointSignal = signal
+      return response.promise
+    })
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state,
+            model: ref(model()),
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: ref(true),
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'ws',
+            granularSync: {
+              store,
+              publishMaterializedRows: () => {
+                state.value.nodes = store.nodes
+              },
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: {
+                fetchNode,
+                fetchLink: vi.fn(),
+                fetchDiagram: vi.fn(),
+                fetchModel: vi.fn(),
+              },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+    const client = stompMock.clients.at(-1)
+    client?.options.onConnect()
+    client?.subscriptions.get('/topic/models/model-1')?.({
+      body: JSON.stringify({
+        type: 'model_changed',
+        modelId: 'model-1',
+        actorUserId: 'other-user',
+        eventId: 'active-before-logout',
+        events: [{ type: 'node_updated', entity: 'node', id: 'node-1', revision: 2 }],
+      }),
+    })
+    await vi.waitFor(() => expect(fetchNode).toHaveBeenCalledTimes(1))
+
+    window.dispatchEvent(new Event('warchi-auth-cleared'))
+    expect(pointSignal?.aborted).toBe(true)
+    response.resolve({
+      success: true,
+      data: {
+        id: 'node-1',
+        name: 'late remote',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'node-type-1',
+        attrs: null,
+      },
+    })
+    await flushPromises()
+
+    expect(state.value.nodes[0]?.name).toBe('old')
     wrapper.unmount()
   })
 

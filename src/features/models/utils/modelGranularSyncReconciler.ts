@@ -50,6 +50,7 @@ type ReconcilerOptions = {
   ) => void
   onRecovered?: (event: GranularSyncEventPayload) => void
   onModelRevisionApplied?: (revision: number | undefined) => void
+  acceptModelMetadata?: (remote: ModelData) => boolean
 }
 
 const isProtectedLocal = (
@@ -380,17 +381,20 @@ export function createModelGranularSyncReconciler(
         fetchers.fetchModel(modelId, signal)
       )
       if (!result?.success) return
+      if (options.acceptModelMetadata && !options.acceptModelMetadata(result.data)) return
       options.onModelRevisionApplied?.(event.revision)
-      options.replaceModel(
-        options.modelDirty()
-          ? {
-              ...result.data,
-              name: local.name,
-              version: local.version,
-              attrs: local.attrs,
-            }
-          : result.data
-      )
+      if (!options.acceptModelMetadata) {
+        options.replaceModel(
+          options.modelDirty()
+            ? {
+                ...result.data,
+                name: local.name,
+                version: local.version,
+                attrs: local.attrs,
+              }
+            : result.data
+        )
+      }
       clearPointError(event)
     } finally {
       finishPointRequest(event, request)

@@ -113,6 +113,7 @@ function harness(options: {
   model?: ModelData
   openDiagramId?: string | null
   refreshVisibleChildrenScope?: (scope: TreeParentScope) => Promise<void>
+  acceptModelMetadata?: (remote: ModelData) => boolean
 } = {}) {
   const store = new ModelPartialStore()
   store.setRootParentNodeId(null)
@@ -161,6 +162,7 @@ function harness(options: {
     onUnknownEvent: unknown,
     onError: errors,
     onRecovered: recovered,
+    acceptModelMetadata: options.acceptModelMetadata,
   })
   return {
     fetchers,
@@ -177,6 +179,26 @@ function harness(options: {
 }
 
 describe('modelGranularSyncReconciler', () => {
+  it('does not apply model metadata rejected by the central monotonic revision owner', async () => {
+    const acceptModelMetadata = vi.fn(() => false)
+    const h = harness({
+      acceptModelMetadata,
+      fetchers: {
+        fetchModel: vi.fn(async () => success(model({ name: 'stale remote', updatedAt: 'v1' }))),
+      },
+    })
+
+    h.reconciler.enqueue([
+      { type: 'model_updated', entity: 'model', id: 'model-1', revision: 2 },
+    ])
+    await h.reconciler.flush()
+
+    expect(acceptModelMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedAt: 'v1' })
+    )
+    expect(h.currentModel().name).toBe('Model')
+  })
+
   it('point-updates only a materialized clean node and never uses an unscoped collection', async () => {
     const h = harness({
       nodes: [node('loaded', { name: 'old' })],

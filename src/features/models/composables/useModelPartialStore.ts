@@ -328,6 +328,113 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     return entry.promise
   }
 
+  const prepareVisibleChildrenScopeRefresh = async (
+    scope: TreeParentScope,
+    externalSignal: AbortSignal
+  ): Promise<{ isCurrent: () => boolean; commit: () => void }> => {
+    const scopeKey = store.scopeKey(scope)
+    const existing = inFlight.get(scopeKey)
+    if (existing) {
+      await existing.promise
+      if (externalSignal.aborted) {
+        return { isCurrent: () => false, commit: () => undefined }
+      }
+      return prepareVisibleChildrenScopeRefresh(scope, externalSignal)
+    }
+    if (!modelId || externalSignal.aborted) {
+      return { isCurrent: () => false, commit: () => undefined }
+    }
+
+    const requestedModelId = modelId
+    const requestGeneration = store.generation
+    const previousPageState = store.childrenPages.get(scopeKey)
+    const visibleThroughPage =
+      previousPageState && previousPageState.loadedPages.size > 0
+        ? Math.max(...previousPageState.loadedPages)
+        : 0
+    const wasComplete = store.loadedChildrenFor.has(scopeKey)
+    const guard = store.beginRequest(`children-refresh:${scopeKey}`)
+    const controller = new AbortController()
+    const abortFromExternal = (): void => controller.abort()
+    externalSignal.addEventListener('abort', abortFromExternal, { once: true })
+    setLoading(scopeKey, true)
+    setError(scopeKey, null)
+
+    let resolveEntry!: () => void
+    const entry = {
+      promise: new Promise<void>(resolve => {
+        resolveEntry = resolve
+      }),
+    }
+    inFlight.set(scopeKey, entry)
+    try {
+      const pages: Array<{ pageNumber: number; response: PaginatedResponse<NodeResponse> }> = []
+      let pageNumber = 0
+      while (true) {
+        const result = await fetchNodeChildren(requestedModelId, scope, {
+          page: pageNumber,
+          signal: controller.signal,
+        })
+        if (
+          controller.signal.aborted ||
+          requestedModelId !== modelId ||
+          requestGeneration !== store.generation ||
+          !store.isRequestCurrent(guard)
+        ) {
+          return { isCurrent: () => false, commit: () => undefined }
+        }
+        if (!result.success) throw new Error(result.error.message)
+        pages.push({ pageNumber, response: result.data })
+        if (
+          paginatedIsLastPage(result.data, pageNumber) ||
+          (!wasComplete && pageNumber >= visibleThroughPage)
+        ) {
+          break
+        }
+        pageNumber += 1
+      }
+
+      const isCurrent = (): boolean =>
+        !externalSignal.aborted &&
+        requestedModelId === modelId &&
+        requestGeneration === store.generation &&
+        store.isRequestCurrent(guard)
+      return {
+        isCurrent,
+        commit: () => {
+          if (!isCurrent()) return
+          captureMaterializedRows()
+          const commitSession = startSession(scope)
+          store.prepareChildrenScopeRefresh(scope)
+          for (const page of pages) {
+            mergePageIntoStore(scope, page.pageNumber, page.response, commitSession)
+          }
+          visibleRefreshFailures.delete(scopeKey)
+          publishRows()
+        },
+      }
+    } catch (error) {
+      if (
+        !controller.signal.aborted &&
+        requestedModelId === modelId &&
+        requestGeneration === store.generation
+      ) {
+        const message = errorMessage(error)
+        visibleRefreshFailures.add(scopeKey)
+        setError(scopeKey, message)
+        throw error instanceof Error ? error : new Error(message)
+      }
+      return { isCurrent: () => false, commit: () => undefined }
+    } finally {
+      externalSignal.removeEventListener('abort', abortFromExternal)
+      if (inFlight.get(scopeKey) === entry) {
+        inFlight.delete(scopeKey)
+        setLoading(scopeKey, false)
+      }
+      resolveEntry()
+    }
+  }
+
   const ensureChildrenScopeComplete = async (scope: TreeParentScope): Promise<void> => {
     const scopeKey = store.scopeKey(scope)
     while (!store.loadedChildrenFor.has(scopeKey)) {
@@ -398,6 +505,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     loadNextChildrenPage,
     refreshChildrenScope,
     refreshVisibleChildrenScope,
+    prepareVisibleChildrenScopeRefresh,
     ensureChildrenScopeComplete,
     resetPartialScopes,
     mergeFullLinks,

@@ -485,6 +485,7 @@ const {
   boundedSync: {
     materializedScopes: partialStore.materializedChildrenScopes,
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
+    prepareVisibleChildrenScopeRefresh: partialStore.prepareVisibleChildrenScopeRefresh,
     reloadOpenDiagramScope: async (diagramId, signal) => {
       if (selectedDiagramId.value !== diagramId) return
       await diagramScope.reload(signal)

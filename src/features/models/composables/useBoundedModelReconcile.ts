@@ -28,6 +28,11 @@ export type BoundedModelReconcile = {
   dispose: () => void
 }
 
+export type PreparedChildrenScopeRefresh = {
+  isCurrent: () => boolean
+  commit: () => void
+}
+
 type BoundedModelReconcileOptions = {
   modelId: () => string | null | undefined
   model: () => ModelData | null
@@ -37,6 +42,10 @@ type BoundedModelReconcileOptions = {
   replaceDiagrams: (diagrams: EditorDiagram[]) => void
   materializedScopes: () => TreeParentScope[]
   refreshVisibleChildrenScope: (scope: TreeParentScope, signal: AbortSignal) => Promise<void>
+  prepareVisibleChildrenScopeRefresh?: (
+    scope: TreeParentScope,
+    signal: AbortSignal
+  ) => Promise<PreparedChildrenScopeRefresh>
   openDiagramId?: () => string | null | undefined
   reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
   fetchers?: BoundedModelReconcileFetchers
@@ -48,7 +57,11 @@ type BoundedModelReconcileOptions = {
   ) => void
   onRecovered?: (reason: ModelLiveSyncPullReason) => void
   onModelUnavailable?: (status: number) => void
+  acceptedRevision?: () => string | null
+  acceptModelMetadata?: (remote: ModelData) => boolean
 }
+
+const SCOPE_REFRESH_CONCURRENCY = 4
 
 const errorResult = <T>(error: unknown): ApiResult<T> => ({
   success: false,
@@ -87,6 +100,16 @@ const defaultFetchers: BoundedModelReconcileFetchers = {
 
 const revision = (value: ModelData | null): string | null => value?.updatedAt ?? null
 
+const compareRevisions = (left: string | null, right: string | null): number => {
+  if (left === right) return 0
+  if (left == null) return -1
+  if (right == null) return 1
+  const leftTime = Date.parse(left)
+  const rightTime = Date.parse(right)
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) return leftTime - rightTime
+  return left.localeCompare(right)
+}
+
 export function createBoundedModelReconcile(
   options: BoundedModelReconcileOptions
 ): BoundedModelReconcile {
@@ -99,6 +122,12 @@ export function createBoundedModelReconcile(
   let lastObservedRevision: string | null = null
   let disposed = false
   let hasReportedError = false
+
+  const recover = (reason: ModelLiveSyncPullReason): void => {
+    if (!hasReportedError) return
+    hasReportedError = false
+    options.onRecovered?.(reason)
+  }
 
   const isCurrent = (
     requestGeneration: number,
@@ -161,7 +190,11 @@ export function createBoundedModelReconcile(
       lastObservedModelId = modelId
       lastObservedRevision = revision(options.model())
     }
-    const baselineRevision = lastObservedRevision
+    const acceptedRevision = options.acceptedRevision?.() ?? revision(options.model())
+    const baselineRevision =
+      compareRevisions(lastObservedRevision, acceptedRevision) >= 0
+        ? lastObservedRevision
+        : acceptedRevision
 
     try {
       const modelResult = await fetchers.fetchModel(modelId, requestController.signal)
@@ -176,7 +209,11 @@ export function createBoundedModelReconcile(
       }
 
       const remoteRevision = revision(modelResult.data)
-      if (remoteRevision === baselineRevision) return
+      const comparison = compareRevisions(remoteRevision, baselineRevision)
+      if (comparison <= 0) {
+        if (comparison === 0) recover(reason)
+        return
+      }
 
       const diagramsResult = await fetchers.fetchSlimDiagrams(modelId, requestController.signal)
       if (!isCurrent(requestGeneration, modelId, requestController)) return
@@ -185,31 +222,70 @@ export function createBoundedModelReconcile(
         throw new Error(diagramsResult.error.message)
       }
 
-      const openDiagramId = options.openDiagramId?.() ?? null
-      mergeSlimDiagrams(diagramsResult.data, openDiagramId)
-
-      const refreshes = options
-        .materializedScopes()
-        .map(scope => options.refreshVisibleChildrenScope(scope, requestController.signal))
-      const refreshResults = await Promise.allSettled(refreshes)
+      const scopes = options.materializedScopes()
+      const preparedScopes: PreparedChildrenScopeRefresh[] = new Array(scopes.length)
+      let nextScopeIndex = 0
+      const workers = Array.from(
+        { length: Math.min(SCOPE_REFRESH_CONCURRENCY, scopes.length) },
+        async () => {
+          while (nextScopeIndex < scopes.length) {
+            const index = nextScopeIndex
+            nextScopeIndex += 1
+            const scope = scopes[index]!
+            if (options.prepareVisibleChildrenScopeRefresh) {
+              preparedScopes[index] = await options.prepareVisibleChildrenScopeRefresh(
+                scope,
+                requestController.signal
+              )
+            } else {
+              await options.refreshVisibleChildrenScope(scope, requestController.signal)
+              preparedScopes[index] = {
+                isCurrent: () => !requestController.signal.aborted,
+                commit: () => undefined,
+              }
+            }
+          }
+        }
+      )
+      const refreshResults = await Promise.allSettled(workers)
       if (!isCurrent(requestGeneration, modelId, requestController)) return
       const failedRefresh = refreshResults.find(
         (result): result is PromiseRejectedResult => result.status === 'rejected'
       )
       if (failedRefresh) throw failedRefresh.reason
 
+      const openDiagramId = options.openDiagramId?.() ?? null
       if (openDiagramId && options.reloadOpenDiagramScope) {
         await options.reloadOpenDiagramScope(openDiagramId, requestController.signal)
         if (!isCurrent(requestGeneration, modelId, requestController)) return
       }
 
-      lastObservedRevision = remoteRevision
-      replaceModelMetadata(modelResult.data)
-      options.onDetachedSnapshotInvalidated?.()
-      if (hasReportedError) {
-        hasReportedError = false
-        options.onRecovered?.(reason)
+      const fenceResult = await fetchers.fetchModel(modelId, requestController.signal)
+      if (!isCurrent(requestGeneration, modelId, requestController)) return
+      if (!fenceResult.success) {
+        if (fenceResult.error.cancelled) return
+        if (fenceResult.error.status === 403 || fenceResult.error.status === 404) {
+          options.onModelUnavailable?.(fenceResult.error.status)
+          return
+        }
+        throw new Error(fenceResult.error.message)
       }
+      if (revision(fenceResult.data) !== remoteRevision) {
+        pendingReason = reason
+        return
+      }
+      if (preparedScopes.some(prepared => !prepared.isCurrent())) {
+        pendingReason = reason
+        return
+      }
+      if (options.acceptModelMetadata && !options.acceptModelMetadata(modelResult.data)) return
+
+      mergeSlimDiagrams(diagramsResult.data, openDiagramId)
+      preparedScopes.forEach(prepared => prepared.commit())
+      lastObservedRevision = remoteRevision
+      if (!options.acceptModelMetadata) replaceModelMetadata(modelResult.data)
+      options.onDetachedSnapshotInvalidated?.()
+      recover(reason)
     } catch (error) {
       if (!isCurrent(requestGeneration, modelId, requestController)) return
       hasReportedError = true

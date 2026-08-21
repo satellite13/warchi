@@ -10,6 +10,7 @@ import {
 
 const REVISION_1 = '2026-01-01T00:00:00.000Z'
 const REVISION_2 = '2026-01-02T00:00:00.000Z'
+const REVISION_3 = '2026-01-03T00:00:00.000Z'
 
 const ok = <T>(data: T) => ({ success: true as const, data })
 
@@ -67,7 +68,13 @@ function harness(overrides?: {
     scope: TreeParentScope,
     signal: AbortSignal
   ) => Promise<void>
+  prepareVisibleChildrenScopeRefresh?: (
+    scope: TreeParentScope,
+    signal: AbortSignal
+  ) => Promise<{ isCurrent: () => boolean; commit: () => void }>
   reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
+  acceptedRevision?: () => string | null
+  acceptModelMetadata?: (remote: ModelData) => boolean
 }) {
   let currentModel = overrides?.currentModel ?? model()
   let diagrams = overrides?.diagrams ?? [editorDiagram('diagram-1', 'local')]
@@ -103,8 +110,11 @@ function harness(overrides?: {
     replaceDiagrams,
     materializedScopes: () => overrides?.scopes ?? [],
     refreshVisibleChildrenScope,
+    prepareVisibleChildrenScopeRefresh: overrides?.prepareVisibleChildrenScopeRefresh,
     openDiagramId: () => 'diagram-1',
     reloadOpenDiagramScope,
+    acceptedRevision: overrides?.acceptedRevision,
+    acceptModelMetadata: overrides?.acceptModelMetadata,
     fetchers,
     onDetachedSnapshotInvalidated: detachedInvalidated,
     onError: errors,
@@ -139,6 +149,140 @@ describe('createBoundedModelReconcile', () => {
     expect(h.refreshVisibleChildrenScope).not.toHaveBeenCalled()
     expect(h.reloadOpenDiagramScope).not.toHaveBeenCalled()
     expect(h.detachedInvalidated).not.toHaveBeenCalled()
+  })
+
+  it('recovers a prior bounded error when a later probe is unchanged', async () => {
+    let fail = true
+    const h = harness({
+      fetchers: {
+        fetchModel: vi.fn(async () =>
+          fail
+            ? { success: false as const, error: { status: 503, message: 'offline' } }
+            : ok(model('model-1', REVISION_1))
+        ),
+      },
+    })
+
+    h.reconciler.request('poll_timer')
+    await h.reconciler.flush()
+    fail = false
+    h.reconciler.request('visibility')
+    await h.reconciler.flush()
+
+    expect(h.recovered).toHaveBeenCalledWith('visibility')
+    expect(h.fetchers.fetchSlimDiagrams).not.toHaveBeenCalled()
+  })
+
+  it('never applies an updatedAt older than the centrally accepted revision', async () => {
+    const acceptModelMetadata = vi.fn(() => true)
+    const h = harness({
+      acceptedRevision: () => REVISION_3,
+      acceptModelMetadata,
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+      },
+    })
+
+    h.reconciler.request('poll_timer')
+    await h.reconciler.flush()
+
+    expect(h.fetchers.fetchSlimDiagrams).not.toHaveBeenCalled()
+    expect(acceptModelMetadata).not.toHaveBeenCalled()
+    expect(h.replaceModel).not.toHaveBeenCalled()
+  })
+
+  it('discards prepared scopes when the revision fence moves and retries the latest revision', async () => {
+    const revisions = [REVISION_2, '2026-01-03T00:00:00.000Z']
+    const fetchModel = vi.fn(async () => {
+      const updatedAt = revisions.shift() ?? '2026-01-03T00:00:00.000Z'
+      return ok(model('model-1', updatedAt))
+    })
+    const commits: Array<ReturnType<typeof vi.fn>> = []
+    const prepareVisibleChildrenScopeRefresh = vi.fn(async () => {
+      const commit = vi.fn()
+      commits.push(commit)
+      return { isCurrent: () => true, commit }
+    })
+    const h = harness({
+      scopes: [{ kind: 'root' }],
+      fetchers: { fetchModel, fetchSlimDiagrams: vi.fn(async () => ok([])) },
+      prepareVisibleChildrenScopeRefresh,
+    })
+
+    h.reconciler.request('poll_timer')
+    await h.reconciler.flush()
+
+    expect(fetchModel).toHaveBeenCalledTimes(4)
+    expect(prepareVisibleChildrenScopeRefresh).toHaveBeenCalledTimes(2)
+    expect(commits[0]).not.toHaveBeenCalled()
+    expect(commits[1]).toHaveBeenCalledTimes(1)
+    expect(h.getModel().updatedAt).toBe('2026-01-03T00:00:00.000Z')
+  })
+
+  it('limits materialized scope refresh concurrency to four workers', async () => {
+    let active = 0
+    let maxActive = 0
+    const releases = Array.from({ length: 9 }, () => deferred<void>())
+    let started = 0
+    const prepareVisibleChildrenScopeRefresh = vi.fn(async () => {
+      const index = started
+      started += 1
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await releases[index]!.promise
+      active -= 1
+      return { isCurrent: () => true, commit: () => undefined }
+    })
+    const h = harness({
+      scopes: Array.from({ length: 9 }, (_, index) => ({
+        kind: 'node' as const,
+        nodeId: `parent-${index}`,
+      })),
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+        fetchSlimDiagrams: vi.fn(async () => ok([])),
+      },
+      prepareVisibleChildrenScopeRefresh,
+    })
+
+    h.reconciler.request('poll_timer')
+    await vi.waitFor(() => expect(started).toBe(4))
+    for (const release of releases) {
+      release.resolve()
+      await Promise.resolve()
+    }
+    await h.reconciler.flush()
+
+    expect(maxActive).toBe(4)
+    expect(prepareVisibleChildrenScopeRefresh).toHaveBeenCalledTimes(9)
+  })
+
+  it('retries without acceptance when a prepared scope becomes stale before commit', async () => {
+    let preparation = 0
+    const commits: Array<ReturnType<typeof vi.fn>> = []
+    const prepareVisibleChildrenScopeRefresh = vi.fn(async () => {
+      const index = preparation
+      preparation += 1
+      const commit = vi.fn()
+      commits.push(commit)
+      return { isCurrent: () => index > 0, commit }
+    })
+    const h = harness({
+      scopes: [{ kind: 'root' }],
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+        fetchSlimDiagrams: vi.fn(async () => ok([])),
+      },
+      prepareVisibleChildrenScopeRefresh,
+    })
+
+    h.reconciler.request('poll_timer')
+    await h.reconciler.flush()
+
+    expect(prepareVisibleChildrenScopeRefresh).toHaveBeenCalledTimes(2)
+    expect(commits[0]).not.toHaveBeenCalled()
+    expect(commits[1]).toHaveBeenCalledTimes(1)
+    expect(h.getModel().updatedAt).toBe(REVISION_2)
   })
 
   it('refreshes slim diagrams, every materialized parent scope, and the open diagram scope', async () => {

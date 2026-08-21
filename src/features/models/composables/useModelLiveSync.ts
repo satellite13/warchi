@@ -25,6 +25,7 @@ import {
 import {
   createBoundedModelReconcile,
   type BoundedModelReconcileFetchers,
+  type PreparedChildrenScopeRefresh,
 } from './useBoundedModelReconcile'
 
 const STOMP_RECONNECT_DELAY_MS = 5000
@@ -110,6 +111,10 @@ export type UseModelLiveSyncOptions = {
   boundedSync?: {
     materializedScopes: () => TreeParentScope[]
     refreshVisibleChildrenScope: (scope: TreeParentScope, signal: AbortSignal) => Promise<void>
+    prepareVisibleChildrenScopeRefresh?: (
+      scope: TreeParentScope,
+      signal: AbortSignal
+    ) => Promise<PreparedChildrenScopeRefresh>
     reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
     onDetachedSnapshotInvalidated?: () => void
     onSyncError?: (
@@ -137,7 +142,37 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
   let wsAuthRefreshInFlight: Promise<boolean> | null = null
   let lastAppliedModelRevision: number | null = null
+  let authActive = loadStoredUser() != null
+  let acceptedRemoteUpdatedAt = options.model.value?.updatedAt ?? null
+  let pendingRemoteModel: ModelData | null = null
   const pendingGranularEvents = new Map<string, GranularSyncEventPayload>()
+  const compareUpdatedAt = (left: string | null, right: string | null): number => {
+    if (left === right) return 0
+    if (left == null) return -1
+    if (right == null) return 1
+    const leftTime = Date.parse(left)
+    const rightTime = Date.parse(right)
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) return leftTime - rightTime
+    return left.localeCompare(right)
+  }
+  const currentAcceptedUpdatedAt = (): string | null => {
+    const current = options.model.value?.updatedAt ?? null
+    return compareUpdatedAt(current, acceptedRemoteUpdatedAt) > 0
+      ? current
+      : acceptedRemoteUpdatedAt
+  }
+  const acceptRemoteModelMetadata = (remote: ModelData): boolean => {
+    const remoteUpdatedAt = remote.updatedAt ?? null
+    if (compareUpdatedAt(remoteUpdatedAt, currentAcceptedUpdatedAt()) < 0) return false
+    acceptedRemoteUpdatedAt = remoteUpdatedAt
+    if (options.modelDirty.value) {
+      pendingRemoteModel = remote
+      return true
+    }
+    pendingRemoteModel = null
+    options.model.value = remote
+    return true
+  }
   const granularReconciler = options.granularSync
     ? createModelGranularSyncReconciler({
         modelId: () => options.modelId.value,
@@ -146,6 +181,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
           options.model.value = model
         },
         modelDirty: () => options.modelDirty.value,
+        acceptModelMetadata: acceptRemoteModelMetadata,
         store: options.granularSync.store,
         diagrams: () => options.state.value.diagrams,
         openDiagramId: () => options.openDiagramId?.value,
@@ -158,7 +194,12 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         fetchers: options.granularSync.fetchers,
         onDetachedSnapshotInvalidated: options.granularSync.onDetachedSnapshotInvalidated,
         onModelRevisionApplied: revision => {
-          lastAppliedModelRevision = revision ?? null
+          if (revision != null) {
+            lastAppliedModelRevision =
+              lastAppliedModelRevision == null
+                ? revision
+                : Math.max(lastAppliedModelRevision, revision)
+          }
         },
         onUnknownEvent: event => {
           const mid = options.modelId.value
@@ -189,6 +230,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       options.model.value = next
     },
     modelDirty: () => options.modelDirty.value,
+    acceptedRevision: currentAcceptedUpdatedAt,
+    acceptModelMetadata: acceptRemoteModelMetadata,
     diagrams: () => options.state.value.diagrams,
     replaceDiagrams: diagrams => {
       options.state.value.diagrams = diagrams
@@ -196,6 +239,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     materializedScopes: options.boundedSync?.materializedScopes ?? (() => []),
     refreshVisibleChildrenScope:
       options.boundedSync?.refreshVisibleChildrenScope ?? (async () => undefined),
+    prepareVisibleChildrenScopeRefresh:
+      options.boundedSync?.prepareVisibleChildrenScopeRefresh,
     openDiagramId: () => options.openDiagramId?.value,
     reloadOpenDiagramScope: options.boundedSync?.reloadOpenDiagramScope,
     fetchers: options.boundedSync?.fetchers,
@@ -269,7 +314,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
 
   const startFallbackPoll = (opts?: { immediate?: boolean }): void => {
     if (!isPollEnabled) return
-    if (!options.enabled.value || options.isLoading.value) return
+    if (!authActive || !options.enabled.value || options.isLoading.value) return
     if (!isInitialSnapshotReady()) return
     if (isHaltedForCurrentModel()) return
     const mid = options.modelId.value
@@ -284,7 +329,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const canPullCurrentModel = (): boolean => {
-    if (disposed || !options.enabled.value || options.isLoading.value) return false
+    if (disposed || !authActive || !options.enabled.value || options.isLoading.value) return false
     if (isHaltedForCurrentModel()) return false
     const mid = options.modelId.value
     return typeof mid === 'string' && mid.length > 0
@@ -312,6 +357,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const enqueueGranularEvents = (events: readonly GranularSyncEventPayload[]): void => {
+    if (!authActive || !options.enabled.value) return
     const coalesced = coalesceModelSyncGranularEvents([...events]).filter(
       event =>
         event.revision == null ||
@@ -342,7 +388,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   const connectPush = (): void => {
     disconnectPush()
     if (!isWsEnabled) return
-    if (!options.enabled.value) return
+    if (!authActive || !options.enabled.value) return
     if (isHaltedForCurrentModel()) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== 'string') return
@@ -358,18 +404,25 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       heartbeatIncoming: STOMP_HEARTBEAT_INCOMING_MS,
       heartbeatOutgoing: STOMP_HEARTBEAT_OUTGOING_MS,
       beforeConnect: async () => {
-        if (disposed || stompClient !== client || options.modelId.value !== mid) {
+        if (disposed || !authActive || stompClient !== client || options.modelId.value !== mid) {
           runAsyncSafely(() => client.deactivate())
           return
         }
         const refreshed = await ensureWsAuthCookieFresh()
-        if (!refreshed || disposed || stompClient !== client || options.modelId.value !== mid) {
+        if (
+          !refreshed ||
+          disposed ||
+          !authActive ||
+          stompClient !== client ||
+          options.modelId.value !== mid
+        ) {
           runAsyncSafely(() => client.deactivate())
         }
       },
       onConnect: () => {
         if (
           disposed ||
+          !authActive ||
           stompClient !== client ||
           options.modelId.value !== mid ||
           syncGeneration !== clientGeneration
@@ -383,6 +436,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         client.subscribe(`/topic/models/${mid}`, message => {
           if (
             disposed ||
+            !authActive ||
             stompClient !== client ||
             options.modelId.value !== mid ||
             syncGeneration !== clientGeneration
@@ -439,14 +493,14 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       onDisconnect: () => {
         if (stompClient !== client) return
         wsConnected = false
-        if (options.enabled.value && !isHaltedForCurrentModel()) {
+        if (authActive && options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
       onStompError: () => {
         if (stompClient !== client) return
         wsConnected = false
-        if (options.enabled.value && !isHaltedForCurrentModel()) {
+        if (authActive && options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
@@ -454,7 +508,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         if (stompClient !== client) return
         wsConnected = false
         runAsyncSafely(() => ensureWsAuthCookieFresh())
-        if (options.enabled.value && !isHaltedForCurrentModel()) {
+        if (authActive && options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
@@ -468,7 +522,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const resyncSession = (): void => {
-    if (!options.enabled.value) {
+    if (!authActive || !options.enabled.value) {
       syncGeneration += 1
       pendingGranularEvents.clear()
       lastAppliedModelRevision = null
@@ -494,6 +548,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       lastSyncedModelId = mid
       pendingGranularEvents.clear()
       lastAppliedModelRevision = null
+      acceptedRemoteUpdatedAt = options.model.value?.updatedAt ?? null
+      pendingRemoteModel = null
       granularReconciler?.invalidate()
       boundedReconciler.invalidate()
       skipConnectResyncOnce = false
@@ -550,6 +606,22 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     }
   )
 
+  watch(
+    () => options.modelDirty.value,
+    dirty => {
+      if (dirty || !pendingRemoteModel) return
+      const pending = pendingRemoteModel
+      pendingRemoteModel = null
+      if (
+        pending.id === options.model.value?.id &&
+        compareUpdatedAt(pending.updatedAt ?? null, options.model.value?.updatedAt ?? null) > 0
+      ) {
+        options.model.value = pending
+      }
+    },
+    { flush: 'post' }
+  )
+
   const onDocumentVisibilityChange = (): void => {
     if (typeof document === 'undefined') return
     if (document.visibilityState === 'hidden') {
@@ -558,7 +630,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       }
       return
     }
-    if (!options.enabled.value || isHaltedForCurrentModel()) return
+    if (!authActive || !options.enabled.value || isHaltedForCurrentModel()) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== 'string') return
     if (isPollEnabled) {
@@ -571,6 +643,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const onAuthUpdated = (): void => {
+    authActive = true
+    if (!options.enabled.value) return
     if (isHaltedForCurrentModel()) return
     if (isWsEnabled) {
       connectPush()
@@ -582,6 +656,10 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const onAuthCleared = (): void => {
+    authActive = false
+    syncGeneration += 1
+    pendingGranularEvents.clear()
+    granularReconciler?.invalidate()
     boundedReconciler.invalidate()
     disconnectPush()
     stopFallbackPoll()

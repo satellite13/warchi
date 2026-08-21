@@ -70,6 +70,7 @@ function createHarness(
   const markNodeDirty = vi.fn()
   const setUiError = vi.fn()
   const reconcileMaterializedRows = vi.fn()
+  const onDiagramInstancesChanged = vi.fn()
   const diagram = ref<EditorDiagram>({
     id: 'diagram-1',
     name: 'Diagram',
@@ -113,6 +114,7 @@ function createHarness(
     },
     markDiagramDirty,
     markNodeDirty,
+    onDiagramInstancesChanged,
     reconcileMaterializedRows,
     setUiError,
     t: key => `translated:${key}`,
@@ -127,12 +129,24 @@ function createHarness(
     markNodeDirty,
     setUiError,
     reconcileMaterializedRows,
+    onDiagramInstancesChanged,
     selectedModelNodeIds,
     selectedInstanceIds,
   }
 }
 
 describe('useModelDiagramInstances', () => {
+  it('explicitly invalidates traceability when node instance membership changes', () => {
+    const { state, instances, historyCommands, onDiagramInstancesChanged } = createHarness()
+    state.value.components = [state.value.components[0]!]
+
+    instances.addExistingNodeToDiagram('existing-node', 40, 60)
+    expect(onDiagramInstancesChanged).toHaveBeenCalledTimes(1)
+
+    historyCommands[0]!.undo()
+    expect(onDiagramInstancesChanged).toHaveBeenCalledTimes(2)
+  })
+
   it('creates a note with diagram attrs and an undoable history command', () => {
     const { diagram, instances, historyCommands, markDiagramDirty } = createHarness()
 

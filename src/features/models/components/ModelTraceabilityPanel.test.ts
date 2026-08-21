@@ -8,6 +8,7 @@ import ModelTraceabilityPanel from './ModelTraceabilityPanel.vue'
 const lazyState = vi.hoisted(() => ({
   selectRoot: vi.fn(async () => {}),
   loadRootBranch: vi.fn(async () => true),
+  changeFilter: vi.fn(async () => true),
   loadBranch: vi.fn(async () => true),
   loadMore: vi.fn(async () => true),
   retry: vi.fn(async () => true),
@@ -53,6 +54,7 @@ vi.mock('../composables/useLazyTraceability', async importOriginal => {
     useLazyTraceability: () => ({
       selectRoot: lazyState.selectRoot,
       loadRootBranch: lazyState.loadRootBranch,
+      changeFilter: lazyState.changeFilter,
       loadBranch: lazyState.loadBranch,
       loadMore: lazyState.loadMore,
       retry: lazyState.retry,
@@ -131,10 +133,12 @@ const mountPanel = () =>
       relations: [],
       canConnect: () => true,
       authoritativeRevision: 1,
+      diagramRevision: 1,
       beginRequest: () => ({ generation: 1, requestKey: 'test', token: 1 }),
       isRequestCurrent: () => true,
       mergePartialEntities: () => true,
       resolveBranchRows: () => [],
+      resolveDiagramReferences: rows => [...rows],
     },
     global: {
       stubs: {
@@ -199,6 +203,47 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     ])
   })
 
+  it('connects section and branch toggles to stable controlled targets', async () => {
+    lazyState.branchStates.set('root', {
+      rows: [neighbor('link-1', 'root', 'child', 'child')],
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: 1,
+      token: 1,
+      generation: 1,
+    })
+    const wrapper = mountPanel()
+    await nextTick()
+
+    const diagramsToggle = wrapper.get('.tp-section__head--no-hover')
+    expect(diagramsToggle.attributes('aria-expanded')).toBe('true')
+    expect(diagramsToggle.attributes('aria-controls')).toBe('traceability-diagrams-panel')
+    expect(wrapper.get('#traceability-diagrams-panel').attributes('id')).toBe(
+      'traceability-diagrams-panel'
+    )
+    await diagramsToggle.trigger('click')
+    expect(diagramsToggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('#traceability-diagrams-panel').attributes('id')).toBe(
+      'traceability-diagrams-panel'
+    )
+
+    const treeToggle = wrapper.get('.tp-section__toggle')
+    expect(treeToggle.attributes('aria-expanded')).toBe('true')
+    expect(treeToggle.attributes('aria-controls')).toBe('traceability-tree-panel')
+    expect(wrapper.get('#traceability-tree-panel').attributes('id')).toBe('traceability-tree-panel')
+
+    const branchToggle = wrapper.get('.tb__link')
+    expect(branchToggle.attributes('aria-expanded')).toBe('false')
+    expect(branchToggle.attributes('aria-controls')).toBe('trace-branch-root-link-1')
+    await branchToggle.trigger('click')
+    expect(branchToggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.get('#trace-branch-root-link-1').attributes('id')).toBe(
+      'trace-branch-root-link-1'
+    )
+  })
+
   it('loads a direct child branch on expansion and never asks for global links', async () => {
     lazyState.branchStates.set('root', {
       rows: [neighbor('link-1', 'root', 'child', 'child')],
@@ -223,6 +268,21 @@ describe('ModelTraceabilityPanel lazy branches', () => {
       },
       new Set(['root'])
     )
+  })
+
+  it('invalidates the full branch session when direction changes', async () => {
+    const wrapper = mountPanel()
+    await nextTick()
+
+    await wrapper.get('.tp-nav__dir').trigger('click')
+    await nextTick()
+
+    expect(lazyState.changeFilter).toHaveBeenCalledWith({
+      nodeId: 'root',
+      direction: 'incoming',
+      linkTypeId: null,
+    })
+    expect(lazyState.loadRootBranch).not.toHaveBeenCalled()
   })
 
   it('exposes accessible branch errors, retry, loading status, and load more controls', async () => {

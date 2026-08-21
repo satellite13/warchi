@@ -100,6 +100,7 @@ export type UseModelLiveSyncOptions = {
     refreshVisibleChildrenScope: (scope: TreeParentScope) => Promise<void>
     invalidateChildrenScope?: (scope: TreeParentScope) => void
     onDetachedSnapshotInvalidated?: () => void
+    onDiagramReferencesInvalidated?: () => void
     onSyncError?: (
       event: GranularSyncEventPayload,
       message: string,
@@ -193,6 +194,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         invalidateChildrenScope: options.granularSync.invalidateChildrenScope,
         fetchers: options.granularSync.fetchers,
         onDetachedSnapshotInvalidated: options.granularSync.onDetachedSnapshotInvalidated,
+        onDiagramReferencesInvalidated:
+          options.granularSync.onDiagramReferencesInvalidated,
         onModelRevisionApplied: revision => {
           if (revision != null) {
             lastAppliedModelRevision =

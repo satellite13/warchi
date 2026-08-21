@@ -42,6 +42,7 @@ type ReconcilerOptions = {
   invalidateChildrenScope?: (scope: TreeParentScope) => void
   fetchers?: ModelGranularSyncFetchers
   onDetachedSnapshotInvalidated?: () => void
+  onDiagramReferencesInvalidated?: () => void
   onUnknownEvent?: (event: GranularSyncEventPayload) => void
   onError?: (
     event: GranularSyncEventPayload,
@@ -535,6 +536,9 @@ export function createModelGranularSyncReconciler(
       )
       await Promise.all(workers)
       results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && batch[index]?.entity === 'diagram') {
+          options.onDiagramReferencesInvalidated?.()
+        }
         if (result.status === 'rejected') {
           const event = batch[index]
           if (event) reportPointError(event, result.reason)

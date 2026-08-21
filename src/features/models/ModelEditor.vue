@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
@@ -107,7 +107,13 @@ import { downloadModelPackage } from './composables/useModelPackage'
 import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
 import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
 import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
-import type { LinkResponse, NodeResponse, RelationResponse } from '@/types/api'
+import type {
+  DiagramReferenceResponse,
+  LinkResponse,
+  NodeResponse,
+  RelationResponse,
+} from '@/types/api'
+import { resolveTraceabilityDiagramReferences as resolveLocalDiagramReferences } from './utils/traceabilityDiagramReferences'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
 import {
@@ -145,6 +151,8 @@ const {
   markNodeDirty,
   markLinkDirty,
   markDiagramDirty,
+  traceabilityDiagramRevision,
+  invalidateTraceabilityDiagrams,
   markModelDirty,
   renameModel,
   createDiagramBaseline,
@@ -477,6 +485,7 @@ const {
     onDetachedSnapshotInvalidated: () => {
       detachedModelLinks.invalidateAfterRemoteSync()
     },
+    onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
     onSyncError: (event, message, retry) => {
       const next = new Map(granularSyncFailures.value)
       next.set(`${event.entity}:${event.id}`, { entity: event.entity, message, retry })
@@ -502,6 +511,7 @@ const {
     },
     onDetachedSnapshotInvalidated: () => {
       detachedModelLinks.invalidateAfterRemoteSync()
+      invalidateTraceabilityDiagrams()
     },
     onSyncError: (_reason, message, retry) => {
       const next = new Map(granularSyncFailures.value)
@@ -897,6 +907,11 @@ const resolveTraceabilityRows = (
   rowIds: readonly TraceabilityNeighborRef[],
   query: TraceabilityBranchQuery
 ): EditorGraphNeighbor[] => partialStore.store.resolveTraceabilityRows(rowIds, query)
+const resolveTraceabilityDiagramReferences = (
+  remoteRows: readonly DiagramReferenceResponse[],
+  selectedNodeId: string
+): DiagramReferenceResponse[] =>
+  resolveLocalDiagramReferences(remoteRows, toRaw(state.value).diagrams, selectedNodeId)
 const treeVisibleNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
@@ -1333,6 +1348,7 @@ const {
   treeScopeForParent,
   executeDiagramHistoryCommand,
   markDiagramDirty,
+  onDiagramInstancesChanged: invalidateTraceabilityDiagrams,
   markNodeDirty,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   setUiError,
@@ -1548,6 +1564,7 @@ const markNodeDeleted = (nodeId: string) => {
       diagram._isDirty = true
     }
   })
+  invalidateTraceabilityDiagrams()
 
   selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== nodeId)
   if (selectedNodeId.value === nodeId) selectedNodeId.value = null
@@ -1563,6 +1580,7 @@ const markDiagramDeleted = (diagramId: string) => {
     row._isDeleted = true
     row._isDirty = true
   }
+  invalidateTraceabilityDiagrams()
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
 
   const remainingCanvasNodeIds = state.value.diagrams
@@ -2142,6 +2160,7 @@ const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
     selectedInstanceIds.value = []
     selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const restoreRemoved = () => {
@@ -2164,6 +2183,7 @@ const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
     }
 
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const history = diagramInteractionManager.value?.history
@@ -2208,6 +2228,7 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
     selectedInstanceIds.value = []
     selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const restoreRemoved = () => {
@@ -2230,6 +2251,7 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
     }
 
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const history = diagramInteractionManager.value?.history
@@ -3603,6 +3625,7 @@ onBeforeUnmount(() => {
               :nodes="traceabilityNodes"
               :link-types="traceabilityLinkTypes"
               :authoritative-revision="partialStore.materializedRevision.value"
+              :diagram-revision="traceabilityDiagramRevision"
               :active-diagram="activeDiagram"
               :active-notation-id="activeNotationId"
               :is-diagram-read-only="isDiagramReadOnly"
@@ -3613,6 +3636,7 @@ onBeforeUnmount(() => {
               :is-request-current="isTraceabilityRequestCurrent"
               :merge-partial-entities="mergeTraceabilityEntities"
               :resolve-branch-rows="resolveTraceabilityRows"
+              :resolve-diagram-references="resolveTraceabilityDiagramReferences"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />

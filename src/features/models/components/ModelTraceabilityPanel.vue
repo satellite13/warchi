@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LinkResponse, LinkTypeResponse, NodeResponse, RelationResponse } from '@/types/api'
+import type {
+  DiagramReferenceResponse,
+  LinkResponse,
+  LinkTypeResponse,
+  NodeResponse,
+  RelationResponse,
+} from '@/types/api'
 import {
   useLazyTraceability,
   type TraceabilityBranchQuery,
@@ -35,6 +41,7 @@ const props = defineProps<{
   canConnect: (sourceModelNodeId: string, targetModelNodeId: string) => boolean
   isDiagramOnlyEdgeModelLinkId?: (modelLinkId: string) => boolean
   authoritativeRevision: number
+  diagramRevision: number
   beginRequest: (requestKey: string) => ModelPartialRequestGuard
   isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
   mergePartialEntities: (
@@ -46,6 +53,10 @@ const props = defineProps<{
     rowIds: readonly TraceabilityNeighborRef[],
     query: TraceabilityBranchQuery
   ) => EditorGraphNeighbor[]
+  resolveDiagramReferences: (
+    remoteRows: readonly DiagramReferenceResponse[],
+    selectedNodeId: string
+  ) => DiagramReferenceResponse[]
 }>()
 
 const emit = defineEmits<{
@@ -68,10 +79,12 @@ const suppressNextSelectionReset = ref(false)
 const traceability = useLazyTraceability({
   modelId: computed(() => props.modelId || null),
   authoritativeRevision: computed(() => props.authoritativeRevision),
+  diagramRevision: computed(() => props.diagramRevision),
   beginRequest: props.beginRequest,
   isRequestCurrent: props.isRequestCurrent,
   mergePartialEntities: props.mergePartialEntities,
   resolveBranchRows: props.resolveBranchRows,
+  resolveDiagramReferences: props.resolveDiagramReferences,
 })
 
 const openDiagramFromKeyboard = (event: KeyboardEvent, diagramId: string): void => {
@@ -172,7 +185,7 @@ watch(
 watch([traceDirection, selectedLinkTypeId], () => {
   expandedLinkKeys.value = new Set()
   const rootId = rootNodeId.value
-  if (rootId) void traceability.loadRootBranch(branchQuery(rootId))
+  if (rootId) void traceability.changeFilter(branchQuery(rootId))
 })
 
 const focusRootOnDiagram = () => {
@@ -294,6 +307,8 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
         <button
           type="button"
           class="tp-section__head tp-section__head--no-hover"
+          :aria-expanded="diagramsOpen"
+          aria-controls="traceability-diagrams-panel"
           @click="diagramsOpen = !diagramsOpen"
         >
           <UiIcon
@@ -306,7 +321,11 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
         </button>
 
         <Transition name="tp-collapse">
-          <div v-if="diagramsOpen" class="tp-section__body">
+          <div
+            v-show="diagramsOpen"
+            id="traceability-diagrams-panel"
+            class="tp-section__body"
+          >
             <div
               v-if="traceability.diagramsLoading.value && diagramsUsingRootNode.length === 0"
               class="tp-section__status"
@@ -376,7 +395,13 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
       <!-- Trace tree section -->
       <div class="tp-section tp-section--tree">
         <div class="tp-section__head tp-section__head--tree">
-          <button type="button" class="tp-section__toggle" @click="treeOpen = !treeOpen">
+          <button
+            type="button"
+            class="tp-section__toggle"
+            :aria-expanded="treeOpen"
+            aria-controls="traceability-tree-panel"
+            @click="treeOpen = !treeOpen"
+          >
             <UiIcon
               name="chevron_right"
               class="tp-section__chevron"
@@ -446,7 +471,11 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
         </div>
 
         <Transition name="tp-collapse">
-          <div v-if="treeOpen && rootNode" class="tp-section__body tp-section__body--tree">
+          <div
+            v-show="treeOpen && rootNode"
+            id="traceability-tree-panel"
+            class="tp-section__body tp-section__body--tree"
+          >
             <div v-if="breadcrumbs.length > 1" class="tp-breadcrumb tp-breadcrumb--in-tree">
               <template v-for="(crumb, idx) in breadcrumbs" :key="crumb.id">
                 <span v-if="idx > 0" class="tp-breadcrumb__sep">/</span>
@@ -461,7 +490,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 </button>
               </template>
             </div>
-            <div class="tp-tree">
+            <div v-if="rootNode" class="tp-tree">
               <button type="button" class="tp-tree__root" @click="focusRootOnDiagram">
                 <span class="tp-tree__root-dot" />
                 <span class="tp-tree__root-name">{{ rootNode.name }}</span>

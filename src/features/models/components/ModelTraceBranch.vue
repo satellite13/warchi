@@ -60,6 +60,8 @@ const linkTypeLabel = (link: EditorLink): string => props.getLinkTypeName(link.l
 const isCycle = (nodeId: string) => props.path.includes(nodeId)
 const resolveNextNodeId = (link: EditorLink): string =>
   props.direction === 'outgoing' ? link.targetId : link.sourceId
+const branchTargetId = (linkId: string): string =>
+  `trace-branch-${encodeURIComponent(props.nodeId)}-${encodeURIComponent(linkId)}`
 
 const getStatus = (link: EditorLink): TraceabilityLinkStatus =>
   statusByLinkId.value.get(link.id) ?? props.getLinkStatus(link)
@@ -131,7 +133,14 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
 <template>
   <div class="tb">
     <div v-for="row in rows" :key="row.link.id" class="tb__item">
-      <button type="button" class="tb__link" :class="linkClasses(row.link)" @click="toggleRow(row)">
+      <button
+        type="button"
+        class="tb__link"
+        :class="linkClasses(row.link)"
+        :aria-expanded="isLinkExpanded(nodeId, row.link.id)"
+        :aria-controls="branchTargetId(row.link.id)"
+        @click="toggleRow(row)"
+      >
         <UiIcon
           class="tb__expand"
           :name="isLinkExpanded(nodeId, row.link.id) ? 'expand_more' : 'chevron_right'"
@@ -150,8 +159,13 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
         <span class="tb__link-type">{{ linkTypeLabel(row.link) }}</span>
       </button>
 
-      <div v-if="isLinkExpanded(nodeId, row.link.id)" class="tb__children">
-        <template v-if="nodeById.get(resolveNextNodeId(row.link)) || row.node">
+      <div :id="branchTargetId(row.link.id)" class="tb__children">
+        <template
+          v-if="
+            isLinkExpanded(nodeId, row.link.id) &&
+            (nodeById.get(resolveNextNodeId(row.link)) || row.node)
+          "
+        >
           <button
             type="button"
             class="tb__node"

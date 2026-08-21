@@ -46,6 +46,7 @@ export type UseModelDiagramInstancesOptions = {
   treeScopeForParent: (parentNodeId: string | null) => TreeParentScope
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
   markDiagramDirty: (diagramId: string) => void
+  onDiagramInstancesChanged?: () => void
   markNodeDirty: (nodeId: string) => void
   reconcileMaterializedRows?: (
     affectedScopes?: readonly TreeParentScope[] | 'all'
@@ -162,12 +163,14 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           diagram.parsedAttrs.instances.nodes.push(deepClone(nodeInstance))
         }
         options.markDiagramDirty(diagram.id)
+        options.onDiagramInstancesChanged?.()
       },
       undo: () => {
         diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
           item => item.id !== nodeInstance.id,
         )
         options.markDiagramDirty(diagram.id)
+        options.onDiagramInstancesChanged?.()
       },
     })
   }
@@ -237,6 +240,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
             diagram.parsedAttrs.instances.nodes.push(deepClone(directoryNoteInstance))
           }
           options.markDiagramDirty(diagram.id)
+        options.onDiagramInstancesChanged?.()
         },
         undo: () => {
           diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
@@ -248,6 +252,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
               edge.targetInstanceId !== directoryNoteInstance.id,
           )
           options.markDiagramDirty(diagram.id)
+        options.onDiagramInstancesChanged?.()
         },
       })
       return
@@ -387,6 +392,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
         }
         options.markDiagramDirty(diagram.id)
+        options.onDiagramInstancesChanged?.()
       },
       undo: () => {
         const removedNodes = options.state.value.nodes.filter(
@@ -424,6 +430,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           options.selectedNodeId.value = null
         }
         options.markDiagramDirty(diagram.id)
+        options.onDiagramInstancesChanged?.()
       },
     })
   }
@@ -576,6 +583,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     })
     const pastedInstanceIds = pastedNotes.map(note => note.id)
     const pastedModelNodeIds = pastedNotes.map(note => note.modelNodeId)
+    const affectsTraceability = pastedNotes.some(note => note.attrs?.isDirectoryNote === true)
     options.executeDiagramHistoryCommand({
       execute: () => {
         const existingIds = new Set(diagram.parsedAttrs.instances.nodes.map(item => item.id))
@@ -589,6 +597,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         options.selectedCanvasElementId.value =
           pastedInstanceIds.length === 1 ? `instance-${pastedInstanceIds[0]}` : null
         options.markDiagramDirty(diagram.id)
+        if (affectsTraceability) options.onDiagramInstancesChanged?.()
       },
       undo: () => {
         const pastedIds = new Set(pastedInstanceIds)
@@ -604,6 +613,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         options.selectedEdgeInstanceId.value = null
         options.selectedCanvasElementId.value = null
         options.markDiagramDirty(diagram.id)
+        if (affectsTraceability) options.onDiagramInstancesChanged?.()
       },
     })
     notePasteCount.value += 1

@@ -118,6 +118,8 @@ describe("useModelEditor save order", () => {
 
   it("updates moved node before deleting old folder", async () => {
     let saveChanges: (() => Promise<boolean>) | null = null
+    let traceabilityRevision: { value: number } | null = null
+    let revisionBeforeSave = 0
     let stopScope: (() => void) | null = null
 
     const scope = effectScope()
@@ -168,6 +170,8 @@ describe("useModelEditor save order", () => {
       }
 
       saveChanges = editor.saveChanges
+      traceabilityRevision = editor.traceabilityDiagramRevision
+      revisionBeforeSave = editor.traceabilityDiagramRevision.value
       stopScope = () => scope.stop()
     })
 
@@ -175,6 +179,7 @@ describe("useModelEditor save order", () => {
     stopScope!()
 
     expect(result).toBe(true)
+    expect(traceabilityRevision!.value).toBeGreaterThan(revisionBeforeSave)
     const batchCall = apiPostMock.mock.calls.find((c: unknown[]) => c[0] === batchSavePath)
     expect(batchCall).toBeDefined()
     const body = batchCall![1] as {

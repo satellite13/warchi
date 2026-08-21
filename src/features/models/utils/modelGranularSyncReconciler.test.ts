@@ -125,6 +125,7 @@ function harness(options: {
   let currentModel = options.model ?? model()
   const refreshedScopes: TreeParentScope[] = []
   const invalidatedDetached = vi.fn()
+  const invalidatedDiagramReferences = vi.fn()
   const unknown = vi.fn()
   const errors = vi.fn()
   const recovered = vi.fn()
@@ -159,6 +160,7 @@ function harness(options: {
       }),
     fetchers,
     onDetachedSnapshotInvalidated: invalidatedDetached,
+    onDiagramReferencesInvalidated: invalidatedDiagramReferences,
     onUnknownEvent: unknown,
     onError: errors,
     onRecovered: recovered,
@@ -169,6 +171,7 @@ function harness(options: {
     errors,
     recovered,
     invalidatedDetached,
+    invalidatedDiagramReferences,
     reconciler,
     refreshedScopes,
     state,
@@ -675,6 +678,17 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.state.diagrams[0]?.name).toBe('remote')
     expect(h.state.diagrams[0]?.parsedAttrs).toBe(local.parsedAttrs)
     expect(h.state.diagrams[0]?._attrsPending).toBe(false)
+    expect(h.invalidatedDiagramReferences).toHaveBeenCalledOnce()
+  })
+
+  it('invalidates diagram references after a remote diagram delete', async () => {
+    const h = harness({ diagrams: [toEditorDiagram(diagram('diagram-1'))] })
+
+    h.reconciler.enqueue([{ type: 'diagram_deleted', entity: 'diagram', id: 'diagram-1' }])
+    await h.reconciler.flush()
+
+    expect(h.state.diagrams).toEqual([])
+    expect(h.invalidatedDiagramReferences).toHaveBeenCalledOnce()
   })
 
   it('marks a closed diagram attrs pending after its metadata update', async () => {

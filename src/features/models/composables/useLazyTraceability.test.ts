@@ -1,4 +1,4 @@
-import { effectScope, ref } from 'vue'
+import { effectScope, nextTick, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DiagramReferenceResponse,
@@ -93,7 +93,11 @@ const outgoing = (nodeId: string, linkTypeId: string | null = null): Traceabilit
   linkTypeId,
 })
 
-function setup(modelId = ref<string | null>('model-1')) {
+function setup(
+  modelId = ref<string | null>('model-1'),
+  diagramRevision = ref(0),
+  resolveDiagramReferences = (rows: readonly DiagramReferenceResponse[]) => [...rows]
+) {
   const store = new ModelPartialStore()
   const authoritativeRevision = ref(0)
   const scope = effectScope()
@@ -101,6 +105,7 @@ function setup(modelId = ref<string | null>('model-1')) {
     useLazyTraceability({
       modelId,
       authoritativeRevision,
+      diagramRevision,
       beginRequest: requestKey => store.beginRequest(requestKey),
       isRequestCurrent: guard => store.isRequestCurrent(guard),
       mergePartialEntities: (nodes, links, guard) => {
@@ -110,9 +115,10 @@ function setup(modelId = ref<string | null>('model-1')) {
         return nodesAccepted && linksAccepted
       },
       resolveBranchRows: (rowIds, query) => store.resolveTraceabilityRows(rowIds, query),
+      resolveDiagramReferences,
     })
   )!
-  return { authoritativeRevision, modelId, scope, store, traceability }
+  return { authoritativeRevision, diagramRevision, modelId, scope, store, traceability }
 }
 
 describe('useLazyTraceability', () => {
@@ -272,6 +278,64 @@ describe('useLazyTraceability', () => {
     expect(traceability.diagramReferences.value.map(row => row.id)).toEqual(['diagram-1'])
   })
 
+  it('cancels every old branch request when the direction or link type changes', async () => {
+    const childRequest = deferred<Awaited<ReturnType<typeof fetchGraphNeighbors>>>()
+    const oldRootRequest = deferred<Awaited<ReturnType<typeof fetchGraphNeighbors>>>()
+    vi.mocked(fetchGraphNeighbors)
+      .mockResolvedValueOnce({ success: true, data: page([], 0, 1) })
+      .mockReturnValueOnce(childRequest.promise)
+      .mockReturnValueOnce(oldRootRequest.promise)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page(
+          [neighbor('fresh-link', 'fresh-child', 'root', 'fresh-child', 'type-new')],
+          0,
+          1
+        ),
+      })
+    vi.mocked(fetchDiagramReferences).mockResolvedValue({
+      success: true,
+      data: page([], 0, 1),
+    })
+    const { traceability, store } = setup()
+    await traceability.selectRoot(outgoing('root'))
+
+    const childLoad = traceability.loadBranch(outgoing('child'), new Set(['root']))
+    const childSignal = vi.mocked(fetchGraphNeighbors).mock.calls[1]?.[2].signal
+    const oldFilterLoad = traceability.changeFilter(outgoing('root', 'type-old'))
+    const oldRootSignal = vi.mocked(fetchGraphNeighbors).mock.calls[2]?.[2].signal
+    const freshQuery: TraceabilityBranchQuery = {
+      nodeId: 'root',
+      direction: 'incoming',
+      linkTypeId: 'type-new',
+    }
+    const freshFilterLoad = traceability.changeFilter(freshQuery)
+
+    expect(childSignal?.aborted).toBe(true)
+    expect(oldRootSignal?.aborted).toBe(true)
+    childRequest.resolve({
+      success: true,
+      data: page([neighbor('stale-child-link', 'child', 'stale-child', 'stale-child')], 0, 1),
+    })
+    oldRootRequest.resolve({
+      success: true,
+      data: page(
+        [neighbor('stale-root-link', 'root', 'stale-root-child', 'stale-root-child')],
+        0,
+        1
+      ),
+    })
+    await Promise.all([childLoad, oldFilterLoad, freshFilterLoad])
+
+    expect(store.linkById.has('stale-child-link')).toBe(false)
+    expect(store.linkById.has('stale-root-link')).toBe(false)
+    expect(traceability.getBranchState(outgoing('child')).rows).toEqual([])
+    expect(traceability.getBranchState(outgoing('root', 'type-old')).rows).toEqual([])
+    expect(traceability.getBranchState(freshQuery).rows.map(row => row.link.id)).toEqual([
+      'fresh-link',
+    ])
+  })
+
   it('preserves dirty local entities when neighbor pages merge into the partial store', async () => {
     vi.mocked(fetchGraphNeighbors).mockResolvedValue({
       success: true,
@@ -332,6 +396,77 @@ describe('useLazyTraceability', () => {
       'diagram-2',
     ])
     expect(traceability.diagramsError.value).toBeNull()
+  })
+
+  it('preserves loaded diagram references when an explicit refresh fails', async () => {
+    vi.mocked(fetchGraphNeighbors).mockResolvedValue({
+      success: true,
+      data: page([], 0, 1),
+    })
+    vi.mocked(fetchDiagramReferences)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([diagram('diagram-1')], 0, 2, 2),
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([diagram('diagram-2')], 1, 2, 2),
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        error: { message: 'refresh failed' },
+      } as never)
+    const { diagramRevision, traceability } = setup()
+    await traceability.selectRoot(outgoing('root'))
+    await traceability.loadMoreDiagrams()
+
+    diagramRevision.value += 1
+    await nextTick()
+    await traceability.waitForDiagramRefresh()
+
+    expect(traceability.diagramReferences.value.map(row => row.id)).toEqual([
+      'diagram-1',
+      'diagram-2',
+    ])
+    expect(traceability.diagramsError.value).toBe('refresh failed')
+  })
+
+  it('coalesces diagram invalidations into one active request and one trailing refresh', async () => {
+    const activeRefresh = deferred<Awaited<ReturnType<typeof fetchDiagramReferences>>>()
+    const trailingRefresh = deferred<Awaited<ReturnType<typeof fetchDiagramReferences>>>()
+    vi.mocked(fetchGraphNeighbors).mockResolvedValue({
+      success: true,
+      data: page([], 0, 1),
+    })
+    vi.mocked(fetchDiagramReferences)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([diagram('diagram-1')], 0, 1),
+      })
+      .mockReturnValueOnce(activeRefresh.promise)
+      .mockReturnValueOnce(trailingRefresh.promise)
+    const { diagramRevision, traceability } = setup()
+    await traceability.selectRoot(outgoing('root'))
+
+    diagramRevision.value += 1
+    await nextTick()
+    diagramRevision.value += 1
+    diagramRevision.value += 1
+    await nextTick()
+
+    expect(fetchDiagramReferences).toHaveBeenCalledTimes(2)
+    activeRefresh.resolve({
+      success: true,
+      data: page([diagram('diagram-stale-refresh')], 0, 1),
+    })
+    await vi.waitFor(() => expect(fetchDiagramReferences).toHaveBeenCalledTimes(3))
+    trailingRefresh.resolve({
+      success: true,
+      data: page([diagram('diagram-latest')], 0, 1),
+    })
+    await traceability.waitForDiagramRefresh()
+
+    expect(traceability.diagramReferences.value.map(row => row.id)).toEqual(['diagram-latest'])
   })
 
   it('cancels selection, model, and scope requests and ignores stale responses', async () => {

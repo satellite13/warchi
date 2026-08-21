@@ -92,6 +92,7 @@ const uniqueDiagrams = (states: readonly DiagramPageState[]): DiagramReferenceRe
 export function useLazyTraceability(options: {
   modelId: Ref<string | null>
   authoritativeRevision: Ref<number>
+  diagramRevision: Ref<number>
   beginRequest: (requestKey: string) => ModelPartialRequestGuard
   isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
   mergePartialEntities: (
@@ -103,12 +104,20 @@ export function useLazyTraceability(options: {
     rowIds: readonly TraceabilityNeighborRef[],
     query: TraceabilityBranchQuery
   ) => EditorGraphNeighbor[]
+  resolveDiagramReferences: (
+    remoteRows: readonly DiagramReferenceResponse[],
+    selectedNodeId: string
+  ) => DiagramReferenceResponse[]
 }) {
   const generation = ref(0)
+  const branchGeneration = ref(0)
+  const diagramGeneration = ref(0)
   const branchPages = ref(new Map<string, LazyTraceabilityPageState>())
   const diagramPages = ref(new Map<string, DiagramPageState>())
   const branchSessions = new Map<string, RequestSession>()
   const diagramSessions = new Map<string, RequestSession>()
+  let diagramRefreshPromise: Promise<void> | null = null
+  let diagramRefreshQueued = false
   let diagramToken = 0
   let selectedRootId: string | null = null
 
@@ -131,11 +140,22 @@ export function useLazyTraceability(options: {
     diagramSessions.clear()
   }
 
+  const invalidateBranches = (): void => {
+    branchGeneration.value += 1
+    for (const session of branchSessions.values()) session.controller.abort()
+    branchSessions.clear()
+    branchPages.value = new Map()
+  }
+
   const reset = (): void => {
     generation.value += 1
+    branchGeneration.value += 1
+    diagramGeneration.value += 1
     abortSessions()
     branchPages.value = new Map()
     diagramPages.value = new Map()
+    diagramRefreshQueued = false
+    diagramRefreshPromise = null
     selectedRootId = null
   }
 
@@ -166,7 +186,7 @@ export function useLazyTraceability(options: {
       nextPage: last?.nextPage ?? (entries.length === 0 ? 0 : null),
       totalElements: Math.max(last?.totalElements ?? 0, rows.length),
       token: last?.token ?? 0,
-      generation: last?.generation ?? generation.value,
+      generation: last?.generation ?? branchGeneration.value,
     }
   }
 
@@ -175,7 +195,7 @@ export function useLazyTraceability(options: {
     session: RequestSession,
     guard: ModelPartialRequestGuard
   ): boolean =>
-    generation.value === session.generation &&
+    branchGeneration.value === session.generation &&
     options.modelId.value === session.modelId &&
     branchSessions.get(key) === session &&
     options.isRequestCurrent(guard)
@@ -195,7 +215,7 @@ export function useLazyTraceability(options: {
     const guard = options.beginRequest(`traceability:${key}`)
     const session: RequestSession = {
       controller: new AbortController(),
-      generation: generation.value,
+      generation: branchGeneration.value,
       modelId,
       token: guard.token,
     }
@@ -263,11 +283,16 @@ export function useLazyTraceability(options: {
   }
 
   const isDiagramSessionCurrent = (key: string, session: RequestSession): boolean =>
-    generation.value === session.generation &&
+    diagramGeneration.value === session.generation &&
     options.modelId.value === session.modelId &&
     diagramSessions.get(key) === session
 
-  const loadDiagramPage = async (nodeId: string, page: number, force = false): Promise<boolean> => {
+  const loadDiagramPage = async (
+    nodeId: string,
+    page: number,
+    force = false,
+    replaceSnapshot = false
+  ): Promise<boolean> => {
     const modelId = options.modelId.value
     if (!modelId) return false
     const key = diagramPageKey(nodeId, page)
@@ -277,7 +302,7 @@ export function useLazyTraceability(options: {
 
     const session: RequestSession = {
       controller: new AbortController(),
-      generation: generation.value,
+      generation: diagramGeneration.value,
       modelId,
       token: ++diagramToken,
     }
@@ -317,6 +342,15 @@ export function useLazyTraceability(options: {
         token: session.token,
         generation: session.generation,
       })
+      if (replaceSnapshot) {
+        const next = new Map(diagramPages.value)
+        for (const existingKey of next.keys()) {
+          if (existingKey.startsWith(`${encodeURIComponent(nodeId)}|`) && existingKey !== key) {
+            next.delete(existingKey)
+          }
+        }
+        diagramPages.value = next
+      }
       return true
     } catch (caught) {
       if (!isDiagramSessionCurrent(key, session)) return false
@@ -339,6 +373,12 @@ export function useLazyTraceability(options: {
 
   const loadRootBranch = (query: TraceabilityBranchQuery): Promise<boolean> =>
     selectedRootId === query.nodeId ? loadBranchPage(query, 0) : Promise.resolve(false)
+
+  const changeFilter = (query: TraceabilityBranchQuery): Promise<boolean> => {
+    if (selectedRootId !== query.nodeId) return Promise.resolve(false)
+    invalidateBranches()
+    return loadBranchPage(query, 0)
+  }
 
   const loadBranch = (
     query: TraceabilityBranchQuery,
@@ -368,7 +408,11 @@ export function useLazyTraceability(options: {
     }
     return states
   })
-  const diagramReferences = computed(() => uniqueDiagrams(diagramStates.value))
+  const diagramReferences = computed(() => {
+    void options.diagramRevision.value
+    if (!selectedRootId) return []
+    return options.resolveDiagramReferences(uniqueDiagrams(diagramStates.value), selectedRootId)
+  })
   const diagramsLoading = computed(() => diagramStates.value.some(state => state.loading))
   const diagramsError = computed(
     () => diagramStates.value.find(state => state.error)?.error ?? null
@@ -376,9 +420,48 @@ export function useLazyTraceability(options: {
   const diagramsNextPage = computed(
     () => diagramStates.value[diagramStates.value.length - 1]?.nextPage ?? null
   )
-  const diagramsTotalElements = computed(
-    () => diagramStates.value[diagramStates.value.length - 1]?.totalElements ?? 0
+  const diagramsTotalElements = computed(() =>
+    Math.max(
+      diagramStates.value[diagramStates.value.length - 1]?.totalElements ?? 0,
+      diagramReferences.value.length
+    )
   )
+
+  const runDiagramRefresh = (): Promise<void> => {
+    if (diagramRefreshPromise) {
+      diagramRefreshQueued = true
+      return diagramRefreshPromise
+    }
+    const nodeId = selectedRootId
+    if (!nodeId) return Promise.resolve()
+    diagramRefreshQueued = false
+    const task = (async (): Promise<void> => {
+      await loadDiagramPage(nodeId, 0, true, true)
+    })()
+    const completion = task.finally(() => {
+      if (diagramRefreshPromise !== completion) return
+      diagramRefreshPromise = null
+      if (diagramRefreshQueued && selectedRootId === nodeId) void runDiagramRefresh()
+    })
+    diagramRefreshPromise = completion
+    return completion
+  }
+
+  const invalidateDiagramReferences = (): void => {
+    if (!selectedRootId) return
+    diagramGeneration.value += 1
+    for (const session of diagramSessions.values()) session.controller.abort()
+    diagramSessions.clear()
+    void runDiagramRefresh()
+  }
+
+  const waitForDiagramRefresh = async (): Promise<void> => {
+    while (diagramRefreshPromise) {
+      const current = diagramRefreshPromise
+      await current
+      if (diagramRefreshPromise === current) break
+    }
+  }
 
   const loadMoreDiagrams = (): Promise<boolean> => {
     if (!selectedRootId || diagramsNextPage.value === null) return Promise.resolve(false)
@@ -394,6 +477,7 @@ export function useLazyTraceability(options: {
   }
 
   watch(options.modelId, reset)
+  watch(options.diagramRevision, invalidateDiagramReferences, { flush: 'sync' })
   onScopeDispose(reset)
 
   return {
@@ -408,11 +492,14 @@ export function useLazyTraceability(options: {
     getBranchState,
     selectRoot,
     loadRootBranch,
+    changeFilter,
     loadBranch,
     loadMore,
     retry,
     loadMoreDiagrams,
     retryDiagrams,
+    invalidateDiagramReferences,
+    waitForDiagramRefresh,
     reset,
   }
 }

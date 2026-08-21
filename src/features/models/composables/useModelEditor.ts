@@ -59,6 +59,8 @@ type ModelEditorReturn = {
   markNodeDirty: (id: string) => void
   markLinkDirty: (id: string) => void
   markDiagramDirty: (id: string) => void
+  traceabilityDiagramRevision: Ref<number>
+  invalidateTraceabilityDiagrams: () => void
   markModelDirty: () => void
   renameModel: (nextName: string) => string | null
   handleBack: () => void
@@ -97,6 +99,10 @@ export const useModelEditor = (): ModelEditorReturn => {
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
   const partialStore = useModelPartialStore(state)
+  const traceabilityDiagramRevision = ref(0)
+  const invalidateTraceabilityDiagrams = (): void => {
+    traceabilityDiagramRevision.value += 1
+  }
   let catalogReadyPromise: Promise<void> = Promise.resolve()
   let backgroundReadyPromise: Promise<void> = Promise.resolve()
   let loadGeneration = 0
@@ -357,6 +363,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
 
       partialStore.reconcileMaterializedRows()
+      invalidateTraceabilityDiagrams()
       completeSave(2500)
       return true
     } finally {
@@ -433,6 +440,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     markNodeDirty,
     markLinkDirty,
     markDiagramDirty,
+    traceabilityDiagramRevision,
+    invalidateTraceabilityDiagrams,
     markModelDirty,
     renameModel,
     handleBack,

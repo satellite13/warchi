@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, type Ref } from 'vue'
+import { onScopeDispose, ref, watch, type Ref } from 'vue'
 import {
   paginatedContent,
   paginatedIsLastPage,
@@ -32,19 +32,34 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const sessions = new Map<string, ScopeRequestSession>()
   const inFlight = new Map<string, { promise: Promise<void> }>()
   let modelId: string | null = null
+  let publishing = false
 
   const publishRows = (): void => {
-    state.value = {
-      ...state.value,
-      nodes: store.nodes,
-      links: store.links,
+    publishing = true
+    try {
+      state.value = {
+        ...state.value,
+        nodes: store.nodes,
+        links: store.links,
+      }
+    } finally {
+      publishing = false
     }
   }
 
   const captureMaterializedRows = (): void => {
-    store.mergeNodes(state.value.nodes, { kind: 'partial' })
-    store.mergeLinks(state.value.links, { kind: 'partial' })
+    store.replaceMaterializedRows(state.value.nodes, state.value.links)
   }
+
+  watch(
+    () => [state.value.nodes, state.value.links] as const,
+    ([nodes, links]) => {
+      if (publishing) return
+      store.replaceMaterializedRows(nodes, links)
+      publishRows()
+    },
+    { flush: 'sync' }
+  )
 
   const setLoading = (scopeKey: string, loading: boolean): void => {
     const next = new Set(childrenLoading.value)

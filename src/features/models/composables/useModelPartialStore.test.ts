@@ -4,6 +4,7 @@ import type { NodeResponse } from '@/types/api'
 import type { PaginatedResponse } from '@/types/entities'
 import { createEmptyModelEditorState } from '../types'
 import { fetchNodeChildren } from './modelScopedApi'
+import { toEditorNode } from './modelEditorMappers'
 import { useModelPartialStore } from './useModelPartialStore'
 
 vi.mock('./modelScopedApi', () => ({
@@ -134,6 +135,64 @@ describe('useModelPartialStore', () => {
     await partial.loadChildren({ kind: 'node', nodeId: 'parent-1' })
 
     expect(state.value.nodes.map(row => row.id).sort()).toEqual(['local-new', 'remote-child'])
+    scope.stop()
+  })
+
+  it('reconciles save-style removals before the next remote merge without resurrection', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValue({
+      success: true,
+      data: page([node('other-child', 'other-parent')]),
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('saved-delete'), node('kept')]),
+    })
+
+    state.value.nodes = [toEditorNode(node('kept'))]
+    await partial.loadChildren({ kind: 'node', nodeId: 'other-parent' })
+
+    expect(state.value.nodes.map(row => row.id).sort()).toEqual(['kept', 'other-child'])
+    expect(partial.store.nodeById.has('saved-delete')).toBe(false)
+    expect(partial.store.childrenByParent.get('root')).toEqual(['kept'])
+    scope.stop()
+  })
+
+  it('reconciles live-sync-style replacements to one ID and exact link indexes', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValue({
+      success: true,
+      data: page([node('other-child', 'other-parent')]),
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('synced')]),
+    })
+    partial.mergeFullLinks([
+      {
+        id: 'removed-link',
+        modelId: 'model-a',
+        ownerId: 'owner-1',
+        linkTypeId: 'link-type-1',
+        sourceId: 'synced',
+        targetId: 'synced',
+        parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
+      },
+    ])
+    const updated = toEditorNode({ ...node('synced'), name: 'Synced update' })
+
+    state.value.nodes = [updated, updated]
+    state.value.links = []
+    await partial.loadChildren({ kind: 'node', nodeId: 'other-parent' })
+
+    expect(state.value.nodes.filter(row => row.id === 'synced')).toEqual([updated])
+    expect(partial.store.nodeById.get('synced')?.name).toBe('Synced update')
+    expect(state.value.links).toEqual([])
+    expect(partial.store.linkById.has('removed-link')).toBe(false)
     scope.stop()
   })
 

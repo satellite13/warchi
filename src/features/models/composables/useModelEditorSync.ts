@@ -13,6 +13,7 @@ export function useModelEditorSync(options: {
   enabled: Ref<boolean>
   isLoading: Ref<boolean>
   initialSnapshotReady: Ref<boolean>
+  liveSyncBaselineReady: Ref<boolean>
   isSaving: Ref<boolean>
   modelDirty: Ref<boolean>
   selectedDiagramId: Ref<string | null>
@@ -95,7 +96,9 @@ export function useModelEditorSync(options: {
     model: options.model,
     enabled: options.enabled,
     isLoading: options.isLoading,
-    initialSnapshotReady: options.initialSnapshotReady,
+    // Keep subscriptions/events active with the shell, but do not let collection sync
+    // treat the partial tree as a full baseline before transitional links finish.
+    initialSnapshotReady: options.liveSyncBaselineReady,
     isSaving: options.isSaving,
     modelDirty: options.modelDirty,
     ensureNotationRelationsAndRules: options.ensureNotationRelationsAndRules,

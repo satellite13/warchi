@@ -243,6 +243,28 @@ describe('ModelTreePalettePanel', () => {
     expect(wrapper.find('[data-tree-node-id="folder"] .tree-node__toggle').exists()).toBe(false)
   })
 
+  it('can expand a hasChildren root row before node-type catalog arrives', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({
+          id: 'uncatalogued-folder',
+          name: 'Folder',
+          nodeTypeId: 'not-loaded-yet',
+          hasChildren: true,
+        }),
+      ],
+    })
+    await flushTree(wrapper)
+
+    await wrapper
+      .get('[data-tree-node-id="uncatalogued-folder"] .tree-node__toggle')
+      .trigger('click')
+
+    expect(wrapper.emitted('loadChildren')).toEqual([
+      [{ kind: 'node', nodeId: 'uncatalogued-folder' }],
+    ])
+  })
+
   it('renders non-draggable local loading, error and load-more rows', async () => {
     const wrapper = mountPanel({
       nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],

@@ -110,6 +110,8 @@ const nodeIndexById = computed(() => {
 
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
+const isExpandable = (node: EditorNode): boolean =>
+  node.hasChildren === true || (isDirectory(node) && node.hasChildren !== false)
 
 const isRootDiagram = (d: EditorDiagram): boolean => {
   if (d._isDeleted) return false
@@ -472,7 +474,7 @@ const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
 
   const pushNode = (node: EditorNode, depth: number): boolean => {
     if (pushRow({ kind: "node", node, depth })) return true
-    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return false
+    if (!isExpandable(node) || !expandedNodes.value.has(node.id)) return false
     for (const diagram of visibleNodeDiagrams(node.id)) {
       if (pushRow({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })) return true
     }
@@ -662,7 +664,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
               @drop.prevent="onTreeDrop($event, row.node.id)"
             >
               <button
-                v-if="isDirectory(row.node) && row.node.hasChildren !== false"
+                v-if="isExpandable(row.node)"
                 type="button"
                 class="tree-node__toggle"
                 @click="onToggleNode(row.node)"
@@ -674,7 +676,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 class="tree-node__select"
                 :class="{ 'tree-node__select--unused': !isDirectory(row.node) && !isNodeUsed(row.node.id) }"
                 @click="emit('selectNode', row.node.id)"
-                @dblclick="isDirectory(row.node) && row.node.hasChildren !== false && onToggleNode(row.node)"
+                @dblclick="isExpandable(row.node) && onToggleNode(row.node)"
               >
                 <LazyIconImg
                   v-if="nodeTypeIconById.get(row.node.nodeTypeId)"

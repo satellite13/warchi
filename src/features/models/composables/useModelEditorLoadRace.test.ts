@@ -1,5 +1,6 @@
 import { effectScope } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NodeResponse } from '@/types/api'
 import type { ModelEditorState } from '../types'
 import type { ModelEditorLoadProgressEvent } from '../utils/modelEditorLoadProgress'
 import { useModelEditor } from './useModelEditor'
@@ -62,13 +63,15 @@ function shell(modelId: string) {
     state: editorState(modelId),
     loadedNotationIds: [],
     rootChildrenPage: {
-      content: [],
+      content: [] as NodeResponse[],
       page: { number: 0, size: 500, totalElements: 0, totalPages: 0 },
     },
   }
 }
 
 const emptyCatalog = {
+  modelCatalog: [],
+  notations: [],
   nodeTypes: [],
   linkTypes: [],
   components: [],
@@ -138,6 +141,7 @@ describe('useModelEditor load sessions', () => {
 
     await vi.waitFor(() => {
       expect(editor.initialSnapshotReady.value).toBe(true)
+      expect(editor.liveSyncBaselineReady.value).toBe(false)
       expect(loadModelEditorCatalogMock).toHaveBeenCalledWith(
         'model-a',
         [],
@@ -152,6 +156,59 @@ describe('useModelEditor load sessions', () => {
     catalog.resolve(emptyCatalog)
     links.resolve([])
     await loading
+    expect(editor.liveSyncBaselineReady.value).toBe(true)
+    expect(loadModelEditorLinksMock).toHaveBeenCalledTimes(1)
+    scope.stop()
+  })
+
+  it('keeps the usable root shell when the separate catalog load fails', async () => {
+    const rootShell = shell('model-a')
+    rootShell.state.nodes = [
+      {
+        id: 'root-child',
+        name: 'Root child',
+        modelId: 'model-a',
+        ownerId: 'owner-1',
+        nodeTypeId: 'directory-type',
+        parentNodeId: null,
+        hasChildren: true,
+        parsedAttrs: {
+          treeOrder: 0,
+          notationComponents: {},
+          componentProperties: {},
+          typeProperties: {},
+        },
+      },
+    ]
+    rootShell.rootChildrenPage.content = [
+      {
+        id: 'root-child',
+        name: 'Root child',
+        modelId: 'model-a',
+        ownerId: 'owner-1',
+        nodeTypeId: 'directory-type',
+        parentNodeId: null,
+        hasChildren: true,
+        attrs: null,
+      },
+    ]
+    rootShell.rootChildrenPage.page = {
+      number: 0,
+      size: 500,
+      totalElements: 1,
+      totalPages: 1,
+    }
+    loadModelEditorShellMock.mockResolvedValue(rootShell)
+    loadModelEditorCatalogMock.mockRejectedValue(new Error('catalog unavailable'))
+    loadModelEditorLinksMock.mockResolvedValue([])
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    await editor.loadModel()
+
+    expect(editor.initialSnapshotReady.value).toBe(true)
+    expect(editor.state.value.nodes.map(row => row.id)).toEqual(['root-child'])
+    expect(editor.errorMessage.value).toBe('catalog unavailable')
     scope.stop()
   })
 

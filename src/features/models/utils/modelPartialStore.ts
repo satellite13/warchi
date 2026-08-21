@@ -195,6 +195,11 @@ export class ModelPartialStore {
     this.remoteDeletedLinkIds.delete(linkId)
   }
 
+  replaceMaterializedRows(nodes: readonly EditorNode[], links: readonly EditorLink[]): void {
+    this.replaceNodes([...nodes])
+    this.replaceLinks([...links])
+  }
+
   private accepts(mode: EntityMergeMode, guard?: ModelPartialRequestGuard): boolean {
     if (guard) {
       if (guard.generation !== this.generation) return false

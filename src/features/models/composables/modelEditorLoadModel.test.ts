@@ -474,34 +474,25 @@ describe('loadModelEditorData', () => {
     )
   })
 
-  it('loads node types in the shell so Directory folders can expand before catalog', async () => {
+  it('does not wait for model, notation or node-type catalogs on the shell critical path', async () => {
     const { loadModelEditorShell } = await import('./modelEditorLoadModel')
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
       if (path === '/models/model-1') {
         return ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' })
       }
-      if (path.startsWith('/models?')) {
-        return ok(
-          listResponse([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }])
-        )
-      }
-      if (path.startsWith('/nodes?')) return ok(page([]))
       if (path.startsWith('/diagrams?')) return ok(page([]))
-      if (path.startsWith('/notations?')) return ok(page([]))
-      if (path.startsWith('/node-types?')) {
-        expect(path).toContain('modelId=model-1')
-        return ok(page([{ id: 'nt-dir', name: 'Directory', ownerId: 'owner-1' }]))
-      }
-      throw new Error(`Unexpected apiGet path: ${path}`)
+      throw new Error(`Catalog request blocked the shell: ${path}`)
     })
 
     const shell = await loadModelEditorShell('model-1')
 
-    expect(shell.state.nodeTypes).toEqual([
-      expect.objectContaining({ id: 'nt-dir', name: 'Directory' }),
-    ])
+    expect(shell.model.id).toBe('model-1')
+    expect(shell.modelCatalog).toEqual([])
+    expect(shell.state.notations).toEqual([])
+    expect(shell.state.nodeTypes).toEqual([])
     expect(shell.state.links).toEqual([])
-    expect(shell.state.components).toEqual([])
+    const paths = vi.mocked(apiGet).mock.calls.map(call => String(call[0]))
+    expect(paths).toEqual(['/models/model-1', expect.stringMatching(/^\/diagrams\?/)])
   })
 
   it('loads the normal shell from the scoped root without unscoped nodes or links', async () => {

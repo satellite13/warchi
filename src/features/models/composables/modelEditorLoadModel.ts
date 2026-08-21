@@ -43,6 +43,8 @@ export type LoadModelEditorDataResult = {
 }
 
 export type ModelEditorCatalog = {
+  modelCatalog: ModelData[]
+  notations: NotationData[]
   nodeTypes: NodeTypeResponse[]
   linkTypes: LinkTypeResponse[]
   components: ComponentResponse[]
@@ -287,30 +289,16 @@ export async function loadModelEditorShell(
   modelId: string,
   options?: LoadModelEditorShellOptions
 ): Promise<LoadModelEditorDataResult> {
-  const listQuery = listParams()
-  const nodeTypesQuery = listParams()
-  nodeTypesQuery.set('modelId', modelId)
   const diagramIncludeAttrs = options?.diagramIncludeAttrs === true
 
-  const [
-    modelResult,
-    modelsResult,
-    rootChildrenResult,
-    diagramResponses,
-    notationsResult,
-    nodeTypesResult,
-  ] =
+  const [modelResult, rootChildrenResult, diagramResponses] =
     await Promise.all([
       apiGet<ModelData>(`/models/${modelId}`),
-      apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
       // Normal opening must stay parent-scoped. The full helper below remains for detached callers.
       fetchNodeChildren(modelId, { kind: 'root' }, { page: 0 }),
       fetchAllByModelId<DiagramResponse>('/diagrams', modelId, PAGE_SIZE_MODEL_DIAGRAMS, {
         includeAttrs: diagramIncludeAttrs ? 'true' : 'false',
       }, options),
-      apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-      // Needed immediately so Directory folders show expand toggles before catalog finishes.
-      apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
     ])
 
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
@@ -337,8 +325,8 @@ export async function loadModelEditorShell(
     nodes: editorNodes,
     links: [],
     diagrams,
-    notations: notationsResult.success ? (notationsResult.data.content ?? []) : [],
-    nodeTypes: nodeTypesResult.success ? (nodeTypesResult.data.content ?? []) : [],
+    notations: [],
+    nodeTypes: [],
     linkTypes: [],
     components: [],
     relations: [],
@@ -347,8 +335,7 @@ export async function loadModelEditorShell(
 
   return {
     model,
-    // GET /models returns ListResponse { items }, not Spring Page { content }
-    modelCatalog: modelsResult.success ? paginatedContent(modelsResult.data) : [],
+    modelCatalog: [],
     state,
     loadedNotationIds: notationIds,
     rootChildrenPage,
@@ -365,6 +352,7 @@ export async function loadModelEditorCatalog(
   options?: ModelEditorLoadCancellationOptions
 ): Promise<ModelEditorCatalog> {
   options?.onProgress?.({ kind: 'catalog', status: 'started' })
+  const listQuery = listParams()
   const typesQuery = listParams()
   typesQuery.set("modelId", modelId)
   for (const notationId of notationIds) {
@@ -376,8 +364,18 @@ export async function loadModelEditorCatalog(
       ? notationIds.map(nid => fetchAllRelationsByNotationId(nid, { modelId }))
       : [Promise.resolve([] as RelationResponse[])]
 
-  const [components, relationsBatches, nodeTypesResult, linkTypesResult, relationRules] =
+  const [
+    modelsResult,
+    notationsResult,
+    components,
+    relationsBatches,
+    nodeTypesResult,
+    linkTypesResult,
+    relationRules,
+  ] =
     await Promise.all([
+      apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
+      apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
       fetchAllComponentsByNotationIds(notationIds, { modelId }),
       Promise.all(relationFetches),
       apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
@@ -396,6 +394,8 @@ export async function loadModelEditorCatalog(
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   options?.onProgress?.({ kind: 'catalog', status: 'complete' })
   return {
+    modelCatalog: modelsResult.success ? paginatedContent(modelsResult.data) : [],
+    notations: notationsResult.success ? paginatedContent(notationsResult.data) : [],
     components,
     relations: [...relationsById.values()],
     nodeTypes: nodeTypesResult.success ? (nodeTypesResult.data.content ?? []) : [],
@@ -454,10 +454,12 @@ export async function loadModelEditorData(
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   return {
     ...shell,
+    modelCatalog: extras.modelCatalog,
     state: {
       ...shell.state,
       nodes: await mapInChunks(allNodes, toEditorNode, options),
       links: extras.links,
+      notations: extras.notations,
       nodeTypes: extras.nodeTypes,
       linkTypes: extras.linkTypes,
       components: extras.components,

@@ -50,6 +50,8 @@ type ModelEditorReturn = {
   whenBackgroundReady: () => Promise<void>
   /** Becomes true once model metadata, root children and slim diagrams form a usable shell. */
   initialSnapshotReady: Ref<boolean>
+  /** Transitional full-link snapshot is loaded and can baseline collection live-sync. */
+  liveSyncBaselineReady: Ref<boolean>
   saveChanges: () => Promise<boolean>
   /** Show saving toast before heavy pre-save work (flush/validate). */
   startSave: () => void
@@ -86,6 +88,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const isLoading = ref(true)
   const loadProgress = ref<ModelEditorLoadProgress | null>(null)
   const initialSnapshotReady = ref(false)
+  const liveSyncBaselineReady = ref(false)
   const errorMessage = ref<string | null>(null)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
@@ -177,6 +180,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
     isLoading.value = true
     initialSnapshotReady.value = false
+    liveSyncBaselineReady.value = false
     errorMessage.value = null
     // Cancel child-page requests from the previous load before starting a new shell.
     partialStore.resetPartialScopes(modelId)
@@ -247,8 +251,10 @@ export const useModelEditor = (): ModelEditorReturn => {
       try {
         const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
         if (!isLoadSessionActive(generation, modelId)) return
+        modelCatalog.value = catalog.modelCatalog
         state.value = {
           ...state.value,
+          notations: catalog.notations,
           nodeTypes: catalog.nodeTypes,
           linkTypes: catalog.linkTypes,
           components: catalog.components,
@@ -274,6 +280,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         const links = await loadModelEditorLinks(modelId, cancellation)
         if (!isLoadSessionActive(generation, modelId)) return
         partialStore.mergeFullLinks(links)
+        liveSyncBaselineReady.value = true
       } catch (error) {
         if (isLoadSessionActive(generation, modelId)) {
           errorMessage.value =
@@ -373,6 +380,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     isLoading,
     loadProgress,
     initialSnapshotReady,
+    liveSyncBaselineReady,
     errorMessage,
     modelDirty,
     isSaving,

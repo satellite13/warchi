@@ -9,6 +9,11 @@ import type {
 } from '../composables/useLazyTraceability'
 import type { TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
 
+type NodeDragEligibility = {
+  allowed: boolean
+  reason: string
+}
+
 const props = defineProps<{
   nodeId: string
   path: string[]
@@ -24,6 +29,7 @@ const props = defineProps<{
   isLinkExpanded: (nodeId: string, linkId: string) => boolean
   toggleLink: (nodeId: string, linkId: string) => void
   getLinkStatus: (link: EditorLink) => TraceabilityLinkStatus
+  canDragNodeToDiagram: (nodeId: string) => NodeDragEligibility
 }>()
 
 const emit = defineEmits<{
@@ -121,6 +127,19 @@ const onLinkDragStart = (event: DragEvent, link: EditorLink) => {
   }
 }
 
+const onNodeDragStart = (event: DragEvent, nodeId: string): void => {
+  const eligibility = props.canDragNodeToDiagram(nodeId)
+  if (!eligibility.allowed) {
+    event.preventDefault()
+    return
+  }
+  event.dataTransfer?.setData('application/x-model-node-id', nodeId)
+  event.dataTransfer?.setData('text/plain', `node:${nodeId}`)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+}
+
 const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
   const link = row.link
   const nextNodeId = resolveNextNodeId(link)
@@ -185,6 +204,19 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
             <span class="tb__node-name">
               {{ nodeName(resolveNextNodeId(row.link), row) }}
             </span>
+            <span
+              class="tb__drag-handle"
+              :class="{
+                'tb__drag-handle--disabled':
+                  !canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed,
+              }"
+              :title="canDragNodeToDiagram(resolveNextNodeId(row.link)).reason"
+              :draggable="canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed"
+              :data-testid="`trace-node-drag-${resolveNextNodeId(row.link)}`"
+              @dragstart.stop="onNodeDragStart($event, resolveNextNodeId(row.link))"
+            >
+              <UiIcon name="drag_indicator" class="tb__drag-handle-icon" />
+            </span>
             <span v-if="isCycle(resolveNextNodeId(row.link))" class="tb__node-cycle-badge">
               ∞
             </span>
@@ -205,6 +237,7 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
             :is-link-expanded="isLinkExpanded"
             :toggle-link="toggleLink"
             :get-link-status="getLinkStatus"
+            :can-drag-node-to-diagram="canDragNodeToDiagram"
             @set-root="emit('setRoot', $event)"
           />
         </template>

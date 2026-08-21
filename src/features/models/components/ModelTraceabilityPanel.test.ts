@@ -119,6 +119,26 @@ const canDragNodeToDiagram = vi.fn(() => ({
   reason: 'models.traceabilityDragDisabledNoActiveDiagram',
 }))
 
+const dragDataTransfer = () => {
+  const data = new Map<string, string>()
+  return {
+    data,
+    dataTransfer: {
+      setData: vi.fn((format: string, value: string) => {
+        data.set(format, value)
+      }),
+      effectAllowed: 'uninitialized',
+    } as unknown as DataTransfer,
+  }
+}
+
+const dispatchDragStart = (element: Element, dataTransfer: DataTransfer): Event => {
+  const event = new Event('dragstart', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+  element.dispatchEvent(event)
+  return event
+}
+
 const mountPanel = () =>
   mount(ModelTraceabilityPanel, {
     props: {
@@ -174,6 +194,53 @@ describe('ModelTraceabilityPanel lazy branches', () => {
       reason: 'models.traceabilityDragDisabledNoActiveDiagram',
     })
     expect(canDragNodeToDiagram).toHaveBeenCalledWith('root')
+  })
+
+  it('drags enabled root and branch nodes with the standard model node payload', async () => {
+    canDragNodeToDiagram.mockReturnValue({ allowed: true, reason: 'Drag node' })
+    lazyState.branchStates.set('root', {
+      rows: [neighbor('link-1', 'root', 'child', 'child')],
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: 1,
+      token: 1,
+      generation: 1,
+    })
+    const wrapper = mountPanel()
+    await nextTick()
+
+    const rootDrag = dragDataTransfer()
+    dispatchDragStart(wrapper.get('[data-testid="trace-node-drag-root"]').element, rootDrag.dataTransfer)
+    expect(rootDrag.dataTransfer.setData).toHaveBeenCalledWith('application/x-model-node-id', 'root')
+    expect(rootDrag.dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'node:root')
+    expect(rootDrag.dataTransfer.effectAllowed).toBe('copy')
+
+    await wrapper.get('.tb__link').trigger('click')
+    const branchDrag = dragDataTransfer()
+    dispatchDragStart(
+      wrapper.get('[data-testid="trace-node-drag-child"]').element,
+      branchDrag.dataTransfer
+    )
+    expect(branchDrag.dataTransfer.setData).toHaveBeenCalledWith(
+      'application/x-model-node-id',
+      'child'
+    )
+    expect(branchDrag.dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'node:child')
+    expect(branchDrag.dataTransfer.effectAllowed).toBe('copy')
+  })
+
+  it('renders a disabled root drag handle with its eligibility reason', () => {
+    canDragNodeToDiagram.mockReturnValue({
+      allowed: false,
+      reason: 'models.traceabilityDragDisabledNoActiveDiagram',
+    })
+    const wrapper = mountPanel()
+
+    const handle = wrapper.get('[data-testid="trace-node-drag-root"]')
+    expect(handle.attributes('title')).toBe('models.traceabilityDragDisabledNoActiveDiagram')
+    expect(handle.attributes('draggable')).toBe('false')
   })
 
   it('loads selected root and renders diagram references from the scoped endpoint state', async () => {

@@ -200,6 +200,19 @@ const focusRootOnDiagram = () => {
   emit('focus-node', rootNodeId.value)
 }
 
+const onNodeDragStart = (event: DragEvent, nodeId: string): void => {
+  const eligibility = props.canDragNodeToDiagram(nodeId)
+  if (!eligibility.allowed) {
+    event.preventDefault()
+    return
+  }
+  event.dataTransfer?.setData('application/x-model-node-id', nodeId)
+  event.dataTransfer?.setData('text/plain', `node:${nodeId}`)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+}
+
 const isLinkExpanded = (nodeId: string, linkId: string): boolean =>
   expandedLinkKeys.value.has(`${nodeId}:${linkId}`)
 
@@ -500,6 +513,16 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
               <button type="button" class="tp-tree__root" @click="focusRootOnDiagram">
                 <span class="tp-tree__root-dot" />
                 <span class="tp-tree__root-name">{{ rootNode.name }}</span>
+                <span
+                  class="tp-tree__drag-handle"
+                  :class="{ 'tp-tree__drag-handle--disabled': !canDragNodeToDiagram(rootNode.id).allowed }"
+                  :title="canDragNodeToDiagram(rootNode.id).reason"
+                  :draggable="canDragNodeToDiagram(rootNode.id).allowed"
+                  data-testid="trace-node-drag-root"
+                  @dragstart.stop="onNodeDragStart($event, rootNode.id)"
+                >
+                  <UiIcon name="drag_indicator" class="tp-tree__drag-handle-icon" />
+                </span>
               </button>
               <ModelTraceBranch
                 :node-id="rootNode.id"
@@ -516,6 +539,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 :is-link-expanded="isLinkExpanded"
                 :toggle-link="toggleLink"
                 :get-link-status="getLinkStatus"
+                :can-drag-node-to-diagram="canDragNodeToDiagram"
                 @set-root="setRootFromTree"
               />
             </div>
@@ -997,6 +1021,43 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+}
+
+.tp-tree__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border-radius: 4px;
+  color: var(--text-subtle);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.tp-tree__drag-handle:hover {
+  background: var(--surface);
+  color: var(--base-text);
+}
+
+.tp-tree__drag-handle:active {
+  cursor: grabbing;
+}
+
+.tp-tree__drag-handle--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tp-tree__drag-handle--disabled:hover {
+  background: transparent;
+  color: var(--text-subtle);
+}
+
+.tp-tree__drag-handle-icon {
+  width: 14px;
+  height: 14px;
 }
 
 /* ---- Collapse transition ---- */

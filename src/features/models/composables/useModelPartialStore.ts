@@ -81,6 +81,13 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     store.invalidateChildrenScope(scope)
   }
 
+  const materializedChildrenScopes = (): TreeParentScope[] =>
+    [...sessions.keys()].map(scopeKey =>
+      scopeKey === 'root'
+        ? { kind: 'root' }
+        : { kind: 'node', nodeId: scopeKey.slice('node:'.length) }
+    )
+
   const setLoading = (scopeKey: string, loading: boolean): void => {
     const next = new Set(childrenLoading.value)
     if (loading) next.add(scopeKey)
@@ -389,6 +396,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     mergePartialEntities,
     reconcileMaterializedRows,
     invalidateChildrenScope,
+    materializedChildrenScopes,
     publishMaterializedRows: publishRows,
   }
 }

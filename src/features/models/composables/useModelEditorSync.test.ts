@@ -81,6 +81,11 @@ function createFacade() {
       parsedAttrs: parseDiagramAttrs(null),
     },
   ]
+  const boundedSync = {
+    materializedScopes: vi.fn(() => [{ kind: 'root' as const }]),
+    refreshVisibleChildrenScope: vi.fn(async () => undefined),
+    reloadOpenDiagramScope: vi.fn(async () => undefined),
+  }
 
   const facade = useModelEditorSync({
     modelId: computed(() => state.value.modelId),
@@ -101,14 +106,15 @@ function createFacade() {
     currentUserId: ref('user-1'),
     getDiagramRenderer: () => null,
     ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+    boundedSync,
   })
 
-  return { facade, lock, collab, shellReady }
+  return { facade, lock, collab, shellReady, boundedSync }
 }
 
 describe('useModelEditorSync', () => {
   it('wires lock, collab and live sync with shared derived state', () => {
-    const { facade, lock, collab, shellReady } = createFacade()
+    const { facade, lock, collab, shellReady, boundedSync } = createFacade()
 
     expect(useDiagramEditLock).toHaveBeenCalled()
     expect(useDiagramRealtimeCollab).toHaveBeenCalledWith(
@@ -120,6 +126,7 @@ describe('useModelEditorSync', () => {
     expect(useModelLiveSync).toHaveBeenCalledWith(
       expect.objectContaining({
         onModelTopicBroadcast: collab.handleModelTopicBroadcast,
+        boundedSync,
       })
     )
 

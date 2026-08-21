@@ -463,10 +463,6 @@ const {
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
   ensureNotationRelationsAndRules,
-  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
-  onRemoteSnapshotApplied: () => {
-    detachedModelLinks.invalidateAfterRemoteSync()
-  },
   granularSync: {
     store: partialStore.store,
     publishMaterializedRows: partialStore.publishMaterializedRows,
@@ -483,6 +479,30 @@ const {
     onSyncRecovered: event => {
       const next = new Map(granularSyncFailures.value)
       next.delete(`${event.entity}:${event.id}`)
+      granularSyncFailures.value = next
+    },
+  },
+  boundedSync: {
+    materializedScopes: partialStore.materializedChildrenScopes,
+    refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
+    reloadOpenDiagramScope: async (diagramId, _signal) => {
+      if (selectedDiagramId.value !== diagramId) return
+      await diagramScope.reload()
+      if (diagramScope.error.value) {
+        throw new Error(diagramScope.error.value.message)
+      }
+    },
+    onDetachedSnapshotInvalidated: () => {
+      detachedModelLinks.invalidateAfterRemoteSync()
+    },
+    onSyncError: (_reason, message, retry) => {
+      const next = new Map(granularSyncFailures.value)
+      next.set('bounded:model', { entity: 'model', message, retry })
+      granularSyncFailures.value = next
+    },
+    onSyncRecovered: () => {
+      const next = new Map(granularSyncFailures.value)
+      next.delete('bounded:model')
       granularSyncFailures.value = next
     },
   },

@@ -29,6 +29,7 @@ export function useModelEditorSync(options: {
   onRemoteSnapshotApplied?: () => void
   onModelUnavailable?: (status: number) => void
   granularSync?: UseModelLiveSyncOptions['granularSync']
+  boundedSync?: UseModelLiveSyncOptions['boundedSync']
 }) {
   const diagramEditLock = useDiagramEditLock({
     modelId: options.modelId,
@@ -110,6 +111,7 @@ export function useModelEditorSync(options: {
     onModelTopicBroadcast: collab.handleModelTopicBroadcast,
     onModelUnavailable: options.onModelUnavailable,
     granularSync: options.granularSync,
+    boundedSync: options.boundedSync,
   })
 
   async function handleReloadModelForDiagramLock(loadModel: () => Promise<void>): Promise<void> {

@@ -66,6 +66,32 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('lists only explicitly materialized parent scopes for bounded reconciliation', async () => {
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({ success: true, data: page([node('root-leaf')]) })
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([node('nested-leaf', 'parent-1')]),
+      })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a')
+
+    await partial.loadChildren({ kind: 'root' })
+    await partial.loadChildren({ kind: 'node', nodeId: 'parent-1' })
+
+    expect(partial.materializedChildrenScopes()).toEqual([
+      { kind: 'root' },
+      { kind: 'node', nodeId: 'parent-1' },
+    ])
+    expect(partial.materializedChildrenScopes()).not.toContainEqual({
+      kind: 'node',
+      nodeId: 'root-leaf',
+    })
+    scope.stop()
+  })
+
   it('ignores an old model response after the generation changes', async () => {
     const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
     vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)

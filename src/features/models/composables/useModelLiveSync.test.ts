@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, ref, type Ref } from 'vue'
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { refreshAccessToken, type ApiResult } from '@/api/apiClient'
-import { apiGet } from '@/composables/useApi'
+import { apiFetch, apiGet } from '@/composables/useApi'
 import type { ModelData } from '@/types/entities'
 import { createEmptyModelEditorState } from '../types'
 import { ModelPartialStore } from '../utils/modelPartialStore'
@@ -49,6 +49,7 @@ vi.mock('@stomp/stompjs', () => ({
 }))
 
 vi.mock('@/composables/useApi', () => ({
+  apiFetch: vi.fn(),
   apiGet: vi.fn(),
 }))
 
@@ -121,6 +122,8 @@ describe('useModelLiveSync config parsing', () => {
 describe('useModelLiveSync snapshot pull', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockReset()
+    vi.mocked(apiFetch).mockReset()
+    vi.mocked(apiFetch).mockImplementation(path => apiGet(path))
     stompMock.clients.length = 0
     stompMock.autoConnect = false
     stompMock.rejectDeactivate = false
@@ -128,7 +131,7 @@ describe('useModelLiveSync snapshot pull', () => {
     vi.mocked(refreshAccessToken).mockResolvedValue(true)
   })
 
-  it('merges remote snapshot into editor state and model metadata', async () => {
+  it('merges only remote slim diagrams and model metadata', async () => {
     const state = ref(createEmptyModelEditorState())
     state.value.modelId = 'model-1'
     const currentModel = ref<ModelData | null>(model({ name: 'Local Model' }))
@@ -188,7 +191,14 @@ describe('useModelLiveSync snapshot pull', () => {
         }
       }
       if (path === '/models/model-1') {
-        return { success: true, data: model({ name: 'Remote Model', version: '1.1.0' }) }
+        return {
+          success: true,
+          data: model({
+            name: 'Remote Model',
+            version: '1.1.0',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          }),
+        }
       }
       if (path.startsWith('/node-types?')) {
         return {
@@ -244,17 +254,15 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     wrapper.unmount()
 
-    expect(state.value.nodes).toHaveLength(1)
-    expect(state.value.nodes[0]?.name).toBe('Remote Node')
-    expect(state.value.nodes[0]?.parsedAttrs.typeProperties).toEqual({ code: 'N1' })
-    expect(state.value.links).toHaveLength(1)
+    expect(state.value.nodes).toEqual([])
+    expect(state.value.links).toEqual([])
     expect(state.value.diagrams[0]?.name).toBe('Remote Diagram')
-    expect(state.value.nodeTypes[0]?.name).toBe('Remote Node Type')
-    expect(state.value.linkTypes[0]?.name).toBe('Remote Link Type')
+    expect(state.value.nodeTypes).toEqual([])
+    expect(state.value.linkTypes).toEqual([])
     expect(currentModel.value?.name).toBe('Remote Model')
     expect(currentModel.value?.version).toBe('1.1.0')
-    expect(ensureNotationRelationsAndRules).toHaveBeenCalledWith('notation-1')
-    expect(reconcileMaterializedRows).toHaveBeenCalled()
+    expect(ensureNotationRelationsAndRules).not.toHaveBeenCalled()
+    expect(reconcileMaterializedRows).not.toHaveBeenCalled()
     expect(onRemoteSnapshotApplied).toHaveBeenCalledTimes(1)
   })
 
@@ -397,7 +405,65 @@ describe('useModelLiveSync snapshot pull', () => {
     wrapper.unmount()
   })
 
-  it('uses a safe transitional resync when model revision changes before subscription', async () => {
+  it('routes poll, visibility, auth refresh, and reconnect probes through bounded sync only', async () => {
+    vi.useFakeTimers()
+    const fetchModel = vi.fn(async () => ({
+      success: true as const,
+      data: model({ updatedAt: '2026-01-01T00:00:00.000Z' }),
+    }))
+    const fetchSlimDiagrams = vi.fn(async () => ({ success: true as const, data: [] }))
+    const state = ref(createEmptyModelEditorState())
+    state.value.modelId = 'model-1'
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state,
+            model: ref(model()),
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: ref(true),
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'hybrid',
+            boundedSync: {
+              materializedScopes: () => [],
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: { fetchModel, fetchSlimDiagrams },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+    await flushPromises()
+    const client = stompMock.clients.at(-1)
+    client?.options.onConnect()
+    await flushPromises()
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    window.dispatchEvent(new Event('warchi-auth-updated'))
+    client?.options.onDisconnect()
+    await vi.advanceTimersByTimeAsync(15_000)
+    client?.options.onConnect()
+    await flushPromises()
+
+    expect(fetchModel.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(fetchSlimDiagrams).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(apiGet)
+        .mock.calls.filter(([path]) => path.startsWith('/nodes?') || path.startsWith('/links?'))
+    ).toEqual([])
+
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('uses bounded reconciliation when model revision changes before subscription', async () => {
     const snapshotReady = ref(false)
     let nodePulls = 0
     let linkPulls = 0
@@ -450,9 +516,9 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(modelGets).toBe(2)
-    expect(nodePulls).toBe(1)
-    expect(linkPulls).toBe(1)
+    expect(modelGets).toBe(1)
+    expect(nodePulls).toBe(0)
+    expect(linkPulls).toBe(0)
     wrapper.unmount()
   })
 
@@ -501,7 +567,7 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     window.dispatchEvent(new Event('warchi-auth-updated'))
     await flushPromises()
-    expect(nodePulls).toBe(1)
+    expect(nodePulls).toBe(0)
     const reconnectClient = stompMock.clients.at(-1)
     reconnectClient?.options.onConnect()
     reconnectClient?.subscriptions.get('/topic/models/model-1')?.({
@@ -513,7 +579,7 @@ describe('useModelLiveSync snapshot pull', () => {
       }),
     })
     await flushPromises()
-    expect(nodePulls).toBe(1)
+    expect(nodePulls).toBe(0)
 
     reconnectClient?.subscriptions.get('/topic/models/model-1')?.({
       body: JSON.stringify({
@@ -528,43 +594,30 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(nodePulls).toBe(1)
+    expect(nodePulls).toBe(0)
     wrapper.unmount()
   })
 
   it('does not merge an old model pull and starts the new model pull once', async () => {
     const modelId = ref('model-1')
-    const firstNodes = deferred<ApiResult<unknown>>()
+    const firstModel = deferred<ApiResult<ModelData>>()
     const state = ref(createEmptyModelEditorState())
+    const currentModel = ref<ModelData | null>(model())
     let modelTwoPulls = 0
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?') && path.includes('modelId=model-1')) {
-        return firstNodes.promise
-      }
-      if (path.startsWith('/nodes?') && path.includes('modelId=model-2')) {
+      if (path === '/models/model-1') return firstModel.promise
+      if (path === '/models/model-2') {
         modelTwoPulls += 1
         return {
           success: true,
-          data: page([
-            {
-              id: 'node-2',
-              name: 'New model node',
-              modelId: 'model-2',
-              ownerId: 'owner-1',
-              nodeTypeId: 'node-type-1',
-              parentNodeId: null,
-              attrs: null,
-            },
-          ]),
+          data: model({
+            id: 'model-2',
+            name: 'Model 2',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          }),
         }
       }
-      if (path.startsWith('/links?') || path.startsWith('/diagrams?')) {
-        return { success: true, data: page([]) }
-      }
-      if (path === '/models/model-1') return { success: true, data: model() }
-      if (path === '/models/model-2') {
-        return { success: true, data: model({ id: 'model-2', name: 'Model 2' }) }
-      }
+      if (path.startsWith('/diagrams?')) return { success: true, data: page([]) }
       throw new Error(`Unexpected apiGet path: ${path}`)
     })
 
@@ -574,7 +627,7 @@ describe('useModelLiveSync snapshot pull', () => {
           useModelLiveSync({
             modelId,
             state,
-            model: ref(model()),
+            model: currentModel,
             enabled: ref(true),
             isLoading: ref(false),
             initialSnapshotReady: ref(true),
@@ -589,41 +642,25 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     modelId.value = 'model-2'
     await flushPromises()
-    firstNodes.resolve({
-      success: true,
-      data: page([
-        {
-          id: 'node-old',
-          name: 'Old model node',
-          modelId: 'model-1',
-          ownerId: 'owner-1',
-          nodeTypeId: 'node-type-1',
-          parentNodeId: null,
-          attrs: null,
-        },
-      ]),
-    })
+    firstModel.resolve({ success: true, data: model() })
     await flushPromises()
     await flushPromises()
 
-    expect(state.value.nodes.map(node => node.id)).toEqual(['node-2'])
+    expect(state.value.nodes).toEqual([])
+    expect(currentModel.value?.id).toBe('model-2')
     expect(modelTwoPulls).toBe(1)
     wrapper.unmount()
   })
 
-  it('coalesces session resync and websocket connect in the same burst', async () => {
+  it('routes session resync and websocket connect through revision probes', async () => {
     const snapshotReady = ref(false)
     const enabled = ref(true)
-    let nodePulls = 0
+    let modelProbes = 0
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?')) {
-        nodePulls += 1
-        return { success: true, data: page([]) }
+      if (path === '/models/model-1') {
+        modelProbes += 1
+        return { success: true, data: model() }
       }
-      if (path.startsWith('/links?') || path.startsWith('/diagrams?')) {
-        return { success: true, data: page([]) }
-      }
-      if (path === '/models/model-1') return { success: true, data: model() }
       throw new Error(`Unexpected apiGet path: ${path}`)
     })
 
@@ -649,7 +686,7 @@ describe('useModelLiveSync snapshot pull', () => {
     snapshotReady.value = true
     stompMock.clients.at(-1)?.options.onConnect()
     await flushPromises()
-    const pullsBeforeBurst = nodePulls
+    const pullsBeforeBurst = modelProbes
 
     stompMock.autoConnect = true
     enabled.value = false
@@ -657,23 +694,19 @@ describe('useModelLiveSync snapshot pull', () => {
     enabled.value = true
     await flushPromises()
 
-    expect(nodePulls - pullsBeforeBurst).toBe(1)
+    expect(modelProbes - pullsBeforeBurst).toBe(2)
     wrapper.unmount()
   })
 
   it('waits for the poll interval after readiness instead of pulling immediately', async () => {
     vi.useFakeTimers()
     const snapshotReady = ref(false)
-    let nodePulls = 0
+    let modelProbes = 0
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?')) {
-        nodePulls += 1
-        return { success: true, data: page([]) }
+      if (path === '/models/model-1') {
+        modelProbes += 1
+        return { success: true, data: model() }
       }
-      if (path.startsWith('/links?') || path.startsWith('/diagrams?')) {
-        return { success: true, data: page([]) }
-      }
-      if (path === '/models/model-1') return { success: true, data: model() }
       throw new Error(`Unexpected apiGet path: ${path}`)
     })
 
@@ -699,32 +732,28 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     snapshotReady.value = true
     await flushPromises()
-    expect(nodePulls).toBe(0)
+    expect(modelProbes).toBe(0)
 
     await vi.advanceTimersByTimeAsync(14_999)
-    expect(nodePulls).toBe(0)
+    expect(modelProbes).toBe(0)
     await vi.advanceTimersByTimeAsync(1)
     await flushPromises()
-    expect(nodePulls).toBe(1)
+    expect(modelProbes).toBe(1)
 
     wrapper.unmount()
     vi.useRealTimers()
   })
 
-  it('does not start an immediate poll repeat after a pull spans multiple intervals', async () => {
+  it('coalesces intervals during a slow poll into one follow-up probe', async () => {
     vi.useFakeTimers()
-    const firstNodes = deferred<ApiResult<unknown>>()
-    let nodePulls = 0
+    const firstModel = deferred<ApiResult<ModelData>>()
+    let modelProbes = 0
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?')) {
-        nodePulls += 1
-        if (nodePulls === 1) return firstNodes.promise
-        return { success: true, data: page([]) }
+      if (path === '/models/model-1') {
+        modelProbes += 1
+        if (modelProbes === 1) return firstModel.promise
+        return { success: true, data: model() }
       }
-      if (path.startsWith('/links?') || path.startsWith('/diagrams?')) {
-        return { success: true, data: page([]) }
-      }
-      if (path === '/models/model-1') return { success: true, data: model() }
       throw new Error(`Unexpected apiGet path: ${path}`)
     })
 
@@ -749,20 +778,20 @@ describe('useModelLiveSync snapshot pull', () => {
     )
     await flushPromises()
     await vi.advanceTimersByTimeAsync(15_000)
-    expect(nodePulls).toBe(1)
+    expect(modelProbes).toBe(1)
 
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(nodePulls).toBe(1)
-    firstNodes.resolve({ success: true, data: page([]) })
+    expect(modelProbes).toBe(1)
+    firstModel.resolve({ success: true, data: model() })
     await flushPromises()
     await flushPromises()
-    expect(nodePulls).toBe(1)
+    expect(modelProbes).toBe(2)
 
     await vi.advanceTimersByTimeAsync(14_999)
-    expect(nodePulls).toBe(1)
+    expect(modelProbes).toBe(2)
     await vi.advanceTimersByTimeAsync(1)
     await flushPromises()
-    expect(nodePulls).toBe(2)
+    expect(modelProbes).toBe(3)
 
     wrapper.unmount()
     vi.useRealTimers()
@@ -859,17 +888,13 @@ describe('useModelLiveSync snapshot pull', () => {
   })
 
   it('contains pull failures and allows the next scheduled pull', async () => {
-    let nodePulls = 0
+    let modelProbes = 0
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?')) {
-        nodePulls += 1
-        if (nodePulls === 1) throw new Error('nodes failed')
-        return { success: true, data: page([]) }
+      if (path === '/models/model-1') {
+        modelProbes += 1
+        if (modelProbes === 1) throw new Error('model probe failed')
+        return { success: true, data: model() }
       }
-      if (path.startsWith('/links?') || path.startsWith('/diagrams?')) {
-        return { success: true, data: page([]) }
-      }
-      if (path === '/models/model-1') return { success: true, data: model() }
       throw new Error(`Unexpected apiGet path: ${path}`)
     })
 
@@ -896,7 +921,7 @@ describe('useModelLiveSync snapshot pull', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
 
-    expect(nodePulls).toBe(2)
+    expect(modelProbes).toBe(2)
     wrapper.unmount()
   })
 

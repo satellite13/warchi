@@ -271,6 +271,9 @@ git commit -m "Load model folder trees lazily."
 
 - [ ] RED: order/missing/foreign/empty/2001/dedup/ACL tests.
 - [ ] Implement validated request/response DTOs and model-scoped service.
+- [ ] Bound the resulting links union to 5,000; detect `limit + 1` before entity
+  materialization and return `413 MODEL_LINK_RESOLVE_RESULT_LIMIT_EXCEEDED`
+  without a partial response.
 - [ ] Add `(model,source)` and `(model,target)` indexes and changelog entry.
 - [ ] Verify:
 

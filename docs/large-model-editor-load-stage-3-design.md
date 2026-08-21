@@ -125,6 +125,10 @@ POST /api/v1/models/{modelId}/links:resolve
 из endpoint ids, плюс `missingLinkIds`. Хотя бы один массив непустой. Добавляются
 индексы `(model, source)` и `(model, target)`. Каждый массив ограничен 2 000 id,
 клиент выполняет chunked requests; чужие ids не раскрываются и считаются missing.
+Итоговый union ограничен 5 000 связей: backend проверяет `limit + 1` до загрузки
+полных entities и при превышении возвращает `413
+MODEL_LINK_RESOLVE_RESULT_LIMIT_EXCEEDED`, не отдавая частичный scope. Клиент
+показывает локальную ошибку diagram scope; автоматическое усечение запрещено.
 
 ### Предки
 

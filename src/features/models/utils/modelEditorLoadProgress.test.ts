@@ -34,7 +34,7 @@ describe('createModelEditorLoadProgressTracker', () => {
     expect(shellComplete).toMatchObject({ generation: 3, modelId: 'model-1' })
   })
 
-  it('reports real preparation and link counts across blocking and background phases', () => {
+  it('moves from scoped shell preparation to nonblocking catalog completion', () => {
     const tracker = createModelEditorLoadProgressTracker({
       generation: 4,
       modelId: 'model-2',
@@ -48,14 +48,9 @@ describe('createModelEditorLoadProgressTracker', () => {
       loaded: 50,
       total: 100,
     })
-    const catalog = tracker.update({ kind: 'catalog', status: 'started' })
+    const catalogStarted = tracker.update({ kind: 'catalog', status: 'started' })
     tracker.setBlocking(false)
-    const links = tracker.update({
-      kind: 'collection',
-      collection: 'links',
-      loaded: 75,
-      total: 100,
-    })
+    const catalogComplete = tracker.update({ kind: 'catalog', status: 'complete' })
     const complete = tracker.update({ kind: 'complete' })
 
     expect(preparing).toMatchObject({
@@ -64,14 +59,14 @@ describe('createModelEditorLoadProgressTracker', () => {
       total: 100,
       blocking: true,
     })
-    expect(catalog.percent).toBeGreaterThanOrEqual(preparing.percent)
-    expect(links).toMatchObject({
-      phase: 'links',
-      loaded: 75,
-      total: 100,
+    expect(catalogStarted.percent).toBeGreaterThanOrEqual(preparing.percent)
+    expect(catalogComplete).toMatchObject({
+      phase: 'catalog',
+      loaded: 1,
+      total: 1,
       blocking: false,
     })
-    expect(links.percent).toBeGreaterThanOrEqual(catalog.percent)
+    expect(catalogComplete.percent).toBeGreaterThanOrEqual(catalogStarted.percent)
     expect(complete.percent).toBe(100)
   })
 })

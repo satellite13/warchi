@@ -85,17 +85,37 @@ describe('useModelEditor load sessions', () => {
     route.params.id = 'model-a'
   })
 
-  it('ignores background completion from the previous model load', async () => {
-    const linksA = deferred<never[]>()
+  it('never starts the transitional unscoped full-links load during ordinary opening', async () => {
+    const catalog = deferred<typeof emptyCatalog>()
+    loadModelEditorShellMock.mockResolvedValue(shell('model-a'))
+    loadModelEditorCatalogMock.mockReturnValue(catalog.promise)
+    loadModelEditorLinksMock.mockResolvedValue([])
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    const loading = editor.loadModel()
+
+    await vi.waitFor(() => {
+      expect(editor.initialSnapshotReady.value).toBe(true)
+      expect(loadModelEditorCatalogMock).toHaveBeenCalled()
+    })
+    expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
+
+    catalog.resolve(emptyCatalog)
+    await loading
+    await editor.whenBackgroundReady()
+    expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('ignores catalog completion from the previous model load', async () => {
+    const catalogA = deferred<typeof emptyCatalog>()
     const catalogB = deferred<typeof emptyCatalog>()
     loadModelEditorShellMock.mockImplementation(async (modelId: string) => shell(modelId))
     loadModelEditorCatalogMock.mockImplementation(async (modelId: string) => {
+      if (modelId === 'model-a') return catalogA.promise
       if (modelId === 'model-b') return catalogB.promise
       return emptyCatalog
-    })
-    loadModelEditorLinksMock.mockImplementation(async (modelId: string) => {
-      if (modelId === 'model-a') return linksA.promise
-      return []
     })
 
     const scope = effectScope()
@@ -104,8 +124,9 @@ describe('useModelEditor load sessions', () => {
     const loadA = editor.loadModel()
     const readyA = editor.whenBackgroundReady()
     await vi.waitFor(() => {
-      expect(loadModelEditorLinksMock).toHaveBeenCalledWith(
+      expect(loadModelEditorCatalogMock).toHaveBeenCalledWith(
         'model-a',
+        [],
         expect.objectContaining({ isCancelled: expect.any(Function) })
       )
     })
@@ -116,7 +137,7 @@ describe('useModelEditor load sessions', () => {
       expect(editor.state.value.modelId).toBe('model-b')
     })
 
-    linksA.resolve([])
+    catalogA.resolve(emptyCatalog)
     await Promise.all([loadA, readyA])
 
     expect(editor.state.value.modelId).toBe('model-b')
@@ -128,12 +149,10 @@ describe('useModelEditor load sessions', () => {
     scope.stop()
   })
 
-  it('marks the usable shell ready before independent catalog and full-link background work', async () => {
+  it('marks the scoped shell ready before independent catalog work', async () => {
     const catalog = deferred<typeof emptyCatalog>()
-    const links = deferred<never[]>()
     loadModelEditorShellMock.mockResolvedValue(shell('model-a'))
     loadModelEditorCatalogMock.mockReturnValue(catalog.promise)
-    loadModelEditorLinksMock.mockReturnValue(links.promise)
 
     const scope = effectScope()
     const editor = scope.run(() => useModelEditor())!
@@ -141,23 +160,17 @@ describe('useModelEditor load sessions', () => {
 
     await vi.waitFor(() => {
       expect(editor.initialSnapshotReady.value).toBe(true)
-      expect(editor.liveSyncBaselineReady.value).toBe(false)
       expect(loadModelEditorCatalogMock).toHaveBeenCalledWith(
         'model-a',
         [],
         expect.objectContaining({ isCancelled: expect.any(Function) })
       )
-      expect(loadModelEditorLinksMock).toHaveBeenCalledWith(
-        'model-a',
-        expect.objectContaining({ isCancelled: expect.any(Function) })
-      )
     })
+    expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
 
     catalog.resolve(emptyCatalog)
-    links.resolve([])
     await loading
-    expect(editor.liveSyncBaselineReady.value).toBe(true)
-    expect(loadModelEditorLinksMock).toHaveBeenCalledTimes(1)
+    expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
     scope.stop()
   })
 
@@ -210,7 +223,7 @@ describe('useModelEditor load sessions', () => {
     expect(editor.state.value.nodes.map(row => row.id)).toEqual(['root-child'])
     expect(editor.errorMessage.value).toBeNull()
     expect(editor.catalogLoadWarning.value).toBe('catalog unavailable')
-    expect(editor.liveSyncBaselineReady.value).toBe(true)
+    expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
 
     loadModelEditorCatalogMock.mockResolvedValue(emptyCatalog)
     await editor.retryCatalogLoad()
@@ -219,7 +232,7 @@ describe('useModelEditor load sessions', () => {
     scope.stop()
   })
 
-  it('keeps links failure nonblocking and enables the baseline after local retry', async () => {
+  it('does not invoke the detached full-links helper even when it would fail', async () => {
     loadModelEditorShellMock.mockResolvedValue(shell('model-a'))
     loadModelEditorCatalogMock.mockResolvedValue(emptyCatalog)
     loadModelEditorLinksMock.mockRejectedValueOnce(new Error('links unavailable'))
@@ -230,13 +243,7 @@ describe('useModelEditor load sessions', () => {
 
     expect(editor.initialSnapshotReady.value).toBe(true)
     expect(editor.errorMessage.value).toBeNull()
-    expect(editor.linksLoadWarning.value).toBe('links unavailable')
-    expect(editor.liveSyncBaselineReady.value).toBe(false)
-
-    loadModelEditorLinksMock.mockResolvedValue([])
-    await editor.retryLinksLoad()
-    expect(editor.linksLoadWarning.value).toBeNull()
-    expect(editor.liveSyncBaselineReady.value).toBe(true)
+    expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
     scope.stop()
   })
 
@@ -266,7 +273,7 @@ describe('useModelEditor load sessions', () => {
   })
 
   it('ignores progress events from an older load generation', async () => {
-    const linksA = deferred<never[]>()
+    const catalogA = deferred<typeof emptyCatalog>()
     const catalogB = deferred<typeof emptyCatalog>()
     const progressByModel = new Map<string, (event: ModelEditorLoadProgressEvent) => void>()
     loadModelEditorShellMock.mockImplementation(
@@ -279,12 +286,9 @@ describe('useModelEditor load sessions', () => {
       }
     )
     loadModelEditorCatalogMock.mockImplementation(async (modelId: string) => {
+      if (modelId === 'model-a') return catalogA.promise
       if (modelId === 'model-b') return catalogB.promise
       return emptyCatalog
-    })
-    loadModelEditorLinksMock.mockImplementation(async (modelId: string) => {
-      if (modelId === 'model-a') return linksA.promise
-      return []
     })
 
     const scope = effectScope()
@@ -325,7 +329,7 @@ describe('useModelEditor load sessions', () => {
       total: 100,
     })
 
-    linksA.resolve([])
+    catalogA.resolve(emptyCatalog)
     catalogB.resolve(emptyCatalog)
     await Promise.all([loadA, loadB])
     scope.stop()

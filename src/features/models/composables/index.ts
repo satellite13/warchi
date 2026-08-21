@@ -1,4 +1,5 @@
 export { useDiagramEditLock } from "./useDiagramEditLock"
+export { useDiagramScope } from './useDiagramScope'
 export { useDiagramRealtimeCollab } from "./useDiagramRealtimeCollab"
 export { useDocumentModal } from "./useDocumentModal"
 export * from "./useModelBatchSave"

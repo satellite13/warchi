@@ -17,7 +17,6 @@ import type { BatchConflictItem } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
 import {
   loadModelEditorCatalog,
-  loadModelEditorLinks,
   loadModelEditorShell,
   type ModelEditorLoadCancellationOptions,
 } from './modelEditorLoadModel'
@@ -36,9 +35,7 @@ type ModelEditorReturn = {
   loadProgress: Ref<ModelEditorLoadProgress | null>
   errorMessage: Ref<string | null>
   catalogLoadWarning: Ref<string | null>
-  linksLoadWarning: Ref<string | null>
   retryCatalogLoad: () => Promise<void>
-  retryLinksLoad: () => Promise<void>
   /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
   modelDirty: Ref<boolean>
   isSaving: Ref<boolean>
@@ -51,12 +48,10 @@ type ModelEditorReturn = {
   discardUnsavedChanges: () => Promise<boolean>
   /** Wait until notation components/relations/types are applied (diagram open). */
   whenCatalogReady: () => Promise<void>
-  /** Wait until links and other background model extras finished. */
+  /** Wait until nonblocking catalog work finished. */
   whenBackgroundReady: () => Promise<void>
   /** Becomes true once model metadata, root children and slim diagrams form a usable shell. */
   initialSnapshotReady: Ref<boolean>
-  /** Transitional full-link snapshot is loaded and can baseline collection live-sync. */
-  liveSyncBaselineReady: Ref<boolean>
   saveChanges: () => Promise<boolean>
   /** Show saving toast before heavy pre-save work (flush/validate). */
   startSave: () => void
@@ -93,10 +88,8 @@ export const useModelEditor = (): ModelEditorReturn => {
   const isLoading = ref(true)
   const loadProgress = ref<ModelEditorLoadProgress | null>(null)
   const initialSnapshotReady = ref(false)
-  const liveSyncBaselineReady = ref(false)
   const errorMessage = ref<string | null>(null)
   const catalogLoadWarning = ref<string | null>(null)
-  const linksLoadWarning = ref<string | null>(null)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
@@ -188,24 +181,6 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
     }
   }
-  const loadLinksForSession = async (
-    modelId: string,
-    generation: number,
-    cancellation?: ModelEditorLoadCancellationOptions
-  ): Promise<void> => {
-    linksLoadWarning.value = null
-    try {
-      const links = await loadModelEditorLinks(modelId, cancellation)
-      if (!isLoadSessionActive(generation, modelId)) return
-      partialStore.mergeFullLinks(links)
-      liveSyncBaselineReady.value = true
-    } catch (error) {
-      if (isLoadSessionActive(generation, modelId)) {
-        linksLoadWarning.value =
-          error instanceof Error ? error.message : 'Не удалось догрузить связи модели.'
-      }
-    }
-  }
   const retryCatalogLoad = async (): Promise<void> => {
     const modelId = route.params.id
     if (typeof modelId !== 'string') return
@@ -214,14 +189,6 @@ export const useModelEditor = (): ModelEditorReturn => {
       new Set(state.value.diagrams.map(diagram => diagram.notationId).filter(Boolean))
     )
     await loadCatalogForSession(modelId, generation, notationIds, {
-      isCancelled: () => !isLoadSessionActive(generation, modelId),
-    })
-  }
-  const retryLinksLoad = async (): Promise<void> => {
-    const modelId = route.params.id
-    if (typeof modelId !== 'string') return
-    const generation = loadGeneration
-    await loadLinksForSession(modelId, generation, {
       isCancelled: () => !isLoadSessionActive(generation, modelId),
     })
   }
@@ -268,10 +235,8 @@ export const useModelEditor = (): ModelEditorReturn => {
 
     isLoading.value = true
     initialSnapshotReady.value = false
-    liveSyncBaselineReady.value = false
     errorMessage.value = null
     catalogLoadWarning.value = null
-    linksLoadWarning.value = null
     // Cancel child-page requests from the previous load before starting a new shell.
     partialStore.resetPartialScopes(modelId)
     const progressTracker = createModelEditorLoadProgressTracker({ generation, modelId })
@@ -313,7 +278,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       })
       isLoading.value = false
       // A usable initial snapshot is model metadata + root tree page + slim diagrams.
-      // Catalog and the temporary full-link background path are independent readiness tracks.
+      // Catalog is independent; graph entities are loaded only for the active diagram.
       initialSnapshotReady.value = true
       progressTracker.setBlocking(false)
       loadProgress.value = progressTracker.current()
@@ -338,25 +303,14 @@ export const useModelEditor = (): ModelEditorReturn => {
       return
     }
 
-    const catalogTask = (async (): Promise<void> => {
+    await (async (): Promise<void> => {
       try {
         await loadCatalogForSession(modelId, generation, notationIds, cancellation)
       } finally {
         resolveCatalogReady()
-      }
-    })()
-
-    const linksTask = (async (): Promise<void> => {
-      try {
-        // Safe ordering: keep the existing full-link background load until diagram scope
-        // replaces its canvas dependency in Task 6. It is not part of the usable shell.
-        await loadLinksForSession(modelId, generation, cancellation)
-      } finally {
         markBackgroundReady(resolveBackgroundReady, generation, modelId)
       }
     })()
-
-    await Promise.all([catalogTask, linksTask])
     if (isLoadSessionActive(generation, modelId)) {
       loadProgress.value = progressTracker.update({ kind: 'complete' })
     }
@@ -447,12 +401,9 @@ export const useModelEditor = (): ModelEditorReturn => {
     isLoading,
     loadProgress,
     initialSnapshotReady,
-    liveSyncBaselineReady,
     errorMessage,
     catalogLoadWarning,
-    linksLoadWarning,
     retryCatalogLoad,
-    retryLinksLoad,
     modelDirty,
     isSaving,
     saveError,

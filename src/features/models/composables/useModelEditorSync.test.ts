@@ -67,7 +67,6 @@ function createFacade() {
 
   const model = ref<ModelData | null>(createModel())
   const shellReady = ref(true)
-  const liveSyncBaselineReady = ref(false)
   const state = ref(createEmptyModelEditorState())
   state.value.modelId = 'model-1'
   state.value.diagrams = [
@@ -90,7 +89,6 @@ function createFacade() {
     enabled: ref(true),
     isLoading: ref(false),
     initialSnapshotReady: shellReady,
-    liveSyncBaselineReady,
     isSaving: ref(false),
     modelDirty: ref(false),
     selectedDiagramId: ref('diagram-1'),
@@ -105,12 +103,12 @@ function createFacade() {
     ensureNotationRelationsAndRules: vi.fn(async () => undefined),
   })
 
-  return { facade, lock, collab, shellReady, liveSyncBaselineReady }
+  return { facade, lock, collab, shellReady }
 }
 
 describe('useModelEditorSync', () => {
   it('wires lock, collab and live sync with shared derived state', () => {
-    const { facade, lock, collab, shellReady, liveSyncBaselineReady } = createFacade()
+    const { facade, lock, collab, shellReady } = createFacade()
 
     expect(useDiagramEditLock).toHaveBeenCalled()
     expect(useDiagramRealtimeCollab).toHaveBeenCalledWith(
@@ -127,8 +125,8 @@ describe('useModelEditorSync', () => {
 
     const liveSyncOptions = vi.mocked(useModelLiveSync).mock.calls[0]?.[0]
     expect(shellReady.value).toBe(true)
-    expect(liveSyncOptions?.initialSnapshotReady).toBe(liveSyncBaselineReady)
-    expect(liveSyncOptions?.initialSnapshotReady.value).toBe(false)
+    expect(liveSyncOptions?.initialSnapshotReady).toBe(shellReady)
+    expect(liveSyncOptions?.initialSnapshotReady.value).toBe(true)
     expect(liveSyncOptions?.preserveOpenDiagramCanvasInstances?.value).toBe(true)
     lock.isBlockedByOther.value = true
     expect(liveSyncOptions?.preserveOpenDiagramCanvasInstances?.value).toBe(false)

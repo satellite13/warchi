@@ -5,10 +5,14 @@ import {
   paginatedTotalElements,
 } from '@/utils/paginatedResponse'
 import type { PaginatedResponse } from '@/types/entities'
-import type { NodeResponse } from '@/types/api'
-import type { ModelEditorState, ModelPartialRequestGuard, TreeParentScope } from '../types'
+import type { LinkResponse, NodeResponse } from '@/types/api'
+import type {
+  ModelEditorState,
+  ModelPartialRequestGuard,
+  TreeParentScope,
+} from '../types'
 import { ModelPartialStore } from '../utils/modelPartialStore'
-import { toEditorNode } from './modelEditorMappers'
+import { toEditorLink, toEditorNode } from './modelEditorMappers'
 import { fetchNodeChildren } from './modelScopedApi'
 
 export type InitialChildrenScope = {
@@ -227,6 +231,19 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     publishRows()
   }
 
+  const mergePartialEntities = (
+    nodes: readonly NodeResponse[],
+    links: readonly LinkResponse[],
+    guard: ModelPartialRequestGuard
+  ): boolean => {
+    captureMaterializedRows()
+    const nodesAccepted = store.mergeNodes(nodes.map(toEditorNode), { kind: 'partial' }, guard)
+    const linksAccepted = store.mergeLinks(links.map(toEditorLink), { kind: 'partial' }, guard)
+    if (!nodesAccepted || !linksAccepted) return false
+    publishRows()
+    return true
+  }
+
   onScopeDispose(() => {
     resetPartialScopes(null)
   })
@@ -241,6 +258,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     ensureChildrenScopeComplete,
     resetPartialScopes,
     mergeFullLinks,
+    mergePartialEntities,
     reconcileMaterializedRows,
   }
 }

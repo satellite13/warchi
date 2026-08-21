@@ -4,6 +4,10 @@ import type { EditorDiagram, ModelEditorState } from '../types'
 import { toEditorDiagram } from './modelEditorMappers'
 
 type StateSource = ModelEditorState | (() => ModelEditorState)
+export type EnsureDiagramAttrsOptions = {
+  expectedModelId?: string
+  shouldApply?: () => boolean
+}
 
 function resolveState(source: StateSource): ModelEditorState {
   return typeof source === 'function' ? source() : source
@@ -24,15 +28,20 @@ function enqueueWrite<T>(task: () => T): Promise<T> {
 /** Load full diagram attrs on demand after list fetch with includeAttrs=false. */
 export async function ensureDiagramAttrsLoaded(
   stateSource: StateSource,
-  diagramId: string
+  diagramId: string,
+  options: EnsureDiagramAttrsOptions = {}
 ): Promise<EditorDiagram | null> {
-  const existing = inFlightById.get(diagramId)
+  const initialState = resolveState(stateSource)
+  const index = initialState.diagrams.findIndex(item => item.id === diagramId)
+  if (index < 0) return null
+  const current = initialState.diagrams[index]!
+  const expectedModelId = options.expectedModelId ?? (initialState.modelId || current.modelId)
+  const guarded = options.expectedModelId !== undefined || options.shouldApply !== undefined
+  const requestKey = `${expectedModelId}:${diagramId}`
+  const existing = guarded ? undefined : inFlightById.get(requestKey)
   if (existing) return existing
 
-  const state = resolveState(stateSource)
-  const index = state.diagrams.findIndex(item => item.id === diagramId)
-  if (index < 0) return null
-  const current = state.diagrams[index]!
+  if (current.modelId !== expectedModelId) return null
   if (!current._attrsPending) return current
 
   const promise = (async () => {
@@ -44,7 +53,16 @@ export async function ensureDiagramAttrsLoaded(
     const hydrated = toEditorDiagram(result.data, { attrsPending: false })
     return enqueueWrite(() => {
       const latest = resolveState(stateSource)
-      const writeIndex = latest.diagrams.findIndex(item => item.id === diagramId)
+      if (
+        (!!latest.modelId && latest.modelId !== expectedModelId) ||
+        result.data.modelId !== expectedModelId ||
+        options.shouldApply?.() === false
+      ) {
+        return null
+      }
+      const writeIndex = latest.diagrams.findIndex(
+        item => item.id === diagramId && item.modelId === expectedModelId
+      )
       if (writeIndex < 0) return null
       const previous = latest.diagrams[writeIndex]!
       const next: EditorDiagram = {
@@ -66,10 +84,10 @@ export async function ensureDiagramAttrsLoaded(
       return next
     })
   })().finally(() => {
-    inFlightById.delete(diagramId)
+    if (!guarded) inFlightById.delete(requestKey)
   })
 
-  inFlightById.set(diagramId, promise)
+  if (!guarded) inFlightById.set(requestKey, promise)
   return promise
 }
 

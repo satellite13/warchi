@@ -69,6 +69,13 @@ export class ModelPartialStore {
     return request
   }
 
+  isRequestCurrent(guard: ModelPartialRequestGuard): boolean {
+    return (
+      guard.generation === this.generation &&
+      this.requestTokens.get(guard.requestKey) === guard.token
+    )
+  }
+
   reset(): void {
     this.generation += 1
     this.nodes = []
@@ -240,10 +247,7 @@ export class ModelPartialStore {
   }
 
   private accepts(mode: EntityMergeMode, guard?: ModelPartialRequestGuard): boolean {
-    if (guard) {
-      if (guard.generation !== this.generation) return false
-      if (this.requestTokens.get(guard.requestKey) !== guard.token) return false
-    }
+    if (guard && !this.isRequestCurrent(guard)) return false
     if (mode.kind === 'childrenPage' || mode.kind === 'childrenScope') {
       const requestKey = this.childrenRequestKey(this.scopeKey(mode.scope))
       if (this.requestTokens.get(requestKey) !== mode.token) return false

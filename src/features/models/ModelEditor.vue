@@ -20,6 +20,7 @@ import {
 import type { EditorLink } from './types'
 import {
   useModelBatchConflictUi,
+  useDiagramScope,
   isDiagramOnlyEdgeModelLinkId,
   useModelDiagramConnections,
   useModelDiagramInstances,
@@ -114,12 +115,9 @@ const {
   isLoading,
   loadProgress,
   initialSnapshotReady,
-  liveSyncBaselineReady,
   errorMessage,
   catalogLoadWarning,
-  linksLoadWarning,
   retryCatalogLoad,
-  retryLinksLoad,
   modelDirty,
   isSaving,
   saveError,
@@ -198,6 +196,8 @@ const {
   selectedLinkEdgeInstanceId,
   applyDiagramSelection,
 } = useModelSelection({ state })
+const diagramScope = useDiagramScope({ state, selectedDiagramId, partialStore })
+const diagramScopeError = diagramScope.error
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
 
@@ -398,7 +398,6 @@ const {
   enabled: modelLiveSyncEnabled,
   isLoading,
   initialSnapshotReady,
-  liveSyncBaselineReady,
   isSaving,
   modelDirty,
   selectedDiagramId,
@@ -473,28 +472,36 @@ async function handleCreateBaseline() {
   }
 }
 
-const isPreparingDiagram = ref(false)
+const isPreparingDiagramCatalog = ref(false)
+const isPreparingDiagram = computed(
+  () => isPreparingDiagramCatalog.value || diagramScope.progress.value !== null
+)
 watch(selectedDiagramId, async diagramId => {
   baselineError.value = null
   if (!diagramId) {
-    isPreparingDiagram.value = false
+    isPreparingDiagramCatalog.value = false
+    diagramScope.cancel()
     return
   }
-  isPreparingDiagram.value = true
+  isPreparingDiagramCatalog.value = true
   try {
     // Components/relations must be present before canvas resolves shapes.
-    await whenCatalogReady()
-    if (selectedDiagramId.value !== diagramId) return
-    await ensureDiagramAttrsLoaded(() => state.value, diagramId)
-  } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : t('models.diagramLoadError')
+    await Promise.all([whenCatalogReady(), diagramScope.open(diagramId)])
   } finally {
     if (selectedDiagramId.value === diagramId) {
-      isPreparingDiagram.value = false
+      isPreparingDiagramCatalog.value = false
     }
   }
 })
+
+async function retryDiagramScope(): Promise<void> {
+  isPreparingDiagramCatalog.value = true
+  try {
+    await Promise.all([whenCatalogReady(), diagramScope.reload()])
+  } finally {
+    isPreparingDiagramCatalog.value = false
+  }
+}
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const isActiveNotationRulesLoading = computed(() =>
@@ -3090,7 +3097,7 @@ onBeforeUnmount(() => {
     </template>
     <template #default>
       <div
-        v-if="catalogLoadWarning || linksLoadWarning"
+        v-if="catalogLoadWarning || diagramScopeError"
         class="background-load-warnings"
         role="status"
         aria-live="polite"
@@ -3101,9 +3108,9 @@ onBeforeUnmount(() => {
             {{ t('common.retry') }}
           </button>
         </div>
-        <div v-if="linksLoadWarning" class="background-load-warnings__item">
-          <span>{{ linksLoadWarning }}</span>
-          <button type="button" class="btn btn--secondary" @click="retryLinksLoad">
+        <div v-if="diagramScopeError" class="background-load-warnings__item">
+          <span>{{ diagramScopeError.message }}</span>
+          <button type="button" class="btn btn--secondary" @click="retryDiagramScope">
             {{ t('common.retry') }}
           </button>
         </div>

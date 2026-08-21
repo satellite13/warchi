@@ -495,6 +495,8 @@ export const modelsMessages = {
       traceabilityDragHint: 'Перетащите связь на диаграмму',
       traceabilityDragDisabledNoActiveDiagram: 'Откройте диаграмму, чтобы перетащить связь',
       traceabilityDragDisabledReadOnly: 'Диаграмма открыта в режиме только чтение',
+      traceabilityDragDisabledMissingComponent:
+        'В активной нотации нет компонента для этого типа узла',
       traceabilityDragDisabledAlreadyOnDiagram: 'Эта связь уже размещена на диаграмме',
       traceabilityDragDisabledMissingEndpointInstances:
         'Для перетаскивания оба конца связи должны быть размещены на диаграмме',
@@ -1127,6 +1129,8 @@ export const modelsMessages = {
       traceabilityDragHint: 'Drag the link onto the diagram',
       traceabilityDragDisabledNoActiveDiagram: 'Open a diagram to drag this link',
       traceabilityDragDisabledReadOnly: 'The active diagram is read-only',
+      traceabilityDragDisabledMissingComponent:
+        'The active notation has no component for this node type',
       traceabilityDragDisabledAlreadyOnDiagram: 'This link is already placed on the diagram',
       traceabilityDragDisabledMissingEndpointInstances:
         'Both link endpoints must be present on the diagram to drag it',

@@ -29,6 +29,11 @@ import ModelTraceBranch from './ModelTraceBranch.vue'
 
 type DirectionMode = 'down' | 'up'
 
+type NodeDragEligibility = {
+  allowed: boolean
+  reason: string
+}
+
 const props = defineProps<{
   modelId: string
   selectedNode: EditorNode | null
@@ -39,6 +44,7 @@ const props = defineProps<{
   isDiagramReadOnly: boolean
   relations: RelationResponse[]
   canConnect: (sourceModelNodeId: string, targetModelNodeId: string) => boolean
+  canDragNodeToDiagram: (nodeId: string) => NodeDragEligibility
   isDiagramOnlyEdgeModelLinkId?: (modelLinkId: string) => boolean
   authoritativeRevision: number
   diagramRevision: number

@@ -984,6 +984,37 @@ const traceabilityNodes = computed(() =>
 const traceabilityLinkTypes = computed(() =>
   state.value.linkTypes.filter(linkType => !isUntypedLinkTypeId(linkType.id))
 )
+const canDragTraceabilityNodeToDiagram = (
+  nodeId: string
+): { allowed: boolean; reason: string } => {
+  if (!activeDiagram.value) {
+    return { allowed: false, reason: 'models.traceabilityDragDisabledNoActiveDiagram' }
+  }
+  if (isDiagramReadOnly.value) {
+    return { allowed: false, reason: 'models.traceabilityDragDisabledReadOnly' }
+  }
+
+  const node = state.value.nodes.find(item => item.id === nodeId && !item._isDeleted)
+  if (!node) {
+    return { allowed: false, reason: 'models.traceabilityDragDisabledMissingComponent' }
+  }
+  const nodeType = state.value.nodeTypes.find(item => item.id === node.nodeTypeId)
+  if ((nodeType?.name ?? '').trim().toLowerCase() === 'directory') {
+    return { allowed: true, reason: 'models.traceabilityDragHint' }
+  }
+
+  const notationId = activeNotationId.value
+  const hasComponent =
+    !!notationId &&
+    state.value.components.some(
+      component =>
+        component.notationId === notationId &&
+        component.nodeTypeId === node.nodeTypeId
+    )
+  return hasComponent
+    ? { allowed: true, reason: 'models.traceabilityDragHint' }
+    : { allowed: false, reason: 'models.traceabilityDragDisabledMissingComponent' }
+}
 const beginTraceabilityRequest = (requestKey: string): ModelPartialRequestGuard =>
   partialStore.store.beginRequest(requestKey)
 const isTraceabilityRequestCurrent = (guard: ModelPartialRequestGuard): boolean =>
@@ -3725,6 +3756,7 @@ onBeforeUnmount(() => {
               :is-diagram-read-only="isDiagramReadOnly"
               :relations="state.relations"
               :can-connect="canConnect"
+              :can-drag-node-to-diagram="canDragTraceabilityNodeToDiagram"
               :is-diagram-only-edge-model-link-id="isDiagramOnlyEdgeModelLinkId"
               :begin-request="beginTraceabilityRequest"
               :is-request-current="isTraceabilityRequestCurrent"

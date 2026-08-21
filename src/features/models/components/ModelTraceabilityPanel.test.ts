@@ -114,6 +114,11 @@ const neighbor = (
   },
 })
 
+const canDragNodeToDiagram = vi.fn(() => ({
+  allowed: false,
+  reason: 'models.traceabilityDragDisabledNoActiveDiagram',
+}))
+
 const mountPanel = () =>
   mount(ModelTraceabilityPanel, {
     props: {
@@ -132,6 +137,7 @@ const mountPanel = () =>
       isDiagramReadOnly: false,
       relations: [],
       canConnect: () => true,
+      canDragNodeToDiagram,
       authoritativeRevision: 1,
       diagramRevision: 1,
       beginRequest: () => ({ generation: 1, requestKey: 'test', token: 1 }),
@@ -154,6 +160,20 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     lazyState.diagramsLoading = false
     lazyState.diagramsError = null
     lazyState.diagramsNextPage = null
+  })
+
+  it('accepts the typed node drag eligibility callback', () => {
+    const wrapper = mountPanel()
+
+    const eligibility = wrapper.props('canDragNodeToDiagram') as (nodeId: string) => {
+      allowed: boolean
+      reason: string
+    }
+    expect(eligibility('root')).toEqual({
+      allowed: false,
+      reason: 'models.traceabilityDragDisabledNoActiveDiagram',
+    })
+    expect(canDragNodeToDiagram).toHaveBeenCalledWith('root')
   })
 
   it('loads selected root and renders diagram references from the scoped endpoint state', async () => {

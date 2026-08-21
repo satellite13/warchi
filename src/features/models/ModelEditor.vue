@@ -106,7 +106,10 @@ import {
   ensureAllDiagramAttrsLoaded,
   ensureDiagramAttrsLoaded,
 } from './composables/ensureDiagramAttrs'
-import { useModelEditorRouteNavigation } from './composables/useModelEditorRouteNavigation'
+import {
+  focusRouteDiagramTree,
+  useModelEditorRouteNavigation,
+} from './composables/useModelEditorRouteNavigation'
 import { validateRequiredCustomProperties as validateRequiredCustomPropertiesState } from './utils/requiredCustomPropertiesValidation'
 import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
@@ -2984,42 +2987,62 @@ const routeModelId = computed(() => (typeof route.params.id === 'string' ? route
 const routeDiagramId = computed(() =>
   typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
 )
-const applyRouteDiagramSelection = () => {
-  if (!routeDiagramId.value) return
+const applyRouteDiagramSelection = (diagramId: string): void => {
+  if (!diagramId) return
   const target = state.value.diagrams.find(
-    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+    diagram => diagram.id === diagramId && !diagram._isDeleted
   )
   if (!target) return
   applyDiagramSelection(target.id)
 }
-const focusRouteDiagramInTree = async (): Promise<void> => {
-  if (!routeDiagramId.value) return
+const routeTreeFocusLoading = ref(false)
+const routeTreeFocusError = ref<string | null>(null)
+const focusRouteDiagramInTree = async (
+  diagramId: string,
+  isCurrent: () => boolean
+): Promise<void> => {
+  if (!isCurrent()) return
+  routeTreeFocusLoading.value = false
+  routeTreeFocusError.value = null
+  if (!diagramId) return
   const target = state.value.diagrams.find(
-    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+    diagram => diagram.id === diagramId && !diagram._isDeleted
   )
   if (!target) return
-  const nodeId = target.nodeId
-  if (nodeId && nodeId !== treeRootNodeId.value) {
-    const path = await lazyTreeSearch.selectHit(nodeId)
-    if (path.length === 0) return
-    await nextTick()
-    treePanelRef.value?.expandPath?.(path)
+  const needsTreePath = !!target.nodeId && target.nodeId !== treeRootNodeId.value
+  routeTreeFocusLoading.value = true
+  routeTreeFocusError.value = null
+  try {
+    await focusRouteDiagramTree({
+      diagramId,
+      nodeId: target.nodeId,
+      treeRootNodeId: treeRootNodeId.value,
+      selectHit: lazyTreeSearch.selectHit,
+      waitForRender: nextTick,
+      expandPath: path => treePanelRef.value?.expandPath?.(path),
+      focusDiagram: (id, guard) => treePanelRef.value?.focusDiagram?.(id, guard),
+      isCurrent,
+    })
+  } finally {
+    if (isCurrent()) {
+      routeTreeFocusLoading.value = false
+      routeTreeFocusError.value = needsTreePath ? lazyTreeSearch.selectionError.value : null
+    }
   }
-  await nextTick()
-  await treePanelRef.value?.focusDiagram?.(target.id)
 }
-useModelEditorRouteNavigation({
-  modelId: routeModelId,
-  diagramId: routeDiagramId,
-  loadModel,
-  applyRouteDiagramSelection,
-  focusRouteDiagramInTree,
-  afterModelLoad: () => {
-    scheduleFetchDocumentsFromApi()
-    scheduleSyncDefaultsOnLoad()
-    void whenBackgroundReady().then(() => fetchWikiDocuments())
-  },
-})
+const { applyCurrentDiagramNavigation, retryCurrentDiagramTreeFocus } =
+  useModelEditorRouteNavigation({
+    modelId: routeModelId,
+    diagramId: routeDiagramId,
+    loadModel: async () => loadModel(),
+    applyRouteDiagramSelection,
+    focusRouteDiagramInTree,
+    afterModelLoad: () => {
+      scheduleFetchDocumentsFromApi()
+      scheduleSyncDefaultsOnLoad()
+      void whenBackgroundReady().then(() => fetchWikiDocuments())
+    },
+  })
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null
@@ -3084,8 +3107,7 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 
 onMounted(async () => {
   await loadModel()
-  applyRouteDiagramSelection()
-  void focusRouteDiagramInTree()
+  applyCurrentDiagramNavigation()
   scheduleFetchDocumentsFromApi()
   scheduleSyncDefaultsOnLoad()
   // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
@@ -3191,6 +3213,8 @@ onBeforeUnmount(() => {
             :search-hits="lazyTreeSearch.hits.value"
             :search-loading="lazyTreeSearch.loading.value || lazyTreeSearch.selectionLoading.value"
             :search-error="lazyTreeSearch.error.value || lazyTreeSearch.selectionError.value"
+            :tree-focus-loading="routeTreeFocusLoading"
+            :tree-focus-error="routeTreeFocusError"
             @select-node="handleTreeSelectNode"
             @search-query-change="lazyTreeSearchQuery = $event"
             @select-search-hit="handleTreeSearchHit"
@@ -3199,6 +3223,7 @@ onBeforeUnmount(() => {
                 ? retryTreeSearchSelection()
                 : lazyTreeSearch.retry()
             "
+            @retry-tree-focus="retryCurrentDiagramTreeFocus"
             @load-children="partialStore.loadChildren"
             @load-next-children-page="partialStore.loadNextChildrenPage"
             @toggle-sync-selection="toggleSelectionSync"

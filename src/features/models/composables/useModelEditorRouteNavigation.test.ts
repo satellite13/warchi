@@ -1,6 +1,9 @@
 import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import { useModelEditorRouteNavigation } from './useModelEditorRouteNavigation'
+import {
+  focusRouteDiagramTree,
+  useModelEditorRouteNavigation,
+} from './useModelEditorRouteNavigation'
 
 describe('useModelEditorRouteNavigation', () => {
   it('reloads the model and applies the requested diagram after a model route change', async () => {
@@ -92,5 +95,154 @@ describe('useModelEditorRouteNavigation', () => {
     finishTreeFocus()
     await Promise.resolve()
     expect(events.at(-1)).toBe('tree-finish')
+  })
+
+  it('ignores an older model route after its controlled load resolves', async () => {
+    const modelId = ref('source-model')
+    const diagramId = ref('source-diagram')
+    const loadResolvers = new Map<string, () => void>()
+    const selected: string[] = []
+
+    useModelEditorRouteNavigation({
+      modelId,
+      diagramId,
+      loadModel: requestedModelId =>
+        new Promise<void>(resolve => loadResolvers.set(requestedModelId, resolve)),
+      applyRouteDiagramSelection: requestedDiagramId => selected.push(requestedDiagramId),
+    })
+
+    modelId.value = 'model-a'
+    diagramId.value = 'diagram-a'
+    await nextTick()
+    modelId.value = 'model-b'
+    diagramId.value = 'diagram-b'
+    await nextTick()
+
+    loadResolvers.get('model-a')?.()
+    await Promise.resolve()
+    expect(selected).toEqual([])
+
+    loadResolvers.get('model-b')?.()
+    await Promise.resolve()
+    expect(selected).toEqual(['diagram-b'])
+  })
+
+  it('passes a generation guard that invalidates stale diagram tree focus', async () => {
+    const modelId = ref('model-1')
+    const diagramId = ref('diagram-1')
+    const focusResolvers = new Map<string, () => void>()
+    const focused: string[] = []
+
+    useModelEditorRouteNavigation({
+      modelId,
+      diagramId,
+      loadModel: vi.fn(),
+      applyRouteDiagramSelection: vi.fn(),
+      focusRouteDiagramInTree: async (requestedDiagramId, isCurrent) => {
+        await new Promise<void>(resolve => focusResolvers.set(requestedDiagramId, resolve))
+        if (isCurrent()) focused.push(requestedDiagramId)
+      },
+    })
+
+    diagramId.value = 'diagram-2'
+    await nextTick()
+    diagramId.value = 'diagram-3'
+    await nextTick()
+    focusResolvers.get('diagram-2')?.()
+    await Promise.resolve()
+
+    expect(focused).not.toContain('diagram-2')
+  })
+
+  it('retries only the current diagram tree focus without reloading or selecting', () => {
+    const loadModel = vi.fn()
+    const applyRouteDiagramSelection = vi.fn()
+    const focusRouteDiagramInTree = vi.fn()
+    const navigation = useModelEditorRouteNavigation({
+      modelId: ref('model-1'),
+      diagramId: ref('diagram-1'),
+      loadModel,
+      applyRouteDiagramSelection,
+      focusRouteDiagramInTree,
+    })
+
+    navigation.retryCurrentDiagramTreeFocus()
+
+    expect(focusRouteDiagramInTree).toHaveBeenCalledWith('diagram-1', expect.any(Function))
+    expect(loadModel).not.toHaveBeenCalled()
+    expect(applyRouteDiagramSelection).not.toHaveBeenCalled()
+  })
+})
+
+describe('focusRouteDiagramTree', () => {
+  it('does not expand or focus when a node path resolves for a stale route', async () => {
+    let resolvePath!: (path: string[]) => void
+    let current = true
+    const expandPath = vi.fn()
+    const focusDiagram = vi.fn()
+    const focusing = focusRouteDiagramTree({
+      diagramId: 'diagram-node',
+      nodeId: 'folder',
+      treeRootNodeId: 'hidden-root',
+      selectHit: () => new Promise(resolve => (resolvePath = resolve)),
+      waitForRender: () => Promise.resolve(),
+      expandPath,
+      focusDiagram,
+      isCurrent: () => current,
+    })
+
+    current = false
+    resolvePath(['folder'])
+    await focusing
+
+    expect(expandPath).not.toHaveBeenCalled()
+    expect(focusDiagram).not.toHaveBeenCalled()
+  })
+
+  it('rechecks generation after render before expanding a resolved node path', async () => {
+    let finishRender!: () => void
+    let current = true
+    const expandPath = vi.fn()
+    const focusDiagram = vi.fn()
+    const focusing = focusRouteDiagramTree({
+      diagramId: 'diagram-node',
+      nodeId: 'folder',
+      treeRootNodeId: 'hidden-root',
+      selectHit: async () => ['folder'],
+      waitForRender: () => new Promise<void>(resolve => (finishRender = resolve)),
+      expandPath,
+      focusDiagram,
+      isCurrent: () => current,
+    })
+    await Promise.resolve()
+
+    current = false
+    finishRender()
+    await focusing
+
+    expect(expandPath).not.toHaveBeenCalled()
+    expect(focusDiagram).not.toHaveBeenCalled()
+  })
+
+  it('does not focus a stale root diagram after its render wait', async () => {
+    let finishRender!: () => void
+    let current = true
+    const focusDiagram = vi.fn()
+    const focusing = focusRouteDiagramTree({
+      diagramId: 'root-diagram',
+      nodeId: 'hidden-root',
+      treeRootNodeId: 'hidden-root',
+      selectHit: vi.fn(),
+      waitForRender: () => new Promise<void>(resolve => (finishRender = resolve)),
+      expandPath: vi.fn(),
+      focusDiagram,
+      isCurrent: () => current,
+    })
+
+    current = false
+    finishRender()
+    await focusing
+
+    expect(focusDiagram).not.toHaveBeenCalled()
   })
 })

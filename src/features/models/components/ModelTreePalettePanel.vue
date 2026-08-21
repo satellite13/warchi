@@ -44,6 +44,8 @@ const props = defineProps<{
   searchHits?: ModelSearchHit[]
   searchLoading?: boolean
   searchError?: string | null
+  treeFocusLoading?: boolean
+  treeFocusError?: string | null
 }>()
 
 const diagramLockById = computed(() => {
@@ -89,6 +91,7 @@ const emit = defineEmits<{
   searchQueryChange: [query: string]
   selectSearchHit: [nodeId: string]
   retrySearch: []
+  retryTreeFocus: []
 }>()
 const { t } = useI18n()
 
@@ -559,23 +562,36 @@ const expandPath = (nodeIds: readonly string[]): void => {
   expandedNodes.value = next
 }
 
-const scrollToTreeIndex = async (index: number): Promise<void> => {
-  if (index < 0) return
+const scrollToTreeIndex = async (
+  index: number,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (index < 0 || !isCurrent()) return
   await nextTick()
+  if (!isCurrent()) return
   rowVirtualizer.value.scrollToIndex(index, { align: "auto" })
   await nextTick()
 }
 
-const focusNode = async (nodeId: string): Promise<void> => {
+const focusNode = async (
+  nodeId: string,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (!isCurrent()) return
   expandToNode(nodeId)
   await nextTick()
+  if (!isCurrent()) return
   const index = visibleTreeRows.value.findIndex(
     (row) => row.kind === "node" && row.node.id === nodeId,
   )
-  await scrollToTreeIndex(index)
+  await scrollToTreeIndex(index, isCurrent)
 }
 
-const focusDiagram = async (diagramId: string): Promise<void> => {
+const focusDiagram = async (
+  diagramId: string,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (!isCurrent()) return
   const diagram = props.diagrams.find((d) => d.id === diagramId && !d._isDeleted)
   if (diagram?.nodeId && !(props.treeRootNodeId && diagram.nodeId === props.treeRootNodeId)) {
     expandToNode(diagram.nodeId)
@@ -585,10 +601,11 @@ const focusDiagram = async (diagramId: string): Promise<void> => {
     expandedNodes.value = next
   }
   await nextTick()
+  if (!isCurrent()) return
   const index = visibleTreeRows.value.findIndex(
     (row) => row.kind === "diagram" && row.diagram.id === diagramId,
   )
-  await scrollToTreeIndex(index)
+  await scrollToTreeIndex(index, isCurrent)
 }
 
 watch(normalizedQuery, (query, prev) => {
@@ -661,7 +678,13 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
       @drop.self.prevent="onTreeDrop($event, null)"
     >
       <EmptyState
-        v-if="visibleTreeRows.length === 0 && !searchLoading && !searchError"
+        v-if="
+          visibleTreeRows.length === 0 &&
+          !searchLoading &&
+          !searchError &&
+          !treeFocusLoading &&
+          !treeFocusError
+        "
         variant="compact"
         icon="account_tree"
         :title="normalizedQuery ? t('models.noSearchResults') : t('models.noNodes')"
@@ -681,6 +704,25 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
       >
         <span>{{ t("models.treeSearchError") }}</span>
         <button type="button" class="tree-status-row__action" @click="emit('retrySearch')">
+          {{ t("common.retry") }}
+        </button>
+      </div>
+      <div
+        v-if="treeFocusLoading"
+        data-tree-focus-loading
+        class="tree-search-status"
+        role="status"
+      >
+        {{ t("models.treeFocusLoading") }}
+      </div>
+      <div
+        v-if="treeFocusError"
+        data-tree-focus-error
+        class="tree-search-status tree-search-status--error"
+        role="status"
+      >
+        <span>{{ treeFocusError }}</span>
+        <button type="button" class="tree-status-row__action" @click="emit('retryTreeFocus')">
           {{ t("common.retry") }}
         </button>
       </div>

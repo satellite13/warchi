@@ -270,6 +270,7 @@ export const modelsMessages = {
       treeLoadMore: 'Загрузить ещё',
       treeSearchLoading: 'Поиск...',
       treeSearchError: 'Не удалось выполнить поиск',
+      treeFocusLoading: 'Загрузка пути в дереве...',
       selectedNodeLoading: 'Загрузка выбранного узла...',
       treeScopeIncompleteMutation:
         'Не удалось загрузить все элементы папки. Повторите изменение после восстановления соединения.',
@@ -869,6 +870,7 @@ export const modelsMessages = {
       treeLoadMore: 'Load more',
       treeSearchLoading: 'Searching...',
       treeSearchError: 'Could not search the model',
+      treeFocusLoading: 'Loading tree path...',
       selectedNodeLoading: 'Loading selected node...',
       treeScopeIncompleteMutation:
         'Could not load every item in this folder. Retry the change after the connection recovers.',

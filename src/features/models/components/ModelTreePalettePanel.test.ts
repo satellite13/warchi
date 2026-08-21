@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { parseDiagramAttrs } from '../modelAttrs'
 import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
-import type { ChildrenPageState, EditorNode } from '../types'
+import type { ChildrenPageState, EditorDiagram, EditorNode } from '../types'
 import type { ModelSearchHit } from '@/types/api'
 
 vi.mock('vue-i18n', async (importOriginal) => {
@@ -103,11 +103,14 @@ function mountPanel(props: {
   searchHits?: ModelSearchHit[]
   searchLoading?: boolean
   searchError?: string | null
+  treeFocusLoading?: boolean
+  treeFocusError?: string | null
+  diagrams?: EditorDiagram[]
 }) {
   return mount(ModelTreePalettePanel, {
     props: {
       nodes: props.nodes,
-      diagrams: [],
+      diagrams: props.diagrams ?? [],
       nodeTypes: [
         { id: 'dir', name: 'Directory', version: '1.0.0', ownerId: 'o1' } as never,
         { id: 'nt1', name: 'Application Component', version: '1.0.0', ownerId: 'o1' } as never,
@@ -122,6 +125,8 @@ function mountPanel(props: {
       searchHits: props.searchHits,
       searchLoading: props.searchLoading,
       searchError: props.searchError,
+      treeFocusLoading: props.treeFocusLoading,
+      treeFocusError: props.treeFocusError,
     },
     // Needed so focusNode/focusDiagram and querySelector work against document
     attachTo: document.body,
@@ -534,6 +539,23 @@ describe('ModelTreePalettePanel search', () => {
     await wrapper.get('[data-tree-search-error] button').trigger('click')
     expect(wrapper.emitted('retrySearch')).toHaveLength(1)
   })
+
+  it('shows deep-link tree focus error with an empty search and retries only tree focus', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits: [],
+      treeFocusLoading: false,
+      treeFocusError: 'ancestors failed',
+    })
+    await flushTree(wrapper)
+
+    expect((wrapper.get('.search-input').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[data-tree-focus-error]').text()).toContain('ancestors failed')
+    await wrapper.get('[data-tree-focus-error] button').trigger('click')
+
+    expect(wrapper.emitted('retryTreeFocus')).toHaveLength(1)
+    expect(wrapper.emitted('retrySearch')).toBeUndefined()
+  })
 })
 
 describe('ModelTreePalettePanel virtualization', () => {
@@ -606,5 +628,37 @@ describe('ModelTreePalettePanel virtualization', () => {
     await flushTree(wrapper)
 
     expect(wrapper.find('[data-tree-node-id="n-70"]').exists()).toBe(true)
+  })
+
+  it('does not scroll a diagram after its route generation becomes stale', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      diagrams: [
+        {
+          id: 'diagram-1',
+          name: 'Diagram',
+          version: '1.0.0',
+          notationId: 'notation-1',
+          ownerId: 'owner-1',
+          modelId: 'model-1',
+          nodeId: null,
+          parsedAttrs: parseDiagramAttrs(null),
+        },
+      ],
+    })
+    await flushTree(wrapper)
+    const tree = wrapper.get('.tree').element as HTMLElement
+    const scrollTo = vi.spyOn(tree, 'scrollTo')
+    let current = true
+
+    const focusing = (
+      wrapper.vm as unknown as {
+        focusDiagram: (id: string, isCurrent: () => boolean) => Promise<void>
+      }
+    ).focusDiagram('diagram-1', () => current)
+    current = false
+    await focusing
+
+    expect(scrollTo).not.toHaveBeenCalled()
   })
 })

@@ -40,12 +40,13 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
     loading.value = false
   }
 
-  const cancelSelection = (): void => {
+  const cancelSelection = (forgetLastSelection = false): void => {
     selectionController?.abort()
     selectionController = null
     selectionSequence += 1
     selectionLoading.value = false
     selectionError.value = null
+    if (forgetLastSelection) lastSelectedNodeId = null
   }
 
   const runSearch = async (): Promise<void> => {
@@ -98,7 +99,10 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
 
   const retry = (): Promise<void> => runSearch()
 
-  const selectHit = async (nodeId: string): Promise<string[]> => {
+  const selectHit = async (
+    nodeId: string,
+    externalGuard: () => boolean = () => true
+  ): Promise<string[]> => {
     selectionController?.abort()
     const requestController = new AbortController()
     selectionController = requestController
@@ -113,7 +117,8 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
       !requestController.signal.aborted &&
       requestSequence === selectionSequence &&
       options.modelId.value === modelId &&
-      options.isRequestCurrent(guard)
+      options.isRequestCurrent(guard) &&
+      externalGuard()
 
     try {
       const ancestorsResult = await fetchNodeAncestors(modelId, nodeId, requestController.signal)
@@ -153,11 +158,16 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
   const retrySelection = (): Promise<string[]> =>
     lastSelectedNodeId ? selectHit(lastSelectedNodeId) : Promise.resolve([])
 
+  const cancel = (): void => {
+    cancelSearch()
+    cancelSelection(true)
+  }
+
   watch(
     [options.query, options.modelId],
-    ([, modelId], [, previousModelId]) => {
+    () => {
       cancelSearch()
-      if (previousModelId !== undefined && modelId !== previousModelId) cancelSelection()
+      cancelSelection(true)
       error.value = null
       const query = options.query.value.trim()
       if (!query || !options.modelId.value) {
@@ -174,7 +184,7 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
 
   onScopeDispose(() => {
     cancelSearch()
-    cancelSelection()
+    cancelSelection(true)
   })
 
   return {
@@ -186,5 +196,6 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
     retry,
     selectHit,
     retrySelection,
+    cancel,
   }
 }

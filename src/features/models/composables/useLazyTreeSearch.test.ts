@@ -279,4 +279,112 @@ describe('useLazyTreeSearch', () => {
     expect(mergeNodes).not.toHaveBeenCalled()
     scope.stop()
   })
+
+  it('invalidates an in-flight selected path when the query changes', async () => {
+    fetchNodeAncestorsMock.mockResolvedValue(ok([node('folder', 'hidden-root')]))
+    let finishResolve!: (
+      value: ReturnType<typeof ok<{ nodes: NodeResponse[]; missingIds: string[] }>>
+    ) => void
+    resolveModelNodesMock.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishResolve = resolve
+        })
+    )
+    const query = ref('old query')
+    const mergeNodes = vi.fn(() => true)
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref('hidden-root'),
+        query,
+        mergeNodes,
+        beginRequest: () => ({ generation: 1, requestKey: 'select', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    const selecting = search.selectHit('hit')
+    await Promise.resolve()
+    const resolveSignal = resolveModelNodesMock.mock.calls[0]?.[2]
+    query.value = 'new query'
+    await nextTick()
+
+    expect(resolveSignal?.aborted).toBe(true)
+    finishResolve(ok({ nodes: [node('hit', 'folder')], missingIds: [] }))
+    await expect(selecting).resolves.toEqual([])
+    expect(mergeNodes).not.toHaveBeenCalled()
+    expect(search.selectionLoading.value).toBe(false)
+    expect(search.selectionError.value).toBeNull()
+    scope.stop()
+  })
+
+  it('cancels search and selected-path work through one explicit cancel operation', async () => {
+    let finishAncestors!: (value: ReturnType<typeof ok<NodeResponse[]>>) => void
+    fetchNodeAncestorsMock.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishAncestors = resolve
+        })
+    )
+    const mergeNodes = vi.fn(() => true)
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref(null),
+        query: ref('hit'),
+        mergeNodes,
+        beginRequest: () => ({ generation: 1, requestKey: 'select', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    const selecting = search.selectHit('hit')
+    const signal = fetchNodeAncestorsMock.mock.calls[0]?.[2]
+    search.cancel()
+
+    expect(signal?.aborted).toBe(true)
+    finishAncestors(ok([]))
+    await expect(selecting).resolves.toEqual([])
+    expect(await search.retrySelection()).toEqual([])
+    expect(mergeNodes).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('rechecks an external route generation after each selected-path await', async () => {
+    fetchNodeAncestorsMock.mockResolvedValue(ok([node('folder', 'hidden-root')]))
+    let finishResolve!: (
+      value: ReturnType<typeof ok<{ nodes: NodeResponse[]; missingIds: string[] }>>
+    ) => void
+    resolveModelNodesMock.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishResolve = resolve
+        })
+    )
+    let routeCurrent = true
+    const mergeNodes = vi.fn(() => true)
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref('hidden-root'),
+        query: ref('hit'),
+        mergeNodes,
+        beginRequest: () => ({ generation: 1, requestKey: 'select', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    const selecting = search.selectHit('hit', () => routeCurrent)
+    await Promise.resolve()
+    routeCurrent = false
+    finishResolve(ok({ nodes: [node('hit', 'folder')], missingIds: [] }))
+
+    await expect(selecting).resolves.toEqual([])
+    expect(mergeNodes).not.toHaveBeenCalled()
+    scope.stop()
+  })
 })

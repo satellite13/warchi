@@ -33,6 +33,7 @@ function setup(
   const complete = new Set(completeScopeKeys)
   const setUiError = vi.fn()
   const reconcileMaterializedRows = vi.fn()
+  const markNodeDirty = vi.fn()
   const operations = useModelTreeOperations({
     state,
     model: ref({ attrs: JSON.stringify({ treeRootNodeId: 'hidden-root' }) }),
@@ -40,7 +41,7 @@ function setup(
     t: key => key,
     setUiError,
     clearUiError: vi.fn(),
-    markNodeDirty: vi.fn(),
+    markNodeDirty,
     markDiagramDirty: vi.fn(),
     isChildrenScopeComplete: (scope: TreeParentScope) =>
       complete.has(scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`),
@@ -51,6 +52,7 @@ function setup(
     state,
     operations,
     setUiError,
+    markNodeDirty,
     reconcileMaterializedRows,
     ensureChildrenScopeComplete,
     complete,
@@ -132,6 +134,35 @@ describe('useModelTreeOperations partial scope safety', () => {
     expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
   })
 
+  it('does not dirty or reorder local siblings when destination loading is cancelled', async () => {
+    const { state, operations, markNodeDirty } = setup(
+      ['node:source-parent'],
+      vi.fn(async () => {})
+    )
+    state.value.nodes = [
+      makeNode('moving', 'source-parent', 'regular', 4),
+      makeNode('source-sibling', 'source-parent', 'regular', 9),
+      makeNode('target-parent', 'hidden-root', 'directory', 0),
+      makeNode('target-sibling', 'target-parent', 'regular', 7),
+    ]
+    const before = state.value.nodes.map(node => ({
+      id: node.id,
+      parentNodeId: node.parentNodeId,
+      treeOrder: node.parsedAttrs.treeOrder,
+    }))
+
+    await operations.handleMoveNode('moving', 'target-parent', 'inside')
+
+    expect(
+      state.value.nodes.map(node => ({
+        id: node.id,
+        parentNodeId: node.parentNodeId,
+        treeOrder: node.parsedAttrs.treeOrder,
+      }))
+    ).toEqual(before)
+    expect(markNodeDirty).not.toHaveBeenCalled()
+  })
+
   it('ensures one sibling scope once before reordering inside it', async () => {
     const ensureChildrenScopeComplete = vi.fn(async (_scope: TreeParentScope) => {
       complete.add('node:parent-a')
@@ -183,6 +214,28 @@ describe('useModelTreeOperations partial scope safety', () => {
       { kind: 'node', nodeId: 'source-parent' },
       { kind: 'node', nodeId: 'target-parent' },
     ])
+  })
+
+  it('reindexes configured root siblings without touching another parent', async () => {
+    const { state, operations, markNodeDirty } = setup(['root'])
+    state.value.nodes = [
+      makeNode('root-first', 'hidden-root', 'regular', 3),
+      makeNode('other-child', 'other-parent', 'regular', 12),
+      makeNode('root-second', 'hidden-root', 'regular', 8),
+    ]
+
+    await operations.handleMoveNode('root-second', 'root-first', 'above')
+
+    expect(
+      state.value.nodes
+        .filter(node => node.parentNodeId === 'hidden-root')
+        .map(node => [node.id, node.parsedAttrs.treeOrder])
+    ).toEqual([
+      ['root-second', 0],
+      ['root-first', 1],
+    ])
+    expect(state.value.nodes.find(node => node.id === 'other-child')?.parsedAttrs.treeOrder).toBe(12)
+    expect(markNodeDirty).not.toHaveBeenCalledWith('other-child')
   })
 
   it('ensures existing directory scopes before creating a missing path segment', async () => {

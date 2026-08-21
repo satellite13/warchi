@@ -280,7 +280,7 @@ watch(wizard.targetModelId, modelId => {
           </label>
         </div>
         <fieldset class="diagram-copy__field diagram-copy__folder-picker">
-          <span>{{ t('models.diagramCopy.folder') }}</span>
+          <legend>{{ t('models.diagramCopy.folder') }}</legend>
           <label class="diagram-copy__folder-row">
             <input
               v-model="wizard.folderNodeId.value"
@@ -320,6 +320,7 @@ watch(wizard.targetModelId, modelId => {
                         : 'models.diagramCopy.expandFolder'
                     )
                   "
+                  :aria-expanded="folderScopeState(folderScope(row.node.id))?.expanded === true"
                   @click="folderTree.toggleFolder(row.node.id)"
                 >
                   {{ folderScopeState(folderScope(row.node.id))?.expanded ? '▾' : '▸' }}

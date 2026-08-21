@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NodeResponse } from '@/types/api'
 import type { PaginatedResponse } from '@/types/entities'
 import { fetchNodeChildren } from './modelScopedApi'
@@ -37,6 +37,10 @@ const deferred = <T>() => {
 }
 
 describe('useLazyFolderTree', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('loads root folders and only direct children when a folder expands', async () => {
     vi.mocked(fetchNodeChildren)
       .mockResolvedValueOnce({
@@ -61,13 +65,13 @@ describe('useLazyFolderTree', () => {
       1,
       'model-1',
       { kind: 'root' },
-      expect.objectContaining({ page: 0, foldersOnly: true })
+      expect.objectContaining({ page: 0, size: 500, foldersOnly: true })
     )
     expect(fetchNodeChildren).toHaveBeenNthCalledWith(
       2,
       'model-1',
       { kind: 'node', nodeId: 'folder-a' },
-      expect.objectContaining({ page: 0, foldersOnly: true })
+      expect.objectContaining({ page: 0, size: 500, foldersOnly: true })
     )
     expect(tree.visibleRows.value.map(row => [row.node.id, row.depth])).toEqual([
       ['folder-a', 0],
@@ -147,5 +151,60 @@ describe('useLazyFolderTree', () => {
 
     expect(tree.scopes.value.get('node:folder-a')?.error).toBeNull()
     expect(tree.visibleRows.value.map(row => row.node.id)).toEqual(['folder-a', 'folder-b'])
+  })
+
+  it('retries a failed next page without discarding earlier folders', async () => {
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([folder('folder-a', null)], 0, 2),
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        error: { message: 'page failed' },
+      } as never)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([folder('folder-b', null)], 1, 2),
+      })
+    const tree = useLazyFolderTree()
+    tree.setModel('model-1')
+    await tree.loadRoot()
+    await tree.loadMore({ kind: 'root' })
+
+    expect(tree.visibleRows.value.map(row => row.node.id)).toEqual(['folder-a'])
+    expect(tree.scopes.value.get('root')).toMatchObject({
+      error: 'page failed',
+      nextPage: 1,
+    })
+
+    await tree.retry({ kind: 'root' })
+
+    expect(fetchNodeChildren).toHaveBeenLastCalledWith(
+      'model-1',
+      { kind: 'root' },
+      expect.objectContaining({ page: 1, size: 500, foldersOnly: true })
+    )
+    expect(tree.visibleRows.value.map(row => row.node.id)).toEqual(['folder-a', 'folder-b'])
+  })
+
+  it('does not reload a known-empty root or reset the same target model', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValue({
+      success: true,
+      data: page([]),
+    })
+    const tree = useLazyFolderTree()
+    tree.setModel('model-1')
+
+    await tree.loadRoot()
+    tree.setModel('model-1')
+    await tree.loadRoot()
+
+    expect(fetchNodeChildren).toHaveBeenCalledTimes(1)
+    expect(tree.scopes.value.get('root')).toMatchObject({
+      rows: [],
+      hasMore: false,
+      error: null,
+    })
   })
 })

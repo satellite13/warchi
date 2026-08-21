@@ -272,7 +272,7 @@ describe('ModelTreePalettePanel', () => {
     ])
   })
 
-  it('disables sibling-dependent drag and create controls for incomplete scopes', async () => {
+  it('allows sibling-dependent actions to load incomplete scopes on demand', async () => {
     const wrapper = mountPanel({
       treeRootNodeId: 'hidden-root',
       nodes: [
@@ -288,13 +288,13 @@ describe('ModelTreePalettePanel', () => {
     })
     await flushTree(wrapper)
 
-    expect(wrapper.get('[data-tree-node-id="root-child"]').attributes('draggable')).toBe('false')
-    expect(wrapper.get('[title="models.addRootNode"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-tree-node-id="root-child"]').attributes('draggable')).toBe('true')
+    expect(wrapper.get('[title="models.addRootNode"]').attributes('disabled')).toBeUndefined()
     expect(
       wrapper.get('[data-tree-node-id="root-child"] [title="models.addChildNode"]').attributes(
         'disabled'
       )
-    ).toBeDefined()
+    ).toBeUndefined()
   })
 
   it('keeps the known-empty child scope of a new local folder mutable', async () => {

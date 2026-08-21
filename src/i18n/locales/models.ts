@@ -269,7 +269,7 @@ export const modelsMessages = {
       treeLoadError: 'Не удалось загрузить ветку',
       treeLoadMore: 'Загрузить ещё',
       treeScopeIncompleteMutation:
-        'Сначала загрузите всех соседей в этой папке. Изменение порядка будет доступно позже.',
+        'Не удалось загрузить все элементы папки. Повторите изменение после восстановления соединения.',
       expandTreeNode: 'Развернуть «{name}»',
       collapseTreeNode: 'Свернуть «{name}»',
       noSearchResults: 'Ничего не найдено',
@@ -865,7 +865,7 @@ export const modelsMessages = {
       treeLoadError: 'Could not load branch',
       treeLoadMore: 'Load more',
       treeScopeIncompleteMutation:
-        'Load all siblings in this folder first. Ordering changes will become available afterwards.',
+        'Could not load every item in this folder. Retry the change after the connection recovers.',
       expandTreeNode: 'Expand “{name}”',
       collapseTreeNode: 'Collapse “{name}”',
       noSearchResults: 'No results',

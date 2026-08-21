@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { MODEL_TREE_PAGE_SIZE } from '@/api/queryHelpers'
 import type { NodeResponse } from '@/types/api'
 import type { TreeParentScope } from '../types'
 import { paginatedContent, paginatedIsLastPage } from '@/utils/paginatedResponse'
@@ -10,6 +11,7 @@ export type LazyFolderScopeState = {
   hasMore: boolean
   loading: boolean
   error: string | null
+  failedPage: number | null
   expanded: boolean
 }
 
@@ -27,6 +29,7 @@ const emptyScope = (expanded = false): LazyFolderScopeState => ({
   hasMore: true,
   loading: false,
   error: null,
+  failedPage: null,
   expanded,
 })
 
@@ -62,6 +65,7 @@ export function useLazyFolderTree() {
   })
 
   const setModel = (nextModelId: string): void => {
+    if (nextModelId === modelId) return
     generation += 1
     modelId = nextModelId
     for (const controller of controllers.values()) controller.abort()
@@ -95,6 +99,7 @@ export function useLazyFolderTree() {
     try {
       const result = await fetchNodeChildren(requestedModelId, scope, {
         page,
+        size: MODEL_TREE_PAGE_SIZE,
         foldersOnly: true,
         signal: controller.signal,
       })
@@ -108,7 +113,12 @@ export function useLazyFolderTree() {
       }
       const latest = scopes.value.get(key) ?? emptyScope(scope.kind === 'root')
       if (!result.success) {
-        publishScope(key, { ...latest, loading: false, error: result.error.message })
+        publishScope(key, {
+          ...latest,
+          loading: false,
+          error: result.error.message,
+          failedPage: page,
+        })
         return
       }
       const merged = restart || page === 0 ? [] : [...latest.rows]
@@ -126,6 +136,7 @@ export function useLazyFolderTree() {
         hasMore: !paginatedIsLastPage(result.data, page),
         loading: false,
         error: null,
+        failedPage: null,
       })
     } catch (error) {
       if (
@@ -139,6 +150,7 @@ export function useLazyFolderTree() {
           ...latest,
           loading: false,
           error: error instanceof Error ? error.message : 'Failed to load folders',
+          failedPage: page,
         })
       }
     } finally {
@@ -148,7 +160,7 @@ export function useLazyFolderTree() {
 
   const loadRoot = (): Promise<void> => {
     const root = scopes.value.get('root')
-    if (root && (root.loading || (root.rows.length > 0 && !root.error))) return Promise.resolve()
+    if (root && (root.loading || (root.nextPage > 0 && !root.error))) return Promise.resolve()
     return loadScope({ kind: 'root' }, 0, true)
   }
 
@@ -168,7 +180,11 @@ export function useLazyFolderTree() {
     return loadScope(scope, state.nextPage)
   }
 
-  const retry = (scope: TreeParentScope): Promise<void> => loadScope(scope, 0, true)
+  const retry = (scope: TreeParentScope): Promise<void> => {
+    const state = scopes.value.get(scopeKey(scope)) ?? emptyScope(scope.kind === 'root')
+    const page = state.failedPage ?? 0
+    return loadScope(scope, page, page === 0)
+  }
 
   return {
     scopes,

@@ -53,6 +53,7 @@ function createHarness(
       createdDirectoryIds: string[]
     }>
     ensureCompleteSiblingScope?: (parentNodeId: string | null) => Promise<boolean>
+    nodeTypeDefaultDirectoryById?: Map<string, string>
   } = {}
 ) {
   const state = ref(stateValue)
@@ -86,7 +87,9 @@ function createHarness(
     activeNotationId: computed(() => 'notation-1'),
     isDiagramReadOnly: computed(() => false),
     directoryNodeType: computed(() => ({ id: 'directory-type' }) as never),
-    nodeTypeDefaultDirectoryById: computed(() => new Map<string, string>()),
+    nodeTypeDefaultDirectoryById: computed(
+      () => overrides.nodeTypeDefaultDirectoryById ?? new Map<string, string>()
+    ),
     selectedModelNodeIds,
     selectedInstanceIds,
     selectedNodeId,
@@ -231,6 +234,26 @@ describe('useModelDiagramInstances', () => {
     expect(state.value.nodes).toHaveLength(1)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
     expect(historyCommands).toHaveLength(0)
+  })
+
+  it('leaves local state unchanged when default-directory loading is cancelled', async () => {
+    const state = createState()
+    const beforeNodes = structuredClone(state.nodes)
+    const ensureDirectoryPath = vi.fn(async () => ({
+      parentNodeId: null,
+      createdDirectoryIds: [],
+    }))
+    const { diagram, instances, historyCommands } = createHarness(state, {
+      ensureDirectoryPath,
+      nodeTypeDefaultDirectoryById: new Map([['type-1', 'Applications/CRM']]),
+    })
+
+    await instances.createNodeFromPaletteComponent('component-1', 75, 95)
+
+    expect(ensureDirectoryPath).toHaveBeenCalledWith('Applications/CRM')
+    expect(state.nodes).toEqual(beforeNodes)
+    expect(diagram.value.parsedAttrs.instances.nodes).toEqual([])
+    expect(historyCommands).toEqual([])
   })
 
   it('defers an existing-node placement until the selected component is finalized', () => {

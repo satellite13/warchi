@@ -68,6 +68,31 @@ function setup(
 }
 
 describe('useModelTreeOperations partial scope safety', () => {
+  it('applies catalog defaults when creating a local node', async () => {
+    const { state, operations } = setup(['root'])
+    state.value.nodeTypes = [
+      {
+        id: 'regular',
+        name: 'Application',
+        ownerId: 'owner-1',
+        attrs: JSON.stringify({
+          customProperties: [
+            { id: 'p0', name: 'tier', type: 'string', required: false, defaultValue: 'app' },
+          ],
+        }),
+      },
+    ]
+
+    operations.openCreateRegularNode(null)
+    operations.newNodeName.value = 'Created'
+    await operations.createNode()
+
+    const created = state.value.nodes.find(node => node.name === 'Created')
+    expect(created?.parsedAttrs.typeProperties).toEqual({ tier: 'app' })
+    expect(created?._isNew).toBe(true)
+    expect(created?._isDirty).toBeUndefined()
+  })
+
   it('ensures the explicit root scope before creating a node', async () => {
     const ensureChildrenScopeComplete = vi.fn(async (_scope: TreeParentScope) => {
       complete.add('root')

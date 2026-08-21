@@ -646,6 +646,60 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('applies catalog defaults when materializing a remote row', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValue({
+      success: true,
+      data: page([
+        {
+          ...node('child-1', 'parent-1'),
+          nodeTypeId: 'nt-1',
+          attrs: JSON.stringify({
+            notationComponents: { 'not-1': { componentId: 'comp-1' } },
+          }),
+        },
+      ]),
+    })
+    const state = ref(createEmptyModelEditorState())
+    state.value.nodeTypes = [
+      {
+        id: 'nt-1',
+        name: 'Application',
+        ownerId: 'owner-1',
+        attrs: JSON.stringify({
+          customProperties: [
+            { id: 'p0', name: 'tier', type: 'string', required: false, defaultValue: 'app' },
+          ],
+        }),
+      },
+    ]
+    state.value.components = [
+      {
+        id: 'comp-1',
+        name: 'C',
+        version: '1.0.0',
+        notationId: 'not-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'nt-1',
+        attrs: JSON.stringify({
+          customProperties: [
+            { id: 'p1', name: 'status', type: 'string', required: false, defaultValue: 'draft' },
+          ],
+        }),
+      },
+    ]
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a')
+
+    await partial.loadChildren({ kind: 'node', nodeId: 'parent-1' })
+
+    const row = state.value.nodes.find(item => item.id === 'child-1')
+    expect(row?.parsedAttrs.typeProperties).toEqual({ tier: 'app' })
+    expect(row?.parsedAttrs.componentProperties['not-1']?.['comp-1']).toEqual({ status: 'draft' })
+    expect(row?._isDirty).toBeUndefined()
+    scope.stop()
+  })
+
   it('aborts paging and rejects its stale result on reset', async () => {
     const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
     vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)

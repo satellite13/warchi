@@ -55,6 +55,12 @@ function defaultsCatalog(overrides: Partial<EditorDefaultsCatalog> = {}): Editor
 }
 
 describe('materialized defaults', () => {
+  it('does not export a global on-load defaults scheduler', async () => {
+    const mod = await import('./syncDefaultsOnLoad')
+    expect(mod).not.toHaveProperty('syncDefaultsOnLoadChunked')
+    expect(mod).not.toHaveProperty('scheduleSyncDefaultsOnLoad')
+  })
+
   it('fills missing component/relation defaults on a materialized row without marking dirty', () => {
     const state = createEmptyModelEditorState()
     state.modelId = 'model-1'

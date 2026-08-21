@@ -203,17 +203,19 @@ export const useModelEditor = (): ModelEditorReturn => {
     generation: number,
     notationIds: string[],
     cancellation?: ModelEditorLoadCancellationOptions
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     catalogLoadWarning.value = null
     try {
       const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
-      if (!isLoadSessionActive(generation, modelId)) return
+      if (!isLoadSessionActive(generation, modelId)) return false
       applyCatalog(catalog, notationIds)
+      return true
     } catch (error) {
       if (isLoadSessionActive(generation, modelId)) {
         catalogLoadWarning.value =
           error instanceof Error ? error.message : 'Не удалось догрузить каталог модели.'
       }
+      return false
     }
   }
   const retryCatalogLoad = async (): Promise<void> => {
@@ -224,13 +226,10 @@ export const useModelEditor = (): ModelEditorReturn => {
     const notationIds = Array.from(
       new Set(state.value.diagrams.map(diagram => diagram.notationId).filter(Boolean))
     )
-    try {
-      await loadCatalogForSession(modelId, generation, notationIds, {
-        isCancelled: () => !isLoadSessionActive(generation, modelId),
-      })
-    } finally {
-      if (isLoadSessionActive(generation, modelId)) catalogReady.value = true
-    }
+    const applied = await loadCatalogForSession(modelId, generation, notationIds, {
+      isCancelled: () => !isLoadSessionActive(generation, modelId),
+    })
+    if (isLoadSessionActive(generation, modelId)) catalogReady.value = applied
   }
   const markBackgroundReady = (
     resolve: () => void,
@@ -269,7 +268,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       errorMessage.value = String(i18n.global.t('models.scopedReloadModelMissing'))
       isLoading.value = false
       initialSnapshotReady.value = true
-      catalogReady.value = true
+      catalogReady.value = false
       resolveCatalogReady()
       resolveBackgroundReady()
       return
@@ -343,17 +342,18 @@ export const useModelEditor = (): ModelEditorReturn => {
       isLoading.value = false
       loadProgress.value = null
       resolveCatalogReady()
-      catalogReady.value = true
+      catalogReady.value = false
       markBackgroundReady(resolveBackgroundReady, generation, modelId)
       return
     }
 
+    let catalogApplied = false
     await (async (): Promise<void> => {
       try {
-        await loadCatalogForSession(modelId, generation, notationIds, cancellation)
+        catalogApplied = await loadCatalogForSession(modelId, generation, notationIds, cancellation)
       } finally {
         resolveCatalogReady()
-        if (isLoadSessionActive(generation, modelId)) catalogReady.value = true
+        if (isLoadSessionActive(generation, modelId)) catalogReady.value = catalogApplied
         markBackgroundReady(resolveBackgroundReady, generation, modelId)
       }
     })()

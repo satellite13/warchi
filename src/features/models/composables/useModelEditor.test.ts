@@ -819,6 +819,27 @@ describe("useModelEditor defaults and unsaved delta", () => {
     scope.stop()
   })
 
+  it("keeps the granular catalog gate closed after a failed load and opens it on retry success", async () => {
+    loadModelEditorCatalogMock
+      .mockRejectedValueOnce(new Error("catalog offline"))
+      .mockResolvedValueOnce(boundNodeCatalog)
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+
+    await editor.loadModel()
+    await editor.whenCatalogReady()
+
+    expect(editor.initialSnapshotReady.value).toBe(true)
+    expect(editor.catalogReady.value).toBe(false)
+    expect(editor.catalogLoadWarning.value).toContain("catalog offline")
+
+    await editor.retryCatalogLoad()
+
+    expect(editor.catalogReady.value).toBe(true)
+    expect(editor.catalogLoadWarning.value).toBeNull()
+    scope.stop()
+  })
+
   it("treats only local materialized dirty/new/deleted rows as unsaved changes", () => {
     const scope = effectScope()
     const editor = scope.run(() => useModelEditor())!

@@ -1434,7 +1434,7 @@ describe('useModelLiveSync snapshot pull', () => {
     wrapper.unmount()
   })
 
-  it('keeps shell-ready granular events pending until the catalog is ready', async () => {
+  it('keeps shell-ready granular events queued after catalog failure and applies them on retry success', async () => {
     const snapshotReady = ref(true)
     const catalogReady = ref(false)
     const state = ref(createEmptyModelEditorState())
@@ -1560,6 +1560,9 @@ describe('useModelLiveSync snapshot pull', () => {
     expect(
       state.value.nodes[0]?.parsedAttrs.componentProperties['notation-1']?.['component-1']
     ).toEqual({ status: 'draft' })
+    catalogReady.value = true
+    await flushPromises()
+    expect(fetchNode).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 })

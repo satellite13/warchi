@@ -126,11 +126,11 @@ export class ModelPartialStore {
       return true
     }
 
-    this.upsertPartialNodes(rows)
+    const acceptedRemoteIds = this.upsertPartialNodes(rows)
     if (mode.kind === 'childrenPage') {
       const scopeKey = this.scopeKey(mode.scope)
       for (const row of rows) {
-        if (this.nodeById.get(row.id) === row) {
+        if (acceptedRemoteIds.has(row.id)) {
           this.treeScopeKeyByNodeId.set(row.id, scopeKey)
         }
       }
@@ -227,18 +227,21 @@ export class ModelPartialStore {
     return row.parentNodeId == null ? this.scopeKey({ kind: 'root' }) : `node:${row.parentNodeId}`
   }
 
-  private upsertPartialNodes(rows: readonly EditorNode[]): void {
+  private upsertPartialNodes(rows: readonly EditorNode[]): Set<string> {
     const next = [...this.nodes]
     const positions = new Map(next.map((row, index) => [row.id, index]))
+    const acceptedRemoteIds = new Set<string>()
     for (const row of rows) {
       const index = positions.get(row.id)
       if (index === undefined) {
         positions.set(row.id, next.length)
         next.push(row)
+        acceptedRemoteIds.add(row.id)
         this.treeScopeKeyByNodeId.set(row.id, this.defaultScopeKey(row))
       } else if (!isProtectedLocal(next[index])) {
         const previous = next[index]
         next[index] = row
+        acceptedRemoteIds.add(row.id)
         if (
           !previous ||
           previous.parentNodeId !== row.parentNodeId ||
@@ -249,6 +252,7 @@ export class ModelPartialStore {
       }
     }
     this.replaceNodes(next)
+    return acceptedRemoteIds
   }
 
   private recordChildrenPage(

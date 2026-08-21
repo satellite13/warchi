@@ -31,7 +31,7 @@ vi.mock('@/composables/useAvailabilityGuard', async () => {
   }
 })
 
-import { apiGet, apiPost, apiPut, apiDelete } from './apiClient'
+import { apiDelete, apiFetch, apiGet, apiPost, apiPut } from './apiClient'
 import { clearAuthStorage, emitAuthCleared } from '@/composables/authStorage'
 import { getCsrfTokenFromCookie } from '@/utils/csrfCookie'
 import {
@@ -201,6 +201,25 @@ describe('apiClient', () => {
         success: false,
         error: { status: 0, message: 'Ошибка подключения' },
       })
+    })
+
+    it('returns a cancelled failure for AbortError without reporting backend outage', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError')),
+      )
+
+      const result = await apiFetch('/models', {
+        method: 'GET',
+        signal: new AbortController().signal,
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: { status: 0, message: 'Request cancelled.', cancelled: true },
+      })
+      expect(reportAvailabilityOutage).not.toHaveBeenCalled()
+      expect(useAvailabilityGuard().outage.value).toBeNull()
     })
   })
 

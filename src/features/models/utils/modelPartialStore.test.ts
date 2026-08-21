@@ -1,3 +1,4 @@
+import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 import type { EditorLink, EditorNode, TreeParentScope } from '../types'
 import { ModelPartialStore } from './modelPartialStore'
@@ -182,6 +183,28 @@ describe('ModelPartialStore tree scopes', () => {
     store.mergeNodes([node('root-child', 'hidden-root', { name: 'updated' })], { kind: 'partial' })
 
     expect(store.childrenByParent.get(store.scopeKey(root))).toEqual(['root-child'])
+    expect(store.childrenByParent.get(store.scopeKey(childScope('hidden-root')))).toBeUndefined()
+  })
+
+  it('records childrenPage provenance through a reactive store proxy', () => {
+    const store = reactive(new ModelPartialStore())
+    const request = store.beginChildrenRequest(root)
+    const row = node('reactive-root-child', 'hidden-root')
+
+    store.mergeNodes(
+      [row],
+      {
+        kind: 'childrenPage',
+        scope: root,
+        page: 0,
+        total: 1,
+        last: true,
+        token: request.token,
+      },
+      request
+    )
+
+    expect(store.childrenByParent.get(store.scopeKey(root))).toEqual(['reactive-root-child'])
     expect(store.childrenByParent.get(store.scopeKey(childScope('hidden-root')))).toBeUndefined()
   })
 

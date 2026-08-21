@@ -12,6 +12,15 @@ const toReference = (diagram: EditorDiagram): DiagramReferenceResponse => ({
   nodeId: diagram.nodeId ?? null,
 })
 
+const compareReferences = (
+  left: DiagramReferenceResponse,
+  right: DiagramReferenceResponse
+): number => {
+  if (left.name < right.name) return -1
+  if (left.name > right.name) return 1
+  return left.id.localeCompare(right.id)
+}
+
 export function resolveTraceabilityDiagramReferences(
   remoteRows: readonly DiagramReferenceResponse[],
   localDiagrams: readonly EditorDiagram[],
@@ -36,5 +45,5 @@ export function resolveTraceabilityDiagramReferences(
     else rows.delete(diagram.id)
   }
 
-  return [...rows.values()]
+  return [...rows.values()].sort(compareReferences)
 }

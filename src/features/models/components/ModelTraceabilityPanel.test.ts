@@ -236,12 +236,55 @@ describe('ModelTraceabilityPanel lazy branches', () => {
 
     const branchToggle = wrapper.get('.tb__link')
     expect(branchToggle.attributes('aria-expanded')).toBe('false')
-    expect(branchToggle.attributes('aria-controls')).toBe('trace-branch-root-link-1')
+    const branchTargetId = branchToggle.attributes('aria-controls')
+    expect(branchTargetId).toBeTruthy()
     await branchToggle.trigger('click')
     expect(branchToggle.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.get('#trace-branch-root-link-1').attributes('id')).toBe(
-      'trace-branch-root-link-1'
-    )
+    expect(wrapper.get(`[id="${branchTargetId}"]`).attributes('id')).toBe(branchTargetId)
+  })
+
+  it('gives the same DAG node unique controlled ids on two paths', async () => {
+    const branchState = (rows: EditorGraphNeighbor[]) => ({
+      rows,
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: rows.length,
+      token: 1,
+      generation: 1,
+    })
+    lazyState.branchStates.set('root', branchState([
+      neighbor('root-a', 'root', 'a', 'a'),
+      neighbor('root-b', 'root', 'b', 'b'),
+    ]))
+    lazyState.branchStates.set('a', branchState([
+      neighbor('a-shared', 'a', 'shared', 'shared'),
+    ]))
+    lazyState.branchStates.set('b', branchState([
+      neighbor('b-shared', 'b', 'shared', 'shared'),
+    ]))
+    lazyState.branchStates.set('shared', branchState([
+      neighbor('shared-leaf', 'shared', 'leaf', 'leaf'),
+    ]))
+    const wrapper = mountPanel()
+    await nextTick()
+
+    for (const label of ['Root → a', 'Root → b', 'a → shared', 'b → shared']) {
+      const toggle = wrapper.findAll('.tb__link').find(item => item.text().includes(label))
+      expect(toggle, label).toBeDefined()
+      await toggle!.trigger('click')
+    }
+
+    const sharedToggles = wrapper
+      .findAll('.tb__link')
+      .filter(item => item.text().includes('shared → leaf'))
+    expect(sharedToggles).toHaveLength(2)
+    const controlledIds = sharedToggles.map(item => item.attributes('aria-controls'))
+    expect(new Set(controlledIds).size).toBe(2)
+    for (const id of controlledIds) {
+      expect(wrapper.findAll(`[id="${id}"]`)).toHaveLength(1)
+    }
   })
 
   it('loads a direct child branch on expansion and never asks for global links', async () => {

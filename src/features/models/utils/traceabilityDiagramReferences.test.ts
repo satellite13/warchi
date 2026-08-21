@@ -4,9 +4,9 @@ import { parseDiagramAttrs } from '../modelAttrs'
 import type { EditorDiagram } from '../types'
 import { resolveTraceabilityDiagramReferences } from './traceabilityDiagramReferences'
 
-const reference = (id: string): DiagramReferenceResponse => ({
+const reference = (id: string, name = `Remote ${id}`): DiagramReferenceResponse => ({
   id,
-  name: `Remote ${id}`,
+  name,
   version: '1.0.0',
   notationId: 'notation-1',
   nodeId: null,
@@ -59,17 +59,41 @@ describe('resolveTraceabilityDiagramReferences', () => {
     )
 
     expect(result.map(row => row.id)).toEqual([
-      'remote-clean',
       'dirty-kept',
       'local-new-a',
       'local-new-b',
+      'remote-clean',
     ])
-    expect(result[1]).toEqual({
+    expect(result[0]).toEqual({
       id: 'dirty-kept',
       name: 'Local dirty-kept',
       version: '2.0.0',
       notationId: 'notation-local',
       nodeId: 'folder-1',
     })
+  })
+
+  it('re-sorts renamed and new local diagrams by combined name and id order', () => {
+    const renamed = localDiagram('dirty-renamed', ['selected'], { _isDirty: true })
+    renamed.name = 'Alpha'
+    const added = localDiagram('local-delta-a', ['selected'], { _isNew: true })
+    added.name = 'Delta'
+
+    const result = resolveTraceabilityDiagramReferences(
+      [
+        reference('remote-beta', 'Beta'),
+        reference('dirty-renamed', 'Zulu'),
+        reference('remote-delta-z', 'Delta'),
+      ],
+      [renamed, added],
+      'selected'
+    )
+
+    expect(result.map(row => row.id)).toEqual([
+      'dirty-renamed',
+      'remote-beta',
+      'local-delta-a',
+      'remote-delta-z',
+    ])
   })
 })

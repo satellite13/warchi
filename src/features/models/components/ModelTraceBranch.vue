@@ -60,8 +60,13 @@ const linkTypeLabel = (link: EditorLink): string => props.getLinkTypeName(link.l
 const isCycle = (nodeId: string) => props.path.includes(nodeId)
 const resolveNextNodeId = (link: EditorLink): string =>
   props.direction === 'outgoing' ? link.targetId : link.sourceId
+const domIdSegment = (value: string): string => {
+  const encoded = encodeURIComponent(value)
+  return `${encoded.length}-${encoded}`
+}
+const branchInstanceKey = computed(() => props.path.map(domIdSegment).join('-'))
 const branchTargetId = (linkId: string): string =>
-  `trace-branch-${encodeURIComponent(props.nodeId)}-${encodeURIComponent(linkId)}`
+  `trace-branch-${branchInstanceKey.value}-${domIdSegment(linkId)}`
 
 const getStatus = (link: EditorLink): TraceabilityLinkStatus =>
   statusByLinkId.value.get(link.id) ?? props.getLinkStatus(link)

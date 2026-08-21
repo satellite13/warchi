@@ -5,6 +5,7 @@ import type { LinkResponse, NodeResponse } from '@/types/api'
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
 import { applyLocalModelDelta } from '../utils/applyLocalModelDelta'
 import { fetchAllByModelId } from './modelEditorLoadModel'
+import type { EditorDefaultsCatalog } from '../utils/syncDefaultsOnLoad'
 import { toEditorLink, toEditorNode } from './modelEditorMappers'
 
 export type DetachedModelSnapshot = {
@@ -21,7 +22,10 @@ const errorMessage = (error: unknown, t: (key: string) => string): string =>
 
 export function useDetachedModelSnapshot(
   modelId: Ref<string | null>,
-  options: { t?: (key: string) => string } = {}
+  options: {
+    t?: (key: string) => string
+    defaultsCatalog?: () => EditorDefaultsCatalog | null | undefined
+  } = {}
 ) {
   const t = options.t ?? ((key: string) => String(i18n.global.t(key)))
   const snapshot = ref<DetachedModelSnapshot | null>(null)
@@ -99,9 +103,10 @@ export function useDetachedModelSnapshot(
       ])
       if (!isCurrent(generation, targetModelId)) return null
 
+      const catalog = options.defaultsCatalog?.()
       const loaded: DetachedModelSnapshot = {
-        nodes: nodeRows.map(toEditorNode),
-        links: linkRows.map(toEditorLink),
+        nodes: nodeRows.map(row => toEditorNode(row, catalog)),
+        links: linkRows.map(row => toEditorLink(row, catalog)),
       }
       snapshot.value = loaded
       loadedModelId.value = targetModelId

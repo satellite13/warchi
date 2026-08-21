@@ -84,7 +84,7 @@ export async function discardUnsavedModelChanges(options: {
       failures.push(`node ${id}: ${result.error.message}`)
       return
     }
-    restoredNodes.set(id, stripEditorFlags(toEditorNode(result.data)))
+    restoredNodes.set(id, stripEditorFlags(toEditorNode(result.data, state)))
   })
   await mapPool(linksToFetch, FETCH_CONCURRENCY, async id => {
     const result = await apiGet<LinkResponse>(`/links/${encodeURIComponent(id)}`)
@@ -92,7 +92,7 @@ export async function discardUnsavedModelChanges(options: {
       failures.push(`link ${id}: ${result.error.message}`)
       return
     }
-    restoredLinks.set(id, stripEditorFlags(toEditorLink(result.data)))
+    restoredLinks.set(id, stripEditorFlags(toEditorLink(result.data, state)))
   })
   await mapPool(diagramsToFetch, FETCH_CONCURRENCY, async id => {
     const result = await apiGet<DiagramResponse>(`/diagrams/${encodeURIComponent(id)}`)

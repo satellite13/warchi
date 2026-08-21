@@ -26,6 +26,7 @@ import {
 import type { ModelEditorState } from "../types"
 import { withModelEditorPageSlot } from '../utils/modelEditorPagePool'
 import type { ModelEditorLoadProgressEvent } from '../utils/modelEditorLoadProgress'
+import { applyDefaultsToEditorLink } from "../utils/syncDefaultsOnLoad"
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllComponentsByNotationIds } from "./modelNotationComponentsApi"
 import {
@@ -465,8 +466,11 @@ export async function loadModelEditorData(
     modelCatalog: extras.modelCatalog,
     state: {
       ...shell.state,
-      nodes: await mapInChunks(allNodes, toEditorNode, options),
-      links: extras.links,
+      nodes: await mapInChunks(allNodes, row => toEditorNode(row, extras), options),
+      links: extras.links.map(link => {
+        applyDefaultsToEditorLink(link, extras)
+        return link
+      }),
       notations: extras.notations,
       nodeTypes: extras.nodeTypes,
       linkTypes: extras.linkTypes,

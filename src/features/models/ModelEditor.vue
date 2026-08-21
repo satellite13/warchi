@@ -176,9 +176,10 @@ const {
 const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
 const detachedModelId = computed(() => state.value.modelId || null)
-const saveDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
-const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
-const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
+const detachedSnapshotOptions = { defaultsCatalog: () => state.value }
+const saveDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
+const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
+const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const isPreparingValidation = ref(false)
 const isPreparingScripts = ref(false)
 const scriptsProgress = ref('')

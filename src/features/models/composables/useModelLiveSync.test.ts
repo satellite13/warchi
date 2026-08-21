@@ -1433,4 +1433,133 @@ describe('useModelLiveSync snapshot pull', () => {
     ).toEqual([])
     wrapper.unmount()
   })
+
+  it('keeps shell-ready granular events pending until the catalog is ready', async () => {
+    const snapshotReady = ref(true)
+    const catalogReady = ref(false)
+    const state = ref(createEmptyModelEditorState())
+    state.value.modelId = 'model-1'
+    const currentModel = ref<ModelData | null>(model())
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [
+        toEditorNode({
+          id: 'node-1',
+          name: 'old',
+          modelId: 'model-1',
+          ownerId: 'owner-1',
+          nodeTypeId: 'node-type-1',
+          attrs: null,
+        }),
+      ],
+      { kind: 'partial' }
+    )
+    state.value.nodes = store.nodes
+    const fetchNode = vi.fn(async () => ({
+      success: true as const,
+      data: {
+        id: 'node-1',
+        name: 'remote',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'node-type-1',
+        attrs: JSON.stringify({
+          notationComponents: { 'notation-1': { componentId: 'component-1' } },
+        }),
+      },
+    }))
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: model({ updatedAt: '2026-01-02T00:00:00.000Z' }),
+    })
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state,
+            model: currentModel,
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: snapshotReady,
+            catalogReady,
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            currentUserId: ref('viewer-1'),
+            mode: 'ws',
+            granularSync: {
+              store,
+              publishMaterializedRows: () => {
+                state.value.nodes = store.nodes
+                state.value.links = store.links
+              },
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: {
+                fetchNode,
+                fetchLink: vi.fn(),
+                fetchDiagram: vi.fn(),
+                fetchModel: vi.fn(),
+              },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+    await flushPromises()
+    const client = stompMock.clients.at(-1)
+    client?.options.onConnect()
+    await flushPromises()
+
+    client?.subscriptions.get('/topic/models/model-1')?.({
+      body: JSON.stringify({
+        type: 'model_changed',
+        modelId: 'model-1',
+        actorUserId: 'other-user',
+        eventId: 'catalog-pending',
+        events: [{ type: 'node_updated', entity: 'node', id: 'node-1', revision: 2 }],
+      }),
+    })
+    await flushPromises()
+
+    expect(fetchNode).not.toHaveBeenCalled()
+    expect(state.value.nodes[0]?.name).toBe('old')
+
+    state.value.nodeTypes = [
+      {
+        id: 'node-type-1',
+        name: 'Node type',
+        ownerId: 'owner-1',
+        attrs: JSON.stringify({
+          customProperties: [{ id: 'tier', name: 'tier', type: 'string', defaultValue: 'app' }],
+        }),
+      },
+    ]
+    state.value.components = [
+      {
+        id: 'component-1',
+        name: 'Component',
+        version: '1.0.0',
+        notationId: 'notation-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'node-type-1',
+        attrs: JSON.stringify({
+          customProperties: [{ id: 'status', name: 'status', type: 'string', defaultValue: 'draft' }],
+        }),
+      },
+    ]
+    catalogReady.value = true
+    await flushPromises()
+    await flushPromises()
+
+    expect(fetchNode).toHaveBeenCalledWith('node-1', expect.any(AbortSignal))
+    expect(state.value.nodes[0]?.name).toBe('remote')
+    expect(state.value.nodes[0]?.parsedAttrs.typeProperties).toEqual({ tier: 'app' })
+    expect(
+      state.value.nodes[0]?.parsedAttrs.componentProperties['notation-1']?.['component-1']
+    ).toEqual({ status: 'draft' })
+    wrapper.unmount()
+  })
 })

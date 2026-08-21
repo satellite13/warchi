@@ -94,6 +94,7 @@ function createFacade() {
     enabled: ref(true),
     isLoading: ref(false),
     initialSnapshotReady: shellReady,
+    catalogReady: ref(true),
     isSaving: ref(false),
     modelDirty: ref(false),
     selectedDiagramId: ref('diagram-1'),

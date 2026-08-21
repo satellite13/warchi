@@ -13,6 +13,7 @@ export function useModelEditorSync(options: {
   enabled: Ref<boolean>
   isLoading: Ref<boolean>
   initialSnapshotReady: Ref<boolean>
+  catalogReady: Ref<boolean>
   isSaving: Ref<boolean>
   modelDirty: Ref<boolean>
   selectedDiagramId: Ref<string | null>
@@ -100,6 +101,7 @@ export function useModelEditorSync(options: {
     enabled: options.enabled,
     isLoading: options.isLoading,
     initialSnapshotReady: options.initialSnapshotReady,
+    catalogReady: options.catalogReady,
     isSaving: options.isSaving,
     modelDirty: options.modelDirty,
     ensureNotationRelationsAndRules: options.ensureNotationRelationsAndRules,

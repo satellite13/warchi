@@ -42,6 +42,8 @@ type ModelEditorReturn = {
   errorMessage: Ref<string | null>
   catalogLoadWarning: Ref<string | null>
   retryCatalogLoad: () => Promise<void>
+  /** Catalog completion gate for default-aware live materialization. */
+  catalogReady: Ref<boolean>
   /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
   modelDirty: Ref<boolean>
   modelInitialName: Ref<string>
@@ -101,6 +103,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const initialSnapshotReady = ref(false)
   const errorMessage = ref<string | null>(null)
   const catalogLoadWarning = ref<string | null>(null)
+  const catalogReady = ref(true)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
@@ -217,12 +220,17 @@ export const useModelEditor = (): ModelEditorReturn => {
     const modelId = route.params.id
     if (typeof modelId !== 'string') return
     const generation = loadGeneration
+    catalogReady.value = false
     const notationIds = Array.from(
       new Set(state.value.diagrams.map(diagram => diagram.notationId).filter(Boolean))
     )
-    await loadCatalogForSession(modelId, generation, notationIds, {
-      isCancelled: () => !isLoadSessionActive(generation, modelId),
-    })
+    try {
+      await loadCatalogForSession(modelId, generation, notationIds, {
+        isCancelled: () => !isLoadSessionActive(generation, modelId),
+      })
+    } finally {
+      if (isLoadSessionActive(generation, modelId)) catalogReady.value = true
+    }
   }
   const markBackgroundReady = (
     resolve: () => void,
@@ -261,6 +269,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       errorMessage.value = String(i18n.global.t('models.scopedReloadModelMissing'))
       isLoading.value = false
       initialSnapshotReady.value = true
+      catalogReady.value = true
       resolveCatalogReady()
       resolveBackgroundReady()
       return
@@ -268,6 +277,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
     isLoading.value = true
     initialSnapshotReady.value = false
+    catalogReady.value = false
     errorMessage.value = null
     catalogLoadWarning.value = null
     // Cancel child-page requests from the previous load before starting a new shell.
@@ -333,6 +343,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       isLoading.value = false
       loadProgress.value = null
       resolveCatalogReady()
+      catalogReady.value = true
       markBackgroundReady(resolveBackgroundReady, generation, modelId)
       return
     }
@@ -342,6 +353,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         await loadCatalogForSession(modelId, generation, notationIds, cancellation)
       } finally {
         resolveCatalogReady()
+        if (isLoadSessionActive(generation, modelId)) catalogReady.value = true
         markBackgroundReady(resolveBackgroundReady, generation, modelId)
       }
     })()
@@ -448,6 +460,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     errorMessage,
     catalogLoadWarning,
     retryCatalogLoad,
+    catalogReady,
     modelDirty,
     modelInitialName,
     isSaving,

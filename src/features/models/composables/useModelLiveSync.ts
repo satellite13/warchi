@@ -79,6 +79,8 @@ export type UseModelLiveSyncOptions = {
   isLoading: Ref<boolean>
   /** false until the materialized shell baseline is ready; opportunistic pulls wait for this. */
   initialSnapshotReady: Ref<boolean>
+  /** Catalog completion gates default-aware granular materialization, not shell interaction. */
+  catalogReady?: Ref<boolean>
   isSaving: Ref<boolean>
   modelDirty: Ref<boolean>
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
@@ -315,6 +317,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const isInitialSnapshotReady = (): boolean => options.initialSnapshotReady.value
+  const isCatalogReady = (): boolean => options.catalogReady?.value ?? true
 
   const startFallbackPoll = (opts?: { immediate?: boolean }): void => {
     if (!isPollEnabled) return
@@ -368,7 +371,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         lastAppliedModelRevision == null ||
         event.revision >= lastAppliedModelRevision
     )
-    if (!isInitialSnapshotReady()) {
+    if (!isInitialSnapshotReady() || !isCatalogReady()) {
       for (const event of coalesced) {
         const key = `${event.entity}:${event.id}`
         const previous = pendingGranularEvents.get(key)
@@ -383,6 +386,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const drainPendingGranularEvents = (): void => {
+    if (!isInitialSnapshotReady() || !isCatalogReady()) return
     if (pendingGranularEvents.size === 0) return
     const events = [...pendingGranularEvents.values()]
     pendingGranularEvents.clear()
@@ -607,6 +611,13 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       if (isPollEnabled && !wsConnected) {
         startFallbackPoll({ immediate: false })
       }
+    }
+  )
+
+  watch(
+    () => options.catalogReady?.value,
+    (ready, wasReady) => {
+      if (ready && wasReady === false) drainPendingGranularEvents()
     }
   )
 

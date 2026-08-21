@@ -596,6 +596,9 @@ export const modelsMessages = {
       edgeRelationNotFound: 'Для выбранной связи не найден relation нотации.',
       saveConflictNameVersion: 'Модель с таким именем и версией уже существует.',
       saveModelUpdateError: 'Ошибка обновления модели: {message}',
+      savePreparingValidation: 'Подготовка проверки модели',
+      saveValidationSnapshotFailed:
+        'Не удалось загрузить полную модель для проверки. Повторите сохранение.',
       saveUpdatingModel: 'Обновление модели: {name}',
       saveCreatingNode: 'Создание узла: {name}',
       saveUpdatingNode: 'Обновление узла: {name}',
@@ -1213,6 +1216,9 @@ export const modelsMessages = {
       edgeRelationNotFound: 'Notation relation not found for the selected edge.',
       saveConflictNameVersion: 'A model with this name and version already exists.',
       saveModelUpdateError: 'Error updating model: {message}',
+      savePreparingValidation: 'Preparing model validation',
+      saveValidationSnapshotFailed:
+        'Could not load the full model for validation. Retry save.',
       saveUpdatingModel: 'Updating model: {name}',
       saveCreatingNode: 'Creating node: {name}',
       saveUpdatingNode: 'Updating node: {name}',

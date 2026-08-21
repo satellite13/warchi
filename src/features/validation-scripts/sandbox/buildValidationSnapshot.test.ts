@@ -70,4 +70,48 @@ describe('buildValidationSnapshot', () => {
     expect(snapshot.notations).toHaveLength(1)
     expect(snapshot.types.nodeTypes.map((t) => t.id)).toEqual(['nt1'])
   })
+
+  it('builds from an explicit detached overlay instead of partial editor arrays', () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'm1'
+    state.nodes = [
+      {
+        id: 'partial-only',
+        name: 'Partial',
+        parentNodeId: null,
+        nodeTypeId: 'nt1',
+        ownerId: 'u1',
+        modelId: 'm1',
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs: {},
+      } as never,
+    ]
+    state.nodeTypes = [{ id: 'nt1', name: 'App', ownerId: 'u1' } as never]
+
+    const { snapshot } = buildValidationSnapshot({
+      state: {
+        ...state,
+        nodes: [
+          {
+            id: 'detached-n',
+            name: 'Detached',
+            parentNodeId: null,
+            nodeTypeId: 'nt1',
+            ownerId: 'u1',
+            modelId: 'm1',
+            createdAt: null,
+            updatedAt: null,
+            parsedAttrs: {},
+          } as never,
+        ],
+      },
+      modelName: 'Model',
+      modelVersion: '1.0.0',
+      openDiagramId: null,
+    })
+
+    expect(snapshot.model.nodes.map(node => node.id)).toEqual(['detached-n'])
+    expect(state.nodes.map(node => node.id)).toEqual(['partial-only'])
+  })
 })

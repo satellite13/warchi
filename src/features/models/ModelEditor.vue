@@ -34,6 +34,8 @@ import {
   useModelDiagramExport,
   useModelEditor,
   useDetachedModelLinks,
+  useDetachedModelSnapshot,
+  prepareModelSaveValidation,
   useModelEditorSync,
   useLazyTreeSearch,
   useModelSelection,
@@ -124,7 +126,6 @@ import {
   focusRouteDiagramTree,
   useModelEditorRouteNavigation,
 } from './composables/useModelEditorRouteNavigation'
-import { validateRequiredCustomProperties as validateRequiredCustomPropertiesState } from './utils/requiredCustomPropertiesValidation'
 import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
@@ -170,6 +171,10 @@ const {
 const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
 const detachedModelLinks = useDetachedModelLinks(computed(() => state.value.modelId || null))
+const detachedModelSnapshot = useDetachedModelSnapshot(
+  computed(() => state.value.modelId || null)
+)
+const isPreparingValidation = ref(false)
 const detachedConsumerLinks = computed(() =>
   detachedModelLinks.loadedModelId.value === state.value.modelId &&
   !detachedModelLinks.stale.value
@@ -265,16 +270,41 @@ const diagramScopeError = diagramScope.error
 const diagramScopeReady = diagramScope.diagramScopeReady
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
+const validationRunPayload = ref<{
+  snapshot: ReturnType<typeof buildValidationSnapshot>['snapshot']
+  openDiagramId: string | null
+} | null>(null)
 
-const validationRunPayload = computed(() => {
-  if (!model.value) return null
-  return buildValidationSnapshot({
-    state: state.value,
-    modelName: model.value.name,
-    modelVersion: model.value.version,
-    openDiagramId: selectedDiagramId.value,
-  })
-})
+async function loadDetachedValidationPayload(): Promise<boolean> {
+  if (!model.value) return false
+  isPreparingValidation.value = true
+  startSave()
+  saveProgress.value = t('models.savePreparingValidation')
+  try {
+    const overlay = await detachedModelSnapshot.loadOverlayed(state.value)
+    if (!overlay.ok) {
+      if (!overlay.cancelled) {
+        setUiError(overlay.error ?? t('models.saveValidationSnapshotFailed'))
+      }
+      return false
+    }
+    validationRunPayload.value = buildValidationSnapshot({
+      state: {
+        ...state.value,
+        nodes: overlay.snapshot.nodes,
+        links: overlay.snapshot.links,
+      },
+      modelName: model.value.name,
+      modelVersion: model.value.version,
+      openDiagramId: selectedDiagramId.value,
+    })
+    return true
+  } finally {
+    detachedModelSnapshot.release()
+    isPreparingValidation.value = false
+    if (isSaving.value) finishSave()
+  }
+}
 
 function handleValidationIssueSelect(issue: ValidationIssue): void {
   showValidationScriptsModal.value = false
@@ -484,6 +514,7 @@ const {
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
       detachedModelLinks.invalidateAfterRemoteSync()
+      detachedModelSnapshot.invalidateAfterRemoteSync()
     },
     onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
     onSyncError: (event, message, retry) => {
@@ -511,6 +542,7 @@ const {
     },
     onDetachedSnapshotInvalidated: () => {
       detachedModelLinks.invalidateAfterRemoteSync()
+      detachedModelSnapshot.invalidateAfterRemoteSync()
       invalidateTraceabilityDiagrams()
     },
     onSyncError: (_reason, message, retry) => {
@@ -1692,14 +1724,6 @@ const switchDiagramWithoutSave = async () => {
   applyDiagramSelection(restoredTarget.id)
 }
 
-const validateRequiredCustomProperties = (): string | null => {
-  const issue = validateRequiredCustomPropertiesState({
-    state: state.value,
-    activeDiagram: activeDiagram.value?.parsedAttrs,
-  })
-  return issue ? t(issue.key, issue.params) : null
-}
-
 /** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
 const yieldToUiPaint = (): Promise<void> =>
   new Promise(resolve => {
@@ -1711,18 +1735,28 @@ const yieldToUiPaint = (): Promise<void> =>
 const saveWithValidation = async (): Promise<boolean> => {
   if (isSaving.value) return false
 
-  // Show toast immediately — validation/lock/flush can block the main thread for a while.
+  // Show toast immediately — snapshot load/validation/lock/flush can block for a while.
   startSave()
-  saveProgress.value = t('common.saving')
+  isPreparingValidation.value = true
+  saveProgress.value = t('models.savePreparingValidation')
   await nextTick()
   await yieldToUiPaint()
 
   try {
-    const validationError = validateRequiredCustomProperties()
-    if (validationError) {
-      setUiError(validationError)
+    const prepared = await prepareModelSaveValidation({
+      loader: detachedModelSnapshot,
+      state: state.value,
+      activeDiagram: activeDiagram.value?.parsedAttrs,
+      t: (key, params) => String(t(key, params ?? {})),
+    })
+    if (!prepared.ok) {
+      if (!prepared.cancelled) {
+        setUiError(prepared.error ?? t('models.saveValidationSnapshotFailed'))
+      }
       return false
     }
+    isPreparingValidation.value = false
+    saveProgress.value = t('common.saving')
     // Проверить, что лок ещё наш, до начала сохранения
     const lockOk = await verifyLockBeforeSave()
     if (!lockOk) return false
@@ -1740,6 +1774,8 @@ const saveWithValidation = async (): Promise<boolean> => {
     }
     return ok
   } finally {
+    isPreparingValidation.value = false
+    detachedModelSnapshot.release()
     if (isSaving.value) finishSave()
   }
 }
@@ -2553,7 +2589,9 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'run-validation-script':
-      showValidationScriptsModal.value = true
+      if (await loadDetachedValidationPayload()) {
+        showValidationScriptsModal.value = true
+      }
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -3674,6 +3712,8 @@ onBeforeUnmount(() => {
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
     :progress="saveProgress"
+    :cancellable="isPreparingValidation"
+    @cancel="detachedModelSnapshot.cancel"
   />
   <RemoteCascadeConflictNotice
     v-if="remoteCascadeConflictCount > 0"
@@ -4087,7 +4127,10 @@ onBeforeUnmount(() => {
     v-if="showValidationScriptsModal && validationRunPayload"
     :snapshot="validationRunPayload.snapshot"
     :open-diagram-id="validationRunPayload.openDiagramId"
-    @close="showValidationScriptsModal = false"
+    @close="
+      showValidationScriptsModal = false
+      validationRunPayload = null
+    "
     @select-issue="handleValidationIssueSelect"
   />
 

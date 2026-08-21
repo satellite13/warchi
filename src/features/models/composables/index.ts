@@ -1,6 +1,8 @@
 export { useDiagramEditLock } from './useDiagramEditLock'
 export { useDiagramScope } from './useDiagramScope'
 export { mergeDetachedModelLinks, useDetachedModelLinks } from './useDetachedModelLinks'
+export { useDetachedModelSnapshot } from './useDetachedModelSnapshot'
+export { prepareModelSaveValidation } from './prepareModelSaveValidation'
 export { useDiagramRealtimeCollab } from './useDiagramRealtimeCollab'
 export { useDocumentModal } from './useDocumentModal'
 export * from './useModelBatchSave'

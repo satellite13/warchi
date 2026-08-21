@@ -318,6 +318,30 @@ describe('ModelTreePalettePanel', () => {
     ).toBeUndefined()
   })
 
+  it('keeps an authoritative hasChildren=false folder mutable without an expand toggle', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({
+          id: 'persisted-empty-folder',
+          name: 'Persisted empty folder',
+          nodeTypeId: 'dir',
+          hasChildren: false,
+        }),
+      ],
+      loadedChildrenFor: new Set(['root']),
+    })
+    await flushTree(wrapper)
+
+    expect(
+      wrapper.find('[data-tree-node-id="persisted-empty-folder"] .tree-node__toggle').exists()
+    ).toBe(false)
+    expect(
+      wrapper
+        .get('[data-tree-node-id="persisted-empty-folder"] [title="models.addChildNode"]')
+        .attributes('disabled')
+    ).toBeUndefined()
+  })
+
   it('renders non-draggable local loading, error and load-more rows', async () => {
     const wrapper = mountPanel({
       nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],

@@ -103,6 +103,7 @@ export class ModelPartialStore {
       this.resetChildrenScopeState()
       this.treeScopeKeyByNodeId.clear()
       this.replaceNodes(merged.items)
+      this.materializeAuthoritativeEmptyScopes(rows)
       return true
     }
 
@@ -133,6 +134,7 @@ export class ModelPartialStore {
         }
       }
       this.replaceNodes([...retainedOutsideScope, ...merged.items])
+      this.materializeAuthoritativeEmptyScopes(rows)
       return true
     }
 
@@ -151,6 +153,7 @@ export class ModelPartialStore {
         rows.map(row => row.id)
       )
     }
+    this.materializeAuthoritativeEmptyScopes(rows)
     return true
   }
 
@@ -210,21 +213,30 @@ export class ModelPartialStore {
     this.replaceLinks([...links])
   }
 
-  reconcileMaterializedRows(nodes: readonly EditorNode[], links: readonly EditorLink[]): void {
+  reconcileMaterializedRows(
+    nodes: readonly EditorNode[],
+    links: readonly EditorLink[],
+    affectedScopes: readonly TreeParentScope[] | 'all' = 'all'
+  ): void {
     const previouslyComplete = new Set(this.loadedChildrenFor)
     const trackedScopes = new Set([
       ...this.childrenPages.keys(),
       ...this.internalChildrenPages.keys(),
       ...previouslyComplete,
     ])
+    const affectedScopeKeys =
+      affectedScopes === 'all'
+        ? trackedScopes
+        : new Set(affectedScopes.map(scope => this.scopeKey(scope)))
     this.treeScopeKeyByNodeId.clear()
     this.replaceMaterializedRows(nodes, links)
-    for (const scopeKey of trackedScopes) {
+    for (const scopeKey of affectedScopeKeys) {
       this.invalidateChildrenScope(scopeKey)
     }
-    for (const scopeKey of previouslyComplete) {
-      this.rebuildCompleteChildrenScope(scopeKey)
+    for (const scopeKey of affectedScopeKeys) {
+      if (previouslyComplete.has(scopeKey)) this.rebuildCompleteChildrenScope(scopeKey)
     }
+    this.materializeAuthoritativeEmptyScopes(this.nodes)
   }
 
   private accepts(mode: EntityMergeMode, guard?: ModelPartialRequestGuard): boolean {
@@ -259,7 +271,8 @@ export class ModelPartialStore {
     this.childrenPages.delete(scopeKey)
     this.internalChildrenPages.delete(scopeKey)
     this.loadedChildrenFor.delete(scopeKey)
-    this.requestTokens.delete(this.childrenRequestKey(scopeKey))
+    const requestKey = this.childrenRequestKey(scopeKey)
+    this.requestTokens.set(requestKey, (this.requestTokens.get(requestKey) ?? 0) + 1)
   }
 
   private rebuildCompleteChildrenScope(scopeKey: string): void {
@@ -280,6 +293,12 @@ export class ModelPartialStore {
       totalElements: rowIds.length,
     })
     this.loadedChildrenFor.add(scopeKey)
+  }
+
+  private materializeAuthoritativeEmptyScopes(rows: readonly EditorNode[]): void {
+    for (const row of rows) {
+      if (row.hasChildren === false) this.rebuildCompleteChildrenScope(`node:${row.id}`)
+    }
   }
 
   private defaultScopeKey(row: EditorNode): string {

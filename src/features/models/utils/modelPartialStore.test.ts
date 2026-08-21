@@ -310,6 +310,44 @@ describe('ModelPartialStore tree scopes', () => {
     )
     expect(store.nodes).toEqual([])
   })
+
+  it('invalidates only affected request tokens during scoped reconciliation', () => {
+    const store = new ModelPartialStore()
+    const affectedScope = childScope('folder')
+    const affectedRequest = store.beginChildrenRequest(affectedScope)
+    const rootRequest = store.beginChildrenRequest(root)
+
+    store.reconcileMaterializedRows([], [], [affectedScope])
+
+    expect(
+      store.mergeNodes(
+        [node('stale-child', 'folder')],
+        {
+          kind: 'childrenPage',
+          scope: affectedScope,
+          page: 0,
+          total: 1,
+          last: true,
+          token: affectedRequest.token,
+        },
+        affectedRequest
+      )
+    ).toBe(false)
+    expect(
+      store.mergeNodes(
+        [node('root-still-valid')],
+        {
+          kind: 'childrenPage',
+          scope: root,
+          page: 0,
+          total: 1,
+          last: true,
+          token: rootRequest.token,
+        },
+        rootRequest
+      )
+    ).toBe(true)
+  })
 })
 
 describe('ModelPartialStore entity merges', () => {

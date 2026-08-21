@@ -4,7 +4,7 @@ import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { createId, parseNodeAttrs, resolveComponentByNodeType } from '../modelAttrs'
 import type { DiagramNodeInstance } from '../modelAttrs'
-import type { EditorDiagram, EditorNode, ModelEditorState } from '../types'
+import type { EditorDiagram, EditorNode, ModelEditorState, TreeParentScope } from '../types'
 import {
   DEFAULT_CONTAINER_DIAGRAM_STYLE,
   DIAGRAM_CONTAINER_NODE_PREFIX,
@@ -42,10 +42,13 @@ export type UseModelDiagramInstancesOptions = {
   isNoteInstance: (instance: DiagramNodeInstance) => boolean
   ensureDirectoryPath: (path: string) => DirectoryPathResult
   getNextTreeOrderForParent: (parentNodeId: string | null) => number | null
+  treeScopeForParent: (parentNodeId: string | null) => TreeParentScope
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
   markDiagramDirty: (diagramId: string) => void
   markNodeDirty: (nodeId: string) => void
-  reconcileMaterializedRows?: () => void
+  reconcileMaterializedRows?: (
+    affectedScopes?: readonly TreeParentScope[] | 'all'
+  ) => void
   setUiError: (message: string) => void
   t: (key: string) => string
 }
@@ -363,7 +366,9 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         }
         if (!options.state.value.nodes.some(item => item.id === nodeId)) {
           options.state.value.nodes.push(deepClone(newNode))
-          options.reconcileMaterializedRows?.()
+          const parent = options.state.value.nodes.find(item => item.id === parentNodeId)
+          if (parent) parent.hasChildren = true
+          options.reconcileMaterializedRows?.([options.treeScopeForParent(parentNodeId)])
         }
         if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === newInstance.id)) {
           diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
@@ -371,10 +376,27 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         options.markDiagramDirty(diagram.id)
       },
       undo: () => {
+        const removedNodes = options.state.value.nodes.filter(
+          item => item.id === nodeId || createdDirectoryIds.includes(item.id)
+        )
+        const removedNodeScopes = removedNodes.map(item =>
+          options.treeScopeForParent(item.parentNodeId ?? null)
+        )
+        const removedParentIds = new Set(
+          removedNodes.flatMap(item => (item.parentNodeId ? [item.parentNodeId] : []))
+        )
         options.state.value.nodes = options.state.value.nodes.filter(
           item => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
         )
-        options.reconcileMaterializedRows?.()
+        for (const parentId of removedParentIds) {
+          const parent = options.state.value.nodes.find(item => item.id === parentId)
+          if (parent) {
+            parent.hasChildren = options.state.value.nodes.some(
+              item => !item._isDeleted && item.parentNodeId === parentId
+            )
+          }
+        }
+        options.reconcileMaterializedRows?.(removedNodeScopes)
         diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
           item => item.id !== newInstance.id
         )

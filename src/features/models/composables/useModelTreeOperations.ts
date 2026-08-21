@@ -17,7 +17,9 @@ export function useModelTreeOperations(options: {
   markDiagramDirty: (diagramId: string) => void
   ensureDiagramAttrsLoaded?: (diagramId: string) => void
   isChildrenScopeComplete?: (scope: TreeParentScope) => boolean
-  reconcileMaterializedRows?: () => void
+  reconcileMaterializedRows?: (
+    affectedScopes?: readonly TreeParentScope[] | 'all'
+  ) => void
 }) {
   const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
     parentNodeId: null,
@@ -121,7 +123,7 @@ export function useModelTreeOperations(options: {
     const parent = parentNodeId
       ? options.state.value.nodes.find(node => node.id === parentNodeId && !node._isDeleted)
       : null
-    if (parent?._isNew) return true
+    if (parent?._isNew || parent?.hasChildren === false) return true
     return options.isChildrenScopeComplete?.(treeScopeForParent(parentNodeId)) ?? true
   }
 
@@ -129,6 +131,16 @@ export function useModelTreeOperations(options: {
     if (isSiblingScopeComplete(parentNodeId)) return true
     options.setUiError(options.t('models.treeScopeIncompleteMutation'))
     return false
+  }
+
+  const syncParentHasChildren = (parentNodeId: string | null): void => {
+    if (!parentNodeId) return
+    const parent = options.state.value.nodes.find(node => node.id === parentNodeId && !node._isDeleted)
+    if (parent) {
+      parent.hasChildren = options.state.value.nodes.some(
+        node => !node._isDeleted && node.parentNodeId === parentNodeId
+      )
+    }
   }
 
   const canCreateNodeFromModal = computed(() => {
@@ -197,7 +209,8 @@ export function useModelTreeOperations(options: {
         },
         _isNew: true,
       })
-      options.reconcileMaterializedRows?.()
+      syncParentHasChildren(currentParentNodeId)
+      options.reconcileMaterializedRows?.([treeScopeForParent(currentParentNodeId)])
       createdDirectoryIds.push(createdDirectoryId)
       currentParentNodeId = createdDirectoryId
     }
@@ -275,7 +288,8 @@ export function useModelTreeOperations(options: {
       },
       _isNew: true,
     })
-    options.reconcileMaterializedRows?.()
+    syncParentHasChildren(parentNodeId)
+    options.reconcileMaterializedRows?.([treeScopeForParent(parentNodeId)])
     showCreateNodeModal.value = false
   }
 
@@ -390,7 +404,12 @@ export function useModelTreeOperations(options: {
     if (parentChanged || orderChanged) {
       options.markNodeDirty(movingNode.id)
       reindexTreeOrders(new Set([previousParentNodeId, newParentNodeId]))
-      options.reconcileMaterializedRows?.()
+      syncParentHasChildren(previousParentNodeId)
+      syncParentHasChildren(newParentNodeId)
+      options.reconcileMaterializedRows?.([
+        treeScopeForParent(previousParentNodeId),
+        treeScopeForParent(newParentNodeId),
+      ])
     }
   }
 
@@ -449,6 +468,7 @@ export function useModelTreeOperations(options: {
     filteredNodeTypes,
     selectedNodeTypeName,
     treeRootNodeId,
+    treeScopeForParent,
     resolveTreeParentId,
     canCreateNodeFromModal,
     getNextTreeOrderForParent,

@@ -119,7 +119,12 @@ const isScopeKeyComplete = (scopeKey: string): boolean =>
 const canMutateRootSiblings = computed(() => isScopeKeyComplete('root'))
 const isParentScopeComplete = (parentNodeId: string | null | undefined): boolean => {
   const parent = parentNodeId ? nodeIndexById.value.get(parentNodeId) : undefined
-  if (parent !== undefined && props.nodes[parent]?._isNew) return true
+  if (
+    parent !== undefined &&
+    (props.nodes[parent]?._isNew || props.nodes[parent]?.hasChildren === false)
+  ) {
+    return true
+  }
   return isScopeKeyComplete(scopeKeyForParent(parentNodeId))
 }
 const canMutateNodeChildren = (nodeId: string): boolean => isParentScopeComplete(nodeId)

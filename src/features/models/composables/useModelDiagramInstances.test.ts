@@ -90,6 +90,8 @@ function createHarness(stateValue = createState()) {
     isNoteInstance: instance => instance.attrs?.isNote === true,
     ensureDirectoryPath: () => ({ parentNodeId: 'parent-node', createdDirectoryIds: [] }),
     getNextTreeOrderForParent: () => 0,
+    treeScopeForParent: parentNodeId =>
+      parentNodeId ? { kind: 'node', nodeId: parentNodeId } : { kind: 'root' },
     executeDiagramHistoryCommand: command => {
       historyCommands.push(command)
       command.execute()

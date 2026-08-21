@@ -46,12 +46,21 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     store.replaceMaterializedRows(state.value.nodes, state.value.links)
   }
 
-  const reconcileMaterializedRows = (): void => {
-    for (const session of sessions.values()) session.controller.abort()
-    sessions.clear()
-    inFlight.clear()
-    store.reconcileMaterializedRows(state.value.nodes, state.value.links)
-    childrenLoading.value = new Set()
+  const reconcileMaterializedRows = (
+    affectedScopes: readonly TreeParentScope[] | 'all' = 'all'
+  ): void => {
+    const scopeKeys =
+      affectedScopes === 'all'
+        ? new Set([...sessions.keys(), ...inFlight.keys()])
+        : new Set(affectedScopes.map(scope => store.scopeKey(scope)))
+    for (const scopeKey of scopeKeys) {
+      sessions.get(scopeKey)?.controller.abort()
+      sessions.delete(scopeKey)
+      inFlight.delete(scopeKey)
+      setLoading(scopeKey, false)
+      setError(scopeKey, null)
+    }
+    store.reconcileMaterializedRows(state.value.nodes, state.value.links, affectedScopes)
     publishRows()
   }
 

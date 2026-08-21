@@ -58,12 +58,31 @@ describe('useModelTreeOperations partial scope safety', () => {
   })
 
   it('blocks create for an incomplete child scope', () => {
-    const { operations, setUiError } = setup(['root'])
+    const { state, operations, setUiError } = setup(['root'])
+    state.value.nodes = [makeNode('folder-a', 'hidden-root', 'directory')]
 
     operations.openCreateFolder('folder-a')
 
     expect(operations.showCreateNodeModal.value).toBe(false)
     expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
+  })
+
+  it('allows first child creation when persisted folder authoritatively has no children', () => {
+    const { state, operations, setUiError } = setup(['root'])
+    state.value.nodes = [
+      {
+        ...makeNode('empty-folder', 'hidden-root', 'directory'),
+        hasChildren: false,
+      },
+    ]
+
+    operations.openCreateRegularNode('empty-folder')
+
+    expect(operations.showCreateNodeModal.value).toBe(true)
+    expect(setUiError).not.toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
+    operations.newNodeName.value = 'First child'
+    operations.createNode()
+    expect(state.value.nodes.find(node => node.id === 'empty-folder')?.hasChildren).toBe(true)
   })
 
   it('blocks move when either source or destination sibling scope is incomplete', () => {
@@ -102,7 +121,7 @@ describe('useModelTreeOperations partial scope safety', () => {
 
     expect(state.value.nodes).toHaveLength(1)
     expect(state.value.nodes[0]?.parentNodeId).toBe('hidden-root')
-    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(1)
+    expect(reconcileMaterializedRows).toHaveBeenCalledWith([{ kind: 'root' }])
   })
 
   it('reconciles the store after a permitted move mutation', () => {
@@ -122,6 +141,9 @@ describe('useModelTreeOperations partial scope safety', () => {
     expect(
       state.value.nodes.find(node => node.id === 'unloaded-sibling')?.parsedAttrs.treeOrder
     ).toBe(10)
-    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(1)
+    expect(reconcileMaterializedRows).toHaveBeenCalledWith([
+      { kind: 'node', nodeId: 'source-parent' },
+      { kind: 'node', nodeId: 'target-parent' },
+    ])
   })
 })

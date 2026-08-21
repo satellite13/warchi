@@ -885,6 +885,7 @@ const {
   createNodeModalTitle,
   nonDirectoryNodeTypes,
   treeRootNodeId,
+  treeScopeForParent,
   canCreateNodeFromModal,
   getNextTreeOrderForParent,
   ensureDirectoryPath,
@@ -1183,6 +1184,7 @@ const {
   isNoteInstance,
   ensureDirectoryPath,
   getNextTreeOrderForParent,
+  treeScopeForParent,
   executeDiagramHistoryCommand,
   markDiagramDirty,
   markNodeDirty,
@@ -1390,7 +1392,7 @@ const markNodeDeleted = (nodeId: string) => {
     node._isDirty = true
     markNodeDirty(node.id)
   }
-  partialStore.reconcileMaterializedRows()
+  partialStore.reconcileMaterializedRows([treeScopeForParent(node.parentNodeId ?? null)])
   state.value.diagrams.forEach(diagram => {
     if (diagram.nodeId !== nodeId) return
     if (diagram._isNew) {
@@ -1479,7 +1481,7 @@ const markLinkDeleted = (linkId: string) => {
     row._isDirty = true
     markLinkDirty(row.id)
   }
-  partialStore.reconcileMaterializedRows()
+  partialStore.reconcileMaterializedRows([])
 
   if (selectedModelLinkId.value === linkId) {
     selectedModelLinkId.value = null

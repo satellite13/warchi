@@ -258,6 +258,76 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('preserves unrelated paged root metadata while reconciling a complete child scope', async () => {
+    vi.mocked(fetchNodeChildren).mockImplementation(async (_modelId, targetScope, options) => {
+      if (targetScope.kind === 'node' && targetScope.nodeId === 'folder') {
+        return { success: true, data: page([node('existing-child', 'folder')]) }
+      }
+      if (targetScope.kind === 'root' && options?.page === 1) {
+        return { success: true, data: page([node('root-page-2')], 1, 3, 2) }
+      }
+      throw new Error(`Unexpected page request: ${targetScope.kind}/${options?.page}`)
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page(
+        [
+          { ...node('folder'), hasChildren: true },
+          node('root-page-1'),
+        ],
+        0,
+        3,
+        2
+      ),
+    })
+    await partial.loadChildren({ kind: 'node', nodeId: 'folder' })
+    expect(partial.store.loadedChildrenFor.has('node:folder')).toBe(true)
+    expect(partial.store.childrenPages.get('root')?.nextPage).toBe(1)
+
+    state.value.nodes.push(toEditorNode(node('new-child', 'folder')))
+    partial.reconcileMaterializedRows([{ kind: 'node', nodeId: 'folder' }])
+
+    expect(partial.store.childrenPages.get('root')).toMatchObject({
+      nextPage: 1,
+      totalElements: 3,
+    })
+    expect(partial.store.childrenPages.get('root')?.loadedPages).toEqual(new Set([0]))
+
+    await partial.loadNextChildrenPage({ kind: 'root' })
+
+    expect(fetchNodeChildren).toHaveBeenLastCalledWith(
+      'model-a',
+      { kind: 'root' },
+      expect.objectContaining({ page: 1 })
+    )
+    expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
+    expect(state.value.nodes.map(row => row.id)).toEqual(
+      expect.arrayContaining(['folder', 'root-page-1', 'root-page-2', 'new-child'])
+    )
+    scope.stop()
+  })
+
+  it('materializes hasChildren=false as a complete empty child scope', () => {
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('empty-folder')]),
+    })
+
+    expect(partial.store.loadedChildrenFor.has('node:empty-folder')).toBe(true)
+    expect(partial.store.childrenPages.get('node:empty-folder')).toMatchObject({
+      nextPage: null,
+      totalElements: 0,
+    })
+    scope.stop()
+  })
+
   it('aborts paging and rejects its stale result on reset', async () => {
     const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
     vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)

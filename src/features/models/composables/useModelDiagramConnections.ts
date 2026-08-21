@@ -3,7 +3,7 @@ import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import type { RelationResponse } from '@/types/api'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { createId, parseLinkAttrs, resolveInstanceComponentId } from '../modelAttrs'
-import type { EditorDiagram, EditorLink, ModelEditorState } from '../types'
+import type { EditorDiagram, EditorLink, ModelEditorState, TreeParentScope } from '../types'
 
 import {
   DEFAULT_DIAGRAM_ONLY_LINK_STYLE,
@@ -59,7 +59,9 @@ export type UseModelDiagramConnectionsOptions = {
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
   markDiagramDirty: (diagramId: string) => void
   markLinkDirty: (linkId: string) => void
-  reconcileMaterializedRows?: () => void
+  reconcileMaterializedRows?: (
+    affectedScopes?: readonly TreeParentScope[] | 'all'
+  ) => void
   bindLinkRelation: (link: EditorLink, relationId: string) => void
   setUiError: (message: string) => void
   t: (key: string) => string
@@ -642,7 +644,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
         let link = options.state.value.links.find(item => item.id === resolvedLinkId) ?? null
         if (!link && newLink) {
           options.state.value.links.push(deepClone(newLink))
-          options.reconcileMaterializedRows?.()
+          options.reconcileMaterializedRows?.([])
           link = options.state.value.links.find(item => item.id === resolvedLinkId) ?? null
         }
         if (!link) return
@@ -664,7 +666,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
         }
         if (isNewLink) {
           options.state.value.links = options.state.value.links.filter(item => item.id !== resolvedLinkId)
-          options.reconcileMaterializedRows?.()
+          options.reconcileMaterializedRows?.([])
         } else if (previousParsedAttrs) {
           const link = options.state.value.links.find(item => item.id === resolvedLinkId)
           if (link) {

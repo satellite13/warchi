@@ -1,9 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GraphNeighborResponse } from '@/types/api'
-import { parseNodeAttrs } from '../modelAttrs'
-import type { EditorNode } from '../types'
+import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
+import type { EditorGraphNeighbor, EditorNode } from '../types'
 import ModelTraceabilityPanel from './ModelTraceabilityPanel.vue'
 
 const lazyState = vi.hoisted(() => ({
@@ -19,9 +18,8 @@ const lazyState = vi.hoisted(() => ({
       id: 'diagram-ref',
       name: 'Referenced diagram',
       version: '1.0.0',
-      ownerId: 'owner-1',
-      modelId: 'model-1',
       notationId: 'notation-1',
+      nodeId: null,
     },
   ],
   diagramsLoading: false,
@@ -31,7 +29,7 @@ const lazyState = vi.hoisted(() => ({
   branchStates: new Map<
     string,
     {
-      rows: GraphNeighborResponse[]
+      rows: EditorGraphNeighbor[]
       loading: boolean
       error: string | null
       failedPage: number | null
@@ -94,7 +92,7 @@ const neighbor = (
   sourceId: string,
   targetId: string,
   nextNodeId: string
-): GraphNeighborResponse => ({
+): EditorGraphNeighbor => ({
   link: {
     id,
     sourceId,
@@ -102,7 +100,7 @@ const neighbor = (
     linkTypeId: 'link-type-1',
     modelId: 'model-1',
     ownerId: 'owner-1',
-    attrs: null,
+    parsedAttrs: parseLinkAttrs(null),
   },
   node: {
     id: nextNodeId,
@@ -110,7 +108,7 @@ const neighbor = (
     modelId: 'model-1',
     ownerId: 'owner-1',
     nodeTypeId: 'node-type-1',
-    attrs: null,
+    parsedAttrs: parseNodeAttrs(null),
   },
 })
 
@@ -132,9 +130,11 @@ const mountPanel = () =>
       isDiagramReadOnly: false,
       relations: [],
       canConnect: () => true,
+      authoritativeRevision: 1,
       beginRequest: () => ({ generation: 1, requestKey: 'test', token: 1 }),
       isRequestCurrent: () => true,
       mergePartialEntities: () => true,
+      resolveBranchRows: () => [],
     },
     global: {
       stubs: {
@@ -162,6 +162,41 @@ describe('ModelTraceabilityPanel lazy branches', () => {
       linkTypeId: null,
     })
     expect(wrapper.text()).toContain('Referenced diagram')
+  })
+
+  it('keeps loaded diagram references visible beside a next-page retry error', async () => {
+    lazyState.diagramsError = 'diagram page failed'
+    lazyState.diagramsNextPage = 1
+
+    const wrapper = mountPanel()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Referenced diagram')
+    expect(wrapper.get('[role="alert"]').text()).toContain('diagram page failed')
+    await wrapper.get('[data-testid="diagram-references-retry"]').trigger('click')
+    expect(lazyState.retryDiagrams).toHaveBeenCalledOnce()
+  })
+
+  it('makes root and diagram rows keyboard accessible while preserving diagram double-click', async () => {
+    const wrapper = mountPanel()
+    await nextTick()
+
+    const root = wrapper.get('.tp-tree__root')
+    expect(root.element.tagName).toBe('BUTTON')
+    await root.trigger('click')
+    expect(wrapper.emitted('focus-node')).toEqual([['root']])
+
+    const diagramRow = wrapper.get('.tp-diagram')
+    expect(diagramRow.attributes('role')).toBe('button')
+    expect(diagramRow.attributes('tabindex')).toBe('0')
+    await diagramRow.trigger('keydown', { key: 'Enter' })
+    await diagramRow.trigger('keydown', { key: ' ' })
+    await diagramRow.trigger('dblclick')
+    expect(wrapper.emitted('open-diagram')).toEqual([
+      ['diagram-ref'],
+      ['diagram-ref'],
+      ['diagram-ref'],
+    ])
   })
 
   it('loads a direct child branch on expansion and never asks for global links', async () => {

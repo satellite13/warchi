@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch } from '@/composables/useApi'
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { apiFetch, type ApiResult } from '@/composables/useApi'
 import { MODEL_RESOLVE_CHUNK_SIZE, MODEL_TREE_PAGE_SIZE, chunkUniqueIds } from '@/api/queryHelpers'
+import type { DiagramReferenceResponse } from '@/types/api'
+import type { PaginatedResponse } from '@/types/entities'
 import {
   fetchDiagramReferences,
   fetchGraphNeighbors,
@@ -128,5 +130,8 @@ describe('modelScopedApi', () => {
       '/models/m/diagram-references?nodeId=n1&page=1&size=20',
       { method: 'GET', signal: controller.signal }
     )
+    expectTypeOf<ReturnType<typeof fetchDiagramReferences>>().toEqualTypeOf<
+      Promise<ApiResult<PaginatedResponse<DiagramReferenceResponse>>>
+    >()
   })
 })

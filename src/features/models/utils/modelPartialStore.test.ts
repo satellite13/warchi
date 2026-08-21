@@ -368,6 +368,108 @@ describe('ModelPartialStore tree scopes', () => {
 })
 
 describe('ModelPartialStore entity merges', () => {
+  it('projects trace rows through authoritative rows and overlays protected local incidents', () => {
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [
+        node('child-authoritative', null, { name: 'Local child', _isDirty: true }),
+        node('local-new-child', null, { _isNew: true }),
+        node('deleted-child', null, { _isDeleted: true }),
+        node('tombstoned-child', null, { _isDirty: true }),
+        node('incoming-source'),
+      ],
+      { kind: 'partial' }
+    )
+    store.mergeLinks(
+      [
+        link('api-link', {
+          sourceId: 'root',
+          targetId: 'child-authoritative',
+          _isDirty: true,
+        }),
+        link('local-new', {
+          sourceId: 'root',
+          targetId: 'local-new-child',
+          _isNew: true,
+        }),
+        link('local-deleted', {
+          sourceId: 'root',
+          targetId: 'deleted-child',
+          _isDeleted: true,
+        }),
+        link('local-tombstoned', {
+          sourceId: 'root',
+          targetId: 'tombstoned-child',
+          _isDirty: true,
+        }),
+        link('wrong-direction', {
+          sourceId: 'incoming-source',
+          targetId: 'root',
+          _isDirty: true,
+        }),
+        link('wrong-type', {
+          sourceId: 'root',
+          targetId: 'local-new-child',
+          linkTypeId: 'other',
+          _isDirty: true,
+        }),
+      ],
+      { kind: 'partial' }
+    )
+    store.deleteRemoteLink('local-tombstoned')
+
+    const rows = store.resolveTraceabilityRows(
+      [
+        { linkId: 'api-link', nodeId: 'stale-api-child' },
+        { linkId: 'api-link', nodeId: 'duplicate-api-child' },
+        { linkId: 'local-deleted', nodeId: 'deleted-child' },
+        { linkId: 'local-tombstoned', nodeId: 'tombstoned-child' },
+        { linkId: 'missing-link', nodeId: 'missing-node' },
+      ],
+      { nodeId: 'root', direction: 'outgoing', linkTypeId: 'lt' }
+    )
+
+    expect(rows.map(row => row.link.id)).toEqual(['api-link', 'local-new'])
+    expect(rows[0]?.node.id).toBe('child-authoritative')
+    expect(rows[0]?.node.name).toBe('Local child')
+    expect(rows[0]?.link._isDirty).toBe(true)
+    expect(rows[1]?.node._isNew).toBe(true)
+  })
+
+  it('reindexes a point-synced local link before projecting trace rows', () => {
+    const store = new ModelPartialStore()
+    store.mergeNodes([node('old-target'), node('new-target')], { kind: 'partial' })
+    store.mergeLinks(
+      [link('moved-link', { sourceId: 'old-source', targetId: 'old-target' })],
+      { kind: 'partial' }
+    )
+
+    store.upsertLocalLink(
+      link('moved-link', {
+        sourceId: 'new-source',
+        targetId: 'new-target',
+        _isDirty: true,
+      })
+    )
+
+    expect(
+      store
+        .resolveTraceabilityRows([], {
+          nodeId: 'new-source',
+          direction: 'outgoing',
+          linkTypeId: null,
+        })
+        .map(row => row.link.id)
+    ).toEqual(['moved-link'])
+    expect(
+      store.resolveTraceabilityRows([], {
+        nodeId: 'old-source',
+        direction: 'outgoing',
+        linkTypeId: null,
+      })
+    ).toEqual([])
+  })
+
   it('preserves local dirty/new/deleted rows in partial and full merges', () => {
     const store = new ModelPartialStore()
     store.mergeNodes(

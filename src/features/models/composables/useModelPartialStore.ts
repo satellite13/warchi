@@ -31,6 +31,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const childrenLoading = ref<Set<string>>(new Set())
   const childrenErrors = ref<Map<string, string>>(new Map())
   const generation = ref(store.generation)
+  const materializedRevision = ref(0)
   const sessions = new Map<string, ScopeRequestSession>()
   const inFlight = new Map<string, { promise: Promise<void> }>()
   const visibleRefreshFailures = new Set<string>()
@@ -43,6 +44,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
       nodes: store.nodes,
       links: store.links,
     }
+    materializedRevision.value += 1
   }
 
   const captureMaterializedRows = (): void => {
@@ -496,6 +498,16 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     return true
   }
 
+  const syncLocalNode = (node: ModelEditorState['nodes'][number]): void => {
+    store.upsertLocalNode(node)
+    materializedRevision.value += 1
+  }
+
+  const syncLocalLink = (link: ModelEditorState['links'][number]): void => {
+    store.upsertLocalLink(link)
+    materializedRevision.value += 1
+  }
+
   onScopeDispose(() => {
     resetPartialScopes(null)
   })
@@ -503,6 +515,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   return {
     store,
     generation,
+    materializedRevision,
     childrenLoading,
     childrenErrors,
     loadChildren,
@@ -515,6 +528,8 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     mergeFullLinks,
     discardRemoteCascadeConflictLinks,
     mergePartialEntities,
+    syncLocalNode,
+    syncLocalLink,
     reconcileMaterializedRows,
     invalidateChildrenScope,
     materializedChildrenScopes,

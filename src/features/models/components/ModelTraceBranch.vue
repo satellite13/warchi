@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { GraphNeighborResponse } from '@/types/api'
-import type { EditorLink, EditorNode } from '../types'
+import type { EditorGraphNeighbor, EditorLink, EditorNode } from '../types'
 import type {
   LazyTraceabilityBranchState,
   TraceabilityBranchQuery,
   TraceabilityDirection,
 } from '../composables/useLazyTraceability'
-import { toEditorLink } from '../composables/modelEditorMappers'
 import type { TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
 
 const props = defineProps<{
@@ -39,9 +37,7 @@ const query = computed<TraceabilityBranchQuery>(() => ({
   linkTypeId: props.linkTypeId,
 }))
 const branchState = computed(() => props.getBranchState(query.value))
-const rows = computed(() =>
-  branchState.value.rows.map(row => ({ ...row, link: toEditorLink(row.link) }))
-)
+const rows = computed(() => branchState.value.rows)
 const statusByLinkId = computed(() => {
   const map = new Map<string, TraceabilityLinkStatus>()
   for (const row of rows.value) {
@@ -50,10 +46,10 @@ const statusByLinkId = computed(() => {
   return map
 })
 
-const nodeName = (nodeId: string, row: GraphNeighborResponse): string =>
-  props.nodeById.get(nodeId)?.name ?? (row.node.id === nodeId ? row.node.name : nodeId)
+const nodeName = (nodeId: string, row: EditorGraphNeighbor): string =>
+  row.node.id === nodeId ? row.node.name : (props.nodeById.get(nodeId)?.name ?? nodeId)
 
-const linkLabel = (row: GraphNeighborResponse): string => {
+const linkLabel = (row: EditorGraphNeighbor): string => {
   const source = nodeName(row.link.sourceId, row)
   const target = nodeName(row.link.targetId, row)
   return `${source} → ${target}`
@@ -115,8 +111,8 @@ const onLinkDragStart = (event: DragEvent, link: EditorLink) => {
   }
 }
 
-const toggleRow = async (row: GraphNeighborResponse): Promise<void> => {
-  const link = toEditorLink(row.link)
+const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
+  const link = row.link
   const nextNodeId = resolveNextNodeId(link)
   const expanded = props.isLinkExpanded(props.nodeId, link.id)
   props.toggleLink(props.nodeId, link.id)

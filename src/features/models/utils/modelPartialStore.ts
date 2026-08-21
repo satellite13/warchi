@@ -1,9 +1,12 @@
 import type {
   ChildrenPageState,
+  EditorGraphNeighbor,
   EditorLink,
   EditorNode,
   EntityMergeMode,
   ModelPartialRequestGuard,
+  TraceabilityBranchQuery,
+  TraceabilityNeighborRef,
   TreeParentScope,
 } from '../types'
 import { mergeEntityListFromRemote, type MergeableEntity } from './modelEntityMerge'
@@ -44,6 +47,8 @@ export class ModelPartialStore {
   readonly remoteCascadeConflictLinkIds = new Set<string>()
 
   private readonly requestTokens = new Map<string, number>()
+  private readonly linkIdsBySource = new Map<string, Set<string>>()
+  private readonly linkIdsByTarget = new Map<string, Set<string>>()
   private readonly childrenScopeMutationVersions = new Map<string, number>()
   private readonly internalChildrenPages = new Map<string, InternalChildrenPageState>()
   /** Explicit materialization provenance; root cannot be reconstructed from parentNodeId. */
@@ -141,11 +146,77 @@ export class ModelPartialStore {
     this.remoteDeletedLinkIds.clear()
     this.staleLinkIds.clear()
     this.remoteCascadeConflictLinkIds.clear()
+    this.linkIdsBySource.clear()
+    this.linkIdsByTarget.clear()
     this.requestTokens.clear()
     this.childrenScopeMutationVersions.clear()
     this.internalChildrenPages.clear()
     this.treeScopeKeyByNodeId.clear()
     this.rootParentNodeId = undefined
+  }
+
+  resolveTraceabilityRows(
+    remoteRefs: readonly TraceabilityNeighborRef[],
+    query: TraceabilityBranchQuery
+  ): EditorGraphNeighbor[] {
+    const orderedLinkIds: string[] = []
+    const seen = new Set<string>()
+    for (const row of remoteRefs) {
+      if (seen.has(row.linkId)) continue
+      seen.add(row.linkId)
+      orderedLinkIds.push(row.linkId)
+    }
+
+    const incidentIds =
+      query.direction === 'outgoing'
+        ? this.linkIdsBySource.get(query.nodeId)
+        : this.linkIdsByTarget.get(query.nodeId)
+    const protectedLocalIds = [...(incidentIds ?? [])]
+      .filter(id => {
+        const link = this.linkById.get(id)
+        return link?._isNew === true || link?._isDirty === true
+      })
+      .sort((left, right) => left.localeCompare(right))
+    for (const id of protectedLocalIds) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      orderedLinkIds.push(id)
+    }
+
+    const rows: EditorGraphNeighbor[] = []
+    for (const linkId of orderedLinkIds) {
+      if (this.remoteDeletedLinkIds.has(linkId)) continue
+      const link = this.linkById.get(linkId)
+      if (!link || link._isDeleted) continue
+      if (query.linkTypeId && link.linkTypeId !== query.linkTypeId) continue
+      const matchesDirection =
+        query.direction === 'outgoing'
+          ? link.sourceId === query.nodeId
+          : link.targetId === query.nodeId
+      if (!matchesDirection) continue
+      const neighborId = query.direction === 'outgoing' ? link.targetId : link.sourceId
+      if (this.remoteDeletedNodeIds.has(neighborId)) continue
+      const node = this.nodeById.get(neighborId)
+      if (!node || node._isDeleted) continue
+      rows.push({ link, node })
+    }
+    return rows
+  }
+
+  upsertLocalNode(row: EditorNode): void {
+    const next = [...this.nodes]
+    const index = next.findIndex(item => item.id === row.id)
+    if (index === -1) next.push(row)
+    else next[index] = row
+    this.replaceNodes(next)
+  }
+
+  upsertLocalLink(row: EditorLink): void {
+    const next = [...this.links]
+    const index = next.findIndex(item => item.id === row.id)
+    if (index === -1) next.push(row)
+    else next[index] = row
+    this.replaceLinks(next)
   }
 
   mergeNodes(
@@ -505,8 +576,21 @@ export class ModelPartialStore {
   private replaceLinks(rows: EditorLink[]): void {
     this.links = uniqueRowsById(rows)
     this.linkById.clear()
+    this.linkIdsBySource.clear()
+    this.linkIdsByTarget.clear()
     for (const row of this.links) {
       this.linkById.set(row.id, row)
+      this.addIncidentLink(this.linkIdsBySource, row.sourceId, row.id)
+      this.addIncidentLink(this.linkIdsByTarget, row.targetId, row.id)
+    }
+  }
+
+  private addIncidentLink(index: Map<string, Set<string>>, nodeId: string, linkId: string): void {
+    const ids = index.get(nodeId)
+    if (ids) {
+      ids.add(linkId)
+    } else {
+      index.set(nodeId, new Set([linkId]))
     }
   }
 }

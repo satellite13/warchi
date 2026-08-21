@@ -17,7 +17,13 @@ import {
   resolveRelationByLinkType,
   type DiagramAttrs,
 } from './modelAttrs'
-import type { EditorLink, ModelPartialRequestGuard } from './types'
+import type {
+  EditorGraphNeighbor,
+  EditorLink,
+  ModelPartialRequestGuard,
+  TraceabilityBranchQuery,
+  TraceabilityNeighborRef,
+} from './types'
 import {
   useModelBatchConflictUi,
   useDiagramScope,
@@ -887,6 +893,10 @@ const mergeTraceabilityEntities = (
   links: readonly LinkResponse[],
   guard: ModelPartialRequestGuard
 ): boolean => partialStore.mergePartialEntities(nodes, links, guard)
+const resolveTraceabilityRows = (
+  rowIds: readonly TraceabilityNeighborRef[],
+  query: TraceabilityBranchQuery
+): EditorGraphNeighbor[] => partialStore.store.resolveTraceabilityRows(rowIds, query)
 const treeVisibleNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
@@ -3592,6 +3602,7 @@ onBeforeUnmount(() => {
               :selected-node="selectedNode"
               :nodes="traceabilityNodes"
               :link-types="traceabilityLinkTypes"
+              :authoritative-revision="partialStore.materializedRevision.value"
               :active-diagram="activeDiagram"
               :active-notation-id="activeNotationId"
               :is-diagram-read-only="isDiagramReadOnly"
@@ -3601,6 +3612,7 @@ onBeforeUnmount(() => {
               :begin-request="beginTraceabilityRequest"
               :is-request-current="isTraceabilityRequestCurrent"
               :merge-partial-entities="mergeTraceabilityEntities"
+              :resolve-branch-rows="resolveTraceabilityRows"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />

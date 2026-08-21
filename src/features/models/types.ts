@@ -56,6 +56,24 @@ export type EditorLink = Omit<LinkResponse, "attrs"> & {
   _isDeleted?: boolean
 }
 
+export type TraceabilityDirection = 'outgoing' | 'incoming'
+
+export type TraceabilityBranchQuery = {
+  nodeId: string
+  direction: TraceabilityDirection
+  linkTypeId: string | null
+}
+
+export type TraceabilityNeighborRef = {
+  linkId: string
+  nodeId: string
+}
+
+export type EditorGraphNeighbor = {
+  link: EditorLink
+  node: EditorNode
+}
+
 export type EditorDiagram = Omit<DiagramResponse, "attrs"> & {
   parsedAttrs: DiagramAttrs
   /** true when list was loaded with includeAttrs=false — hydrate via GET /diagrams/{id}. */

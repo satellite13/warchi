@@ -1,7 +1,7 @@
 import { MODEL_RESOLVE_CHUNK_SIZE, MODEL_TREE_PAGE_SIZE, chunkUniqueIds } from '@/api/queryHelpers'
 import { apiFetch, type ApiResult } from '@/composables/useApi'
 import type {
-  DiagramResponse,
+  DiagramReferenceResponse,
   GraphNeighborResponse,
   LinkResponse,
   ModelLinkResolveRequest,
@@ -191,13 +191,13 @@ export function fetchDiagramReferences(
   modelId: string,
   nodeId: string,
   options: FetchDiagramReferencesOptions = {}
-): Promise<ApiResult<PaginatedResponse<DiagramResponse>>> {
+): Promise<ApiResult<PaginatedResponse<DiagramReferenceResponse>>> {
   const query = new URLSearchParams({
     nodeId,
     page: String(options.page ?? 0),
     size: String(options.size ?? 50),
   })
-  return apiFetch<PaginatedResponse<DiagramResponse>>(
+  return apiFetch<PaginatedResponse<DiagramReferenceResponse>>(
     `/models/${encodePath(modelId)}/diagram-references?${query.toString()}`,
     { method: 'GET', signal: options.signal }
   )

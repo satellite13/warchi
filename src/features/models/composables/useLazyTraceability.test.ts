@@ -1,7 +1,7 @@
 import { effectScope, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  DiagramResponse,
+  DiagramReferenceResponse,
   GraphNeighborResponse,
   LinkResponse,
   NodeResponse,
@@ -56,13 +56,12 @@ const neighbor = (
   node: node(nextNodeId),
 })
 
-const diagram = (id: string): DiagramResponse => ({
+const diagram = (id: string): DiagramReferenceResponse => ({
   id,
   name: id,
   version: '1.0.0',
-  ownerId: 'owner-1',
-  modelId: 'model-1',
   notationId: 'notation-1',
+  nodeId: null,
 })
 
 const page = <T>(
@@ -96,20 +95,24 @@ const outgoing = (nodeId: string, linkTypeId: string | null = null): Traceabilit
 
 function setup(modelId = ref<string | null>('model-1')) {
   const store = new ModelPartialStore()
+  const authoritativeRevision = ref(0)
   const scope = effectScope()
   const traceability = scope.run(() =>
     useLazyTraceability({
       modelId,
+      authoritativeRevision,
       beginRequest: requestKey => store.beginRequest(requestKey),
       isRequestCurrent: guard => store.isRequestCurrent(guard),
       mergePartialEntities: (nodes, links, guard) => {
         const nodesAccepted = store.mergeNodes(nodes.map(toEditorNode), { kind: 'partial' }, guard)
         const linksAccepted = store.mergeLinks(links.map(toEditorLink), { kind: 'partial' }, guard)
+        if (nodesAccepted && linksAccepted) authoritativeRevision.value += 1
         return nodesAccepted && linksAccepted
       },
+      resolveBranchRows: (rowIds, query) => store.resolveTraceabilityRows(rowIds, query),
     })
   )!
-  return { modelId, scope, store, traceability }
+  return { authoritativeRevision, modelId, scope, store, traceability }
 }
 
 describe('useLazyTraceability', () => {
@@ -146,12 +149,16 @@ describe('useLazyTraceability', () => {
       signal: expect.any(AbortSignal),
     })
     expect(traceability.getBranchState(outgoing('root', 'link-type-filter'))).toMatchObject({
-      rows: rootPage.content,
       loading: false,
       error: null,
       nextPage: 1,
       totalElements: 2,
     })
+    expect(
+      traceability
+        .getBranchState(outgoing('root', 'link-type-filter'))
+        .rows.map(row => [row.link.id, row.node.id])
+    ).toEqual([['link-1', 'child']])
     expect(traceability.diagramReferences.value.map(row => row.id)).toEqual(['diagram-1'])
     expect(store.nodeById.has('child')).toBe(true)
     expect(store.linkById.has('link-1')).toBe(true)
@@ -274,7 +281,7 @@ describe('useLazyTraceability', () => {
       success: true,
       data: page([], 0, 1),
     })
-    const { traceability, store } = setup()
+    const { authoritativeRevision, traceability, store } = setup()
     store.mergeNodes([{ ...toEditorNode(node('child', 'local child')), _isDirty: true }], {
       kind: 'partial',
     })
@@ -287,6 +294,44 @@ describe('useLazyTraceability', () => {
     expect(store.nodeById.get('child')?.name).toBe('local child')
     expect(store.nodeById.get('child')?._isDirty).toBe(true)
     expect(store.linkById.get('link-1')?._isDirty).toBe(true)
+    authoritativeRevision.value += 1
+    expect(traceability.getBranchState(outgoing('root')).rows[0]?.node.name).toBe('local child')
+  })
+
+  it('keeps loaded diagram references visible when the next page fails and retries locally', async () => {
+    vi.mocked(fetchGraphNeighbors).mockResolvedValue({
+      success: true,
+      data: page([], 0, 1),
+    })
+    vi.mocked(fetchDiagramReferences)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([diagram('diagram-1')], 0, 2, 2),
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        error: { message: 'diagram page failed' },
+      } as never)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([diagram('diagram-2')], 1, 2, 2),
+      })
+    const { traceability } = setup()
+    await traceability.selectRoot(outgoing('root'))
+
+    await traceability.loadMoreDiagrams()
+
+    expect(traceability.diagramReferences.value.map(row => row.id)).toEqual(['diagram-1'])
+    expect(traceability.diagramsError.value).toBe('diagram page failed')
+    expect(traceability.diagramsNextPage.value).toBe(1)
+
+    await traceability.retryDiagrams()
+
+    expect(traceability.diagramReferences.value.map(row => row.id)).toEqual([
+      'diagram-1',
+      'diagram-2',
+    ])
+    expect(traceability.diagramsError.value).toBeNull()
   })
 
   it('cancels selection, model, and scope requests and ignores stale responses', async () => {

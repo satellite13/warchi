@@ -7,7 +7,14 @@ import {
   type TraceabilityBranchQuery,
   type TraceabilityDirection,
 } from '../composables/useLazyTraceability'
-import type { EditorDiagram, EditorLink, EditorNode, ModelPartialRequestGuard } from '../types'
+import type {
+  EditorDiagram,
+  EditorGraphNeighbor,
+  EditorLink,
+  EditorNode,
+  ModelPartialRequestGuard,
+  TraceabilityNeighborRef,
+} from '../types'
 import {
   computeTraceabilityLinkStatus,
   type TraceabilityLinkStatus,
@@ -27,6 +34,7 @@ const props = defineProps<{
   relations: RelationResponse[]
   canConnect: (sourceModelNodeId: string, targetModelNodeId: string) => boolean
   isDiagramOnlyEdgeModelLinkId?: (modelLinkId: string) => boolean
+  authoritativeRevision: number
   beginRequest: (requestKey: string) => ModelPartialRequestGuard
   isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
   mergePartialEntities: (
@@ -34,6 +42,10 @@ const props = defineProps<{
     links: readonly LinkResponse[],
     guard: ModelPartialRequestGuard
   ) => boolean
+  resolveBranchRows: (
+    rowIds: readonly TraceabilityNeighborRef[],
+    query: TraceabilityBranchQuery
+  ) => EditorGraphNeighbor[]
 }>()
 
 const emit = defineEmits<{
@@ -55,10 +67,18 @@ const treeOpen = ref(true)
 const suppressNextSelectionReset = ref(false)
 const traceability = useLazyTraceability({
   modelId: computed(() => props.modelId || null),
+  authoritativeRevision: computed(() => props.authoritativeRevision),
   beginRequest: props.beginRequest,
   isRequestCurrent: props.isRequestCurrent,
   mergePartialEntities: props.mergePartialEntities,
+  resolveBranchRows: props.resolveBranchRows,
 })
+
+const openDiagramFromKeyboard = (event: KeyboardEvent, diagramId: string): void => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  emit('open-diagram', diagramId)
+}
 
 const nodeById = computed(() => {
   const map = new Map<string, EditorNode>()
@@ -297,25 +317,40 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
               <span>{{ t('models.traceabilityLoadingDiagrams') }}</span>
             </div>
             <div
-              v-else-if="traceability.diagramsError.value"
+              v-if="traceability.diagramsError.value"
               class="tp-section__status tp-section__status--error"
               role="alert"
             >
               <span>{{ traceability.diagramsError.value }}</span>
-              <button type="button" class="tp-section__action" @click="traceability.retryDiagrams">
+              <button
+                type="button"
+                class="tp-section__action"
+                data-testid="diagram-references-retry"
+                @click="traceability.retryDiagrams"
+              >
                 {{ t('common.retry') }}
               </button>
             </div>
-            <div v-else-if="diagramsUsingRootNode.length === 0" class="tp-section__empty">
+            <div
+              v-if="
+                diagramsUsingRootNode.length === 0 &&
+                !traceability.diagramsLoading.value &&
+                !traceability.diagramsError.value
+              "
+              class="tp-section__empty"
+            >
               {{ t('models.traceabilityNoDiagrams') }}
             </div>
-            <div v-else class="tp-diagrams">
+            <div v-if="diagramsUsingRootNode.length > 0" class="tp-diagrams">
               <div
                 v-for="diagram in diagramsUsingRootNode"
                 :key="diagram.id"
                 class="tp-diagram"
+                role="button"
+                tabindex="0"
                 @mousedown.prevent
                 @selectstart.prevent
+                @keydown="openDiagramFromKeyboard($event, diagram.id)"
                 @dblclick.prevent="emit('open-diagram', diagram.id)"
               >
                 <UiIcon name="dashboard" class="tp-diagram__icon" />
@@ -323,7 +358,10 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 <span class="tp-diagram__version">{{ diagram.version }}</span>
               </div>
               <button
-                v-if="traceability.diagramsNextPage.value !== null"
+                v-if="
+                  traceability.diagramsNextPage.value !== null &&
+                  !traceability.diagramsError.value
+                "
                 type="button"
                 class="tp-section__action tp-section__action--more"
                 @click="traceability.loadMoreDiagrams"
@@ -424,10 +462,10 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
               </template>
             </div>
             <div class="tp-tree">
-              <div class="tp-tree__root" @click="focusRootOnDiagram">
+              <button type="button" class="tp-tree__root" @click="focusRootOnDiagram">
                 <span class="tp-tree__root-dot" />
                 <span class="tp-tree__root-name">{{ rootNode.name }}</span>
-              </div>
+              </button>
               <ModelTraceBranch
                 :node-id="rootNode.id"
                 :path="[rootNode.id]"

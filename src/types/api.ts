@@ -257,6 +257,14 @@ export interface GraphNeighborResponse {
   node: NodeResponse
 }
 
+export interface DiagramReferenceResponse {
+  id: string
+  name: string
+  version: string
+  notationId: string
+  nodeId: string | null
+}
+
 // ── Notations ──
 
 export type NotationRequest = VersionedEntityRequest

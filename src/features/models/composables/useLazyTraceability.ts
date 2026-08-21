@@ -1,11 +1,15 @@
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 import type {
-  DiagramResponse,
-  GraphNeighborResponse,
+  DiagramReferenceResponse,
   LinkResponse,
   NodeResponse,
 } from '@/types/api'
-import type { ModelPartialRequestGuard } from '../types'
+import type {
+  EditorGraphNeighbor,
+  ModelPartialRequestGuard,
+  TraceabilityBranchQuery,
+  TraceabilityNeighborRef,
+} from '../types'
 import {
   paginatedContent,
   paginatedIsLastPage,
@@ -15,16 +19,10 @@ import { fetchDiagramReferences, fetchGraphNeighbors } from './modelScopedApi'
 
 const TRACEABILITY_PAGE_SIZE = 50
 
-export type TraceabilityDirection = 'outgoing' | 'incoming'
-
-export type TraceabilityBranchQuery = {
-  nodeId: string
-  direction: TraceabilityDirection
-  linkTypeId: string | null
-}
+export type { TraceabilityBranchQuery, TraceabilityDirection } from '../types'
 
 export type LazyTraceabilityPageState = {
-  rows: GraphNeighborResponse[]
+  rows: TraceabilityNeighborRef[]
   loading: boolean
   error: string | null
   nextPage: number | null
@@ -33,12 +31,13 @@ export type LazyTraceabilityPageState = {
   generation: number
 }
 
-export type LazyTraceabilityBranchState = LazyTraceabilityPageState & {
+export type LazyTraceabilityBranchState = Omit<LazyTraceabilityPageState, 'rows'> & {
+  rows: EditorGraphNeighbor[]
   failedPage: number | null
 }
 
 type DiagramPageState = {
-  rows: DiagramResponse[]
+  rows: DiagramReferenceResponse[]
   loading: boolean
   error: string | null
   nextPage: number | null
@@ -72,18 +71,18 @@ const diagramPageKey = (nodeId: string, page: number): string =>
 const messageFrom = (caught: unknown, fallback: string): string =>
   caught instanceof Error ? caught.message : fallback
 
-const uniqueNeighborRows = (
+const uniqueNeighborRefs = (
   states: readonly LazyTraceabilityPageState[]
-): GraphNeighborResponse[] => {
-  const rows = new Map<string, GraphNeighborResponse>()
+): TraceabilityNeighborRef[] => {
+  const rows = new Map<string, TraceabilityNeighborRef>()
   for (const state of states) {
-    for (const row of state.rows) rows.set(row.link.id, row)
+    for (const row of state.rows) rows.set(row.linkId, row)
   }
   return [...rows.values()]
 }
 
-const uniqueDiagrams = (states: readonly DiagramPageState[]): DiagramResponse[] => {
-  const rows = new Map<string, DiagramResponse>()
+const uniqueDiagrams = (states: readonly DiagramPageState[]): DiagramReferenceResponse[] => {
+  const rows = new Map<string, DiagramReferenceResponse>()
   for (const state of states) {
     for (const row of state.rows) rows.set(row.id, row)
   }
@@ -92,6 +91,7 @@ const uniqueDiagrams = (states: readonly DiagramPageState[]): DiagramResponse[] 
 
 export function useLazyTraceability(options: {
   modelId: Ref<string | null>
+  authoritativeRevision: Ref<number>
   beginRequest: (requestKey: string) => ModelPartialRequestGuard
   isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
   mergePartialEntities: (
@@ -99,6 +99,10 @@ export function useLazyTraceability(options: {
     links: readonly LinkResponse[],
     guard: ModelPartialRequestGuard
   ) => boolean
+  resolveBranchRows: (
+    rowIds: readonly TraceabilityNeighborRef[],
+    query: TraceabilityBranchQuery
+  ) => EditorGraphNeighbor[]
 }) {
   const generation = ref(0)
   const branchPages = ref(new Map<string, LazyTraceabilityPageState>())
@@ -148,17 +152,19 @@ export function useLazyTraceability(options: {
   }
 
   const getBranchState = (query: TraceabilityBranchQuery): LazyTraceabilityBranchState => {
+    void options.authoritativeRevision.value
     const entries = branchPageEntries(query)
     const states = entries.map(([, state]) => state)
     const failed = entries.find(([, state]) => state.error !== null)
     const last = states[states.length - 1]
+    const rows = options.resolveBranchRows(uniqueNeighborRefs(states), query)
     return {
-      rows: uniqueNeighborRows(states),
+      rows,
       loading: states.some(state => state.loading),
       error: failed?.[1].error ?? null,
       failedPage: failed?.[0] ?? null,
       nextPage: last?.nextPage ?? (entries.length === 0 ? 0 : null),
-      totalElements: last?.totalElements ?? 0,
+      totalElements: Math.max(last?.totalElements ?? 0, rows.length),
       token: last?.token ?? 0,
       generation: last?.generation ?? generation.value,
     }
@@ -234,7 +240,7 @@ export function useLazyTraceability(options: {
         return false
       }
       replaceBranchPage(key, {
-        rows,
+        rows: rows.map(row => ({ linkId: row.link.id, nodeId: row.node.id })),
         loading: false,
         error: null,
         nextPage: paginatedIsLastPage(result.data, page) ? null : page + 1,

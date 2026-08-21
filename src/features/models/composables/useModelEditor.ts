@@ -109,8 +109,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     resetLoadedNotationIds,
   } = useNotationRelationsAndRulesLoader(state)
   const {
-    markNodeDirty,
-    markLinkDirty,
+    markNodeDirty: markNodeDirtyInState,
+    markLinkDirty: markLinkDirtyInState,
     markDiagramDirty,
     markModelDirty,
     renameModel,
@@ -124,6 +124,18 @@ export const useModelEditor = (): ModelEditorReturn => {
     modelCatalog,
     saveError,
   })
+
+  const markNodeDirty = (id: string): void => {
+    markNodeDirtyInState(id)
+    const node = state.value.nodes.find(item => item.id === id)
+    if (node) partialStore.syncLocalNode(node)
+  }
+
+  const markLinkDirty = (id: string): void => {
+    markLinkDirtyInState(id)
+    const link = state.value.links.find(item => item.id === id)
+    if (link) partialStore.syncLocalLink(link)
+  }
 
   onScopeDispose(() => {
     disposeSaveErrorTimer()

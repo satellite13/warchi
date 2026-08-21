@@ -13,7 +13,7 @@ import type {
   NodeTypeResponse,
 } from '@/types/api'
 import type { ModelData, PaginatedResponse } from '@/types/entities'
-import type { EditorDiagram, ModelEditorState } from '../types'
+import type { EditorDiagram, ModelEditorState, TreeParentScope } from '../types'
 import {
   mergeEntityListFromRemote,
   preserveOpenDiagramCanvasAfterRemoteMerge,
@@ -25,8 +25,14 @@ import {
   type ModelLiveSyncPullReason,
 } from '../utils/modelLiveSyncTelemetry'
 import {
+  createModelGranularSyncReconciler,
+  type ModelGranularSyncFetchers,
+} from '../utils/modelGranularSyncReconciler'
+import type { ModelPartialStore } from '../utils/modelPartialStore'
+import {
   coalesceModelSyncGranularEvents,
   parseGranularSyncEventsFromPayload,
+  type GranularSyncEventPayload,
 } from '../utils/modelSyncGranularCoalesce'
 import { fetchAllByModelId } from './modelEditorLoadModel'
 import {
@@ -92,9 +98,9 @@ type PullSnapshotOptions = {
 }
 
 /**
- * Live sync по событию: STOMP `/topic/models/{modelId}` → один проход merge с API (ноды, связи, диаграммы, модель).
+ * Live sync: STOMP `/topic/models/{modelId}` применяет granular events к materialized state.
  * Режимы:
- * - ws: только STOMP + pull по событию
+ * - ws: STOMP granular reconcile без snapshot pull по событию
  * - poll: только периодический pull
  * - hybrid (default): STOMP primary + polling fallback при потере WS
  * Дополнительно: lightweight revision check после STOMP connect/reconnect, pull при обнаруженном
@@ -124,6 +130,14 @@ export type UseModelLiveSyncOptions = {
   onModelUnavailable?: (status: number) => void
   /** Test/config override; production defaults to VITE_MODEL_LIVE_SYNC_MODE. */
   mode?: ModelLiveSyncMode
+  granularSync?: {
+    store: ModelPartialStore
+    publishMaterializedRows: () => void
+    refreshChildrenScope: (scope: TreeParentScope) => Promise<void>
+    invalidateChildrenScope?: (scope: TreeParentScope) => void
+    onDetachedSnapshotInvalidated?: () => void
+    fetchers?: ModelGranularSyncFetchers
+  }
 }
 
 export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
@@ -140,13 +154,33 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   let wsConnected = false
   let connectHelloPending = false
   let skipConnectResyncOnce = false
-  let pendingModelChanged = false
   let lastSyncedModelId: string | null = null
   /** После soft/permanent delete не долбить /models/{id} 404’ами. */
   let unavailableModelId: string | null = null
   const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
-  let stompPullCoalesceScheduled = false
   let wsAuthRefreshInFlight: Promise<boolean> | null = null
+  const pendingGranularEvents = new Map<string, GranularSyncEventPayload>()
+  const granularReconciler = options.granularSync
+    ? createModelGranularSyncReconciler({
+        modelId: () => options.modelId.value,
+        store: options.granularSync.store,
+        diagrams: () => options.state.value.diagrams,
+        replaceDiagrams: diagrams => {
+          options.state.value.diagrams = diagrams
+        },
+        publishMaterializedRows: options.granularSync.publishMaterializedRows,
+        refreshChildrenScope: options.granularSync.refreshChildrenScope,
+        invalidateChildrenScope: options.granularSync.invalidateChildrenScope,
+        fetchers: options.granularSync.fetchers,
+        onDetachedSnapshotInvalidated: options.granularSync.onDetachedSnapshotInvalidated,
+        onUnknownEvent: event => {
+          const mid = options.modelId.value
+          if (typeof mid === 'string') {
+            emitModelLiveSyncTelemetry({ kind: 'granular_event_unknown', modelId: mid, event })
+          }
+        },
+      })
+    : null
 
   const runAsyncSafely = (task: () => Promise<unknown>): void => {
     try {
@@ -430,7 +464,6 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       })
       if (decision.action === 'skip') return
       if (decision.action === 'queue') {
-        pendingModelChanged = true
         return
       }
       if (decision.action === 'skip_hello') {
@@ -442,13 +475,22 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     queuePullDrain()
   }
 
-  const scheduleStompModelChangedPull = (): void => {
-    if (stompPullCoalesceScheduled) return
-    stompPullCoalesceScheduled = true
-    queueMicrotask(() => {
-      stompPullCoalesceScheduled = false
-      pullRemoteSnapshot({ ignoreSavingGuard: true, reason: 'stomp_model_changed' })
-    })
+  const enqueueGranularEvents = (events: readonly GranularSyncEventPayload[]): void => {
+    const coalesced = coalesceModelSyncGranularEvents([...events])
+    if (!isInitialSnapshotReady()) {
+      for (const event of coalesced) {
+        pendingGranularEvents.set(`${event.entity}:${event.id}`, event)
+      }
+      return
+    }
+    granularReconciler?.enqueue(coalesced)
+  }
+
+  const drainPendingGranularEvents = (): void => {
+    if (pendingGranularEvents.size === 0) return
+    const events = [...pendingGranularEvents.values()]
+    pendingGranularEvents.clear()
+    enqueueGranularEvents(events)
   }
 
   const checkRevisionAfterConnect = async (
@@ -560,8 +602,16 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
               }
               return
             }
-            coalesceModelSyncGranularEvents(parseGranularSyncEventsFromPayload(parsed.events))
-            scheduleStompModelChangedPull()
+            const events = parseGranularSyncEventsFromPayload(parsed.events)
+            if (events.length === 0) {
+              emitModelLiveSyncTelemetry({
+                kind: 'granular_payload_unsupported',
+                modelId: mid,
+                eventId: typeof parsed.eventId === 'string' ? parsed.eventId : undefined,
+              })
+              return
+            }
+            enqueueGranularEvents(events)
           } catch {
             /* ignore malformed */
           }
@@ -605,7 +655,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     if (!options.enabled.value) {
       syncGeneration += 1
       pendingPull = null
-      pendingModelChanged = false
+      pendingGranularEvents.clear()
+      granularReconciler?.invalidate()
       connectHelloPending = false
       disconnectPush()
       stopFallbackPoll()
@@ -625,7 +676,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       syncGeneration += 1
       lastSyncedModelId = mid
       pendingPull = null
-      pendingModelChanged = false
+      pendingGranularEvents.clear()
+      granularReconciler?.invalidate()
       skipConnectResyncOnce = false
       connectHelloPending = false
     }
@@ -674,10 +726,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       if (!ready) return
       if (wasReady === false) {
         skipConnectResyncOnce = connectHelloPending
-        if (pendingModelChanged) {
-          pendingModelChanged = false
-          pullRemoteSnapshot({ ignoreSavingGuard: true, reason: 'stomp_model_changed' })
-        }
+        drainPendingGranularEvents()
       }
       if (isPollEnabled && !wsConnected) {
         startFallbackPoll({ immediate: false })
@@ -733,7 +782,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     disposed = true
     syncGeneration += 1
     pendingPull = null
-    pendingModelChanged = false
+    pendingGranularEvents.clear()
+    granularReconciler?.dispose()
     disconnectPush()
     stopFallbackPoll()
     if (typeof document !== 'undefined') {

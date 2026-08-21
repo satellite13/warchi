@@ -4,7 +4,7 @@ import type { ModelData } from '@/types/entities'
 import type { ModelEditorState } from '../types'
 import { useDiagramEditLock } from './useDiagramEditLock'
 import { useDiagramRealtimeCollab } from './useDiagramRealtimeCollab'
-import { useModelLiveSync } from './useModelLiveSync'
+import { useModelLiveSync, type UseModelLiveSyncOptions } from './useModelLiveSync'
 
 export function useModelEditorSync(options: {
   modelId: Ref<string | null | undefined>
@@ -28,6 +28,7 @@ export function useModelEditorSync(options: {
   reconcileMaterializedRows?: () => void
   onRemoteSnapshotApplied?: () => void
   onModelUnavailable?: (status: number) => void
+  granularSync?: UseModelLiveSyncOptions['granularSync']
 }) {
   const diagramEditLock = useDiagramEditLock({
     modelId: options.modelId,
@@ -108,6 +109,7 @@ export function useModelEditorSync(options: {
     preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),
     onModelTopicBroadcast: collab.handleModelTopicBroadcast,
     onModelUnavailable: options.onModelUnavailable,
+    granularSync: options.granularSync,
   })
 
   async function handleReloadModelForDiagramLock(loadModel: () => Promise<void>): Promise<void> {

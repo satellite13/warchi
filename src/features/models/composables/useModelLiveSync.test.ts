@@ -5,6 +5,8 @@ import { refreshAccessToken, type ApiResult } from '@/api/apiClient'
 import { apiGet } from '@/composables/useApi'
 import type { ModelData } from '@/types/entities'
 import { createEmptyModelEditorState } from '../types'
+import { ModelPartialStore } from '../utils/modelPartialStore'
+import { toEditorNode } from './modelEditorMappers'
 import { parseModelLivePollMs, parseModelLiveSyncMode, useModelLiveSync } from './useModelLiveSync'
 
 type StompOptions = {
@@ -454,7 +456,7 @@ describe('useModelLiveSync snapshot pull', () => {
     wrapper.unmount()
   })
 
-  it('coalesces multiple foreign changes during a pull into exactly one repeat', async () => {
+  it('never promotes unsupported WS payloads to a full snapshot repeat', async () => {
     const snapshotReady = ref(false)
     const firstNodes = deferred<ApiResult<unknown>>()
     let nodePulls = 0
@@ -526,7 +528,7 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(nodePulls).toBe(2)
+    expect(nodePulls).toBe(1)
     wrapper.unmount()
   })
 
@@ -766,83 +768,6 @@ describe('useModelLiveSync snapshot pull', () => {
     vi.useRealTimers()
   })
 
-  it('keeps the pull in flight until rejected siblings settle before a foreign repeat', async () => {
-    const snapshotReady = ref(false)
-    const firstLinks = deferred<ApiResult<unknown>>()
-    let nodePulls = 0
-    let linkPulls = 0
-    vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?')) {
-        nodePulls += 1
-        if (nodePulls === 1) throw new Error('nodes failed')
-        return { success: true, data: page([]) }
-      }
-      if (path.startsWith('/links?')) {
-        linkPulls += 1
-        if (linkPulls === 1) return firstLinks.promise
-        return { success: true, data: page([]) }
-      }
-      if (path.startsWith('/diagrams?')) return { success: true, data: page([]) }
-      if (path === '/models/model-1') return { success: true, data: model() }
-      throw new Error(`Unexpected apiGet path: ${path}`)
-    })
-
-    const wrapper = mount(
-      defineComponent({
-        setup() {
-          useModelLiveSync({
-            modelId: ref('model-1'),
-            state: ref(createEmptyModelEditorState()),
-            model: ref(model()),
-            enabled: ref(true),
-            isLoading: ref(false),
-            initialSnapshotReady: snapshotReady,
-            isSaving: ref(false),
-            modelDirty: ref(false),
-            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
-            currentUserId: ref('viewer-1'),
-            mode: 'ws',
-          })
-          return () => null
-        },
-      })
-    )
-    await flushPromises()
-    const client = stompMock.clients.at(-1)
-    client?.options.onConnect()
-    snapshotReady.value = true
-    await flushPromises()
-    const callback = client?.subscriptions.get('/topic/models/model-1')
-    callback?.({
-      body: JSON.stringify({
-        type: 'model_changed',
-        modelId: 'model-1',
-        actorUserId: 'other-user',
-        eventId: 'event-1',
-      }),
-    })
-    await flushPromises()
-    expect(nodePulls).toBe(1)
-
-    callback?.({
-      body: JSON.stringify({
-        type: 'model_changed',
-        modelId: 'model-1',
-        actorUserId: 'other-user',
-        eventId: 'event-2',
-      }),
-    })
-    await flushPromises()
-    expect(nodePulls).toBe(1)
-
-    firstLinks.resolve({ success: true, data: page([]) })
-    await flushPromises()
-    await flushPromises()
-    expect(nodePulls).toBe(2)
-
-    wrapper.unmount()
-  })
-
   it('ignores a late connect callback from a replaced websocket client', async () => {
     const modelId = ref('model-1')
     vi.mocked(apiGet).mockImplementation(async () => {
@@ -1048,6 +973,102 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
 
     expect(onModelTopicBroadcast).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(apiGet)
+        .mock.calls.filter(([path]) => path.startsWith('/nodes?') || path.startsWith('/links?'))
+    ).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('applies granular STOMP events without unscoped node/link snapshot fallback', async () => {
+    const snapshotReady = ref(false)
+    const state = ref(createEmptyModelEditorState())
+    state.value.modelId = 'model-1'
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [
+        toEditorNode({
+          id: 'node-1',
+          name: 'old',
+          modelId: 'model-1',
+          ownerId: 'owner-1',
+          nodeTypeId: 'node-type-1',
+          attrs: null,
+        }),
+      ],
+      { kind: 'partial' }
+    )
+    state.value.nodes = store.nodes
+    const fetchNode = vi.fn(async () => ({
+      success: true as const,
+      data: {
+        id: 'node-1',
+        name: 'remote',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'node-type-1',
+        attrs: null,
+      },
+    }))
+    vi.mocked(apiGet).mockImplementation(async path => {
+      if (path === '/models/model-1') return { success: true, data: model() }
+      throw new Error(`Unexpected unscoped live-sync GET: ${path}`)
+    })
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state,
+            model: ref(model()),
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: snapshotReady,
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            currentUserId: ref('viewer-1'),
+            mode: 'ws',
+            granularSync: {
+              store,
+              publishMaterializedRows: () => {
+                state.value.nodes = store.nodes
+                state.value.links = store.links
+              },
+              refreshChildrenScope: vi.fn(async () => undefined),
+              fetchers: {
+                fetchNode,
+                fetchLink: vi.fn(),
+                fetchDiagram: vi.fn(),
+              },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+    await flushPromises()
+    snapshotReady.value = true
+    const client = stompMock.clients.at(-1)
+    client?.options.onConnect()
+    await flushPromises()
+
+    client?.subscriptions.get('/topic/models/model-1')?.({
+      body: JSON.stringify({
+        type: 'model_changed',
+        modelId: 'model-1',
+        actorUserId: 'other-user',
+        eventId: 'granular-1',
+        events: [{ type: 'node_updated', entity: 'node', id: 'node-1' }],
+      }),
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(fetchNode).toHaveBeenCalledWith('node-1', expect.any(AbortSignal))
+    expect(state.value.nodes[0]?.name).toBe('remote')
     expect(
       vi
         .mocked(apiGet)

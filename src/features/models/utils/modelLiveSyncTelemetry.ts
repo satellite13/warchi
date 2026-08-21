@@ -1,3 +1,5 @@
+import type { GranularSyncEventPayload } from './modelSyncGranularCoalesce'
+
 /** Слушатель: window.addEventListener(WARCHI_MODEL_LIVE_SYNC_EVENT, …) */
 export const WARCHI_MODEL_LIVE_SYNC_EVENT = 'warchi-model-live-sync'
 
@@ -18,6 +20,16 @@ export type ModelLiveSyncTelemetryDetail =
       eventId?: string
     }
   | { kind: 'ws_message_deduped'; modelId: string; eventId: string }
+  | {
+      kind: 'granular_event_unknown'
+      modelId: string
+      event: GranularSyncEventPayload
+    }
+  | {
+      kind: 'granular_payload_unsupported'
+      modelId: string
+      eventId?: string
+    }
   | {
       kind: 'pull_trigger'
       modelId: string

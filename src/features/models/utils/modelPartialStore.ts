@@ -54,6 +54,33 @@ export class ModelPartialStore {
     this.rootParentNodeId = nodeId
   }
 
+  treeScopeForParentNodeId(parentNodeId: string | null | undefined): TreeParentScope {
+    return parentNodeId == null || parentNodeId === this.rootParentNodeId
+      ? { kind: 'root' }
+      : { kind: 'node', nodeId: parentNodeId }
+  }
+
+  treeScopeForNode(nodeId: string): TreeParentScope | null {
+    const scopeKey = this.treeScopeKeyByNodeId.get(nodeId)
+    if (!scopeKey) return null
+    return scopeKey === 'root'
+      ? { kind: 'root' }
+      : { kind: 'node', nodeId: scopeKey.slice('node:'.length) }
+  }
+
+  isChildrenScopeKnown(scope: TreeParentScope): boolean {
+    const scopeKey = this.scopeKey(scope)
+    return (
+      this.childrenPages.has(scopeKey) ||
+      this.loadedChildrenFor.has(scopeKey) ||
+      this.childrenByParent.has(scopeKey)
+    )
+  }
+
+  isChildrenScopeLoaded(scope: TreeParentScope): boolean {
+    return this.loadedChildrenFor.has(this.scopeKey(scope))
+  }
+
   beginRequest(requestKey: string): ModelPartialRequestGuard {
     const token = (this.requestTokens.get(requestKey) ?? 0) + 1
     this.requestTokens.set(requestKey, token)
@@ -271,7 +298,8 @@ export class ModelPartialStore {
     }
   }
 
-  private invalidateChildrenScope(scopeKey: string): void {
+  invalidateChildrenScope(scope: TreeParentScope | string): void {
+    const scopeKey = typeof scope === 'string' ? scope : this.scopeKey(scope)
     this.childrenPages.delete(scopeKey)
     this.internalChildrenPages.delete(scopeKey)
     this.loadedChildrenFor.delete(scopeKey)

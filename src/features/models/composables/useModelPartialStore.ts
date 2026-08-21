@@ -65,6 +65,16 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     publishRows()
   }
 
+  const invalidateChildrenScope = (scope: TreeParentScope): void => {
+    const scopeKey = store.scopeKey(scope)
+    sessions.get(scopeKey)?.controller.abort()
+    sessions.delete(scopeKey)
+    inFlight.delete(scopeKey)
+    setLoading(scopeKey, false)
+    setError(scopeKey, null)
+    store.invalidateChildrenScope(scope)
+  }
+
   const setLoading = (scopeKey: string, loading: boolean): void => {
     const next = new Set(childrenLoading.value)
     if (loading) next.add(scopeKey)
@@ -257,5 +267,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     mergeFullLinks,
     mergePartialEntities,
     reconcileMaterializedRows,
+    invalidateChildrenScope,
+    publishMaterializedRows: publishRows,
   }
 }

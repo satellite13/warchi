@@ -440,6 +440,15 @@ const {
   onRemoteSnapshotApplied: () => {
     void detachedModelLinks.refreshAfterRemoteSync()
   },
+  granularSync: {
+    store: partialStore.store,
+    publishMaterializedRows: partialStore.publishMaterializedRows,
+    refreshChildrenScope: partialStore.refreshChildrenScope,
+    invalidateChildrenScope: partialStore.invalidateChildrenScope,
+    onDetachedSnapshotInvalidated: () => {
+      void detachedModelLinks.refreshAfterRemoteSync()
+    },
+  },
   onModelUnavailable: status => {
     errorMessage.value =
       status === 403 ? t('models.modelAccessRevoked') : t('models.modelNoLongerAvailable')

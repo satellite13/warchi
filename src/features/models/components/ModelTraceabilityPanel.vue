@@ -68,6 +68,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'open-diagram': [diagramId: string]
   'focus-node': [nodeId: string]
+  'add-node-to-diagram': [nodeId: string]
 }>()
 
 const { t } = useI18n()
@@ -211,6 +212,17 @@ const onNodeDragStart = (event: DragEvent, nodeId: string): void => {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'copy'
   }
+}
+
+const requestNodeAddToDiagram = (nodeId: string): void => {
+  if (!props.canDragNodeToDiagram(nodeId).allowed) return
+  emit('add-node-to-diagram', nodeId)
+}
+
+const onNodeKeyboardRequest = (event: KeyboardEvent, nodeId: string): void => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  requestNodeAddToDiagram(nodeId)
 }
 
 const isLinkExpanded = (nodeId: string, linkId: string): boolean =>
@@ -518,8 +530,16 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                   :class="{ 'tp-tree__drag-handle--disabled': !canDragNodeToDiagram(rootNode.id).allowed }"
                   :title="canDragNodeToDiagram(rootNode.id).reason"
                   :draggable="canDragNodeToDiagram(rootNode.id).allowed"
+                  :aria-disabled="!canDragNodeToDiagram(rootNode.id).allowed"
+                  :aria-label="t('models.traceabilityAddNodeToDiagram', { name: rootNode.name })"
+                  :tabindex="canDragNodeToDiagram(rootNode.id).allowed ? 0 : -1"
                   data-testid="trace-node-drag-root"
+                  role="button"
+                  @click.stop
+                  @mousedown.stop
+                  @pointerdown.stop
                   @dragstart.stop="onNodeDragStart($event, rootNode.id)"
+                  @keydown.stop="onNodeKeyboardRequest($event, rootNode.id)"
                 >
                   <UiIcon name="drag_indicator" class="tp-tree__drag-handle-icon" />
                 </span>
@@ -541,6 +561,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 :get-link-status="getLinkStatus"
                 :can-drag-node-to-diagram="canDragNodeToDiagram"
                 @set-root="setRootFromTree"
+                @request-add-node="requestNodeAddToDiagram"
               />
             </div>
           </div>

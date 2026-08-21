@@ -34,6 +34,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   setRoot: [nodeId: string]
+  requestAddNode: [nodeId: string]
 }>()
 
 const { t } = useI18n()
@@ -140,6 +141,13 @@ const onNodeDragStart = (event: DragEvent, nodeId: string): void => {
   }
 }
 
+const onNodeKeyboardRequest = (event: KeyboardEvent, nodeId: string): void => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  if (!props.canDragNodeToDiagram(nodeId).allowed) return
+  emit('requestAddNode', nodeId)
+}
+
 const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
   const link = row.link
   const nextNodeId = resolveNextNodeId(link)
@@ -212,8 +220,20 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
               }"
               :title="canDragNodeToDiagram(resolveNextNodeId(row.link)).reason"
               :draggable="canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed"
+              :aria-disabled="!canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed"
+              :aria-label="
+                t('models.traceabilityAddNodeToDiagram', {
+                  name: nodeName(resolveNextNodeId(row.link), row),
+                })
+              "
+              :tabindex="canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed ? 0 : -1"
               :data-testid="`trace-node-drag-${resolveNextNodeId(row.link)}`"
+              role="button"
+              @click.stop
+              @mousedown.stop
+              @pointerdown.stop
               @dragstart.stop="onNodeDragStart($event, resolveNextNodeId(row.link))"
+              @keydown.stop="onNodeKeyboardRequest($event, resolveNextNodeId(row.link))"
             >
               <UiIcon name="drag_indicator" class="tb__drag-handle-icon" />
             </span>
@@ -239,6 +259,7 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
             :get-link-status="getLinkStatus"
             :can-drag-node-to-diagram="canDragNodeToDiagram"
             @set-root="emit('setRoot', $event)"
+            @request-add-node="emit('requestAddNode', $event)"
           />
         </template>
       </div>

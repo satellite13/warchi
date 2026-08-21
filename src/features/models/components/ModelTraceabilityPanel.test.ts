@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
 import type { EditorGraphNeighbor, EditorNode } from '../types'
+import ModelTraceBranch from './ModelTraceBranch.vue'
 import ModelTraceabilityPanel from './ModelTraceabilityPanel.vue'
 
 const lazyState = vi.hoisted(() => ({
@@ -258,6 +259,47 @@ describe('ModelTraceabilityPanel lazy branches', () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(drag.dataTransfer.setData).not.toHaveBeenCalled()
+  })
+
+  it('keeps root focus unchanged when its drag handle is clicked and requests keyboard addition', async () => {
+    canDragNodeToDiagram.mockReturnValue({ allowed: true, reason: 'Drag node' })
+    const wrapper = mountPanel()
+    const handle = wrapper.get('[data-testid="trace-node-drag-root"]')
+
+    expect(handle.attributes('role')).toBe('button')
+    expect(handle.attributes('tabindex')).toBe('0')
+    await handle.trigger('click')
+    expect(wrapper.emitted('focus-node')).toBeUndefined()
+
+    await handle.trigger('keydown', { key: 'Enter' })
+    await handle.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('add-node-to-diagram')).toEqual([['root'], ['root']])
+  })
+
+  it('keeps the current root on branch-handle click and forwards keyboard addition', async () => {
+    canDragNodeToDiagram.mockReturnValue({ allowed: true, reason: 'Drag node' })
+    lazyState.branchStates.set('root', {
+      rows: [neighbor('link-1', 'root', 'child', 'child')],
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: 1,
+      token: 1,
+      generation: 1,
+    })
+    const wrapper = mountPanel()
+    await nextTick()
+    await wrapper.get('.tb__link').trigger('click')
+
+    const handle = wrapper.get('[data-testid="trace-node-drag-child"]')
+    await handle.trigger('click')
+
+    expect(wrapper.findComponent(ModelTraceBranch).emitted('setRoot')).toBeUndefined()
+    expect(wrapper.get('.tp-tree__root-name').text()).toBe('Root')
+
+    await handle.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('add-node-to-diagram')).toEqual([['child']])
   })
 
   it('loads selected root and renders diagram references from the scoped endpoint state', async () => {

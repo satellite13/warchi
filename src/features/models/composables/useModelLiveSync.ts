@@ -32,6 +32,7 @@ import type { ModelPartialStore } from '../utils/modelPartialStore'
 import {
   coalesceModelSyncGranularEvents,
   parseGranularSyncEventsFromPayload,
+  reduceModelSyncGranularEvent,
   type GranularSyncEventPayload,
 } from '../utils/modelSyncGranularCoalesce'
 import { fetchAllByModelId } from './modelEditorLoadModel'
@@ -172,6 +173,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         modelDirty: () => options.modelDirty.value,
         store: options.granularSync.store,
         diagrams: () => options.state.value.diagrams,
+        openDiagramId: () => options.openDiagramId?.value,
         replaceDiagrams: diagrams => {
           options.state.value.diagrams = diagrams
         },
@@ -187,6 +189,17 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
           const mid = options.modelId.value
           if (typeof mid === 'string') {
             emitModelLiveSyncTelemetry({ kind: 'granular_event_unknown', modelId: mid, event })
+          }
+        },
+        onError: (event, error) => {
+          const mid = options.modelId.value
+          if (typeof mid === 'string') {
+            emitModelLiveSyncTelemetry({
+              kind: 'granular_event_error',
+              modelId: mid,
+              event,
+              message: error instanceof Error ? error.message : String(error),
+            })
           }
         },
       })
@@ -497,7 +510,12 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     }
     if (!isInitialSnapshotReady()) {
       for (const event of coalesced) {
-        pendingGranularEvents.set(`${event.entity}:${event.id}`, event)
+        const key = `${event.entity}:${event.id}`
+        const previous = pendingGranularEvents.get(key)
+        pendingGranularEvents.set(
+          key,
+          previous ? reduceModelSyncGranularEvent(previous, event) : event
+        )
       }
       return
     }

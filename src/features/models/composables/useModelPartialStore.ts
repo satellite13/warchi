@@ -34,6 +34,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const sessions = new Map<string, ScopeRequestSession>()
   const inFlight = new Map<string, { promise: Promise<void> }>()
   const visibleRefreshFailures = new Set<string>()
+  const queuedVisibleRefreshes = new Set<string>()
   let modelId: string | null = null
 
   const publishRows = (): void => {
@@ -60,6 +61,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
       sessions.delete(scopeKey)
       inFlight.delete(scopeKey)
       visibleRefreshFailures.delete(scopeKey)
+      queuedVisibleRefreshes.delete(scopeKey)
       setLoading(scopeKey, false)
       setError(scopeKey, null)
     }
@@ -73,6 +75,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     sessions.delete(scopeKey)
     inFlight.delete(scopeKey)
     visibleRefreshFailures.delete(scopeKey)
+    queuedVisibleRefreshes.delete(scopeKey)
     setLoading(scopeKey, false)
     setError(scopeKey, null)
     store.invalidateChildrenScope(scope)
@@ -218,7 +221,16 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const refreshVisibleChildrenScope = (scope: TreeParentScope): Promise<void> => {
     const scopeKey = store.scopeKey(scope)
     const existing = inFlight.get(scopeKey)
-    if (existing) return existing.promise
+    if (existing) {
+      queuedVisibleRefreshes.add(scopeKey)
+      return existing.promise.then(async () => {
+        if (queuedVisibleRefreshes.delete(scopeKey)) {
+          await refreshVisibleChildrenScope(scope)
+        } else {
+          await inFlight.get(scopeKey)?.promise
+        }
+      })
+    }
     if (!modelId) return Promise.resolve()
 
     const requestedModelId = modelId
@@ -313,6 +325,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     sessions.clear()
     inFlight.clear()
     visibleRefreshFailures.clear()
+    queuedVisibleRefreshes.clear()
     store.reset()
     generation.value = store.generation
     modelId = nextModelId
@@ -334,6 +347,12 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const mergeFullLinks = (links: ModelEditorState['links']): void => {
     captureMaterializedRows()
     store.mergeLinks(links, { kind: 'full' })
+    publishRows()
+  }
+
+  const discardRemoteCascadeConflictLinks = (): void => {
+    captureMaterializedRows()
+    store.discardRemoteCascadeConflictLinks()
     publishRows()
   }
 
@@ -366,6 +385,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     ensureChildrenScopeComplete,
     resetPartialScopes,
     mergeFullLinks,
+    discardRemoteCascadeConflictLinks,
     mergePartialEntities,
     reconcileMaterializedRows,
     invalidateChildrenScope,

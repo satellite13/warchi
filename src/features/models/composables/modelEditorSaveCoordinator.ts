@@ -27,6 +27,7 @@ type ExecuteModelEditorSaveOptions = {
   pendingForceBatch: Ref<boolean>
   batchSaveConflict: Ref<BatchConflictItem[] | null>
   saveError: Ref<string | null>
+  remoteCascadeConflictLinkIds?: ReadonlySet<string>
   onProgress: (msg: string) => void
   scheduleSaveErrorClear: () => void
 }
@@ -49,6 +50,12 @@ export function hasLegacyEntitySaveWork(
 export async function executeModelEditorSave(options: ExecuteModelEditorSaveOptions): Promise<boolean> {
   const modelValue = options.model.value
   if (!modelValue) return false
+  if ((options.remoteCascadeConflictLinkIds?.size ?? 0) > 0) {
+    options.saveError.value = t("models.remoteCascadeSaveBlocked", {
+      count: options.remoteCascadeConflictLinkIds?.size ?? 0,
+    })
+    return false
+  }
 
   try {
     const { ownerId, modelId, nodes, links, diagrams } = options.state.value

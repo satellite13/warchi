@@ -145,28 +145,31 @@ describe('useDetachedModelLinks', () => {
     vueScope.stop()
   })
 
-  it('supersedes an in-flight snapshot on remote delete and ignores a late old result', async () => {
+  it('invalidates remote events without eager reload and next explicit load is fresh', async () => {
     const oldRequest = deferred<EditorLink[]>()
-    const deleteRefresh = deferred<EditorLink[]>()
     vi.mocked(loadModelEditorLinks)
       .mockReturnValueOnce(oldRequest.promise)
-      .mockReturnValueOnce(deleteRefresh.promise)
+      .mockResolvedValueOnce([link('fresh-after-events')])
     const vueScope = effectScope()
     const loader = vueScope.run(() => useDetachedModelLinks(ref('model-1')))!
 
     const oldLoad = loader.load()
-    const remoteRefresh = loader.refreshAfterRemoteSync()
-    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
-
-    deleteRefresh.resolve([])
-    await remoteRefresh
+    loader.invalidateAfterRemoteSync()
+    loader.invalidateAfterRemoteSync()
+    loader.invalidateAfterRemoteSync()
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(1)
     expect(loader.links.value).toEqual([])
-    expect(loader.loadedModelId.value).toBe('model-1')
+    expect(loader.loadedModelId.value).toBeNull()
+    expect(loader.stale.value).toBe(true)
 
     oldRequest.resolve([link('deleted-remotely')])
     await oldLoad
     expect(loader.links.value).toEqual([])
-    expect(loader.loadedModelId.value).toBe('model-1')
+
+    await loader.load()
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
+    expect(loader.links.value).toEqual([link('fresh-after-events')])
+    expect(loader.stale.value).toBe(false)
     vueScope.stop()
   })
 })

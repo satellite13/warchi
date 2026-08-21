@@ -14,7 +14,28 @@ describe("coalesceModelSyncGranularEvents", () => {
     expect(r[0]!.type).toBe("node_deleted")
   })
 
-  it("last event per slot wins", () => {
+  it.each([
+    ["created", "updated", "created"],
+    ["created", "deleted", "deleted"],
+    ["updated", "created", "created"],
+    ["updated", "deleted", "deleted"],
+    ["deleted", "updated", "deleted"],
+    ["deleted", "created", "created"],
+  ] as const)(
+    "reduces %s followed by %s to %s intent with the latest revision",
+    (first, second, expected) => {
+      const r = coalesceModelSyncGranularEvents([
+        { type: `node_${first}`, entity: "node", id: "1", revision: 5 },
+        { type: `node_${second}`, entity: "node", id: "1", revision: 6 },
+      ])
+
+      expect(r).toEqual([
+        { type: `node_${expected}`, entity: "node", id: "1", revision: 6 },
+      ])
+    }
+  )
+
+  it("keeps latest metadata for repeated updates", () => {
     const r = coalesceModelSyncGranularEvents([
       { type: "node_updated", entity: "node", id: "1", revision: 5 },
       { type: "node_updated", entity: "node", id: "1", revision: 3 },

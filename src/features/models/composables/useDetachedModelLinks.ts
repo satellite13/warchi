@@ -24,6 +24,7 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
   const error = ref<string | null>(null)
   const loadedModelId = ref<string | null>(null)
   const requestedModelId = ref<string | null>(null)
+  const stale = ref(false)
   let snapshotGeneration = 0
   let inFlight: Promise<EditorLink[] | null> | null = null
 
@@ -35,6 +36,7 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     error.value = null
     loadedModelId.value = null
     requestedModelId.value = null
+    stale.value = false
   }
 
   const startLoad = async (supersede: boolean): Promise<EditorLink[] | null> => {
@@ -48,6 +50,7 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     const requestGeneration = ++snapshotGeneration
     requestedModelId.value = targetModelId
     loading.value = true
+    stale.value = false
     error.value = null
     links.value = []
     loadedModelId.value = null
@@ -65,6 +68,7 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
         }
         links.value = loaded
         loadedModelId.value = targetModelId
+        stale.value = false
         return loaded
       } catch (caught) {
         if (
@@ -94,7 +98,16 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     return refresh()
   }
   const refreshAfterSuccessfulSave = refreshActiveRequest
-  const refreshAfterRemoteSync = refreshActiveRequest
+  const invalidateAfterRemoteSync = (): void => {
+    snapshotGeneration += 1
+    inFlight = null
+    links.value = []
+    loading.value = false
+    error.value = null
+    loadedModelId.value = null
+    requestedModelId.value = null
+    stale.value = modelId.value !== null
+  }
 
   onScopeDispose(reset)
 
@@ -104,10 +117,11 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     error,
     loadedModelId,
     requestedModelId,
+    stale,
     load,
     refresh,
     refreshAfterSuccessfulSave,
-    refreshAfterRemoteSync,
+    invalidateAfterRemoteSync,
     reset,
   }
 }

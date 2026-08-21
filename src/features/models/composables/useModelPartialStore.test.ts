@@ -458,6 +458,38 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('queues one follow-up bounded refresh requested during an in-flight refresh', async () => {
+    const first = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
+    const followUp = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
+    vi.mocked(fetchNodeChildren)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(followUp.promise)
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old')]),
+    })
+
+    const refreshing = partial.refreshVisibleChildrenScope({ kind: 'root' })
+    const queued = partial.refreshVisibleChildrenScope({ kind: 'root' })
+    const coalesced = partial.refreshVisibleChildrenScope({ kind: 'root' })
+    expect(fetchNodeChildren).toHaveBeenCalledTimes(1)
+
+    first.resolve({ success: true, data: page([node('first-read')]) })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fetchNodeChildren).toHaveBeenCalledTimes(2)
+
+    followUp.resolve({ success: true, data: page([node('follow-up-read')]) })
+    await Promise.all([refreshing, queued, coalesced])
+
+    expect(fetchNodeChildren).toHaveBeenCalledTimes(2)
+    expect(state.value.nodes.map(row => row.id)).toEqual(['follow-up-read'])
+    scope.stop()
+  })
+
   it('aborts a visible scope refresh and rejects its late result after reset', async () => {
     const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
     vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)

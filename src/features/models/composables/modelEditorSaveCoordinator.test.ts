@@ -169,6 +169,42 @@ describe("executeModelEditorSave", () => {
     expect(mocks.buildBatchSaveRequest).not.toHaveBeenCalled()
   })
 
+  it("blocks save for remote cascade conflicts with an actionable error", async () => {
+    const state = ref(createState())
+    const conflicted = state.value.links[0]
+    if (!conflicted) throw new Error("expected link")
+    conflicted._isDirty = true
+    const saveError = ref<string | null>(null)
+    const scheduleSaveErrorClear = vi.fn()
+
+    const result = await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref([]),
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError,
+      remoteCascadeConflictLinkIds: new Set(["l-1"]),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear,
+    })
+
+    expect(result).toBe(false)
+    expect(saveError.value).toContain("перезагруз")
+    expect(saveError.value).toContain("повторите сохранение")
+    expect(scheduleSaveErrorClear).not.toHaveBeenCalled()
+    expect(mocks.buildBatchSaveRequest).not.toHaveBeenCalled()
+    expect(mocks.batchSave).not.toHaveBeenCalled()
+  })
+
   it("skips legacy entity pipeline when there are no batch changes", async () => {
     const state = ref(createState())
     // Local-only soft deletes (new+deleted) and clean rows — nothing for entity pipelines.

@@ -39,7 +39,7 @@ export class ModelPartialStore {
   readonly loadedChildrenFor = new Set<string>()
   readonly remoteDeletedNodeIds = new Set<string>()
   readonly remoteDeletedLinkIds = new Set<string>()
-  /** Dirty/new incident links removed by a remote node FK cascade. */
+  /** Dirty/new incident links preserved after a remote node FK cascade. */
   readonly remoteCascadeConflictLinkIds = new Set<string>()
 
   private readonly requestTokens = new Map<string, number>()
@@ -241,10 +241,11 @@ export class ModelPartialStore {
   deleteRemoteLink(linkId: string, options?: { force?: boolean }): void {
     this.remoteDeletedLinkIds.add(linkId)
     const local = this.linkById.get(linkId)
-    if (isProtectedLocal(local) && options?.force !== true) return
     if (local?._isDirty || local?._isNew) {
-      this.remoteCascadeConflictLinkIds.add(linkId)
+      if (options?.force === true) this.remoteCascadeConflictLinkIds.add(linkId)
+      return
     }
+    if (isProtectedLocal(local)) return
     this.replaceLinks(this.links.filter(row => row.id !== linkId))
   }
 
@@ -256,6 +257,12 @@ export class ModelPartialStore {
       this.deleteRemoteLink(linkId, { force: true })
     }
     return incidentIds
+  }
+
+  discardRemoteCascadeConflictLinks(): void {
+    const conflictedIds = new Set(this.remoteCascadeConflictLinkIds)
+    this.replaceLinks(this.links.filter(row => !conflictedIds.has(row.id)))
+    this.remoteCascadeConflictLinkIds.clear()
   }
 
   clearRemoteNodeTombstone(nodeId: string): void {

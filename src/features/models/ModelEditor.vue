@@ -71,6 +71,7 @@ import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
 import ModelEditorLoadProgress from './components/ModelEditorLoadProgress.vue'
+import RemoteCascadeConflictNotice from './components/RemoteCascadeConflictNotice.vue'
 import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
@@ -157,6 +158,22 @@ const detachedModelLinks = useDetachedModelLinks(computed(() => state.value.mode
 const detachedConsumerLinks = computed(() =>
   mergeDetachedModelLinks(detachedModelLinks.links.value, state.value.links)
 )
+const remoteCascadeConflictCount = computed(
+  () =>
+    state.value.links.filter(link =>
+      partialStore.store.remoteCascadeConflictLinkIds.has(link.id)
+    ).length
+)
+
+function discardRemoteCascadeConflictLinks(): void {
+  partialStore.discardRemoteCascadeConflictLinks()
+  saveError.value = null
+}
+
+async function reloadAfterRemoteCascadeConflict(): Promise<void> {
+  saveError.value = null
+  await loadModel()
+}
 
 const modelLiveSyncEnabled = computed(
   () => !!model.value && !isLoading.value && !errorMessage.value
@@ -438,7 +455,7 @@ const {
   ensureNotationRelationsAndRules,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   onRemoteSnapshotApplied: () => {
-    void detachedModelLinks.refreshAfterRemoteSync()
+    detachedModelLinks.invalidateAfterRemoteSync()
   },
   granularSync: {
     store: partialStore.store,
@@ -446,7 +463,7 @@ const {
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
-      void detachedModelLinks.refreshAfterRemoteSync()
+      detachedModelLinks.invalidateAfterRemoteSync()
     },
   },
   onModelUnavailable: status => {
@@ -3531,7 +3548,8 @@ onBeforeUnmount(() => {
                 canShowTraceabilityTab &&
                 selectedNode &&
                 !detachedModelLinks.loading.value &&
-                !detachedModelLinks.error.value
+                !detachedModelLinks.error.value &&
+                !detachedModelLinks.stale.value
               "
               :selected-node="selectedNode"
               :nodes="traceabilityNodes"
@@ -3547,6 +3565,24 @@ onBeforeUnmount(() => {
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />
+            <div
+              v-else-if="
+                activeRightTab === 'traceability' &&
+                canShowTraceabilityTab &&
+                detachedModelLinks.stale.value
+              "
+              class="background-load-warnings__item"
+              role="status"
+            >
+              <span>{{ t('models.detachedLinksStale') }}</span>
+              <button
+                type="button"
+                class="btn btn--secondary"
+                @click="detachedModelLinks.load()"
+              >
+                {{ t('models.detachedLinksRefresh') }}
+              </button>
+            </div>
             <div
               v-else-if="
                 activeRightTab === 'traceability' &&
@@ -3611,6 +3647,12 @@ onBeforeUnmount(() => {
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
     :progress="saveProgress"
+  />
+  <RemoteCascadeConflictNotice
+    v-if="remoteCascadeConflictCount > 0"
+    :count="remoteCascadeConflictCount"
+    @discard="discardRemoteCascadeConflictLinks"
+    @reload="reloadAfterRemoteCascadeConflict"
   />
 
   <DiagramCopyWizard

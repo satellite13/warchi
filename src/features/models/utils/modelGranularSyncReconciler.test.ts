@@ -111,6 +111,8 @@ function harness(options: {
   diagrams?: EditorDiagram[]
   fetchers?: Partial<ModelGranularSyncFetchers>
   model?: ModelData
+  openDiagramId?: string | null
+  refreshVisibleChildrenScope?: (scope: TreeParentScope) => Promise<void>
 } = {}) {
   const store = new ModelPartialStore()
   store.setRootParentNodeId(null)
@@ -123,6 +125,7 @@ function harness(options: {
   const refreshedScopes: TreeParentScope[] = []
   const invalidatedDetached = vi.fn()
   const unknown = vi.fn()
+  const errors = vi.fn()
   const fetchers: ModelGranularSyncFetchers = {
     fetchNode: vi.fn(async id => success(node(id))),
     fetchLink: vi.fn(async id => success(link(id))),
@@ -139,6 +142,7 @@ function harness(options: {
     modelDirty: () => false,
     store,
     diagrams: () => state.diagrams,
+    openDiagramId: () => options.openDiagramId ?? null,
     replaceDiagrams: rows => {
       state.diagrams = rows
     },
@@ -146,15 +150,19 @@ function harness(options: {
       state.nodes = store.nodes
       state.links = store.links
     },
-    refreshVisibleChildrenScope: async scope => {
-      refreshedScopes.push(scope)
-    },
+    refreshVisibleChildrenScope:
+      options.refreshVisibleChildrenScope ??
+      (async scope => {
+        refreshedScopes.push(scope)
+      }),
     fetchers,
     onDetachedSnapshotInvalidated: invalidatedDetached,
     onUnknownEvent: unknown,
+    onError: errors,
   })
   return {
     fetchers,
+    errors,
     invalidatedDetached,
     reconciler,
     refreshedScopes,
@@ -201,6 +209,72 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.store.nodeById.get('dirty-node')).toBe(dirtyNode)
     expect(h.store.linkById.get('new-link')).toBe(newLink)
     expect(h.store.linkById.get('deleted-link')).toBe(deletedLink)
+  })
+
+  it('retries a transient point error once and applies the successful response', async () => {
+    const fetchNode = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: false,
+        error: { status: 503, message: 'temporary' },
+      })
+      .mockResolvedValueOnce(success(node('loaded', { name: 'recovered' })))
+    const h = harness({ nodes: [node('loaded')], fetchers: { fetchNode } })
+
+    h.reconciler.enqueue([{ type: 'node_updated', entity: 'node', id: 'loaded' }])
+    await h.reconciler.flush()
+
+    expect(fetchNode).toHaveBeenCalledTimes(2)
+    expect(h.store.nodeById.get('loaded')?.name).toBe('recovered')
+    expect(h.errors).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an exhausted point exception and invalidates only its known scope', async () => {
+    const fetchNode = vi.fn(async () => {
+      throw new Error('network down')
+    })
+    const h = harness({ fetchers: { fetchNode } })
+    loadScope(h.store, { kind: 'root' }, [node('loaded')])
+
+    h.reconciler.enqueue([{ type: 'node_updated', entity: 'node', id: 'loaded' }])
+    await h.reconciler.flush()
+
+    expect(fetchNode).toHaveBeenCalledTimes(2)
+    expect(h.errors).toHaveBeenCalledWith(
+      { type: 'node_updated', entity: 'node', id: 'loaded' },
+      expect.any(Error)
+    )
+    expect(h.store.loadedChildrenFor.has('root')).toBe(false)
+  })
+
+  it('keeps 404 point responses as immediate delete semantics without retry', async () => {
+    const fetchNode = vi.fn(async () => ({
+      success: false as const,
+      error: { status: 404, message: 'gone' },
+    }))
+    const h = harness({ nodes: [node('loaded')], fetchers: { fetchNode } })
+
+    h.reconciler.enqueue([{ type: 'node_updated', entity: 'node', id: 'loaded' }])
+    await h.reconciler.flush()
+
+    expect(fetchNode).toHaveBeenCalledTimes(1)
+    expect(h.store.remoteDeletedNodeIds.has('loaded')).toBe(true)
+    expect(h.errors).not.toHaveBeenCalled()
+  })
+
+  it('turns a raced materialized create 404 into delete semantics', async () => {
+    const fetchLink = vi.fn(async () => ({
+      success: false as const,
+      error: { status: 404, message: 'gone' },
+    }))
+    const h = harness({ links: [link('loaded')], fetchers: { fetchLink } })
+
+    h.reconciler.enqueue([{ type: 'link_created', entity: 'link', id: 'loaded' }])
+    await h.reconciler.flush()
+
+    expect(fetchLink).toHaveBeenCalledTimes(1)
+    expect(h.store.remoteDeletedLinkIds.has('loaded')).toBe(true)
+    expect(h.store.linkById.has('loaded')).toBe(false)
   })
 
   it('refreshes a loaded parent after create without materializing the point response', async () => {
@@ -320,11 +394,15 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.store.loadedChildrenFor.has('root')).toBe(false)
   })
 
-  it('cascade-deletes every materialized incident link even when it is locally dirty', async () => {
+  it('cascade-deletes clean incident links but preserves protected links as conflicts', async () => {
     const cleanIncident = toEditorLink(link('clean-incident', { sourceId: 'deleted' }))
     const dirtyIncident = {
       ...toEditorLink(link('dirty-incident', { targetId: 'deleted' })),
       _isDirty: true,
+    }
+    const newIncident = {
+      ...toEditorLink(link('new-incident', { sourceId: 'deleted' })),
+      _isNew: true,
     }
     const unrelated = toEditorLink(
       link('unrelated', { sourceId: 'other-1', targetId: 'other-2' })
@@ -332,19 +410,22 @@ describe('modelGranularSyncReconciler', () => {
     const h = harness()
     h.store.replaceMaterializedRows(
       [toEditorNode(node('deleted'))],
-      [cleanIncident, dirtyIncident, unrelated]
+      [cleanIncident, dirtyIncident, newIncident, unrelated]
     )
 
     h.reconciler.enqueue([{ type: 'node_deleted', entity: 'node', id: 'deleted' }])
     await h.reconciler.flush()
 
     expect(h.store.linkById.has('clean-incident')).toBe(false)
-    expect(h.store.linkById.has('dirty-incident')).toBe(false)
+    expect(h.store.linkById.get('dirty-incident')).toBe(dirtyIncident)
+    expect(h.store.linkById.get('new-incident')).toBe(newIncident)
     expect(h.store.linkById.get('unrelated')).toBe(unrelated)
     expect(h.store.remoteDeletedLinkIds).toEqual(
-      new Set(['clean-incident', 'dirty-incident'])
+      new Set(['clean-incident', 'dirty-incident', 'new-incident'])
     )
-    expect(h.store.remoteCascadeConflictLinkIds).toEqual(new Set(['dirty-incident']))
+    expect(h.store.remoteCascadeConflictLinkIds).toEqual(
+      new Set(['dirty-incident', 'new-incident'])
+    )
     expect(h.invalidatedDetached).toHaveBeenCalledTimes(1)
   })
 
@@ -477,6 +558,7 @@ describe('modelGranularSyncReconciler', () => {
     )
     const h = harness({
       diagrams: [local],
+      openDiagramId: 'diagram-1',
       fetchers: {
         fetchDiagram: vi.fn(async id =>
           success(
@@ -494,6 +576,32 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.state.diagrams[0]?.name).toBe('remote')
     expect(h.state.diagrams[0]?.parsedAttrs).toBe(local.parsedAttrs)
     expect(h.state.diagrams[0]?._attrsPending).toBe(false)
+  })
+
+  it('marks a closed diagram attrs pending after its metadata update', async () => {
+    const local = toEditorDiagram(
+      diagram('diagram-1', {
+        name: 'local',
+        attrs: JSON.stringify({ instances: [{ id: 'hydrated' }] }),
+      }),
+      { attrsPending: false }
+    )
+    const h = harness({
+      diagrams: [local],
+      openDiagramId: 'other-diagram',
+      fetchers: {
+        fetchDiagram: vi.fn(async () =>
+          success(diagram('diagram-1', { name: 'remote', attrs: null }))
+        ),
+      },
+    })
+
+    h.reconciler.enqueue([{ type: 'diagram_updated', entity: 'diagram', id: 'diagram-1' }])
+    await h.reconciler.flush()
+
+    expect(h.state.diagrams[0]?.name).toBe('remote')
+    expect(h.state.diagrams[0]?._attrsPending).toBe(true)
+    expect(h.state.diagrams[0]?.parsedAttrs.instances).toEqual({ nodes: [], edges: [] })
   })
 
   it('reports an unknown event and invalidates its materialized node scope without fetching', async () => {
@@ -522,6 +630,45 @@ describe('modelGranularSyncReconciler', () => {
 
     expect(h.fetchers.fetchNode).not.toHaveBeenCalled()
     expect(h.store.remoteDeletedNodeIds.has('same')).toBe(true)
+  })
+
+  it('retains create intent when an update is enqueued before the same drain', async () => {
+    const h = harness({
+      fetchers: {
+        fetchNode: vi.fn(async id =>
+          success(node(id, { parentNodeId: 'folder', name: 'latest' }))
+        ),
+      },
+    })
+    loadScope(h.store, { kind: 'node', nodeId: 'folder' }, [])
+
+    h.reconciler.enqueue([{ type: 'node_created', entity: 'node', id: 'created' }])
+    h.reconciler.enqueue([{ type: 'node_updated', entity: 'node', id: 'created' }])
+    await h.reconciler.flush()
+
+    expect(h.fetchers.fetchNode).toHaveBeenCalledTimes(1)
+    expect(h.refreshedScopes).toEqual([{ kind: 'node', nodeId: 'folder' }])
+  })
+
+  it('observes rejected granular handlers instead of dropping allSettled results', async () => {
+    const handlerError = new Error('bounded refresh failed')
+    const h = harness({
+      fetchers: {
+        fetchNode: vi.fn(async id => success(node(id, { parentNodeId: 'folder' }))),
+      },
+      refreshVisibleChildrenScope: vi.fn(async () => {
+        throw handlerError
+      }),
+    })
+    loadScope(h.store, { kind: 'node', nodeId: 'folder' }, [])
+
+    h.reconciler.enqueue([{ type: 'node_created', entity: 'node', id: 'created' }])
+    await h.reconciler.flush()
+
+    expect(h.errors).toHaveBeenCalledWith(
+      { type: 'node_created', entity: 'node', id: 'created' },
+      handlerError
+    )
   })
 
   it('coalesces detached snapshot invalidation for a granular batch', async () => {

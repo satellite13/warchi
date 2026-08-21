@@ -26,6 +26,12 @@ export type ModelLiveSyncTelemetryDetail =
       event: GranularSyncEventPayload
     }
   | {
+      kind: 'granular_event_error'
+      modelId: string
+      event: GranularSyncEventPayload
+      message: string
+    }
+  | {
       kind: 'granular_payload_unsupported'
       modelId: string
       eventId?: string

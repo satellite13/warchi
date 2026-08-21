@@ -333,6 +333,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         pendingForceBatch,
         batchSaveConflict,
         saveError,
+        remoteCascadeConflictLinkIds: partialStore.store.remoteCascadeConflictLinkIds,
         onProgress: (msg: string) => {
           saveProgress.value = msg
         },

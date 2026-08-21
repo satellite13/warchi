@@ -560,6 +560,16 @@ export const modelsMessages = {
       batchSaveVersionConflict: 'Конфликт версий при сохранении (данные изменены на сервере).',
       batchSaveBlankNodeName:
         'Нельзя сохранить: у {count} элемент(ов) пустое имя. Укажите имя и повторите сохранение.',
+      remoteCascadeSaveBlocked:
+        'Нельзя сохранить: удалённый узел конфликтует с {count} локальной связью. Отмените затронутые связи или перезагрузите модель, затем повторите сохранение.',
+      remoteCascadeConflictTitle:
+        'Удаление узла на сервере конфликтует с локальными связями: {count}.',
+      remoteCascadeConflictHelp:
+        'Отмените затронутые связи или перезагрузите модель, затем повторите сохранение.',
+      remoteCascadeDiscard: 'Отменить затронутые связи',
+      remoteCascadeReload: 'Перезагрузить модель',
+      detachedLinksStale: 'Связи модели изменились на сервере.',
+      detachedLinksRefresh: 'Обновить связи',
       validationNodeTypePropRequired:
         'У ноды «{node}» не заполнено обязательное свойство типа «{prop}».',
       validationNodeComponentPropRequired:
@@ -1159,6 +1169,16 @@ export const modelsMessages = {
       batchSaveVersionConflict: 'Version conflict while saving (data changed on server).',
       batchSaveBlankNodeName:
         'Cannot save: {count} element(s) have an empty name. Set a name and try again.',
+      remoteCascadeSaveBlocked:
+        'Cannot save: a remote node deletion conflicts with {count} local link(s). Discard the affected links or reload the model, then retry saving.',
+      remoteCascadeConflictTitle:
+        'Remote node deletion conflicts with {count} local link(s).',
+      remoteCascadeConflictHelp:
+        'Discard the affected links or reload the model, then retry saving.',
+      remoteCascadeDiscard: 'Discard affected links',
+      remoteCascadeReload: 'Reload model',
+      detachedLinksStale: 'Model links changed on the server.',
+      detachedLinksRefresh: 'Refresh links',
       validationNodeTypePropRequired:
         'Node "{node}" is missing required type property "{prop}".',
       validationNodeComponentPropRequired:

@@ -127,6 +127,43 @@ describe('useModelEditorRouteNavigation', () => {
     expect(selected).toEqual(['diagram-b'])
   })
 
+  it('keeps model loading current while diagram intent changes from A to B', async () => {
+    const modelId = ref('source-model')
+    const diagramId = ref('source-diagram')
+    let finishLoad!: () => void
+    const loadModel = vi.fn(
+      () =>
+        new Promise<void>(resolve => {
+          finishLoad = resolve
+        })
+    )
+    const selected: string[] = []
+    const afterModelLoad = vi.fn()
+
+    useModelEditorRouteNavigation({
+      modelId,
+      diagramId,
+      loadModel,
+      applyRouteDiagramSelection: requestedDiagramId => selected.push(requestedDiagramId),
+      afterModelLoad,
+    })
+
+    modelId.value = 'target-model'
+    diagramId.value = 'diagram-a'
+    await nextTick()
+    diagramId.value = 'diagram-b'
+    await nextTick()
+
+    expect(loadModel).toHaveBeenCalledTimes(1)
+    expect(selected).toEqual([])
+
+    finishLoad()
+    await Promise.resolve()
+
+    expect(selected).toEqual(['diagram-b'])
+    expect(afterModelLoad).toHaveBeenCalledTimes(1)
+  })
+
   it('passes a generation guard that invalidates stale diagram tree focus', async () => {
     const modelId = ref('model-1')
     const diagramId = ref('diagram-1')

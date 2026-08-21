@@ -5,10 +5,7 @@ type ModelEditorRouteNavigationOptions = {
   diagramId: Ref<string>
   loadModel: (modelId: string) => Promise<void>
   applyRouteDiagramSelection: (diagramId: string) => void
-  focusRouteDiagramInTree?: (
-    diagramId: string,
-    isCurrent: () => boolean
-  ) => Promise<void> | void
+  focusRouteDiagramInTree?: (diagramId: string, isCurrent: () => boolean) => Promise<void> | void
   afterModelLoad?: () => void
 }
 
@@ -46,7 +43,9 @@ export function useModelEditorRouteNavigation(options: ModelEditorRouteNavigatio
   applyCurrentDiagramNavigation: () => void
   retryCurrentDiagramTreeFocus: () => void
 } {
-  let generation = 0
+  let modelLoadGeneration = 0
+  let diagramIntentGeneration = 0
+  let loadingModelId: string | null = null
 
   const startDiagramNavigation = (
     requestedModelId: string,
@@ -54,7 +53,7 @@ export function useModelEditorRouteNavigation(options: ModelEditorRouteNavigatio
     navigationGeneration: number
   ): void => {
     const isCurrent = (): boolean =>
-      generation === navigationGeneration &&
+      diagramIntentGeneration === navigationGeneration &&
       options.modelId.value === requestedModelId &&
       options.diagramId.value === requestedDiagramId
     if (!isCurrent()) return
@@ -63,20 +62,16 @@ export function useModelEditorRouteNavigation(options: ModelEditorRouteNavigatio
   }
 
   const applyCurrentDiagramNavigation = (): void => {
-    const navigationGeneration = ++generation
-    startDiagramNavigation(
-      options.modelId.value,
-      options.diagramId.value,
-      navigationGeneration
-    )
+    const navigationGeneration = ++diagramIntentGeneration
+    startDiagramNavigation(options.modelId.value, options.diagramId.value, navigationGeneration)
   }
 
   const retryCurrentDiagramTreeFocus = (): void => {
     const requestedModelId = options.modelId.value
     const requestedDiagramId = options.diagramId.value
-    const navigationGeneration = ++generation
+    const navigationGeneration = ++diagramIntentGeneration
     const isCurrent = (): boolean =>
-      generation === navigationGeneration &&
+      diagramIntentGeneration === navigationGeneration &&
       options.modelId.value === requestedModelId &&
       options.diagramId.value === requestedDiagramId
     void options.focusRouteDiagramInTree?.(requestedDiagramId, isCurrent)
@@ -85,21 +80,22 @@ export function useModelEditorRouteNavigation(options: ModelEditorRouteNavigatio
   watch(
     [options.modelId, options.diagramId],
     async ([modelId, diagramId], [previousModelId, previousDiagramId]) => {
-      const navigationGeneration = ++generation
-      const isCurrent = (): boolean =>
-        generation === navigationGeneration &&
-        options.modelId.value === modelId &&
-        options.diagramId.value === diagramId
       if (modelId !== previousModelId) {
         if (!modelId) return
+        const loadGeneration = ++modelLoadGeneration
+        loadingModelId = modelId
+        diagramIntentGeneration += 1
         await options.loadModel(modelId)
-        if (!isCurrent()) return
-        startDiagramNavigation(modelId, diagramId, navigationGeneration)
+        if (modelLoadGeneration !== loadGeneration || options.modelId.value !== modelId) return
+        loadingModelId = null
+        startDiagramNavigation(modelId, options.diagramId.value, ++diagramIntentGeneration)
         options.afterModelLoad?.()
         return
       }
 
       if (diagramId !== previousDiagramId) {
+        const navigationGeneration = ++diagramIntentGeneration
+        if (loadingModelId === modelId) return
         startDiagramNavigation(modelId, diagramId, navigationGeneration)
       }
     }

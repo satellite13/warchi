@@ -109,6 +109,34 @@ describe('useLazyTreeSearch', () => {
     scope.stop()
   })
 
+  it('clears previous hits immediately when a new query starts debouncing', async () => {
+    searchModelNodesMock.mockResolvedValue(ok(searchResponse('old', ['old-hit'])))
+    const query = ref('')
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref(null),
+        query,
+        mergeNodes: vi.fn(() => true),
+        beginRequest: () => ({ generation: 1, requestKey: 'search', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    query.value = 'old'
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(search.hits.value.map(hit => hit.id)).toEqual(['old-hit'])
+
+    query.value = 'new'
+    await nextTick()
+
+    expect(search.hits.value).toEqual([])
+    expect(searchModelNodesMock).toHaveBeenCalledTimes(1)
+    scope.stop()
+  })
+
   it('loads ordered ancestors before the selected node and merges them as partial rows', async () => {
     const ancestors = [node('folder-a', 'hidden-root'), node('folder-b', 'folder-a')]
     const selected = node('hit', 'folder-b')
@@ -130,16 +158,8 @@ describe('useLazyTreeSearch', () => {
 
     const path = await search.selectHit('hit')
 
-    expect(fetchNodeAncestorsMock).toHaveBeenCalledWith(
-      'model-1',
-      'hit',
-      expect.any(AbortSignal)
-    )
-    expect(resolveModelNodesMock).toHaveBeenCalledWith(
-      'model-1',
-      ['hit'],
-      expect.any(AbortSignal)
-    )
+    expect(fetchNodeAncestorsMock).toHaveBeenCalledWith('model-1', 'hit', expect.any(AbortSignal))
+    expect(resolveModelNodesMock).toHaveBeenCalledWith('model-1', ['hit'], expect.any(AbortSignal))
     expect(fetchNodeAncestorsMock.mock.invocationCallOrder[0]).toBeLessThan(
       resolveModelNodesMock.mock.invocationCallOrder[0]!
     )
@@ -220,9 +240,7 @@ describe('useLazyTreeSearch', () => {
         error: { status: 503, message: 'ancestors failed' },
       })
       .mockResolvedValueOnce(ok([node('folder', 'hidden-root')]))
-    resolveModelNodesMock.mockResolvedValue(
-      ok({ nodes: [node('hit', 'folder')], missingIds: [] })
-    )
+    resolveModelNodesMock.mockResolvedValue(ok({ nodes: [node('hit', 'folder')], missingIds: [] }))
     const mergeNodes = vi.fn(() => true)
     const scope = effectScope()
     const search = scope.run(() =>

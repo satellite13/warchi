@@ -169,9 +169,9 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
       cancelSearch()
       cancelSelection(true)
       error.value = null
+      hits.value = []
       const query = options.query.value.trim()
       if (!query || !options.modelId.value) {
-        hits.value = []
         return
       }
       timer = setTimeout(() => {

@@ -17,6 +17,16 @@ type InternalChildrenPageState = ChildrenPageState & {
 const isProtectedLocal = (entity: MergeableEntity | undefined): boolean =>
   entity?._isNew === true || entity?._isDirty === true || entity?._isDeleted === true
 
+const uniqueRowsById = <T extends MergeableEntity>(rows: readonly T[]): T[] => {
+  const unique = new Map<string, T>()
+  for (const row of rows) {
+    const previous = unique.get(row.id)
+    if (isProtectedLocal(previous) && !isProtectedLocal(row)) continue
+    unique.set(row.id, row)
+  }
+  return [...unique.values()]
+}
+
 export class ModelPartialStore {
   generation = 0
   nodes: EditorNode[] = []
@@ -32,7 +42,8 @@ export class ModelPartialStore {
 
   private readonly requestTokens = new Map<string, number>()
   private readonly internalChildrenPages = new Map<string, InternalChildrenPageState>()
-  private readonly treeParentKeyByNodeId = new Map<string, string>()
+  /** Explicit materialization provenance; root cannot be reconstructed from parentNodeId. */
+  private readonly treeScopeKeyByNodeId = new Map<string, string>()
 
   scopeKey(scope: TreeParentScope): string {
     return scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`
@@ -66,7 +77,7 @@ export class ModelPartialStore {
     this.remoteDeletedLinkIds.clear()
     this.requestTokens.clear()
     this.internalChildrenPages.clear()
-    this.treeParentKeyByNodeId.clear()
+    this.treeScopeKeyByNodeId.clear()
   }
 
   mergeNodes(
@@ -79,7 +90,8 @@ export class ModelPartialStore {
 
     if (mode.kind === 'full') {
       const merged = mergeEntityListFromRemote(this.nodes, rows, row => row)
-      this.treeParentKeyByNodeId.clear()
+      this.resetChildrenScopeState()
+      this.treeScopeKeyByNodeId.clear()
       this.replaceNodes(merged.items)
       return true
     }
@@ -88,15 +100,27 @@ export class ModelPartialStore {
       const scopeKey = this.scopeKey(mode.scope)
       if (!this.loadedChildrenFor.has(scopeKey)) return false
       const localIds = new Set(this.childrenByParent.get(scopeKey) ?? [])
-      const localRows = this.nodes.filter(row => localIds.has(row.id))
+      const remoteIds = new Set(rows.map(row => row.id))
+      const protectedOutsideIds = new Set(
+        this.nodes
+          .filter(row => !localIds.has(row.id) && remoteIds.has(row.id) && isProtectedLocal(row))
+          .map(row => row.id)
+      )
+      const localRows = this.nodes.filter(
+        row => localIds.has(row.id) || protectedOutsideIds.has(row.id)
+      )
       const merged = mergeEntityListFromRemote(localRows, rows, row => row)
       const scopedIds = new Set(merged.items.map(row => row.id))
-      const retainedOutsideScope = this.nodes.filter(row => !localIds.has(row.id))
+      const retainedOutsideScope = this.nodes.filter(
+        row => !localIds.has(row.id) && !scopedIds.has(row.id)
+      )
       for (const id of localIds) {
-        if (!scopedIds.has(id)) this.treeParentKeyByNodeId.delete(id)
+        if (!scopedIds.has(id)) this.treeScopeKeyByNodeId.delete(id)
       }
       for (const row of merged.items) {
-        this.treeParentKeyByNodeId.set(row.id, scopeKey)
+        if (!protectedOutsideIds.has(row.id)) {
+          this.treeScopeKeyByNodeId.set(row.id, scopeKey)
+        }
       }
       this.replaceNodes([...retainedOutsideScope, ...merged.items])
       return true
@@ -106,7 +130,9 @@ export class ModelPartialStore {
     if (mode.kind === 'childrenPage') {
       const scopeKey = this.scopeKey(mode.scope)
       for (const row of rows) {
-        this.treeParentKeyByNodeId.set(row.id, scopeKey)
+        if (this.nodeById.get(row.id) === row) {
+          this.treeScopeKeyByNodeId.set(row.id, scopeKey)
+        }
       }
       this.rebuildNodeIndexes()
       this.recordChildrenPage(
@@ -150,7 +176,7 @@ export class ModelPartialStore {
     this.remoteDeletedNodeIds.add(nodeId)
     const local = this.nodeById.get(nodeId)
     if (isProtectedLocal(local)) return
-    this.treeParentKeyByNodeId.delete(nodeId)
+    this.treeScopeKeyByNodeId.delete(nodeId)
     this.replaceNodes(this.nodes.filter(row => row.id !== nodeId))
   }
 
@@ -186,7 +212,18 @@ export class ModelPartialStore {
     return `children:${scopeKey}`
   }
 
-  private inferredParentKey(row: EditorNode): string {
+  private resetChildrenScopeState(): void {
+    this.childrenPages.clear()
+    this.internalChildrenPages.clear()
+    this.loadedChildrenFor.clear()
+    for (const requestKey of this.requestTokens.keys()) {
+      if (requestKey.startsWith('children:')) {
+        this.requestTokens.delete(requestKey)
+      }
+    }
+  }
+
+  private defaultScopeKey(row: EditorNode): string {
     return row.parentNodeId == null ? this.scopeKey({ kind: 'root' }) : `node:${row.parentNodeId}`
   }
 
@@ -198,10 +235,17 @@ export class ModelPartialStore {
       if (index === undefined) {
         positions.set(row.id, next.length)
         next.push(row)
-        this.treeParentKeyByNodeId.set(row.id, this.inferredParentKey(row))
+        this.treeScopeKeyByNodeId.set(row.id, this.defaultScopeKey(row))
       } else if (!isProtectedLocal(next[index])) {
+        const previous = next[index]
         next[index] = row
-        this.treeParentKeyByNodeId.set(row.id, this.inferredParentKey(row))
+        if (
+          !previous ||
+          previous.parentNodeId !== row.parentNodeId ||
+          !this.treeScopeKeyByNodeId.has(row.id)
+        ) {
+          this.treeScopeKeyByNodeId.set(row.id, this.defaultScopeKey(row))
+        }
       }
     }
     this.replaceNodes(next)
@@ -250,10 +294,15 @@ export class ModelPartialStore {
   }
 
   private replaceNodes(rows: EditorNode[]): void {
-    this.nodes = rows
-    const ids = new Set(rows.map(row => row.id))
-    for (const id of this.treeParentKeyByNodeId.keys()) {
-      if (!ids.has(id)) this.treeParentKeyByNodeId.delete(id)
+    this.nodes = uniqueRowsById(rows)
+    const ids = new Set(this.nodes.map(row => row.id))
+    for (const row of this.nodes) {
+      if (!this.treeScopeKeyByNodeId.has(row.id)) {
+        this.treeScopeKeyByNodeId.set(row.id, this.defaultScopeKey(row))
+      }
+    }
+    for (const id of this.treeScopeKeyByNodeId.keys()) {
+      if (!ids.has(id)) this.treeScopeKeyByNodeId.delete(id)
     }
     this.rebuildNodeIndexes()
   }
@@ -263,7 +312,7 @@ export class ModelPartialStore {
     this.childrenByParent.clear()
     for (const row of this.nodes) {
       this.nodeById.set(row.id, row)
-      const parentKey = this.treeParentKeyByNodeId.get(row.id) ?? this.inferredParentKey(row)
+      const parentKey = this.treeScopeKeyByNodeId.get(row.id) ?? this.defaultScopeKey(row)
       const children = this.childrenByParent.get(parentKey)
       if (children) {
         children.push(row.id)
@@ -274,9 +323,9 @@ export class ModelPartialStore {
   }
 
   private replaceLinks(rows: EditorLink[]): void {
-    this.links = rows
+    this.links = uniqueRowsById(rows)
     this.linkById.clear()
-    for (const row of rows) {
+    for (const row of this.links) {
       this.linkById.set(row.id, row)
     }
   }

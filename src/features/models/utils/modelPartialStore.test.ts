@@ -131,6 +131,135 @@ describe('ModelPartialStore tree scopes', () => {
     ])
   })
 
+  it('keeps one protected outside winner when childrenScope returns the same id', () => {
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [node('moved', 'outside', { name: 'local winner', _isDirty: true })],
+      { kind: 'partial' }
+    )
+    const request = store.beginChildrenRequest(childScope('inside'))
+    store.mergeNodes(
+      [],
+      {
+        kind: 'childrenPage',
+        scope: childScope('inside'),
+        page: 0,
+        total: 0,
+        last: true,
+        token: request.token,
+      },
+      request
+    )
+
+    store.mergeNodes(
+      [node('moved', 'inside')],
+      { kind: 'childrenScope', scope: childScope('inside'), token: request.token },
+      request
+    )
+
+    expect(store.nodes.filter(item => item.id === 'moved')).toHaveLength(1)
+    expect(store.nodeById.get('moved')?.name).toBe('local winner')
+    expect(store.childrenByParent.get(store.scopeKey(childScope('outside')))).toEqual(['moved'])
+    expect(store.childrenByParent.get(store.scopeKey(childScope('inside')))).toBeUndefined()
+  })
+
+  it('preserves explicit root provenance when a root child receives a partial update', () => {
+    const store = new ModelPartialStore()
+    const request = store.beginChildrenRequest(root)
+    store.mergeNodes(
+      [node('root-child', 'hidden-root')],
+      {
+        kind: 'childrenPage',
+        scope: root,
+        page: 0,
+        total: 1,
+        last: true,
+        token: request.token,
+      },
+      request
+    )
+
+    store.mergeNodes([node('root-child', 'hidden-root', { name: 'updated' })], { kind: 'partial' })
+
+    expect(store.childrenByParent.get(store.scopeKey(root))).toEqual(['root-child'])
+    expect(store.childrenByParent.get(store.scopeKey(childScope('hidden-root')))).toBeUndefined()
+  })
+
+  it('indexes protected childrenPage winners by their local parent provenance', () => {
+    const store = new ModelPartialStore()
+    store.mergeNodes(
+      [
+        node('dirty', 'local-parent', { _isDirty: true }),
+        node('new', 'local-parent', { _isNew: true }),
+        node('deleted', 'local-parent', { _isDeleted: true }),
+      ],
+      { kind: 'partial' }
+    )
+    const request = store.beginChildrenRequest(childScope('remote-parent'))
+
+    store.mergeNodes(
+      [
+        node('dirty', 'remote-parent'),
+        node('new', 'remote-parent'),
+        node('deleted', 'remote-parent'),
+      ],
+      {
+        kind: 'childrenPage',
+        scope: childScope('remote-parent'),
+        page: 0,
+        total: 3,
+        last: true,
+        token: request.token,
+      },
+      request
+    )
+
+    expect(store.childrenByParent.get(store.scopeKey(childScope('local-parent')))).toEqual([
+      'dirty',
+      'new',
+      'deleted',
+    ])
+    expect(store.childrenByParent.get(store.scopeKey(childScope('remote-parent')))).toBeUndefined()
+  })
+
+  it('resets scoped page completeness and totals when a full node snapshot replaces state', () => {
+    const store = new ModelPartialStore()
+    const request = store.beginChildrenRequest(root)
+    store.mergeNodes(
+      [node('old-root-child', 'hidden-root')],
+      {
+        kind: 'childrenPage',
+        scope: root,
+        page: 0,
+        total: 1,
+        last: true,
+        token: request.token,
+      },
+      request
+    )
+
+    store.mergeNodes([node('full-child', 'folder')], { kind: 'full' })
+
+    expect(
+      store.mergeNodes(
+        [node('stale-page', 'hidden-root')],
+        {
+          kind: 'childrenPage',
+          scope: root,
+          page: 1,
+          total: 2,
+          last: true,
+          token: request.token,
+        },
+        request
+      )
+    ).toBe(false)
+    expect(store.childrenPages.size).toBe(0)
+    expect(store.loadedChildrenFor.size).toBe(0)
+    expect(store.childrenByParent.get(store.scopeKey(childScope('folder')))).toEqual(['full-child'])
+    expect(store.childrenByParent.get(store.scopeKey(root))).toBeUndefined()
+  })
+
   it('ignores stale scope tokens and generations', () => {
     const store = new ModelPartialStore()
     const staleToken = store.beginChildrenRequest(root)

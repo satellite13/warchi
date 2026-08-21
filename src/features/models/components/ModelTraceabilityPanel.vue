@@ -498,6 +498,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
               <ModelTraceBranch
                 :node-id="rootNode.id"
                 :path="[rootNode.id]"
+                :instance-path="[]"
                 :node-by-id="nodeById"
                 :direction="traceDirection"
                 :link-type-id="selectedLinkTypeId"

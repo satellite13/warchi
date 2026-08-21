@@ -287,6 +287,51 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     }
   })
 
+  it('gives parallel links to the same child unique subtree ids', async () => {
+    const branchState = (rows: EditorGraphNeighbor[]) => ({
+      rows,
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: rows.length,
+      token: 1,
+      generation: 1,
+    })
+    lazyState.branchStates.set('root', branchState([
+      neighbor('parallel-1', 'root', 'child', 'child'),
+      neighbor('parallel-2', 'root', 'child', 'child'),
+    ]))
+    lazyState.branchStates.set('child', branchState([
+      neighbor('child-leaf', 'child', 'leaf', 'leaf'),
+    ]))
+    const wrapper = mountPanel()
+    await nextTick()
+
+    for (let index = 0; index < 2; index += 1) {
+      const toggle = wrapper
+        .findAll('.tb__link')
+        .find(
+          item =>
+            item.text().includes('Root → child') &&
+            item.attributes('aria-expanded') === 'false'
+        )
+      expect(toggle).toBeDefined()
+      await toggle!.trigger('click')
+      await nextTick()
+    }
+
+    const childToggles = wrapper
+      .findAll('.tb__link')
+      .filter(item => item.text().includes('Child → leaf'))
+    expect(childToggles).toHaveLength(2)
+    const controlledIds = childToggles.map(item => item.attributes('aria-controls'))
+    expect(new Set(controlledIds).size).toBe(2)
+    for (const id of controlledIds) {
+      expect(wrapper.findAll(`[id="${id}"]`)).toHaveLength(1)
+    }
+  })
+
   it('loads a direct child branch on expansion and never asks for global links', async () => {
     lazyState.branchStates.set('root', {
       rows: [neighbor('link-1', 'root', 'child', 'child')],

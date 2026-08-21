@@ -12,6 +12,7 @@ import type { TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
 const props = defineProps<{
   nodeId: string
   path: string[]
+  instancePath: string[]
   nodeById: Map<string, EditorNode>
   direction: TraceabilityDirection
   linkTypeId: string | null
@@ -64,7 +65,9 @@ const domIdSegment = (value: string): string => {
   const encoded = encodeURIComponent(value)
   return `${encoded.length}-${encoded}`
 }
-const branchInstanceKey = computed(() => props.path.map(domIdSegment).join('-'))
+const branchInstanceKey = computed(() =>
+  [props.path[0] ?? props.nodeId, ...props.instancePath].map(domIdSegment).join('-')
+)
 const branchTargetId = (linkId: string): string =>
   `trace-branch-${branchInstanceKey.value}-${domIdSegment(linkId)}`
 
@@ -190,6 +193,7 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
             v-if="!isCycle(resolveNextNodeId(row.link))"
             :node-id="resolveNextNodeId(row.link)"
             :path="[...path, resolveNextNodeId(row.link)]"
+            :instance-path="[...instancePath, row.link.id]"
             :node-by-id="nodeById"
             :direction="direction"
             :link-type-id="linkTypeId"

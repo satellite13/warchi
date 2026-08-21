@@ -19,6 +19,14 @@ const makeNode = (
   parsedAttrs: { ...parseNodeAttrs(null), treeOrder },
 })
 
+const deferred = () => {
+  let resolve!: () => void
+  const promise = new Promise<void>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 function setup(
   completeScopeKeys: string[],
   ensureChildrenScopeComplete = vi.fn(async (_scope: TreeParentScope) => {})
@@ -111,6 +119,28 @@ describe('useModelTreeOperations partial scope safety', () => {
     expect(ensureChildrenScopeComplete).not.toHaveBeenCalled()
   })
 
+  it('creates only one node while sibling scope loading is pending', async () => {
+    const pendingScope = deferred()
+    const ensureChildrenScopeComplete = vi.fn(async () => {
+      await pendingScope.promise
+      complete.add('root')
+    })
+    const { state, operations, complete } = setup([], ensureChildrenScopeComplete)
+    operations.openCreateRegularNode(null)
+    operations.newNodeName.value = 'Created once'
+
+    const firstCreate = operations.createNode()
+    const duplicateCreate = operations.createNode()
+
+    expect(operations.createNodePending.value).toBe(true)
+    expect(ensureChildrenScopeComplete).toHaveBeenCalledTimes(1)
+    pendingScope.resolve()
+    await Promise.all([firstCreate, duplicateCreate])
+
+    expect(state.value.nodes.map(node => node.name)).toEqual(['Created once'])
+    expect(operations.createNodePending.value).toBe(false)
+  })
+
   it('does not move when either source or destination sibling loading fails', async () => {
     const ensureChildrenScopeComplete = vi.fn(async (scope: TreeParentScope) => {
       if (scope.kind === 'node' && scope.nodeId === 'target-parent') throw new Error('load failed')
@@ -161,6 +191,42 @@ describe('useModelTreeOperations partial scope safety', () => {
       }))
     ).toEqual(before)
     expect(markNodeDirty).not.toHaveBeenCalled()
+  })
+
+  it('ignores a stale overlapping move and indexes only the winning scopes', async () => {
+    const firstTargetLoad = deferred()
+    const ensureChildrenScopeComplete = vi.fn(async (scope: TreeParentScope) => {
+      if (scope.kind === 'node' && scope.nodeId === 'target-a') {
+        await firstTargetLoad.promise
+        complete.add('node:target-a')
+      }
+      if (scope.kind === 'node' && scope.nodeId === 'target-b') {
+        complete.add('node:target-b')
+      }
+    })
+    const { state, operations, reconcileMaterializedRows, complete } = setup(
+      ['node:source-parent'],
+      ensureChildrenScopeComplete
+    )
+    state.value.nodes = [
+      makeNode('moving', 'source-parent', 'regular', 0),
+      makeNode('source-sibling', 'source-parent', 'regular', 1),
+      makeNode('target-a', 'hidden-root', 'directory', 0),
+      makeNode('target-b', 'hidden-root', 'directory', 1),
+    ]
+
+    const staleMove = operations.handleMoveNode('moving', 'target-a', 'inside')
+    const winningMove = operations.handleMoveNode('moving', 'target-b', 'inside')
+    await winningMove
+    firstTargetLoad.resolve()
+    await staleMove
+
+    expect(state.value.nodes.find(node => node.id === 'moving')?.parentNodeId).toBe('target-b')
+    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(1)
+    expect(reconcileMaterializedRows).toHaveBeenCalledWith([
+      { kind: 'node', nodeId: 'source-parent' },
+      { kind: 'node', nodeId: 'target-b' },
+    ])
   })
 
   it('ensures one sibling scope once before reordering inside it', async () => {

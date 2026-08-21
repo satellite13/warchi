@@ -146,6 +146,7 @@ async function initialize(): Promise<void> {
 
 function closeWizard(): void {
   if (wizard.loading.value) return
+  folderTree.setModel('')
   wizard.close()
   emit('close')
 }
@@ -197,7 +198,10 @@ watch(
   () => props.open,
   isOpen => {
     if (isOpen) void initialize()
-    else wizard.close()
+    else {
+      folderTree.setModel('')
+      wizard.close()
+    }
   },
   { immediate: true }
 )
@@ -290,10 +294,20 @@ watch(wizard.targetModelId, modelId => {
             />
             <span>{{ t('models.diagramCopy.rootFolder') }}</span>
           </label>
-          <div v-if="folderScopeState({ kind: 'root' })?.loading" class="diagram-copy__hint">
+          <div
+            v-if="folderScopeState({ kind: 'root' })?.loading"
+            class="diagram-copy__hint"
+            role="status"
+            aria-live="polite"
+          >
             {{ t('models.diagramCopy.loadingFolders') }}
           </div>
-          <div v-if="folderScopeState({ kind: 'root' })?.error" class="diagram-copy__folder-status">
+          <div
+            v-if="folderScopeState({ kind: 'root' })?.error"
+            class="diagram-copy__folder-status"
+            role="alert"
+            aria-live="assertive"
+          >
             <span class="diagram-copy__error">{{ folderScopeState({ kind: 'root' })?.error }}</span>
             <button type="button" class="btn btn--secondary" @click="folderTree.retry({ kind: 'root' })">
               {{ t('common.retry') }}
@@ -347,11 +361,16 @@ watch(wizard.targetModelId, modelId => {
                 class="diagram-copy__folder-status"
                 :style="{ paddingLeft: `${(row.depth + 1) * 20}px` }"
               >
-                <span v-if="folderScopeState(folderScope(row.node.id))?.loading" class="diagram-copy__hint">
+                <span
+                  v-if="folderScopeState(folderScope(row.node.id))?.loading"
+                  class="diagram-copy__hint"
+                  role="status"
+                  aria-live="polite"
+                >
                   {{ t('models.diagramCopy.loadingFolders') }}
                 </span>
                 <template v-else-if="folderScopeState(folderScope(row.node.id))?.error">
-                  <span class="diagram-copy__error">
+                  <span class="diagram-copy__error" role="alert" aria-live="assertive">
                     {{ folderScopeState(folderScope(row.node.id))?.error }}
                   </span>
                   <button

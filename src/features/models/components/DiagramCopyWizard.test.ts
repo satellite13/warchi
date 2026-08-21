@@ -7,6 +7,9 @@ import DiagramCopyWizard from './DiagramCopyWizard.vue'
 const folderTestState = vi.hoisted(() => ({
   rootError: null as string | null,
   rootFailedPage: null as number | null,
+  rootLoading: false,
+  setModel: vi.fn(),
+  loadRoot: vi.fn(async () => {}),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -17,7 +20,14 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('@/composables/useApi', () => ({
-  apiGet: vi.fn(async () => ({ success: true, data: { content: [] } })),
+  apiGet: vi.fn(async (path: string) => ({
+    success: true,
+    data: {
+      content: path.startsWith('/models')
+        ? [{ id: 'target-model', name: 'Target', version: '1.0.0' }]
+        : [{ id: 'notation-1', name: 'Notation', version: '1.0.0' }],
+    },
+  })),
 }))
 
 vi.mock('../composables/useDiagramCopyWizard', () => ({
@@ -66,7 +76,7 @@ vi.mock('../composables/useLazyFolderTree', () => ({
             rows: [],
             nextPage: 1,
             hasMore: false,
-            loading: false,
+            loading: folderTestState.rootLoading,
             error: folderTestState.rootError,
             failedPage: folderTestState.rootFailedPage,
             expanded: true,
@@ -88,8 +98,8 @@ vi.mock('../composables/useLazyFolderTree', () => ({
         depth: 0,
       },
     ]),
-    setModel: vi.fn(),
-    loadRoot: vi.fn(async () => {}),
+    setModel: folderTestState.setModel,
+    loadRoot: folderTestState.loadRoot,
     toggleFolder: vi.fn(async () => {}),
     loadMore: vi.fn(async () => {}),
     retry: vi.fn(async () => {}),
@@ -104,6 +114,9 @@ describe('DiagramCopyWizard folder picker', () => {
   beforeEach(() => {
     folderTestState.rootError = null
     folderTestState.rootFailedPage = null
+    folderTestState.rootLoading = false
+    folderTestState.setModel.mockClear()
+    folderTestState.loadRoot.mockClear()
   })
 
   it('renders an accessible hierarchical folder choice', async () => {
@@ -150,5 +163,57 @@ describe('DiagramCopyWizard folder picker', () => {
     expect(wrapper.text()).toContain('Folder A')
     expect(wrapper.text()).toContain('Next root page failed')
     expect(wrapper.text()).toContain('common.retry')
+    expect(wrapper.get('.diagram-copy__folder-status').attributes('role')).toBe('alert')
+    expect(wrapper.get('.diagram-copy__folder-status').attributes('aria-live')).toBe('assertive')
+  })
+
+  it('announces folder loading as a polite status', async () => {
+    folderTestState.rootLoading = true
+    const wrapper = mount(DiagramCopyWizard, {
+      props: {
+        open: true,
+        sourceModelId: 'source-model',
+        sourceDiagramId: 'source-diagram',
+      },
+      global: {
+        stubs: {
+          BaseModal: modalStub,
+          SearchableSelect: true,
+        },
+      },
+    })
+    await nextTick()
+
+    const loading = wrapper.get('.diagram-copy__folder-picker > .diagram-copy__hint')
+    expect(loading.attributes('role')).toBe('status')
+    expect(loading.attributes('aria-live')).toBe('polite')
+  })
+
+  it('invalidates folder requests on close and reloads the same target on reopen', async () => {
+    const wrapper = mount(DiagramCopyWizard, {
+      props: {
+        open: true,
+        sourceModelId: 'source-model',
+        sourceDiagramId: 'source-diagram',
+      },
+      global: {
+        stubs: {
+          BaseModal: modalStub,
+          SearchableSelect: true,
+        },
+      },
+    })
+    await nextTick()
+    folderTestState.setModel.mockClear()
+
+    await wrapper.setProps({ open: false })
+    await nextTick()
+    await wrapper.setProps({ open: true })
+    await vi.waitFor(() => {
+      expect(folderTestState.setModel.mock.calls.map(([modelId]) => modelId)).toEqual([
+        '',
+        'target-model',
+      ])
+    })
   })
 })

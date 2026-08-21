@@ -873,6 +873,7 @@ const handleOpenNotationEditor = (notationId: string) => {
 const {
   createNodeModal,
   showCreateNodeModal,
+  createNodePending,
   newNodeName,
   newNodeTypeId,
   showCreateDiagramModal,
@@ -919,6 +920,9 @@ const {
   ensureChildrenScopeComplete: partialStore.ensureChildrenScopeComplete,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
 })
+const closeCreateNodeModal = (): void => {
+  if (!createNodePending.value) showCreateNodeModal.value = false
+}
 
 const {
   showImportWizard,
@@ -3460,7 +3464,7 @@ onBeforeUnmount(() => {
     v-if="showCreateNodeModal"
     :title="createNodeModalTitle"
     max-width="440px"
-    @close="showCreateNodeModal = false"
+    @close="closeCreateNodeModal"
   >
     <div class="form-grid">
       <label>
@@ -3468,12 +3472,13 @@ onBeforeUnmount(() => {
         <input
           v-model="newNodeName"
           class="form-input"
+          :disabled="createNodePending"
           :placeholder="
             createNodeModal.kind === 'folder'
               ? t('models.newFolderPlaceholder')
               : t('models.newNodePlaceholder')
           "
-          @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
+          @keydown.enter.prevent="canCreateNodeFromModal && !createNodePending && createNode()"
         />
       </label>
       <label v-if="createNodeModal.kind === 'node'">
@@ -3484,18 +3489,24 @@ onBeforeUnmount(() => {
           :placeholder="t('models.selectType')"
           :search-placeholder="t('models.typeSearchPlaceholder')"
           :empty-text="t('common.nothingFound')"
+          :disabled="createNodePending"
         />
       </label>
       <div v-else class="form-hint">{{ t('models.directoryTypeHint') }}</div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateNodeModal = false">
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="createNodePending"
+        @click="closeCreateNodeModal"
+      >
         {{ t('common.cancel') }}
       </button>
       <button
         type="button"
         class="btn btn--primary"
-        :disabled="!canCreateNodeFromModal"
+        :disabled="!canCreateNodeFromModal || createNodePending"
         @click="createNode"
       >
         {{ t('common.create') }}

@@ -124,6 +124,33 @@ describe('useLazyFolderTree', () => {
     expect(tree.visibleRows.value.map(row => row.node.id)).toEqual(['new-folder'])
   })
 
+  it('clears on close and reloads the same target without accepting the stale response', async () => {
+    const oldRequest = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
+    vi.mocked(fetchNodeChildren)
+      .mockReturnValueOnce(oldRequest.promise)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([folder('fresh-folder', null)]),
+      })
+    const tree = useLazyFolderTree()
+
+    tree.setModel('model-1')
+    const oldLoad = tree.loadRoot()
+    tree.setModel('')
+    expect(tree.visibleRows.value).toEqual([])
+
+    tree.setModel('model-1')
+    await tree.loadRoot()
+    oldRequest.resolve({
+      success: true,
+      data: page([folder('stale-folder', null)]),
+    })
+    await oldLoad
+
+    expect(fetchNodeChildren).toHaveBeenCalledTimes(2)
+    expect(tree.visibleRows.value.map(row => row.node.id)).toEqual(['fresh-folder'])
+  })
+
   it('keeps child loading errors local and retryable', async () => {
     vi.mocked(fetchNodeChildren)
       .mockResolvedValueOnce({

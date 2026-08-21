@@ -354,7 +354,11 @@ used JS heap — до 339 MiB.
    не клиентский обход 104k.
 2. **Диаграммы.** Список без `attrs`, как сейчас. Полный документ — при открытии (`GET /diagrams/{id}`), как уже делает гидратация `_attrsPending`.
 3. **Связи.** Не грузить все 170k при открытии. Для открытой диаграммы — связи её экземпляров. Для трассировки / матрицы — отдельный запрос по конечным точкам или по диаграмме.
-4. **Live sync.** Полный `fetchAllByModelId` на каждое событие запрещён. Применять гранулярные события (`parseGranularSyncEventsFromPayload` уже есть) или точечный `GET` по id. Полный pull — только явная команда «подтянуть с сервера».
+4. **Live sync.** Полный `fetchAllByModelId` на каждое событие запрещён. Применять
+   гранулярные события (`parseGranularSyncEventsFromPayload` уже есть), точечный
+   `GET` по id или bounded reconciliation загруженных scopes для poll fallback.
+   Полный snapshot остаётся только внутренним временным путём для глобальной
+   валидации и служебных reload; пользовательской команды полного pull нет.
 5. **Сохранение.** `batch-save` уже шлёт дельту. Клиентский стейт должен уметь жить с неполной коллекцией: не считать «нет в массиве» удалением при merge.
 
 ### API, которого сейчас нет
@@ -409,6 +413,10 @@ Live sync этапа 3 применяет результат `parseGranularSyncE
 получает явные режимы `full` и `partial`; отсутствие id в partial-ответе не означает
 удаление.
 
+Это целевое поведение Stage 3 заменяет таблицу trigger semantics этапов 1–2 выше:
+poll/visibility/auth-refresh выполняют bounded reconciliation уже загруженных
+scopes, а не полный pull коллекций.
+
 ### Потребители полного снимка
 
 Ленивый editor state нельзя молча передавать функциям, которые сегодня считают массивы
@@ -418,7 +426,8 @@ Live sync этапа 3 применяет результат `parseGranularSyncE
 - version diff, visual compare и diagram versions compare;
 - validation scripts и required custom properties save guard;
 - diagram copy wizard (до появления `foldersOnly` API);
-- batch-conflict reload, OEF import reload и ручной полный resync;
+- batch-conflict reload, OEF import reload и discard fallback; после них editor
+  пересоздаёт partial root/open-diagram state;
 - package export/import и backend copy — эти серверные процессы не зависят от
   editor state и остаются как есть.
 

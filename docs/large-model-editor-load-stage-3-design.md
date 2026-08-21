@@ -39,18 +39,29 @@ pull для неизвестного sync-события.
 Store поддерживает:
 
 - `nodeById`, `linkById`, `childrenByParent`;
-- `loadedChildrenFor` и page state широких папок;
+- `childrenPages` с загруженными page numbers, `nextPage` и `totalElements`;
+- `loadedChildrenFor` только для полностью загруженного parent scope;
 - in-flight dedup, локальные ошибки и request token каждого scope;
 - model generation guard;
 - `treeScopeReady` и `diagramScopeReady`.
 
+Stage 3 не вводит eviction: материализованные clean entities живут до смены модели
+или scoped reset. Dirty/new/deleted entities никогда не вытесняются. Если длительная
+сессия снова приблизится к full snapshot, eviction становится отдельным измеряемым
+этапом, а не скрытой частью этой реализации.
+
 Merge modes:
 
 - `partial` — upsert, отсутствие id ничего не удаляет;
-- `childrenScope(parentId)` — заменяет только известных прямых детей родителя;
+- `childrenPage(parentId, page)` — append/upsert страницы без удаления детей из
+  других страниц;
+- `childrenScope(parentId)` — reconcile всех прямых детей разрешён только после
+  получения полного набора страниц в одном generation;
 - `full` — прежняя drop-семантика для отдельного полного снимка;
 - explicit delete очищает materialized entity и индексы;
-- delete tombstone не даёт старому in-flight ответу воскресить entity.
+- internal `remoteDeletedIds` tombstone, отдельный от пользовательского
+  `_isDeleted`, не даёт старому in-flight ответу воскресить entity;
+- dirty/new/deleted local entity сохраняет приоритет при любом merge.
 
 ## Backend API
 
@@ -67,15 +78,29 @@ GET /api/v1/nodes
 
 - UUID возвращает direct children.
 - `root` разрешается через `models.attrs.treeRootNodeId`; legacy fallback —
-  `parent_node IS NULL`.
+  `parent_node IS NULL` только при отсутствии `treeRootNodeId`. Ссылка на
+  отсутствующий root считается повреждёнными данными и возвращает `409`.
+- `modelId` обязателен при `parentId`. UUID parent из другой модели возвращает
+  `404`, не раскрывая его существование.
 - `excludeSystem=true` по умолчанию скрывает hidden root.
-- `foldersOnly=false` по умолчанию; `true` оставляет Directory.
+- `foldersOnly=false` по умолчанию; `true` оставляет node type с
+  `lower(name) = 'directory'`, что совпадает с текущей frontend-семантикой.
 - Сортировка `treeOrder,id`; total относится к parent scope.
-- `NodeResponse` получает `hasChildren`.
+- В parent-scoped Page `NodeResponse.hasChildren` обязателен. При
+  `foldersOnly=true` он означает наличие хотя бы одного видимого Directory child;
+  иначе — любого видимого child. EXISTS повторяет ACL, `excludeSystem` и
+  `foldersOnly`.
+- В point/full/resolve ответах `hasChildren` nullable и не вычисляется массовым
+  N+1; ancestors явно возвращают его для path nodes.
 - Без `parentId` сохраняется существующий full-list escape hatch.
 - ACL выполняется до pagination; owner/shared viewer/admin/MCP получают одинаковый
-  порядок и корректный total.
+  порядок и корректный total. Lazy-tree использует единый ACL SQL path без
+  admin/user веток с разной сортировкой; admin global list без `modelId` остаётся
+  старым endpoint.
 - `hasChildren` реализуется projection/correlated EXISTS, не N+1.
+- Клиент запрашивает `size=500`. При оставшихся страницах дерево добавляет
+  служебную строку «Загрузить ещё»; повторное раскрытие не считается полностью
+  загруженным до последней страницы.
 
 ### Batch resolve
 
@@ -85,7 +110,8 @@ POST /api/v1/models/{modelId}/nodes:resolve
 ```
 
 Возвращает nodes в порядке входных id и `missingIds`. Лимит — 2 000 id, клиент
-делит больший scope на chunks.
+делит больший scope на chunks. Чужие/недоступные ids попадают в `missingIds`;
+oversized или пустой request возвращает `400`.
 
 ```http
 POST /api/v1/models/{modelId}/links:resolve
@@ -97,7 +123,8 @@ POST /api/v1/models/{modelId}/links:resolve
 
 Возвращает deduplicated links, явно перечисленные по id или имеющие source/target
 из endpoint ids, плюс `missingLinkIds`. Хотя бы один массив непустой. Добавляются
-индексы `(model, source)` и `(model, target)`.
+индексы `(model, source)` и `(model, target)`. Каждый массив ограничен 2 000 id,
+клиент выполняет chunked requests; чужие ids не раскрываются и считаются missing.
 
 ### Предки
 
@@ -106,7 +133,8 @@ GET /api/v1/models/{modelId}/nodes/{nodeId}/ancestors
 ```
 
 Ordered list от корневого ребёнка до непосредственного parent; hidden root
-исключён. Сервер защищён от циклов.
+исключён. Для hidden root ответ пуст. Максимальная глубина 256; превышение или
+цикл возвращает `409`.
 
 ### Трассировка
 
@@ -119,7 +147,8 @@ GET /api/v1/models/{modelId}/graph/neighbors
 ```
 
 Возвращает Page `GraphNeighborResponse { link, node }`. Только прямые соседи;
-следующая глубина загружается при раскрытии ветки.
+следующая глубина загружается при раскрытии ветки. Для outgoing `node` — target,
+для incoming — source. Сортировка стабильна по `link.id,node.id`.
 
 ```http
 GET /api/v1/models/{modelId}/diagram-references
@@ -127,7 +156,9 @@ GET /api/v1/models/{modelId}/diagram-references
 ```
 
 Возвращает slim Page диаграмм, содержащих instance node. Query ограничен model id
-и использует GIN/expression index на `diagrams.attrs`.
+и сортируется по `name,id`. Используется
+`GIN (attrs jsonb_path_ops) WHERE deleted = false`; SQL ограничивает model id и
+проверяет JSONPath `$.instances.nodes[*].modelNodeId`. Ответ не содержит attrs.
 
 ## Основные потоки
 
@@ -144,10 +175,16 @@ GET /api/v1/models/{modelId}/diagram-references
 ### Дерево, поиск и deep-link
 
 Раскрытие папки проверяет cache/in-flight, загружает direct children и применяет
-`childrenScope`. Ошибка локальна строке и повторяема.
+`childrenPage`. Последняя страница переводит parent в `loadedChildrenFor`.
+«Загрузить ещё» догружает следующую страницу. Полный scoped refresh сбрасывает
+page cursor и reconcile выполняется только после получения всех страниц. Ошибка
+локальна строке и повторяема.
 
 Поиск использует существующий `/search/models/{id}?kinds=nodes`. Выбор результата
-получает ancestors и batch-resolve node, после чего раскрывает путь.
+получает ancestors и batch-resolve node, после чего раскрывает путь. Ancestor
+merge остаётся `partial`: наличие одного path child не помечает siblings scope
+полностью загруженным. Search исключает hidden root. Server limit 50 относится к
+hits; `MAX_SEARCH_TREE_ROWS=250` остаётся лимитом отрисованных строк.
 
 Deep-link сначала выбирает diagram из slim-list, затем гидратирует attrs, parent
 path и diagram scope. Canvas может открыться раньше фокусировки дерева.
@@ -156,7 +193,7 @@ path и diagram scope. Canvas может открыться раньше фок�
 
 1. `GET /diagrams/{id}` гидратирует attrs.
 2. Из instances извлекаются `modelNodeId[]` и `modelLinkId[]`.
-3. Nodes и links загружаются batch resolve.
+3. Nodes и links загружаются batch resolve chunks по 2 000 id.
 4. Endpoint ids добавляются для reuse/connection UI.
 5. Результат вливается через `partial`.
 6. Scope имеет progress, cancellation и generation guard.
@@ -178,8 +215,17 @@ Parsed/coalesced granular events применяются напрямую:
   диаграммы;
 - неизвестное событие логируется и инвалидирует известный scope без full pull.
 
-Dirty local entity имеет приоритет над remote update. Full pull остаётся только
-внутренним механизмом conflict/OEF reload и глобальной валидации.
+Dirty local entity имеет приоритет над remote update. Full collection load
+остаётся только detached-механизмом глобальной валидации/scripts и отдельных
+matrix/compare экранов. Conflict/OEF/discard выполняют partial reset, описанный
+ниже, а не full pull.
+
+WS/hybrid применяют granular payload. Чистый poll и fallback poll сначала
+сравнивают model `updatedAt`; при изменении выполняют bounded reconciliation:
+slim diagrams, все materialized parent scopes и открытый diagram scope. Poll,
+visibility и auth-refresh никогда не вызывают `fetchAllByModelId` обычных
+nodes/links. Offset-pagination scope после remote create/move сбрасывается и
+перечитывается с первой страницы до прежней видимой границы.
 
 ## Save, validation и reload
 
@@ -187,7 +233,12 @@ Batch-save отправляет только local dirty/new/deleted entities. �
 в partial store никогда не означает delete.
 
 Required-properties validation перед Save использует временный detached full
-snapshot. Он не сливается в editor state и освобождается после проверки.
+snapshot. Перед проверкой поверх server snapshot накладывается local delta:
+dirty/new upsert и deleted remove. Иначе несохранённые изменения не попадут в
+валидацию. Snapshot не сливается в editor state и освобождается после проверки.
+Save показывает отдельный cancellable progress «Подготовка проверки модели»;
+cancel не меняет partial state и не отправляет batch-save. Ошибка полной загрузки
+блокирует Save с повторяемым сообщением.
 
 Conflict reload, OEF reload и discard пересоздают root/diagram partial state.
 Relation matrix, version diff и visual compare сохраняют отдельные full-load
@@ -208,6 +259,33 @@ Direction и link type фильтруются сервером. Loading/error/re
 - Навигация игнорирует старые ответы.
 - Ошибка root shell блокирует открытие; child/search/graph/diagram ошибки локальны.
 - Partial response после delete не преодолевает tombstone.
+- Selection id может ссылаться на нематериализованный node: properties panel
+  выполняет `nodes:resolve`; до результата показывает локальный loading.
+- Scoped refresh не фильтрует links по текущему `nodeById`: endpoints могут быть
+  ещё не материализованы и разрешаются по требованию.
+- Reorder/move/create в parent с неполными страницами сначала догружает всех
+  siblings. Только после этого клиент пересчитывает `treeOrder` в полном
+  `childrenScope`; при ошибке догрузки операция не выполняется. Это исключает
+  дубли treeOrder без отдельного reorder API.
+
+## Матрица потребителей полного снимка
+
+| Потребитель | Trigger | Scope Stage 3 | Progress / ошибка |
+|---|---|---|---|
+| Required properties Save guard | Save | detached full + local delta | cancellable; ошибка блокирует Save |
+| Validation scripts | ручной запуск script | detached full + local delta | отдельный progress; editor не меняется |
+| Relation matrix | открытие matrix | существующий отдельный full-load | локальный экран loading/error |
+| Version/visual/diagram compare | открытие compare | существующий отдельный full-load | локальный экран loading/error |
+| Batch conflict reload | выбор reload | reset partial + root/open diagram scope | blocking reload/retry |
+| OEF import reload | успешный commit import | reset partial + root/open diagram scope | import progress/retry |
+| Discard fallback | point restore не удался | reset partial + root/open diagram scope | blocking reload/retry |
+| Diagram lock remote reload | подтверждение reload | open diagram scope + affected tree scopes | локальный progress/retry |
+| Diagram copy wizard | выбор target model | lazy folders, не full snapshot | row/tree loading/retry |
+| Package export/import/backend copy | отдельная server operation | editor state не используется | существующий server progress |
+
+Полный снимок — временный read model, а не merge в partial editor state. Ручной
+user-facing full refresh исключён принятым решением; source requirements должны
+использовать эту же формулировку.
 
 ## Поставка
 
@@ -235,12 +313,15 @@ Frontend:
 
 - индексы и `partial`/`childrenScope`/`full`;
 - branch pagination/dedup/retry/stale generation/tombstone;
+- append страниц без удаления предыдущих и full-scope reconcile после последней;
 - root shell без full nodes/links;
 - diagram scope только по ids attrs с сохранением dirty;
 - search/deep-link ancestor path;
 - granular sync без full pull и удаления unloaded;
+- poll/hybrid bounded reconciliation без full collection pull;
 - lazy folders wizard и lazy traceability;
-- detached validation без раздувания editor state;
+- detached validation с local delta без раздувания editor state;
+- reorder/move после полной materialization siblings;
 - корректные conflict/OEF/discard reload.
 
 Benchmark на эталонной модели:
@@ -256,6 +337,6 @@ Benchmark на эталонной модели:
 ## Риски
 
 - ACL post-filter после Page исказит total — фильтрация должна быть в SQL.
-- `reindexTreeOrders` ограничивается известным parent scope.
+- `reindexTreeOrders` запускается только после полной загрузки parent scope.
 - Full validation дорога, но не влияет на opening и не остаётся в editor state.
 - Search limit остаётся 50.

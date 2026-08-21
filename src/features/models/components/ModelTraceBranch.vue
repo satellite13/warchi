@@ -319,6 +319,7 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
 
 .tb--depth-capped {
   margin-left: 0;
+  padding-left: 0;
 }
 
 .tb--depth-capped .tb {

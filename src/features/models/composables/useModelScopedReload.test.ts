@@ -170,6 +170,7 @@ describe('useModelScopedReload', () => {
         partialStore,
         reopenDiagramScope,
         refreshTreeScopes,
+        t: key => key,
       })
     )!
     return {
@@ -241,6 +242,113 @@ describe('useModelScopedReload', () => {
     harness.vueScope.stop()
   })
 
+  it('leaves materialized dirty/new/deleted intact when the shell fails', async () => {
+    loadModelEditorShellMock.mockRejectedValue(new Error('shell down'))
+    const harness = createHarness()
+    harness.state.value.nodes.push({
+      id: 'dirty-local',
+      name: 'Dirty',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      nodeTypeId: 'type-1',
+      parentNodeId: 'root-1',
+      parsedAttrs: parseNodeAttrs(null),
+      _isDirty: true,
+    })
+    const nodesBefore = harness.state.value.nodes.map(row => row.id)
+
+    const result = await harness.reload.reloadPartialEditor()
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.failedPhase).toBe('shell')
+      expect(result.error).toBe('shell down')
+    }
+    expect(harness.state.value.nodes.map(row => row.id)).toEqual(nodesBefore)
+    expect(harness.state.value.nodes.find(row => row.id === 'dirty-local')?._isDirty).toBe(true)
+    expect(harness.reopenDiagramScope).not.toHaveBeenCalled()
+    harness.vueScope.stop()
+  })
+
+  it('ignores a stale model-A shell after the instance switches to model B', async () => {
+    const first = deferred<ReturnType<typeof shell>>()
+    loadModelEditorShellMock.mockReturnValueOnce(first.promise).mockResolvedValueOnce(
+      shell(['b-root'])
+    )
+    const harness = createHarness()
+    const pendingA = harness.reload.reloadPartialEditor()
+    harness.state.value.modelId = 'model-2'
+    harness.reload.invalidate()
+    const pendingB = harness.reload.reloadPartialEditor()
+    first.resolve(shell(['stale-a']))
+    await pendingA
+    await pendingB
+
+    expect(harness.state.value.nodes.map(row => row.id)).toEqual(['b-root'])
+    expect(harness.reopenDiagramScope).toHaveBeenCalledTimes(1)
+    harness.vueScope.stop()
+  })
+
+  it('ignores an in-flight shell after dispose or explicit invalidate', async () => {
+    const first = deferred<ReturnType<typeof shell>>()
+    loadModelEditorShellMock.mockReturnValueOnce(first.promise)
+    const harness = createHarness()
+    const pending = harness.reload.reloadPartialEditor()
+    harness.reload.invalidate()
+    first.resolve(shell(['disposed-root']))
+    const result = await pending
+
+    expect(result.ok).toBe(false)
+    expect(harness.state.value.nodes.map(row => row.id)).toEqual(['stale-clean'])
+    expect(harness.reopenDiagramScope).not.toHaveBeenCalled()
+    harness.vueScope.stop()
+  })
+
+  it('does not report full success when diagram reopen fails after a successful shell', async () => {
+    const harness = createHarness()
+    harness.reopenDiagramScope.mockRejectedValue(new Error('diagram scope failed'))
+
+    const result = await harness.reload.reloadPartialEditor()
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.failedPhase).toBe('diagram')
+      expect(result.error).toBe('diagram scope failed')
+    }
+    expect(harness.state.value.nodes.map(row => row.id)).toEqual(['root-child'])
+    harness.vueScope.stop()
+  })
+
+  it('does not report full success when lock tree refresh fails', async () => {
+    const harness = createHarness()
+    harness.refreshTreeScopes.mockRejectedValue(new Error('tree refresh failed'))
+
+    const result = await harness.reload.reloadPartialEditor({ mode: 'lock' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.failedPhase).toBe('tree')
+      expect(result.error).toBe('tree refresh failed')
+    }
+    expect(harness.reopenDiagramScope).toHaveBeenCalledWith('diagram-1')
+    harness.vueScope.stop()
+  })
+
+  it('returns a translated retryable error when the model id is missing', async () => {
+    const harness = createHarness()
+    harness.state.value.modelId = ''
+
+    const result = await harness.reload.reloadPartialEditor()
+
+    expect(result).toEqual({
+      ok: false,
+      failedPhase: 'shell',
+      error: 'models.scopedReloadModelMissing',
+    })
+    expect(harness.state.value.nodes.map(row => row.id)).toEqual(['stale-clean'])
+    harness.vueScope.stop()
+  })
+
   it('falls back to a partial reset when point-restore discard fails', async () => {
     discardUnsavedModelChangesMock.mockResolvedValue({ ok: false, error: 'point restore failed' })
     const harness = createHarness()
@@ -257,6 +365,32 @@ describe('useModelScopedReload', () => {
     expect(loadModelEditorShellMock).toHaveBeenCalled()
     expect(fetchAllByModelIdMock).not.toHaveBeenCalled()
     expect(harness.reopenDiagramScope).toHaveBeenCalledWith('diagram-1')
+    harness.vueScope.stop()
+  })
+
+  it('keeps unsaved edits when the discard fallback reload fails', async () => {
+    discardUnsavedModelChangesMock.mockResolvedValue({ ok: false, error: 'point restore failed' })
+    loadModelEditorShellMock.mockRejectedValue(new Error('shell down'))
+    const harness = createHarness()
+    harness.state.value.nodes.push({
+      id: 'new-local',
+      name: 'New',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      nodeTypeId: 'type-1',
+      parentNodeId: 'root-1',
+      parsedAttrs: parseNodeAttrs(null),
+      _isNew: true,
+    })
+
+    const result = await harness.reload.discardUnsavedOrReload({
+      model: harness.modelRef.value,
+      modelDirty: false,
+    })
+
+    expect(result).toBe(false)
+    expect(harness.state.value.nodes.some(row => row.id === 'new-local' && row._isNew)).toBe(true)
+    expect(harness.reopenDiagramScope).not.toHaveBeenCalled()
     harness.vueScope.stop()
   })
 })

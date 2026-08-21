@@ -52,6 +52,8 @@ const props = withDefaults(
     diagramLockServerNewer?: boolean
     /** Зрители смотрят диаграмму (только для держателя lock) */
     diagramSpectators?: { userId: string; displayName: string }[]
+    /** Toolbar actions that must not run during save validation. */
+    toolbarLocked?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -88,6 +90,7 @@ const props = withDefaults(
     diagramLockHolderDisplay: '',
     diagramLockServerNewer: false,
     diagramSpectators: () => [],
+    toolbarLocked: false,
   }
 )
 
@@ -232,7 +235,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     icon: 'upload_file',
     event: 'import-oef',
     title: t('models.oefImportTitle'),
-    disabled: !props.canEditModel,
+    disabled: !props.canEditModel || props.toolbarLocked,
   },
   {
     icon: 'download',
@@ -243,6 +246,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     icon: 'terminal',
     event: 'run-validation-script',
     title: t('validationScripts.toolbarRun'),
+    disabled: props.toolbarLocked,
   },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin

@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import { apiGet } from '@/composables/useApi'
+import i18n from '@/i18n'
 import type { DiagramResponse } from '@/types/api'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { parseDiagramAttrs, type DiagramAttrs } from '../modelAttrs'
@@ -12,8 +13,9 @@ type UseModelBatchConflictResolutionOptions = {
   batchSaveConflict: Ref<BatchConflictItem[] | null>
   errorMessage: Ref<string | null>
   pendingForceBatch: Ref<boolean>
-  loadModel: () => Promise<void>
+  loadModel: () => Promise<boolean>
   saveChanges: () => Promise<boolean>
+  t?: (key: string) => string
 }
 
 export function useModelBatchConflictResolution(options: UseModelBatchConflictResolutionOptions): {
@@ -21,9 +23,11 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
   resolveBatchSaveOverwrite: () => Promise<boolean>
   dismissBatchSaveConflict: () => void
 } {
+  const t = options.t ?? ((key: string) => String(i18n.global.t(key)))
+
   const resolveBatchSaveReload = async (): Promise<void> => {
     const conflicts = options.batchSaveConflict.value ? [...options.batchSaveConflict.value] : []
-    options.batchSaveConflict.value = null
+    if (conflicts.length === 0) return
 
     const diagramBeforeReload = new Map<
       string,
@@ -45,9 +49,11 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
       })
     )
 
-    await options.loadModel()
-
-    if (options.errorMessage.value || conflicts.length === 0) return
+    const reloadOk = await options.loadModel()
+    if (reloadOk === false) {
+      options.errorMessage.value = t('models.batchSaveConflictReloadFailed')
+      return
+    }
 
     for (const c of conflicts) {
       if (c.kind !== 'diagram') continue
@@ -57,10 +63,14 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
       if (d._attrsPending) {
         const enc = encodeURIComponent(c.id)
         const reloaded = await apiGet<DiagramResponse>(`/diagrams/${enc}`)
-        if (reloaded.success) {
-          d.parsedAttrs = parseDiagramAttrs(reloaded.data.attrs ?? null)
+        if (!reloaded.success) {
+          d.parsedAttrs = snap.localAttrs
           d._attrsPending = false
+          options.errorMessage.value = t('models.batchSaveConflictHydrateFailed')
+          return
         }
+        d.parsedAttrs = parseDiagramAttrs(reloaded.data.attrs ?? null)
+        d._attrsPending = false
       }
       d.parsedAttrs = mergeDiagramAttrsAfterBatchConflictReload(
         snap.localAttrs,
@@ -69,6 +79,7 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
       )
       d._isDirty = true
     }
+    options.batchSaveConflict.value = null
   }
 
   const resolveBatchSaveOverwrite = async (): Promise<boolean> => {

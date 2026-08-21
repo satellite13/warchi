@@ -599,6 +599,15 @@ export const modelsMessages = {
       savePreparingValidation: 'Подготовка проверки модели',
       saveValidationSnapshotFailed:
         'Не удалось загрузить полную модель для проверки. Повторите сохранение.',
+      detachedSnapshotFailed: 'Не удалось загрузить полную модель для проверки.',
+      validationScriptsSnapshotFailed:
+        'Не удалось загрузить полную модель для проверки. Повторите запуск скрипта.',
+      scopedReloadModelMissing: 'Не удалось определить модель.',
+      scopedReloadFailed: 'Не удалось перезагрузить модель.',
+      batchSaveConflictReloadFailed:
+        'Не удалось перезагрузить модель после конфликта. Повторите попытку.',
+      batchSaveConflictHydrateFailed:
+        'Не удалось загрузить атрибуты диаграммы после конфликта. Локальный холст сохранён, повторите попытку.',
       saveUpdatingModel: 'Обновление модели: {name}',
       saveCreatingNode: 'Создание узла: {name}',
       saveUpdatingNode: 'Обновление узла: {name}',
@@ -1219,6 +1228,14 @@ export const modelsMessages = {
       savePreparingValidation: 'Preparing model validation',
       saveValidationSnapshotFailed:
         'Could not load the full model for validation. Retry save.',
+      detachedSnapshotFailed: 'Could not load the full model for validation.',
+      validationScriptsSnapshotFailed:
+        'Could not load the full model for validation. Retry the script.',
+      scopedReloadModelMissing: 'Could not determine the model.',
+      scopedReloadFailed: 'Could not reload the model.',
+      batchSaveConflictReloadFailed: 'Could not reload the model after a conflict. Retry.',
+      batchSaveConflictHydrateFailed:
+        'Could not load diagram attributes after the conflict. The local canvas was kept; retry.',
       saveUpdatingModel: 'Updating model: {name}',
       saveCreatingNode: 'Creating node: {name}',
       saveUpdatingNode: 'Updating node: {name}',

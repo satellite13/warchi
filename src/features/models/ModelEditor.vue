@@ -47,6 +47,7 @@ import {
   useOefImport,
   ensureNotationImportCatalog,
 } from './composables'
+import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -172,18 +173,19 @@ const {
 
 const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
-const detachedModelSnapshot = useDetachedModelSnapshot(
-  computed(() => state.value.modelId || null)
-)
+const detachedModelId = computed(() => state.value.modelId || null)
+const saveDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
+const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
+const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
 const isPreparingValidation = ref(false)
 const detachedOverlayReady = computed(
   () =>
-    detachedModelSnapshot.loadedModelId.value === state.value.modelId &&
-    !detachedModelSnapshot.stale.value &&
-    detachedModelSnapshot.snapshot.value !== null
+    oefDetachedSnapshot.loadedModelId.value === state.value.modelId &&
+    !oefDetachedSnapshot.stale.value &&
+    oefDetachedSnapshot.snapshot.value !== null
 )
 const detachedOverlay = computed(() => {
-  const remote = detachedModelSnapshot.snapshot.value
+  const remote = oefDetachedSnapshot.snapshot.value
   if (!detachedOverlayReady.value || !remote) {
     return { nodes: [] as typeof state.value.nodes, links: [] as typeof state.value.links }
   }
@@ -295,10 +297,15 @@ const scopedReload = useModelScopedReload({
   refreshTreeScopes: async scopes => {
     await Promise.all(scopes.map(scope => partialStore.refreshChildrenScope(scope)))
   },
+  t: key => t(key),
 })
-assignScopedReload(async () => {
-  const result = await scopedReload.reloadPartialEditor()
-  if (!result.ok && result.error) setUiError(result.error)
+assignScopedReload({
+  reload: async () => {
+    const result = await scopedReload.reloadPartialEditor()
+    if (!result.ok && result.error) setUiError(result.error)
+    return result.ok
+  },
+  invalidate: scopedReload.invalidate,
 })
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
@@ -309,14 +316,11 @@ const validationRunPayload = ref<{
 
 async function loadDetachedValidationPayload(): Promise<boolean> {
   if (!model.value) return false
-  isPreparingValidation.value = true
-  startSave()
-  saveProgress.value = t('models.savePreparingValidation')
   try {
-    const overlay = await detachedModelSnapshot.loadOverlayed(state.value)
+    const overlay = await scriptsDetachedSnapshot.loadOverlayed(state.value)
     if (!overlay.ok) {
       if (!overlay.cancelled) {
-        setUiError(overlay.error ?? t('models.saveValidationSnapshotFailed'))
+        setUiError(overlay.error ?? t('models.validationScriptsSnapshotFailed'))
       }
       return false
     }
@@ -332,9 +336,7 @@ async function loadDetachedValidationPayload(): Promise<boolean> {
     })
     return true
   } finally {
-    detachedModelSnapshot.release()
-    isPreparingValidation.value = false
-    if (isSaving.value) finishSave()
+    scriptsDetachedSnapshot.release()
   }
 }
 
@@ -550,7 +552,9 @@ const {
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
-      detachedModelSnapshot.invalidateAfterRemoteSync()
+      saveDetachedSnapshot.invalidateAfterRemoteSync()
+      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+      oefDetachedSnapshot.invalidateAfterRemoteSync()
     },
     onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
     onSyncError: (event, message, retry) => {
@@ -577,7 +581,9 @@ const {
       }
     },
     onDetachedSnapshotInvalidated: () => {
-      detachedModelSnapshot.invalidateAfterRemoteSync()
+      saveDetachedSnapshot.invalidateAfterRemoteSync()
+      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+      oefDetachedSnapshot.invalidateAfterRemoteSync()
       invalidateTraceabilityDiagrams()
     },
     onSyncError: (_reason, message, retry) => {
@@ -1040,7 +1046,9 @@ watch([rightPanelTabs, activeRightTab], () => {
 })
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
-  detachedModelSnapshot.reset()
+  saveDetachedSnapshot.invalidateAfterRemoteSync()
+  scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+  oefDetachedSnapshot.invalidateAfterRemoteSync()
 })
 
 const {
@@ -1784,7 +1792,7 @@ const saveWithValidation = async (): Promise<boolean> => {
 
   try {
     const prepared = await prepareModelSaveValidation({
-      loader: detachedModelSnapshot,
+      loader: saveDetachedSnapshot,
       state: state.value,
       activeDiagram: activeDiagram.value?.parsedAttrs,
       t: (key, params) => String(t(key, params ?? {})),
@@ -1806,7 +1814,9 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
-      detachedModelSnapshot.invalidateAfterRemoteSync()
+      saveDetachedSnapshot.invalidateAfterRemoteSync()
+      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+      oefDetachedSnapshot.invalidateAfterRemoteSync()
       diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
         void uploadDiagramPreview()
@@ -1815,7 +1825,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     return ok
   } finally {
     isPreparingValidation.value = false
-    detachedModelSnapshot.release()
+    saveDetachedSnapshot.release()
     if (isSaving.value) finishSave()
   }
 }
@@ -2487,6 +2497,7 @@ const confirmDiagramDelete = () => {
 }
 
 const handleToolbarAction = async (event: string) => {
+  if (isSaveLockedToolbarEvent(event, isSaving.value)) return
   switch (event) {
     case 'save': {
       const openedBeforeSave = activeDiagram.value
@@ -2608,9 +2619,9 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'import-oef':
       if (canInspectDiagramJson.value) {
-        const loadedSnapshot = await detachedModelSnapshot.load()
+        const loadedSnapshot = await oefDetachedSnapshot.load()
         if (!loadedSnapshot) {
-          setUiError(detachedModelSnapshot.error.value ?? t('common.error'))
+          setUiError(oefDetachedSnapshot.error.value ?? t('common.error'))
           break
         }
         showImportWizard.value = true
@@ -3323,6 +3334,7 @@ onBeforeUnmount(() => {
         hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :can-save="!isSaving && !isDiagramReadOnly"
+        :toolbar-locked="isSaving"
         :can-edit-model="canInspectDiagramJson"
         :show-model-wiki-button="showModelWikiHeaderButton"
         :model-name="model?.name"
@@ -3522,6 +3534,7 @@ onBeforeUnmount(() => {
               canvas-mode
               :has-unsaved-changes="hasUnsavedChanges"
               :can-save="!isSaving && !isDiagramReadOnly"
+              :toolbar-locked="isSaving"
               :can-edit-model="canInspectDiagramJson"
               :show-model-wiki-button="showModelWikiHeaderButton"
               :show-diagram-wiki-button="showDiagramWikiToolbarButton"
@@ -3753,7 +3766,7 @@ onBeforeUnmount(() => {
     :error="saveError || uiError"
     :progress="saveProgress"
     :cancellable="isPreparingValidation"
-    @cancel="detachedModelSnapshot.cancel"
+    @cancel="saveDetachedSnapshot.cancel"
   />
   <RemoteCascadeConflictNotice
     v-if="remoteCascadeConflictCount > 0"
@@ -3768,10 +3781,10 @@ onBeforeUnmount(() => {
     @retry="firstGranularSyncFailure.retry"
   />
   <GranularSyncErrorNotice
-    v-if="showImportWizard && detachedModelSnapshot.stale.value"
+    v-if="showImportWizard && oefDetachedSnapshot.stale.value"
     entity="links"
     :message="t('models.oefDetachedLinksStale')"
-    @retry="detachedModelSnapshot.load"
+    @retry="oefDetachedSnapshot.load"
   />
 
   <DiagramCopyWizard

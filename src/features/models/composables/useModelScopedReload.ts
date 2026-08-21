@@ -1,13 +1,20 @@
-import type { Ref } from 'vue'
+import { onScopeDispose, type Ref } from 'vue'
+import i18n from '@/i18n'
 import type { ModelData } from '@/types/entities'
-import type { ModelEditorState, TreeParentScope } from '../types'
+import type { ModelEditorState, ModelPartialRequestGuard, TreeParentScope } from '../types'
 import { discardUnsavedModelChanges } from './discardUnsavedModelChanges'
 import { loadModelEditorShell } from './modelEditorLoadModel'
 import type { useModelPartialStore } from './useModelPartialStore'
 
 export type ScopedReloadMode = 'standard' | 'lock'
 
-export type ScopedReloadResult = { ok: true } | { ok: false; error?: string }
+export type ScopedReloadFailedPhase = 'shell' | 'diagram' | 'tree'
+
+export type ScopedReloadResult =
+  | { ok: true }
+  | { ok: false; error?: string; failedPhase?: ScopedReloadFailedPhase }
+
+const SCOPED_RELOAD_REQUEST = 'scoped-reload'
 
 const treeRootNodeId = (attrs: string | null | undefined): string | null => {
   if (!attrs) return null
@@ -19,8 +26,8 @@ const treeRootNodeId = (attrs: string | null | undefined): string | null => {
   }
 }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : 'Не удалось перезагрузить модель.'
+const errorMessage = (error: unknown, t: (key: string) => string): string =>
+  error instanceof Error ? error.message : t('models.scopedReloadFailed')
 
 export function useModelScopedReload(options: {
   state: Ref<ModelEditorState>
@@ -31,27 +38,50 @@ export function useModelScopedReload(options: {
   partialStore: ReturnType<typeof useModelPartialStore>
   reopenDiagramScope: (diagramId: string) => Promise<void>
   refreshTreeScopes?: (scopes: TreeParentScope[]) => Promise<void>
+  t?: (key: string) => string
 }) {
   let reloadGeneration = 0
+  const t = options.t ?? ((key: string) => String(i18n.global.t(key)))
+
+  const isCurrent = (
+    generation: number,
+    requestedModelId: string,
+    guard: ModelPartialRequestGuard
+  ): boolean =>
+    generation === reloadGeneration &&
+    options.state.value.modelId === requestedModelId &&
+    options.partialStore.store.isRequestCurrent(guard)
+
+  const fail = (phase: ScopedReloadFailedPhase, error?: string): ScopedReloadResult => ({
+    ok: false,
+    failedPhase: phase,
+    error,
+  })
+
+  const invalidate = (): void => {
+    reloadGeneration += 1
+    options.partialStore.abortInFlightScopes()
+  }
 
   const reloadPartialEditor = async (
     reloadOptions: { mode?: ScopedReloadMode } = {}
   ): Promise<ScopedReloadResult> => {
-    const modelId = options.state.value.modelId
-    if (!modelId) return { ok: false, error: 'Не удалось определить модель.' }
+    const requestedModelId = options.state.value.modelId
+    if (!requestedModelId) return fail('shell', t('models.scopedReloadModelMissing'))
 
     const mode = reloadOptions.mode ?? 'standard'
     const openDiagramId = options.selectedDiagramId.value
     const affectedScopes =
       mode === 'lock' ? options.partialStore.materializedChildrenScopes() : []
     const generation = ++reloadGeneration
-    options.partialStore.resetPartialScopes(modelId)
+    options.partialStore.abortInFlightScopes()
+    const guard = options.partialStore.store.beginRequest(SCOPED_RELOAD_REQUEST)
 
     try {
-      const shell = await loadModelEditorShell(modelId, {
-        isCancelled: () => generation !== reloadGeneration,
+      const shell = await loadModelEditorShell(requestedModelId, {
+        isCancelled: () => !isCurrent(generation, requestedModelId, guard),
       })
-      if (generation !== reloadGeneration) return { ok: false }
+      if (!isCurrent(generation, requestedModelId, guard)) return fail('shell')
 
       const catalog = {
         notations: options.state.value.notations,
@@ -68,24 +98,36 @@ export function useModelScopedReload(options: {
         ...shell.state,
         ...catalog,
       }
-      options.partialStore.resetPartialScopes(modelId, {
+      options.partialStore.resetPartialScopes(requestedModelId, {
         scope: { kind: 'root' },
         page: shell.rootChildrenPage,
         rootParentNodeId: treeRootNodeId(shell.model.attrs),
       })
+      const applyGuard = options.partialStore.store.beginRequest(SCOPED_RELOAD_REQUEST)
+
       if (openDiagramId) {
         options.selectedDiagramId.value = openDiagramId
-        await options.reopenDiagramScope(openDiagramId)
+        try {
+          await options.reopenDiagramScope(openDiagramId)
+        } catch (error) {
+          if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('diagram')
+          return fail('diagram', errorMessage(error, t))
+        }
+        if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('diagram')
       }
-      if (generation !== reloadGeneration) return { ok: false }
       if (mode === 'lock' && affectedScopes.length > 0) {
-        await options.refreshTreeScopes?.(affectedScopes)
+        try {
+          await options.refreshTreeScopes?.(affectedScopes)
+        } catch (error) {
+          if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('tree')
+          return fail('tree', errorMessage(error, t))
+        }
+        if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('tree')
       }
-      if (generation !== reloadGeneration) return { ok: false }
       return { ok: true }
     } catch (error) {
-      if (generation !== reloadGeneration) return { ok: false }
-      return { ok: false, error: errorMessage(error) }
+      if (!isCurrent(generation, requestedModelId, guard)) return fail('shell')
+      return fail('shell', errorMessage(error, t))
     }
   }
 
@@ -106,12 +148,15 @@ export function useModelScopedReload(options: {
       if (options.modelDirty.value) options.modelDirty.value = false
       return true
     }
-    await reloadPartialEditor()
-    return true
+    const reload = await reloadPartialEditor()
+    return reload.ok
   }
+
+  onScopeDispose(invalidate)
 
   return {
     reloadPartialEditor,
     discardUnsavedOrReload,
+    invalidate,
   }
 }

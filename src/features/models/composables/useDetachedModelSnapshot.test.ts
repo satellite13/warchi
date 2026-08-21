@@ -240,4 +240,21 @@ describe('useDetachedModelSnapshot', () => {
     expect(loader.snapshot.value).toBeNull()
     vueScope.stop()
   })
+
+  it('marks the snapshot stale after a remote scoped reload so OEF stays blocked', async () => {
+    fetchAllByModelIdMock.mockResolvedValue([])
+    const vueScope = effectScope()
+    const modelId = ref('model-1')
+    const loader = vueScope.run(() => useDetachedModelSnapshot(modelId))!
+
+    await loader.load()
+    expect(loader.stale.value).toBe(false)
+    expect(loader.snapshot.value).not.toBeNull()
+
+    loader.invalidateAfterRemoteSync()
+
+    expect(loader.stale.value).toBe(true)
+    expect(loader.snapshot.value).toBeNull()
+    vueScope.stop()
+  })
 })

@@ -1,5 +1,6 @@
 import { onScopeDispose, ref, type Ref } from 'vue'
 import { PAGE_SIZE_MODEL_NODES } from '@/api/queryHelpers'
+import i18n from '@/i18n'
 import type { LinkResponse, NodeResponse } from '@/types/api'
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
 import { applyLocalModelDelta } from '../utils/applyLocalModelDelta'
@@ -15,10 +16,14 @@ export type DetachedOverlayResult =
   | { ok: true; snapshot: DetachedModelSnapshot }
   | { ok: false; cancelled: boolean; error: string | null }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : 'Не удалось загрузить полную модель для проверки.'
+const errorMessage = (error: unknown, t: (key: string) => string): string =>
+  error instanceof Error ? error.message : t('models.detachedSnapshotFailed')
 
-export function useDetachedModelSnapshot(modelId: Ref<string | null>) {
+export function useDetachedModelSnapshot(
+  modelId: Ref<string | null>,
+  options: { t?: (key: string) => string } = {}
+) {
+  const t = options.t ?? ((key: string) => String(i18n.global.t(key)))
   const snapshot = ref<DetachedModelSnapshot | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -103,7 +108,7 @@ export function useDetachedModelSnapshot(modelId: Ref<string | null>) {
       return loaded
     } catch (caught) {
       if (!isCurrent(generation, targetModelId)) return null
-      error.value = errorMessage(caught)
+      error.value = errorMessage(caught, t)
       return null
     } finally {
       if (generation === requestGeneration) {

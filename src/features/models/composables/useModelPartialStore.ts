@@ -449,12 +449,17 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     }
   }
 
-  const resetPartialScopes = (nextModelId: string | null, initial?: InitialChildrenScope): void => {
+  const abortInFlightScopes = (): void => {
     for (const session of sessions.values()) session.controller.abort()
     sessions.clear()
     inFlight.clear()
     visibleRefreshFailures.clear()
     queuedVisibleRefreshes.clear()
+    childrenLoading.value = new Set()
+  }
+
+  const resetPartialScopes = (nextModelId: string | null, initial?: InitialChildrenScope): void => {
+    abortInFlightScopes()
     store.reset()
     generation.value = store.generation
     modelId = nextModelId
@@ -524,6 +529,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     refreshVisibleChildrenScope,
     prepareVisibleChildrenScopeRefresh,
     ensureChildrenScopeComplete,
+    abortInFlightScopes,
     resetPartialScopes,
     mergeFullLinks,
     discardRemoteCascadeConflictLinks,

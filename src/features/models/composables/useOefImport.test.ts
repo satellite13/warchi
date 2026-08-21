@@ -159,4 +159,47 @@ describe('useOefImport detached reuse input', () => {
     expect(setUiError).toHaveBeenCalledWith('models.oefDetachedLinksStale')
     expect(buildOefBatchSaveRequest).not.toHaveBeenCalled()
   })
+
+  it('keeps submit blocked after a scoped reload until an explicit detached reload', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    let ready = true
+    const setUiError = vi.fn()
+    const oef = useOefImport({
+      state: ref(state),
+      treeRootNodeId: computed(() => null),
+      t: key => key,
+      setUiError,
+      loadModel: vi.fn(async () => undefined),
+      getExistingLinks: () => state.links,
+      isExistingLinksReady: () => ready,
+    })
+
+    ready = false
+    await oef.handleOefImportSubmit({
+      draft: {
+        sourceModelId: 'source-model',
+        sourceModelName: 'Source',
+        nodes: [],
+        links: [],
+        diagrams: [],
+        organizations: [],
+        sourceElementTypes: [],
+        sourceRelationshipTypes: [],
+      },
+      notationId: 'notation-1',
+      mapping: { elementTypeMap: {}, relationshipTypeMap: {} },
+      ruleDecisions: {},
+      reuseSettings: {
+        nodesMode: 'reuseMatching',
+        linksMode: 'reuseMatching',
+        linkMatchCriterion: 'endpointsAndType',
+        onNodeMatch: 'reuseId',
+        onLinkMatch: 'reuseId',
+      },
+    })
+
+    expect(setUiError).toHaveBeenCalledWith('models.oefDetachedLinksStale')
+    expect(buildOefBatchSaveRequest).not.toHaveBeenCalled()
+  })
 })

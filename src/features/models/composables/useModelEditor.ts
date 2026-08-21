@@ -1,6 +1,7 @@
 import { computed, onScopeDispose, ref, type ComputedRef, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiPost } from '@/composables/useApi'
+import i18n from '@/i18n'
 import { useSaveState } from '@/composables/useSaveState'
 import type { ModelData } from '@/types/entities'
 import type { DiagramResponse } from '@/types/api'
@@ -28,6 +29,11 @@ import { useModelPartialStore } from './useModelPartialStore'
 import { useNotationRelationsAndRulesLoader } from './useNotationRelationsAndRulesLoader'
 import { resetLoadedNotationCatalogIds } from './ensureNotationImportCatalog'
 
+export type ScopedReloadBinding = {
+  reload: () => Promise<boolean>
+  invalidate: () => void
+}
+
 type ModelEditorReturn = {
   model: Ref<ModelData | null>
   state: Ref<ModelEditorState>
@@ -46,7 +52,7 @@ type ModelEditorReturn = {
   hasUnsavedChanges: ComputedRef<boolean>
   loadModel: () => Promise<void>
   /** Bind the scoped partial reload used by conflict/discard fallbacks. */
-  assignScopedReload: (fn: (() => Promise<void>) | null) => void
+  assignScopedReload: (binding: ScopedReloadBinding | null) => void
   /** Discard local dirty/new/deleted edits without a full model reload. */
   discardUnsavedChanges: () => Promise<boolean>
   /** Wait until notation components/relations/types are applied (diagram open). */
@@ -111,9 +117,9 @@ export const useModelEditor = (): ModelEditorReturn => {
   let loadGeneration = 0
   /** Guards concurrent save pipeline; separate from isSaving so UI can start early. */
   let saveOperationActive = false
-  let scopedReloadFn: (() => Promise<void>) | null = null
-  const assignScopedReload = (fn: (() => Promise<void>) | null): void => {
-    scopedReloadFn = fn
+  let scopedReloadBinding: ScopedReloadBinding | null = null
+  const assignScopedReload = (binding: ScopedReloadBinding | null): void => {
+    scopedReloadBinding = binding
   }
 
   const {
@@ -152,7 +158,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
   onScopeDispose(() => {
     disposeSaveErrorTimer()
-    scopedReloadFn = null
+    scopedReloadBinding = null
   })
 
   const hasUnsavedChanges = computed(() => {
@@ -239,6 +245,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   }
 
   const loadModel = async (): Promise<void> => {
+    scopedReloadBinding?.invalidate()
     const generation = ++loadGeneration
     let resolveCatalogReady: () => void = () => undefined
     let resolveBackgroundReady: () => void = () => undefined
@@ -251,7 +258,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     const modelId = route.params.id
     if (!modelId || typeof modelId !== 'string') {
       loadProgress.value = null
-      errorMessage.value = 'Не удалось определить модель.'
+      errorMessage.value = String(i18n.global.t('models.scopedReloadModelMissing'))
       isLoading.value = false
       initialSnapshotReady.value = true
       resolveCatalogReady()
@@ -321,7 +328,8 @@ export const useModelEditor = (): ModelEditorReturn => {
         settleStaleSession()
         return
       }
-      errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить модель.'
+      errorMessage.value =
+        error instanceof Error ? error.message : String(i18n.global.t('models.scopedReloadFailed'))
       isLoading.value = false
       loadProgress.value = null
       resolveCatalogReady()
@@ -342,12 +350,12 @@ export const useModelEditor = (): ModelEditorReturn => {
     }
   }
 
-  const reloadEditorState = async (): Promise<void> => {
-    if (scopedReloadFn) {
-      await scopedReloadFn()
-      return
+  const reloadEditorState = async (): Promise<boolean> => {
+    if (scopedReloadBinding) {
+      return scopedReloadBinding.reload()
     }
     await loadModel()
+    return !errorMessage.value
   }
 
   const saveChanges = async (): Promise<boolean> => {
@@ -405,8 +413,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       return true
     }
     // Fallback for point-restore failures: scoped partial reset, not a full collection load.
-    await reloadEditorState()
-    return true
+    return reloadEditorState()
   }
 
   const handleBack = () => {

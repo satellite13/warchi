@@ -277,6 +277,40 @@ describe('useDiagramScope', () => {
     mounted.vueScope.stop()
   })
 
+  it('threads an external abort through reload and ignores a late diagram response', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [
+      toEditorDiagram({
+        ...diagramResponse('diagram-1', [], []),
+        attrs: null,
+      }),
+    ]
+    const pendingDiagram = deferred<ReturnType<typeof ok>>()
+    vi.mocked(apiFetch).mockImplementation(async path => {
+      if (path === '/diagrams/diagram-1') return pendingDiagram.promise
+      if (path.endsWith('/nodes:resolve')) return ok({ nodes: [nodeResponse('late')], missingIds: [] })
+      return ok({ links: [], missingLinkIds: [] })
+    })
+    const mounted = mountScope(state)
+    const controller = new AbortController()
+
+    const reloading = mounted.diagramScope.reload(controller.signal)
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1))
+    const requestSignal = vi.mocked(apiFetch).mock.calls[0]?.[1]?.signal
+
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
+    pendingDiagram.resolve(ok(diagramResponse('diagram-1', ['late'])))
+    await reloading
+
+    expect(mounted.state.value.nodes).toEqual([])
+    expect(mounted.state.value.diagrams[0]?._attrsPending).toBe(true)
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(false)
+    expect(mounted.diagramScope.progress.value).toBeNull()
+    mounted.vueScope.stop()
+  })
+
   it('keeps a 413 link-union error local and retries the same diagram', async () => {
     const state = createEmptyModelEditorState()
     state.modelId = 'model-1'

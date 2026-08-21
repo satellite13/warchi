@@ -36,7 +36,7 @@ type BoundedModelReconcileOptions = {
   diagrams: () => EditorDiagram[]
   replaceDiagrams: (diagrams: EditorDiagram[]) => void
   materializedScopes: () => TreeParentScope[]
-  refreshVisibleChildrenScope: (scope: TreeParentScope) => Promise<void>
+  refreshVisibleChildrenScope: (scope: TreeParentScope, signal: AbortSignal) => Promise<void>
   openDiagramId?: () => string | null | undefined
   reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
   fetchers?: BoundedModelReconcileFetchers
@@ -190,7 +190,7 @@ export function createBoundedModelReconcile(
 
       const refreshes = options
         .materializedScopes()
-        .map(scope => options.refreshVisibleChildrenScope(scope))
+        .map(scope => options.refreshVisibleChildrenScope(scope, requestController.signal))
       const refreshResults = await Promise.allSettled(refreshes)
       if (!isCurrent(requestGeneration, modelId, requestController)) return
       const failedRefresh = refreshResults.find(

@@ -957,6 +957,57 @@ describe('useModelLiveSync snapshot pull', () => {
     expect(refreshAccessToken).toHaveBeenCalled()
   })
 
+  it('invalidates an active bounded reconcile on auth clear and ignores its late response', async () => {
+    const modelResponse = deferred<ApiResult<ModelData>>()
+    let requestSignal: AbortSignal | undefined
+    const fetchModel = vi.fn(async (_modelId: string, signal: AbortSignal) => {
+      requestSignal = signal
+      return modelResponse.promise
+    })
+    const fetchSlimDiagrams = vi.fn(async () => ({ success: true as const, data: [] }))
+    const currentModel = ref<ModelData | null>(model())
+    const onRemoteSnapshotApplied = vi.fn()
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state: ref(createEmptyModelEditorState()),
+            model: currentModel,
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: ref(true),
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'ws',
+            onRemoteSnapshotApplied,
+            boundedSync: {
+              materializedScopes: () => [],
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
+              fetchers: { fetchModel, fetchSlimDiagrams },
+            },
+          })
+          return () => null
+        },
+      })
+    )
+    await vi.waitFor(() => expect(fetchModel).toHaveBeenCalledTimes(1))
+
+    window.dispatchEvent(new Event('warchi-auth-cleared'))
+    expect(requestSignal?.aborted).toBe(true)
+    modelResponse.resolve({
+      success: true,
+      data: model({ name: 'late remote', updatedAt: '2026-01-02T00:00:00.000Z' }),
+    })
+    await flushPromises()
+
+    expect(currentModel.value?.name).toBe('Model')
+    expect(fetchSlimDiagrams).not.toHaveBeenCalled()
+    expect(onRemoteSnapshotApplied).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('ignores a late subscription callback from the previous model generation', async () => {
     const modelId = ref('model-1')
     const onModelTopicBroadcast = vi.fn()

@@ -109,7 +109,7 @@ export type UseModelLiveSyncOptions = {
   }
   boundedSync?: {
     materializedScopes: () => TreeParentScope[]
-    refreshVisibleChildrenScope: (scope: TreeParentScope) => Promise<void>
+    refreshVisibleChildrenScope: (scope: TreeParentScope, signal: AbortSignal) => Promise<void>
     reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
     onDetachedSnapshotInvalidated?: () => void
     onSyncError?: (
@@ -582,6 +582,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const onAuthCleared = (): void => {
+    boundedReconciler.invalidate()
     disconnectPush()
     stopFallbackPoll()
   }

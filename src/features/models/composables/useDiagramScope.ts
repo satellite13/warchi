@@ -26,6 +26,7 @@ type DiagramScopeSession = {
   diagramId: string
   controller: AbortController
   guard: ReturnType<ReturnType<typeof useModelPartialStore>['store']['beginRequest']>
+  releaseExternalAbort?: () => void
 }
 
 const uniqueIds = (ids: readonly string[]): string[] => {
@@ -97,6 +98,7 @@ export function useDiagramScope(options: {
   }
 
   const cancel = (): void => {
+    active?.releaseExternalAbort?.()
     active?.controller.abort()
     active = null
     progress.value = null
@@ -104,10 +106,10 @@ export function useDiagramScope(options: {
     ready.value = null
   }
 
-  const open = async (diagramId: string): Promise<void> => {
+  const open = async (diagramId: string, externalSignal?: AbortSignal): Promise<void> => {
     cancel()
     const modelId = options.state.value.modelId
-    if (!modelId || options.selectedDiagramId.value !== diagramId) return
+    if (!modelId || options.selectedDiagramId.value !== diagramId || externalSignal?.aborted) return
     const session: DiagramScopeSession = {
       modelId,
       diagramId,
@@ -115,6 +117,15 @@ export function useDiagramScope(options: {
       guard: options.partialStore.store.beginRequest('diagram-scope'),
     }
     active = session
+    if (externalSignal) {
+      const abortFromExternal = (): void => {
+        if (active === session) cancel()
+        else session.controller.abort()
+      }
+      externalSignal.addEventListener('abort', abortFromExternal, { once: true })
+      session.releaseExternalAbort = () =>
+        externalSignal.removeEventListener('abort', abortFromExternal)
+    }
     updateProgress(session, 'diagram', 0, 1)
 
     try {
@@ -218,17 +229,18 @@ export function useDiagramScope(options: {
                 caught instanceof Error ? caught.message : 'Не удалось загрузить данные диаграммы.',
             }
     } finally {
+      session.releaseExternalAbort?.()
       if (isCurrent(session)) progress.value = null
     }
   }
 
-  const reload = async (): Promise<void> => {
+  const reload = async (signal?: AbortSignal): Promise<void> => {
     const diagramId = options.selectedDiagramId.value
     if (!diagramId) {
       cancel()
       return
     }
-    await open(diagramId)
+    await open(diagramId, signal)
   }
 
   if (options.autoOpen) {

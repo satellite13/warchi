@@ -63,6 +63,11 @@ function harness(overrides?: {
   diagrams?: EditorDiagram[]
   scopes?: TreeParentScope[]
   fetchers?: Partial<BoundedModelReconcileFetchers>
+  refreshVisibleChildrenScope?: (
+    scope: TreeParentScope,
+    signal: AbortSignal
+  ) => Promise<void>
+  reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
 }) {
   let currentModel = overrides?.currentModel ?? model()
   let diagrams = overrides?.diagrams ?? [editorDiagram('diagram-1', 'local')]
@@ -77,8 +82,14 @@ function harness(overrides?: {
   const replaceDiagrams = vi.fn((next: EditorDiagram[]) => {
     diagrams = next
   })
-  const refreshVisibleChildrenScope = vi.fn(async (_scope: TreeParentScope) => undefined)
-  const reloadOpenDiagramScope = vi.fn(async () => undefined)
+  const refreshVisibleChildrenScope = vi.fn(
+    overrides?.refreshVisibleChildrenScope ??
+      (async (_scope: TreeParentScope, _signal: AbortSignal) => undefined)
+  )
+  const reloadOpenDiagramScope = vi.fn(
+    overrides?.reloadOpenDiagramScope ??
+      (async (_diagramId: string, _signal: AbortSignal) => undefined)
+  )
   const detachedInvalidated = vi.fn()
   const errors = vi.fn()
   const recovered = vi.fn()
@@ -213,6 +224,37 @@ describe('createBoundedModelReconcile', () => {
     expect(h.detachedInvalidated).toHaveBeenCalledTimes(1)
   })
 
+  it('aborts a materialized scope and applies no late completion after invalidation', async () => {
+    const scopeRefresh = deferred<void>()
+    let refreshSignal: AbortSignal | undefined
+    const h = harness({
+      scopes: [{ kind: 'root' }],
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+        fetchSlimDiagrams: vi.fn(async () => ok([diagramResponse('diagram-1', 'remote')])),
+      },
+      refreshVisibleChildrenScope: async (_scope, signal) => {
+        refreshSignal = signal
+        await scopeRefresh.promise
+      },
+    })
+
+    h.reconciler.request('poll_timer')
+    await vi.waitFor(() => expect(h.refreshVisibleChildrenScope).toHaveBeenCalledTimes(1))
+    expect(refreshSignal).toBeInstanceOf(AbortSignal)
+    const diagramsAtInvalidation = h.getDiagrams()
+
+    h.reconciler.invalidate()
+    expect(refreshSignal?.aborted).toBe(true)
+    scopeRefresh.resolve()
+    await h.reconciler.flush()
+
+    expect(h.getDiagrams()).toBe(diagramsAtInvalidation)
+    expect(h.reloadOpenDiagramScope).not.toHaveBeenCalled()
+    expect(h.getModel().updatedAt).toBe(REVISION_1)
+    expect(h.detachedInvalidated).not.toHaveBeenCalled()
+  })
+
   it('keeps a failed revision retryable and recovers without eager detached loading', async () => {
     let fail = true
     const fetchSlimDiagrams = vi.fn(async () =>
@@ -250,6 +292,75 @@ describe('createBoundedModelReconcile', () => {
     expect(h.getModel().updatedAt).toBe(REVISION_2)
     expect(h.detachedInvalidated).toHaveBeenCalledTimes(1)
     expect(h.recovered).toHaveBeenCalledWith('poll_timer')
+  })
+
+  it('does not accept the revision until every required scope succeeds', async () => {
+    let failScope = true
+    const refreshVisibleChildrenScope = vi.fn(async () => {
+      if (failScope) throw new Error('root scope failed')
+    })
+    const h = harness({
+      scopes: [{ kind: 'root' }],
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+        fetchSlimDiagrams: vi.fn(async () => ok([])),
+      },
+      refreshVisibleChildrenScope,
+    })
+
+    h.reconciler.request('poll_timer')
+    await h.reconciler.flush()
+
+    expect(h.errors).toHaveBeenCalledWith(
+      'poll_timer',
+      expect.objectContaining({ message: 'root scope failed' }),
+      expect.any(Function)
+    )
+    expect(h.getModel().updatedAt).toBe(REVISION_1)
+    expect(h.detachedInvalidated).not.toHaveBeenCalled()
+
+    failScope = false
+    const retry = h.errors.mock.calls[0]?.[2] as (() => void) | undefined
+    retry?.()
+    await h.reconciler.flush()
+
+    expect(refreshVisibleChildrenScope).toHaveBeenCalledTimes(2)
+    expect(h.getModel().updatedAt).toBe(REVISION_2)
+    expect(h.detachedInvalidated).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not accept the revision until the open diagram scope succeeds', async () => {
+    let failDiagram = true
+    const reloadOpenDiagramScope = vi.fn(async () => {
+      if (failDiagram) throw new Error('open diagram failed')
+    })
+    const h = harness({
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+        fetchSlimDiagrams: vi.fn(async () => ok([diagramResponse('diagram-1')])),
+      },
+      reloadOpenDiagramScope,
+    })
+
+    h.reconciler.request('visibility')
+    await h.reconciler.flush()
+
+    expect(h.errors).toHaveBeenCalledWith(
+      'visibility',
+      expect.objectContaining({ message: 'open diagram failed' }),
+      expect.any(Function)
+    )
+    expect(h.getModel().updatedAt).toBe(REVISION_1)
+    expect(h.detachedInvalidated).not.toHaveBeenCalled()
+
+    failDiagram = false
+    const retry = h.errors.mock.calls[0]?.[2] as (() => void) | undefined
+    retry?.()
+    await h.reconciler.flush()
+
+    expect(reloadOpenDiagramScope).toHaveBeenCalledTimes(2)
+    expect(h.getModel().updatedAt).toBe(REVISION_2)
+    expect(h.detachedInvalidated).toHaveBeenCalledTimes(1)
   })
 
   it('halts on an unavailable model without starting bounded collection requests', async () => {

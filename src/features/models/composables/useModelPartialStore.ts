@@ -225,20 +225,24 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     return loadPage(scope, 0, true)
   }
 
-  const refreshVisibleChildrenScope = (scope: TreeParentScope): Promise<void> => {
+  const refreshVisibleChildrenScope = (
+    scope: TreeParentScope,
+    externalSignal?: AbortSignal
+  ): Promise<void> => {
     const scopeKey = store.scopeKey(scope)
     const existing = inFlight.get(scopeKey)
     if (existing) {
       queuedVisibleRefreshes.add(scopeKey)
       return existing.promise.then(async () => {
+        if (externalSignal?.aborted) return
         if (queuedVisibleRefreshes.delete(scopeKey)) {
-          await refreshVisibleChildrenScope(scope)
+          await refreshVisibleChildrenScope(scope, externalSignal)
         } else {
           await inFlight.get(scopeKey)?.promise
         }
       })
     }
-    if (!modelId) return Promise.resolve()
+    if (!modelId || externalSignal?.aborted) return Promise.resolve()
 
     const requestedModelId = modelId
     const requestGeneration = store.generation
@@ -255,6 +259,8 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     }
     sessions.get(scopeKey)?.controller.abort()
     sessions.set(scopeKey, prefetchSession)
+    const abortFromExternal = (): void => prefetchSession.controller.abort()
+    externalSignal?.addEventListener('abort', abortFromExternal, { once: true })
     setLoading(scopeKey, true)
     setError(scopeKey, null)
 
@@ -277,9 +283,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
             return
           }
           if (!result.success) {
-            visibleRefreshFailures.add(scopeKey)
-            setError(scopeKey, result.error.message)
-            return
+            throw new Error(result.error.message)
           }
           pages.push({ pageNumber, response: result.data })
           if (
@@ -305,10 +309,15 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
           requestedModelId === modelId &&
           requestGeneration === store.generation
         ) {
+          const message = errorMessage(error)
           visibleRefreshFailures.add(scopeKey)
-          setError(scopeKey, errorMessage(error))
+          setError(scopeKey, message)
+          if (externalSignal) {
+            throw error instanceof Error ? error : new Error(message)
+          }
         }
       } finally {
+        externalSignal?.removeEventListener('abort', abortFromExternal)
         if (inFlight.get(scopeKey) === entry) {
           inFlight.delete(scopeKey)
           setLoading(scopeKey, false)

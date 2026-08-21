@@ -456,7 +456,9 @@ describe('useModelPartialStore', () => {
         error: { status: 503, message: 'refresh failed' },
       })
 
-    await partial.refreshVisibleChildrenScope({ kind: 'root' })
+    await expect(
+      partial.refreshVisibleChildrenScope({ kind: 'root' }, new AbortController().signal)
+    ).rejects.toThrow('refresh failed')
 
     expect(state.value.nodes.map(row => row.id)).toEqual(['old-page-0', 'old-page-1'])
     expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
@@ -536,6 +538,42 @@ describe('useModelPartialStore', () => {
     await refreshing
     expect(state.value.modelId).toBe('model-b')
     expect(state.value.nodes).toEqual([])
+    scope.stop()
+  })
+
+  it('threads an external abort through every bounded refresh page and ignores late rows', async () => {
+    const secondPage = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([node('new-page-0')], 0, 2, 2),
+      })
+      .mockReturnValueOnce(secondPage.promise)
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old')]),
+    })
+    const controller = new AbortController()
+
+    const refreshing = partial.refreshVisibleChildrenScope({ kind: 'root' }, controller.signal)
+    await vi.waitFor(() => expect(fetchNodeChildren).toHaveBeenCalledTimes(2))
+    const requestSignals = vi
+      .mocked(fetchNodeChildren)
+      .mock.calls.map(([, , options]) => options?.signal)
+
+    controller.abort()
+    expect(requestSignals.every(signal => signal?.aborted)).toBe(true)
+    secondPage.resolve({
+      success: true,
+      data: page([node('late-page-1')], 1, 2, 2),
+    })
+    await refreshing
+
+    expect(state.value.nodes.map(row => row.id)).toEqual(['old'])
+    expect(partial.childrenErrors.value.has('root')).toBe(false)
     scope.stop()
   })
 

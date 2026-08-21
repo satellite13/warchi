@@ -781,7 +781,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .tp-section__body--tree::-webkit-scrollbar {

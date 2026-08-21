@@ -44,6 +44,8 @@ const query = computed<TraceabilityBranchQuery>(() => ({
   direction: props.direction,
   linkTypeId: props.linkTypeId,
 }))
+const visualDepth = computed(() => Math.max(0, props.path.length - 1))
+const isDepthCapped = computed(() => visualDepth.value >= 4)
 const branchState = computed(() => props.getBranchState(query.value))
 const rows = computed(() => branchState.value.rows)
 const statusByLinkId = computed(() => {
@@ -173,7 +175,11 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
 </script>
 
 <template>
-  <div class="tb">
+  <div
+    class="tb"
+    :class="{ 'tb--depth-capped': isDepthCapped }"
+    :data-trace-depth="visualDepth"
+  >
     <div v-for="row in rows" :key="row.link.id" class="tb__item">
       <button
         type="button"
@@ -188,7 +194,7 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
           :name="isLinkExpanded(nodeId, row.link.id) ? 'expand_more' : 'chevron_right'"
         />
         <UiIcon name="route" class="tb__link-icon" />
-        <span class="tb__link-text">{{ linkLabel(row) }}</span>
+        <span class="tb__link-text" :title="linkLabel(row)">{{ linkLabel(row) }}</span>
         <span
           class="tb__drag-handle"
           :class="{ 'tb__drag-handle--disabled': !getStatus(row.link).draggable }"
@@ -216,7 +222,10 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
             @click="emit('setRoot', resolveNextNodeId(row.link))"
           >
             <span class="tb__node-dot" />
-            <span class="tb__node-name">
+            <span
+              class="tb__node-name"
+              :title="nodeName(resolveNextNodeId(row.link), row)"
+            >
               {{ nodeName(resolveNextNodeId(row.link), row) }}
             </span>
             <span
@@ -299,9 +308,13 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-left: 11px;
-  padding-left: 12px;
+  margin-left: 8px;
+  padding-left: 9px;
   border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.tb--depth-capped {
+  margin-left: 0;
 }
 
 .tb__item {

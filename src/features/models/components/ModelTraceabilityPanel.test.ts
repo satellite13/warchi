@@ -97,7 +97,8 @@ const neighbor = (
   id: string,
   sourceId: string,
   targetId: string,
-  nextNodeId: string
+  nextNodeId: string,
+  nextNodeName = nextNodeId
 ): EditorGraphNeighbor => ({
   link: {
     id,
@@ -110,7 +111,7 @@ const neighbor = (
   },
   node: {
     id: nextNodeId,
-    name: nextNodeId,
+    name: nextNodeName,
     modelId: 'model-1',
     ownerId: 'owner-1',
     nodeTypeId: 'node-type-1',
@@ -143,12 +144,12 @@ const dispatchDragStart = (element: Element, dataTransfer: DataTransfer): Event 
   return event
 }
 
-const mountPanel = () =>
+const mountPanel = (nodes = [editorNode('root', 'Root'), editorNode('child', 'Child')]) =>
   mount(ModelTraceabilityPanel, {
     props: {
       modelId: 'model-1',
-      selectedNode: editorNode('root', 'Root'),
-      nodes: [editorNode('root', 'Root'), editorNode('child', 'Child')],
+      selectedNode: nodes.find(node => node.id === 'root') ?? editorNode('root', 'Root'),
+      nodes,
       linkTypes: [
         {
           id: 'link-type-1',
@@ -504,6 +505,60 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     for (const id of controlledIds) {
       expect(wrapper.findAll(`[id="${id}"]`)).toHaveLength(1)
     }
+  })
+
+  it('caps deep branch indentation and retains complete label titles', async () => {
+    const rootName = 'Root application component with a complete descriptive name'
+    const aName = 'A service with a complete descriptive name'
+    const bName = 'B service with a complete descriptive name'
+    const cName = 'C service with a complete descriptive name'
+    const dName = 'D service with a complete descriptive name'
+    const leafName = 'Leaf service with a complete descriptive name'
+    const nodes = [
+      editorNode('root', rootName),
+      editorNode('a', aName),
+      editorNode('b', bName),
+      editorNode('c', cName),
+      editorNode('d', dName),
+      editorNode('leaf', leafName),
+    ]
+    const branchState = (rows: EditorGraphNeighbor[]) => ({
+      rows,
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: rows.length,
+      token: 1,
+      generation: 1,
+    })
+    lazyState.branchStates.set('root', branchState([neighbor('root-a', 'root', 'a', 'a', aName)]))
+    lazyState.branchStates.set('a', branchState([neighbor('a-b', 'a', 'b', 'b', bName)]))
+    lazyState.branchStates.set('b', branchState([neighbor('b-c', 'b', 'c', 'c', cName)]))
+    lazyState.branchStates.set('c', branchState([neighbor('c-d', 'c', 'd', 'd', dName)]))
+    lazyState.branchStates.set(
+      'd',
+      branchState([neighbor('d-leaf', 'd', 'leaf', 'leaf', leafName)])
+    )
+
+    const wrapper = mountPanel(nodes)
+    await nextTick()
+
+    for (let depth = 0; depth < 5; depth += 1) {
+      await wrapper.findAll('.tb__link').at(-1)!.trigger('click')
+    }
+
+    const branches = wrapper.findAll('.tb')
+    for (const branch of branches) {
+      const depth = Number(branch.attributes('data-trace-depth'))
+      expect(branch.classes().includes('tb--depth-capped')).toBe(depth >= 4)
+    }
+    expect(wrapper.findAll('.tb--depth-capped')).toHaveLength(2)
+
+    const linkLabel = wrapper.findAll('.tb__link-text').at(0)!
+    expect(linkLabel.attributes('title')).toBe(`${rootName} → ${aName}`)
+    const nodeLabel = wrapper.findAll('.tb__node-name').at(0)!
+    expect(nodeLabel.attributes('title')).toBe(aName)
   })
 
   it('loads a direct child branch on expansion and never asks for global links', async () => {

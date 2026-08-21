@@ -126,4 +126,58 @@ test.describe('Model editor lazy loading', () => {
       await cleanupLazyModelFixture(page, fixture)
     }
   })
+
+  test('saves a traceability node dropped onto the diagram exactly once', async ({ page }) => {
+    test.setTimeout(60000)
+    const fixture = await createLazyModelFixture(page)
+    try {
+      await openLazyModelEditor(page, fixture)
+      await page.locator(`[data-tree-node-id="${fixture.rootFolderId}"] .tree-node__toggle`).click()
+      await page.getByRole('button', { name: fixture.diagramName }).dblclick()
+      await expect(
+        page.getByRole('button', { name: `${fixture.diagramName} Opened`, exact: true })
+      ).toBeVisible()
+      await page.locator(`[data-tree-node-id="${fixture.nodeIds[1]}"] .tree-node__select`).click()
+      await page.getByRole('button', { name: 'Traceability', exact: true }).click()
+
+      const dragHandle = page.getByTestId('trace-node-drag-root')
+      await expect(dragHandle).toHaveAttribute('aria-disabled', 'false')
+      const canvas = page.locator('.diagram-canvas__canvas')
+      const canvasBox = await canvas.boundingBox()
+      expect(canvasBox).not.toBeNull()
+      const dataTransfer = await page.evaluateHandle(() => new DataTransfer())
+      await dragHandle.dispatchEvent('dragstart', { dataTransfer })
+      await canvas.dispatchEvent('dragover', {
+        dataTransfer,
+        clientX: canvasBox!.x + canvasBox!.width / 2,
+        clientY: canvasBox!.y + canvasBox!.height / 2,
+      })
+      await canvas.dispatchEvent('drop', {
+        dataTransfer,
+        clientX: canvasBox!.x + canvasBox!.width / 2,
+        clientY: canvasBox!.y + canvasBox!.height / 2,
+      })
+
+      const batchSaveRequest = page.waitForRequest(request => {
+        const url = new URL(request.url())
+        return url.pathname === `/api/v1/models/${fixture.modelId}/batch-save` && request.method() === 'POST'
+      })
+      await page.getByTitle('Save changes').click()
+
+      const payload = JSON.parse((await batchSaveRequest).postData() ?? '{}') as {
+        diagrams: { update: Array<{ id: string; attrs: string | null }> }
+      }
+      const diagramUpdate = payload.diagrams.update.find(diagram => diagram.id === fixture.diagramId)
+      expect(diagramUpdate?.attrs).not.toBeNull()
+
+      const attrs = JSON.parse(diagramUpdate?.attrs ?? '{}') as {
+        instances?: { nodes?: Array<{ modelNodeId?: string }> }
+      }
+      const matchingInstances =
+        attrs.instances?.nodes?.filter(instance => instance.modelNodeId === fixture.nodeIds[1]) ?? []
+      expect(matchingInstances).toHaveLength(1)
+    } finally {
+      await cleanupLazyModelFixture(page, fixture)
+    }
+  })
 })

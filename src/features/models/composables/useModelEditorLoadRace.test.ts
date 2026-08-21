@@ -1,6 +1,7 @@
 import { effectScope } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ModelEditorState } from '../types'
+import type { ModelEditorLoadProgressEvent } from '../utils/modelEditorLoadProgress'
 import { useModelEditor } from './useModelEditor'
 
 const { route, loadModelEditorShellMock, loadModelEditorCatalogMock, loadModelEditorLinksMock } =
@@ -141,6 +142,72 @@ describe('useModelEditor load sessions', () => {
 
     shellA.resolve(shell('model-a'))
     await loadA
+    scope.stop()
+  })
+
+  it('ignores progress events from an older load generation', async () => {
+    const linksA = deferred<never[]>()
+    const catalogB = deferred<typeof emptyCatalog>()
+    const progressByModel = new Map<string, (event: ModelEditorLoadProgressEvent) => void>()
+    loadModelEditorShellMock.mockImplementation(
+      async (
+        modelId: string,
+        options: { onProgress?: (event: ModelEditorLoadProgressEvent) => void }
+      ) => {
+        if (options.onProgress) progressByModel.set(modelId, options.onProgress)
+        return shell(modelId)
+      }
+    )
+    loadModelEditorCatalogMock.mockImplementation(async (modelId: string) => {
+      if (modelId === 'model-b') return catalogB.promise
+      return emptyCatalog
+    })
+    loadModelEditorLinksMock.mockImplementation(async (modelId: string) => {
+      if (modelId === 'model-a') return linksA.promise
+      return []
+    })
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    const loadA = editor.loadModel()
+    await vi.waitFor(() => {
+      expect(progressByModel.has('model-a')).toBe(true)
+    })
+
+    route.params.id = 'model-b'
+    const loadB = editor.loadModel()
+    await vi.waitFor(() => {
+      expect(progressByModel.has('model-b')).toBe(true)
+    })
+
+    progressByModel.get('model-a')?.({
+      kind: 'collection',
+      collection: 'nodes',
+      loaded: 100,
+      total: 100,
+    })
+    expect(editor.loadProgress.value).toMatchObject({
+      modelId: 'model-b',
+      percent: 0,
+      blocking: false,
+    })
+
+    progressByModel.get('model-b')?.({
+      kind: 'collection',
+      collection: 'nodes',
+      loaded: 50,
+      total: 100,
+    })
+    expect(editor.loadProgress.value).toMatchObject({
+      modelId: 'model-b',
+      phase: 'nodes',
+      loaded: 50,
+      total: 100,
+    })
+
+    linksA.resolve([])
+    catalogB.resolve(emptyCatalog)
+    await Promise.all([loadA, loadB])
     scope.stop()
   })
 })

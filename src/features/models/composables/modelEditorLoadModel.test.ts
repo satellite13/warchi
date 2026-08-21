@@ -35,10 +35,14 @@ const fail = (status: number, message: string) => ({
   success: false as const,
   error: { status, message },
 })
-const page = <T>(content: T[], meta?: { last?: boolean; totalPages?: number }) => ({
+const page = <T>(
+  content: T[],
+  meta?: { last?: boolean; totalPages?: number; totalElements?: number }
+) => ({
   content,
   last: meta?.last ?? true,
   totalPages: meta?.totalPages ?? 1,
+  totalElements: meta?.totalElements ?? content.length,
 })
 /** arepos ListResponse for GET /models (items, not Spring content). */
 const listResponse = <T>(items: T[]) => ({
@@ -79,6 +83,24 @@ describe('fetchAllByModelId', () => {
         expect.stringContaining('page=2'),
       ])
     )
+  })
+
+  it('reports cumulative row progress from page metadata', async () => {
+    vi.mocked(apiGet)
+      .mockResolvedValueOnce(
+        ok(page([{ id: 'n1' }, { id: 'n2' }], { last: false, totalPages: 2, totalElements: 3 }))
+      )
+      .mockResolvedValueOnce(ok(page([{ id: 'n3' }], { totalElements: 3 })))
+    const onProgress = vi.fn()
+
+    await fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000, undefined, {
+      onProgress,
+    })
+
+    expect(onProgress.mock.calls.map(call => call[0])).toEqual([
+      { kind: 'collection', collection: 'nodes', loaded: 2, total: 3 },
+      { kind: 'collection', collection: 'nodes', loaded: 3, total: 3 },
+    ])
   })
 
   it('forwards extra query params (includeAttrs=false for diagrams)', async () => {

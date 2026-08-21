@@ -9,6 +9,10 @@ import {
   type EditorDiagram,
   type ModelEditorState,
 } from '../types'
+import {
+  createModelEditorLoadProgressTracker,
+  type ModelEditorLoadProgress,
+} from '../utils/modelEditorLoadProgress'
 import type { BatchConflictItem } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
 import {
@@ -27,6 +31,7 @@ type ModelEditorReturn = {
   model: Ref<ModelData | null>
   state: Ref<ModelEditorState>
   isLoading: Ref<boolean>
+  loadProgress: Ref<ModelEditorLoadProgress | null>
   errorMessage: Ref<string | null>
   /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
   modelDirty: Ref<boolean>
@@ -77,6 +82,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const model = ref<ModelData | null>(null)
   const state = ref<ModelEditorState>(createEmptyModelEditorState())
   const isLoading = ref(true)
+  const loadProgress = ref<ModelEditorLoadProgress | null>(null)
   const initialSnapshotReady = ref(false)
   const errorMessage = ref<string | null>(null)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
@@ -157,6 +163,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     })
     const modelId = route.params.id
     if (!modelId || typeof modelId !== 'string') {
+      loadProgress.value = null
       errorMessage.value = 'Не удалось определить модель.'
       isLoading.value = false
       initialSnapshotReady.value = true
@@ -168,9 +175,15 @@ export const useModelEditor = (): ModelEditorReturn => {
     isLoading.value = true
     initialSnapshotReady.value = false
     errorMessage.value = null
+    const progressTracker = createModelEditorLoadProgressTracker({ generation, modelId })
+    loadProgress.value = progressTracker.current()
     let notationIds: string[]
     const cancellation = {
       isCancelled: () => !isLoadSessionActive(generation, modelId),
+      onProgress: (event: Parameters<typeof progressTracker.update>[0]) => {
+        if (!isLoadSessionActive(generation, modelId)) return
+        loadProgress.value = progressTracker.update(event)
+      },
     }
     const settleStaleSession = (): void => {
       resolveCatalogReady()
@@ -195,6 +208,8 @@ export const useModelEditor = (): ModelEditorReturn => {
       resetLoadedNotationCatalogIds([])
       state.value = shell.state
       isLoading.value = false
+      progressTracker.setBlocking(false)
+      loadProgress.value = progressTracker.current()
       // Let Vue paint the tree and handle expand clicks before catalog/links work.
       await new Promise<void>(resolve => {
         setTimeout(resolve, 0)
@@ -210,6 +225,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить модель.'
       isLoading.value = false
+      loadProgress.value = null
       resolveCatalogReady()
       markBackgroundReady(resolveBackgroundReady, generation, modelId)
       return
@@ -245,6 +261,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         ...state.value,
         links,
       }
+      loadProgress.value = progressTracker.update({ kind: 'complete' })
       markBackgroundReady(resolveBackgroundReady, generation, modelId)
     } catch (error) {
       if (!isLoadSessionActive(generation, modelId)) {
@@ -253,6 +270,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
       resolveCatalogReady()
       markBackgroundReady(resolveBackgroundReady, generation, modelId)
+      loadProgress.value = null
       // Tree is already visible; surface catalog/links failure without blanking the editor.
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось догрузить данные модели.'
     }
@@ -339,6 +357,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     model,
     state,
     isLoading,
+    loadProgress,
     initialSnapshotReady,
     errorMessage,
     modelDirty,

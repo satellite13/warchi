@@ -1,8 +1,9 @@
-import { ref } from "vue"
+import { computed, ref } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
 import type { ModelData } from "../../../types/entities"
 import type { ModelEditorState } from "../types"
+import { toEditorLink, toEditorNode } from './modelEditorMappers'
 import { useModelEditorStateHelpers } from "./useModelEditorStateHelpers"
 
 function createState(): ModelEditorState {
@@ -101,6 +102,61 @@ describe("useModelEditorStateHelpers", () => {
     expect(state.value.links[0]?._isDirty).toBe(true)
     expect(state.value.diagrams[0]?._isDirty).toBe(true)
     expect(modelDirty.value).toBe(true)
+  })
+
+  it('replaces high-volume entities when marking them dirty', () => {
+    const initialNode = toEditorNode({
+      id: 'n-raw',
+      name: 'Raw node',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      nodeTypeId: 'type-1',
+      parentNodeId: null,
+      attrs: null,
+    })
+    const initialLink = toEditorLink({
+      id: 'l-raw',
+      sourceId: 'n-raw',
+      targetId: 'n-2',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      linkTypeId: 'lt-1',
+      attrs: null,
+    })
+    const state = ref({
+      ...createState(),
+      nodes: [initialNode],
+      links: [initialLink],
+    })
+    const model = ref<ModelData | null>({
+      id: 'model-1',
+      name: 'Model',
+      version: '1.0.0',
+      ownerId: 'owner-1',
+      attrs: null,
+    })
+    const modelDirty = ref(false)
+    const helpers = useModelEditorStateHelpers({
+      state,
+      model,
+      modelDirty,
+      modelInitialName: ref('Model'),
+      modelCatalog: ref([]),
+      saveError: ref(null),
+    })
+    const hasDirtyEntities = computed(
+      () =>
+        state.value.nodes.some(node => node._isDirty) ||
+        state.value.links.some(link => link._isDirty)
+    )
+
+    expect(hasDirtyEntities.value).toBe(false)
+    helpers.markNodeDirty('n-raw')
+    helpers.markLinkDirty('l-raw')
+
+    expect(hasDirtyEntities.value).toBe(true)
+    expect(state.value.nodes[0]).not.toBe(initialNode)
+    expect(state.value.links[0]).not.toBe(initialLink)
   })
 
   it("validates and renames model with conflict checks", () => {

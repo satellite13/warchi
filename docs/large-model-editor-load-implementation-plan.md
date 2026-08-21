@@ -153,16 +153,28 @@ curl --http2 -k -o /dev/null -w 'HTTP/%{http_version} %{http_code}\n' \
 ### Task 8: Убрать измеренный Vue long task полного snapshot
 
 **Files:**
-- Modify: `src/features/models/composables/useModelEditor.ts`
-- Modify as needed: model editor state/index composables
+- Modify: `src/features/models/composables/modelEditorMappers.ts`
+- Modify: `src/features/models/composables/useModelEditorStateHelpers.ts`
+- Modify: `src/features/models/ModelEditor.vue`
+- Add: `src/features/models/components/ModelEditorLoadProgress.vue`
+- Add: `src/features/models/utils/modelEditorLoadProgress.ts`
 - Test: editor state, tree, dirty/rename/watchers regression tests
 
-- [ ] Снять CPU profile участка после последней страницы nodes: `mapInChunks`,
+- [x] Снять CPU profile участка после последней страницы nodes: `mapInChunks`,
   присвоение `state.nodes`, создание reactive proxies и пересчёт индексов.
-- [ ] Сначала добавить регрессионные тесты для замены массивов и точечных изменений
+- [x] Сначала добавить регрессионные тесты для замены массивов и точечных изменений
   node/link/diagram при `shallowRef` или `markRaw`.
-- [ ] Уменьшить повторяемый long task 2,1–2,3 с без изменения API и полного snapshot.
-- [ ] Повторить 1 × 5000 baseline; критерий — max long task < 2 с и p95 locks < 1 с.
+- [x] Оставить массовые nodes/links вне глубокой реактивности через `markRaw`;
+  изменения пользователя публиковать заменой записи, diagrams оставить reactive.
+- [x] Добавить реальный progress bar по метаданным страниц и фазам shell/catalog/links:
+  блокирующий до готовности shell, затем неблокирующий.
+- [x] Уменьшить повторяемый long task 2,1–2,3 с без изменения API и полного snapshot:
+  контрольный max long task **303 мс**.
+- [x] Повторить 1 × 5000 application baseline: max long task **303 мс**,
+  p95 `GET /diagram-locks` **65 мс** (49 проб, без ошибок), used JS heap после
+  полной загрузки **339 MiB**. Контрольный браузерный прогон выполнялся через
+  HTTP/1.1 URL сервиса из-за trust scope сертификата; ранее подтверждённый HTTP/2
+  transport baseline и backend-профиль не менялись.
 
 ### Task 7: Проверить документацию этапа 3
 

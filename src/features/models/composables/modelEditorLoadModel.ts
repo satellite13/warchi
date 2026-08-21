@@ -20,10 +20,12 @@ import type {
 import {
   paginatedContent,
   paginatedIsLastPage,
+  paginatedTotalElements,
   paginatedTotalPages,
 } from "@/utils/paginatedResponse"
 import type { ModelEditorState } from "../types"
 import { withModelEditorPageSlot } from '../utils/modelEditorPagePool'
+import type { ModelEditorLoadProgressEvent } from '../utils/modelEditorLoadProgress'
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllComponentsByNotationIds } from "./modelNotationComponentsApi"
 import {
@@ -48,6 +50,7 @@ export type ModelEditorCatalog = {
 
 export type ModelEditorLoadCancellationOptions = {
   isCancelled?: () => boolean
+  onProgress?: (event: ModelEditorLoadProgressEvent) => void
 }
 
 type ModelPageLoadControl = {
@@ -152,6 +155,23 @@ export async function fetchAllByModelId<T extends { id?: string }>(
   }
   if (options?.isCancelled?.()) return []
   const firstBatch = first.content ?? []
+  const totalElements = Math.max(paginatedTotalElements(first), firstBatch.length)
+  let loadedElements = firstBatch.length
+  const reportPage = (data: PaginatedResponse<T>): void => {
+    loadedElements += data.content?.length ?? 0
+    options?.onProgress?.({
+      kind: 'collection',
+      collection: path.slice(1) as 'nodes' | 'links' | 'diagrams',
+      loaded: Math.min(loadedElements, totalElements),
+      total: totalElements,
+    })
+  }
+  options?.onProgress?.({
+    kind: 'collection',
+    collection: path.slice(1) as 'nodes' | 'links' | 'diagrams',
+    loaded: Math.min(loadedElements, totalElements),
+    total: totalElements,
+  })
   let collected: T[]
   if (paginatedIsLastPage(first, 0)) {
     collected = firstBatch
@@ -170,6 +190,7 @@ export async function fetchAllByModelId<T extends { id?: string }>(
           throw error
         }
         if (options?.isCancelled?.()) return []
+        reportPage(data)
         collected.push(...(data.content ?? []))
         if (paginatedIsLastPage(data, page)) break
         page += 1
@@ -179,11 +200,14 @@ export async function fetchAllByModelId<T extends { id?: string }>(
       const rest = await mapPool(
         restPages,
         MODEL_PAGE_FETCH_CONCURRENCY,
-        (page, control) =>
-          fetchModelPage<T>(path, modelId, page, pageSize, extraParams, {
+        async (page, control) => {
+          const data = await fetchModelPage<T>(path, modelId, page, pageSize, extraParams, {
             ...options,
             ...control,
-          }),
+          })
+          reportPage(data)
+          return data
+        },
         options
       )
       if (options?.isCancelled?.()) return []
@@ -232,15 +256,18 @@ function yieldToUi(): Promise<void> {
 async function mapInChunks<T, R>(
   items: T[],
   mapFn: (item: T) => R,
-  options?: ModelEditorLoadCancellationOptions
+  options?: ModelEditorLoadCancellationOptions,
+  onChunk?: (loaded: number, total: number) => void
 ): Promise<R[]> {
   const mapped: R[] = []
+  onChunk?.(0, items.length)
   for (let i = 0; i < items.length; i += ENTITY_MAP_CHUNK) {
     if (options?.isCancelled?.()) throw LOAD_CANCELLED
     const slice = items.slice(i, i + ENTITY_MAP_CHUNK)
     for (const item of slice) {
       mapped.push(mapFn(item))
     }
+    onChunk?.(mapped.length, items.length)
     if (i + ENTITY_MAP_CHUNK < items.length) {
       await yieldToUi()
     }
@@ -284,7 +311,9 @@ export async function loadModelEditorShell(
   )
   const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
   // Attrs parse is CPU-heavy on large models — yield so the first paint stays responsive.
-  const editorNodes = await mapInChunks(nodes, toEditorNode, options)
+  const editorNodes = await mapInChunks(nodes, toEditorNode, options, (loaded, total) => {
+    options?.onProgress?.({ kind: 'preparing', target: 'shell', loaded, total })
+  })
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
 
   const state: ModelEditorState = {
@@ -319,6 +348,7 @@ export async function loadModelEditorCatalog(
   notationIds: string[],
   options?: ModelEditorLoadCancellationOptions
 ): Promise<ModelEditorCatalog> {
+  options?.onProgress?.({ kind: 'catalog', status: 'started' })
   const typesQuery = listParams()
   typesQuery.set("modelId", modelId)
   for (const notationId of notationIds) {
@@ -348,6 +378,7 @@ export async function loadModelEditorCatalog(
   }
 
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
+  options?.onProgress?.({ kind: 'catalog', status: 'complete' })
   return {
     components,
     relations: [...relationsById.values()],
@@ -371,7 +402,9 @@ export async function loadModelEditorLinks(
   )
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   // Mapping parses attrs; yield so folder expand clicks stay responsive on large models.
-  const mapped = await mapInChunks(links, toEditorLink, options)
+  const mapped = await mapInChunks(links, toEditorLink, options, (loaded, total) => {
+    options?.onProgress?.({ kind: 'preparing', target: 'links', loaded, total })
+  })
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   return mapped
 }

@@ -65,6 +65,7 @@ import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
+import ModelEditorLoadProgress from './components/ModelEditorLoadProgress.vue'
 import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
@@ -111,6 +112,7 @@ const {
   model,
   state,
   isLoading,
+  loadProgress,
   initialSnapshotReady,
   errorMessage,
   modelDirty,
@@ -1370,6 +1372,7 @@ const markNodeDeleted = (nodeId: string) => {
   } else {
     node._isDeleted = true
     node._isDirty = true
+    markNodeDirty(node.id)
   }
   state.value.diagrams.forEach(diagram => {
     if (diagram.nodeId !== nodeId) return
@@ -1457,6 +1460,7 @@ const markLinkDeleted = (linkId: string) => {
   } else {
     row._isDeleted = true
     row._isDirty = true
+    markLinkDirty(row.id)
   }
 
   if (selectedModelLinkId.value === linkId) {
@@ -3867,11 +3871,11 @@ onBeforeUnmount(() => {
     @select-version="versionDiff.loadCompareTarget"
   />
 
-  <div v-if="isLoading" class="overlay-loading">
-    <UiIcon name="sync" class="overlay-loading__icon spin" />
-    <span>{{ t('common.loading') }}</span>
-  </div>
-  <div v-else-if="isPreparingDiagram" class="overlay-loading overlay-loading--soft">
+  <ModelEditorLoadProgress
+    v-if="loadProgress && !initialSnapshotReady && !errorMessage"
+    :progress="loadProgress"
+  />
+  <div v-if="!isLoading && isPreparingDiagram" class="overlay-loading overlay-loading--soft">
     <UiIcon name="sync" class="overlay-loading__icon spin" />
     <span>{{ t('models.diagramLoading') }}</span>
   </div>

@@ -13,6 +13,7 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 - Opening a large model no longer walks `/nodes`, `/links`, and `/diagrams` twice: live sync waits for the editor snapshot and skips the first connect/resync pull. For the current 1 CPU / 1 GiB backend profile, model pages load 5000 rows at a time through one global request slot; the HTTP/2 benchmark found that wider pools exhaust or contend for backend resources.
+- Large-model loading now shows real page/phase progress. High-volume nodes and links no longer become deep Vue proxies: the benchmark max long task dropped from 2.54 s to 303 ms and used JS heap from roughly 811 to 339 MiB.
 - The bundled nginx enables HTTP/2 on its TLS listener, including the local Kubernetes service URL.
 
 ### Fixed

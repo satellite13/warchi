@@ -398,6 +398,58 @@ describe("executeModelEditorSave", () => {
     expect(mocks.saveNodes).not.toHaveBeenCalled()
   })
 
+  it("builds the batch request only from materialized editor rows", async () => {
+    const state = ref(createState())
+    state.value.nodes = [
+      {
+        id: "n-dirty",
+        name: "Dirty",
+        modelId: "model-1",
+        ownerId: "owner-1",
+        nodeTypeId: "type-1",
+        parentNodeId: null,
+        parsedAttrs: parseNodeAttrs(null),
+        _isDirty: true,
+      },
+    ]
+    state.value.links = []
+    state.value.diagrams = []
+
+    await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref<ModelData[]>([]),
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError: ref<string | null>(null),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear: vi.fn(),
+    })
+
+    expect(mocks.buildBatchSaveRequest).toHaveBeenCalledTimes(1)
+    expect(mocks.buildBatchSaveRequest).toHaveBeenCalledWith(
+      state.value.nodes,
+      state.value.links,
+      state.value.diagrams,
+      { force: false }
+    )
+    const [nodesArg, linksArg] = mocks.buildBatchSaveRequest.mock.calls[0] as [
+      Array<{ id: string }>,
+      Array<{ id: string }>,
+    ]
+    expect(nodesArg.map(row => row.id)).toEqual(["n-dirty"])
+    expect(linksArg.map(row => row.id)).toEqual([])
+    expect(nodesArg.map(row => row.id)).not.toContain("unloaded-remote-node")
+  })
+
   it("falls back to legacy entity pipeline only when dirty state is missing from the batch request", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     mocks.hasBatchChanges.mockReturnValue(false)

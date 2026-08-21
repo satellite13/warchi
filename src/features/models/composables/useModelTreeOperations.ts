@@ -1,7 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { bumpMinor, compareVersions } from '@/utils/version'
 import { createId, parseNodeAttrs } from '../modelAttrs'
-import type { ModelEditorState, TreeParentScope } from '../types'
+import type { EditorNode, ModelEditorState, TreeParentScope } from '../types'
+import { applyDefaultsToEditorNode } from '../utils/syncDefaultsOnLoad'
 import { parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
@@ -165,6 +166,32 @@ export function useModelTreeOperations(options: {
     return Math.max(...siblingOrders) + 1
   }
 
+  const createLocalNode = (input: {
+    id: string
+    name: string
+    nodeTypeId: string
+    parentNodeId: string | null
+    treeOrder: number
+  }): EditorNode => {
+    const node: EditorNode = {
+      id: input.id,
+      name: input.name,
+      modelId: options.state.value.modelId,
+      ownerId: options.state.value.ownerId,
+      nodeTypeId: input.nodeTypeId,
+      parentNodeId: input.parentNodeId,
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: {
+        ...parseNodeAttrs(null),
+        treeOrder: input.treeOrder,
+      },
+      _isNew: true,
+    }
+    applyDefaultsToEditorNode(node, options.state.value)
+    return node
+  }
+
   const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
     rawPath
       .split(/[\\/]+/)
@@ -203,21 +230,15 @@ export function useModelTreeOperations(options: {
 
       const createdDirectoryId = createId()
       const treeOrder = getNextTreeOrderForParent(currentParentNodeId)
-      options.state.value.nodes.push({
-        id: createdDirectoryId,
-        name: segment,
-        modelId: options.state.value.modelId,
-        ownerId: options.state.value.ownerId,
-        nodeTypeId: directoryTypeId,
-        parentNodeId: currentParentNodeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs: {
-          ...parseNodeAttrs(null),
+      options.state.value.nodes.push(
+        createLocalNode({
+          id: createdDirectoryId,
+          name: segment,
+          nodeTypeId: directoryTypeId,
+          parentNodeId: currentParentNodeId,
           treeOrder,
-        },
-        _isNew: true,
-      })
+        })
+      )
       syncParentHasChildren(currentParentNodeId)
       options.reconcileMaterializedRows?.([treeScopeForParent(currentParentNodeId)])
       createdDirectoryIds.push(createdDirectoryId)
@@ -283,21 +304,15 @@ export function useModelTreeOperations(options: {
     try {
       if (!(await ensureCompleteSiblingScope(parentNodeId))) return
       const treeOrder = getNextTreeOrderForParent(parentNodeId)
-      options.state.value.nodes.push({
-        id: createId(),
-        name: nodeName,
-        modelId: options.state.value.modelId,
-        ownerId: options.state.value.ownerId,
-        nodeTypeId,
-        parentNodeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs: {
-          ...parseNodeAttrs(null),
+      options.state.value.nodes.push(
+        createLocalNode({
+          id: createId(),
+          name: nodeName,
+          nodeTypeId,
+          parentNodeId,
           treeOrder,
-        },
-        _isNew: true,
-      })
+        })
+      )
       syncParentHasChildren(parentNodeId)
       options.reconcileMaterializedRows?.([treeScopeForParent(parentNodeId)])
       showCreateNodeModal.value = false

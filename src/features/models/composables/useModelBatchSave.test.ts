@@ -129,6 +129,54 @@ describe('useModelBatchSave', () => {
     ])
   })
 
+  it('never deletes remote ids that are absent from the materialized arrays', () => {
+    const request = buildBatchSaveRequest(
+      [createNode({ id: 'loaded-clean' }), createNode({ id: 'loaded-dirty', _isDirty: true })],
+      [createLink({ id: 'loaded-link' })],
+      [createDiagram({ id: 'loaded-diagram' })]
+    )
+
+    expect(request.nodes.delete).toEqual([])
+    expect(request.links.delete).toEqual([])
+    expect(request.diagrams.delete).toEqual([])
+    expect(request.nodes.update.map(row => row.id)).toEqual(['loaded-dirty'])
+    expect(request.nodes.create).toEqual([])
+    expect(request.links.create).toEqual([])
+    expect(request.links.update).toEqual([])
+    expect(request.diagrams.create).toEqual([])
+    expect(request.diagrams.update).toEqual([])
+    expect([...request.nodes.create, ...request.nodes.update, ...request.nodes.delete]).not.toContain(
+      'unloaded-remote-node'
+    )
+    expect([...request.links.create, ...request.links.update, ...request.links.delete]).not.toContain(
+      'unloaded-remote-link'
+    )
+  })
+
+  it('sends only the one dirty materialized row', () => {
+    const request = buildBatchSaveRequest(
+      [
+        createNode({ id: 'clean-a' }),
+        createNode({ id: 'dirty', _isDirty: true, updatedAt: '2026-01-01T00:00:00.000Z' }),
+        createNode({ id: 'clean-b' }),
+      ],
+      [createLink({ id: 'clean-link' })],
+      [createDiagram({ id: 'clean-diagram' })]
+    )
+
+    expect(request.nodes.create).toEqual([])
+    expect(request.nodes.delete).toEqual([])
+    expect(request.nodes.update).toEqual([
+      expect.objectContaining({ id: 'dirty', baseUpdatedAt: '2026-01-01T00:00:00.000Z' }),
+    ])
+    expect(request.links.create).toEqual([])
+    expect(request.links.update).toEqual([])
+    expect(request.links.delete).toEqual([])
+    expect(request.diagrams.create).toEqual([])
+    expect(request.diagrams.update).toEqual([])
+    expect(request.diagrams.delete).toEqual([])
+  })
+
   it('detects whether a batch request contains changes', () => {
     const emptyRequest = buildBatchSaveRequest([], [], [])
     const changedRequest = buildBatchSaveRequest([createNode({ _isNew: true })], [], [])

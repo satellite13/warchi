@@ -122,7 +122,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     response: PaginatedResponse<NodeResponse>,
     session: ScopeRequestSession
   ): void => {
-    const rows = paginatedContent(response).map(toEditorNode)
+    const rows = paginatedContent(response).map(row => toEditorNode(row, state.value))
     for (const row of rows) session.rowsById.set(row.id, row)
     const last = paginatedIsLastPage(response, pageNumber)
     store.mergeNodes(
@@ -496,8 +496,16 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     guard: ModelPartialRequestGuard
   ): boolean => {
     captureMaterializedRows()
-    const nodesAccepted = store.mergeNodes(nodes.map(toEditorNode), { kind: 'partial' }, guard)
-    const linksAccepted = store.mergeLinks(links.map(toEditorLink), { kind: 'partial' }, guard)
+    const nodesAccepted = store.mergeNodes(
+      nodes.map(row => toEditorNode(row, state.value)),
+      { kind: 'partial' },
+      guard
+    )
+    const linksAccepted = store.mergeLinks(
+      links.map(row => toEditorLink(row, state.value)),
+      { kind: 'partial' },
+      guard
+    )
     if (!nodesAccepted || !linksAccepted) return false
     publishRows()
     return true

@@ -1,5 +1,6 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
+import { applyDefaultsToEditorNode } from '../utils/syncDefaultsOnLoad'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { createId, parseNodeAttrs, resolveComponentByNodeType } from '../modelAttrs'
@@ -382,6 +383,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           parsedAttrs,
           _isNew: true,
         }
+        applyDefaultsToEditorNode(newNode, options.state.value)
         if (!options.state.value.nodes.some(item => item.id === nodeId)) {
           options.state.value.nodes.push(deepClone(newNode))
           const parent = options.state.value.nodes.find(item => item.id === parentNodeId)

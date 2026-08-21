@@ -1,15 +1,27 @@
 import { effectScope } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { parseDiagramAttrs, parseNodeAttrs } from "../modelAttrs"
+import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
+import type { NodeResponse } from "../../../types/api"
 import type { ModelData } from "../../../types/entities"
+import type { ModelEditorState } from "../types"
 import { useModelEditor } from "./useModelEditor"
 
-const { apiGetMock, apiPostMock, apiPutMock, apiDeleteMock, routerPushMock } = vi.hoisted(() => ({
+const {
+  apiGetMock,
+  apiPostMock,
+  apiPutMock,
+  apiDeleteMock,
+  routerPushMock,
+  loadModelEditorShellMock,
+  loadModelEditorCatalogMock
+} = vi.hoisted(() => ({
   apiGetMock: vi.fn(),
   apiPostMock: vi.fn(),
   apiPutMock: vi.fn(),
   apiDeleteMock: vi.fn(),
-  routerPushMock: vi.fn()
+  routerPushMock: vi.fn(),
+  loadModelEditorShellMock: vi.fn(),
+  loadModelEditorCatalogMock: vi.fn()
 }))
 
 vi.mock("../../../composables/useApi", () => ({
@@ -22,6 +34,12 @@ vi.mock("../../../composables/useApi", () => ({
 vi.mock("vue-router", () => ({
   useRoute: () => ({ params: { id: "model-1" } }),
   useRouter: () => ({ push: routerPushMock })
+}))
+
+vi.mock("./modelEditorLoadModel", () => ({
+  loadModelEditorShell: loadModelEditorShellMock,
+  loadModelEditorCatalog: loadModelEditorCatalogMock,
+  loadModelEditorLinks: vi.fn()
 }))
 
 const batchSavePath = "/models/model-1/batch-save"
@@ -684,5 +702,179 @@ describe("useModelEditor — golden save contract", () => {
     expect(body.nodes.create.length).toBeGreaterThan(0)
     expect(body.links.create.length).toBeGreaterThan(0)
     expect(body.diagrams.update.length).toBeGreaterThan(0)
+  })
+})
+
+function editorState(overrides: Partial<ModelEditorState> = {}): ModelEditorState {
+  return {
+    modelId: "model-1",
+    ownerId: "owner-1",
+    nodes: [],
+    links: [],
+    diagrams: [],
+    notations: [],
+    nodeTypes: [],
+    linkTypes: [],
+    components: [],
+    relations: [],
+    relationRules: [],
+    ...overrides
+  }
+}
+
+function shellWithBoundNode() {
+  const node: NodeResponse = {
+    id: "root-child",
+    name: "Root child",
+    modelId: "model-1",
+    ownerId: "owner-1",
+    nodeTypeId: "nt-1",
+    parentNodeId: null,
+    attrs: JSON.stringify({
+      notationComponents: { "not-1": { componentId: "comp-1" } }
+    })
+  }
+  return {
+    model: {
+      id: "model-1",
+      name: "Model",
+      version: "1.0.0",
+      ownerId: "owner-1"
+    },
+    modelCatalog: [],
+    state: editorState({
+      nodes: [
+        {
+          id: "root-child",
+          name: "Root child",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeTypeId: "nt-1",
+          parentNodeId: null,
+          parsedAttrs: parseNodeAttrs(node.attrs ?? null)
+        }
+      ]
+    }),
+    loadedNotationIds: ["not-1"],
+    rootChildrenPage: {
+      content: [node],
+      page: { number: 0, size: 500, totalElements: 1, totalPages: 1 }
+    }
+  }
+}
+
+const boundNodeCatalog = {
+  modelCatalog: [],
+  notations: [],
+  nodeTypes: [
+    {
+      id: "nt-1",
+      name: "Application",
+      ownerId: "owner-1",
+      attrs: JSON.stringify({
+        customProperties: [
+          { id: "p0", name: "tier", type: "string", required: false, defaultValue: "app" }
+        ]
+      })
+    }
+  ],
+  linkTypes: [],
+  components: [
+    {
+      id: "comp-1",
+      name: "C",
+      version: "1.0.0",
+      notationId: "not-1",
+      ownerId: "owner-1",
+      nodeTypeId: "nt-1",
+      attrs: JSON.stringify({
+        customProperties: [
+          { id: "p1", name: "status", type: "string", required: false, defaultValue: "draft" }
+        ]
+      })
+    }
+  ],
+  relations: [],
+  relationRules: []
+}
+
+describe("useModelEditor defaults and unsaved delta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupApiGetForBatchTimestampRefresh()
+    loadModelEditorShellMock.mockResolvedValue(shellWithBoundNode())
+    loadModelEditorCatalogMock.mockResolvedValue(boundNodeCatalog)
+  })
+
+  it("does not apply defaults globally on normal open", async () => {
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    await editor.loadModel()
+    await editor.whenCatalogReady()
+
+    const row = editor.state.value.nodes.find(item => item.id === "root-child")
+    expect(row?.parsedAttrs.typeProperties).toEqual({})
+    expect(row?.parsedAttrs.componentProperties).toEqual({ "not-1": { "comp-1": {} } })
+    expect(row?._isDirty).toBeUndefined()
+    scope.stop()
+  })
+
+  it("treats only local materialized dirty/new/deleted rows as unsaved changes", () => {
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    editor.model.value = {
+      id: "model-1",
+      name: "Model",
+      version: "1.0.0",
+      ownerId: "owner-1",
+      attrs: null
+    }
+    editor.state.value = editorState({
+      nodes: [
+        {
+          id: "loaded-clean",
+          name: "Clean",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeTypeId: "nt-1",
+          parentNodeId: null,
+          parsedAttrs: parseNodeAttrs(null)
+        }
+      ],
+      links: [
+        {
+          id: "loaded-link",
+          sourceId: "loaded-clean",
+          targetId: "other",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          linkTypeId: "lt-1",
+          parsedAttrs: parseLinkAttrs(null)
+        }
+      ]
+    })
+
+    expect(editor.hasUnsavedChanges.value).toBe(false)
+
+    editor.state.value.nodes[0]!._isDirty = true
+    expect(editor.hasUnsavedChanges.value).toBe(true)
+
+    editor.state.value.nodes[0]!._isDirty = false
+    editor.state.value.links.push({
+      id: "local-new",
+      sourceId: "loaded-clean",
+      targetId: "other",
+      modelId: "model-1",
+      ownerId: "owner-1",
+      linkTypeId: "lt-1",
+      parsedAttrs: parseLinkAttrs(null),
+      _isNew: true
+    })
+    expect(editor.hasUnsavedChanges.value).toBe(true)
+
+    editor.state.value.links = editor.state.value.links.filter(link => link.id !== "local-new")
+    editor.state.value.nodes[0]!._isDeleted = true
+    expect(editor.hasUnsavedChanges.value).toBe(true)
+    scope.stop()
   })
 })

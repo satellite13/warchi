@@ -33,6 +33,31 @@ describe('model editor mappers', () => {
     expect(isReactive(link.parsedAttrs)).toBe(false)
   })
 
+  it('maps rows without treating Array.map indexes as defaults catalogs', () => {
+    const rows = [
+      {
+        id: 'node-1',
+        name: 'First',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
+        parentNodeId: null,
+        attrs: null,
+      },
+      {
+        id: 'node-2',
+        name: 'Second',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
+        parentNodeId: null,
+        attrs: null,
+      },
+    ]
+
+    expect(rows.map(toEditorNode).map(row => row.id)).toEqual(['node-1', 'node-2'])
+  })
+
   it('keeps diagrams reactive for canvas deep watchers', () => {
     const diagram = toEditorDiagram({
       id: 'diagram-1',

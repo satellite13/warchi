@@ -129,7 +129,6 @@ import {
   useModelEditorRouteNavigation,
 } from './composables/useModelEditorRouteNavigation'
 import { applyLocalModelDelta } from './utils/applyLocalModelDelta'
-import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
 const {
@@ -1523,16 +1522,6 @@ const bindLinkRelationFromPanel = (relationId: string): void => {
       markLinkDirty(row.id)
     },
   })
-}
-
-const scheduleSyncDefaultsOnLoad = (): void => {
-  const modelId = state.value.modelId
-  void whenCatalogReady()
-    .then(() => whenBackgroundReady())
-    .then(async () => {
-      if (state.value.modelId !== modelId) return
-      await syncDefaultsOnLoadChunked(state.value)
-    })
 }
 
 const bindLinkRelation = (
@@ -3243,7 +3232,6 @@ const { applyCurrentDiagramNavigation, retryCurrentDiagramTreeFocus } =
     focusRouteDiagramInTree,
     afterModelLoad: () => {
       scheduleFetchDocumentsFromApi()
-      scheduleSyncDefaultsOnLoad()
       void whenBackgroundReady().then(() => fetchWikiDocuments())
     },
   })
@@ -3313,7 +3301,6 @@ onMounted(async () => {
   await loadModel()
   applyCurrentDiagramNavigation()
   scheduleFetchDocumentsFromApi()
-  scheduleSyncDefaultsOnLoad()
   // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
   void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)

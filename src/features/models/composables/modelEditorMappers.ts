@@ -2,6 +2,11 @@ import { markRaw, reactive } from 'vue'
 import type { DiagramResponse, LinkResponse, NodeResponse } from "@/types/api"
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
 import type { EditorDiagram, EditorLink, EditorNode } from "../types"
+import {
+  applyDefaultsToEditorLink,
+  applyDefaultsToEditorNode,
+  type EditorDefaultsCatalog,
+} from "../utils/syncDefaultsOnLoad"
 
 function materializeEditorEntity<T extends { parsedAttrs: object }>(entity: T): T {
   const materialized = reactive(entity) as T
@@ -10,17 +15,40 @@ function materializeEditorEntity<T extends { parsedAttrs: object }>(entity: T): 
   return materialized
 }
 
-export const toEditorNode = (row: NodeResponse): EditorNode =>
-  markRaw({
+function hasDefaultsCatalog(catalog: unknown): catalog is EditorDefaultsCatalog {
+  return (
+    typeof catalog === 'object' &&
+    catalog !== null &&
+    Array.isArray((catalog as Partial<EditorDefaultsCatalog>).nodeTypes) &&
+    Array.isArray((catalog as Partial<EditorDefaultsCatalog>).linkTypes) &&
+    Array.isArray((catalog as Partial<EditorDefaultsCatalog>).components) &&
+    Array.isArray((catalog as Partial<EditorDefaultsCatalog>).relations)
+  )
+}
+
+export const toEditorNode = (
+  row: NodeResponse,
+  catalog?: EditorDefaultsCatalog | null | number
+): EditorNode => {
+  const node = markRaw({
     ...row,
     parsedAttrs: parseNodeAttrs(row.attrs ?? null),
   })
+  if (hasDefaultsCatalog(catalog)) applyDefaultsToEditorNode(node, catalog)
+  return node
+}
 
-export const toEditorLink = (row: LinkResponse): EditorLink =>
-  markRaw({
+export const toEditorLink = (
+  row: LinkResponse,
+  catalog?: EditorDefaultsCatalog | null | number
+): EditorLink => {
+  const link = markRaw({
     ...row,
     parsedAttrs: parseLinkAttrs(row.attrs ?? null),
   })
+  if (hasDefaultsCatalog(catalog)) applyDefaultsToEditorLink(link, catalog)
+  return link
+}
 
 export const toEditorDiagram = (
   row: DiagramResponse,

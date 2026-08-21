@@ -101,15 +101,12 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     return session
   }
 
-  const mergePage = (
+  const mergePageIntoStore = (
     scope: TreeParentScope,
     pageNumber: number,
     response: PaginatedResponse<NodeResponse>,
     session: ScopeRequestSession
   ): void => {
-    // Tree operations still mutate compatible state arrays directly. Capture those local
-    // materialized rows before every remote merge so the partial store remains merge owner.
-    captureMaterializedRows()
     const rows = paginatedContent(response).map(toEditorNode)
     for (const row of rows) session.rowsById.set(row.id, row)
     const last = paginatedIsLastPage(response, pageNumber)
@@ -132,6 +129,18 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
         session.guard
       )
     }
+  }
+
+  const mergePage = (
+    scope: TreeParentScope,
+    pageNumber: number,
+    response: PaginatedResponse<NodeResponse>,
+    session: ScopeRequestSession
+  ): void => {
+    // Tree operations still mutate compatible state arrays directly. Capture those local
+    // materialized rows before every remote merge so the partial store remains merge owner.
+    captureMaterializedRows()
+    mergePageIntoStore(scope, pageNumber, response, session)
     publishRows()
   }
 
@@ -201,6 +210,88 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     return loadPage(scope, 0, true)
   }
 
+  const refreshVisibleChildrenScope = (scope: TreeParentScope): Promise<void> => {
+    const scopeKey = store.scopeKey(scope)
+    const existing = inFlight.get(scopeKey)
+    if (existing) return existing.promise
+    if (!modelId) return Promise.resolve()
+
+    const requestedModelId = modelId
+    const requestGeneration = store.generation
+    const previousPageState = store.childrenPages.get(scopeKey)
+    const visibleThroughPage =
+      previousPageState && previousPageState.loadedPages.size > 0
+        ? Math.max(...previousPageState.loadedPages)
+        : 0
+    const wasComplete = store.loadedChildrenFor.has(scopeKey)
+    const prefetchSession: ScopeRequestSession = {
+      guard: store.beginRequest(`children-refresh:${scopeKey}`),
+      controller: new AbortController(),
+      rowsById: new Map(),
+    }
+    sessions.get(scopeKey)?.controller.abort()
+    sessions.set(scopeKey, prefetchSession)
+    setLoading(scopeKey, true)
+    setError(scopeKey, null)
+
+    const entry = { promise: Promise.resolve() }
+    entry.promise = (async (): Promise<void> => {
+      const pages: Array<{ pageNumber: number; response: PaginatedResponse<NodeResponse> }> = []
+      try {
+        let pageNumber = 0
+        while (true) {
+          const result = await fetchNodeChildren(requestedModelId, scope, {
+            page: pageNumber,
+            signal: prefetchSession.controller.signal,
+          })
+          if (
+            prefetchSession.controller.signal.aborted ||
+            requestedModelId !== modelId ||
+            requestGeneration !== store.generation ||
+            !store.isRequestCurrent(prefetchSession.guard)
+          ) {
+            return
+          }
+          if (!result.success) {
+            setError(scopeKey, result.error.message)
+            return
+          }
+          pages.push({ pageNumber, response: result.data })
+          if (
+            paginatedIsLastPage(result.data, pageNumber) ||
+            (!wasComplete && pageNumber >= visibleThroughPage)
+          ) {
+            break
+          }
+          pageNumber += 1
+        }
+
+        captureMaterializedRows()
+        const commitSession = startSession(scope)
+        store.prepareChildrenScopeRefresh(scope)
+        for (const page of pages) {
+          mergePageIntoStore(scope, page.pageNumber, page.response, commitSession)
+        }
+        publishRows()
+      } catch (error) {
+        if (
+          !prefetchSession.controller.signal.aborted &&
+          requestedModelId === modelId &&
+          requestGeneration === store.generation
+        ) {
+          setError(scopeKey, errorMessage(error))
+        }
+      } finally {
+        if (inFlight.get(scopeKey) === entry) {
+          inFlight.delete(scopeKey)
+          setLoading(scopeKey, false)
+        }
+      }
+    })()
+    inFlight.set(scopeKey, entry)
+    return entry.promise
+  }
+
   const ensureChildrenScopeComplete = async (scope: TreeParentScope): Promise<void> => {
     const scopeKey = store.scopeKey(scope)
     while (!store.loadedChildrenFor.has(scopeKey)) {
@@ -262,6 +353,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     loadChildren,
     loadNextChildrenPage,
     refreshChildrenScope,
+    refreshVisibleChildrenScope,
     ensureChildrenScopeComplete,
     resetPartialScopes,
     mergeFullLinks,

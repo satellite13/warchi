@@ -39,6 +39,8 @@ export class ModelPartialStore {
   readonly loadedChildrenFor = new Set<string>()
   readonly remoteDeletedNodeIds = new Set<string>()
   readonly remoteDeletedLinkIds = new Set<string>()
+  /** Dirty/new incident links removed by a remote node FK cascade. */
+  readonly remoteCascadeConflictLinkIds = new Set<string>()
 
   private readonly requestTokens = new Map<string, number>()
   private readonly internalChildrenPages = new Map<string, InternalChildrenPageState>()
@@ -81,6 +83,14 @@ export class ModelPartialStore {
     return this.loadedChildrenFor.has(this.scopeKey(scope))
   }
 
+  prepareChildrenScopeRefresh(scope: TreeParentScope): void {
+    const scopeKey = this.scopeKey(scope)
+    const scopedIds = new Set(this.childrenByParent.get(scopeKey) ?? [])
+    this.replaceNodes(
+      this.nodes.filter(row => !scopedIds.has(row.id) || isProtectedLocal(row))
+    )
+  }
+
   beginRequest(requestKey: string): ModelPartialRequestGuard {
     const token = (this.requestTokens.get(requestKey) ?? 0) + 1
     this.requestTokens.set(requestKey, token)
@@ -114,6 +124,7 @@ export class ModelPartialStore {
     this.loadedChildrenFor.clear()
     this.remoteDeletedNodeIds.clear()
     this.remoteDeletedLinkIds.clear()
+    this.remoteCascadeConflictLinkIds.clear()
     this.requestTokens.clear()
     this.internalChildrenPages.clear()
     this.treeScopeKeyByNodeId.clear()
@@ -227,11 +238,24 @@ export class ModelPartialStore {
     this.replaceNodes(this.nodes.filter(row => row.id !== nodeId))
   }
 
-  deleteRemoteLink(linkId: string): void {
+  deleteRemoteLink(linkId: string, options?: { force?: boolean }): void {
     this.remoteDeletedLinkIds.add(linkId)
     const local = this.linkById.get(linkId)
-    if (isProtectedLocal(local)) return
+    if (isProtectedLocal(local) && options?.force !== true) return
+    if (local?._isDirty || local?._isNew) {
+      this.remoteCascadeConflictLinkIds.add(linkId)
+    }
     this.replaceLinks(this.links.filter(row => row.id !== linkId))
+  }
+
+  deleteRemoteIncidentLinks(nodeId: string): string[] {
+    const incidentIds = this.links
+      .filter(link => link.sourceId === nodeId || link.targetId === nodeId)
+      .map(link => link.id)
+    for (const linkId of incidentIds) {
+      this.deleteRemoteLink(linkId, { force: true })
+    }
+    return incidentIds
   }
 
   clearRemoteNodeTombstone(nodeId: string): void {
@@ -240,6 +264,7 @@ export class ModelPartialStore {
 
   clearRemoteLinkTombstone(linkId: string): void {
     this.remoteDeletedLinkIds.delete(linkId)
+    this.remoteCascadeConflictLinkIds.delete(linkId)
   }
 
   replaceMaterializedRows(nodes: readonly EditorNode[], links: readonly EditorLink[]): void {

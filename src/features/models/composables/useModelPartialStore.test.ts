@@ -328,6 +328,107 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('atomically refreshes page zero through the previously visible page', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValueOnce({
+      success: true,
+      data: page([node('old-page-1')], 1, 1500, 3),
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old-page-0')], 0, 1500, 3),
+    })
+    await partial.loadNextChildrenPage({ kind: 'root' })
+
+    const secondPage = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([node('new-page-0')], 0, 1500, 3),
+      })
+      .mockReturnValueOnce(secondPage.promise)
+
+    const refreshing = partial.refreshVisibleChildrenScope({ kind: 'root' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.value.nodes.map(row => row.id)).toEqual(['old-page-0', 'old-page-1'])
+    secondPage.resolve({
+      success: true,
+      data: page([node('new-page-1')], 1, 1500, 3),
+    })
+    await refreshing
+
+    expect(
+      vi.mocked(fetchNodeChildren).mock.calls.slice(-2).map(([, , options]) => options?.page)
+    ).toEqual([0, 1])
+    expect(state.value.nodes.map(row => row.id)).toEqual(['new-page-0', 'new-page-1'])
+    expect(partial.store.childrenPages.get('root')?.nextPage).toBe(2)
+    scope.stop()
+  })
+
+  it('refreshes a previously complete parent through the new last page', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValueOnce({
+      success: true,
+      data: page([node('old-page-1')], 1, 2, 2),
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old-page-0')], 0, 2, 2),
+    })
+    await partial.loadNextChildrenPage({ kind: 'root' })
+    expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
+
+    vi.mocked(fetchNodeChildren).mockImplementation(async (_modelId, _scope, options) => {
+      const pageNumber = options?.page ?? 0
+      return {
+        success: true,
+        data: page([node(`new-page-${pageNumber}`)], pageNumber, 3, 3),
+      }
+    })
+
+    await partial.refreshVisibleChildrenScope({ kind: 'root' })
+
+    expect(
+      vi.mocked(fetchNodeChildren).mock.calls.slice(-3).map(([, , options]) => options?.page)
+    ).toEqual([0, 1, 2])
+    expect(state.value.nodes.map(row => row.id)).toEqual([
+      'new-page-0',
+      'new-page-1',
+      'new-page-2',
+    ])
+    expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
+    scope.stop()
+  })
+
+  it('aborts a visible scope refresh and rejects its late result after reset', async () => {
+    const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
+    vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old')]),
+    })
+
+    const refreshing = partial.refreshVisibleChildrenScope({ kind: 'root' })
+    const signal = vi.mocked(fetchNodeChildren).mock.calls[0]?.[2]?.signal
+    partial.resetPartialScopes('model-b')
+    expect(signal?.aborted).toBe(true)
+
+    response.resolve({ success: true, data: page([node('stale')]) })
+    await refreshing
+    expect(state.value.modelId).toBe('model-b')
+    expect(state.value.nodes).toEqual([])
+    scope.stop()
+  })
+
   it('aborts paging and rejects its stale result on reset', async () => {
     const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
     vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)

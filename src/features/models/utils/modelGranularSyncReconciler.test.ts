@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiResult } from '@/composables/useApi'
 import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
+import type { ModelData } from '@/types/entities'
 import { createEmptyModelEditorState, type EditorDiagram, type TreeParentScope } from '../types'
 import { toEditorDiagram, toEditorLink, toEditorNode } from '../composables/modelEditorMappers'
 import { ModelPartialStore } from './modelPartialStore'
@@ -61,6 +62,18 @@ function success<T>(data: T): ApiResult<T> {
   return { success: true, data }
 }
 
+function model(overrides: Partial<ModelData> = {}): ModelData {
+  return {
+    id: 'model-1',
+    name: 'Model',
+    version: '1.0.0',
+    ownerId: 'owner-1',
+    attrs: null,
+    updatedAt: 'v1',
+    ...overrides,
+  }
+}
+
 function deferred<T>(): {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -97,6 +110,7 @@ function harness(options: {
   links?: LinkResponse[]
   diagrams?: EditorDiagram[]
   fetchers?: Partial<ModelGranularSyncFetchers>
+  model?: ModelData
 } = {}) {
   const store = new ModelPartialStore()
   store.setRootParentNodeId(null)
@@ -105,6 +119,7 @@ function harness(options: {
   const state = createEmptyModelEditorState()
   state.modelId = 'model-1'
   state.diagrams = options.diagrams ?? []
+  let currentModel = options.model ?? model()
   const refreshedScopes: TreeParentScope[] = []
   const invalidatedDetached = vi.fn()
   const unknown = vi.fn()
@@ -112,10 +127,16 @@ function harness(options: {
     fetchNode: vi.fn(async id => success(node(id))),
     fetchLink: vi.fn(async id => success(link(id))),
     fetchDiagram: vi.fn(async id => success(diagram(id))),
+    fetchModel: vi.fn(async () => success(model({ name: 'Remote model', updatedAt: 'v2' }))),
     ...options.fetchers,
   }
   const reconciler = createModelGranularSyncReconciler({
     modelId: () => state.modelId,
+    model: () => currentModel,
+    replaceModel: next => {
+      currentModel = next
+    },
+    modelDirty: () => false,
     store,
     diagrams: () => state.diagrams,
     replaceDiagrams: rows => {
@@ -125,7 +146,7 @@ function harness(options: {
       state.nodes = store.nodes
       state.links = store.links
     },
-    refreshChildrenScope: async scope => {
+    refreshVisibleChildrenScope: async scope => {
       refreshedScopes.push(scope)
     },
     fetchers,
@@ -140,6 +161,7 @@ function harness(options: {
     state,
     store,
     unknown,
+    currentModel: () => currentModel,
   }
 }
 
@@ -243,6 +265,87 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.store.remoteDeletedNodeIds.has('deleted')).toBe(true)
     expect(h.store.nodeById.has('deleted')).toBe(false)
     expect(h.store.loadedChildrenFor.has('root')).toBe(false)
+  })
+
+  it('cascade-deletes every materialized incident link even when it is locally dirty', async () => {
+    const cleanIncident = toEditorLink(link('clean-incident', { sourceId: 'deleted' }))
+    const dirtyIncident = {
+      ...toEditorLink(link('dirty-incident', { targetId: 'deleted' })),
+      _isDirty: true,
+    }
+    const unrelated = toEditorLink(
+      link('unrelated', { sourceId: 'other-1', targetId: 'other-2' })
+    )
+    const h = harness()
+    h.store.replaceMaterializedRows(
+      [toEditorNode(node('deleted'))],
+      [cleanIncident, dirtyIncident, unrelated]
+    )
+
+    h.reconciler.enqueue([{ type: 'node_deleted', entity: 'node', id: 'deleted' }])
+    await h.reconciler.flush()
+
+    expect(h.store.linkById.has('clean-incident')).toBe(false)
+    expect(h.store.linkById.has('dirty-incident')).toBe(false)
+    expect(h.store.linkById.get('unrelated')).toBe(unrelated)
+    expect(h.store.remoteDeletedLinkIds).toEqual(
+      new Set(['clean-incident', 'dirty-incident'])
+    )
+    expect(h.store.remoteCascadeConflictLinkIds).toEqual(new Set(['dirty-incident']))
+    expect(h.invalidatedDetached).toHaveBeenCalledTimes(1)
+  })
+
+  it('point-refreshes model_updated metadata and records its event revision', async () => {
+    const revisionApplied = vi.fn()
+    const h = harness()
+    let appliedModel: ModelData | null = null
+    const reconciler = createModelGranularSyncReconciler({
+      modelId: () => h.state.modelId,
+      model: h.currentModel,
+      replaceModel: next => {
+        appliedModel = next
+      },
+      modelDirty: () => false,
+      store: h.store,
+      diagrams: () => h.state.diagrams,
+      replaceDiagrams: rows => {
+        h.state.diagrams = rows
+      },
+      publishMaterializedRows: vi.fn(),
+      refreshVisibleChildrenScope: vi.fn(async () => undefined),
+      fetchers: h.fetchers,
+      onModelRevisionApplied: revisionApplied,
+    })
+
+    reconciler.enqueue([
+      { type: 'model_updated', entity: 'model', id: 'model-1', revision: 42 },
+    ])
+    await reconciler.flush()
+
+    expect(h.fetchers.fetchModel).toHaveBeenCalledWith('model-1', expect.any(AbortSignal))
+    expect(revisionApplied).toHaveBeenCalledWith(42)
+    expect(appliedModel).toMatchObject({ name: 'Remote model', updatedAt: 'v2' })
+    expect(h.fetchers.fetchNode).not.toHaveBeenCalled()
+    expect(h.fetchers.fetchLink).not.toHaveBeenCalled()
+  })
+
+  it('ignores a stale model_updated point response after generation reset', async () => {
+    const response = deferred<ApiResult<ModelData>>()
+    const h = harness({
+      fetchers: {
+        fetchModel: vi.fn(() => response.promise),
+      },
+    })
+
+    h.reconciler.enqueue([
+      { type: 'model_updated', entity: 'model', id: 'model-1', revision: 7 },
+    ])
+    await Promise.resolve()
+    h.store.reset()
+    response.resolve(success(model({ name: 'Late model', updatedAt: 'late' })))
+    await h.reconciler.flush()
+
+    expect(h.currentModel()).toMatchObject({ name: 'Model', updatedAt: 'v1' })
   })
 
   it('blocks a stale point GET that resolves after delete and aborts its request', async () => {

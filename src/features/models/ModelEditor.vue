@@ -443,7 +443,7 @@ const {
   granularSync: {
     store: partialStore.store,
     publishMaterializedRows: partialStore.publishMaterializedRows,
-    refreshChildrenScope: partialStore.refreshChildrenScope,
+    refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
       void detachedModelLinks.refreshAfterRemoteSync()

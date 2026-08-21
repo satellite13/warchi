@@ -1,17 +1,19 @@
 import { apiFetch, type ApiResult } from '@/composables/useApi'
 import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
+import type { ModelData } from '@/types/entities'
 import type { EditorDiagram, ModelPartialRequestGuard, TreeParentScope } from '../types'
 import { toEditorDiagram, toEditorLink, toEditorNode } from '../composables/modelEditorMappers'
 import { ModelPartialStore } from './modelPartialStore'
 import type { GranularSyncEventPayload } from './modelSyncGranularCoalesce'
 
-type GranularEntity = 'node' | 'link' | 'diagram'
+type GranularEntity = 'model' | 'node' | 'link' | 'diagram'
 type GranularAction = 'created' | 'updated' | 'deleted'
 
 export type ModelGranularSyncFetchers = {
   fetchNode: (id: string, signal: AbortSignal) => Promise<ApiResult<NodeResponse>>
   fetchLink: (id: string, signal: AbortSignal) => Promise<ApiResult<LinkResponse>>
   fetchDiagram: (id: string, signal: AbortSignal) => Promise<ApiResult<DiagramResponse>>
+  fetchModel: (id: string, signal: AbortSignal) => Promise<ApiResult<ModelData>>
 }
 
 export type ModelGranularSyncReconciler = {
@@ -23,15 +25,19 @@ export type ModelGranularSyncReconciler = {
 
 type ReconcilerOptions = {
   modelId: () => string | null | undefined
+  model: () => ModelData | null
+  replaceModel: (model: ModelData) => void
+  modelDirty: () => boolean
   store: ModelPartialStore
   diagrams: () => EditorDiagram[]
   replaceDiagrams: (rows: EditorDiagram[]) => void
   publishMaterializedRows: () => void
-  refreshChildrenScope: (scope: TreeParentScope) => Promise<void>
+  refreshVisibleChildrenScope: (scope: TreeParentScope) => Promise<void>
   invalidateChildrenScope?: (scope: TreeParentScope) => void
   fetchers?: ModelGranularSyncFetchers
   onDetachedSnapshotInvalidated?: () => void
   onUnknownEvent?: (event: GranularSyncEventPayload) => void
+  onModelRevisionApplied?: (revision: number | undefined) => void
 }
 
 const isProtectedLocal = (
@@ -43,13 +49,19 @@ const eventKey = (event: GranularSyncEventPayload): string => `${event.entity}:$
 const parseOperation = (
   event: GranularSyncEventPayload
 ): { entity: GranularEntity; action: GranularAction } | null => {
-  if (event.entity !== 'node' && event.entity !== 'link' && event.entity !== 'diagram') {
+  if (
+    event.entity !== 'model' &&
+    event.entity !== 'node' &&
+    event.entity !== 'link' &&
+    event.entity !== 'diagram'
+  ) {
     return null
   }
   const prefix = `${event.entity}_`
   if (!event.type.startsWith(prefix)) return null
   const action = event.type.slice(prefix.length)
   if (action !== 'created' && action !== 'updated' && action !== 'deleted') return null
+  if (event.entity === 'model' && action !== 'updated') return null
   return { entity: event.entity, action }
 }
 
@@ -60,6 +72,8 @@ const defaultFetchers: ModelGranularSyncFetchers = {
     apiFetch<LinkResponse>(`/links/${encodeURIComponent(id)}`, { method: 'GET', signal }),
   fetchDiagram: (id, signal) =>
     apiFetch<DiagramResponse>(`/diagrams/${encodeURIComponent(id)}`, { method: 'GET', signal }),
+  fetchModel: (id, signal) =>
+    apiFetch<ModelData>(`/models/${encodeURIComponent(id)}`, { method: 'GET', signal }),
 }
 
 export function createModelGranularSyncReconciler(
@@ -129,6 +143,7 @@ export function createModelGranularSyncReconciler(
   const handleNodeDelete = (event: GranularSyncEventPayload): void => {
     invalidatePointRequest(event)
     const scope = options.store.treeScopeForNode(event.id)
+    options.store.deleteRemoteIncidentLinks(event.id)
     options.store.deleteRemoteNode(event.id)
     options.publishMaterializedRows()
     invalidateKnownScope(scope)
@@ -206,10 +221,34 @@ export function createModelGranularSyncReconciler(
       if (!result.success || !isPointRequestCurrent(event, request)) return
       const scope = options.store.treeScopeForParentNodeId(result.data.parentNodeId)
       if (options.store.isChildrenScopeLoaded(scope)) {
-        await options.refreshChildrenScope(scope)
+        await options.refreshVisibleChildrenScope(scope)
       } else {
         invalidateKnownScope(scope)
       }
+    } finally {
+      finishPointRequest(event, request)
+    }
+  }
+
+  const handleModelUpdate = async (event: GranularSyncEventPayload): Promise<void> => {
+    const modelId = options.modelId()
+    const local = options.model()
+    if (!modelId || !local || event.id !== modelId) return
+    const request = beginPointRequest(event)
+    try {
+      const result = await fetchers.fetchModel(modelId, request.controller.signal)
+      if (!result.success || !isPointRequestCurrent(event, request)) return
+      options.onModelRevisionApplied?.(event.revision)
+      options.replaceModel(
+        options.modelDirty()
+          ? {
+              ...result.data,
+              name: local.name,
+              version: local.version,
+              attrs: local.attrs,
+            }
+          : result.data
+      )
     } finally {
       finishPointRequest(event, request)
     }
@@ -286,6 +325,10 @@ export function createModelGranularSyncReconciler(
       if (operation.entity === 'diagram') handleDiagramDelete(event)
       return
     }
+    if (operation.entity === 'model') {
+      await handleModelUpdate(event)
+      return
+    }
     if (operation.entity === 'node') {
       if (operation.action === 'created') await handleNodeCreate(event)
       else await handleNodeUpdate(event)
@@ -302,7 +345,13 @@ export function createModelGranularSyncReconciler(
     while (!disposed && pending.size > 0) {
       const batch = [...pending.values()]
       pending.clear()
-      if (batch.some(event => event.entity === 'link')) {
+      if (
+        batch.some(
+          event =>
+            event.entity === 'link' ||
+            (event.entity === 'node' && event.type === 'node_deleted')
+        )
+      ) {
         options.onDetachedSnapshotInvalidated?.()
       }
       await Promise.allSettled(batch.map(applyEvent))

@@ -984,6 +984,7 @@ describe('useModelLiveSync snapshot pull', () => {
   it('applies granular STOMP events without unscoped node/link snapshot fallback', async () => {
     const snapshotReady = ref(false)
     const state = ref(createEmptyModelEditorState())
+    const currentModel = ref<ModelData | null>(model({ name: 'old model' }))
     state.value.modelId = 'model-1'
     const store = new ModelPartialStore()
     store.mergeNodes(
@@ -1011,8 +1012,13 @@ describe('useModelLiveSync snapshot pull', () => {
         attrs: null,
       },
     }))
+    const fetchModel = vi.fn(async () => ({
+      success: true as const,
+      data: model({ name: 'remote model', updatedAt: '2026-01-02T00:00:00.000Z' }),
+    }))
+    const revisionProbe = deferred<ApiResult<ModelData>>()
     vi.mocked(apiGet).mockImplementation(async path => {
-      if (path === '/models/model-1') return { success: true, data: model() }
+      if (path === '/models/model-1') return revisionProbe.promise
       throw new Error(`Unexpected unscoped live-sync GET: ${path}`)
     })
 
@@ -1022,7 +1028,7 @@ describe('useModelLiveSync snapshot pull', () => {
           useModelLiveSync({
             modelId: ref('model-1'),
             state,
-            model: ref(model()),
+            model: currentModel,
             enabled: ref(true),
             isLoading: ref(false),
             initialSnapshotReady: snapshotReady,
@@ -1037,11 +1043,12 @@ describe('useModelLiveSync snapshot pull', () => {
                 state.value.nodes = store.nodes
                 state.value.links = store.links
               },
-              refreshChildrenScope: vi.fn(async () => undefined),
+              refreshVisibleChildrenScope: vi.fn(async () => undefined),
               fetchers: {
                 fetchNode,
                 fetchLink: vi.fn(),
                 fetchDiagram: vi.fn(),
+                fetchModel,
               },
             },
           })
@@ -1061,14 +1068,25 @@ describe('useModelLiveSync snapshot pull', () => {
         modelId: 'model-1',
         actorUserId: 'other-user',
         eventId: 'granular-1',
-        events: [{ type: 'node_updated', entity: 'node', id: 'node-1' }],
+        events: [
+          { type: 'node_updated', entity: 'node', id: 'node-1', revision: 2 },
+          { type: 'model_updated', entity: 'model', id: 'model-1', revision: 2 },
+        ],
       }),
+    })
+    await flushPromises()
+    await flushPromises()
+    revisionProbe.resolve({
+      success: true,
+      data: model({ updatedAt: '2026-01-02T00:00:00.000Z' }),
     })
     await flushPromises()
     await flushPromises()
 
     expect(fetchNode).toHaveBeenCalledWith('node-1', expect.any(AbortSignal))
+    expect(fetchModel).toHaveBeenCalledWith('model-1', expect.any(AbortSignal))
     expect(state.value.nodes[0]?.name).toBe('remote')
+    expect(currentModel.value?.name).toBe('remote model')
     expect(
       vi
         .mocked(apiGet)

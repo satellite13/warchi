@@ -133,7 +133,7 @@ export type UseModelLiveSyncOptions = {
   granularSync?: {
     store: ModelPartialStore
     publishMaterializedRows: () => void
-    refreshChildrenScope: (scope: TreeParentScope) => Promise<void>
+    refreshVisibleChildrenScope: (scope: TreeParentScope) => Promise<void>
     invalidateChildrenScope?: (scope: TreeParentScope) => void
     onDetachedSnapshotInvalidated?: () => void
     fetchers?: ModelGranularSyncFetchers
@@ -159,20 +159,30 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   let unavailableModelId: string | null = null
   const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
   let wsAuthRefreshInFlight: Promise<boolean> | null = null
+  let lastAppliedModelRevision: number | null = null
+  let revisionProbeToken = 0
   const pendingGranularEvents = new Map<string, GranularSyncEventPayload>()
   const granularReconciler = options.granularSync
     ? createModelGranularSyncReconciler({
         modelId: () => options.modelId.value,
+        model: () => options.model.value,
+        replaceModel: model => {
+          options.model.value = model
+        },
+        modelDirty: () => options.modelDirty.value,
         store: options.granularSync.store,
         diagrams: () => options.state.value.diagrams,
         replaceDiagrams: diagrams => {
           options.state.value.diagrams = diagrams
         },
         publishMaterializedRows: options.granularSync.publishMaterializedRows,
-        refreshChildrenScope: options.granularSync.refreshChildrenScope,
+        refreshVisibleChildrenScope: options.granularSync.refreshVisibleChildrenScope,
         invalidateChildrenScope: options.granularSync.invalidateChildrenScope,
         fetchers: options.granularSync.fetchers,
         onDetachedSnapshotInvalidated: options.granularSync.onDetachedSnapshotInvalidated,
+        onModelRevisionApplied: revision => {
+          lastAppliedModelRevision = revision ?? null
+        },
         onUnknownEvent: event => {
           const mid = options.modelId.value
           if (typeof mid === 'string') {
@@ -476,7 +486,15 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
   }
 
   const enqueueGranularEvents = (events: readonly GranularSyncEventPayload[]): void => {
-    const coalesced = coalesceModelSyncGranularEvents([...events])
+    const coalesced = coalesceModelSyncGranularEvents([...events]).filter(
+      event =>
+        event.revision == null ||
+        lastAppliedModelRevision == null ||
+        event.revision >= lastAppliedModelRevision
+    )
+    if (coalesced.some(event => event.entity === 'model' && event.type === 'model_updated')) {
+      revisionProbeToken += 1
+    }
     if (!isInitialSnapshotReady()) {
       for (const event of coalesced) {
         pendingGranularEvents.set(`${event.entity}:${event.id}`, event)
@@ -497,14 +515,16 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     mid: string,
     client: Client,
     clientGeneration: number,
-    baselineRevision: string | null
+    baselineRevision: string | null,
+    probeToken: number
   ): Promise<void> => {
     const result = await apiGet<ModelData>(`/models/${mid}`)
     if (
       disposed ||
       stompClient !== client ||
       options.modelId.value !== mid ||
-      syncGeneration !== clientGeneration
+      syncGeneration !== clientGeneration ||
+      revisionProbeToken !== probeToken
     ) {
       return
     }
@@ -563,6 +583,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         wsConnected = true
         stopFallbackPoll()
         const baselineRevision = options.model.value?.updatedAt ?? null
+        const connectRevisionProbeToken = ++revisionProbeToken
         client.subscribe(`/topic/models/${mid}`, message => {
           if (
             disposed ||
@@ -604,6 +625,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
             }
             const events = parseGranularSyncEventsFromPayload(parsed.events)
             if (events.length === 0) {
+              lastAppliedModelRevision = null
               emitModelLiveSyncTelemetry({
                 kind: 'granular_payload_unsupported',
                 modelId: mid,
@@ -617,7 +639,13 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
           }
         })
         runAsyncSafely(() =>
-          checkRevisionAfterConnect(mid, client, clientGeneration, baselineRevision)
+          checkRevisionAfterConnect(
+            mid,
+            client,
+            clientGeneration,
+            baselineRevision,
+            connectRevisionProbeToken
+          )
         )
       },
       onDisconnect: () => {
@@ -656,6 +684,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       syncGeneration += 1
       pendingPull = null
       pendingGranularEvents.clear()
+      lastAppliedModelRevision = null
+      revisionProbeToken += 1
       granularReconciler?.invalidate()
       connectHelloPending = false
       disconnectPush()
@@ -677,6 +707,8 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
       lastSyncedModelId = mid
       pendingPull = null
       pendingGranularEvents.clear()
+      lastAppliedModelRevision = null
+      revisionProbeToken += 1
       granularReconciler?.invalidate()
       skipConnectResyncOnce = false
       connectHelloPending = false

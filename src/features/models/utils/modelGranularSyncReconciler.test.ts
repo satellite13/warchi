@@ -255,6 +255,59 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.store.nodeById.has('unknown-child')).toBe(false)
   })
 
+  it('point-refreshes materialized node/link creates while protected local rows win', async () => {
+    const dirtyNode = {
+      ...toEditorNode(node('dirty-node', { name: 'local dirty node', parentNodeId: 'folder' })),
+      _isDirty: true,
+    }
+    const dirtyLink = {
+      ...toEditorLink(link('dirty-link', { sourceId: 'local-source' })),
+      _isDirty: true,
+    }
+    const h = harness({
+      nodes: [node('known-node', { name: 'local node', parentNodeId: 'folder' })],
+      links: [link('known-link', { sourceId: 'local-source' })],
+      fetchers: {
+        fetchNode: vi.fn(async id =>
+          success(node(id, { name: 'remote node', parentNodeId: 'folder' }))
+        ),
+        fetchLink: vi.fn(async id =>
+          success(link(id, { sourceId: 'remote-source' }))
+        ),
+      },
+    })
+    h.store.replaceMaterializedRows(
+      [...h.store.nodes, dirtyNode],
+      [...h.store.links, dirtyLink]
+    )
+    loadScope(
+      h.store,
+      { kind: 'node', nodeId: 'folder' },
+      [node('known-node', { name: 'local node', parentNodeId: 'folder' })]
+    )
+
+    h.reconciler.enqueue([
+      { type: 'node_created', entity: 'node', id: 'known-node' },
+      { type: 'node_created', entity: 'node', id: 'dirty-node' },
+      { type: 'link_created', entity: 'link', id: 'known-link' },
+      { type: 'link_created', entity: 'link', id: 'dirty-link' },
+      { type: 'link_created', entity: 'link', id: 'unloaded-link' },
+    ])
+    await h.reconciler.flush()
+
+    expect(h.store.nodeById.get('known-node')?.name).toBe('remote node')
+    expect(h.store.nodeById.get('dirty-node')).toBe(dirtyNode)
+    expect(h.store.linkById.get('known-link')?.sourceId).toBe('remote-source')
+    expect(h.store.linkById.get('dirty-link')).toBe(dirtyLink)
+    expect(h.store.linkById.has('unloaded-link')).toBe(false)
+    expect(h.fetchers.fetchLink).toHaveBeenCalledTimes(2)
+    expect(h.fetchers.fetchNode).toHaveBeenCalledTimes(2)
+    expect(h.refreshedScopes).toEqual([
+      { kind: 'node', nodeId: 'folder' },
+      { kind: 'node', nodeId: 'folder' },
+    ])
+  })
+
   it('tombstones a remote delete, removes a clean materialized row, and invalidates its known parent', async () => {
     const h = harness()
     loadScope(h.store, { kind: 'root' }, [node('deleted')])

@@ -214,17 +214,48 @@ export function createModelGranularSyncReconciler(
   }
 
   const handleNodeCreate = async (event: GranularSyncEventPayload): Promise<void> => {
+    const wasMaterialized = options.store.nodeById.has(event.id)
+    const oldScope = wasMaterialized ? options.store.treeScopeForNode(event.id) : null
     options.store.clearRemoteNodeTombstone(event.id)
     const request = beginPointRequest(event)
     try {
       const result = await fetchers.fetchNode(event.id, request.controller.signal)
       if (!result.success || !isPointRequestCurrent(event, request)) return
+      if (wasMaterialized) {
+        options.store.mergeNodes(
+          [toEditorNode(result.data)],
+          { kind: 'partial' },
+          request.guard
+        )
+        options.publishMaterializedRows()
+      }
       const scope = options.store.treeScopeForParentNodeId(result.data.parentNodeId)
+      if (oldScope && options.store.scopeKey(oldScope) !== options.store.scopeKey(scope)) {
+        invalidateKnownScope(oldScope)
+      }
       if (options.store.isChildrenScopeLoaded(scope)) {
         await options.refreshVisibleChildrenScope(scope)
       } else {
         invalidateKnownScope(scope)
       }
+    } finally {
+      finishPointRequest(event, request)
+    }
+  }
+
+  const handleLinkCreate = async (event: GranularSyncEventPayload): Promise<void> => {
+    if (!options.store.linkById.has(event.id)) return
+    options.store.clearRemoteLinkTombstone(event.id)
+    const request = beginPointRequest(event)
+    try {
+      const result = await fetchers.fetchLink(event.id, request.controller.signal)
+      if (!result.success || !isPointRequestCurrent(event, request)) return
+      options.store.mergeLinks(
+        [toEditorLink(result.data)],
+        { kind: 'partial' },
+        request.guard
+      )
+      options.publishMaterializedRows()
     } finally {
       finishPointRequest(event, request)
     }
@@ -335,7 +366,8 @@ export function createModelGranularSyncReconciler(
       return
     }
     if (operation.entity === 'link') {
-      if (operation.action === 'updated') await handleLinkUpdate(event)
+      if (operation.action === 'created') await handleLinkCreate(event)
+      else await handleLinkUpdate(event)
       return
     }
     await handleDiagramPoint(event, operation.action)

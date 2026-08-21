@@ -33,6 +33,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const generation = ref(store.generation)
   const sessions = new Map<string, ScopeRequestSession>()
   const inFlight = new Map<string, { promise: Promise<void> }>()
+  const visibleRefreshFailures = new Set<string>()
   let modelId: string | null = null
 
   const publishRows = (): void => {
@@ -58,6 +59,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
       sessions.get(scopeKey)?.controller.abort()
       sessions.delete(scopeKey)
       inFlight.delete(scopeKey)
+      visibleRefreshFailures.delete(scopeKey)
       setLoading(scopeKey, false)
       setError(scopeKey, null)
     }
@@ -70,6 +72,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     sessions.get(scopeKey)?.controller.abort()
     sessions.delete(scopeKey)
     inFlight.delete(scopeKey)
+    visibleRefreshFailures.delete(scopeKey)
     setLoading(scopeKey, false)
     setError(scopeKey, null)
     store.invalidateChildrenScope(scope)
@@ -189,6 +192,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
 
   const loadChildren = (scope: TreeParentScope): Promise<void> => {
     const scopeKey = store.scopeKey(scope)
+    if (visibleRefreshFailures.has(scopeKey)) return refreshVisibleChildrenScope(scope)
     if (store.loadedChildrenFor.has(scopeKey)) return Promise.resolve()
     const existing = inFlight.get(scopeKey)
     if (existing) return existing.promise
@@ -207,6 +211,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const refreshChildrenScope = (scope: TreeParentScope): Promise<void> => {
     const scopeKey = store.scopeKey(scope)
     inFlight.delete(scopeKey)
+    visibleRefreshFailures.delete(scopeKey)
     return loadPage(scope, 0, true)
   }
 
@@ -253,6 +258,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
             return
           }
           if (!result.success) {
+            visibleRefreshFailures.add(scopeKey)
             setError(scopeKey, result.error.message)
             return
           }
@@ -272,6 +278,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
         for (const page of pages) {
           mergePageIntoStore(scope, page.pageNumber, page.response, commitSession)
         }
+        visibleRefreshFailures.delete(scopeKey)
         publishRows()
       } catch (error) {
         if (
@@ -279,6 +286,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
           requestedModelId === modelId &&
           requestGeneration === store.generation
         ) {
+          visibleRefreshFailures.add(scopeKey)
           setError(scopeKey, errorMessage(error))
         }
       } finally {
@@ -304,6 +312,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     for (const session of sessions.values()) session.controller.abort()
     sessions.clear()
     inFlight.clear()
+    visibleRefreshFailures.clear()
     store.reset()
     generation.value = store.generation
     modelId = nextModelId

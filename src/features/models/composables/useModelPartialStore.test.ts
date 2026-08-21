@@ -406,6 +406,58 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('retries a failed bounded refresh with prior rows and visible metadata intact', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValueOnce({
+      success: true,
+      data: page([node('old-page-1')], 1, 2, 2),
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old-page-0')], 0, 2, 2),
+    })
+    await partial.loadNextChildrenPage({ kind: 'root' })
+
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([node('failed-new-page-0')], 0, 2, 2),
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        error: { status: 503, message: 'refresh failed' },
+      })
+
+    await partial.refreshVisibleChildrenScope({ kind: 'root' })
+
+    expect(state.value.nodes.map(row => row.id)).toEqual(['old-page-0', 'old-page-1'])
+    expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
+    expect(partial.store.childrenPages.get('root')?.loadedPages).toEqual(new Set([0, 1]))
+    expect(partial.childrenErrors.value.get('root')).toBe('refresh failed')
+    const failedRefreshSignal = vi.mocked(fetchNodeChildren).mock.calls.at(-2)?.[2]?.signal
+
+    vi.mocked(fetchNodeChildren).mockImplementation(async (_modelId, _scope, options) => {
+      const pageNumber = options?.page ?? 0
+      return {
+        success: true,
+        data: page([node(`retried-page-${pageNumber}`)], pageNumber, 2, 2),
+      }
+    })
+    await partial.loadChildren({ kind: 'root' })
+
+    expect(
+      vi.mocked(fetchNodeChildren).mock.calls.slice(-2).map(([, , options]) => options?.page)
+    ).toEqual([0, 1])
+    expect(vi.mocked(fetchNodeChildren).mock.calls.at(-2)?.[2]?.signal).not.toBe(
+      failedRefreshSignal
+    )
+    expect(state.value.nodes.map(row => row.id)).toEqual(['retried-page-0', 'retried-page-1'])
+    expect(partial.childrenErrors.value.has('root')).toBe(false)
+    scope.stop()
+  })
+
   it('aborts a visible scope refresh and rejects its late result after reset', async () => {
     const response = deferred<Awaited<ReturnType<typeof fetchNodeChildren>>>()
     vi.mocked(fetchNodeChildren).mockReturnValue(response.promise)

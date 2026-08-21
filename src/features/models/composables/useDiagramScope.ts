@@ -187,7 +187,7 @@ export function useDiagramScope(options: {
         ...nodes.map(node => node.id),
       ])
       const endpointIds = uniqueIds(links.flatMap(link => [link.sourceId, link.targetId])).filter(
-        id => !knownNodeIds.has(id)
+        id => !knownNodeIds.has(id) && !isEdgeAnchorModelNodeId(id)
       )
 
       if (endpointIds.length > 0) {

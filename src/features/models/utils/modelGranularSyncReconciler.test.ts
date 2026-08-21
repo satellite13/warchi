@@ -126,6 +126,7 @@ function harness(options: {
   const invalidatedDetached = vi.fn()
   const unknown = vi.fn()
   const errors = vi.fn()
+  const recovered = vi.fn()
   const fetchers: ModelGranularSyncFetchers = {
     fetchNode: vi.fn(async id => success(node(id))),
     fetchLink: vi.fn(async id => success(link(id))),
@@ -159,10 +160,12 @@ function harness(options: {
     onDetachedSnapshotInvalidated: invalidatedDetached,
     onUnknownEvent: unknown,
     onError: errors,
+    onRecovered: recovered,
   })
   return {
     fetchers,
     errors,
+    recovered,
     invalidatedDetached,
     reconciler,
     refreshedScopes,
@@ -242,7 +245,8 @@ describe('modelGranularSyncReconciler', () => {
     expect(fetchNode).toHaveBeenCalledTimes(2)
     expect(h.errors).toHaveBeenCalledWith(
       { type: 'node_updated', entity: 'node', id: 'loaded' },
-      expect.any(Error)
+      expect.any(Error),
+      expect.any(Function)
     )
     expect(h.store.loadedChildrenFor.has('root')).toBe(false)
   })
@@ -260,6 +264,79 @@ describe('modelGranularSyncReconciler', () => {
     expect(fetchNode).toHaveBeenCalledTimes(1)
     expect(h.store.remoteDeletedNodeIds.has('loaded')).toBe(true)
     expect(h.errors).not.toHaveBeenCalled()
+  })
+
+  it('marks an exhausted link stale and recovers it through the local retry queue', async () => {
+    const fetchLink = vi.fn<
+      (id: string, signal: AbortSignal) => Promise<ApiResult<LinkResponse>>
+    >(async () => {
+      throw new Error('offline')
+    })
+    const h = harness({ links: [link('loaded')], fetchers: { fetchLink } })
+
+    h.reconciler.enqueue([{ type: 'link_updated', entity: 'link', id: 'loaded' }])
+    await h.reconciler.flush()
+
+    expect(h.store.staleLinkIds.has('loaded')).toBe(true)
+    const retry = h.errors.mock.calls[0]?.[2] as (() => void) | undefined
+    expect(retry).toEqual(expect.any(Function))
+
+    fetchLink.mockImplementation(async () => success(link('loaded', { sourceId: 'fresh' })))
+    retry?.()
+    await h.reconciler.flush()
+
+    expect(h.store.staleLinkIds.has('loaded')).toBe(false)
+    expect(h.store.linkById.get('loaded')?.sourceId).toBe('fresh')
+    expect(h.recovered).toHaveBeenCalledWith({
+      type: 'link_updated',
+      entity: 'link',
+      id: 'loaded',
+    })
+  })
+
+  it('surfaces diagram and model failures and clears them after explicit retries', async () => {
+    const fetchDiagram = vi.fn<
+      (id: string, signal: AbortSignal) => Promise<ApiResult<DiagramResponse>>
+    >(async () => {
+      throw new Error('diagram offline')
+    })
+    const fetchModel = vi.fn<
+      (id: string, signal: AbortSignal) => Promise<ApiResult<ModelData>>
+    >(async () => {
+      throw new Error('model offline')
+    })
+    const h = harness({
+      diagrams: [toEditorDiagram(diagram('diagram-1'), { attrsPending: false })],
+      fetchers: { fetchDiagram, fetchModel },
+    })
+
+    h.reconciler.enqueue([
+      { type: 'diagram_updated', entity: 'diagram', id: 'diagram-1' },
+      { type: 'model_updated', entity: 'model', id: 'model-1' },
+    ])
+    await h.reconciler.flush()
+
+    expect(h.state.diagrams[0]?._attrsPending).toBe(true)
+    expect(h.errors).toHaveBeenCalledTimes(2)
+    const retries = h.errors.mock.calls.map(call => call[2] as () => void)
+
+    fetchDiagram.mockImplementation(async () =>
+      success(diagram('diagram-1', { name: 'recovered diagram' }))
+    )
+    fetchModel.mockImplementation(async () => success(model({ name: 'recovered model' })))
+    retries.forEach(retry => retry())
+    await h.reconciler.flush()
+
+    expect(h.recovered).toHaveBeenCalledWith({
+      type: 'diagram_updated',
+      entity: 'diagram',
+      id: 'diagram-1',
+    })
+    expect(h.recovered).toHaveBeenCalledWith({
+      type: 'model_updated',
+      entity: 'model',
+      id: 'model-1',
+    })
   })
 
   it('turns a raced materialized create 404 into delete semantics', async () => {
@@ -650,6 +727,93 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.refreshedScopes).toEqual([{ kind: 'node', nodeId: 'folder' }])
   })
 
+  it('serializes an update arriving during an active create without aborting materialization', async () => {
+    const first = deferred<ApiResult<NodeResponse>>()
+    let firstSignal: AbortSignal | undefined
+    const fetchNode = vi
+      .fn()
+      .mockImplementationOnce((_id, signal: AbortSignal) => {
+        firstSignal = signal
+        return first.promise
+      })
+      .mockResolvedValueOnce(success(node('same', { name: 'follow-up' })))
+    const h = harness({ nodes: [node('same', { name: 'local' })], fetchers: { fetchNode } })
+
+    h.reconciler.enqueue([{ type: 'node_created', entity: 'node', id: 'same' }])
+    await Promise.resolve()
+    h.reconciler.enqueue([{ type: 'node_updated', entity: 'node', id: 'same' }])
+
+    expect(firstSignal?.aborted).toBe(false)
+    first.resolve(success(node('same', { name: 'first' })))
+    await h.reconciler.flush()
+
+    expect(fetchNode).toHaveBeenCalledTimes(2)
+    expect(h.store.nodeById.get('same')?.name).toBe('follow-up')
+  })
+
+  it('limits concurrent point operations to four', async () => {
+    const requests = Array.from({ length: 6 }, () => deferred<ApiResult<NodeResponse>>())
+    let active = 0
+    let maxActive = 0
+    const fetchNode = vi.fn((id: string) => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      const index = Number(id.slice('node-'.length))
+      return requests[index]!.promise.finally(() => {
+        active -= 1
+      })
+    })
+    const h = harness({
+      nodes: Array.from({ length: 6 }, (_, index) => node(`node-${index}`)),
+      fetchers: { fetchNode },
+    })
+
+    h.reconciler.enqueue(
+      Array.from({ length: 6 }, (_, index) => ({
+        type: 'node_updated',
+        entity: 'node',
+        id: `node-${index}`,
+      }))
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(fetchNode).toHaveBeenCalledTimes(4)
+    requests.slice(0, 4).forEach((request, index) =>
+      request.resolve(success(node(`node-${index}`, { name: `done-${index}` })))
+    )
+    await vi.waitFor(() => expect(fetchNode).toHaveBeenCalledTimes(6))
+    requests.slice(4).forEach((request, offset) =>
+      request.resolve(success(node(`node-${offset + 4}`)))
+    )
+    await h.reconciler.flush()
+    expect(maxActive).toBe(4)
+  })
+
+  it('backs off before the bounded transient point retry', async () => {
+    vi.useFakeTimers()
+    const fetchNode = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: false,
+        error: { status: 503, message: 'temporary' },
+      })
+      .mockResolvedValueOnce(success(node('loaded', { name: 'recovered' })))
+    const h = harness({ nodes: [node('loaded')], fetchers: { fetchNode } })
+
+    h.reconciler.enqueue([{ type: 'node_updated', entity: 'node', id: 'loaded' }])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fetchNode).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(99)
+    expect(fetchNode).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await h.reconciler.flush()
+
+    expect(fetchNode).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
   it('observes rejected granular handlers instead of dropping allSettled results', async () => {
     const handlerError = new Error('bounded refresh failed')
     const h = harness({
@@ -667,7 +831,8 @@ describe('modelGranularSyncReconciler', () => {
 
     expect(h.errors).toHaveBeenCalledWith(
       { type: 'node_created', entity: 'node', id: 'created' },
-      handlerError
+      handlerError,
+      expect.any(Function)
     )
   })
 

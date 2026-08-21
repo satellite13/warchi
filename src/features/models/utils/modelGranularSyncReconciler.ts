@@ -11,6 +11,8 @@ import {
 
 type GranularEntity = 'model' | 'node' | 'link' | 'diagram'
 type GranularAction = 'created' | 'updated' | 'deleted'
+const POINT_OPERATION_CONCURRENCY = 4
+const POINT_RETRY_DELAY_MS = 100
 
 export type ModelGranularSyncFetchers = {
   fetchNode: (id: string, signal: AbortSignal) => Promise<ApiResult<NodeResponse>>
@@ -41,7 +43,12 @@ type ReconcilerOptions = {
   fetchers?: ModelGranularSyncFetchers
   onDetachedSnapshotInvalidated?: () => void
   onUnknownEvent?: (event: GranularSyncEventPayload) => void
-  onError?: (event: GranularSyncEventPayload, error: unknown) => void
+  onError?: (
+    event: GranularSyncEventPayload,
+    error: unknown,
+    retry: () => void
+  ) => void
+  onRecovered?: (event: GranularSyncEventPayload) => void
   onModelRevisionApplied?: (revision: number | undefined) => void
 }
 
@@ -86,10 +93,26 @@ export function createModelGranularSyncReconciler(
 ): ModelGranularSyncReconciler {
   const fetchers = options.fetchers ?? defaultFetchers
   const pending = new Map<string, GranularSyncEventPayload>()
+  const activeEvents = new Map<string, GranularSyncEventPayload>()
   const controllers = new Map<string, AbortController>()
   const remoteDeletedDiagramIds = new Set<string>()
   let scheduled: Promise<void> | null = null
   let disposed = false
+
+  const waitForPointRetry = (signal: AbortSignal): Promise<void> =>
+    new Promise(resolve => {
+      if (signal.aborted) {
+        resolve()
+        return
+      }
+      const timer = setTimeout(done, POINT_RETRY_DELAY_MS)
+      function done(): void {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', done)
+        resolve()
+      }
+      signal.addEventListener('abort', done, { once: true })
+    })
 
   const invalidateKnownScope = (scope: TreeParentScope | null): void => {
     if (scope && options.store.isChildrenScopeKnown(scope)) {
@@ -141,8 +164,21 @@ export function createModelGranularSyncReconciler(
   const reportPointError = (event: GranularSyncEventPayload, error: unknown): void => {
     if (event.entity === 'node') {
       invalidateKnownScope(options.store.treeScopeForNode(event.id))
+    } else if (event.entity === 'link') {
+      options.store.markLinkStale(event.id)
+    } else if (event.entity === 'diagram') {
+      options.replaceDiagrams(
+        options.diagrams().map(row =>
+          row.id === event.id ? { ...row, _attrsPending: true } : row
+        )
+      )
     }
-    options.onError?.(event, error)
+    options.onError?.(event, error, () => enqueue([event]))
+  }
+
+  const clearPointError = (event: GranularSyncEventPayload): void => {
+    if (event.entity === 'link') options.store.clearLinkStale(event.id)
+    options.onRecovered?.(event)
   }
 
   const fetchPoint = async <T>(
@@ -162,12 +198,20 @@ export function createModelGranularSyncReconciler(
           result.error.status === 408 ||
           result.error.status === 429 ||
           result.error.status >= 500
-        if (attempt === 0 && transient) continue
+        if (attempt === 0 && transient) {
+          await waitForPointRetry(request.controller.signal)
+          if (!isPointRequestCurrent(event, request)) return null
+          continue
+        }
         reportPointError(event, new Error(result.error.message))
         return result
       } catch (error) {
         if (!isPointRequestCurrent(event, request)) return null
-        if (attempt === 0) continue
+        if (attempt === 0) {
+          await waitForPointRetry(request.controller.signal)
+          if (!isPointRequestCurrent(event, request)) return null
+          continue
+        }
         reportPointError(event, error)
         return null
       }
@@ -189,12 +233,14 @@ export function createModelGranularSyncReconciler(
     options.store.deleteRemoteNode(event.id)
     options.publishMaterializedRows()
     invalidateKnownScope(scope)
+    clearPointError(event)
   }
 
   const handleLinkDelete = (event: GranularSyncEventPayload): void => {
     invalidatePointRequest(event)
     options.store.deleteRemoteLink(event.id)
     options.publishMaterializedRows()
+    clearPointError(event)
   }
 
   const handleDiagramDelete = (event: GranularSyncEventPayload): void => {
@@ -204,6 +250,7 @@ export function createModelGranularSyncReconciler(
     if (!isProtectedLocal(local)) {
       options.replaceDiagrams(options.diagrams().filter(row => row.id !== event.id))
     }
+    clearPointError(event)
   }
 
   const handleNodeUpdate = async (event: GranularSyncEventPayload): Promise<void> => {
@@ -227,6 +274,7 @@ export function createModelGranularSyncReconciler(
         request.guard
       )
       options.publishMaterializedRows()
+      clearPointError(event)
       invalidateKnownScope(oldScope)
       invalidateKnownScope(options.store.treeScopeForNode(event.id))
     } finally {
@@ -254,6 +302,7 @@ export function createModelGranularSyncReconciler(
         request.guard
       )
       options.publishMaterializedRows()
+      clearPointError(event)
     } finally {
       finishPointRequest(event, request)
     }
@@ -281,6 +330,7 @@ export function createModelGranularSyncReconciler(
         )
         options.publishMaterializedRows()
       }
+      clearPointError(event)
       const scope = options.store.treeScopeForParentNodeId(result.data.parentNodeId)
       if (oldScope && options.store.scopeKey(oldScope) !== options.store.scopeKey(scope)) {
         invalidateKnownScope(oldScope)
@@ -314,6 +364,7 @@ export function createModelGranularSyncReconciler(
         request.guard
       )
       options.publishMaterializedRows()
+      clearPointError(event)
     } finally {
       finishPointRequest(event, request)
     }
@@ -340,6 +391,7 @@ export function createModelGranularSyncReconciler(
             }
           : result.data
       )
+      clearPointError(event)
     } finally {
       finishPointRequest(event, request)
     }
@@ -392,6 +444,7 @@ export function createModelGranularSyncReconciler(
             toEditorDiagram({ ...result.data, attrs: null }, { attrsPending: true }),
           ])
         }
+        clearPointError(event)
         return
       }
       const current = currentRows[currentIndex]
@@ -399,6 +452,7 @@ export function createModelGranularSyncReconciler(
       const next = [...currentRows]
       next[currentIndex] = mergeDiagramMetadata(current, result.data)
       options.replaceDiagrams(next)
+      clearPointError(event)
     } finally {
       finishPointRequest(event, request)
     }
@@ -453,11 +507,33 @@ export function createModelGranularSyncReconciler(
       ) {
         options.onDetachedSnapshotInvalidated?.()
       }
-      const results = await Promise.allSettled(batch.map(applyEvent))
+      const results: PromiseSettledResult<void>[] = new Array(batch.length)
+      let nextIndex = 0
+      const workers = Array.from(
+        { length: Math.min(POINT_OPERATION_CONCURRENCY, batch.length) },
+        async () => {
+          while (nextIndex < batch.length) {
+            const index = nextIndex
+            nextIndex += 1
+            const event = batch[index]!
+            const key = eventKey(event)
+            activeEvents.set(key, event)
+            try {
+              await applyEvent(event)
+              results[index] = { status: 'fulfilled', value: undefined }
+            } catch (reason) {
+              results[index] = { status: 'rejected', reason }
+            } finally {
+              if (activeEvents.get(key) === event) activeEvents.delete(key)
+            }
+          }
+        }
+      )
+      await Promise.all(workers)
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
           const event = batch[index]
-          if (event) options.onError?.(event, result.reason)
+          if (event) reportPointError(event, result.reason)
         }
       })
     }
@@ -480,9 +556,12 @@ export function createModelGranularSyncReconciler(
     if (disposed) return
     for (const event of events) {
       const key = eventKey(event)
-      const previous = pending.get(key)
+      const active = activeEvents.get(key)
+      const previous = pending.get(key) ?? active
       pending.set(key, previous ? reduceModelSyncGranularEvent(previous, event) : event)
-      controllers.get(key)?.abort()
+      if (active && pending.get(key)?.type.endsWith('_deleted')) {
+        controllers.get(key)?.abort()
+      }
     }
     if (pending.size > 0) scheduleDrain()
   }

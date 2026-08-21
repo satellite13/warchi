@@ -72,6 +72,7 @@ import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
 import ModelEditorLoadProgress from './components/ModelEditorLoadProgress.vue'
 import RemoteCascadeConflictNotice from './components/RemoteCascadeConflictNotice.vue'
+import GranularSyncErrorNotice from './components/GranularSyncErrorNotice.vue'
 import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
@@ -156,13 +157,22 @@ const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
 const detachedModelLinks = useDetachedModelLinks(computed(() => state.value.modelId || null))
 const detachedConsumerLinks = computed(() =>
-  mergeDetachedModelLinks(detachedModelLinks.links.value, state.value.links)
+  detachedModelLinks.loadedModelId.value === state.value.modelId &&
+  !detachedModelLinks.stale.value
+    ? mergeDetachedModelLinks(detachedModelLinks.links.value, state.value.links)
+    : []
 )
 const remoteCascadeConflictCount = computed(
   () =>
     state.value.links.filter(link =>
       partialStore.store.remoteCascadeConflictLinkIds.has(link.id)
     ).length
+)
+const granularSyncFailures = ref(
+  new Map<string, { entity: string; message: string; retry: () => void }>()
+)
+const firstGranularSyncFailure = computed(
+  () => granularSyncFailures.value.values().next().value ?? null
 )
 
 function discardRemoteCascadeConflictLinks(): void {
@@ -464,6 +474,16 @@ const {
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
       detachedModelLinks.invalidateAfterRemoteSync()
+    },
+    onSyncError: (event, message, retry) => {
+      const next = new Map(granularSyncFailures.value)
+      next.set(`${event.entity}:${event.id}`, { entity: event.entity, message, retry })
+      granularSyncFailures.value = next
+    },
+    onSyncRecovered: event => {
+      const next = new Map(granularSyncFailures.value)
+      next.delete(`${event.entity}:${event.id}`)
+      granularSyncFailures.value = next
     },
   },
   onModelUnavailable: status => {
@@ -901,6 +921,7 @@ watch(activeRightTab, tab => {
   }
 })
 watch(partialStore.generation, () => {
+  granularSyncFailures.value = new Map()
   detachedModelLinks.reset()
   if (activeRightTab.value === 'traceability') {
     void whenCatalogReady().then(() => detachedModelLinks.load())
@@ -1024,6 +1045,9 @@ const {
   setUiError,
   loadModel,
   getExistingLinks: () => detachedConsumerLinks.value,
+  isExistingLinksReady: () =>
+    detachedModelLinks.loadedModelId.value === state.value.modelId &&
+    !detachedModelLinks.stale.value,
 })
 
 async function ensureImportNotationCatalog(notationId: string): Promise<void> {
@@ -3653,6 +3677,18 @@ onBeforeUnmount(() => {
     :count="remoteCascadeConflictCount"
     @discard="discardRemoteCascadeConflictLinks"
     @reload="reloadAfterRemoteCascadeConflict"
+  />
+  <GranularSyncErrorNotice
+    v-if="firstGranularSyncFailure"
+    :entity="firstGranularSyncFailure.entity"
+    :message="firstGranularSyncFailure.message"
+    @retry="firstGranularSyncFailure.retry"
+  />
+  <GranularSyncErrorNotice
+    v-if="showImportWizard && detachedModelLinks.stale.value"
+    entity="links"
+    :message="t('models.oefDetachedLinksStale')"
+    @retry="detachedModelLinks.load"
   />
 
   <DiagramCopyWizard

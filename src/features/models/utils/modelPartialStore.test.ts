@@ -42,6 +42,23 @@ const link = (id: string, overrides: Partial<EditorLink> = {}): EditorLink => ({
 })
 
 describe('ModelPartialStore tree scopes', () => {
+  it('clears cascade conflicts resolved or removed by general discard reconciliation', () => {
+    const store = new ModelPartialStore()
+    store.replaceMaterializedRows(
+      [node('deleted')],
+      [
+        link('dirty', { sourceId: 'deleted', _isDirty: true }),
+        link('new', { targetId: 'deleted', _isNew: true }),
+      ]
+    )
+    store.deleteRemoteIncidentLinks('deleted')
+    expect(store.remoteCascadeConflictLinkIds).toEqual(new Set(['dirty', 'new']))
+
+    store.reconcileMaterializedRows([], [link('dirty')])
+
+    expect(store.remoteCascadeConflictLinkIds.size).toBe(0)
+  })
+
   it('keeps earlier children pages and marks a contiguous complete scope', () => {
     const store = new ModelPartialStore()
     const request = store.beginChildrenRequest(root)

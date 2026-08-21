@@ -570,6 +570,11 @@ export const modelsMessages = {
       remoteCascadeReload: 'Перезагрузить модель',
       detachedLinksStale: 'Связи модели изменились на сервере.',
       detachedLinksRefresh: 'Обновить связи',
+      granularSyncError:
+        'Не удалось обновить сущность «{entity}». Локальные данные помечены как устаревшие.',
+      granularSyncRetry: 'Повторить синхронизацию',
+      oefDetachedLinksStale:
+        'Связи модели изменились. Обновите полный список связей перед продолжением импорта.',
       validationNodeTypePropRequired:
         'У ноды «{node}» не заполнено обязательное свойство типа «{prop}».',
       validationNodeComponentPropRequired:
@@ -1179,6 +1184,11 @@ export const modelsMessages = {
       remoteCascadeReload: 'Reload model',
       detachedLinksStale: 'Model links changed on the server.',
       detachedLinksRefresh: 'Refresh links',
+      granularSyncError:
+        'Could not refresh {entity}. Local data is marked stale.',
+      granularSyncRetry: 'Retry sync',
+      oefDetachedLinksStale:
+        'Model links changed. Refresh the complete links snapshot before continuing the import.',
       validationNodeTypePropRequired:
         'Node "{node}" is missing required type property "{prop}".',
       validationNodeComponentPropRequired:

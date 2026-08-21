@@ -46,6 +46,7 @@ export function useOefImport(options: {
   setUiError: (message: string) => void
   loadModel: () => Promise<void>
   getExistingLinks?: () => ModelEditorState['links']
+  isExistingLinksReady?: () => boolean
 }) {
   const showImportWizard = ref(false)
   const isImportingOef = ref(false)
@@ -227,6 +228,10 @@ export function useOefImport(options: {
   }): Promise<void> {
     const modelId = options.state.value.modelId
     if (!modelId || isImportingOef.value) return
+    if (options.isExistingLinksReady && !options.isExistingLinksReady()) {
+      options.setUiError(options.t('models.oefDetachedLinksStale'))
+      return
+    }
 
     // Show busy UI before any heavy sync work so the wizard does not freeze blank.
     isImportingOef.value = true

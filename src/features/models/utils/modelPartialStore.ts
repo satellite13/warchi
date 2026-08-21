@@ -39,6 +39,7 @@ export class ModelPartialStore {
   readonly loadedChildrenFor = new Set<string>()
   readonly remoteDeletedNodeIds = new Set<string>()
   readonly remoteDeletedLinkIds = new Set<string>()
+  readonly staleLinkIds = new Set<string>()
   /** Dirty/new incident links preserved after a remote node FK cascade. */
   readonly remoteCascadeConflictLinkIds = new Set<string>()
 
@@ -124,6 +125,7 @@ export class ModelPartialStore {
     this.loadedChildrenFor.clear()
     this.remoteDeletedNodeIds.clear()
     this.remoteDeletedLinkIds.clear()
+    this.staleLinkIds.clear()
     this.remoteCascadeConflictLinkIds.clear()
     this.requestTokens.clear()
     this.internalChildrenPages.clear()
@@ -274,6 +276,14 @@ export class ModelPartialStore {
     this.remoteCascadeConflictLinkIds.delete(linkId)
   }
 
+  markLinkStale(linkId: string): void {
+    if (this.linkById.has(linkId)) this.staleLinkIds.add(linkId)
+  }
+
+  clearLinkStale(linkId: string): void {
+    this.staleLinkIds.delete(linkId)
+  }
+
   replaceMaterializedRows(nodes: readonly EditorNode[], links: readonly EditorLink[]): void {
     this.replaceNodes([...nodes])
     this.replaceLinks([...links])
@@ -296,6 +306,12 @@ export class ModelPartialStore {
         : new Set(affectedScopes.map(scope => this.scopeKey(scope)))
     this.treeScopeKeyByNodeId.clear()
     this.replaceMaterializedRows(nodes, links)
+    for (const linkId of this.remoteCascadeConflictLinkIds) {
+      const link = this.linkById.get(linkId)
+      if (!link || (!link._isDirty && !link._isNew)) {
+        this.remoteCascadeConflictLinkIds.delete(linkId)
+      }
+    }
     for (const scopeKey of affectedScopeKeys) {
       this.invalidateChildrenScope(scopeKey)
     }

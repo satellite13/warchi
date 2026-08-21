@@ -137,6 +137,12 @@ export type UseModelLiveSyncOptions = {
     refreshVisibleChildrenScope: (scope: TreeParentScope) => Promise<void>
     invalidateChildrenScope?: (scope: TreeParentScope) => void
     onDetachedSnapshotInvalidated?: () => void
+    onSyncError?: (
+      event: GranularSyncEventPayload,
+      message: string,
+      retry: () => void
+    ) => void
+    onSyncRecovered?: (event: GranularSyncEventPayload) => void
     fetchers?: ModelGranularSyncFetchers
   }
 }
@@ -191,17 +197,20 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
             emitModelLiveSyncTelemetry({ kind: 'granular_event_unknown', modelId: mid, event })
           }
         },
-        onError: (event, error) => {
+        onError: (event, error, retry) => {
           const mid = options.modelId.value
+          const message = error instanceof Error ? error.message : String(error)
           if (typeof mid === 'string') {
             emitModelLiveSyncTelemetry({
               kind: 'granular_event_error',
               modelId: mid,
               event,
-              message: error instanceof Error ? error.message : String(error),
+              message,
             })
           }
+          options.granularSync?.onSyncError?.(event, message, retry)
         },
+        onRecovered: event => options.granularSync?.onSyncRecovered?.(event),
       })
     : null
 

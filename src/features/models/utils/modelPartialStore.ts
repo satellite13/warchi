@@ -44,6 +44,7 @@ export class ModelPartialStore {
   readonly remoteCascadeConflictLinkIds = new Set<string>()
 
   private readonly requestTokens = new Map<string, number>()
+  private readonly childrenScopeMutationVersions = new Map<string, number>()
   private readonly internalChildrenPages = new Map<string, InternalChildrenPageState>()
   /** Explicit materialization provenance; root cannot be reconstructed from parentNodeId. */
   private readonly treeScopeKeyByNodeId = new Map<string, string>()
@@ -100,6 +101,7 @@ export class ModelPartialStore {
 
   beginChildrenRequest(scope: TreeParentScope): ModelPartialRequestGuard {
     const scopeKey = this.scopeKey(scope)
+    this.markChildrenScopeMutation(scopeKey)
     const request = this.beginRequest(this.childrenRequestKey(scopeKey))
     this.internalChildrenPages.delete(scopeKey)
     this.childrenPages.delete(scopeKey)
@@ -112,6 +114,18 @@ export class ModelPartialStore {
       guard.generation === this.generation &&
       this.requestTokens.get(guard.requestKey) === guard.token
     )
+  }
+
+  childrenScopeMutationVersion(scope: TreeParentScope | string): number {
+    const scopeKey = typeof scope === 'string' ? scope : this.scopeKey(scope)
+    return this.childrenScopeMutationVersions.get(scopeKey) ?? 0
+  }
+
+  markChildrenScopeMutation(scope: TreeParentScope | string): number {
+    const scopeKey = typeof scope === 'string' ? scope : this.scopeKey(scope)
+    const next = this.childrenScopeMutationVersion(scopeKey) + 1
+    this.childrenScopeMutationVersions.set(scopeKey, next)
+    return next
   }
 
   reset(): void {
@@ -128,6 +142,7 @@ export class ModelPartialStore {
     this.staleLinkIds.clear()
     this.remoteCascadeConflictLinkIds.clear()
     this.requestTokens.clear()
+    this.childrenScopeMutationVersions.clear()
     this.internalChildrenPages.clear()
     this.treeScopeKeyByNodeId.clear()
     this.rootParentNodeId = undefined
@@ -348,6 +363,7 @@ export class ModelPartialStore {
 
   invalidateChildrenScope(scope: TreeParentScope | string): void {
     const scopeKey = typeof scope === 'string' ? scope : this.scopeKey(scope)
+    this.markChildrenScopeMutation(scopeKey)
     this.childrenPages.delete(scopeKey)
     this.internalChildrenPages.delete(scopeKey)
     this.loadedChildrenFor.delete(scopeKey)

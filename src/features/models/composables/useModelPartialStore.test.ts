@@ -467,6 +467,40 @@ describe('useModelPartialStore', () => {
     scope.stop()
   })
 
+  it('rejects a prepared commit after an intervening user page load without cancelling it', async () => {
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([node('prepared-page-0')], 0, 2, 2),
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([node('user-page-1')], 1, 2, 2),
+      })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('old-page-0')], 0, 2, 2),
+    })
+
+    const prepared = await partial.prepareVisibleChildrenScopeRefresh(
+      { kind: 'root' },
+      new AbortController().signal
+    )
+    await partial.loadNextChildrenPage({ kind: 'root' })
+    const rowsAfterUserPage = state.value.nodes
+
+    expect(prepared.isCurrent()).toBe(false)
+    prepared.commit()
+
+    expect(state.value.nodes).toBe(rowsAfterUserPage)
+    expect(state.value.nodes.map(row => row.id)).toEqual(['old-page-0', 'user-page-1'])
+    expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
+    scope.stop()
+  })
+
   it('retries a failed bounded refresh with prior rows and visible metadata intact', async () => {
     vi.mocked(fetchNodeChildren).mockResolvedValueOnce({
       success: true,

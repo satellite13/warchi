@@ -138,6 +138,49 @@ function harness(overrides?: {
 }
 
 describe('createBoundedModelReconcile', () => {
+  it('caps a continuously moving revision at one delayed retry and resumes manually later', async () => {
+    vi.useFakeTimers()
+    let stable = false
+    let call = 0
+    const fetchModel = vi.fn(async () => {
+      call += 1
+      const day = stable ? 9 : call + 1
+      return ok(model('model-1', `2026-01-${String(day).padStart(2, '0')}T00:00:00.000Z`))
+    })
+    const h = harness({
+      fetchers: { fetchModel, fetchSlimDiagrams: vi.fn(async () => ok([])) },
+    })
+
+    h.reconciler.request('poll_timer')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fetchModel).toHaveBeenCalledTimes(2)
+    expect(h.errors).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(100)
+    await h.reconciler.flush()
+
+    expect(fetchModel).toHaveBeenCalledTimes(4)
+    expect(h.getModel().updatedAt).toBe(REVISION_1)
+    expect(h.detachedInvalidated).not.toHaveBeenCalled()
+    expect(h.errors).toHaveBeenCalledWith(
+      'poll_timer',
+      expect.objectContaining({ message: expect.stringContaining('revision') }),
+      expect.any(Function)
+    )
+
+    stable = true
+    const retry = h.errors.mock.calls[0]?.[2] as (() => void) | undefined
+    retry?.()
+    await vi.advanceTimersByTimeAsync(0)
+    await h.reconciler.flush()
+
+    expect(fetchModel).toHaveBeenCalledTimes(6)
+    expect(h.getModel().updatedAt).toBe('2026-01-09T00:00:00.000Z')
+    expect(h.recovered).toHaveBeenCalledWith('poll_timer')
+    vi.useRealTimers()
+  })
+
   it('stops after the point model revision when updatedAt is unchanged', async () => {
     const h = harness()
 

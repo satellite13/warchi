@@ -62,6 +62,7 @@ type BoundedModelReconcileOptions = {
 }
 
 const SCOPE_REFRESH_CONCURRENCY = 4
+const REVISION_FENCE_RETRY_DELAY_MS = 100
 
 const errorResult = <T>(error: unknown): ApiResult<T> => ({
   success: false,
@@ -129,6 +130,21 @@ export function createBoundedModelReconcile(
     options.onRecovered?.(reason)
   }
 
+  const waitForFenceRetry = (signal: AbortSignal): Promise<void> =>
+    new Promise(resolve => {
+      if (signal.aborted) {
+        resolve()
+        return
+      }
+      const timer = setTimeout(done, REVISION_FENCE_RETRY_DELAY_MS)
+      function done(): void {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', done)
+        resolve()
+      }
+      signal.addEventListener('abort', done, { once: true })
+    })
+
   const isCurrent = (
     requestGeneration: number,
     requestModelId: string,
@@ -179,9 +195,9 @@ export function createBoundedModelReconcile(
     )
   }
 
-  const runOnce = async (reason: ModelLiveSyncPullReason): Promise<void> => {
+  const runOnce = async (reason: ModelLiveSyncPullReason): Promise<boolean> => {
     const modelId = options.modelId()
-    if (!modelId || typeof modelId !== 'string') return
+    if (!modelId || typeof modelId !== 'string') return false
     const requestGeneration = generation
     const requestController = new AbortController()
     controller = requestController
@@ -198,12 +214,12 @@ export function createBoundedModelReconcile(
 
     try {
       const modelResult = await fetchers.fetchModel(modelId, requestController.signal)
-      if (!isCurrent(requestGeneration, modelId, requestController)) return
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
       if (!modelResult.success) {
-        if (modelResult.error.cancelled) return
+        if (modelResult.error.cancelled) return false
         if (modelResult.error.status === 403 || modelResult.error.status === 404) {
           options.onModelUnavailable?.(modelResult.error.status)
-          return
+          return false
         }
         throw new Error(modelResult.error.message)
       }
@@ -212,13 +228,13 @@ export function createBoundedModelReconcile(
       const comparison = compareRevisions(remoteRevision, baselineRevision)
       if (comparison <= 0) {
         if (comparison === 0) recover(reason)
-        return
+        return false
       }
 
       const diagramsResult = await fetchers.fetchSlimDiagrams(modelId, requestController.signal)
-      if (!isCurrent(requestGeneration, modelId, requestController)) return
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
       if (!diagramsResult.success) {
-        if (diagramsResult.error.cancelled) return
+        if (diagramsResult.error.cancelled) return false
         throw new Error(diagramsResult.error.message)
       }
 
@@ -248,7 +264,7 @@ export function createBoundedModelReconcile(
         }
       )
       const refreshResults = await Promise.allSettled(workers)
-      if (!isCurrent(requestGeneration, modelId, requestController)) return
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
       const failedRefresh = refreshResults.find(
         (result): result is PromiseRejectedResult => result.status === 'rejected'
       )
@@ -257,28 +273,26 @@ export function createBoundedModelReconcile(
       const openDiagramId = options.openDiagramId?.() ?? null
       if (openDiagramId && options.reloadOpenDiagramScope) {
         await options.reloadOpenDiagramScope(openDiagramId, requestController.signal)
-        if (!isCurrent(requestGeneration, modelId, requestController)) return
+        if (!isCurrent(requestGeneration, modelId, requestController)) return false
       }
 
       const fenceResult = await fetchers.fetchModel(modelId, requestController.signal)
-      if (!isCurrent(requestGeneration, modelId, requestController)) return
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
       if (!fenceResult.success) {
-        if (fenceResult.error.cancelled) return
+        if (fenceResult.error.cancelled) return false
         if (fenceResult.error.status === 403 || fenceResult.error.status === 404) {
           options.onModelUnavailable?.(fenceResult.error.status)
-          return
+          return false
         }
         throw new Error(fenceResult.error.message)
       }
       if (revision(fenceResult.data) !== remoteRevision) {
-        pendingReason = reason
-        return
+        return true
       }
       if (preparedScopes.some(prepared => !prepared.isCurrent())) {
-        pendingReason = reason
-        return
+        return true
       }
-      if (options.acceptModelMetadata && !options.acceptModelMetadata(modelResult.data)) return
+      if (options.acceptModelMetadata && !options.acceptModelMetadata(modelResult.data)) return false
 
       mergeSlimDiagrams(diagramsResult.data, openDiagramId)
       preparedScopes.forEach(prepared => prepared.commit())
@@ -286,18 +300,41 @@ export function createBoundedModelReconcile(
       if (!options.acceptModelMetadata) replaceModelMetadata(modelResult.data)
       options.onDetachedSnapshotInvalidated?.()
       recover(reason)
+      return false
     } catch (error) {
-      if (!isCurrent(requestGeneration, modelId, requestController)) return
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
       hasReportedError = true
       options.onError?.(reason, error, () => request(reason))
+      return false
     }
   }
 
   const drain = async (firstReason: ModelLiveSyncPullReason): Promise<void> => {
     let reason: ModelLiveSyncPullReason | null = firstReason
+    let fenceRetried = false
     while (reason && !disposed) {
       pendingReason = null
-      await runOnce(reason)
+      const fenceMoved = await runOnce(reason)
+      if (fenceMoved) {
+        if (!fenceRetried) {
+          fenceRetried = true
+          const retrySignal = controller?.signal
+          if (!retrySignal) break
+          await waitForFenceRetry(retrySignal)
+          if (retrySignal.aborted || disposed) break
+          reason = pendingReason ?? reason
+          continue
+        }
+        hasReportedError = true
+        const failedReason = reason
+        options.onError?.(
+          failedReason,
+          new Error('Model revision changed during bounded reconciliation.'),
+          () => request(failedReason)
+        )
+        pendingReason = null
+        break
+      }
       reason = pendingReason
     }
   }

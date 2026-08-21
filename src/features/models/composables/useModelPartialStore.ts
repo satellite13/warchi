@@ -170,6 +170,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     const requestedModelId = modelId
     const session =
       restart || !sessions.has(scopeKey) ? startSession(scope) : sessions.get(scopeKey)!
+    store.markChildrenScopeMutation(scope)
     setLoading(scopeKey, true)
     setError(scopeKey, null)
     const entry = { promise: Promise.resolve() }
@@ -252,6 +253,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
         ? Math.max(...previousPageState.loadedPages)
         : 0
     const wasComplete = store.loadedChildrenFor.has(scopeKey)
+    store.markChildrenScopeMutation(scope)
     const prefetchSession: ScopeRequestSession = {
       guard: store.beginRequest(`children-refresh:${scopeKey}`),
       controller: new AbortController(),
@@ -347,6 +349,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
 
     const requestedModelId = modelId
     const requestGeneration = store.generation
+    const scopeMutationVersion = store.childrenScopeMutationVersion(scope)
     const previousPageState = store.childrenPages.get(scopeKey)
     const visibleThroughPage =
       previousPageState && previousPageState.loadedPages.size > 0
@@ -398,6 +401,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
         !externalSignal.aborted &&
         requestedModelId === modelId &&
         requestGeneration === store.generation &&
+        store.childrenScopeMutationVersion(scope) === scopeMutationVersion &&
         store.isRequestCurrent(guard)
       return {
         isCurrent,

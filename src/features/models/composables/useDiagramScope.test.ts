@@ -104,6 +104,33 @@ describe('useDiagramScope', () => {
     vi.clearAllMocks()
   })
 
+  it('does not resolve diagram-only edge-anchor ids as model nodes', async () => {
+    const realNodeId = '8c865e01-108f-4b99-a46a-421d4fa54a64'
+    const edgeAnchorId = '__diagram-edge-anchor__:7c5176ac-6b72-4fc6-9e75-2f68f2e157af'
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', [realNodeId, edgeAnchorId]))]
+    vi.mocked(apiFetch).mockImplementation(async (path, options) => {
+      if (path.endsWith('/nodes:resolve')) {
+        const body = JSON.parse(String(options?.body)) as { nodeIds: string[] }
+        return ok({ nodes: body.nodeIds.map(id => nodeResponse(id)), missingIds: [] })
+      }
+      return ok({ links: [], missingLinkIds: [] })
+    })
+    const mounted = mountScope(state)
+
+    await mounted.diagramScope.open('diagram-1')
+
+    const resolvedNodeIds = vi
+      .mocked(apiFetch)
+      .mock.calls.filter(([path]) => path.endsWith('/nodes:resolve'))
+      .flatMap(([, options]) => JSON.parse(String(options?.body)) as { nodeIds: string[] })
+      .flatMap(body => body.nodeIds)
+    expect(resolvedNodeIds).toEqual([realNodeId])
+    expect(resolvedNodeIds).not.toContain(edgeAnchorId)
+    mounted.vueScope.stop()
+  })
+
   it('hydrates attrs and resolves 4501 node ids in 2000/2000/501 chunks with only explicit and incident links', async () => {
     const nodeIds = Array.from({ length: 4501 }, (_, index) => `n-${index}`)
     const state = createEmptyModelEditorState()

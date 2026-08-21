@@ -207,7 +207,11 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
         <span class="tb__link-type">{{ linkTypeLabel(row.link) }}</span>
       </button>
 
-      <div :id="branchTargetId(row.link.id)" class="tb__children">
+      <div
+        :id="branchTargetId(row.link.id)"
+        class="tb__children"
+        :class="{ 'tb__children--depth-capped': isDepthCapped }"
+      >
         <template
           v-if="
             isLinkExpanded(nodeId, row.link.id) &&
@@ -315,6 +319,11 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
 
 .tb--depth-capped {
   margin-left: 0;
+}
+
+.tb--depth-capped .tb {
+  margin-left: 0;
+  padding-left: 0;
 }
 
 .tb__item {
@@ -438,6 +447,10 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
 .tb__children {
   margin-left: 8px;
   margin-top: 1px;
+}
+
+.tb__children--depth-capped {
+  margin-left: 0;
 }
 
 .tb__node {

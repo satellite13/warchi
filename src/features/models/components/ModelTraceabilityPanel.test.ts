@@ -554,6 +554,11 @@ describe('ModelTraceabilityPanel lazy branches', () => {
       expect(branch.classes().includes('tb--depth-capped')).toBe(depth >= 4)
     }
     expect(wrapper.findAll('.tb--depth-capped')).toHaveLength(2)
+    const cappedChildContainers = wrapper.findAll('.tb__children--depth-capped')
+    expect(cappedChildContainers).toHaveLength(1)
+    for (const branch of wrapper.findAll('.tb--depth-capped').filter(branch => branch.find('.tb__link').exists())) {
+      expect(branch.find('.tb__children--depth-capped').exists()).toBe(true)
+    }
 
     const linkLabel = wrapper.findAll('.tb__link-text').at(0)!
     expect(linkLabel.attributes('title')).toBe(`${rootName} → ${aName}`)

@@ -8,7 +8,11 @@ import {
   fetchAllRelationsByNotationId,
 } from './modelNotationRelationsApi'
 import { fetchNodeChildren } from './modelScopedApi'
-import { fetchAllByModelId, loadModelEditorData } from './modelEditorLoadModel'
+import {
+  fetchAllByModelId,
+  loadModelEditorCatalog,
+  loadModelEditorData,
+} from './modelEditorLoadModel'
 
 vi.mock('@/composables/useApi', () => ({
   apiGet: vi.fn(),
@@ -442,6 +446,20 @@ describe('loadModelEditorData', () => {
       includeAttrs: false,
       modelId: 'model-1',
     })
+  })
+
+  it('aggregates catalog API failures instead of returning successful empty collections', async () => {
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path.startsWith('/models?')) return fail(503, 'models unavailable')
+      if (path.startsWith('/notations?')) return fail(403, 'notations forbidden')
+      if (path.startsWith('/node-types?')) return ok(page([]))
+      if (path.startsWith('/link-types?')) return fail(502, 'link types unavailable')
+      throw new Error(`Unexpected apiGet path: ${path}`)
+    })
+
+    await expect(loadModelEditorCatalog('model-1', ['notation-1'])).rejects.toThrow(
+      /models unavailable.*notations forbidden.*link types unavailable/
+    )
   })
 
   it('throws a localized not found error for 404 model load failure', async () => {

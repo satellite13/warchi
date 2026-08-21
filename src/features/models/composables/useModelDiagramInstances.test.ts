@@ -59,6 +59,7 @@ function createHarness(stateValue = createState()) {
   const markDiagramDirty = vi.fn()
   const markNodeDirty = vi.fn()
   const setUiError = vi.fn()
+  const reconcileMaterializedRows = vi.fn()
   const diagram = ref<EditorDiagram>({
     id: 'diagram-1',
     name: 'Diagram',
@@ -95,6 +96,7 @@ function createHarness(stateValue = createState()) {
     },
     markDiagramDirty,
     markNodeDirty,
+    reconcileMaterializedRows,
     setUiError,
     t: key => `translated:${key}`,
   })
@@ -107,6 +109,7 @@ function createHarness(stateValue = createState()) {
     markDiagramDirty,
     markNodeDirty,
     setUiError,
+    reconcileMaterializedRows,
     selectedModelNodeIds,
     selectedInstanceIds,
   }
@@ -175,7 +178,7 @@ describe('useModelDiagramInstances', () => {
   })
 
   it('creates a palette node and its diagram instance in one history command', () => {
-    const { state, diagram, instances, historyCommands } = createHarness()
+    const { state, diagram, instances, historyCommands, reconcileMaterializedRows } = createHarness()
 
     instances.createNodeFromPaletteComponent('component-1', 75, 95)
 
@@ -194,10 +197,12 @@ describe('useModelDiagramInstances', () => {
       y: 95,
       attrs: { notationComponentId: 'component-1' },
     })
+    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(1)
 
     historyCommands[0]!.undo()
     expect(state.value.nodes).toHaveLength(1)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
+    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(2)
   })
 
   it('defers an existing-node placement until the selected component is finalized', () => {

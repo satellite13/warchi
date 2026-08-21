@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, watch, type Ref } from 'vue'
+import { onScopeDispose, ref, type Ref } from 'vue'
 import {
   paginatedContent,
   paginatedIsLastPage,
@@ -14,6 +14,7 @@ import { fetchNodeChildren } from './modelScopedApi'
 export type InitialChildrenScope = {
   scope: TreeParentScope
   page: PaginatedResponse<NodeResponse>
+  rootParentNodeId?: string | null
 }
 
 type ScopeRequestSession = {
@@ -32,18 +33,12 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const sessions = new Map<string, ScopeRequestSession>()
   const inFlight = new Map<string, { promise: Promise<void> }>()
   let modelId: string | null = null
-  let publishing = false
 
   const publishRows = (): void => {
-    publishing = true
-    try {
-      state.value = {
-        ...state.value,
-        nodes: store.nodes,
-        links: store.links,
-      }
-    } finally {
-      publishing = false
+    state.value = {
+      ...state.value,
+      nodes: store.nodes,
+      links: store.links,
     }
   }
 
@@ -51,15 +46,14 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     store.replaceMaterializedRows(state.value.nodes, state.value.links)
   }
 
-  watch(
-    () => [state.value.nodes, state.value.links] as const,
-    ([nodes, links]) => {
-      if (publishing) return
-      store.replaceMaterializedRows(nodes, links)
-      publishRows()
-    },
-    { flush: 'sync' }
-  )
+  const reconcileMaterializedRows = (): void => {
+    for (const session of sessions.values()) session.controller.abort()
+    sessions.clear()
+    inFlight.clear()
+    store.reconcileMaterializedRows(state.value.nodes, state.value.links)
+    childrenLoading.value = new Set()
+    publishRows()
+  }
 
   const setLoading = (scopeKey: string, loading: boolean): void => {
     const next = new Set(childrenLoading.value)
@@ -212,6 +206,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
       links: [],
     }
     if (initial) {
+      store.setRootParentNodeId(initial.rootParentNodeId)
       const session = startSession(initial.scope)
       mergePage(initial.scope, 0, initial.page, session)
     }
@@ -237,5 +232,6 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     ensureChildrenScopeComplete,
     resetPartialScopes,
     mergeFullLinks,
+    reconcileMaterializedRows,
   }
 }

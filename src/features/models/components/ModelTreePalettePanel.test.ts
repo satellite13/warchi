@@ -94,6 +94,7 @@ function mountPanel(props: {
   nodes: EditorNode[]
   selectedNodeId?: string | null
   selectedDiagramId?: string | null
+  treeRootNodeId?: string | null
   loadedChildrenFor?: Set<string>
   childrenPages?: Map<string, ChildrenPageState>
   childrenLoading?: Set<string>
@@ -109,6 +110,7 @@ function mountPanel(props: {
       ],
       selectedNodeId: props.selectedNodeId ?? null,
       selectedDiagramId: props.selectedDiagramId ?? null,
+      treeRootNodeId: props.treeRootNodeId,
       loadedChildrenFor: props.loadedChildrenFor,
       childrenPages: props.childrenPages,
       childrenLoading: props.childrenLoading,
@@ -225,7 +227,12 @@ describe('ModelTreePalettePanel', () => {
     })
     await flushTree(wrapper)
 
-    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    const toggle = wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.attributes('aria-label')).toBe('models.expandTreeNode')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(toggle.attributes('aria-label')).toBe('models.collapseTreeNode')
     expect(wrapper.emitted('loadChildren')).toEqual([[{ kind: 'node', nodeId: 'folder' }]])
 
     await wrapper.setProps({ loadedChildrenFor: new Set(['node:folder']) })
@@ -265,6 +272,52 @@ describe('ModelTreePalettePanel', () => {
     ])
   })
 
+  it('disables sibling-dependent drag and create controls for incomplete scopes', async () => {
+    const wrapper = mountPanel({
+      treeRootNodeId: 'hidden-root',
+      nodes: [
+        makeNode({
+          id: 'root-child',
+          name: 'Root child',
+          nodeTypeId: 'dir',
+          parentNodeId: 'hidden-root',
+          hasChildren: true,
+        }),
+      ],
+      loadedChildrenFor: new Set(),
+    })
+    await flushTree(wrapper)
+
+    expect(wrapper.get('[data-tree-node-id="root-child"]').attributes('draggable')).toBe('false')
+    expect(wrapper.get('[title="models.addRootNode"]').attributes('disabled')).toBeDefined()
+    expect(
+      wrapper.get('[data-tree-node-id="root-child"] [title="models.addChildNode"]').attributes(
+        'disabled'
+      )
+    ).toBeDefined()
+  })
+
+  it('keeps the known-empty child scope of a new local folder mutable', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({
+          id: 'new-folder',
+          name: 'New folder',
+          nodeTypeId: 'dir',
+          _isNew: true,
+        }),
+      ],
+      loadedChildrenFor: new Set(['root']),
+    })
+    await flushTree(wrapper)
+
+    expect(
+      wrapper.get('[data-tree-node-id="new-folder"] [title="models.addChildNode"]').attributes(
+        'disabled'
+      )
+    ).toBeUndefined()
+  })
+
   it('renders non-draggable local loading, error and load-more rows', async () => {
     const wrapper = mountPanel({
       nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],
@@ -283,6 +336,10 @@ describe('ModelTreePalettePanel', () => {
 
     for (const selector of ['[data-tree-loading]', '[data-tree-error]', '[data-tree-load-more]']) {
       expect(wrapper.get(selector).attributes('draggable')).not.toBe('true')
+    }
+    for (const selector of ['[data-tree-loading]', '[data-tree-error]']) {
+      expect(wrapper.get(selector).attributes('role')).toBe('status')
+      expect(wrapper.get(selector).attributes('aria-live')).toBe('polite')
     }
     await wrapper.get('[data-tree-load-more] button').trigger('click')
     expect(wrapper.emitted('loadNextChildrenPage')).toEqual([

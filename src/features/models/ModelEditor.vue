@@ -116,6 +116,10 @@ const {
   initialSnapshotReady,
   liveSyncBaselineReady,
   errorMessage,
+  catalogLoadWarning,
+  linksLoadWarning,
+  retryCatalogLoad,
+  retryLinksLoad,
   modelDirty,
   isSaving,
   saveError,
@@ -412,6 +416,7 @@ const {
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
   ensureNotationRelationsAndRules,
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   onModelUnavailable: status => {
     errorMessage.value =
       status === 403 ? t('models.modelAccessRevoked') : t('models.modelNoLongerAvailable')
@@ -907,6 +912,9 @@ const {
   ensureDiagramAttrsLoaded: diagramId => {
     void ensureDiagramAttrsLoaded(() => state.value, diagramId)
   },
+  isChildrenScopeComplete: scope =>
+    partialStore.store.loadedChildrenFor.has(partialStore.store.scopeKey(scope)),
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
 })
 
 const {
@@ -1178,6 +1186,7 @@ const {
   executeDiagramHistoryCommand,
   markDiagramDirty,
   markNodeDirty,
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   setUiError,
   t: key => String(t(key)),
 })
@@ -1333,6 +1342,7 @@ const {
   executeDiagramHistoryCommand,
   markDiagramDirty,
   markLinkDirty,
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   bindLinkRelation,
   setUiError,
   t: key => String(t(key)),
@@ -1380,6 +1390,7 @@ const markNodeDeleted = (nodeId: string) => {
     node._isDirty = true
     markNodeDirty(node.id)
   }
+  partialStore.reconcileMaterializedRows()
   state.value.diagrams.forEach(diagram => {
     if (diagram.nodeId !== nodeId) return
     if (diagram._isNew) {
@@ -1468,6 +1479,7 @@ const markLinkDeleted = (linkId: string) => {
     row._isDirty = true
     markLinkDirty(row.id)
   }
+  partialStore.reconcileMaterializedRows()
 
   if (selectedModelLinkId.value === linkId) {
     selectedModelLinkId.value = null
@@ -3068,6 +3080,25 @@ onBeforeUnmount(() => {
       />
     </template>
     <template #default>
+      <div
+        v-if="catalogLoadWarning || linksLoadWarning"
+        class="background-load-warnings"
+        role="status"
+        aria-live="polite"
+      >
+        <div v-if="catalogLoadWarning" class="background-load-warnings__item">
+          <span>{{ catalogLoadWarning }}</span>
+          <button type="button" class="btn btn--secondary" @click="retryCatalogLoad">
+            {{ t('common.retry') }}
+          </button>
+        </div>
+        <div v-if="linksLoadWarning" class="background-load-warnings__item">
+          <span>{{ linksLoadWarning }}</span>
+          <button type="button" class="btn btn--secondary" @click="retryLinksLoad">
+            {{ t('common.retry') }}
+          </button>
+        </div>
+      </div>
       <ModelMainPanelLayout>
         <template #left>
           <ModelTreePalettePanel
@@ -3924,6 +3955,23 @@ onBeforeUnmount(() => {
 .overlay-loading__icon {
   width: 24px;
   height: 24px;
+}
+
+.background-load-warnings {
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+
+.background-load-warnings__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
 }
 
 .form-grid {

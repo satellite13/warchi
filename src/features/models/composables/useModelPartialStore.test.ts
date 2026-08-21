@@ -152,6 +152,7 @@ describe('useModelPartialStore', () => {
     })
 
     state.value.nodes = [toEditorNode(node('kept'))]
+    partial.reconcileMaterializedRows()
     await partial.loadChildren({ kind: 'node', nodeId: 'other-parent' })
 
     expect(state.value.nodes.map(row => row.id).sort()).toEqual(['kept', 'other-child'])
@@ -187,12 +188,73 @@ describe('useModelPartialStore', () => {
 
     state.value.nodes = [updated, updated]
     state.value.links = []
+    partial.reconcileMaterializedRows()
     await partial.loadChildren({ kind: 'node', nodeId: 'other-parent' })
 
     expect(state.value.nodes.filter(row => row.id === 'synced')).toEqual([updated])
     expect(partial.store.nodeById.get('synced')?.name).toBe('Synced update')
     expect(state.value.links).toEqual([])
     expect(partial.store.linkById.has('removed-link')).toBe(false)
+    scope.stop()
+  })
+
+  it('rebuilds complete scopes and invalidates incomplete paging after exact reconciliation', async () => {
+    vi.mocked(fetchNodeChildren).mockResolvedValue({
+      success: true,
+      data: page([node('partial-child', 'parent-1')], 0, 501, 2),
+    })
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('removed-root'), node('kept-root')]),
+    })
+    await partial.loadChildren({ kind: 'node', nodeId: 'parent-1' })
+    expect(partial.store.childrenPages.has('node:parent-1')).toBe(true)
+
+    state.value.nodes = state.value.nodes.filter(row => row.id !== 'removed-root')
+    partial.reconcileMaterializedRows()
+
+    expect(partial.store.nodeById.has('removed-root')).toBe(false)
+    expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
+    expect(partial.store.childrenPages.get('root')?.totalElements).toBe(1)
+    expect(partial.store.childrenPages.has('node:parent-1')).toBe(false)
+    scope.stop()
+  })
+
+  it('rebuilds parent indexes when an in-place move changes node scope', () => {
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([node('moving', 'hidden-root')]),
+    })
+
+    state.value.nodes[0]!.parentNodeId = 'destination'
+    partial.reconcileMaterializedRows()
+
+    expect(partial.store.childrenByParent.get('root')).toEqual([])
+    expect(partial.store.childrenByParent.get('node:destination')).toEqual(['moving'])
+    scope.stop()
+  })
+
+  it('keeps explicit root provenance when the initial root page is empty', () => {
+    const state = ref(createEmptyModelEditorState())
+    const scope = effectScope()
+    const partial = scope.run(() => useModelPartialStore(state))!
+    partial.resetPartialScopes('model-a', {
+      scope: { kind: 'root' },
+      page: page([]),
+      rootParentNodeId: 'hidden-root',
+    })
+
+    state.value.nodes.push(toEditorNode(node('local-root', 'hidden-root')))
+    partial.reconcileMaterializedRows()
+
+    expect(partial.store.childrenByParent.get('root')).toEqual(['local-root'])
+    expect(partial.store.childrenByParent.has('node:hidden-root')).toBe(false)
     scope.stop()
   })
 

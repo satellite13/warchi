@@ -112,6 +112,19 @@ const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
 const isExpandable = (node: EditorNode): boolean =>
   node.hasChildren === true || (isDirectory(node) && node.hasChildren !== false)
+const scopeKeyForParent = (parentNodeId: string | null | undefined): string =>
+  parentNodeId == null || parentNodeId === props.treeRootNodeId ? 'root' : `node:${parentNodeId}`
+const isScopeKeyComplete = (scopeKey: string): boolean =>
+  props.loadedChildrenFor === undefined || props.loadedChildrenFor.has(scopeKey)
+const canMutateRootSiblings = computed(() => isScopeKeyComplete('root'))
+const isParentScopeComplete = (parentNodeId: string | null | undefined): boolean => {
+  const parent = parentNodeId ? nodeIndexById.value.get(parentNodeId) : undefined
+  if (parent !== undefined && props.nodes[parent]?._isNew) return true
+  return isScopeKeyComplete(scopeKeyForParent(parentNodeId))
+}
+const canMutateNodeChildren = (nodeId: string): boolean => isParentScopeComplete(nodeId)
+const canDragNode = (node: EditorNode): boolean =>
+  !props.navigationOnlyMode && isParentScopeComplete(node.parentNodeId)
 
 const isRootDiagram = (d: EditorDiagram): boolean => {
   if (d._isDeleted) return false
@@ -237,6 +250,11 @@ const usedNodeIds = computed(() => {
 const isNodeUsed = (nodeId: string): boolean => usedNodeIds.value.has(nodeId)
 
 const onDragNodeStart = (event: DragEvent, nodeId: string) => {
+  const node = nodeById.value.get(nodeId)
+  if (!node || !canDragNode(node)) {
+    event.preventDefault()
+    return
+  }
   event.dataTransfer?.setData("application/x-model-node-id", nodeId)
   event.dataTransfer?.setData("text/plain", `node:${nodeId}`)
 
@@ -359,9 +377,15 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   }
 
   if (!draggedNodeId || draggedNodeId === targetNodeId) return
+  const draggedNode = nodeById.value.get(draggedNodeId)
+  if (!draggedNode || !canDragNode(draggedNode)) return
 
   // Prevent dropping a node onto its own descendant
   if (targetNodeId && isDescendant(targetNodeId, draggedNodeId)) return
+  const targetNode = targetNodeId ? nodeById.value.get(targetNodeId) : null
+  const destinationParentId =
+    targetNode && targetPosition === 'inside' ? targetNode.id : (targetNode?.parentNodeId ?? null)
+  if (!isParentScopeComplete(destinationParentId)) return
 
   emit("moveNode", draggedNodeId, targetNodeId, targetPosition)
 }
@@ -605,10 +629,10 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
         >
           <UiIcon name="sync_alt" />
         </button>
-        <button type="button" class="btn--icon" :title="t('models.addRootFolder')" @click="emit('createFolder', null)">
+        <button type="button" class="btn--icon" :title="t('models.addRootFolder')" :disabled="!canMutateRootSiblings" @click="emit('createFolder', null)">
           <UiIcon name="create_new_folder" />
         </button>
-        <button type="button" class="btn--icon" :title="t('models.addRootNode')" @click="emit('createNode', null)">
+        <button type="button" class="btn--icon" :title="t('models.addRootNode')" :disabled="!canMutateRootSiblings" @click="emit('createNode', null)">
           <UiIcon name="add_box" />
         </button>
         <button type="button" class="btn--icon" :title="t('models.createDiagramTitle')" @click="emit('createDiagram', null)">
@@ -657,7 +681,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
               :class="{ 'tree-node__row--active': selectedNodeId === row.node.id, ...getDropClass(row.node.id) }"
               :style="{ '--tree-depth': String(row.depth) }"
               :data-tree-node-id="row.node.id"
-              :draggable="!props.navigationOnlyMode"
+              :draggable="canDragNode(row.node)"
               @dragstart="onDragNodeStart($event, row.node.id)"
               @dragover.prevent="onTreeDragOver($event, row.node.id)"
               @dragleave="onTreeDragLeave"
@@ -667,6 +691,12 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 v-if="isExpandable(row.node)"
                 type="button"
                 class="tree-node__toggle"
+                :aria-expanded="expandedNodes.has(row.node.id)"
+                :aria-label="
+                  expandedNodes.has(row.node.id)
+                    ? t('models.collapseTreeNode', { name: row.node.name })
+                    : t('models.expandTreeNode', { name: row.node.name })
+                "
                 @click="onToggleNode(row.node)"
               >
                 <UiIcon :name="expandedNodes.has(row.node.id) ? 'expand_more' : 'chevron_right'" />
@@ -715,6 +745,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                   type="button"
                   class="btn--icon"
                   :title="t('models.addChildFolder')"
+                  :disabled="!canMutateNodeChildren(row.node.id)"
                   @click.stop="emit('createFolder', row.node.id)"
                 >
                   <UiIcon name="create_new_folder" />
@@ -724,6 +755,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                   type="button"
                   class="btn--icon"
                   :title="t('models.addChildNode')"
+                  :disabled="!canMutateNodeChildren(row.node.id)"
                   @click.stop="emit('createNode', row.node.id)"
                 >
                   <UiIcon name="add_box" />
@@ -833,6 +865,8 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
             :data-tree-loading="row.kind === 'loading' ? '' : undefined"
             :data-tree-error="row.kind === 'error' ? '' : undefined"
             :data-tree-load-more="row.kind === 'loadMore' ? '' : undefined"
+            :role="row.kind === 'loading' || row.kind === 'error' ? 'status' : undefined"
+            :aria-live="row.kind === 'loading' || row.kind === 'error' ? 'polite' : undefined"
           >
             <span v-if="row.kind === 'loading'">{{ t("models.treeLoading") }}</span>
             <template v-else-if="row.kind === 'error'">

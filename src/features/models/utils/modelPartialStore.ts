@@ -44,9 +44,14 @@ export class ModelPartialStore {
   private readonly internalChildrenPages = new Map<string, InternalChildrenPageState>()
   /** Explicit materialization provenance; root cannot be reconstructed from parentNodeId. */
   private readonly treeScopeKeyByNodeId = new Map<string, string>()
+  private rootParentNodeId: string | null | undefined
 
   scopeKey(scope: TreeParentScope): string {
     return scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`
+  }
+
+  setRootParentNodeId(nodeId: string | null | undefined): void {
+    this.rootParentNodeId = nodeId
   }
 
   beginRequest(requestKey: string): ModelPartialRequestGuard {
@@ -78,6 +83,7 @@ export class ModelPartialStore {
     this.requestTokens.clear()
     this.internalChildrenPages.clear()
     this.treeScopeKeyByNodeId.clear()
+    this.rootParentNodeId = undefined
   }
 
   mergeNodes(
@@ -87,6 +93,10 @@ export class ModelPartialStore {
   ): boolean {
     if (!this.accepts(mode, guard)) return false
     const rows = remoteRows.filter(row => !this.remoteDeletedNodeIds.has(row.id))
+    if (mode.kind === 'childrenPage' && mode.scope.kind === 'root') {
+      const parentIds = new Set(rows.map(row => row.parentNodeId ?? null))
+      if (parentIds.size === 1) this.rootParentNodeId = parentIds.values().next().value
+    }
 
     if (mode.kind === 'full') {
       const merged = mergeEntityListFromRemote(this.nodes, rows, row => row)
@@ -200,6 +210,23 @@ export class ModelPartialStore {
     this.replaceLinks([...links])
   }
 
+  reconcileMaterializedRows(nodes: readonly EditorNode[], links: readonly EditorLink[]): void {
+    const previouslyComplete = new Set(this.loadedChildrenFor)
+    const trackedScopes = new Set([
+      ...this.childrenPages.keys(),
+      ...this.internalChildrenPages.keys(),
+      ...previouslyComplete,
+    ])
+    this.treeScopeKeyByNodeId.clear()
+    this.replaceMaterializedRows(nodes, links)
+    for (const scopeKey of trackedScopes) {
+      this.invalidateChildrenScope(scopeKey)
+    }
+    for (const scopeKey of previouslyComplete) {
+      this.rebuildCompleteChildrenScope(scopeKey)
+    }
+  }
+
   private accepts(mode: EntityMergeMode, guard?: ModelPartialRequestGuard): boolean {
     if (guard) {
       if (guard.generation !== this.generation) return false
@@ -228,8 +255,37 @@ export class ModelPartialStore {
     }
   }
 
+  private invalidateChildrenScope(scopeKey: string): void {
+    this.childrenPages.delete(scopeKey)
+    this.internalChildrenPages.delete(scopeKey)
+    this.loadedChildrenFor.delete(scopeKey)
+    this.requestTokens.delete(this.childrenRequestKey(scopeKey))
+  }
+
+  private rebuildCompleteChildrenScope(scopeKey: string): void {
+    const rowIds = [...(this.childrenByParent.get(scopeKey) ?? [])]
+    if (!this.childrenByParent.has(scopeKey)) this.childrenByParent.set(scopeKey, [])
+    const token = this.requestTokens.get(this.childrenRequestKey(scopeKey)) ?? 0
+    this.internalChildrenPages.set(scopeKey, {
+      token,
+      loadedPages: new Set([0]),
+      nextPage: null,
+      totalElements: rowIds.length,
+      lastPage: 0,
+      pageIds: new Map([[0, rowIds]]),
+    })
+    this.childrenPages.set(scopeKey, {
+      loadedPages: new Set([0]),
+      nextPage: null,
+      totalElements: rowIds.length,
+    })
+    this.loadedChildrenFor.add(scopeKey)
+  }
+
   private defaultScopeKey(row: EditorNode): string {
-    return row.parentNodeId == null ? this.scopeKey({ kind: 'root' }) : `node:${row.parentNodeId}`
+    return row.parentNodeId == null || row.parentNodeId === this.rootParentNodeId
+      ? this.scopeKey({ kind: 'root' })
+      : `node:${row.parentNodeId}`
   }
 
   private upsertPartialNodes(rows: readonly EditorNode[]): Set<string> {

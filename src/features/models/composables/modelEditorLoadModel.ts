@@ -384,6 +384,14 @@ export async function loadModelEditorCatalog(
     ])
 
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
+  const catalogFailures: string[] = []
+  if (!modelsResult.success) catalogFailures.push(`models: ${modelsResult.error.message}`)
+  if (!notationsResult.success) catalogFailures.push(`notations: ${notationsResult.error.message}`)
+  if (!nodeTypesResult.success) catalogFailures.push(`node-types: ${nodeTypesResult.error.message}`)
+  if (!linkTypesResult.success) catalogFailures.push(`link-types: ${linkTypesResult.error.message}`)
+  if (catalogFailures.length > 0) {
+    throw new Error(`Не удалось загрузить каталог модели: ${catalogFailures.join('; ')}`)
+  }
   const relationsById = new Map<string, RelationResponse>()
   for (const batch of relationsBatches) {
     for (const relation of batch) {

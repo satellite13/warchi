@@ -161,7 +161,7 @@ describe('useModelEditor load sessions', () => {
     scope.stop()
   })
 
-  it('keeps the usable root shell when the separate catalog load fails', async () => {
+  it('keeps catalog failure nonblocking and retryable without removing the root shell', async () => {
     const rootShell = shell('model-a')
     rootShell.state.nodes = [
       {
@@ -208,7 +208,35 @@ describe('useModelEditor load sessions', () => {
 
     expect(editor.initialSnapshotReady.value).toBe(true)
     expect(editor.state.value.nodes.map(row => row.id)).toEqual(['root-child'])
-    expect(editor.errorMessage.value).toBe('catalog unavailable')
+    expect(editor.errorMessage.value).toBeNull()
+    expect(editor.catalogLoadWarning.value).toBe('catalog unavailable')
+    expect(editor.liveSyncBaselineReady.value).toBe(true)
+
+    loadModelEditorCatalogMock.mockResolvedValue(emptyCatalog)
+    await editor.retryCatalogLoad()
+    expect(editor.catalogLoadWarning.value).toBeNull()
+    expect(editor.state.value.nodes.map(row => row.id)).toEqual(['root-child'])
+    scope.stop()
+  })
+
+  it('keeps links failure nonblocking and enables the baseline after local retry', async () => {
+    loadModelEditorShellMock.mockResolvedValue(shell('model-a'))
+    loadModelEditorCatalogMock.mockResolvedValue(emptyCatalog)
+    loadModelEditorLinksMock.mockRejectedValueOnce(new Error('links unavailable'))
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    await editor.loadModel()
+
+    expect(editor.initialSnapshotReady.value).toBe(true)
+    expect(editor.errorMessage.value).toBeNull()
+    expect(editor.linksLoadWarning.value).toBe('links unavailable')
+    expect(editor.liveSyncBaselineReady.value).toBe(false)
+
+    loadModelEditorLinksMock.mockResolvedValue([])
+    await editor.retryLinksLoad()
+    expect(editor.linksLoadWarning.value).toBeNull()
+    expect(editor.liveSyncBaselineReady.value).toBe(true)
     scope.stop()
   })
 

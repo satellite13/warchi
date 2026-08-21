@@ -59,6 +59,7 @@ export type UseModelDiagramConnectionsOptions = {
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
   markDiagramDirty: (diagramId: string) => void
   markLinkDirty: (linkId: string) => void
+  reconcileMaterializedRows?: () => void
   bindLinkRelation: (link: EditorLink, relationId: string) => void
   setUiError: (message: string) => void
   t: (key: string) => string
@@ -641,6 +642,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
         let link = options.state.value.links.find(item => item.id === resolvedLinkId) ?? null
         if (!link && newLink) {
           options.state.value.links.push(deepClone(newLink))
+          options.reconcileMaterializedRows?.()
           link = options.state.value.links.find(item => item.id === resolvedLinkId) ?? null
         }
         if (!link) return
@@ -662,6 +664,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
         }
         if (isNewLink) {
           options.state.value.links = options.state.value.links.filter(item => item.id !== resolvedLinkId)
+          options.reconcileMaterializedRows?.()
         } else if (previousParsedAttrs) {
           const link = options.state.value.links.find(item => item.id === resolvedLinkId)
           if (link) {

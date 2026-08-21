@@ -264,6 +264,10 @@ export const modelsMessages = {
       treeLoading: 'Загрузка...',
       treeLoadError: 'Не удалось загрузить ветку',
       treeLoadMore: 'Загрузить ещё',
+      treeScopeIncompleteMutation:
+        'Сначала загрузите всех соседей в этой папке. Изменение порядка будет доступно позже.',
+      expandTreeNode: 'Развернуть «{name}»',
+      collapseTreeNode: 'Свернуть «{name}»',
       noSearchResults: 'Ничего не найдено',
       searchResultsTruncated: 'Показаны первые {count} результатов. Уточните запрос.',
       createFolderOrNodeHint: 'Создайте папку или ноду в шапке',
@@ -852,6 +856,10 @@ export const modelsMessages = {
       treeLoading: 'Loading...',
       treeLoadError: 'Could not load branch',
       treeLoadMore: 'Load more',
+      treeScopeIncompleteMutation:
+        'Load all siblings in this folder first. Ordering changes will become available afterwards.',
+      expandTreeNode: 'Expand “{name}”',
+      collapseTreeNode: 'Collapse “{name}”',
       noSearchResults: 'No results',
       searchResultsTruncated: 'Showing the first {count} results. Refine your query.',
       createFolderOrNodeHint: 'Create a folder or node in the header',

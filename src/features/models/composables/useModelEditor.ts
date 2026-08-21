@@ -19,6 +19,7 @@ import {
   loadModelEditorCatalog,
   loadModelEditorLinks,
   loadModelEditorShell,
+  type ModelEditorLoadCancellationOptions,
 } from './modelEditorLoadModel'
 import { discardUnsavedModelChanges } from './discardUnsavedModelChanges'
 import { executeModelEditorSave } from './modelEditorSaveCoordinator'
@@ -34,6 +35,10 @@ type ModelEditorReturn = {
   isLoading: Ref<boolean>
   loadProgress: Ref<ModelEditorLoadProgress | null>
   errorMessage: Ref<string | null>
+  catalogLoadWarning: Ref<string | null>
+  linksLoadWarning: Ref<string | null>
+  retryCatalogLoad: () => Promise<void>
+  retryLinksLoad: () => Promise<void>
   /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
   modelDirty: Ref<boolean>
   isSaving: Ref<boolean>
@@ -90,6 +95,8 @@ export const useModelEditor = (): ModelEditorReturn => {
   const initialSnapshotReady = ref(false)
   const liveSyncBaselineReady = ref(false)
   const errorMessage = ref<string | null>(null)
+  const catalogLoadWarning = ref<string | null>(null)
+  const linksLoadWarning = ref<string | null>(null)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
@@ -146,6 +153,78 @@ export const useModelEditor = (): ModelEditorReturn => {
   const whenBackgroundReady = (): Promise<void> => backgroundReadyPromise
   const isLoadSessionActive = (generation: number, modelId: string): boolean =>
     generation === loadGeneration && route.params.id === modelId
+  const applyCatalog = (
+    catalog: Awaited<ReturnType<typeof loadModelEditorCatalog>>,
+    notationIds: string[]
+  ): void => {
+    modelCatalog.value = catalog.modelCatalog
+    state.value = {
+      ...state.value,
+      notations: catalog.notations,
+      nodeTypes: catalog.nodeTypes,
+      linkTypes: catalog.linkTypes,
+      components: catalog.components,
+      relations: catalog.relations,
+      relationRules: catalog.relationRules,
+    }
+    resetLoadedNotationIds(notationIds)
+    resetLoadedNotationCatalogIds(notationIds)
+  }
+  const loadCatalogForSession = async (
+    modelId: string,
+    generation: number,
+    notationIds: string[],
+    cancellation?: ModelEditorLoadCancellationOptions
+  ): Promise<void> => {
+    catalogLoadWarning.value = null
+    try {
+      const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) return
+      applyCatalog(catalog, notationIds)
+    } catch (error) {
+      if (isLoadSessionActive(generation, modelId)) {
+        catalogLoadWarning.value =
+          error instanceof Error ? error.message : 'Не удалось догрузить каталог модели.'
+      }
+    }
+  }
+  const loadLinksForSession = async (
+    modelId: string,
+    generation: number,
+    cancellation?: ModelEditorLoadCancellationOptions
+  ): Promise<void> => {
+    linksLoadWarning.value = null
+    try {
+      const links = await loadModelEditorLinks(modelId, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) return
+      partialStore.mergeFullLinks(links)
+      liveSyncBaselineReady.value = true
+    } catch (error) {
+      if (isLoadSessionActive(generation, modelId)) {
+        linksLoadWarning.value =
+          error instanceof Error ? error.message : 'Не удалось догрузить связи модели.'
+      }
+    }
+  }
+  const retryCatalogLoad = async (): Promise<void> => {
+    const modelId = route.params.id
+    if (typeof modelId !== 'string') return
+    const generation = loadGeneration
+    const notationIds = Array.from(
+      new Set(state.value.diagrams.map(diagram => diagram.notationId).filter(Boolean))
+    )
+    await loadCatalogForSession(modelId, generation, notationIds, {
+      isCancelled: () => !isLoadSessionActive(generation, modelId),
+    })
+  }
+  const retryLinksLoad = async (): Promise<void> => {
+    const modelId = route.params.id
+    if (typeof modelId !== 'string') return
+    const generation = loadGeneration
+    await loadLinksForSession(modelId, generation, {
+      isCancelled: () => !isLoadSessionActive(generation, modelId),
+    })
+  }
   const markBackgroundReady = (
     resolve: () => void,
     generation: number,
@@ -154,6 +233,15 @@ export const useModelEditor = (): ModelEditorReturn => {
     resolve()
     if (isLoadSessionActive(generation, modelId)) {
       initialSnapshotReady.value = true
+    }
+  }
+  const modelTreeRootNodeId = (attrs: string | null | undefined): string | null => {
+    if (!attrs) return null
+    try {
+      const value = (JSON.parse(attrs) as Record<string, unknown>).treeRootNodeId
+      return typeof value === 'string' && value.trim() ? value : null
+    } catch {
+      return null
     }
   }
 
@@ -182,6 +270,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     initialSnapshotReady.value = false
     liveSyncBaselineReady.value = false
     errorMessage.value = null
+    catalogLoadWarning.value = null
+    linksLoadWarning.value = null
     // Cancel child-page requests from the previous load before starting a new shell.
     partialStore.resetPartialScopes(modelId)
     const progressTracker = createModelEditorLoadProgressTracker({ generation, modelId })
@@ -219,6 +309,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       partialStore.resetPartialScopes(modelId, {
         scope: { kind: 'root' },
         page: shell.rootChildrenPage,
+        rootParentNodeId: modelTreeRootNodeId(shell.model.attrs),
       })
       isLoading.value = false
       // A usable initial snapshot is model metadata + root tree page + slim diagrams.
@@ -249,25 +340,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
     const catalogTask = (async (): Promise<void> => {
       try {
-        const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
-        if (!isLoadSessionActive(generation, modelId)) return
-        modelCatalog.value = catalog.modelCatalog
-        state.value = {
-          ...state.value,
-          notations: catalog.notations,
-          nodeTypes: catalog.nodeTypes,
-          linkTypes: catalog.linkTypes,
-          components: catalog.components,
-          relations: catalog.relations,
-          relationRules: catalog.relationRules,
-        }
-        resetLoadedNotationIds(notationIds)
-        resetLoadedNotationCatalogIds(notationIds)
-      } catch (error) {
-        if (isLoadSessionActive(generation, modelId)) {
-          errorMessage.value =
-            error instanceof Error ? error.message : 'Не удалось догрузить каталог модели.'
-        }
+        await loadCatalogForSession(modelId, generation, notationIds, cancellation)
       } finally {
         resolveCatalogReady()
       }
@@ -277,15 +350,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       try {
         // Safe ordering: keep the existing full-link background load until diagram scope
         // replaces its canvas dependency in Task 6. It is not part of the usable shell.
-        const links = await loadModelEditorLinks(modelId, cancellation)
-        if (!isLoadSessionActive(generation, modelId)) return
-        partialStore.mergeFullLinks(links)
-        liveSyncBaselineReady.value = true
-      } catch (error) {
-        if (isLoadSessionActive(generation, modelId)) {
-          errorMessage.value =
-            error instanceof Error ? error.message : 'Не удалось догрузить связи модели.'
-        }
+        await loadLinksForSession(modelId, generation, cancellation)
       } finally {
         markBackgroundReady(resolveBackgroundReady, generation, modelId)
       }
@@ -324,6 +389,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         return false
       }
 
+      partialStore.reconcileMaterializedRows()
       completeSave(2500)
       return true
     } finally {
@@ -344,6 +410,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       },
     })
     if (result.ok) {
+      partialStore.reconcileMaterializedRows()
       if (modelDirty.value) modelDirty.value = false
       return true
     }
@@ -382,6 +449,10 @@ export const useModelEditor = (): ModelEditorReturn => {
     initialSnapshotReady,
     liveSyncBaselineReady,
     errorMessage,
+    catalogLoadWarning,
+    linksLoadWarning,
+    retryCatalogLoad,
+    retryLinksLoad,
     modelDirty,
     isSaving,
     saveError,

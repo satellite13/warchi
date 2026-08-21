@@ -116,6 +116,7 @@ export type UseModelLiveSyncOptions = {
   isSaving: Ref<boolean>
   modelDirty: Ref<boolean>
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
+  reconcileMaterializedRows?: () => void
   openDiagramId?: Ref<string | null | undefined>
   currentUserId?: Ref<string | null | undefined>
   /** false = для открытой диаграммы подставлять instances с сервера при pull (режим зрителя) */
@@ -320,6 +321,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
 
       options.state.value.nodes = nextNodes
       options.state.value.links = nextLinks
+      options.reconcileMaterializedRows?.()
       options.state.value.diagrams = nextDiagrams
 
       if (options.model.value && !options.modelDirty.value && modelRes.success) {

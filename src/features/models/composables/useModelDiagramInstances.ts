@@ -41,10 +41,11 @@ export type UseModelDiagramInstancesOptions = {
   isDirectoryNode: (modelNodeId: string) => boolean
   isNoteInstance: (instance: DiagramNodeInstance) => boolean
   ensureDirectoryPath: (path: string) => DirectoryPathResult
-  getNextTreeOrderForParent: (parentNodeId: string | null) => number
+  getNextTreeOrderForParent: (parentNodeId: string | null) => number | null
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
   markDiagramDirty: (diagramId: string) => void
   markNodeDirty: (nodeId: string) => void
+  reconcileMaterializedRows?: () => void
   setUiError: (message: string) => void
   t: (key: string) => string
 }
@@ -339,7 +340,9 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           createdDirectoryIds = ensuredPath.createdDirectoryIds
         }
         const parsedAttrs = parseNodeAttrs(null)
-        parsedAttrs.treeOrder = options.getNextTreeOrderForParent(parentNodeId)
+        const treeOrder = options.getNextTreeOrderForParent(parentNodeId)
+        if (treeOrder === null) return
+        parsedAttrs.treeOrder = treeOrder
         if (notationId) {
           parsedAttrs.notationComponents[notationId] = { componentId }
           const scopedDefaults: Record<string, unknown> = {}
@@ -360,6 +363,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         }
         if (!options.state.value.nodes.some(item => item.id === nodeId)) {
           options.state.value.nodes.push(deepClone(newNode))
+          options.reconcileMaterializedRows?.()
         }
         if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === newInstance.id)) {
           diagram.parsedAttrs.instances.nodes.push(deepClone(newInstance))
@@ -370,6 +374,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         options.state.value.nodes = options.state.value.nodes.filter(
           item => item.id !== nodeId && !createdDirectoryIds.includes(item.id)
         )
+        options.reconcileMaterializedRows?.()
         diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
           item => item.id !== newInstance.id
         )

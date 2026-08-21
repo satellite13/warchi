@@ -425,6 +425,11 @@ const {
   getDiagramRenderer: () => diagramRenderer.value,
   ensureNotationRelationsAndRules,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
+  onRemoteSnapshotApplied: () => {
+    if (detachedModelLinks.loadedModelId.value === state.value.modelId) {
+      void detachedModelLinks.refresh()
+    }
+  },
   onModelUnavailable: status => {
     errorMessage.value =
       status === 403 ? t('models.modelAccessRevoked') : t('models.modelNoLongerAvailable')
@@ -1592,6 +1597,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
+      await detachedModelLinks.refreshAfterSuccessfulSave()
       diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
         void uploadDiagramPreview()
@@ -3451,7 +3457,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="btn btn--secondary"
-                @click="detachedModelLinks.load(true)"
+                @click="detachedModelLinks.refresh()"
               >
                 {{ t('common.retry') }}
               </button>

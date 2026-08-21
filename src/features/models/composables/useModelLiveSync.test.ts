@@ -132,6 +132,7 @@ describe('useModelLiveSync snapshot pull', () => {
     const currentModel = ref<ModelData | null>(model({ name: 'Local Model' }))
     const ensureNotationRelationsAndRules = vi.fn(async () => undefined)
     const reconcileMaterializedRows = vi.fn()
+    const onRemoteSnapshotApplied = vi.fn()
 
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
       if (path.startsWith('/nodes?')) {
@@ -230,6 +231,7 @@ describe('useModelLiveSync snapshot pull', () => {
             modelDirty: ref(false),
             ensureNotationRelationsAndRules,
             reconcileMaterializedRows,
+            onRemoteSnapshotApplied,
           })
           return () => null
         },
@@ -251,6 +253,7 @@ describe('useModelLiveSync snapshot pull', () => {
     expect(currentModel.value?.version).toBe('1.1.0')
     expect(ensureNotationRelationsAndRules).toHaveBeenCalledWith('notation-1')
     expect(reconcileMaterializedRows).toHaveBeenCalled()
+    expect(onRemoteSnapshotApplied).toHaveBeenCalledTimes(1)
   })
 
   it('halts sync and notifies when model GET returns 404', async () => {

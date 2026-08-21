@@ -20,9 +20,17 @@ const link = (id: string, updatedAt: string | null = null): EditorLink => ({
   updatedAt,
 })
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 describe('useDetachedModelLinks', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.mocked(loadModelEditorLinks).mockReset()
   })
 
   it('loads full links only on demand and keeps them detached from partial state', async () => {
@@ -48,5 +56,68 @@ describe('useDetachedModelLinks', () => {
     const deleted = { ...link('remote-only'), _isDeleted: true }
 
     expect(mergeDetachedModelLinks(remote, [dirty, created, deleted])).toEqual([dirty, created])
+  })
+
+  it('refetches a repeated operation and replaces a remotely updated snapshot', async () => {
+    vi.mocked(loadModelEditorLinks)
+      .mockResolvedValueOnce([link('remote', 'v1')])
+      .mockResolvedValueOnce([link('remote', 'v2')])
+    const vueScope = effectScope()
+    const loader = vueScope.run(() => useDetachedModelLinks(ref('model-1')))!
+
+    await loader.load()
+    await loader.load()
+
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
+    expect(loader.links.value).toEqual([link('remote', 'v2')])
+    expect(mergeDetachedModelLinks(loader.links.value, [link('remote', 'v1')])).toEqual([
+      link('remote', 'v2'),
+    ])
+    vueScope.stop()
+  })
+
+  it('does not resurrect a remote delete after a successful save clears local flags', async () => {
+    const staleCleanPartial = link('deleted-remotely', 'v1')
+    vi.mocked(loadModelEditorLinks)
+      .mockResolvedValueOnce([link('deleted-remotely', 'v1')])
+      .mockResolvedValueOnce([])
+    const vueScope = effectScope()
+    const loader = vueScope.run(() => useDetachedModelLinks(ref('model-1')))!
+
+    await loader.load()
+    expect(
+      mergeDetachedModelLinks(loader.links.value, [
+        { ...staleCleanPartial, _isDeleted: true },
+      ])
+    ).toEqual([])
+
+    // Successful save removes the local tombstone; the next detached operation must
+    // consult the server again instead of treating the old full snapshot as authoritative.
+    await loader.refreshAfterSuccessfulSave()
+
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
+    expect(mergeDetachedModelLinks(loader.links.value, [staleCleanPartial])).toEqual([])
+    vueScope.stop()
+  })
+
+  it('deduplicates only concurrent calls and starts a new request after settlement', async () => {
+    const first = deferred<EditorLink[]>()
+    vi.mocked(loadModelEditorLinks)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce([link('second')])
+    const vueScope = effectScope()
+    const loader = vueScope.run(() => useDetachedModelLinks(ref('model-1')))!
+
+    const firstCall = loader.load()
+    const sameOperation = loader.load()
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(1)
+    first.resolve([link('first')])
+    await Promise.all([firstCall, sameOperation])
+
+    await loader.load()
+
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
+    expect(loader.links.value).toEqual([link('second')])
+    vueScope.stop()
   })
 })

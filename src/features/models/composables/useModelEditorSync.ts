@@ -26,6 +26,7 @@ export function useModelEditorSync(options: {
   getDiagramRenderer: () => DiagramRenderer | null
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
   reconcileMaterializedRows?: () => void
+  onRemoteSnapshotApplied?: () => void
   onModelUnavailable?: (status: number) => void
 }) {
   const diagramEditLock = useDiagramEditLock({
@@ -101,6 +102,7 @@ export function useModelEditorSync(options: {
     modelDirty: options.modelDirty,
     ensureNotationRelationsAndRules: options.ensureNotationRelationsAndRules,
     reconcileMaterializedRows: options.reconcileMaterializedRows,
+    onRemoteSnapshotApplied: options.onRemoteSnapshotApplied,
     openDiagramId: options.selectedDiagramId,
     currentUserId: options.currentUserId,
     preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),

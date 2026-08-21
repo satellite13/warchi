@@ -113,6 +113,7 @@ export type UseModelLiveSyncOptions = {
   modelDirty: Ref<boolean>
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
   reconcileMaterializedRows?: () => void
+  onRemoteSnapshotApplied?: () => void
   openDiagramId?: Ref<string | null | undefined>
   currentUserId?: Ref<string | null | undefined>
   /** false = для открытой диаграммы подставлять instances с сервера при pull (режим зрителя) */
@@ -333,6 +334,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
           updatedAt: d.updatedAt,
         }
       }
+      options.onRemoteSnapshotApplied?.()
 
       const notationIds = collectNotationIds(nextDiagrams)
       for (const nid of notationIds) {

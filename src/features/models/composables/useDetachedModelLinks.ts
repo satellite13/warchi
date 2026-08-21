@@ -35,18 +35,19 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     loadedModelId.value = null
   }
 
-  const load = async (force = false): Promise<EditorLink[] | null> => {
+  const startLoad = async (supersede: boolean): Promise<EditorLink[] | null> => {
     const requestedModelId = modelId.value
     if (!requestedModelId) {
       reset()
       return null
     }
-    if (!force && loadedModelId.value === requestedModelId) return links.value
-    if (!force && inFlight) return inFlight
+    if (!supersede && inFlight) return inFlight
 
     const requestGeneration = ++generation
     loading.value = true
     error.value = null
+    links.value = []
+    loadedModelId.value = null
     const request = (async (): Promise<EditorLink[] | null> => {
       try {
         const loaded = await loadModelEditorLinks(requestedModelId, {
@@ -72,7 +73,23 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     return request
   }
 
+  const load = (): Promise<EditorLink[] | null> => startLoad(false)
+  const refresh = (): Promise<EditorLink[] | null> => startLoad(true)
+  const refreshAfterSuccessfulSave = (): Promise<EditorLink[] | null> => {
+    if (loadedModelId.value !== modelId.value) return Promise.resolve(null)
+    return refresh()
+  }
+
   onScopeDispose(reset)
 
-  return { links, loading, error, loadedModelId, load, reset }
+  return {
+    links,
+    loading,
+    error,
+    loadedModelId,
+    load,
+    refresh,
+    refreshAfterSuccessfulSave,
+    reset,
+  }
 }

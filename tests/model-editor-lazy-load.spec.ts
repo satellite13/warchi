@@ -137,7 +137,8 @@ test.describe('Model editor lazy loading', () => {
       await expect(
         page.getByRole('button', { name: `${fixture.diagramName} Opened`, exact: true })
       ).toBeVisible()
-      await page.locator(`[data-tree-node-id="${fixture.nodeIds[1]}"] .tree-node__select`).click()
+      await page.locator(`[data-tree-node-id="${fixture.nodeIds[1]}"] .tree-node__toggle`).click()
+      await page.locator(`[data-tree-node-id="${fixture.nodeIds[2]}"] .tree-node__select`).click()
       await page.getByRole('button', { name: 'Traceability', exact: true }).click()
 
       const dragHandle = page.getByTestId('trace-node-drag-root')
@@ -158,13 +159,18 @@ test.describe('Model editor lazy loading', () => {
         clientY: canvasBox!.y + canvasBox!.height / 2,
       })
 
-      const batchSaveRequest = page.waitForRequest(request => {
-        const url = new URL(request.url())
-        return url.pathname === `/api/v1/models/${fixture.modelId}/batch-save` && request.method() === 'POST'
+      const batchSaveResponse = page.waitForResponse(response => {
+        const url = new URL(response.url())
+        return (
+          url.pathname === `/api/v1/models/${fixture.modelId}/batch-save` &&
+          response.request().method() === 'POST'
+        )
       })
       await page.getByTitle('Save changes').click()
+      const response = await batchSaveResponse
+      expect(response.ok()).toBe(true)
 
-      const payload = JSON.parse((await batchSaveRequest).postData() ?? '{}') as {
+      const payload = JSON.parse(response.request().postData() ?? '{}') as {
         diagrams: { update: Array<{ id: string; attrs: string | null }> }
       }
       const diagramUpdate = payload.diagrams.update.find(diagram => diagram.id === fixture.diagramId)
@@ -174,7 +180,7 @@ test.describe('Model editor lazy loading', () => {
         instances?: { nodes?: Array<{ modelNodeId?: string }> }
       }
       const matchingInstances =
-        attrs.instances?.nodes?.filter(instance => instance.modelNodeId === fixture.nodeIds[1]) ?? []
+        attrs.instances?.nodes?.filter(instance => instance.modelNodeId === fixture.nodeIds[2]) ?? []
       expect(matchingInstances).toHaveLength(1)
     } finally {
       await cleanupLazyModelFixture(page, fixture)

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 import { apiJson, csrfFromPage, currentUser, loginViaUi } from './e2eApi'
 
 type EntityId = { id: string }
@@ -62,11 +63,11 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
   )
   const csrf = await csrfFromPage(page)
   const owner = await currentUser(page)
-  const stamp = Date.now()
-  const modelName = `E2E lazy model ${stamp}`
-  const notationName = `E2E lazy notation ${stamp}`
-  const childFolderName = `Child folder ${stamp}`
-  const diagramName = `Lazy diagram ${stamp}`
+  const suffix = randomUUID()
+  const modelName = `E2E lazy model ${suffix}`
+  const notationName = `E2E lazy notation ${suffix}`
+  const childFolderName = `Child folder ${suffix}`
+  const diagramName = `Lazy diagram ${suffix}`
 
   const directoryTypes = await apiJson<NodeTypePage>(page.request, 'GET', '/node-types?size=1000')
   if (!directoryTypes.ok) {
@@ -87,14 +88,14 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
   const nodeTypeId = requireId(
     await apiJson<EntityId>(page.request, 'POST', '/node-types', {
       csrf,
-      data: { name: `E2E lazy node ${stamp}`, version: '1.0.0', ownerId: owner.id, attrs: null },
+      data: { name: `E2E lazy node ${suffix}`, version: '1.0.0', ownerId: owner.id, attrs: null },
     }),
     'create node type'
   )
   const linkTypeId = requireId(
     await apiJson<EntityId>(page.request, 'POST', '/link-types', {
       csrf,
-      data: { name: `E2E lazy link ${stamp}`, version: '1.0.0', ownerId: owner.id, attrs: null },
+      data: { name: `E2E lazy link ${suffix}`, version: '1.0.0', ownerId: owner.id, attrs: null },
     }),
     'create link type'
   )
@@ -109,7 +110,7 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     await apiJson<EntityId>(page.request, 'POST', '/components', {
       csrf,
       data: {
-        name: `Directory component ${stamp}`,
+        name: `Directory component ${suffix}`,
         version: '1.0.0',
         notationId,
         ownerId: owner.id,
@@ -123,7 +124,7 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     await apiJson<EntityId>(page.request, 'POST', '/components', {
       csrf,
       data: {
-        name: `Node component ${stamp}`,
+        name: `Node component ${suffix}`,
         version: '1.0.0',
         notationId,
         ownerId: owner.id,
@@ -149,7 +150,7 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     await apiJson<EntityId>(page.request, 'POST', '/nodes', {
       csrf,
       data: {
-        name: `Root folder ${stamp}`,
+        name: `Root folder ${suffix}`,
         modelId,
         ownerId: owner.id,
         nodeTypeId: directoryTypeId,
@@ -177,7 +178,7 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     await apiJson<EntityId>(page.request, 'POST', '/nodes', {
       csrf,
       data: {
-        name: `Leaf A ${stamp}`,
+        name: `Leaf A ${suffix}`,
         modelId,
         ownerId: owner.id,
         nodeTypeId,
@@ -191,7 +192,7 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     await apiJson<EntityId>(page.request, 'POST', '/nodes', {
       csrf,
       data: {
-        name: `Leaf B ${stamp}`,
+        name: `Leaf B ${suffix}`,
         modelId,
         ownerId: owner.id,
         nodeTypeId,
@@ -229,28 +230,14 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
           instances: {
             nodes: [
               {
-                id: `instance-a-${stamp}`,
-                modelNodeId: firstNodeId,
-                x: 80,
-                y: 80,
-                attrs: { notationComponentId: nodeComponentId },
-              },
-              {
-                id: `instance-b-${stamp}`,
+                id: `instance-b-${suffix}`,
                 modelNodeId: secondNodeId,
                 x: 300,
                 y: 80,
                 attrs: { notationComponentId: nodeComponentId },
               },
             ],
-            edges: [
-              {
-                id: `edge-${stamp}`,
-                modelLinkId: linkId,
-                sourceInstanceId: `instance-a-${stamp}`,
-                targetInstanceId: `instance-b-${stamp}`,
-              },
-            ],
+            edges: [],
           },
         }),
       },
@@ -299,10 +286,10 @@ export async function createLazyCopyTargetFixture(
 ): Promise<LazyCopyTargetFixture> {
   const csrf = await csrfFromPage(page)
   const owner = await currentUser(page)
-  const stamp = Date.now()
-  const modelName = `E2E copy target ${stamp}`
-  const rootFolderName = `Target folder ${stamp}`
-  const childFolderName = `Target child ${stamp}`
+  const suffix = randomUUID()
+  const modelName = `E2E copy target ${suffix}`
+  const rootFolderName = `Target folder ${suffix}`
+  const childFolderName = `Target child ${suffix}`
   const modelId = requireId(
     await apiJson<EntityId>(page.request, 'POST', '/models', {
       csrf,

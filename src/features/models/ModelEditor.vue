@@ -47,7 +47,10 @@ import {
   useOefImport,
   ensureNotationImportCatalog,
 } from './composables'
+import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
+import { cancelDetachedProgress } from './utils/cancelDetachedProgress'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
+import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -107,7 +110,6 @@ import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
 import { downloadModelPackage } from './composables/useModelPackage'
 import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
-import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
 import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
 import type {
   DiagramReferenceResponse,
@@ -178,6 +180,15 @@ const saveDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
 const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
 const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId)
 const isPreparingValidation = ref(false)
+const isPreparingScripts = ref(false)
+const scriptsProgress = ref('')
+/** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
+const yieldToUiPaint = (): Promise<void> =>
+  new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
 const detachedOverlayReady = computed(
   () =>
     oefDetachedSnapshot.loadedModelId.value === state.value.modelId &&
@@ -309,33 +320,34 @@ assignScopedReload({
 })
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
-const validationRunPayload = ref<{
-  snapshot: ReturnType<typeof buildValidationSnapshot>['snapshot']
-  openDiagramId: string | null
-} | null>(null)
+const validationRunPayload = ref<
+  Extract<Awaited<ReturnType<typeof prepareValidationScriptRun>>, { ok: true }>['payload'] | null
+>(null)
 
 async function loadDetachedValidationPayload(): Promise<boolean> {
   if (!model.value) return false
+  isPreparingScripts.value = true
+  scriptsProgress.value = t('models.validationScriptsPreparing')
+  await nextTick()
+  await yieldToUiPaint()
   try {
-    const overlay = await scriptsDetachedSnapshot.loadOverlayed(state.value)
-    if (!overlay.ok) {
-      if (!overlay.cancelled) {
-        setUiError(overlay.error ?? t('models.validationScriptsSnapshotFailed'))
-      }
-      return false
-    }
-    validationRunPayload.value = buildValidationSnapshot({
-      state: {
-        ...state.value,
-        nodes: overlay.snapshot.nodes,
-        links: overlay.snapshot.links,
-      },
+    const prepared = await prepareValidationScriptRun({
+      loader: scriptsDetachedSnapshot,
+      state: state.value,
       modelName: model.value.name,
       modelVersion: model.value.version,
       openDiagramId: selectedDiagramId.value,
     })
+    if (!prepared.ok) {
+      if (!prepared.cancelled) {
+        setUiError(prepared.error ?? t('models.validationScriptsSnapshotFailed'))
+      }
+      return false
+    }
+    validationRunPayload.value = prepared.payload
     return true
   } finally {
+    isPreparingScripts.value = false
     scriptsDetachedSnapshot.release()
   }
 }
@@ -1748,10 +1760,19 @@ const switchDiagramWithoutSave = async () => {
   // Close the modal immediately so the UI does not feel stuck on large models.
   cancelDiagramSwitch()
 
-  await discardUnsavedChanges()
+  const result = await applyPendingDiagramSwitch({
+    discard: discardUnsavedChanges,
+    action,
+    targetDiagramId,
+  })
+  if (!result.ok) {
+    setUiError(t('models.discardUnsavedFailed'))
+    return
+  }
+
   diagramInteractionManager.value?.history?.clear?.()
 
-  if (action === 'close') {
+  if (result.effect === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
     selectedInstanceIds.value = []
@@ -1760,9 +1781,9 @@ const switchDiagramWithoutSave = async () => {
     return
   }
 
-  if (!targetDiagramId) return
+  if (result.effect !== 'switch') return
   const restoredTarget = state.value.diagrams.find(
-    diagram => diagram.id === targetDiagramId && !diagram._isDeleted
+    diagram => diagram.id === result.diagramId && !diagram._isDeleted
   )
   if (!restoredTarget) {
     setUiError(t('models.diagramSwitchFailed'))
@@ -1771,14 +1792,6 @@ const switchDiagramWithoutSave = async () => {
 
   applyDiagramSelection(restoredTarget.id)
 }
-
-/** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
-const yieldToUiPaint = (): Promise<void> =>
-  new Promise(resolve => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve())
-    })
-  })
 
 const saveWithValidation = async (): Promise<boolean> => {
   if (isSaving.value) return false
@@ -3760,13 +3773,20 @@ onBeforeUnmount(() => {
   </MainLayout>
 
   <SaveToast
-    :saving="isSaving"
+    :saving="isSaving || isPreparingScripts"
     :success="saveSuccess || diagramCopySuccess"
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
-    :progress="saveProgress"
-    :cancellable="isPreparingValidation"
-    @cancel="saveDetachedSnapshot.cancel"
+    :progress="isPreparingScripts ? scriptsProgress : saveProgress"
+    :cancellable="isPreparingValidation || isPreparingScripts"
+    @cancel="
+      cancelDetachedProgress({
+        savePreparing: isPreparingValidation,
+        scriptsPreparing: isPreparingScripts,
+        saveCancel: saveDetachedSnapshot.cancel,
+        scriptsCancel: scriptsDetachedSnapshot.cancel,
+      })
+    "
   />
   <RemoteCascadeConflictNotice
     v-if="remoteCascadeConflictCount > 0"

@@ -100,6 +100,7 @@ describe("useModelBatchConflictResolution", () => {
       state,
       batchSaveConflict,
       errorMessage,
+      saveError: ref<string | null>(null),
       pendingForceBatch,
       loadModel,
       saveChanges: async () => true,
@@ -190,6 +191,7 @@ describe("useModelBatchConflictResolution", () => {
         { kind: "diagram", id: "d-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
       ]),
       errorMessage: ref<string | null>(null),
+      saveError: ref<string | null>(null),
       pendingForceBatch: ref(false),
       loadModel: async () => {
         const d = state.value.diagrams.find(item => item.id === "d-1")
@@ -236,6 +238,7 @@ describe("useModelBatchConflictResolution", () => {
     ]
     const batchSaveConflict = ref(conflicts)
     const errorMessage = ref<string | null>(null)
+    const saveError = ref<string | null>(null)
     const state = ref<ModelEditorState>({
       ...createEmptyModelEditorState(),
       modelId: "model-1",
@@ -258,6 +261,7 @@ describe("useModelBatchConflictResolution", () => {
       state,
       batchSaveConflict,
       errorMessage,
+      saveError,
       pendingForceBatch: ref(false),
       loadModel: async () => false,
       saveChanges: async () => true,
@@ -267,7 +271,8 @@ describe("useModelBatchConflictResolution", () => {
     await resolveBatchSaveReload()
 
     expect(batchSaveConflict.value).toEqual(conflicts)
-    expect(errorMessage.value).toBe("models.batchSaveConflictReloadFailed")
+    expect(errorMessage.value).toBeNull()
+    expect(saveError.value).toBe("models.batchSaveConflictReloadFailed")
     expect(mergeSpy).not.toHaveBeenCalled()
     expect(state.value.diagrams[0]?.parsedAttrs).toStrictEqual(localAttrs)
   })
@@ -299,6 +304,7 @@ describe("useModelBatchConflictResolution", () => {
       { kind: "diagram" as const, id: "d-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
     ])
     const errorMessage = ref<string | null>(null)
+    const saveError = ref<string | null>(null)
     const state = ref<ModelEditorState>({
       ...createEmptyModelEditorState(),
       modelId: "model-1",
@@ -321,6 +327,7 @@ describe("useModelBatchConflictResolution", () => {
       state,
       batchSaveConflict,
       errorMessage,
+      saveError,
       pendingForceBatch: ref(false),
       loadModel: async () => {
         const d = state.value.diagrams.find(item => item.id === "d-1")
@@ -336,12 +343,59 @@ describe("useModelBatchConflictResolution", () => {
     await resolveBatchSaveReload()
 
     expect(batchSaveConflict.value).not.toBeNull()
-    expect(errorMessage.value).toBe("models.batchSaveConflictHydrateFailed")
+    expect(errorMessage.value).toBeNull()
+    expect(saveError.value).toBe("models.batchSaveConflictHydrateFailed")
     expect(mergeDiagramAttrsAfterBatchConflictReloadMock).not.toHaveBeenCalled()
     expect(state.value.diagrams[0]?.parsedAttrs.documentFileId).toBe("local")
     expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes.map(node => node.id)).toEqual([
       "n1",
     ])
+  })
+
+  it("treats a post-shell diagram/tree failure as a toast, not a fullscreen overlay", async () => {
+    const conflicts = [
+      { kind: "diagram" as const, id: "d-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
+    ]
+    const batchSaveConflict = ref(conflicts)
+    const errorMessage = ref<string | null>(null)
+    const saveError = ref<string | null>(null)
+    const state = ref<ModelEditorState>({
+      ...createEmptyModelEditorState(),
+      modelId: "model-1",
+      ownerId: "owner-1",
+      diagrams: [
+        {
+          id: "d-1",
+          name: "Diagram",
+          version: "1.0.0",
+          notationId: "notation-1",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeId: null,
+          parsedAttrs: parseDiagramAttrs(null),
+        },
+      ],
+    })
+
+    const { resolveBatchSaveReload } = useModelBatchConflictResolution({
+      state,
+      batchSaveConflict,
+      errorMessage,
+      saveError,
+      pendingForceBatch: ref(false),
+      loadModel: async () => {
+        state.value.nodes = []
+        return false
+      },
+      saveChanges: async () => true,
+      t: key => key,
+    })
+
+    await resolveBatchSaveReload()
+
+    expect(batchSaveConflict.value).toEqual(conflicts)
+    expect(errorMessage.value).toBeNull()
+    expect(saveError.value).toBe("models.batchSaveConflictReloadFailed")
   })
 
   it("resolveBatchSaveOverwrite sets force flag and delegates to saveChanges", async () => {
@@ -358,6 +412,7 @@ describe("useModelBatchConflictResolution", () => {
       state,
       batchSaveConflict,
       errorMessage,
+      saveError: ref<string | null>(null),
       pendingForceBatch,
       loadModel,
       saveChanges,
@@ -383,6 +438,7 @@ describe("useModelBatchConflictResolution", () => {
       state,
       batchSaveConflict,
       errorMessage,
+      saveError: ref<string | null>(null),
       pendingForceBatch,
       loadModel: async () => true,
       saveChanges: async () => false,

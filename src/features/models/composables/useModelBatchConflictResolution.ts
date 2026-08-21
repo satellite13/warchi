@@ -11,7 +11,10 @@ import type { BatchConflictItem } from './useModelBatchSave'
 type UseModelBatchConflictResolutionOptions = {
   state: Ref<ModelEditorState>
   batchSaveConflict: Ref<BatchConflictItem[] | null>
-  errorMessage: Ref<string | null>
+  /** Fullscreen overlay; conflict failures must leave this empty. */
+  errorMessage?: Ref<string | null>
+  saveError: Ref<string | null>
+  scheduleSaveErrorClear?: () => void
   pendingForceBatch: Ref<boolean>
   loadModel: () => Promise<boolean>
   saveChanges: () => Promise<boolean>
@@ -24,6 +27,11 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
   dismissBatchSaveConflict: () => void
 } {
   const t = options.t ?? ((key: string) => String(i18n.global.t(key)))
+
+  const reportRetryable = (key: string): void => {
+    options.saveError.value = t(key)
+    options.scheduleSaveErrorClear?.()
+  }
 
   const resolveBatchSaveReload = async (): Promise<void> => {
     const conflicts = options.batchSaveConflict.value ? [...options.batchSaveConflict.value] : []
@@ -51,7 +59,7 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
 
     const reloadOk = await options.loadModel()
     if (reloadOk === false) {
-      options.errorMessage.value = t('models.batchSaveConflictReloadFailed')
+      reportRetryable('models.batchSaveConflictReloadFailed')
       return
     }
 
@@ -66,7 +74,7 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
         if (!reloaded.success) {
           d.parsedAttrs = snap.localAttrs
           d._attrsPending = false
-          options.errorMessage.value = t('models.batchSaveConflictHydrateFailed')
+          reportRetryable('models.batchSaveConflictHydrateFailed')
           return
         }
         d.parsedAttrs = parseDiagramAttrs(reloaded.data.attrs ?? null)

@@ -106,4 +106,24 @@ describe('useModelEditor scoped reload binding', () => {
     expect(invalidate).toHaveBeenCalled()
     vueScope.stop()
   })
+
+  it('keeps the conflict dialog usable and does not set the fullscreen error overlay', async () => {
+    const vueScope = effectScope()
+    const editor = vueScope.run(() => useModelEditor())!
+    editor.assignScopedReload({
+      reload: async () => false,
+      invalidate: vi.fn(),
+    })
+    editor.batchSaveConflict.value = [
+      { kind: 'node', id: 'n-1', serverUpdatedAt: null, clientBaseUpdatedAt: null },
+    ]
+    editor.errorMessage.value = null
+
+    await editor.resolveBatchSaveReload()
+
+    expect(editor.errorMessage.value).toBeNull()
+    expect(editor.saveError.value).toBeTruthy()
+    expect(editor.batchSaveConflict.value).not.toBeNull()
+    vueScope.stop()
+  })
 })

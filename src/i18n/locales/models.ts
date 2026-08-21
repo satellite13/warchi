@@ -553,6 +553,8 @@ export const modelsMessages = {
       directoryTypeNotFound: 'Тип Directory не найден. Невозможно создать папку.',
       noAvailableNodeTypes: 'Нет доступных типов нод, кроме Directory.',
       diagramSwitchFailed: 'Не удалось открыть выбранную диаграмму после обновления данных.',
+      discardUnsavedFailed:
+        'Не удалось отменить несохранённые изменения. Текущая диаграмма не закрыта и не переключена.',
       noDiagramSelected: 'Диаграмма не выбрана',
       noteName: 'Заметка',
       containerName: 'Контейнер',
@@ -600,6 +602,7 @@ export const modelsMessages = {
       saveValidationSnapshotFailed:
         'Не удалось загрузить полную модель для проверки. Повторите сохранение.',
       detachedSnapshotFailed: 'Не удалось загрузить полную модель для проверки.',
+      validationScriptsPreparing: 'Подготовка проверки скриптом',
       validationScriptsSnapshotFailed:
         'Не удалось загрузить полную модель для проверки. Повторите запуск скрипта.',
       scopedReloadModelMissing: 'Не удалось определить модель.',
@@ -1182,6 +1185,8 @@ export const modelsMessages = {
       directoryTypeNotFound: 'Directory type not found. Cannot create folder.',
       noAvailableNodeTypes: 'No available node types besides Directory.',
       diagramSwitchFailed: 'Failed to open the selected diagram after refreshing data.',
+      discardUnsavedFailed:
+        'Could not discard unsaved changes. The current diagram was not closed or switched.',
       noDiagramSelected: 'No diagram selected',
       noteName: 'Note',
       containerName: 'Container',
@@ -1229,6 +1234,7 @@ export const modelsMessages = {
       saveValidationSnapshotFailed:
         'Could not load the full model for validation. Retry save.',
       detachedSnapshotFailed: 'Could not load the full model for validation.',
+      validationScriptsPreparing: 'Preparing script validation',
       validationScriptsSnapshotFailed:
         'Could not load the full model for validation. Retry the script.',
       scopedReloadModelMissing: 'Could not determine the model.',

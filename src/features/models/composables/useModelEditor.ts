@@ -432,7 +432,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     useModelBatchConflictResolution({
       state,
       batchSaveConflict,
-      errorMessage,
+      saveError,
+      scheduleSaveErrorClear,
       pendingForceBatch,
       loadModel: reloadEditorState,
       saveChanges,

@@ -11,7 +11,12 @@ All notable changes to this project are documented in this file.
 - Saved notation style presets now include content insets (T/R/B/L), label position, lock-size, and width/height, and apply them to the next component.
 - Notation system flags `boundary` / `boundaryAllow`: a guest snaps to a host outline (BPMN boundary events), keeps a hidden Traceability link, and can be slid, reattached, or pulled off.
 
+### Changed
+- Opening a large model no longer walks `/nodes`, `/links`, and `/diagrams` twice: live sync waits for the editor snapshot and skips the first connect/resync pull. For the current 1 CPU / 1 GiB backend profile, model pages load 5000 rows at a time through one global request slot; the HTTP/2 benchmark found that wider pools exhaust or contend for backend resources.
+- The bundled nginx enables HTTP/2 on its TLS listener, including the local Kubernetes service URL.
+
 ### Fixed
+- Large-model loading ignores stale route sessions, drains or cancels queued pages after failures, and preserves foreign live-sync changes that arrive during an active snapshot pull.
 - Changing the target model in the diagram-copy wizard no longer keeps «Match» targets from the previous model (that produced `invalid match target` on commit).
 - Diagram copy now defaults unmatched nodes and links to **Create** when there is no match candidate, instead of leaving every row empty and blocking the wizard.
 - Custom property rows no longer collapse the name field into a square next to the type select and Required/System toggles.

@@ -11,7 +11,6 @@ import {
 } from '../types'
 import type { BatchConflictItem } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
-import { markModelEditorSnapshotFresh } from '../utils/modelEditorSnapshotFreshness'
 import {
   loadModelEditorCatalog,
   loadModelEditorLinks,
@@ -43,6 +42,8 @@ type ModelEditorReturn = {
   whenCatalogReady: () => Promise<void>
   /** Wait until links and other background model extras finished. */
   whenBackgroundReady: () => Promise<void>
+  /** false until whenBackgroundReady resolves for the current load. */
+  initialSnapshotReady: Ref<boolean>
   saveChanges: () => Promise<boolean>
   /** Show saving toast before heavy pre-save work (flush/validate). */
   startSave: () => void
@@ -76,6 +77,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const model = ref<ModelData | null>(null)
   const state = ref<ModelEditorState>(createEmptyModelEditorState())
   const isLoading = ref(true)
+  const initialSnapshotReady = ref(false)
   const errorMessage = ref<string | null>(null)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
@@ -85,6 +87,7 @@ export const useModelEditor = (): ModelEditorReturn => {
   const modelCatalog = ref<ModelData[]>([])
   let catalogReadyPromise: Promise<void> = Promise.resolve()
   let backgroundReadyPromise: Promise<void> = Promise.resolve()
+  let loadGeneration = 0
   /** Guards concurrent save pipeline; separate from isSaving so UI can start early. */
   let saveOperationActive = false
 
@@ -129,18 +132,21 @@ export const useModelEditor = (): ModelEditorReturn => {
 
   const whenCatalogReady = (): Promise<void> => catalogReadyPromise
   const whenBackgroundReady = (): Promise<void> => backgroundReadyPromise
+  const isLoadSessionActive = (generation: number, modelId: string): boolean =>
+    generation === loadGeneration && route.params.id === modelId
+  const markBackgroundReady = (
+    resolve: () => void,
+    generation: number,
+    modelId: string
+  ): void => {
+    resolve()
+    if (isLoadSessionActive(generation, modelId)) {
+      initialSnapshotReady.value = true
+    }
+  }
 
   const loadModel = async (): Promise<void> => {
-    const modelId = route.params.id
-    if (!modelId || typeof modelId !== 'string') {
-      errorMessage.value = 'Не удалось определить модель.'
-      isLoading.value = false
-      return
-    }
-
-    isLoading.value = true
-    errorMessage.value = null
-    let notationIds: string[]
+    const generation = ++loadGeneration
     let resolveCatalogReady: () => void = () => undefined
     let resolveBackgroundReady: () => void = () => undefined
     catalogReadyPromise = new Promise<void>(resolve => {
@@ -149,13 +155,33 @@ export const useModelEditor = (): ModelEditorReturn => {
     backgroundReadyPromise = new Promise<void>(resolve => {
       resolveBackgroundReady = resolve
     })
+    const modelId = route.params.id
+    if (!modelId || typeof modelId !== 'string') {
+      errorMessage.value = 'Не удалось определить модель.'
+      isLoading.value = false
+      initialSnapshotReady.value = true
+      resolveCatalogReady()
+      resolveBackgroundReady()
+      return
+    }
+
+    isLoading.value = true
+    initialSnapshotReady.value = false
+    errorMessage.value = null
+    let notationIds: string[]
+    const cancellation = {
+      isCancelled: () => !isLoadSessionActive(generation, modelId),
+    }
+    const settleStaleSession = (): void => {
+      resolveCatalogReady()
+      markBackgroundReady(resolveBackgroundReady, generation, modelId)
+    }
 
     try {
       // Critical path: tree + diagram list (without heavy diagram attrs).
-      const shell = await loadModelEditorShell(modelId)
-      if (route.params.id !== modelId) {
-        resolveCatalogReady()
-        resolveBackgroundReady()
+      const shell = await loadModelEditorShell(modelId, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
         return
       }
 
@@ -168,27 +194,32 @@ export const useModelEditor = (): ModelEditorReturn => {
       resetLoadedNotationIds([])
       resetLoadedNotationCatalogIds([])
       state.value = shell.state
-      // Avoid an immediate duplicate full pull from live sync after this load.
-      markModelEditorSnapshotFresh()
       isLoading.value = false
       // Let Vue paint the tree and handle expand clicks before catalog/links work.
       await new Promise<void>(resolve => {
         setTimeout(resolve, 0)
       })
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
+        return
+      }
     } catch (error) {
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
+        return
+      }
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить модель.'
       isLoading.value = false
       resolveCatalogReady()
-      resolveBackgroundReady()
+      markBackgroundReady(resolveBackgroundReady, generation, modelId)
       return
     }
 
     try {
       // Catalog first: needed to render/open diagrams (must not wait for huge links).
-      const catalog = await loadModelEditorCatalog(modelId, notationIds)
-      if (route.params.id !== modelId) {
-        resolveCatalogReady()
-        resolveBackgroundReady()
+      const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
         return
       }
 
@@ -202,24 +233,26 @@ export const useModelEditor = (): ModelEditorReturn => {
       }
       resetLoadedNotationIds(notationIds)
       resetLoadedNotationCatalogIds(notationIds)
-      markModelEditorSnapshotFresh()
       resolveCatalogReady()
 
       // Links are large and only needed for connections/traceability.
-      const links = await loadModelEditorLinks(modelId)
-      if (route.params.id !== modelId) {
-        resolveBackgroundReady()
+      const links = await loadModelEditorLinks(modelId, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
         return
       }
       state.value = {
         ...state.value,
         links,
       }
-      markModelEditorSnapshotFresh()
-      resolveBackgroundReady()
+      markBackgroundReady(resolveBackgroundReady, generation, modelId)
     } catch (error) {
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
+        return
+      }
       resolveCatalogReady()
-      resolveBackgroundReady()
+      markBackgroundReady(resolveBackgroundReady, generation, modelId)
       // Tree is already visible; surface catalog/links failure without blanking the editor.
       errorMessage.value = error instanceof Error ? error.message : 'Не удалось догрузить данные модели.'
     }
@@ -306,6 +339,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     model,
     state,
     isLoading,
+    initialSnapshotReady,
     errorMessage,
     modelDirty,
     isSaving,

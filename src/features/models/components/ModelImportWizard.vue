@@ -68,6 +68,9 @@ const props = withDefaults(
     existingNodes: () => [],
     existingLinks: () => [],
     existingDiagrams: () => [],
+    importProgress: null,
+    ensureNotationCatalog: undefined,
+    ensureDiagramAttrs: undefined,
   }
 )
 

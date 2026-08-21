@@ -87,6 +87,7 @@ function createFacade() {
     model,
     enabled: ref(true),
     isLoading: ref(false),
+    initialSnapshotReady: ref(true),
     isSaving: ref(false),
     modelDirty: ref(false),
     selectedDiagramId: ref('diagram-1'),

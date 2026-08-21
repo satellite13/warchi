@@ -1,6 +1,7 @@
 import { apiGet, type ApiResult } from "@/composables/useApi"
 import {
   listParams,
+  MODEL_PAGE_FETCH_CONCURRENCY,
   PAGE_SIZE_MODEL_DIAGRAMS,
   PAGE_SIZE_MODEL_NODES,
   pagedListParams,
@@ -22,6 +23,7 @@ import {
   paginatedTotalPages,
 } from "@/utils/paginatedResponse"
 import type { ModelEditorState } from "../types"
+import { withModelEditorPageSlot } from '../utils/modelEditorPagePool'
 import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
 import { fetchAllComponentsByNotationIds } from "./modelNotationComponentsApi"
 import {
@@ -44,38 +46,111 @@ export type ModelEditorCatalog = {
   relationRules: RelationRuleResponse[]
 }
 
+export type ModelEditorLoadCancellationOptions = {
+  isCancelled?: () => boolean
+}
+
+type ModelPageLoadControl = {
+  shouldStop: () => boolean
+  onError: (error: unknown) => void
+}
+
+type FetchModelPageOptions = ModelEditorLoadCancellationOptions & Partial<ModelPageLoadControl>
+
+const LOAD_CANCELLED = Symbol('model-editor-load-cancelled')
+
 async function fetchModelPage<T>(
   path: '/nodes' | '/links' | '/diagrams',
   modelId: string,
   page: number,
   pageSize: number,
-  extraParams?: Record<string, string>
+  extraParams?: Record<string, string>,
+  options?: FetchModelPageOptions
 ): Promise<PaginatedResponse<T>> {
-  const query = pagedListParams(page, pageSize)
-  query.set('modelId', modelId)
-  if (extraParams) {
-    for (const [key, value] of Object.entries(extraParams)) {
-      query.set(key, value)
+  return withModelEditorPageSlot(async () => {
+    if (options?.isCancelled?.() || options?.shouldStop?.()) throw LOAD_CANCELLED
+    const query = pagedListParams(page, pageSize)
+    query.set('modelId', modelId)
+    if (extraParams) {
+      for (const [key, value] of Object.entries(extraParams)) {
+        query.set(key, value)
+      }
+    }
+    try {
+      const result = await apiGet<PaginatedResponse<T>>(`${path}?${query.toString()}`)
+      if (options?.isCancelled?.() || options?.shouldStop?.()) throw LOAD_CANCELLED
+      if (!result.success) {
+        throw new Error(`Ошибка загрузки ${path}: ${result.error.message}`)
+      }
+      return result.data
+    } catch (error) {
+      if (error !== LOAD_CANCELLED) options?.onError?.(error)
+      throw error
+    }
+  })
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, control: ModelPageLoadControl) => Promise<R>,
+  options?: ModelEditorLoadCancellationOptions
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const results: R[] = new Array(items.length)
+  let nextIndex = 0
+  let firstError: unknown
+  let failed = false
+  const onError = (error: unknown): void => {
+    if (!options?.isCancelled?.() && !failed) {
+      failed = true
+      firstError = error
     }
   }
-  const result = await apiGet<PaginatedResponse<T>>(`${path}?${query.toString()}`)
-  if (!result.success) {
-    throw new Error(`Ошибка загрузки ${path}: ${result.error.message}`)
+  const control: ModelPageLoadControl = {
+    shouldStop: () => failed || options?.isCancelled?.() === true,
+    onError,
   }
-  return result.data
+  const worker = async (): Promise<void> => {
+    while (!failed && !options?.isCancelled?.() && nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const item = items[index]
+      if (item === undefined) break
+      try {
+        results[index] = await mapper(item, control)
+      } catch (error) {
+        if (error !== LOAD_CANCELLED) onError(error)
+      }
+    }
+  }
+  const workerCount = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  if (options?.isCancelled?.()) return results
+  if (failed) throw firstError
+  return results
 }
 
 /**
  * Load every page for a model-scoped collection (nodes/links/diagrams).
- * Fetches page 0 first, then remaining pages in parallel.
+ * Fetches page 0 first, then remaining pages with a bounded pool.
  */
 export async function fetchAllByModelId<T extends { id?: string }>(
   path: '/nodes' | '/links' | '/diagrams',
   modelId: string,
   pageSize: number = path === '/diagrams' ? PAGE_SIZE_MODEL_DIAGRAMS : PAGE_SIZE_MODEL_NODES,
-  extraParams?: Record<string, string>
+  extraParams?: Record<string, string>,
+  options?: ModelEditorLoadCancellationOptions
 ): Promise<T[]> {
-  const first = await fetchModelPage<T>(path, modelId, 0, pageSize, extraParams)
+  if (options?.isCancelled?.()) return []
+  let first: PaginatedResponse<T>
+  try {
+    first = await fetchModelPage<T>(path, modelId, 0, pageSize, extraParams, options)
+  } catch (error) {
+    if (error === LOAD_CANCELLED || options?.isCancelled?.()) return []
+    throw error
+  }
+  if (options?.isCancelled?.()) return []
   const firstBatch = first.content ?? []
   let collected: T[]
   if (paginatedIsLastPage(first, 0)) {
@@ -86,17 +161,32 @@ export async function fetchAllByModelId<T extends { id?: string }>(
       collected = [...firstBatch]
       let page = 1
       while (true) {
-        const data = await fetchModelPage<T>(path, modelId, page, pageSize, extraParams)
+        if (options?.isCancelled?.()) return []
+        let data: PaginatedResponse<T>
+        try {
+          data = await fetchModelPage<T>(path, modelId, page, pageSize, extraParams, options)
+        } catch (error) {
+          if (error === LOAD_CANCELLED || options?.isCancelled?.()) return []
+          throw error
+        }
+        if (options?.isCancelled?.()) return []
         collected.push(...(data.content ?? []))
         if (paginatedIsLastPage(data, page)) break
         page += 1
       }
     } else {
-      const rest = await Promise.all(
-        Array.from({ length: totalPages - 1 }, (_, index) =>
-          fetchModelPage<T>(path, modelId, index + 1, pageSize, extraParams)
-        )
+      const restPages = Array.from({ length: totalPages - 1 }, (_, index) => index + 1)
+      const rest = await mapPool(
+        restPages,
+        MODEL_PAGE_FETCH_CONCURRENCY,
+        (page, control) =>
+          fetchModelPage<T>(path, modelId, page, pageSize, extraParams, {
+            ...options,
+            ...control,
+          }),
+        options
       )
+      if (options?.isCancelled?.()) return []
       collected = firstBatch.concat(...rest.map(page => page.content ?? []))
     }
   }
@@ -114,6 +204,7 @@ export async function fetchAllByModelId<T extends { id?: string }>(
     seen.add(id)
     unique.push(item)
   }
+  if (options?.isCancelled?.()) return []
   return unique
 }
 
@@ -138,9 +229,14 @@ function yieldToUi(): Promise<void> {
   })
 }
 
-async function mapInChunks<T, R>(items: T[], mapFn: (item: T) => R): Promise<R[]> {
+async function mapInChunks<T, R>(
+  items: T[],
+  mapFn: (item: T) => R,
+  options?: ModelEditorLoadCancellationOptions
+): Promise<R[]> {
   const mapped: R[] = []
   for (let i = 0; i < items.length; i += ENTITY_MAP_CHUNK) {
+    if (options?.isCancelled?.()) throw LOAD_CANCELLED
     const slice = items.slice(i, i + ENTITY_MAP_CHUNK)
     for (const item of slice) {
       mapped.push(mapFn(item))
@@ -155,7 +251,7 @@ async function mapInChunks<T, R>(items: T[], mapFn: (item: T) => R): Promise<R[]
 export type LoadModelEditorShellOptions = {
   /** Default false for editor tree; matrix needs true to read instance-scoped props. */
   diagramIncludeAttrs?: boolean
-}
+} & ModelEditorLoadCancellationOptions
 
 /** Critical path for the tree: model + nodes + light diagrams (no attrs) + node types. */
 export async function loadModelEditorShell(
@@ -171,15 +267,16 @@ export async function loadModelEditorShell(
     await Promise.all([
       apiGet<ModelData>(`/models/${modelId}`),
       apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
-      fetchAllByModelId<NodeResponse>('/nodes', modelId, PAGE_SIZE_MODEL_NODES),
+      fetchAllByModelId<NodeResponse>('/nodes', modelId, PAGE_SIZE_MODEL_NODES, undefined, options),
       fetchAllByModelId<DiagramResponse>('/diagrams', modelId, PAGE_SIZE_MODEL_DIAGRAMS, {
         includeAttrs: diagramIncludeAttrs ? 'true' : 'false',
-      }),
+      }, options),
       apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
       // Needed immediately so Directory folders show expand toggles before catalog finishes.
       apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
     ])
 
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
   const model = requireModel(modelResult)
   // includeAttrs=false → attrs null → _attrsPending; hydrate on open via GET /diagrams/{id}
   const diagrams = diagramResponses.map(row =>
@@ -187,7 +284,8 @@ export async function loadModelEditorShell(
   )
   const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
   // Attrs parse is CPU-heavy on large models — yield so the first paint stays responsive.
-  const editorNodes = await mapInChunks(nodes, toEditorNode)
+  const editorNodes = await mapInChunks(nodes, toEditorNode, options)
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
 
   const state: ModelEditorState = {
     modelId,
@@ -218,7 +316,8 @@ export async function loadModelEditorShell(
  */
 export async function loadModelEditorCatalog(
   modelId: string,
-  notationIds: string[]
+  notationIds: string[],
+  options?: ModelEditorLoadCancellationOptions
 ): Promise<ModelEditorCatalog> {
   const typesQuery = listParams()
   typesQuery.set("modelId", modelId)
@@ -240,6 +339,7 @@ export async function loadModelEditorCatalog(
       fetchAllRelationRulesByNotationIds(notationIds, { includeAttrs: false, modelId }),
     ])
 
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
   const relationsById = new Map<string, RelationResponse>()
   for (const batch of relationsBatches) {
     for (const relation of batch) {
@@ -247,6 +347,7 @@ export async function loadModelEditorCatalog(
     }
   }
 
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
   return {
     components,
     relations: [...relationsById.values()],
@@ -257,21 +358,35 @@ export async function loadModelEditorCatalog(
 }
 
 /** Heavy model graph edges — can finish after the tree/catalog are usable. */
-export async function loadModelEditorLinks(modelId: string): Promise<ReturnType<typeof toEditorLink>[]> {
-  const links = await fetchAllByModelId<LinkResponse>('/links', modelId, PAGE_SIZE_MODEL_NODES)
+export async function loadModelEditorLinks(
+  modelId: string,
+  options?: ModelEditorLoadCancellationOptions
+): Promise<ReturnType<typeof toEditorLink>[]> {
+  const links = await fetchAllByModelId<LinkResponse>(
+    '/links',
+    modelId,
+    PAGE_SIZE_MODEL_NODES,
+    undefined,
+    options
+  )
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
   // Mapping parses attrs; yield so folder expand clicks stay responsive on large models.
-  return mapInChunks(links, toEditorLink)
+  const mapped = await mapInChunks(links, toEditorLink, options)
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
+  return mapped
 }
 
 /** @deprecated Prefer shell + catalog + links; kept for tests and one-shot callers. */
 export async function loadModelEditorExtras(
   modelId: string,
-  notationIds: string[]
+  notationIds: string[],
+  options?: ModelEditorLoadCancellationOptions
 ): Promise<ModelEditorCatalog & { links: ReturnType<typeof toEditorLink>[] }> {
   const [catalog, links] = await Promise.all([
-    loadModelEditorCatalog(modelId, notationIds),
-    loadModelEditorLinks(modelId),
+    loadModelEditorCatalog(modelId, notationIds, options),
+    loadModelEditorLinks(modelId, options),
   ])
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
   return { ...catalog, links }
 }
 
@@ -281,7 +396,8 @@ export async function loadModelEditorData(
   options?: LoadModelEditorShellOptions
 ): Promise<LoadModelEditorDataResult> {
   const shell = await loadModelEditorShell(modelId, options)
-  const extras = await loadModelEditorExtras(modelId, shell.loadedNotationIds)
+  const extras = await loadModelEditorExtras(modelId, shell.loadedNotationIds, options)
+  if (options?.isCancelled?.()) throw LOAD_CANCELLED
   return {
     ...shell,
     state: {

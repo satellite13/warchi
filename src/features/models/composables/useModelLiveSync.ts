@@ -22,7 +22,7 @@ import {
   mergeEntityListFromRemote,
   preserveOpenDiagramCanvasAfterRemoteMerge,
 } from "../utils/modelEntityMerge"
-import { isModelEditorSnapshotFresh } from "../utils/modelEditorSnapshotFreshness"
+import { decideCollectionPull } from "../utils/modelLiveSyncPullGate"
 import { createModelChangedEventIdDeduper } from "../utils/modelLiveSyncEventDedup"
 import {
   emitModelLiveSyncTelemetry,
@@ -45,7 +45,7 @@ const STOMP_HEARTBEAT_OUTGOING_MS = 15000
 
 const DEFAULT_FALLBACK_POLL_MS = 15_000
 
-type ModelLiveSyncMode = "ws" | "poll" | "hybrid"
+export type ModelLiveSyncMode = "ws" | "poll" | "hybrid"
 
 export function parseModelLiveSyncMode(raw: string | undefined): ModelLiveSyncMode {
   const normalized = raw?.trim().toLowerCase()
@@ -65,6 +65,29 @@ export function parseModelLivePollMs(raw: string | undefined): number {
 const MODEL_LIVE_SYNC_MODE = parseModelLiveSyncMode(import.meta.env.VITE_MODEL_LIVE_SYNC_MODE)
 const MODEL_LIVE_POLL_MS = parseModelLivePollMs(import.meta.env.VITE_MODEL_LIVE_POLL_MS)
 
+async function allSettledOrThrow<T extends readonly Promise<unknown>[]>(
+  promises: T
+): Promise<{ [K in keyof T]: Awaited<T[K]> }> {
+  let firstRejection: unknown
+  let hasRejection = false
+  const tracked = promises.map(promise =>
+    promise.catch(error => {
+      if (!hasRejection) {
+        hasRejection = true
+        firstRejection = error
+      }
+      throw error
+    })
+  )
+  const settled = await Promise.allSettled(tracked)
+  if (hasRejection) {
+    throw firstRejection
+  }
+  return settled.map(result => (result as PromiseFulfilledResult<unknown>).value) as {
+    [K in keyof T]: Awaited<T[K]>
+  }
+}
+
 type PullSnapshotOptions = {
   /** Push / переподключение / возврат на вкладку — не ждать окончания локального save. */
   ignoreSavingGuard?: boolean
@@ -82,12 +105,14 @@ type PullSnapshotOptions = {
  * при `model_changed`, при возврате на вкладку (догон после фона).
  * См. in-app help: /docs/diagrams и /docs/models.
  */
-export function useModelLiveSync(options: {
+export type UseModelLiveSyncOptions = {
   modelId: Ref<string | null | undefined>
   state: Ref<ModelEditorState>
   model: Ref<ModelData | null>
   enabled: Ref<boolean>
   isLoading: Ref<boolean>
+  /** false until shell+links finished; opportunistic pulls wait for this. */
+  initialSnapshotReady: Ref<boolean>
   isSaving: Ref<boolean>
   modelDirty: Ref<boolean>
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
@@ -99,16 +124,39 @@ export function useModelLiveSync(options: {
   onModelTopicBroadcast?: (msg: Record<string, unknown>) => void
   /** Модель удалена / недоступна (404/403) — остановить sync и показать ошибку в редакторе */
   onModelUnavailable?: (status: number) => void
-}): void {
+  /** Test/config override; production defaults to VITE_MODEL_LIVE_SYNC_MODE. */
+  mode?: ModelLiveSyncMode
+}
+
+export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
+  const syncMode = options.mode ?? MODEL_LIVE_SYNC_MODE
   let inFlight = false
+  let activePullGeneration: number | null = null
+  let activePullModelId: string | null = null
+  let pullScheduled = false
+  let pendingPull: PullSnapshotOptions | null = null
+  let syncGeneration = 0
+  let disposed = false
   let stompClient: Client | null = null
   let fallbackPollTimer: ReturnType<typeof setInterval> | null = null
   let wsConnected = false
+  let connectHelloPending = false
+  let skipConnectResyncOnce = false
+  let pendingModelChanged = false
+  let lastSyncedModelId: string | null = null
   /** После soft/permanent delete не долбить /models/{id} 404’ами. */
   let unavailableModelId: string | null = null
   const modelChangedEventIdDeduper = createModelChangedEventIdDeduper()
   let stompPullCoalesceScheduled = false
   let wsAuthRefreshInFlight: Promise<boolean> | null = null
+
+  const runAsyncSafely = (task: () => Promise<unknown>): void => {
+    try {
+      void task().catch(() => undefined)
+    } catch {
+      // Fire-and-forget lifecycle work must not escape into Vue/STOMP callbacks.
+    }
+  }
 
   const isHaltedForCurrentModel = (): boolean => {
     const mid = options.modelId.value
@@ -125,22 +173,24 @@ export function useModelLiveSync(options: {
 
   const ensureWsAuthCookieFresh = async (): Promise<boolean> => {
     if (!wsAuthRefreshInFlight) {
-      wsAuthRefreshInFlight = refreshAccessToken().finally(() => {
-        wsAuthRefreshInFlight = null
-      })
+      wsAuthRefreshInFlight = refreshAccessToken()
+        .catch(() => false)
+        .finally(() => {
+          wsAuthRefreshInFlight = null
+        })
     }
     return wsAuthRefreshInFlight
   }
 
-  const isWsEnabled = MODEL_LIVE_SYNC_MODE === "ws" || MODEL_LIVE_SYNC_MODE === "hybrid"
-  const isPollEnabled = MODEL_LIVE_SYNC_MODE === "poll" || MODEL_LIVE_SYNC_MODE === "hybrid"
+  const isWsEnabled = syncMode === "ws" || syncMode === "hybrid"
+  const isPollEnabled = syncMode === "poll" || syncMode === "hybrid"
 
   const disconnectPush = (): void => {
     const c = stompClient
     stompClient = null
     wsConnected = false
     if (c) {
-      void c.deactivate()
+      runAsyncSafely(() => c.deactivate())
     }
   }
 
@@ -151,9 +201,12 @@ export function useModelLiveSync(options: {
     }
   }
 
-  const startFallbackPoll = (): void => {
+  const isInitialSnapshotReady = (): boolean => options.initialSnapshotReady.value
+
+  const startFallbackPoll = (opts?: { immediate?: boolean }): void => {
     if (!isPollEnabled) return
     if (!options.enabled.value || options.isLoading.value) return
+    if (!isInitialSnapshotReady()) return
     if (isHaltedForCurrentModel()) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
@@ -161,7 +214,9 @@ export function useModelLiveSync(options: {
     fallbackPollTimer = setInterval(() => {
       void pullRemoteSnapshot({ reason: "poll_timer" })
     }, MODEL_LIVE_POLL_MS)
-    void pullRemoteSnapshot({ reason: "poll_timer" })
+    if (opts?.immediate !== false) {
+      void pullRemoteSnapshot({ reason: "poll_timer" })
+    }
   }
 
   const collectNotationIds = (diagrams: EditorDiagram[]): string[] => {
@@ -173,27 +228,26 @@ export function useModelLiveSync(options: {
     return [...set]
   }
 
-  const pullRemoteSnapshot = async (pullOpts?: PullSnapshotOptions): Promise<void> => {
+  const canPullCurrentModel = (): boolean => {
+    if (disposed || !options.enabled.value || options.isLoading.value) return false
+    if (isHaltedForCurrentModel()) return false
+    const mid = options.modelId.value
+    return typeof mid === 'string' && mid.length > 0
+  }
+
+  const executeRemoteSnapshotPull = async (pullOpts: PullSnapshotOptions): Promise<void> => {
     if (inFlight) return
     if (!options.enabled.value || options.isLoading.value) return
     if (isHaltedForCurrentModel()) return
-    if (!pullOpts?.ignoreSavingGuard && options.isSaving.value) return
+    if (!pullOpts.ignoreSavingGuard && options.isSaving.value) return
     const mid = options.modelId.value
     if (!mid || typeof mid !== "string") return
-
-    // After loadModel we already have a full snapshot — skip connect/poll/resync churn.
-    // Real remote changes (STOMP model_changed) must still pull.
-    const reason = pullOpts?.reason
-    const skipWhileFresh =
-      reason === "session_resync" ||
-      reason === "ws_connect" ||
-      reason === "poll_timer" ||
-      reason === "auth_refresh" ||
-      reason === "visibility"
-    if (skipWhileFresh && isModelEditorSnapshotFresh()) return
+    const pullGeneration = syncGeneration
 
     inFlight = true
-    if (pullOpts?.reason) {
+    activePullGeneration = pullGeneration
+    activePullModelId = mid
+    if (pullOpts.reason) {
       emitModelLiveSyncTelemetry({
         kind: "pull_trigger",
         modelId: mid,
@@ -203,14 +257,25 @@ export function useModelLiveSync(options: {
     try {
       // Must page through the full collections — a single size=1000 page drops the rest
       // via mergeEntityListFromRemote and empties the tree after a large import.
-      const [remoteNodes, remoteLinks, remoteDiagrams, modelRes] = await Promise.all([
-        fetchAllByModelId<NodeResponse>('/nodes', mid),
-        fetchAllByModelId<LinkResponse>('/links', mid),
-        fetchAllByModelId<DiagramResponse>('/diagrams', mid, undefined, {
-          includeAttrs: 'false',
-        }),
-        apiGet<ModelData>(`/models/${mid}`),
-      ])
+      const [remoteNodes, remoteLinks, remoteDiagrams, modelRes] = await allSettledOrThrow(
+        [
+          fetchAllByModelId<NodeResponse>('/nodes', mid),
+          fetchAllByModelId<LinkResponse>('/links', mid),
+          fetchAllByModelId<DiagramResponse>('/diagrams', mid, undefined, {
+            includeAttrs: 'false',
+          }),
+          apiGet<ModelData>(`/models/${mid}`),
+        ] as const
+      )
+
+      if (
+        disposed ||
+        !options.enabled.value ||
+        syncGeneration !== pullGeneration ||
+        options.modelId.value !== mid
+      ) {
+        return
+      }
 
       if (!modelRes.success) {
         // Soft/permanent delete → findById returns 404; keep polling would spam console on any page
@@ -220,10 +285,6 @@ export function useModelLiveSync(options: {
         }
         return
       }
-
-      // Guard against stale results: if modelId changed while requests were in flight,
-      // discard results to avoid overwriting the newly loaded model's state.
-      if (options.modelId.value !== mid) return
 
       const diagramsBefore = options.state.value.diagrams
       const notationIdsBefore = new Set(collectNotationIds(diagramsBefore))
@@ -281,6 +342,14 @@ export function useModelLiveSync(options: {
       for (const nid of notationIds) {
         if (!notationIdsBefore.has(nid)) {
           await options.ensureNotationRelationsAndRules(nid)
+          if (
+            disposed ||
+            !options.enabled.value ||
+            syncGeneration !== pullGeneration ||
+            options.modelId.value !== mid
+          ) {
+            return
+          }
         }
       }
 
@@ -290,10 +359,20 @@ export function useModelLiveSync(options: {
         for (const nid of notationIds) {
           typesQuery.append("notationId", nid)
         }
-        const [ntRes, ltRes] = await Promise.all([
-          apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
-          apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${typesQuery.toString()}`),
-        ])
+        const [ntRes, ltRes] = await allSettledOrThrow(
+          [
+            apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
+            apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${typesQuery.toString()}`),
+          ] as const
+        )
+        if (
+          disposed ||
+          !options.enabled.value ||
+          syncGeneration !== pullGeneration ||
+          options.modelId.value !== mid
+        ) {
+          return
+        }
         if (ntRes.success) {
           options.state.value.nodeTypes = ntRes.data.content ?? []
         }
@@ -303,17 +382,76 @@ export function useModelLiveSync(options: {
       }
     } finally {
       inFlight = false
+      activePullGeneration = null
+      activePullModelId = null
+      queuePullDrain()
     }
   }
 
-  const scheduleStompModelChangedPull = (): void => {
-    if (stompPullCoalesceScheduled) {
+  const mergePendingPull = (pullOpts: PullSnapshotOptions): void => {
+    if (!pendingPull || pullOpts.reason === 'stomp_model_changed') {
+      pendingPull = pullOpts
+    }
+  }
+
+  const drainPullQueue = (): void => {
+    pullScheduled = false
+    if (inFlight || !pendingPull) return
+    if (!canPullCurrentModel()) {
+      pendingPull = null
       return
     }
+    const nextPull = pendingPull
+    pendingPull = null
+    runAsyncSafely(() => executeRemoteSnapshotPull(nextPull))
+  }
+
+  function queuePullDrain(): void {
+    if (pullScheduled || disposed || !pendingPull) return
+    pullScheduled = true
+    queueMicrotask(() => {
+      drainPullQueue()
+    })
+  }
+
+  const pullRemoteSnapshot = (pullOpts: PullSnapshotOptions = {}): void => {
+    if (!canPullCurrentModel()) return
+    if (!pullOpts.ignoreSavingGuard && options.isSaving.value) return
+    const reason = pullOpts.reason
+    if (
+      inFlight &&
+      reason !== 'stomp_model_changed' &&
+      activePullGeneration === syncGeneration &&
+      activePullModelId === options.modelId.value
+    ) {
+      return
+    }
+    if (reason) {
+      const decision = decideCollectionPull({
+        reason,
+        snapshotReady: isInitialSnapshotReady(),
+        skipConnectResyncOnce,
+      })
+      if (decision.action === 'skip') return
+      if (decision.action === 'queue') {
+        pendingModelChanged = true
+        return
+      }
+      if (decision.action === 'skip_hello') {
+        skipConnectResyncOnce = false
+        return
+      }
+    }
+    mergePendingPull(pullOpts)
+    queuePullDrain()
+  }
+
+  const scheduleStompModelChangedPull = (): void => {
+    if (stompPullCoalesceScheduled) return
     stompPullCoalesceScheduled = true
     queueMicrotask(() => {
       stompPullCoalesceScheduled = false
-      void pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "stomp_model_changed" })
+      pullRemoteSnapshot({ ignoreSavingGuard: true, reason: 'stomp_model_changed' })
     })
   }
 
@@ -329,21 +467,49 @@ export function useModelLiveSync(options: {
     const url = buildModelSyncWsUrl()
     if (!url) return
 
+    const clientGeneration = syncGeneration
     const client = new Client({
       brokerURL: url,
       reconnectDelay: STOMP_RECONNECT_DELAY_MS,
       heartbeatIncoming: STOMP_HEARTBEAT_INCOMING_MS,
       heartbeatOutgoing: STOMP_HEARTBEAT_OUTGOING_MS,
       beforeConnect: async () => {
+        if (disposed || stompClient !== client || options.modelId.value !== mid) {
+          runAsyncSafely(() => client.deactivate())
+          return
+        }
         const refreshed = await ensureWsAuthCookieFresh()
-        if (!refreshed) {
-          client.deactivate()
+        if (
+          !refreshed ||
+          disposed ||
+          stompClient !== client ||
+          options.modelId.value !== mid
+        ) {
+          runAsyncSafely(() => client.deactivate())
         }
       },
       onConnect: () => {
+        if (
+          disposed ||
+          stompClient !== client ||
+          options.modelId.value !== mid ||
+          syncGeneration !== clientGeneration
+        ) {
+          runAsyncSafely(() => client.deactivate())
+          return
+        }
+        connectHelloPending = false
         wsConnected = true
         stopFallbackPoll()
         client.subscribe(`/topic/models/${mid}`, message => {
+          if (
+            disposed ||
+            stompClient !== client ||
+            options.modelId.value !== mid ||
+            syncGeneration !== clientGeneration
+          ) {
+            return
+          }
           try {
             const parsed = JSON.parse(message.body) as Record<string, unknown>
             if (typeof parsed.modelId !== "string" || parsed.modelId !== mid) {
@@ -370,34 +536,38 @@ export function useModelLiveSync(options: {
               }
               return
             }
-            void coalesceModelSyncGranularEvents(parseGranularSyncEventsFromPayload(parsed.events))
+            coalesceModelSyncGranularEvents(parseGranularSyncEventsFromPayload(parsed.events))
             scheduleStompModelChangedPull()
           } catch {
             /* ignore malformed */
           }
         })
-        void pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "ws_connect" })
+        pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "ws_connect" })
       },
       onDisconnect: () => {
+        if (stompClient !== client) return
         wsConnected = false
         if (options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
       onStompError: () => {
+        if (stompClient !== client) return
         wsConnected = false
         if (options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
       onWebSocketClose: () => {
+        if (stompClient !== client) return
         wsConnected = false
-        void ensureWsAuthCookieFresh()
+        runAsyncSafely(() => ensureWsAuthCookieFresh())
         if (options.enabled.value && !isHaltedForCurrentModel()) {
           startFallbackPoll()
         }
       },
     })
+    connectHelloPending = true
     stompClient = client
     void client.activate()
     if (isPollEnabled) {
@@ -407,6 +577,10 @@ export function useModelLiveSync(options: {
 
   const resyncSession = (): void => {
     if (!options.enabled.value) {
+      syncGeneration += 1
+      pendingPull = null
+      pendingModelChanged = false
+      connectHelloPending = false
       disconnectPush()
       stopFallbackPoll()
       return
@@ -420,6 +594,14 @@ export function useModelLiveSync(options: {
     // New model id → allow sync again after a previous unavailable halt.
     if (unavailableModelId != null && unavailableModelId !== mid) {
       unavailableModelId = null
+    }
+    if (lastSyncedModelId !== mid) {
+      syncGeneration += 1
+      lastSyncedModelId = mid
+      pendingPull = null
+      pendingModelChanged = false
+      skipConnectResyncOnce = false
+      connectHelloPending = false
     }
     if (isHaltedForCurrentModel()) {
       disconnectPush()
@@ -436,7 +618,7 @@ export function useModelLiveSync(options: {
       disconnectPush()
     }
     if (isPollEnabled) {
-      startFallbackPoll()
+      startFallbackPoll({ immediate: syncMode !== 'poll' })
     } else {
       stopFallbackPoll()
     }
@@ -447,7 +629,9 @@ export function useModelLiveSync(options: {
     // The onConnect callback in connectPush also pulls — the inFlight guard
     // ensures only one pull runs at a time, so this is safe but may be redundant.
     // We keep it for the case where WS connection is slow or fails.
-    void pullRemoteSnapshot({ reason: "session_resync" })
+    if (syncMode !== 'poll') {
+      pullRemoteSnapshot({ reason: "session_resync" })
+    }
   }
 
   watch(
@@ -458,10 +642,27 @@ export function useModelLiveSync(options: {
     { flush: "post", immediate: true }
   )
 
+  watch(
+    () => options.initialSnapshotReady.value,
+    (ready, wasReady) => {
+      if (!ready) return
+      if (wasReady === false) {
+        skipConnectResyncOnce = connectHelloPending
+        if (pendingModelChanged) {
+          pendingModelChanged = false
+          pullRemoteSnapshot({ ignoreSavingGuard: true, reason: 'stomp_model_changed' })
+        }
+      }
+      if (isPollEnabled && !wsConnected) {
+        startFallbackPoll({ immediate: false })
+      }
+    }
+  )
+
   const onDocumentVisibilityChange = (): void => {
     if (typeof document === "undefined") return
     if (document.visibilityState === "hidden") {
-      if (MODEL_LIVE_SYNC_MODE === "hybrid") {
+      if (syncMode === "hybrid") {
         stopFallbackPoll()
       }
       return
@@ -475,7 +676,7 @@ export function useModelLiveSync(options: {
     if (isWsEnabled && !wsConnected) {
       connectPush()
     }
-    void pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "visibility" })
+    pullRemoteSnapshot({ ignoreSavingGuard: true, reason: "visibility" })
   }
 
   const onAuthUpdated = (): void => {
@@ -486,7 +687,7 @@ export function useModelLiveSync(options: {
     if (isPollEnabled) {
       startFallbackPoll()
     }
-    void pullRemoteSnapshot({ reason: "auth_refresh" })
+    pullRemoteSnapshot({ reason: "auth_refresh" })
   }
 
   const onAuthCleared = (): void => {
@@ -503,6 +704,10 @@ export function useModelLiveSync(options: {
   }
 
   onBeforeUnmount(() => {
+    disposed = true
+    syncGeneration += 1
+    pendingPull = null
+    pendingModelChanged = false
     disconnectPush()
     stopFallbackPoll()
     if (typeof document !== "undefined") {

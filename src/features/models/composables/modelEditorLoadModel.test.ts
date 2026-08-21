@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiGet } from '@/composables/useApi'
-import { listParams } from '@/api/queryHelpers'
+import { listParams, MODEL_PAGE_FETCH_CONCURRENCY } from '@/api/queryHelpers'
 import { fetchAllComponentsByNotationIds } from './modelNotationComponentsApi'
+import { withModelEditorPageSlot } from '../utils/modelEditorPagePool'
 import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
@@ -47,6 +48,14 @@ const listResponse = <T>(items: T[]) => ({
   size: items.length,
 })
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 describe('fetchAllByModelId', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -78,6 +87,198 @@ describe('fetchAllByModelId', () => {
     await fetchAllByModelId('/diagrams', 'model-1', 100, { includeAttrs: 'false' })
 
     expect(String(vi.mocked(apiGet).mock.calls[0]?.[0])).toContain('includeAttrs=false')
+  })
+
+  it(`fetches remaining pages with a concurrency cap of ${MODEL_PAGE_FETCH_CONCURRENCY}`, async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const pageMatch = String(path).match(/page=(\d+)/)
+      const pageNum = Number(pageMatch?.[1] ?? 0)
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, 20)
+      })
+      inFlight -= 1
+      return ok(page([{ id: `n${pageNum}` }], { last: pageNum === 9, totalPages: 10 }))
+    })
+
+    const result = await fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+
+    expect(result).toHaveLength(10)
+    expect(maxInFlight).toBeLessThanOrEqual(MODEL_PAGE_FETCH_CONCURRENCY)
+    expect(apiGet).toHaveBeenCalledTimes(10)
+  })
+
+  it('shares one global page request limit across parallel node and link loads', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const requestPath = String(path)
+      const pageNum = Number(requestPath.match(/page=(\d+)/)?.[1] ?? 0)
+      const collection = requestPath.startsWith('/nodes?') ? 'node' : 'link'
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, 20)
+      })
+      inFlight -= 1
+      return ok(
+        page([{ id: `${collection}-${pageNum}` }], {
+          last: pageNum === 7,
+          totalPages: 8,
+        })
+      )
+    })
+
+    const [nodes, links] = await Promise.all([
+      fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000),
+      fetchAllByModelId<{ id: string }>('/links', 'model-1', 1000),
+    ])
+
+    expect(nodes).toHaveLength(8)
+    expect(links).toHaveLength(8)
+    expect(maxInFlight).toBeLessThanOrEqual(MODEL_PAGE_FETCH_CONCURRENCY)
+    expect(apiGet).toHaveBeenCalledTimes(16)
+  })
+
+  it('stops scheduling new pages after an error and drains active workers', async () => {
+    const firstError = new Error('page failed')
+    const drainActivePages = deferred()
+    const releaseFollowUps = deferred()
+    const startedNodePages: number[] = []
+    const startedFollowUps: string[] = []
+    const expectedStartedNodePages = Array.from(
+      { length: MODEL_PAGE_FETCH_CONCURRENCY + 1 },
+      (_, index) => index
+    )
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const requestPath = String(path)
+      const params = new URLSearchParams(requestPath.split('?')[1])
+      const pageNum = Number(params.get('page') ?? 0)
+      const modelId = params.get('modelId') ?? ''
+
+      if (requestPath.startsWith('/nodes?')) {
+        startedNodePages.push(pageNum)
+        if (pageNum === 0) {
+          return ok(page([{ id: 'node-0' }], { last: false, totalPages: 8 }))
+        }
+        if (pageNum === 1) throw firstError
+        await drainActivePages.promise
+        return ok(page([{ id: `node-${pageNum}` }], { last: false, totalPages: 8 }))
+      }
+
+      startedFollowUps.push(modelId)
+      await releaseFollowUps.promise
+      return ok(page([{ id: `link-${modelId}` }]))
+    })
+
+    let loadSettled = false
+    const loadOutcome = fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+      .then(
+        value => ({ value }),
+        error => ({ error })
+      )
+      .finally(() => {
+        loadSettled = true
+      })
+    let followUps: Array<Promise<Array<{ id: string }>>> = []
+
+    try {
+      await vi.waitFor(() => {
+        expect(startedNodePages).toEqual(expectedStartedNodePages)
+      })
+      expect(loadSettled).toBe(MODEL_PAGE_FETCH_CONCURRENCY === 1)
+
+      drainActivePages.resolve()
+      const outcome = await loadOutcome
+
+      expect('error' in outcome ? outcome.error : undefined).toBe(firstError)
+      expect(startedNodePages).toEqual(expectedStartedNodePages)
+
+      followUps = Array.from({ length: MODEL_PAGE_FETCH_CONCURRENCY }, (_, index) =>
+        fetchAllByModelId<{ id: string }>('/links', `model-${index}`, 1000)
+      )
+      await vi.waitFor(() => {
+        expect(startedFollowUps).toHaveLength(MODEL_PAGE_FETCH_CONCURRENCY)
+      })
+    } finally {
+      drainActivePages.resolve()
+      releaseFollowUps.resolve()
+      await loadOutcome
+      await Promise.allSettled(followUps)
+    }
+  })
+
+  it('does not start queued page requests after the first page error', async () => {
+    const releaseSlotHolders = deferred()
+    const firstError = new Error('page failed')
+    const startedPages: number[] = []
+    let slotHolders: Promise<void>[] = []
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const pageNum = Number(String(path).match(/page=(\d+)/)?.[1] ?? 0)
+      startedPages.push(pageNum)
+      if (pageNum === 0) {
+        slotHolders = Array.from({ length: MODEL_PAGE_FETCH_CONCURRENCY - 1 }, () =>
+          withModelEditorPageSlot(async () => {
+            await releaseSlotHolders.promise
+          })
+        )
+        return ok(
+          page([{ id: 'node-0' }], {
+            last: false,
+            totalPages: MODEL_PAGE_FETCH_CONCURRENCY + 1,
+          })
+        )
+      }
+      if (pageNum === 1) throw firstError
+      return ok(page([{ id: `node-${pageNum}` }]))
+    })
+
+    const load = fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+
+    try {
+      await expect(load).rejects.toBe(firstError)
+      expect(startedPages).toEqual([0, 1])
+    } finally {
+      releaseSlotHolders.resolve()
+      await Promise.allSettled(slotHolders)
+      await load.catch(() => undefined)
+    }
+  })
+
+  it('stops scheduling pages after cancellation and drains active requests', async () => {
+    const releaseActivePages = deferred()
+    const startedPages: number[] = []
+    const expectedStartedPages = Array.from(
+      { length: MODEL_PAGE_FETCH_CONCURRENCY + 1 },
+      (_, index) => index
+    )
+    let cancelled = false
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const pageNum = Number(String(path).match(/page=(\d+)/)?.[1] ?? 0)
+      startedPages.push(pageNum)
+      if (pageNum === 0) {
+        return ok(page([{ id: 'node-0' }], { last: false, totalPages: 8 }))
+      }
+      await releaseActivePages.promise
+      if (pageNum === 2) throw new Error('active request failed after cancellation')
+      return ok(page([{ id: `node-${pageNum}` }], { last: false, totalPages: 8 }))
+    })
+
+    const load = fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000, undefined, {
+      isCancelled: () => cancelled,
+    })
+
+    await vi.waitFor(() => {
+      expect(startedPages).toEqual(expectedStartedPages)
+    })
+    cancelled = true
+    releaseActivePages.resolve()
+
+    await expect(load).resolves.toEqual([])
+    expect(startedPages).toEqual(expectedStartedPages)
   })
 
   it('dedupes entities that appear on multiple pages', async () => {

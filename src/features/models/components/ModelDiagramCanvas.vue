@@ -3214,6 +3214,11 @@ const resolveModelNodeDropSize = (modelNodeId: string): { width: number; height:
   const node = props.nodes.find(item => item.id === modelNodeId)
   if (!node) return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
 
+  const nodeType = props.nodeTypes.find(item => item.id === node.nodeTypeId)
+  if ((nodeType?.name ?? '').trim().toLowerCase() === 'directory') {
+    return { width: 230, height: 126 }
+  }
+
   const notationId = activeNotationId.value
   const binding = notationId ? node.parsedAttrs.notationComponents[notationId] : undefined
   const component = binding ? props.components.find(item => item.id === binding.componentId) : undefined

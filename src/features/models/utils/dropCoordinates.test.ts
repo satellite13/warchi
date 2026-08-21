@@ -37,7 +37,7 @@ describe('worldTopLeftCenteredOnCursor', () => {
 })
 
 describe('worldTopLeftCenteredOnScreenPoint', () => {
-  it('converts the screen point and centers a styled node at that world point', () => {
+  it('converts the screen point and centers a Directory note at that world point', () => {
     const screenToWorld = (point: { x: number; y: number }) => ({
       x: (point.x - 100) / 2,
       y: (point.y - 40) / 2,
@@ -47,8 +47,8 @@ describe('worldTopLeftCenteredOnScreenPoint', () => {
       worldTopLeftCenteredOnScreenPoint(
         { x: 500, y: 340 },
         screenToWorld,
-        { width: 240, height: 80 }
+        { width: 230, height: 126 }
       )
-    ).toEqual({ x: 80, y: 110 })
+    ).toEqual({ x: 85, y: 87 })
   })
 })

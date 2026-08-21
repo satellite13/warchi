@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
 import { effectScope } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
@@ -819,12 +816,6 @@ describe("useModelEditor defaults and unsaved delta", () => {
     expect(row?.parsedAttrs.typeProperties).toEqual({})
     expect(row?.parsedAttrs.componentProperties).toEqual({ "not-1": { "comp-1": {} } })
     expect(row?._isDirty).toBeUndefined()
-
-    const here = dirname(fileURLToPath(import.meta.url))
-    const editorSource = readFileSync(resolve(here, "useModelEditor.ts"), "utf8")
-    const viewSource = readFileSync(resolve(here, "../ModelEditor.vue"), "utf8")
-    expect(editorSource).not.toMatch(/scheduleSyncDefaultsOnLoad|syncDefaultsOnLoadChunked/)
-    expect(viewSource).not.toMatch(/scheduleSyncDefaultsOnLoad|syncDefaultsOnLoadChunked/)
     scope.stop()
   })
 

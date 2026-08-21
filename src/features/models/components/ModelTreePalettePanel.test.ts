@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 import { parseDiagramAttrs } from '../modelAttrs'
 import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
 import type { ChildrenPageState, EditorNode } from '../types'
+import type { ModelSearchHit } from '@/types/api'
 
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
@@ -99,6 +100,9 @@ function mountPanel(props: {
   childrenPages?: Map<string, ChildrenPageState>
   childrenLoading?: Set<string>
   childrenErrors?: Map<string, string>
+  searchHits?: ModelSearchHit[]
+  searchLoading?: boolean
+  searchError?: string | null
 }) {
   return mount(ModelTreePalettePanel, {
     props: {
@@ -115,6 +119,9 @@ function mountPanel(props: {
       childrenPages: props.childrenPages,
       childrenLoading: props.childrenLoading,
       childrenErrors: props.childrenErrors,
+      searchHits: props.searchHits,
+      searchLoading: props.searchLoading,
+      searchError: props.searchError,
     },
     // Needed so focusNode/focusDiagram and querySelector work against document
     attachTo: document.body,
@@ -482,6 +489,50 @@ describe('ModelTreePalettePanel search', () => {
     expect(wrapper.get('[data-tree-node-id="hit"] .tree-node__name').classes()).not.toContain(
       'tree-node__name--ancestor',
     )
+  })
+
+  it('renders server hits instead of scanning only materialized nodes', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'local-hit', name: 'Special local node' })],
+      searchHits: [{ kind: 'node', id: 'server-hit', name: 'Special server node' }],
+    })
+    await flushTree(wrapper)
+    await wrapper.get('.search-input').setValue('special')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushTree(wrapper)
+
+    expect(wrapper.emitted('searchQueryChange')).toEqual([['special']])
+    expect(wrapper.find('[data-tree-node-id="local-hit"]').exists()).toBe(false)
+    expect(wrapper.get('[data-tree-search-hit-id="server-hit"]').text()).toContain(
+      'Special server node'
+    )
+
+    await wrapper.get('[data-tree-search-hit-id="server-hit"] button').trigger('click')
+    expect(wrapper.emitted('selectSearchHit')).toEqual([['server-hit']])
+  })
+
+  it('keeps search loading/error/retry local and caps only rendered server rows', async () => {
+    const searchHits: ModelSearchHit[] = Array.from({ length: 300 }, (_, index) => ({
+      kind: 'node',
+      id: `hit-${index}`,
+      name: `Hit ${index}`,
+    }))
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits,
+      searchLoading: true,
+      searchError: 'search failed',
+    })
+    await flushTree(wrapper)
+    await wrapper.get('.search-input').setValue('hit')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushTree(wrapper)
+
+    expect(wrapper.find('[data-tree-search-loading]').exists()).toBe(true)
+    expect(wrapper.get('[data-tree-search-error]').text()).toContain('models.treeSearchError')
+    expect(wrapper.text()).toContain('models.searchResultsTruncated')
+    await wrapper.get('[data-tree-search-error] button').trigger('click')
+    expect(wrapper.emitted('retrySearch')).toHaveLength(1)
   })
 })
 

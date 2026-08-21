@@ -29,6 +29,7 @@ import {
   useModelEditor,
   useDetachedModelLinks,
   useModelEditorSync,
+  useLazyTreeSearch,
   useModelSelection,
   useModelToolbarState,
   useModelTreeOperations,
@@ -199,8 +200,16 @@ const {
   selectedLink,
   selectedNodeInstanceId,
   selectedLinkEdgeInstanceId,
+  selectedNodeLoading,
+  selectedNodeError,
+  retrySelectedNode,
   applyDiagramSelection,
-} = useModelSelection({ state })
+} = useModelSelection({
+  state,
+  mergeNodes: (nodes, guard) => partialStore.mergePartialEntities(nodes, [], guard),
+  beginRequest: () => partialStore.store.beginRequest('selection-node'),
+  isRequestCurrent: guard => partialStore.store.isRequestCurrent(guard),
+})
 const diagramScope = useDiagramScope({
   state,
   selectedDiagramId,
@@ -941,6 +950,33 @@ const {
   ensureChildrenScopeComplete: partialStore.ensureChildrenScopeComplete,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
 })
+const lazyTreeSearchQuery = ref('')
+const lazyTreeSearch = useLazyTreeSearch({
+  modelId: computed(() => state.value.modelId),
+  treeRootNodeId,
+  query: lazyTreeSearchQuery,
+  mergeNodes: (nodes, guard) => partialStore.mergePartialEntities(nodes, [], guard),
+  beginRequest: () => partialStore.store.beginRequest('tree-search-selection'),
+  isRequestCurrent: guard => partialStore.store.isRequestCurrent(guard),
+})
+
+const applyLazyTreePath = async (nodeId: string, path: readonly string[]): Promise<void> => {
+  if (path.length === 0) return
+  treePanelRef.value?.expandPath?.(path.slice(0, -1))
+  handleTreeSelectNode(nodeId)
+  await nextTick()
+  await treePanelRef.value?.focusNode?.(nodeId)
+}
+
+const handleTreeSearchHit = async (nodeId: string): Promise<void> => {
+  await applyLazyTreePath(nodeId, await lazyTreeSearch.selectHit(nodeId))
+}
+
+const retryTreeSearchSelection = async (): Promise<void> => {
+  const path = await lazyTreeSearch.retrySelection()
+  const nodeId = path.at(-1)
+  if (nodeId) await applyLazyTreePath(nodeId, path)
+}
 const closeCreateNodeModal = (): void => {
   if (!createNodePending.value) showCreateNodeModal.value = false
 }
@@ -2956,11 +2992,28 @@ const applyRouteDiagramSelection = () => {
   if (!target) return
   applyDiagramSelection(target.id)
 }
+const focusRouteDiagramInTree = async (): Promise<void> => {
+  if (!routeDiagramId.value) return
+  const target = state.value.diagrams.find(
+    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+  )
+  if (!target) return
+  const nodeId = target.nodeId
+  if (nodeId && nodeId !== treeRootNodeId.value) {
+    const path = await lazyTreeSearch.selectHit(nodeId)
+    if (path.length === 0) return
+    await nextTick()
+    treePanelRef.value?.expandPath?.(path)
+  }
+  await nextTick()
+  await treePanelRef.value?.focusDiagram?.(target.id)
+}
 useModelEditorRouteNavigation({
   modelId: routeModelId,
   diagramId: routeDiagramId,
   loadModel,
   applyRouteDiagramSelection,
+  focusRouteDiagramInTree,
   afterModelLoad: () => {
     scheduleFetchDocumentsFromApi()
     scheduleSyncDefaultsOnLoad()
@@ -3032,6 +3085,7 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 onMounted(async () => {
   await loadModel()
   applyRouteDiagramSelection()
+  void focusRouteDiagramInTree()
   scheduleFetchDocumentsFromApi()
   scheduleSyncDefaultsOnLoad()
   // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
@@ -3134,7 +3188,17 @@ onBeforeUnmount(() => {
             :children-pages="childrenPages"
             :children-loading="partialStore.childrenLoading.value"
             :children-errors="partialStore.childrenErrors.value"
+            :search-hits="lazyTreeSearch.hits.value"
+            :search-loading="lazyTreeSearch.loading.value || lazyTreeSearch.selectionLoading.value"
+            :search-error="lazyTreeSearch.error.value || lazyTreeSearch.selectionError.value"
             @select-node="handleTreeSelectNode"
+            @search-query-change="lazyTreeSearchQuery = $event"
+            @select-search-hit="handleTreeSearchHit"
+            @retry-search="
+              lazyTreeSearch.selectionError.value
+                ? retryTreeSearchSelection()
+                : lazyTreeSearch.retry()
+            "
             @load-children="partialStore.loadChildren"
             @load-next-children-page="partialStore.loadNextChildrenPage"
             @toggle-sync-selection="toggleSelectionSync"
@@ -3371,8 +3435,27 @@ onBeforeUnmount(() => {
 
         <template #right>
           <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
+            <div
+              v-if="activeRightTab === 'properties' && selectedNodeLoading"
+              class="selection-scope-status"
+              role="status"
+              aria-live="polite"
+            >
+              {{ t('models.selectedNodeLoading') }}
+            </div>
+            <div
+              v-else-if="activeRightTab === 'properties' && selectedNodeError"
+              class="selection-scope-status selection-scope-status--error"
+              role="status"
+              aria-live="polite"
+            >
+              <span>{{ selectedNodeError }}</span>
+              <button type="button" class="btn btn--secondary" @click="retrySelectedNode">
+                {{ t('common.retry') }}
+              </button>
+            </div>
             <ModelPropertiesPanel
-              v-if="activeRightTab === 'properties' && canShowPropertiesTab"
+              v-else-if="activeRightTab === 'properties' && canShowPropertiesTab"
               :active-notation-id="activeNotationId"
               :selected-node="selectedNode"
               :selected-link="selectedLink"
@@ -4046,6 +4129,20 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.selection-scope-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.selection-scope-status--error {
+  color: var(--danger);
+}
+
 .overlay-loading {
   position: fixed;
   inset: 0;

@@ -5,6 +5,7 @@ type ModelEditorRouteNavigationOptions = {
   diagramId: Ref<string>
   loadModel: () => Promise<void>
   applyRouteDiagramSelection: () => void
+  focusRouteDiagramInTree?: () => Promise<void> | void
   afterModelLoad?: () => void
 }
 
@@ -20,12 +21,14 @@ export function useModelEditorRouteNavigation(options: ModelEditorRouteNavigatio
         if (!modelId) return
         await options.loadModel()
         options.applyRouteDiagramSelection()
+        void options.focusRouteDiagramInTree?.()
         options.afterModelLoad?.()
         return
       }
 
       if (diagramId !== previousDiagramId) {
         options.applyRouteDiagramSelection()
+        void options.focusRouteDiagramInTree?.()
       }
     }
   )

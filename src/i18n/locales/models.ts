@@ -268,6 +268,9 @@ export const modelsMessages = {
       treeLoading: 'Загрузка...',
       treeLoadError: 'Не удалось загрузить ветку',
       treeLoadMore: 'Загрузить ещё',
+      treeSearchLoading: 'Поиск...',
+      treeSearchError: 'Не удалось выполнить поиск',
+      selectedNodeLoading: 'Загрузка выбранного узла...',
       treeScopeIncompleteMutation:
         'Не удалось загрузить все элементы папки. Повторите изменение после восстановления соединения.',
       expandTreeNode: 'Развернуть «{name}»',
@@ -864,6 +867,9 @@ export const modelsMessages = {
       treeLoading: 'Loading...',
       treeLoadError: 'Could not load branch',
       treeLoadMore: 'Load more',
+      treeSearchLoading: 'Searching...',
+      treeSearchError: 'Could not search the model',
+      selectedNodeLoading: 'Loading selected node...',
       treeScopeIncompleteMutation:
         'Could not load every item in this folder. Retry the change after the connection recovers.',
       expandTreeNode: 'Expand “{name}”',

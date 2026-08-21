@@ -5,7 +5,7 @@ import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "@/utils/version"
 import { parseTypeAttrs } from "@/domain/attrs/notationAttrs"
-import type { DiagramLockStatusResponse, NodeTypeResponse } from "@/types/api"
+import type { DiagramLockStatusResponse, ModelSearchHit, NodeTypeResponse } from "@/types/api"
 import type {
   ChildrenPageState,
   EditorDiagram,
@@ -41,6 +41,9 @@ const props = defineProps<{
   childrenPages?: Map<string, ChildrenPageState>
   childrenLoading?: Set<string>
   childrenErrors?: Map<string, string>
+  searchHits?: ModelSearchHit[]
+  searchLoading?: boolean
+  searchError?: string | null
 }>()
 
 const diagramLockById = computed(() => {
@@ -83,6 +86,9 @@ const emit = defineEmits<{
   toggleSyncSelection: []
   loadChildren: [scope: TreeParentScope]
   loadNextChildrenPage: [scope: TreeParentScope]
+  searchQueryChange: [query: string]
+  selectSearchHit: [nodeId: string]
+  retrySearch: []
 }>()
 const { t } = useI18n()
 
@@ -445,12 +451,24 @@ type TreeStatusRow = {
   message?: string
 }
 
-type TreeRow = TreeNodeRow | TreeDiagramRow | TreeStatusRow
+type TreeSearchRow = {
+  kind: "search"
+  hit: ModelSearchHit
+}
+
+type TreeRow = TreeNodeRow | TreeDiagramRow | TreeStatusRow | TreeSearchRow
 
 const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   const rows: TreeRow[] = []
   const query = normalizedQuery.value
   const limit = query ? MAX_SEARCH_TREE_ROWS : Number.POSITIVE_INFINITY
+
+  if (query && props.searchHits !== undefined) {
+    for (const hit of props.searchHits.slice(0, limit)) {
+      rows.push({ kind: "search", hit })
+    }
+    return { rows, truncated: props.searchHits.length > limit }
+  }
 
   const pushRow = (row: TreeRow): boolean => {
     rows.push(row)
@@ -535,6 +553,12 @@ const expandToNode = (nodeId: string): void => {
   expandedNodes.value = next
 }
 
+const expandPath = (nodeIds: readonly string[]): void => {
+  const next = new Set(expandedNodes.value)
+  for (const id of nodeIds) next.add(id)
+  expandedNodes.value = next
+}
+
 const scrollToTreeIndex = async (index: number): Promise<void> => {
   if (index < 0) return
   await nextTick()
@@ -569,6 +593,7 @@ const focusDiagram = async (diagramId: string): Promise<void> => {
 
 watch(normalizedQuery, (query, prev) => {
   if (query) {
+    if (props.searchHits !== undefined) return
     const next = new Set(expandedNodes.value)
     for (const id of collectAncestorIds(matchingNodeIds.value)) {
       next.add(id)
@@ -591,7 +616,9 @@ watch(normalizedQuery, (query, prev) => {
   }
 })
 
-defineExpose({ expandToNode, focusNode, focusDiagram })
+watch(treeSearchQuery, query => emit("searchQueryChange", query))
+
+defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 </script>
 
 <template>
@@ -634,7 +661,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
       @drop.self.prevent="onTreeDrop($event, null)"
     >
       <EmptyState
-        v-if="visibleTreeRows.length === 0"
+        v-if="visibleTreeRows.length === 0 && !searchLoading && !searchError"
         variant="compact"
         icon="account_tree"
         :title="normalizedQuery ? t('models.noSearchResults') : t('models.noNodes')"
@@ -642,6 +669,20 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
       />
       <div v-if="searchResultsTruncated" class="tree__truncated">
         {{ t('models.searchResultsTruncated', { count: MAX_SEARCH_TREE_ROWS }) }}
+      </div>
+      <div v-if="normalizedQuery && searchLoading" data-tree-search-loading class="tree-search-status" role="status">
+        {{ t("models.treeSearchLoading") }}
+      </div>
+      <div
+        v-if="normalizedQuery && searchError"
+        data-tree-search-error
+        class="tree-search-status tree-search-status--error"
+        role="status"
+      >
+        <span>{{ t("models.treeSearchError") }}</span>
+        <button type="button" class="tree-status-row__action" @click="emit('retrySearch')">
+          {{ t("common.retry") }}
+        </button>
       </div>
       <div
         v-if="visibleTreeRows.length > 0"
@@ -839,6 +880,23 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
           </button>
           </div>
           <div
+            v-else-if="row.kind === 'search'"
+            class="tree-node"
+            :data-tree-search-hit-id="row.hit.id"
+          >
+            <div class="tree-node__row tree-node__row--flattened">
+              <span class="tree-node__toggle" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="tree-node__select"
+                @click="emit('selectSearchHit', row.hit.id)"
+              >
+                <UiIcon :name="DEFAULT_ENTITY_ICONS.node" class="tree-node__icon-symbol" />
+                <span class="tree-node__name">{{ row.hit.name || row.hit.id }}</span>
+              </button>
+            </div>
+          </div>
+          <div
             v-else
             class="tree-status-row"
             :style="{ '--tree-depth': String(row.depth) }"
@@ -960,6 +1018,19 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   font-size: 12px;
   color: var(--text-muted);
   background: var(--surface-muted);
+}
+
+.tree-search-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tree-search-status--error {
+  color: var(--danger);
 }
 
 .tree-status-row {

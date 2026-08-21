@@ -184,6 +184,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         modelDirty: () => options.modelDirty.value,
         acceptModelMetadata: acceptRemoteModelMetadata,
         store: options.granularSync.store,
+        defaultsCatalog: () => options.state.value,
         diagrams: () => options.state.value.diagrams,
         openDiagramId: () => options.openDiagramId?.value,
         replaceDiagrams: diagrams => {

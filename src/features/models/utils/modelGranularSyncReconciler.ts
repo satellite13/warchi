@@ -4,6 +4,7 @@ import type { ModelData } from '@/types/entities'
 import type { EditorDiagram, ModelPartialRequestGuard, TreeParentScope } from '../types'
 import { toEditorDiagram, toEditorLink, toEditorNode } from '../composables/modelEditorMappers'
 import { ModelPartialStore } from './modelPartialStore'
+import type { EditorDefaultsCatalog } from './syncDefaultsOnLoad'
 import {
   reduceModelSyncGranularEvent,
   type GranularSyncEventPayload,
@@ -34,6 +35,7 @@ type ReconcilerOptions = {
   replaceModel: (model: ModelData) => void
   modelDirty: () => boolean
   store: ModelPartialStore
+  defaultsCatalog: () => EditorDefaultsCatalog
   diagrams: () => EditorDiagram[]
   openDiagramId?: () => string | null | undefined
   replaceDiagrams: (rows: EditorDiagram[]) => void
@@ -271,7 +273,7 @@ export function createModelGranularSyncReconciler(
       }
       if (options.store.remoteDeletedNodeIds.has(event.id)) return
       options.store.mergeNodes(
-        [toEditorNode(result.data)],
+        [toEditorNode(result.data, options.defaultsCatalog())],
         { kind: 'partial' },
         request.guard
       )
@@ -299,7 +301,7 @@ export function createModelGranularSyncReconciler(
       }
       if (options.store.remoteDeletedLinkIds.has(event.id)) return
       options.store.mergeLinks(
-        [toEditorLink(result.data)],
+        [toEditorLink(result.data, options.defaultsCatalog())],
         { kind: 'partial' },
         request.guard
       )
@@ -326,7 +328,7 @@ export function createModelGranularSyncReconciler(
       }
       if (wasMaterialized) {
         options.store.mergeNodes(
-          [toEditorNode(result.data)],
+          [toEditorNode(result.data, options.defaultsCatalog())],
           { kind: 'partial' },
           request.guard
         )
@@ -361,7 +363,7 @@ export function createModelGranularSyncReconciler(
         return
       }
       options.store.mergeLinks(
-        [toEditorLink(result.data)],
+        [toEditorLink(result.data, options.defaultsCatalog())],
         { kind: 'partial' },
         request.guard
       )

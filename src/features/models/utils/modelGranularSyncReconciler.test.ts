@@ -144,6 +144,7 @@ function harness(options: {
     },
     modelDirty: () => false,
     store,
+    defaultsCatalog: () => state,
     diagrams: () => state.diagrams,
     openDiagramId: () => options.openDiagramId ?? null,
     replaceDiagrams: rows => {
@@ -218,6 +219,94 @@ describe('modelGranularSyncReconciler', () => {
     expect(h.fetchers.fetchNode).toHaveBeenCalledWith('loaded', expect.any(AbortSignal))
     expect(h.store.nodeById.get('loaded')?.name).toBe('remote')
     expect(h.store.nodeById.has('unloaded')).toBe(false)
+  })
+
+  it('applies catalog defaults when materialized node and link point updates arrive', async () => {
+    const h = harness({
+      nodes: [node('node-1')],
+      links: [link('link-1')],
+      fetchers: {
+        fetchNode: vi.fn(async id =>
+          success(
+            node(id, {
+              attrs: JSON.stringify({
+                notationComponents: { 'notation-1': { componentId: 'component-1' } },
+              }),
+            })
+          )
+        ),
+        fetchLink: vi.fn(async id =>
+          success(
+            link(id, {
+              attrs: JSON.stringify({
+                notationRelations: { 'notation-1': { relationId: 'relation-1' } },
+              }),
+            })
+          )
+        ),
+      },
+    })
+    h.state.nodeTypes = [
+      {
+        id: 'node-type-1',
+        name: 'Node type',
+        ownerId: 'owner-1',
+        attrs: JSON.stringify({
+          customProperties: [{ id: 'tier', name: 'tier', type: 'string', defaultValue: 'app' }],
+        }),
+      },
+    ]
+    h.state.linkTypes = [
+      {
+        id: 'link-type-1',
+        name: 'Link type',
+        ownerId: 'owner-1',
+        attrs: JSON.stringify({
+          customProperties: [{ id: 'code', name: 'code', type: 'string', defaultValue: 'L1' }],
+        }),
+      },
+    ]
+    h.state.components = [
+      {
+        id: 'component-1',
+        name: 'Component',
+        version: '1.0.0',
+        notationId: 'notation-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'node-type-1',
+        attrs: JSON.stringify({
+          customProperties: [{ id: 'status', name: 'status', type: 'string', defaultValue: 'draft' }],
+        }),
+      },
+    ]
+    h.state.relations = [
+      {
+        id: 'relation-1',
+        name: 'Relation',
+        version: '1.0.0',
+        notationId: 'notation-1',
+        ownerId: 'owner-1',
+        linkTypeId: 'link-type-1',
+        attrs: JSON.stringify({
+          customProperties: [{ id: 'weight', name: 'weight', type: 'number', defaultValue: 1 }],
+        }),
+      },
+    ]
+
+    h.reconciler.enqueue([
+      { type: 'node_updated', entity: 'node', id: 'node-1' },
+      { type: 'link_updated', entity: 'link', id: 'link-1' },
+    ])
+    await h.reconciler.flush()
+
+    expect(h.store.nodeById.get('node-1')?.parsedAttrs.typeProperties).toEqual({ tier: 'app' })
+    expect(
+      h.store.nodeById.get('node-1')?.parsedAttrs.componentProperties['notation-1']?.['component-1']
+    ).toEqual({ status: 'draft' })
+    expect(h.store.linkById.get('link-1')?.parsedAttrs.typeProperties).toEqual({ code: 'L1' })
+    expect(
+      h.store.linkById.get('link-1')?.parsedAttrs.relationProperties['notation-1']?.['relation-1']
+    ).toEqual({ weight: 1 })
   })
 
   it('keeps dirty, new, and locally deleted node/link rows over remote updates', async () => {
@@ -543,6 +632,7 @@ describe('modelGranularSyncReconciler', () => {
       },
       modelDirty: () => false,
       store: h.store,
+      defaultsCatalog: () => h.state,
       diagrams: () => h.state.diagrams,
       replaceDiagrams: rows => {
         h.state.diagrams = rows

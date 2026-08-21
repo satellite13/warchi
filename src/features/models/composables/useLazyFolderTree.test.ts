@@ -153,6 +153,34 @@ describe('useLazyFolderTree', () => {
     expect(tree.visibleRows.value.map(row => row.node.id)).toEqual(['folder-a', 'folder-b'])
   })
 
+  it('caches a successfully loaded empty child scope across repeated expands', async () => {
+    vi.mocked(fetchNodeChildren)
+      .mockResolvedValueOnce({
+        success: true,
+        data: page([folder('empty-folder', null, true)]),
+      })
+      .mockResolvedValue({
+        success: true,
+        data: page([]),
+      })
+    const tree = useLazyFolderTree()
+    tree.setModel('model-1')
+    await tree.loadRoot()
+
+    await tree.toggleFolder('empty-folder')
+    await tree.toggleFolder('empty-folder')
+    await tree.toggleFolder('empty-folder')
+
+    expect(fetchNodeChildren).toHaveBeenCalledTimes(2)
+    expect(tree.scopes.value.get('node:empty-folder')).toMatchObject({
+      rows: [],
+      nextPage: 1,
+      hasMore: false,
+      error: null,
+      expanded: true,
+    })
+  })
+
   it('retries a failed next page without discarding earlier folders', async () => {
     vi.mocked(fetchNodeChildren)
       .mockResolvedValueOnce({

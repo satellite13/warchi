@@ -169,7 +169,7 @@ export function useLazyFolderTree() {
     const current = scopes.value.get(key) ?? emptyScope()
     const expanded = !current.expanded
     publishScope(key, { ...current, expanded })
-    if (expanded && current.rows.length === 0) {
+    if (expanded && current.nextPage === 0) {
       await loadScope({ kind: 'node', nodeId }, 0, true)
     }
   }

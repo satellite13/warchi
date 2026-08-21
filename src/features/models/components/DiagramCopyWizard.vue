@@ -293,13 +293,19 @@ watch(wizard.targetModelId, modelId => {
           <div v-if="folderScopeState({ kind: 'root' })?.loading" class="diagram-copy__hint">
             {{ t('models.diagramCopy.loadingFolders') }}
           </div>
-          <div v-else-if="folderScopeState({ kind: 'root' })?.error" class="diagram-copy__folder-status">
+          <div v-if="folderScopeState({ kind: 'root' })?.error" class="diagram-copy__folder-status">
             <span class="diagram-copy__error">{{ folderScopeState({ kind: 'root' })?.error }}</span>
             <button type="button" class="btn btn--secondary" @click="folderTree.retry({ kind: 'root' })">
               {{ t('common.retry') }}
             </button>
           </div>
-          <template v-else>
+          <template
+            v-if="
+              (folderScopeState({ kind: 'root' })?.nextPage ?? 0) > 0 ||
+              (!folderScopeState({ kind: 'root' })?.loading &&
+                !folderScopeState({ kind: 'root' })?.error)
+            "
+          >
             <div
               v-for="row in folderTree.visibleRows.value"
               :key="row.node.id"
@@ -370,7 +376,10 @@ watch(wizard.targetModelId, modelId => {
               {{ t('models.diagramCopy.noFolders') }}
             </p>
             <button
-              v-if="folderScopeState({ kind: 'root' })?.hasMore"
+              v-if="
+                folderScopeState({ kind: 'root' })?.hasMore &&
+                !folderScopeState({ kind: 'root' })?.error
+              "
               type="button"
               class="btn btn--secondary"
               @click="folderTree.loadMore({ kind: 'root' })"

@@ -1,8 +1,13 @@
 import { mount } from '@vue/test-utils'
 import { computed, nextTick, ref } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NodeResponse } from '@/types/api'
 import DiagramCopyWizard from './DiagramCopyWizard.vue'
+
+const folderTestState = vi.hoisted(() => ({
+  rootError: null as string | null,
+  rootFailedPage: null as number | null,
+}))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -62,8 +67,8 @@ vi.mock('../composables/useLazyFolderTree', () => ({
             nextPage: 1,
             hasMore: false,
             loading: false,
-            error: null,
-            failedPage: null,
+            error: folderTestState.rootError,
+            failedPage: folderTestState.rootFailedPage,
             expanded: true,
           },
         ],
@@ -96,6 +101,11 @@ const modalStub = {
 }
 
 describe('DiagramCopyWizard folder picker', () => {
+  beforeEach(() => {
+    folderTestState.rootError = null
+    folderTestState.rootFailedPage = null
+  })
+
   it('renders an accessible hierarchical folder choice', async () => {
     const wrapper = mount(DiagramCopyWizard, {
       props: {
@@ -117,5 +127,28 @@ describe('DiagramCopyWizard folder picker', () => {
     )
     expect(wrapper.get('.diagram-copy__folder-toggle').attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('select').exists()).toBe(false)
+  })
+
+  it('keeps loaded root folders visible when the next root page fails', async () => {
+    folderTestState.rootError = 'Next root page failed'
+    folderTestState.rootFailedPage = 1
+    const wrapper = mount(DiagramCopyWizard, {
+      props: {
+        open: true,
+        sourceModelId: 'source-model',
+        sourceDiagramId: 'source-diagram',
+      },
+      global: {
+        stubs: {
+          BaseModal: modalStub,
+          SearchableSelect: true,
+        },
+      },
+    })
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Folder A')
+    expect(wrapper.text()).toContain('Next root page failed')
+    expect(wrapper.text()).toContain('common.retry')
   })
 })

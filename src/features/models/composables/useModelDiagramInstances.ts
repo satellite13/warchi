@@ -28,6 +28,18 @@ type DirectoryPathResult = {
   createdDirectoryIds: string[]
 }
 
+type PendingCenteredDiagramDrop = {
+  modelNodeId: string
+  centerX: number
+  centerY: number
+  snapGridSize: number | null
+}
+
+export type ExistingNodeDiagramPlacement = {
+  centered: true
+  snapGridSize?: number | null
+}
+
 export type UseModelDiagramInstancesOptions = {
   state: Ref<ModelEditorState>
   activeDiagram: ComputedRef<EditorDiagram | null>
@@ -66,7 +78,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
   const showComponentChoiceModal = ref(false)
   const componentChoiceOptions = ref<{ id: string; name: string }[]>([])
   const componentChoiceNodeId = ref<string | null>(null)
-  const pendingTreeNodeDiagramDrop = ref<{ modelNodeId: string; x: number; y: number } | null>(null)
+  const pendingTreeNodeDiagramDrop = ref<PendingCenteredDiagramDrop | null>(null)
   const noteClipboard = ref<DiagramNodeInstance[] | null>(null)
   const notePasteCount = ref(0)
 
@@ -208,7 +220,12 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     return false
   }
 
-  const addExistingNodeToDiagram = (modelNodeId: string, x: number, y: number): void => {
+  const addExistingNodeToDiagram = (
+    modelNodeId: string,
+    x: number,
+    y: number,
+    placement?: ExistingNodeDiagramPlacement,
+  ): void => {
     const diagram = options.activeDiagram.value
     if (!diagram) return
     const node = options.state.value.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
@@ -283,7 +300,14 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         id: item.id,
         name: item.name,
       }))
-      pendingTreeNodeDiagramDrop.value = { modelNodeId, x, y }
+      pendingTreeNodeDiagramDrop.value = placement
+        ? {
+            modelNodeId,
+            centerX: x,
+            centerY: y,
+            snapGridSize: placement.snapGridSize ?? null,
+          }
+        : null
       showComponentChoiceModal.value = true
       return
     }
@@ -303,7 +327,17 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     componentChoiceOptions.value = []
     pendingTreeNodeDiagramDrop.value = null
     if (pending && pending.modelNodeId === nodeId && node) {
-      placeExistingNodeInstance(node, pending.x, pending.y, componentId)
+      const diagramStyle = getComponentDiagramStyle(componentId)
+      const width = typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160
+      const height = typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56
+      const snap = (value: number): number =>
+        pending.snapGridSize ? Math.round(value / pending.snapGridSize) * pending.snapGridSize : value
+      placeExistingNodeInstance(
+        node,
+        snap(pending.centerX - width / 2),
+        snap(pending.centerY - height / 2),
+        componentId,
+      )
     } else if (node) {
       ensureNodeDefaultBinding(node, componentId)
     }

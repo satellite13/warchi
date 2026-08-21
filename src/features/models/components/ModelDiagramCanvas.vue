@@ -221,7 +221,12 @@ const emit = defineEmits<{
   createNodeFromComponent: [componentId: string, x: number, y: number]
   createNote: [x: number, y: number]
   createContainer: [x: number, y: number]
-  addExistingNode: [modelNodeId: string, x: number, y: number]
+  addExistingNode: [
+    modelNodeId: string,
+    x: number,
+    y: number,
+    placement?: { centered: true; snapGridSize?: number | null },
+  ]
   placeExistingModelLink: [modelLinkId: string]
   connectNodes: [
     sourceModelNodeId: string,
@@ -3231,6 +3236,27 @@ const resolveModelNodeDropSize = (modelNodeId: string): { width: number; height:
   }
 }
 
+const hasMultipleCompatibleComponents = (modelNodeId: string): boolean => {
+  const node = props.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
+  if (!node) return false
+  return (
+    resolveCompatibleNotationComponents({
+      node,
+      notationId: activeNotationId.value,
+      components: props.components,
+    }).length > 1
+  )
+}
+
+const resolveDropWorldCenter = (event: DragEvent): { x: number; y: number } | null => {
+  if (!renderer) return null
+  const client = clientPointForDrop(
+    { x: event.clientX, y: event.clientY },
+    lastDragOverClient
+  )
+  return renderer.screenToWorld(client.x, client.y)
+}
+
 const resolveDropSize = (event: DragEvent): { width: number; height: number } => {
   const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) {
@@ -3284,6 +3310,15 @@ const addExistingNodeAtViewportCenter = (modelNodeId: string): void => {
   }
   const snapTo = (value: number) =>
     snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  if (hasMultipleCompatibleComponents(modelNodeId)) {
+    const canvasCenter = getCanvasCenter()
+    const center = renderer.screenToWorld(canvasCenter.x, canvasCenter.y)
+    emit('addExistingNode', modelNodeId, center.x, center.y, {
+      centered: true,
+      snapGridSize: snapEnabled.value ? GRID_SIZE : null,
+    })
+    return
+  }
   const { x, y } = worldTopLeftCenteredOnScreenPoint(
     getCanvasCenter(),
     point => renderer!.screenToWorld(point.x, point.y),
@@ -3341,6 +3376,18 @@ const onDrop = (event: DragEvent) => {
   if (props.readOnly || props.navigationOnlyMode || !props.activeDiagram) return
   if (!isAllowedDropEvent(event)) return
   event.preventDefault()
+  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
+  if (modelNodeId && hasMultipleCompatibleComponents(modelNodeId)) {
+    const center = resolveDropWorldCenter(event)
+    lastDragOverClient = null
+    if (center) {
+      emit('addExistingNode', modelNodeId, center.x, center.y, {
+        centered: true,
+        snapGridSize: snapEnabled.value ? GRID_SIZE : null,
+      })
+    }
+    return
+  }
   const size = resolveDropSize(event)
   const { x, y } = normalizeDropCoordinates(event, size)
   lastDragOverClient = null
@@ -3363,7 +3410,6 @@ const onDrop = (event: DragEvent) => {
     return
   }
 
-  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) {
     emit('addExistingNode', modelNodeId, x, y)
     return

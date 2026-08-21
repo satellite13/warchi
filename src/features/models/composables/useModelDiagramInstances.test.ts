@@ -287,9 +287,11 @@ describe('useModelDiagramInstances', () => {
   })
 
   it('defers an existing-node placement until the selected component is finalized', () => {
-    const { diagram, instances } = createHarness()
+    const state = createState()
+    state.components[1]!.attrs = JSON.stringify({ diagramStyle: { width: 100, height: 40 } })
+    const { diagram, instances } = createHarness(state)
 
-    instances.addExistingNodeToDiagram('existing-node', 10, 20)
+    instances.addExistingNodeToDiagram('existing-node', 300, 200, { centered: true })
 
     expect(instances.showComponentChoiceModal.value).toBe(true)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
@@ -302,6 +304,12 @@ describe('useModelDiagramInstances', () => {
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
       'component-2',
     )
+    expect(diagram.value.parsedAttrs.instances.nodes[0]).toMatchObject({
+      x: 250,
+      y: 180,
+      width: 100,
+      height: 40,
+    })
   })
 
   it('uses the node default binding for later drops', () => {

@@ -421,7 +421,7 @@ git commit -m "Load model folder trees lazily."
 - [ ] Record opening/expand/diagram/sync network, heap, long tasks and lock p95.
 - [ ] Require no unscoped opening `/nodes`/`/links`, heap below 339 MiB,
   max long task <2s, lock p95 <1s.
-- [ ] Update design, help and changelogs.
+- [x] Update design, help and changelogs.
 
 ```bash
 ./gradlew build

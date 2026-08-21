@@ -148,6 +148,13 @@ const onNodeKeyboardRequest = (event: KeyboardEvent, nodeId: string): void => {
   emit('requestAddNode', nodeId)
 }
 
+const nodeDragAriaLabel = (nodeId: string, name: string): string => {
+  const eligibility = props.canDragNodeToDiagram(nodeId)
+  return eligibility.allowed
+    ? t('models.traceabilityAddNodeToDiagram', { name })
+    : t(eligibility.reason)
+}
+
 const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
   const link = row.link
   const nextNodeId = resolveNextNodeId(link)
@@ -218,14 +225,10 @@ const toggleRow = async (row: EditorGraphNeighbor): Promise<void> => {
                 'tb__drag-handle--disabled':
                   !canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed,
               }"
-              :title="canDragNodeToDiagram(resolveNextNodeId(row.link)).reason"
+              :title="t(canDragNodeToDiagram(resolveNextNodeId(row.link)).reason)"
               :draggable="canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed"
               :aria-disabled="!canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed"
-              :aria-label="
-                t('models.traceabilityAddNodeToDiagram', {
-                  name: nodeName(resolveNextNodeId(row.link), row),
-                })
-              "
+              :aria-label="nodeDragAriaLabel(resolveNextNodeId(row.link), nodeName(resolveNextNodeId(row.link), row))"
               :tabindex="canDragNodeToDiagram(resolveNextNodeId(row.link)).allowed ? 0 : -1"
               :data-testid="`trace-node-drag-${resolveNextNodeId(row.link)}`"
               role="button"

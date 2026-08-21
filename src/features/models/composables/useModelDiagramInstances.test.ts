@@ -208,6 +208,22 @@ describe('useModelDiagramInstances', () => {
     expect(markNodeDirty).toHaveBeenCalledWith('existing-node')
   })
 
+  it('uses a valid explicit notation binding before node type component matching', () => {
+    const { state, diagram, instances, markNodeDirty } = createHarness()
+    state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1'] = {
+      componentId: 'component-2',
+    }
+
+    instances.addExistingNodeToDiagram('existing-node', 15, 25)
+
+    expect(instances.showComponentChoiceModal.value).toBe(false)
+    expect(diagram.value.parsedAttrs.instances.nodes[0]).toMatchObject({
+      modelNodeId: 'existing-node',
+      attrs: { notationComponentId: 'component-2' },
+    })
+    expect(markNodeDirty).not.toHaveBeenCalled()
+  })
+
   it('creates a palette node and its diagram instance in one history command', async () => {
     const { state, diagram, instances, historyCommands, reconcileMaterializedRows } = createHarness()
 
@@ -288,26 +304,21 @@ describe('useModelDiagramInstances', () => {
     )
   })
 
-  it('asks again on second drop so two instances can use different visuals', () => {
+  it('uses the node default binding for later drops', () => {
     const { state, diagram, instances } = createHarness()
     state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1'] = {
       componentId: 'component-1',
     }
 
     instances.addExistingNodeToDiagram('existing-node', 10, 20)
-    expect(instances.showComponentChoiceModal.value).toBe(true)
-    instances.finalizeComponentChoiceForDiagram('component-1')
-
     instances.addExistingNodeToDiagram('existing-node', 40, 50)
-    expect(instances.showComponentChoiceModal.value).toBe(true)
-    instances.finalizeComponentChoiceForDiagram('component-2')
 
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(2)
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
       'component-1',
     )
     expect(diagram.value.parsedAttrs.instances.nodes[1]?.attrs?.notationComponentId).toBe(
-      'component-2',
+      'component-1',
     )
   })
 

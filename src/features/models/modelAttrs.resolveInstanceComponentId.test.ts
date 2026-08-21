@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hasEligibleNotationComponent,
   parseNodeAttrs,
+  resolveCompatibleNotationComponents,
   resolveInstanceComponentId,
   type DiagramNodeInstance,
 } from './modelAttrs'
@@ -90,5 +91,43 @@ describe('resolveInstanceComponentId', () => {
         components: [{ id: 'other-component', notationId: 'notation-1', nodeTypeId: 'type-1' }],
       }),
     ).toBe(false)
+  })
+
+  it('returns a valid binding before node type matches and returns no fallback for stale binding', () => {
+    const components = [
+      { id: 'bound-component', notationId: 'notation-1', nodeTypeId: 'type-2' },
+      { id: 'node-type-component', notationId: 'notation-1', nodeTypeId: 'type-1' },
+    ]
+    const boundNode = {
+      nodeTypeId: 'type-1',
+      parsedAttrs: parseNodeAttrs(
+        JSON.stringify({
+          notationComponents: { 'notation-1': { componentId: 'bound-component' } },
+        }),
+      ),
+    }
+    const staleNode = {
+      nodeTypeId: 'type-1',
+      parsedAttrs: parseNodeAttrs(
+        JSON.stringify({
+          notationComponents: { 'notation-1': { componentId: 'stale-component' } },
+        }),
+      ),
+    }
+
+    expect(
+      resolveCompatibleNotationComponents({
+        node: boundNode,
+        notationId: 'notation-1',
+        components,
+      }).map(component => component.id),
+    ).toEqual(['bound-component'])
+    expect(
+      resolveCompatibleNotationComponents({
+        node: staleNode,
+        notationId: 'notation-1',
+        components,
+      }),
+    ).toEqual([])
   })
 })

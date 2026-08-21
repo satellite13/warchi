@@ -53,7 +53,11 @@ import {
   getInteractiveBadgeIconIds,
 } from '@/config/interactiveBadgeIcons'
 import type { BoundaryAttach, DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
-import { parseBoundaryAttach, resolveInstanceComponentId } from '../modelAttrs'
+import {
+  parseBoundaryAttach,
+  resolveCompatibleNotationComponents,
+  resolveInstanceComponentId,
+} from '../modelAttrs'
 import {
   guestCenter,
   pickNearestOutlineHost,
@@ -3178,16 +3182,11 @@ const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
   const notationId = activeNotationId.value
   if (!notationId) return false
 
-  const existingComponentId = node.parsedAttrs.notationComponents[notationId]?.componentId
-  if (existingComponentId) {
-    return props.components.some(
-      component => component.id === existingComponentId && component.notationId === notationId
-    )
-  }
-
-  return props.components.some(
-    component => component.notationId === notationId && component.nodeTypeId === node.nodeTypeId
-  )
+  return resolveCompatibleNotationComponents({
+    node,
+    notationId,
+    components: props.components,
+  }).length > 0
 }
 
 const hasDragType = (event: DragEvent, type: string): boolean =>
@@ -3220,8 +3219,11 @@ const resolveModelNodeDropSize = (modelNodeId: string): { width: number; height:
   }
 
   const notationId = activeNotationId.value
-  const binding = notationId ? node.parsedAttrs.notationComponents[notationId] : undefined
-  const component = binding ? props.components.find(item => item.id === binding.componentId) : undefined
+  const component = resolveCompatibleNotationComponents({
+    node,
+    notationId,
+    components: props.components,
+  })[0]
   const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
   return {
     width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,

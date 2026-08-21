@@ -219,6 +219,13 @@ const requestNodeAddToDiagram = (nodeId: string): void => {
   emit('add-node-to-diagram', nodeId)
 }
 
+const nodeDragAriaLabel = (nodeId: string, nodeName: string): string => {
+  const eligibility = props.canDragNodeToDiagram(nodeId)
+  return eligibility.allowed
+    ? t('models.traceabilityAddNodeToDiagram', { name: nodeName })
+    : t(eligibility.reason)
+}
+
 const onNodeKeyboardRequest = (event: KeyboardEvent, nodeId: string): void => {
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
@@ -528,10 +535,10 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 <span
                   class="tp-tree__drag-handle"
                   :class="{ 'tp-tree__drag-handle--disabled': !canDragNodeToDiagram(rootNode.id).allowed }"
-                  :title="canDragNodeToDiagram(rootNode.id).reason"
+                  :title="t(canDragNodeToDiagram(rootNode.id).reason)"
                   :draggable="canDragNodeToDiagram(rootNode.id).allowed"
                   :aria-disabled="!canDragNodeToDiagram(rootNode.id).allowed"
-                  :aria-label="t('models.traceabilityAddNodeToDiagram', { name: rootNode.name })"
+                  :aria-label="nodeDragAriaLabel(rootNode.id, rootNode.name)"
                   :tabindex="canDragNodeToDiagram(rootNode.id).allowed ? 0 : -1"
                   data-testid="trace-node-drag-root"
                   role="button"

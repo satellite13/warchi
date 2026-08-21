@@ -3,7 +3,11 @@ import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/custom
 import { applyDefaultsToEditorNode } from '../utils/syncDefaultsOnLoad'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
-import { createId, parseNodeAttrs, resolveComponentByNodeType } from '../modelAttrs'
+import {
+  createId,
+  parseNodeAttrs,
+  resolveCompatibleNotationComponents,
+} from '../modelAttrs'
 import type { DiagramNodeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorNode, ModelEditorState, TreeParentScope } from '../types'
 import {
@@ -182,11 +186,11 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     if (!notationId) return false
     if (node.parsedAttrs.notationComponents[notationId]?.componentId) return true
 
-    const matchingComponents = resolveComponentByNodeType(
-      options.state.value.components,
+    const matchingComponents = resolveCompatibleNotationComponents({
+      node,
       notationId,
-      node.nodeTypeId,
-    )
+      components: options.state.value.components,
+    })
     if (matchingComponents.length === 1) {
       bindNodeComponent(node, matchingComponents[0]!.id)
       return true
@@ -264,11 +268,11 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       options.setUiError(options.t('models.noMatchingComponent'))
       return
     }
-    const matchingComponents = resolveComponentByNodeType(
-      options.state.value.components,
+    const matchingComponents = resolveCompatibleNotationComponents({
+      node,
       notationId,
-      node.nodeTypeId,
-    )
+      components: options.state.value.components,
+    })
     if (matchingComponents.length === 0) {
       options.setUiError(options.t('models.noMatchingComponent'))
       return

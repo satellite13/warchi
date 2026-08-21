@@ -266,6 +266,34 @@ export const resolveComponentByNodeType = (
 ): ComponentResponse[] =>
   components.filter(item => item.notationId === notationId && item.nodeTypeId === nodeTypeId)
 
+/**
+ * Resolves components with the same precedence as notation eligibility:
+ * a present node binding is authoritative, while an absent binding falls back
+ * to components matching the node type.
+ */
+export const resolveCompatibleNotationComponents = <
+  T extends Pick<ComponentResponse, 'id' | 'notationId' | 'nodeTypeId'>,
+>(input: {
+  node: { nodeTypeId: string; parsedAttrs: ModelNodeAttrs }
+  notationId: string | null | undefined
+  components: readonly T[]
+}): T[] => {
+  const notationId = input.notationId
+  if (!notationId) return []
+
+  const componentId = input.node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (componentId) {
+    return input.components.filter(
+      component => component.id === componentId && component.notationId === notationId
+    )
+  }
+
+  return input.components.filter(
+    component =>
+      component.notationId === notationId && component.nodeTypeId === input.node.nodeTypeId
+  )
+}
+
 export type ResolveInstanceComponentIdInput = {
   instance?: DiagramNodeInstance | null
   node?: { parsedAttrs: ModelNodeAttrs } | null

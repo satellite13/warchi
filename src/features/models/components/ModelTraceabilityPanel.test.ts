@@ -44,7 +44,10 @@ const lazyState = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({
+    t: (key: string) =>
+      key === 'models.traceabilityDragDisabledNoActiveDiagram' ? 'No active diagram' : key,
+  }),
 }))
 
 vi.mock('../composables/useLazyTraceability', async importOriginal => {
@@ -232,7 +235,7 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     expect(branchDrag.dataTransfer.effectAllowed).toBe('copy')
   })
 
-  it('renders a disabled root drag handle with its eligibility reason', () => {
+  it('translates the disabled root drag reason for title and aria label', () => {
     canDragNodeToDiagram.mockReturnValue({
       allowed: false,
       reason: 'models.traceabilityDragDisabledNoActiveDiagram',
@@ -240,7 +243,8 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     const wrapper = mountPanel()
 
     const handle = wrapper.get('[data-testid="trace-node-drag-root"]')
-    expect(handle.attributes('title')).toBe('models.traceabilityDragDisabledNoActiveDiagram')
+    expect(handle.attributes('title')).toBe('No active diagram')
+    expect(handle.attributes('aria-label')).toBe('No active diagram')
     expect(handle.attributes('draggable')).toBe('false')
   })
 
@@ -300,6 +304,30 @@ describe('ModelTraceabilityPanel lazy branches', () => {
 
     await handle.trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('add-node-to-diagram')).toEqual([['child']])
+  })
+
+  it('translates the disabled branch drag reason for title and aria label', async () => {
+    canDragNodeToDiagram.mockReturnValue({
+      allowed: false,
+      reason: 'models.traceabilityDragDisabledNoActiveDiagram',
+    })
+    lazyState.branchStates.set('root', {
+      rows: [neighbor('link-1', 'root', 'child', 'child')],
+      loading: false,
+      error: null,
+      failedPage: null,
+      nextPage: null,
+      totalElements: 1,
+      token: 1,
+      generation: 1,
+    })
+    const wrapper = mountPanel()
+    await nextTick()
+    await wrapper.get('.tb__link').trigger('click')
+
+    const handle = wrapper.get('[data-testid="trace-node-drag-child"]')
+    expect(handle.attributes('title')).toBe('No active diagram')
+    expect(handle.attributes('aria-label')).toBe('No active diagram')
   })
 
   it('loads selected root and renders diagram references from the scoped endpoint state', async () => {

@@ -17,7 +17,7 @@ import {
   resolveRelationByLinkType,
   type DiagramAttrs,
 } from './modelAttrs'
-import type { EditorLink } from './types'
+import type { EditorLink, ModelPartialRequestGuard } from './types'
 import {
   useModelBatchConflictUi,
   useDiagramScope,
@@ -101,7 +101,7 @@ import { downloadModelPackage } from './composables/useModelPackage'
 import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
 import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
 import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
-import type { RelationResponse } from '@/types/api'
+import type { LinkResponse, NodeResponse, RelationResponse } from '@/types/api'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
 import {
@@ -875,12 +875,18 @@ const canShowPropertiesTab = computed(() => true)
 const traceabilityNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
-const traceabilityLinks = computed(() =>
-  (detachedModelLinks.loadedModelId.value === state.value.modelId
-    ? detachedConsumerLinks.value
-    : []
-  ).filter(link => !link._isDeleted && !isUntypedLinkTypeId(link.linkTypeId))
+const traceabilityLinkTypes = computed(() =>
+  state.value.linkTypes.filter(linkType => !isUntypedLinkTypeId(linkType.id))
 )
+const beginTraceabilityRequest = (requestKey: string): ModelPartialRequestGuard =>
+  partialStore.store.beginRequest(requestKey)
+const isTraceabilityRequestCurrent = (guard: ModelPartialRequestGuard): boolean =>
+  partialStore.store.isRequestCurrent(guard)
+const mergeTraceabilityEntities = (
+  nodes: readonly NodeResponse[],
+  links: readonly LinkResponse[],
+  guard: ModelPartialRequestGuard
+): boolean => partialStore.mergePartialEntities(nodes, links, guard)
 const treeVisibleNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
@@ -937,17 +943,9 @@ watch([rightPanelTabs, activeRightTab], () => {
     activeRightTab.value = rightPanelTabs.value[0]?.id ?? 'properties'
   }
 })
-watch(activeRightTab, tab => {
-  if (tab === 'traceability') {
-    void detachedModelLinks.load()
-  }
-})
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
   detachedModelLinks.reset()
-  if (activeRightTab.value === 'traceability') {
-    void whenCatalogReady().then(() => detachedModelLinks.load())
-  }
 })
 
 const {
@@ -3589,76 +3587,23 @@ onBeforeUnmount(() => {
               :on-open-node-document="handleOpenNodeDoc"
             />
             <ModelTraceabilityPanel
-              v-if="
-                activeRightTab === 'traceability' &&
-                canShowTraceabilityTab &&
-                selectedNode &&
-                !detachedModelLinks.loading.value &&
-                !detachedModelLinks.error.value &&
-                !detachedModelLinks.stale.value
-              "
+              v-if="activeRightTab === 'traceability' && canShowTraceabilityTab && selectedNode"
+              :model-id="state.modelId"
               :selected-node="selectedNode"
               :nodes="traceabilityNodes"
-              :links="traceabilityLinks"
-              :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
-              :link-types="state.linkTypes"
+              :link-types="traceabilityLinkTypes"
               :active-diagram="activeDiagram"
               :active-notation-id="activeNotationId"
               :is-diagram-read-only="isDiagramReadOnly"
               :relations="state.relations"
               :can-connect="canConnect"
               :is-diagram-only-edge-model-link-id="isDiagramOnlyEdgeModelLinkId"
+              :begin-request="beginTraceabilityRequest"
+              :is-request-current="isTraceabilityRequestCurrent"
+              :merge-partial-entities="mergeTraceabilityEntities"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />
-            <div
-              v-else-if="
-                activeRightTab === 'traceability' &&
-                canShowTraceabilityTab &&
-                detachedModelLinks.stale.value
-              "
-              class="background-load-warnings__item"
-              role="status"
-            >
-              <span>{{ t('models.detachedLinksStale') }}</span>
-              <button
-                type="button"
-                class="btn btn--secondary"
-                @click="detachedModelLinks.load()"
-              >
-                {{ t('models.detachedLinksRefresh') }}
-              </button>
-            </div>
-            <div
-              v-else-if="
-                activeRightTab === 'traceability' &&
-                canShowTraceabilityTab &&
-                detachedModelLinks.loading.value
-              "
-              class="background-load-warnings__item"
-              role="status"
-            >
-              <UiIcon name="sync" class="spin" />
-              <span>{{ t('common.loading') }}</span>
-            </div>
-            <div
-              v-else-if="
-                activeRightTab === 'traceability' &&
-                canShowTraceabilityTab &&
-                detachedModelLinks.error.value
-              "
-              class="background-load-warnings__item"
-              role="status"
-            >
-              <span>{{ detachedModelLinks.error.value }}</span>
-              <button
-                type="button"
-                class="btn btn--secondary"
-                @click="detachedModelLinks.refresh()"
-              >
-                {{ t('common.retry') }}
-              </button>
-            </div>
             <NodeStylePanel
               v-if="activeRightTab === 'style' && canShowStyleTab"
               :selected-element-id="selectedCanvasElementId"

@@ -1,16 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { GraphNeighborResponse } from '@/types/api'
 import type { EditorLink, EditorNode } from '../types'
+import type {
+  LazyTraceabilityBranchState,
+  TraceabilityBranchQuery,
+  TraceabilityDirection,
+} from '../composables/useLazyTraceability'
+import { toEditorLink } from '../composables/modelEditorMappers'
 import type { TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
 
 const props = defineProps<{
   nodeId: string
   path: string[]
   nodeById: Map<string, EditorNode>
-  getLinksForNode: (nodeId: string) => EditorLink[]
+  direction: TraceabilityDirection
+  linkTypeId: string | null
+  getBranchState: (query: TraceabilityBranchQuery) => LazyTraceabilityBranchState
+  loadBranch: (query: TraceabilityBranchQuery, currentPath: ReadonlySet<string>) => Promise<boolean>
+  loadMore: (query: TraceabilityBranchQuery) => Promise<boolean>
+  retry: (query: TraceabilityBranchQuery) => Promise<boolean>
   getLinkTypeName: (linkTypeId: string) => string
-  resolveNextNodeId: (link: EditorLink) => string
   isLinkExpanded: (nodeId: string, linkId: string) => boolean
   toggleLink: (nodeId: string, linkId: string) => void
   getLinkStatus: (link: EditorLink) => TraceabilityLinkStatus
@@ -22,24 +33,37 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const links = computed(() => props.getLinksForNode(props.nodeId))
+const query = computed<TraceabilityBranchQuery>(() => ({
+  nodeId: props.nodeId,
+  direction: props.direction,
+  linkTypeId: props.linkTypeId,
+}))
+const branchState = computed(() => props.getBranchState(query.value))
+const rows = computed(() =>
+  branchState.value.rows.map(row => ({ ...row, link: toEditorLink(row.link) }))
+)
 const statusByLinkId = computed(() => {
   const map = new Map<string, TraceabilityLinkStatus>()
-  for (const link of links.value) {
-    map.set(link.id, props.getLinkStatus(link))
+  for (const row of rows.value) {
+    map.set(row.link.id, props.getLinkStatus(row.link))
   }
   return map
 })
 
-const linkLabel = (link: EditorLink) => {
-  const source = props.nodeById.get(link.sourceId)?.name ?? link.sourceId
-  const target = props.nodeById.get(link.targetId)?.name ?? link.targetId
+const nodeName = (nodeId: string, row: GraphNeighborResponse): string =>
+  props.nodeById.get(nodeId)?.name ?? (row.node.id === nodeId ? row.node.name : nodeId)
+
+const linkLabel = (row: GraphNeighborResponse): string => {
+  const source = nodeName(row.link.sourceId, row)
+  const target = nodeName(row.link.targetId, row)
   return `${source} → ${target}`
 }
 
 const linkTypeLabel = (link: EditorLink): string => props.getLinkTypeName(link.linkTypeId)
 
 const isCycle = (nodeId: string) => props.path.includes(nodeId)
+const resolveNextNodeId = (link: EditorLink): string =>
+  props.direction === 'outgoing' ? link.targetId : link.sourceId
 
 const getStatus = (link: EditorLink): TraceabilityLinkStatus =>
   statusByLinkId.value.get(link.id) ?? props.getLinkStatus(link)
@@ -90,54 +114,75 @@ const onLinkDragStart = (event: DragEvent, link: EditorLink) => {
     event.dataTransfer.effectAllowed = 'copy'
   }
 }
+
+const toggleRow = async (row: GraphNeighborResponse): Promise<void> => {
+  const link = toEditorLink(row.link)
+  const nextNodeId = resolveNextNodeId(link)
+  const expanded = props.isLinkExpanded(props.nodeId, link.id)
+  props.toggleLink(props.nodeId, link.id)
+  if (expanded || isCycle(nextNodeId)) return
+  await props.loadBranch(
+    {
+      nodeId: nextNodeId,
+      direction: props.direction,
+      linkTypeId: props.linkTypeId,
+    },
+    new Set(props.path)
+  )
+}
 </script>
 
 <template>
-  <div v-if="links.length > 0" class="tb">
-    <div v-for="link in links" :key="link.id" class="tb__item">
-      <button type="button" class="tb__link" :class="linkClasses(link)" @click="toggleLink(nodeId, link.id)">
+  <div class="tb">
+    <div v-for="row in rows" :key="row.link.id" class="tb__item">
+      <button type="button" class="tb__link" :class="linkClasses(row.link)" @click="toggleRow(row)">
         <UiIcon
           class="tb__expand"
-          :name="isLinkExpanded(nodeId, link.id) ? 'expand_more' : 'chevron_right'"
+          :name="isLinkExpanded(nodeId, row.link.id) ? 'expand_more' : 'chevron_right'"
         />
         <UiIcon name="route" class="tb__link-icon" />
-        <span class="tb__link-text">{{ linkLabel(link) }}</span>
+        <span class="tb__link-text">{{ linkLabel(row) }}</span>
         <span
           class="tb__drag-handle"
-          :class="{ 'tb__drag-handle--disabled': !getStatus(link).draggable }"
-          :title="dragHandleTitle(link)"
-          :draggable="getStatus(link).draggable"
-          @dragstart.stop="onLinkDragStart($event, link)"
+          :class="{ 'tb__drag-handle--disabled': !getStatus(row.link).draggable }"
+          :title="dragHandleTitle(row.link)"
+          :draggable="getStatus(row.link).draggable"
+          @dragstart.stop="onLinkDragStart($event, row.link)"
         >
           <UiIcon name="drag_indicator" class="tb__drag-handle-icon" />
         </span>
-        <span class="tb__link-type">{{ linkTypeLabel(link) }}</span>
+        <span class="tb__link-type">{{ linkTypeLabel(row.link) }}</span>
       </button>
 
-      <div v-if="isLinkExpanded(nodeId, link.id)" class="tb__children">
-        <template v-if="nodeById.get(resolveNextNodeId(link))">
+      <div v-if="isLinkExpanded(nodeId, row.link.id)" class="tb__children">
+        <template v-if="nodeById.get(resolveNextNodeId(row.link)) || row.node">
           <button
             type="button"
             class="tb__node"
-            :class="{ 'tb__node--cycle': isCycle(resolveNextNodeId(link)) }"
-            @click="emit('setRoot', resolveNextNodeId(link))"
+            :class="{ 'tb__node--cycle': isCycle(resolveNextNodeId(row.link)) }"
+            :disabled="isCycle(resolveNextNodeId(row.link))"
+            @click="emit('setRoot', resolveNextNodeId(row.link))"
           >
             <span class="tb__node-dot" />
             <span class="tb__node-name">
-              {{ nodeById.get(resolveNextNodeId(link))?.name }}
+              {{ nodeName(resolveNextNodeId(row.link), row) }}
             </span>
-            <span v-if="isCycle(resolveNextNodeId(link))" class="tb__node-cycle-badge">
+            <span v-if="isCycle(resolveNextNodeId(row.link))" class="tb__node-cycle-badge">
               ∞
             </span>
           </button>
           <ModelTraceBranch
-            v-if="!isCycle(resolveNextNodeId(link))"
-            :node-id="resolveNextNodeId(link)"
-            :path="[...path, resolveNextNodeId(link)]"
+            v-if="!isCycle(resolveNextNodeId(row.link))"
+            :node-id="resolveNextNodeId(row.link)"
+            :path="[...path, resolveNextNodeId(row.link)]"
             :node-by-id="nodeById"
-            :get-links-for-node="getLinksForNode"
+            :direction="direction"
+            :link-type-id="linkTypeId"
+            :get-branch-state="getBranchState"
+            :load-branch="loadBranch"
+            :load-more="loadMore"
+            :retry="retry"
             :get-link-type-name="getLinkTypeName"
-            :resolve-next-node-id="resolveNextNodeId"
             :is-link-expanded="isLinkExpanded"
             :toggle-link="toggleLink"
             :get-link-status="getLinkStatus"
@@ -146,6 +191,30 @@ const onLinkDragStart = (event: DragEvent, link: EditorLink) => {
         </template>
       </div>
     </div>
+    <div v-if="branchState.loading" class="tb__status" role="status" aria-live="polite">
+      <UiIcon name="sync" class="spin" />
+      <span>{{ t('models.traceabilityLoadingBranch') }}</span>
+    </div>
+    <div v-else-if="branchState.error" class="tb__status tb__status--error" role="alert">
+      <span>{{ branchState.error }}</span>
+      <button
+        type="button"
+        class="tb__status-action"
+        data-testid="trace-retry"
+        @click="retry(query)"
+      >
+        {{ t('common.retry') }}
+      </button>
+    </div>
+    <button
+      v-else-if="branchState.nextPage !== null && rows.length > 0"
+      type="button"
+      class="tb__status-action tb__status-action--more"
+      data-testid="trace-load-more"
+      @click="loadMore(query)"
+    >
+      {{ t('models.traceabilityLoadMore') }}
+    </button>
   </div>
 </template>
 
@@ -336,5 +405,33 @@ const onLinkDragStart = (event: DragEvent, link: EditorLink) => {
   font-size: 11px;
   color: var(--text-subtle);
   font-weight: 600;
+}
+
+.tb__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--text-subtle);
+}
+
+.tb__status--error {
+  color: var(--danger);
+}
+
+.tb__status-action {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.tb__status-action--more {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 8px;
 }
 </style>

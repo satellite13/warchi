@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LinkTypeResponse, RelationResponse } from '@/types/api'
-import type { EditorDiagram, EditorLink, EditorNode } from '../types'
-import { computeTraceabilityLinkStatus, type TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
+import type { LinkResponse, LinkTypeResponse, NodeResponse, RelationResponse } from '@/types/api'
+import {
+  useLazyTraceability,
+  type TraceabilityBranchQuery,
+  type TraceabilityDirection,
+} from '../composables/useLazyTraceability'
+import type { EditorDiagram, EditorLink, EditorNode, ModelPartialRequestGuard } from '../types'
+import {
+  computeTraceabilityLinkStatus,
+  type TraceabilityLinkStatus,
+} from '../utils/traceabilityLinkStatus'
 import ModelTraceBranch from './ModelTraceBranch.vue'
 
 type DirectionMode = 'down' | 'up'
 
 const props = defineProps<{
+  modelId: string
   selectedNode: EditorNode | null
   nodes: EditorNode[]
-  links: EditorLink[]
-  diagrams: EditorDiagram[]
   linkTypes: LinkTypeResponse[]
   activeDiagram: EditorDiagram | null
   activeNotationId: string | null
@@ -20,6 +27,13 @@ const props = defineProps<{
   relations: RelationResponse[]
   canConnect: (sourceModelNodeId: string, targetModelNodeId: string) => boolean
   isDiagramOnlyEdgeModelLinkId?: (modelLinkId: string) => boolean
+  beginRequest: (requestKey: string) => ModelPartialRequestGuard
+  isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
+  mergePartialEntities: (
+    nodes: readonly NodeResponse[],
+    links: readonly LinkResponse[],
+    guard: ModelPartialRequestGuard
+  ) => boolean
 }>()
 
 const emit = defineEmits<{
@@ -39,28 +53,16 @@ const expandedLinkKeys = ref<Set<string>>(new Set())
 const diagramsOpen = ref(true)
 const treeOpen = ref(true)
 const suppressNextSelectionReset = ref(false)
+const traceability = useLazyTraceability({
+  modelId: computed(() => props.modelId || null),
+  beginRequest: props.beginRequest,
+  isRequestCurrent: props.isRequestCurrent,
+  mergePartialEntities: props.mergePartialEntities,
+})
 
 const nodeById = computed(() => {
   const map = new Map<string, EditorNode>()
   for (const node of props.nodes) map.set(node.id, node)
-  return map
-})
-
-const linksBySourceId = computed(() => {
-  const map = new Map<string, EditorLink[]>()
-  for (const link of props.links) {
-    if (!map.has(link.sourceId)) map.set(link.sourceId, [])
-    map.get(link.sourceId)!.push(link)
-  }
-  return map
-})
-
-const linksByTargetId = computed(() => {
-  const map = new Map<string, EditorLink[]>()
-  for (const link of props.links) {
-    if (!map.has(link.targetId)) map.set(link.targetId, [])
-    map.get(link.targetId)!.push(link)
-  }
   return map
 })
 
@@ -75,16 +77,23 @@ const linkTypeNameById = computed(() => {
 const getLinkTypeName = (linkTypeId: string): string =>
   linkTypeNameById.value.get(linkTypeId) ?? t('models.traceabilityUnknownLinkType')
 
-const linkTypeOptions = computed(() => {
-  const usedTypeIds = new Set(props.links.map((link) => link.linkTypeId))
-  return Array.from(usedTypeIds)
-    .map((id) => ({ id, name: getLinkTypeName(id) }))
+const linkTypeOptions = computed(() =>
+  props.linkTypes
+    .map(linkType => ({ id: linkType.id, name: linkType.name }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-})
+)
 
-const matchesSelectedLinkType = (link: EditorLink): boolean =>
-  selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER ||
-  link.linkTypeId === selectedLinkTypeFilter.value
+const traceDirection = computed<TraceabilityDirection>(() =>
+  direction.value === 'down' ? 'outgoing' : 'incoming'
+)
+const selectedLinkTypeId = computed<string | null>(() =>
+  selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER ? null : selectedLinkTypeFilter.value
+)
+const branchQuery = (nodeId: string): TraceabilityBranchQuery => ({
+  nodeId,
+  direction: traceDirection.value,
+  linkTypeId: selectedLinkTypeId.value,
+})
 
 const rootNode = computed(() => {
   const rootId = rootNodeId.value
@@ -92,13 +101,7 @@ const rootNode = computed(() => {
   return nodeById.value.get(rootId) ?? null
 })
 
-const diagramsUsingRootNode = computed(() => {
-  const rootId = rootNodeId.value
-  if (!rootId) return []
-  return props.diagrams.filter((diagram) =>
-    diagram.parsedAttrs.instances.nodes.some((instance) => instance.modelNodeId === rootId),
-  )
-})
+const diagramsUsingRootNode = traceability.diagramReferences
 
 const canGoBack = computed(() => backStack.value.length > 0)
 const canGoForward = computed(() => forwardStack.value.length > 0)
@@ -115,21 +118,15 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-const outgoingCount = computed(() => {
+const rootBranchCount = computed(() => {
   const rootId = rootNodeId.value
   if (!rootId) return 0
-  return (linksBySourceId.value.get(rootId) ?? []).filter(matchesSelectedLinkType).length
-})
-
-const incomingCount = computed(() => {
-  const rootId = rootNodeId.value
-  if (!rootId) return 0
-  return (linksByTargetId.value.get(rootId) ?? []).filter(matchesSelectedLinkType).length
+  return traceability.getBranchState(branchQuery(rootId)).totalElements
 })
 
 watch(
   () => props.selectedNode?.id ?? null,
-  (nodeId) => {
+  nodeId => {
     if (suppressNextSelectionReset.value && nodeId === rootNodeId.value) {
       suppressNextSelectionReset.value = false
       return
@@ -141,15 +138,21 @@ watch(
     expandedLinkKeys.value = new Set()
     direction.value = 'down'
   },
-  { immediate: true },
+  { immediate: true }
 )
 
-watch(linkTypeOptions, (options) => {
-  if (selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER) return
-  const selectedExists = options.some((option) => option.id === selectedLinkTypeFilter.value)
-  if (!selectedExists) {
-    selectedLinkTypeFilter.value = ALL_LINK_TYPES_FILTER
-  }
+watch(
+  rootNodeId,
+  nodeId => {
+    if (nodeId) void traceability.selectRoot(branchQuery(nodeId))
+  },
+  { immediate: true }
+)
+
+watch([traceDirection, selectedLinkTypeId], () => {
+  expandedLinkKeys.value = new Set()
+  const rootId = rootNodeId.value
+  if (rootId) void traceability.loadRootBranch(branchQuery(rootId))
 })
 
 const focusRootOnDiagram = () => {
@@ -157,14 +160,6 @@ const focusRootOnDiagram = () => {
   suppressNextSelectionReset.value = true
   emit('focus-node', rootNodeId.value)
 }
-
-const getLinksForNode = (nodeId: string): EditorLink[] =>
-  direction.value === 'down'
-    ? (linksBySourceId.value.get(nodeId) ?? []).filter(matchesSelectedLinkType)
-    : (linksByTargetId.value.get(nodeId) ?? []).filter(matchesSelectedLinkType)
-
-const resolveNextNodeId = (link: EditorLink): string =>
-  direction.value === 'down' ? link.targetId : link.sourceId
 
 const isLinkExpanded = (nodeId: string, linkId: string): boolean =>
   expandedLinkKeys.value.has(`${nodeId}:${linkId}`)
@@ -287,12 +282,31 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
             :class="{ 'tp-section__chevron--open': diagramsOpen }"
           />
           <span class="tp-section__label">{{ t('models.traceabilityDiagramsTitle') }}</span>
-          <span class="tp-section__count">{{ diagramsUsingRootNode.length }}</span>
+          <span class="tp-section__count">{{ traceability.diagramsTotalElements.value }}</span>
         </button>
 
         <Transition name="tp-collapse">
           <div v-if="diagramsOpen" class="tp-section__body">
-            <div v-if="diagramsUsingRootNode.length === 0" class="tp-section__empty">
+            <div
+              v-if="traceability.diagramsLoading.value && diagramsUsingRootNode.length === 0"
+              class="tp-section__status"
+              role="status"
+              aria-live="polite"
+            >
+              <UiIcon name="sync" class="spin" />
+              <span>{{ t('models.traceabilityLoadingDiagrams') }}</span>
+            </div>
+            <div
+              v-else-if="traceability.diagramsError.value"
+              class="tp-section__status tp-section__status--error"
+              role="alert"
+            >
+              <span>{{ traceability.diagramsError.value }}</span>
+              <button type="button" class="tp-section__action" @click="traceability.retryDiagrams">
+                {{ t('common.retry') }}
+              </button>
+            </div>
+            <div v-else-if="diagramsUsingRootNode.length === 0" class="tp-section__empty">
               {{ t('models.traceabilityNoDiagrams') }}
             </div>
             <div v-else class="tp-diagrams">
@@ -308,6 +322,14 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 <span class="tp-diagram__name">{{ diagram.name }}</span>
                 <span class="tp-diagram__version">{{ diagram.version }}</span>
               </div>
+              <button
+                v-if="traceability.diagramsNextPage.value !== null"
+                type="button"
+                class="tp-section__action tp-section__action--more"
+                @click="traceability.loadMoreDiagrams"
+              >
+                {{ t('models.traceabilityLoadMore') }}
+              </button>
             </div>
           </div>
         </Transition>
@@ -344,7 +366,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 }}
               </span>
               <span class="tp-nav__dir-count">
-                {{ direction === 'down' ? outgoingCount : incomingCount }}
+                {{ rootBranchCount }}
               </span>
             </button>
             <label class="tp-nav__filter">
@@ -353,7 +375,11 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 <option :value="ALL_LINK_TYPES_FILTER">
                   {{ t('models.traceabilityAllLinkTypes') }}
                 </option>
-                <option v-for="typeOption in linkTypeOptions" :key="typeOption.id" :value="typeOption.id">
+                <option
+                  v-for="typeOption in linkTypeOptions"
+                  :key="typeOption.id"
+                  :value="typeOption.id"
+                >
                   {{ typeOption.name }}
                 </option>
               </select>
@@ -406,9 +432,13 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 :node-id="rootNode.id"
                 :path="[rootNode.id]"
                 :node-by-id="nodeById"
-                :get-links-for-node="getLinksForNode"
+                :direction="traceDirection"
+                :link-type-id="selectedLinkTypeId"
+                :get-branch-state="traceability.getBranchState"
+                :load-branch="traceability.loadBranch"
+                :load-more="traceability.loadMore"
+                :retry="traceability.retry"
                 :get-link-type-name="getLinkTypeName"
-                :resolve-next-node-id="resolveNextNodeId"
                 :is-link-expanded="isLinkExpanded"
                 :toggle-link="toggleLink"
                 :get-link-status="getLinkStatus"
@@ -501,7 +531,9 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .tp-breadcrumb__item:hover:not(:disabled) {
@@ -647,6 +679,33 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   padding: 10px 12px;
   font-size: 11px;
   color: var(--text-subtle);
+}
+
+.tp-section__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  color: var(--text-subtle);
+}
+
+.tp-section__status--error {
+  color: var(--danger);
+}
+
+.tp-section__action {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.tp-section__action--more {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 12px;
 }
 
 /* ---- Navigation ---- */

@@ -285,6 +285,27 @@ export const resolveInstanceComponentId = (
   return input.node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
 }
 
+export const hasEligibleNotationComponent = (input: {
+  node: { nodeTypeId: string; parsedAttrs: ModelNodeAttrs }
+  notationId: string | null | undefined
+  components: readonly Pick<ComponentResponse, 'id' | 'notationId' | 'nodeTypeId'>[]
+}): boolean => {
+  const notationId = input.notationId
+  if (!notationId) return false
+
+  const existingComponentId = input.node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (existingComponentId) {
+    return input.components.some(
+      component => component.id === existingComponentId && component.notationId === notationId
+    )
+  }
+
+  return input.components.some(
+    component =>
+      component.notationId === notationId && component.nodeTypeId === input.node.nodeTypeId
+  )
+}
+
 export const resolveRelationByLinkType = (
   relations: RelationResponse[],
   notationId: string,

@@ -12,6 +12,7 @@ import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
+  hasEligibleNotationComponent,
   resolveComponentByNodeType,
   resolveInstanceComponentId,
   resolveRelationByLinkType,
@@ -1004,13 +1005,11 @@ const canDragTraceabilityNodeToDiagram = (
   }
 
   const notationId = activeNotationId.value
-  const hasComponent =
-    !!notationId &&
-    state.value.components.some(
-      component =>
-        component.notationId === notationId &&
-        component.nodeTypeId === node.nodeTypeId
-    )
+  const hasComponent = hasEligibleNotationComponent({
+    node,
+    notationId,
+    components: state.value.components,
+  })
   return hasComponent
     ? { allowed: true, reason: 'models.traceabilityDragHint' }
     : { allowed: false, reason: 'models.traceabilityDragDisabledMissingComponent' }

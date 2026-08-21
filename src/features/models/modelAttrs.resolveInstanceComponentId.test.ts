@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  hasEligibleNotationComponent,
   parseNodeAttrs,
   resolveInstanceComponentId,
   type DiagramNodeInstance,
@@ -55,5 +56,39 @@ describe('resolveInstanceComponentId', () => {
         notationId: 'notation-1',
       }),
     ).toBeNull()
+  })
+
+  it('allows a node with a matching bound component', () => {
+    expect(
+      hasEligibleNotationComponent({
+        node: {
+          nodeTypeId: 'type-1',
+          parsedAttrs: parseNodeAttrs(
+            JSON.stringify({
+              notationComponents: { 'notation-1': { componentId: 'bound-component' } },
+            }),
+          ),
+        },
+        notationId: 'notation-1',
+        components: [{ id: 'bound-component', notationId: 'notation-1', nodeTypeId: 'type-2' }],
+      }),
+    ).toBe(true)
+  })
+
+  it('rejects a stale binding instead of falling back to a matching node type component', () => {
+    expect(
+      hasEligibleNotationComponent({
+        node: {
+          nodeTypeId: 'type-1',
+          parsedAttrs: parseNodeAttrs(
+            JSON.stringify({
+              notationComponents: { 'notation-1': { componentId: 'stale-component' } },
+            }),
+          ),
+        },
+        notationId: 'notation-1',
+        components: [{ id: 'other-component', notationId: 'notation-1', nodeTypeId: 'type-1' }],
+      }),
+    ).toBe(false)
   })
 })

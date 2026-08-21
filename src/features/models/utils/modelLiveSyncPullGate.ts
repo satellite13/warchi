@@ -17,9 +17,14 @@ export function decideCollectionPull(input: {
   if (!input.snapshotReady) {
     return { action: 'skip' }
   }
+  // The current shell/materialized store is the initial baseline. A STOMP hello
+  // only establishes the subscription; it must not trigger a legacy full pull.
+  if (input.reason === 'ws_connect') {
+    return { action: 'skip_hello' }
+  }
   if (
     input.skipConnectResyncOnce &&
-    (input.reason === 'ws_connect' || input.reason === 'session_resync')
+    input.reason === 'session_resync'
   ) {
     return { action: 'skip_hello' }
   }

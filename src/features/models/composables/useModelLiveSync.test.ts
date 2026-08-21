@@ -340,6 +340,44 @@ describe('useModelLiveSync snapshot pull', () => {
     wrapper.unmount()
   })
 
+  it('does not pull unscoped collections when websocket connects immediately after shell readiness', async () => {
+    const snapshotReady = ref(false)
+    vi.mocked(apiGet).mockImplementation(async () => {
+      throw new Error('websocket connect must reuse the materialized shell baseline')
+    })
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          const state = createEmptyModelEditorState()
+          state.modelId = 'model-1'
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state: ref(state),
+            model: ref(model()),
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: snapshotReady,
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'ws',
+          })
+          return () => null
+        },
+      })
+    )
+    await flushPromises()
+    const client = stompMock.clients.at(-1)
+
+    snapshotReady.value = true
+    client?.options.onConnect()
+    await flushPromises()
+
+    expect(apiGet).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('coalesces multiple foreign changes during a pull into exactly one repeat', async () => {
     const snapshotReady = ref(false)
     const firstNodes = deferred<ApiResult<unknown>>()
@@ -767,7 +805,7 @@ describe('useModelLiveSync snapshot pull', () => {
     wrapper.unmount()
   })
 
-  it('does not suppress a real reconnect when websocket connected before readiness', async () => {
+  it('does not full-pull when websocket reconnects after readiness', async () => {
     const snapshotReady = ref(false)
     const isLoading = ref(false)
     let nodePulls = 0
@@ -815,7 +853,7 @@ describe('useModelLiveSync snapshot pull', () => {
     client?.options.onConnect()
     await flushPromises()
 
-    expect(nodePulls).toBe(1)
+    expect(nodePulls).toBe(0)
     wrapper.unmount()
   })
 

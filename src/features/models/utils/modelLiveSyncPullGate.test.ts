@@ -41,10 +41,20 @@ describe('decideCollectionPull', () => {
     ).toEqual({ action: 'skip_hello' })
   })
 
-  it('pulls later connect/resync, poll, visibility and queued model_changed', () => {
+  it('always treats websocket connect as a baseline hello', () => {
     expect(
       decideCollectionPull({
         reason: 'ws_connect',
+        snapshotReady: true,
+        skipConnectResyncOnce: false,
+      })
+    ).toEqual({ action: 'skip_hello' })
+  })
+
+  it('pulls later session resync, poll, visibility and queued model_changed', () => {
+    expect(
+      decideCollectionPull({
+        reason: 'session_resync',
         snapshotReady: true,
         skipConnectResyncOnce: false,
       })

@@ -426,9 +426,7 @@ const {
   ensureNotationRelationsAndRules,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   onRemoteSnapshotApplied: () => {
-    if (detachedModelLinks.loadedModelId.value === state.value.modelId) {
-      void detachedModelLinks.refresh()
-    }
+    void detachedModelLinks.refreshAfterRemoteSync()
   },
   onModelUnavailable: status => {
     errorMessage.value =

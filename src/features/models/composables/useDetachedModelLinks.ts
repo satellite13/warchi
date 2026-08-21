@@ -23,47 +23,61 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const loadedModelId = ref<string | null>(null)
-  let generation = 0
+  const requestedModelId = ref<string | null>(null)
+  let snapshotGeneration = 0
   let inFlight: Promise<EditorLink[] | null> | null = null
 
   const reset = (): void => {
-    generation += 1
+    snapshotGeneration += 1
     inFlight = null
     links.value = []
     loading.value = false
     error.value = null
     loadedModelId.value = null
+    requestedModelId.value = null
   }
 
   const startLoad = async (supersede: boolean): Promise<EditorLink[] | null> => {
-    const requestedModelId = modelId.value
-    if (!requestedModelId) {
+    const targetModelId = modelId.value
+    if (!targetModelId) {
       reset()
       return null
     }
-    if (!supersede && inFlight) return inFlight
+    if (!supersede && inFlight && requestedModelId.value === targetModelId) return inFlight
 
-    const requestGeneration = ++generation
+    const requestGeneration = ++snapshotGeneration
+    requestedModelId.value = targetModelId
     loading.value = true
     error.value = null
     links.value = []
     loadedModelId.value = null
     const request = (async (): Promise<EditorLink[] | null> => {
       try {
-        const loaded = await loadModelEditorLinks(requestedModelId, {
-          isCancelled: () => requestGeneration !== generation || modelId.value !== requestedModelId,
+        const loaded = await loadModelEditorLinks(targetModelId, {
+          isCancelled: () =>
+            requestGeneration !== snapshotGeneration || modelId.value !== targetModelId,
         })
-        if (requestGeneration !== generation || modelId.value !== requestedModelId) return null
+        if (
+          requestGeneration !== snapshotGeneration ||
+          modelId.value !== targetModelId
+        ) {
+          return null
+        }
         links.value = loaded
-        loadedModelId.value = requestedModelId
+        loadedModelId.value = targetModelId
         return loaded
       } catch (caught) {
-        if (requestGeneration !== generation || modelId.value !== requestedModelId) return null
+        if (
+          requestGeneration !== snapshotGeneration ||
+          modelId.value !== targetModelId
+        ) {
+          return null
+        }
         error.value =
           caught instanceof Error ? caught.message : 'Не удалось загрузить связи модели.'
         return null
       } finally {
-        if (requestGeneration === generation) {
+        if (requestGeneration === snapshotGeneration) {
           loading.value = false
           inFlight = null
         }
@@ -75,10 +89,12 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
 
   const load = (): Promise<EditorLink[] | null> => startLoad(false)
   const refresh = (): Promise<EditorLink[] | null> => startLoad(true)
-  const refreshAfterSuccessfulSave = (): Promise<EditorLink[] | null> => {
-    if (loadedModelId.value !== modelId.value) return Promise.resolve(null)
+  const refreshActiveRequest = (): Promise<EditorLink[] | null> => {
+    if (requestedModelId.value !== modelId.value) return Promise.resolve(null)
     return refresh()
   }
+  const refreshAfterSuccessfulSave = refreshActiveRequest
+  const refreshAfterRemoteSync = refreshActiveRequest
 
   onScopeDispose(reset)
 
@@ -87,9 +103,11 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
     loading,
     error,
     loadedModelId,
+    requestedModelId,
     load,
     refresh,
     refreshAfterSuccessfulSave,
+    refreshAfterRemoteSync,
     reset,
   }
 }

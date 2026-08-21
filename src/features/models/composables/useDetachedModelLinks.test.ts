@@ -120,4 +120,53 @@ describe('useDetachedModelLinks', () => {
     expect(loader.links.value).toEqual([link('second')])
     vueScope.stop()
   })
+
+  it('supersedes an in-flight snapshot when save succeeds and never publishes the old result', async () => {
+    const oldRequest = deferred<EditorLink[]>()
+    const freshRequest = deferred<EditorLink[]>()
+    vi.mocked(loadModelEditorLinks)
+      .mockReturnValueOnce(oldRequest.promise)
+      .mockReturnValueOnce(freshRequest.promise)
+    const vueScope = effectScope()
+    const loader = vueScope.run(() => useDetachedModelLinks(ref('model-1')))!
+
+    const oldLoad = loader.load()
+    const saveRefresh = loader.refreshAfterSuccessfulSave()
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
+
+    oldRequest.resolve([link('stale-before-save')])
+    await oldLoad
+    expect(loader.links.value).toEqual([])
+    expect(loader.loadedModelId.value).toBeNull()
+
+    freshRequest.resolve([link('fresh-after-save')])
+    await saveRefresh
+    expect(loader.links.value).toEqual([link('fresh-after-save')])
+    vueScope.stop()
+  })
+
+  it('supersedes an in-flight snapshot on remote delete and ignores a late old result', async () => {
+    const oldRequest = deferred<EditorLink[]>()
+    const deleteRefresh = deferred<EditorLink[]>()
+    vi.mocked(loadModelEditorLinks)
+      .mockReturnValueOnce(oldRequest.promise)
+      .mockReturnValueOnce(deleteRefresh.promise)
+    const vueScope = effectScope()
+    const loader = vueScope.run(() => useDetachedModelLinks(ref('model-1')))!
+
+    const oldLoad = loader.load()
+    const remoteRefresh = loader.refreshAfterRemoteSync()
+    expect(loadModelEditorLinks).toHaveBeenCalledTimes(2)
+
+    deleteRefresh.resolve([])
+    await remoteRefresh
+    expect(loader.links.value).toEqual([])
+    expect(loader.loadedModelId.value).toBe('model-1')
+
+    oldRequest.resolve([link('deleted-remotely')])
+    await oldLoad
+    expect(loader.links.value).toEqual([])
+    expect(loader.loadedModelId.value).toBe('model-1')
+    vueScope.stop()
+  })
 })

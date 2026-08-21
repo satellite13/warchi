@@ -243,6 +243,23 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     expect(handle.attributes('draggable')).toBe('false')
   })
 
+  it('prevents disabled root dragstart without writing DataTransfer payload', () => {
+    canDragNodeToDiagram.mockReturnValue({
+      allowed: false,
+      reason: 'models.traceabilityDragDisabledNoActiveDiagram',
+    })
+    const wrapper = mountPanel()
+    const drag = dragDataTransfer()
+
+    const event = dispatchDragStart(
+      wrapper.get('[data-testid="trace-node-drag-root"]').element,
+      drag.dataTransfer
+    )
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(drag.dataTransfer.setData).not.toHaveBeenCalled()
+  })
+
   it('loads selected root and renders diagram references from the scoped endpoint state', async () => {
     const wrapper = mountPanel()
     await nextTick()

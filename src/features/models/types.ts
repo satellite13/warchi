@@ -15,6 +15,33 @@ import type {
   ModelNodeAttrs
 } from "./modelAttrs"
 
+export type TreeParentScope = { kind: 'root' } | { kind: 'node'; nodeId: string }
+
+export type EntityMergeMode =
+  | { kind: 'partial' }
+  | {
+      kind: 'childrenPage'
+      scope: TreeParentScope
+      page: number
+      total: number
+      last: boolean
+      token: number
+    }
+  | { kind: 'childrenScope'; scope: TreeParentScope; token: number }
+  | { kind: 'full' }
+
+export type ModelPartialRequestGuard = {
+  generation: number
+  requestKey: string
+  token: number
+}
+
+export type ChildrenPageState = {
+  loadedPages: Set<number>
+  nextPage: number | null
+  totalElements: number
+}
+
 export type EditorNode = Omit<NodeResponse, "attrs"> & {
   parsedAttrs: ModelNodeAttrs
   _isNew?: boolean
@@ -65,4 +92,3 @@ export const createEmptyModelEditorState = (): ModelEditorState => ({
   relations: [],
   relationRules: []
 })
-

@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyModelEditorState } from '../types'
-import { parseLinkAttrs } from '../modelAttrs'
+import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
 import { buildOefBatchSaveRequest } from '../utils/oef/oefToBatchSave'
 import { useOefImport } from './useOefImport'
 
@@ -22,10 +22,30 @@ describe('useOefImport detached reuse input', () => {
     })
   })
 
-  it('uses explicitly supplied detached links instead of the partial editor store', async () => {
+  it('uses explicitly supplied detached nodes and links instead of the partial editor store', async () => {
     const state = createEmptyModelEditorState()
     state.modelId = 'model-1'
+    state.nodes = [
+      {
+        id: 'partial-node',
+        name: 'Partial',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
+        parentNodeId: null,
+        parsedAttrs: parseNodeAttrs(null),
+      },
+    ]
     state.links = []
+    const detachedNode = {
+      id: 'detached-node',
+      name: 'Detached',
+      modelId: 'model-1',
+      ownerId: 'owner-1',
+      nodeTypeId: 'type-1',
+      parentNodeId: null,
+      parsedAttrs: parseNodeAttrs(null),
+    }
     const detachedLink = {
       id: 'detached-link',
       modelId: 'model-1',
@@ -63,6 +83,7 @@ describe('useOefImport detached reuse input', () => {
       t: key => key,
       setUiError: vi.fn(),
       loadModel: vi.fn(async () => undefined),
+      getExistingNodes: () => [detachedNode],
       getExistingLinks: () => [detachedLink],
     })
 
@@ -90,8 +111,12 @@ describe('useOefImport detached reuse input', () => {
     })
 
     expect(buildOefBatchSaveRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ existingLinks: [detachedLink] })
+      expect.objectContaining({
+        existingNodes: [detachedNode],
+        existingLinks: [detachedLink],
+      })
     )
+    expect(state.nodes.map(node => node.id)).toEqual(['partial-node'])
   })
 
   it('blocks import while the detached links snapshot is stale', async () => {

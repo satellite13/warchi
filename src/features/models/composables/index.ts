@@ -13,6 +13,7 @@ export {
 } from './useModelDiagramConnections'
 export { useModelDiagramInstances } from './useModelDiagramInstances'
 export { useModelEditor } from './useModelEditor'
+export { useModelScopedReload } from './useModelScopedReload'
 export { useModelEditorSync } from './useModelEditorSync'
 export { useModelLiveSync } from './useModelLiveSync'
 export { useLazyTreeSearch } from './useLazyTreeSearch'

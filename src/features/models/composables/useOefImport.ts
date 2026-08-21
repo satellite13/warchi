@@ -45,6 +45,7 @@ export function useOefImport(options: {
   t: TranslateFn
   setUiError: (message: string) => void
   loadModel: () => Promise<void>
+  getExistingNodes?: () => ModelEditorState['nodes']
   getExistingLinks?: () => ModelEditorState['links']
   isExistingLinksReady?: () => boolean
 }) {
@@ -308,7 +309,9 @@ export function useOefImport(options: {
         relationCustomPropertiesById,
         relationRules: options.state.value.relationRules,
         ruleDecisions: payload.ruleDecisions,
-        existingNodes: options.state.value.nodes.filter(node => !node._isDeleted),
+        existingNodes: (options.getExistingNodes?.() ?? options.state.value.nodes).filter(
+          node => !node._isDeleted
+        ),
         existingLinks: (options.getExistingLinks?.() ?? options.state.value.links).filter(
           link => !link._isDeleted
         ),

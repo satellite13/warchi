@@ -118,6 +118,99 @@ describe("useModelBatchConflictResolution", () => {
     expect(state.value.diagrams[0]?._isDirty).toBe(true)
   })
 
+  it("hydrates a slim reloaded diagram before the three-way attrs merge", async () => {
+    const localAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "local",
+      })
+    )
+    const serverAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "server",
+      })
+    )
+    const reloadedAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "reloaded",
+      })
+    )
+    const mergedAttrs = parseDiagramAttrs(
+      JSON.stringify({
+        instances: { nodes: [], edges: [] },
+        documentFileId: "merged",
+      })
+    )
+    apiGetMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          id: "d-1",
+          attrs: JSON.stringify({
+            instances: { nodes: [], edges: [] },
+            documentFileId: "server",
+          }),
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          id: "d-1",
+          attrs: JSON.stringify({
+            instances: { nodes: [], edges: [] },
+            documentFileId: "reloaded",
+          }),
+        },
+      })
+    mergeDiagramAttrsAfterBatchConflictReloadMock.mockReturnValue(mergedAttrs)
+
+    const state = ref<ModelEditorState>({
+      ...createEmptyModelEditorState(),
+      modelId: "model-1",
+      ownerId: "owner-1",
+      diagrams: [
+        {
+          id: "d-1",
+          name: "Diagram",
+          version: "1.0.0",
+          notationId: "notation-1",
+          modelId: "model-1",
+          ownerId: "owner-1",
+          nodeId: null,
+          parsedAttrs: localAttrs,
+        },
+      ],
+    })
+    const { resolveBatchSaveReload } = useModelBatchConflictResolution({
+      state,
+      batchSaveConflict: ref([
+        { kind: "diagram", id: "d-1", serverUpdatedAt: null, clientBaseUpdatedAt: null },
+      ]),
+      errorMessage: ref<string | null>(null),
+      pendingForceBatch: ref(false),
+      loadModel: async () => {
+        const d = state.value.diagrams.find(item => item.id === "d-1")
+        if (!d) return
+        d.parsedAttrs = parseDiagramAttrs(null)
+        d._attrsPending = true
+      },
+      saveChanges: async () => true,
+    })
+
+    await resolveBatchSaveReload()
+
+    expect(apiGetMock).toHaveBeenCalledTimes(2)
+    expect(mergeDiagramAttrsAfterBatchConflictReloadMock).toHaveBeenCalledWith(
+      localAttrs,
+      serverAttrs,
+      reloadedAttrs
+    )
+    expect(state.value.diagrams[0]?.parsedAttrs).toStrictEqual(mergedAttrs)
+    expect(state.value.diagrams[0]?._attrsPending).toBe(false)
+  })
+
   it("resolveBatchSaveOverwrite sets force flag and delegates to saveChanges", async () => {
     const state = ref(createEmptyModelEditorState())
     const batchSaveConflict = ref([

@@ -38,12 +38,15 @@ type ModelEditorReturn = {
   retryCatalogLoad: () => Promise<void>
   /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
   modelDirty: Ref<boolean>
+  modelInitialName: Ref<string>
   isSaving: Ref<boolean>
   saveError: Ref<string | null>
   saveSuccess: Ref<boolean>
   saveProgress: Ref<string>
   hasUnsavedChanges: ComputedRef<boolean>
   loadModel: () => Promise<void>
+  /** Bind the scoped partial reload used by conflict/discard fallbacks. */
+  assignScopedReload: (fn: (() => Promise<void>) | null) => void
   /** Discard local dirty/new/deleted edits without a full model reload. */
   discardUnsavedChanges: () => Promise<boolean>
   /** Wait until notation components/relations/types are applied (diagram open). */
@@ -108,6 +111,10 @@ export const useModelEditor = (): ModelEditorReturn => {
   let loadGeneration = 0
   /** Guards concurrent save pipeline; separate from isSaving so UI can start early. */
   let saveOperationActive = false
+  let scopedReloadFn: (() => Promise<void>) | null = null
+  const assignScopedReload = (fn: (() => Promise<void>) | null): void => {
+    scopedReloadFn = fn
+  }
 
   const {
     ensureNotationRelationsAndRules,
@@ -145,6 +152,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
   onScopeDispose(() => {
     disposeSaveErrorTimer()
+    scopedReloadFn = null
   })
 
   const hasUnsavedChanges = computed(() => {
@@ -334,6 +342,14 @@ export const useModelEditor = (): ModelEditorReturn => {
     }
   }
 
+  const reloadEditorState = async (): Promise<void> => {
+    if (scopedReloadFn) {
+      await scopedReloadFn()
+      return
+    }
+    await loadModel()
+  }
+
   const saveChanges = async (): Promise<boolean> => {
     if (!model.value) return false
     if (saveOperationActive) return false
@@ -388,8 +404,8 @@ export const useModelEditor = (): ModelEditorReturn => {
       if (modelDirty.value) modelDirty.value = false
       return true
     }
-    // Fallback for partial API failures: full reload is slow but consistent.
-    await loadModel()
+    // Fallback for point-restore failures: scoped partial reset, not a full collection load.
+    await reloadEditorState()
     return true
   }
 
@@ -411,7 +427,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       batchSaveConflict,
       errorMessage,
       pendingForceBatch,
-      loadModel,
+      loadModel: reloadEditorState,
       saveChanges,
     })
 
@@ -425,12 +441,14 @@ export const useModelEditor = (): ModelEditorReturn => {
     catalogLoadWarning,
     retryCatalogLoad,
     modelDirty,
+    modelInitialName,
     isSaving,
     saveError,
     saveSuccess,
     saveProgress,
     hasUnsavedChanges,
     loadModel,
+    assignScopedReload,
     discardUnsavedChanges,
     whenCatalogReady,
     whenBackgroundReady,

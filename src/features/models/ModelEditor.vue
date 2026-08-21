@@ -27,14 +27,13 @@ import type {
 import {
   useModelBatchConflictUi,
   useDiagramScope,
-  mergeDetachedModelLinks,
   isDiagramOnlyEdgeModelLinkId,
   useModelDiagramConnections,
   useModelDiagramInstances,
   useModelDiagramExport,
   useModelEditor,
-  useDetachedModelLinks,
   useDetachedModelSnapshot,
+  useModelScopedReload,
   prepareModelSaveValidation,
   useModelEditorSync,
   useLazyTreeSearch,
@@ -126,6 +125,7 @@ import {
   focusRouteDiagramTree,
   useModelEditorRouteNavigation,
 } from './composables/useModelEditorRouteNavigation'
+import { applyLocalModelDelta } from './utils/applyLocalModelDelta'
 import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
@@ -139,12 +139,14 @@ const {
   catalogLoadWarning,
   retryCatalogLoad,
   modelDirty,
+  modelInitialName,
   isSaving,
   saveError,
   saveSuccess,
   saveProgress,
   hasUnsavedChanges,
   loadModel,
+  assignScopedReload,
   discardUnsavedChanges,
   saveChanges,
   startSave,
@@ -170,17 +172,24 @@ const {
 
 const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
-const detachedModelLinks = useDetachedModelLinks(computed(() => state.value.modelId || null))
 const detachedModelSnapshot = useDetachedModelSnapshot(
   computed(() => state.value.modelId || null)
 )
 const isPreparingValidation = ref(false)
-const detachedConsumerLinks = computed(() =>
-  detachedModelLinks.loadedModelId.value === state.value.modelId &&
-  !detachedModelLinks.stale.value
-    ? mergeDetachedModelLinks(detachedModelLinks.links.value, state.value.links)
-    : []
+const detachedOverlayReady = computed(
+  () =>
+    detachedModelSnapshot.loadedModelId.value === state.value.modelId &&
+    !detachedModelSnapshot.stale.value &&
+    detachedModelSnapshot.snapshot.value !== null
 )
+const detachedOverlay = computed(() => {
+  const remote = detachedModelSnapshot.snapshot.value
+  if (!detachedOverlayReady.value || !remote) {
+    return { nodes: [] as typeof state.value.nodes, links: [] as typeof state.value.links }
+  }
+  return applyLocalModelDelta(remote, state.value)
+})
+const detachedConsumerLinks = computed(() => detachedOverlay.value.links)
 const remoteCascadeConflictCount = computed(
   () =>
     state.value.links.filter(link =>
@@ -201,7 +210,8 @@ function discardRemoteCascadeConflictLinks(): void {
 
 async function reloadAfterRemoteCascadeConflict(): Promise<void> {
   saveError.value = null
-  await loadModel()
+  const result = await scopedReload.reloadPartialEditor()
+  if (!result.ok && result.error) setUiError(result.error)
 }
 
 const modelLiveSyncEnabled = computed(
@@ -268,6 +278,28 @@ const diagramScope = useDiagramScope({
 })
 const diagramScopeError = diagramScope.error
 const diagramScopeReady = diagramScope.diagramScopeReady
+const scopedReload = useModelScopedReload({
+  state,
+  model,
+  modelDirty,
+  modelInitialName,
+  selectedDiagramId,
+  partialStore,
+  reopenDiagramScope: async diagramId => {
+    if (selectedDiagramId.value !== diagramId) return
+    await diagramScope.reload()
+    if (diagramScope.error.value) {
+      throw new Error(diagramScope.error.value.message)
+    }
+  },
+  refreshTreeScopes: async scopes => {
+    await Promise.all(scopes.map(scope => partialStore.refreshChildrenScope(scope)))
+  },
+})
+assignScopedReload(async () => {
+  const result = await scopedReload.reloadPartialEditor()
+  if (!result.ok && result.error) setUiError(result.error)
+})
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
 const validationRunPayload = ref<{
@@ -306,8 +338,13 @@ async function loadDetachedValidationPayload(): Promise<boolean> {
   }
 }
 
-function handleValidationIssueSelect(issue: ValidationIssue): void {
+function closeValidationScriptsModal(): void {
   showValidationScriptsModal.value = false
+  validationRunPayload.value = null
+}
+
+function handleValidationIssueSelect(issue: ValidationIssue): void {
+  closeValidationScriptsModal()
   const target = issue.target
   if (!target) return
   if (target.kind === 'diagram') {
@@ -513,7 +550,6 @@ const {
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
-      detachedModelLinks.invalidateAfterRemoteSync()
       detachedModelSnapshot.invalidateAfterRemoteSync()
     },
     onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
@@ -541,7 +577,6 @@ const {
       }
     },
     onDetachedSnapshotInvalidated: () => {
-      detachedModelLinks.invalidateAfterRemoteSync()
       detachedModelSnapshot.invalidateAfterRemoteSync()
       invalidateTraceabilityDiagrams()
     },
@@ -563,7 +598,10 @@ const {
 })
 
 async function handleReloadModelForDiagramLock() {
-  await reloadModelForDiagramLock(loadModel)
+  await reloadModelForDiagramLock(async () => {
+    const result = await scopedReload.reloadPartialEditor({ mode: 'lock' })
+    if (!result.ok && result.error) setUiError(result.error)
+  })
 }
 
 watch(
@@ -1002,7 +1040,7 @@ watch([rightPanelTabs, activeRightTab], () => {
 })
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
-  detachedModelLinks.reset()
+  detachedModelSnapshot.reset()
 })
 
 const {
@@ -1120,11 +1158,13 @@ const {
   treeRootNodeId,
   t: (key, params) => String(t(key, params ?? {})),
   setUiError,
-  loadModel,
-  getExistingLinks: () => detachedConsumerLinks.value,
-  isExistingLinksReady: () =>
-    detachedModelLinks.loadedModelId.value === state.value.modelId &&
-    !detachedModelLinks.stale.value,
+  loadModel: async () => {
+    const result = await scopedReload.reloadPartialEditor()
+    if (!result.ok && result.error) setUiError(result.error)
+  },
+  getExistingNodes: () => detachedOverlay.value.nodes,
+  getExistingLinks: () => detachedOverlay.value.links,
+  isExistingLinksReady: () => detachedOverlayReady.value,
 })
 
 async function ensureImportNotationCatalog(notationId: string): Promise<void> {
@@ -1766,7 +1806,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
-      await detachedModelLinks.refreshAfterSuccessfulSave()
+      detachedModelSnapshot.invalidateAfterRemoteSync()
       diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
         void uploadDiagramPreview()
@@ -2568,9 +2608,9 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'import-oef':
       if (canInspectDiagramJson.value) {
-        const loadedLinks = await detachedModelLinks.load()
-        if (!loadedLinks) {
-          setUiError(detachedModelLinks.error.value ?? t('common.error'))
+        const loadedSnapshot = await detachedModelSnapshot.load()
+        if (!loadedSnapshot) {
+          setUiError(detachedModelSnapshot.error.value ?? t('common.error'))
           break
         }
         showImportWizard.value = true
@@ -3728,10 +3768,10 @@ onBeforeUnmount(() => {
     @retry="firstGranularSyncFailure.retry"
   />
   <GranularSyncErrorNotice
-    v-if="showImportWizard && detachedModelLinks.stale.value"
+    v-if="showImportWizard && detachedModelSnapshot.stale.value"
     entity="links"
     :message="t('models.oefDetachedLinksStale')"
-    @retry="detachedModelLinks.load"
+    @retry="detachedModelSnapshot.load"
   />
 
   <DiagramCopyWizard
@@ -4127,10 +4167,7 @@ onBeforeUnmount(() => {
     v-if="showValidationScriptsModal && validationRunPayload"
     :snapshot="validationRunPayload.snapshot"
     :open-diagram-id="validationRunPayload.openDiagramId"
-    @close="
-      showValidationScriptsModal = false
-      validationRunPayload = null
-    "
+    @close="closeValidationScriptsModal"
     @select-issue="handleValidationIssueSelect"
   />
 

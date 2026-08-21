@@ -1,7 +1,7 @@
 import { effectScope, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
-import type { EditorLink, EditorNode } from '../types'
+import { parseNodeAttrs } from '../modelAttrs'
+import type { EditorNode } from '../types'
 import { createEmptyModelEditorState } from '../types'
 import { fetchAllByModelId } from './modelEditorLoadModel'
 import { useDetachedModelSnapshot } from './useDetachedModelSnapshot'
@@ -25,16 +25,6 @@ const node = (id: string, name = id): EditorNode => ({
   nodeTypeId: 'type-1',
   parentNodeId: null,
   parsedAttrs: parseNodeAttrs(null),
-})
-
-const link = (id: string, sourceId = 'n1', targetId = 'n2'): EditorLink => ({
-  id,
-  modelId: 'model-1',
-  ownerId: 'owner-1',
-  linkTypeId: 'type-1',
-  sourceId,
-  targetId,
-  parsedAttrs: parseLinkAttrs(null),
 })
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: Error) => void } {

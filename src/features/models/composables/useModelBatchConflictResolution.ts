@@ -54,6 +54,14 @@ export function useModelBatchConflictResolution(options: UseModelBatchConflictRe
       const snap = diagramBeforeReload.get(c.id)
       const d = options.state.value.diagrams.find(item => item.id === c.id)
       if (!snap || !d) continue
+      if (d._attrsPending) {
+        const enc = encodeURIComponent(c.id)
+        const reloaded = await apiGet<DiagramResponse>(`/diagrams/${enc}`)
+        if (reloaded.success) {
+          d.parsedAttrs = parseDiagramAttrs(reloaded.data.attrs ?? null)
+          d._attrsPending = false
+        }
+      }
       d.parsedAttrs = mergeDiagramAttrsAfterBatchConflictReload(
         snap.localAttrs,
         snap.serverAttrs,

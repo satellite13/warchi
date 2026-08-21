@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { clientPointForDrop, worldTopLeftCenteredOnCursor } from './dropCoordinates'
+import {
+  clientPointForDrop,
+  worldTopLeftCenteredOnCursor,
+  worldTopLeftCenteredOnScreenPoint,
+} from './dropCoordinates'
 
 describe('clientPointForDrop', () => {
   it('prefers last dragover point over drop event', () => {
@@ -29,5 +33,22 @@ describe('worldTopLeftCenteredOnCursor', () => {
         y: 80,
       }
     )
+  })
+})
+
+describe('worldTopLeftCenteredOnScreenPoint', () => {
+  it('converts the screen point and centers a styled node at that world point', () => {
+    const screenToWorld = (point: { x: number; y: number }) => ({
+      x: (point.x - 100) / 2,
+      y: (point.y - 40) / 2,
+    })
+
+    expect(
+      worldTopLeftCenteredOnScreenPoint(
+        { x: 500, y: 340 },
+        screenToWorld,
+        { width: 240, height: 80 }
+      )
+    ).toEqual({ x: 80, y: 110 })
   })
 })

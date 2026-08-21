@@ -1014,11 +1014,6 @@ const canDragTraceabilityNodeToDiagram = (
     ? { allowed: true, reason: 'models.traceabilityDragHint' }
     : { allowed: false, reason: 'models.traceabilityDragDisabledMissingComponent' }
 }
-
-// ModelDiagramCanvas exposes viewport controls but not its client bounds or a screen-to-world helper.
-// Keep the keyboard fallback on this stable canvas-center world coordinate until that public API exists.
-const TRACEABILITY_KEYBOARD_ADD_CENTER = { x: 480, y: 320 }
-
 const beginTraceabilityRequest = (requestKey: string): ModelPartialRequestGuard =>
   partialStore.store.beginRequest(requestKey)
 const isTraceabilityRequestCurrent = (guard: ModelPartialRequestGuard): boolean =>
@@ -2199,11 +2194,7 @@ const handleTraceabilityFocusNode = (modelNodeId: string) => {
 
 const handleTraceabilityAddNodeToDiagram = (modelNodeId: string): void => {
   if (!canDragTraceabilityNodeToDiagram(modelNodeId).allowed) return
-  addExistingNodeToDiagram(
-    modelNodeId,
-    TRACEABILITY_KEYBOARD_ADD_CENTER.x,
-    TRACEABILITY_KEYBOARD_ADD_CENTER.y
-  )
+  diagramCanvasRef.value?.addExistingNodeAtViewportCenter(modelNodeId)
 }
 
 const handleTreeSelectNode = (nodeId: string) => {

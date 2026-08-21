@@ -84,7 +84,10 @@ import {
   mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
-import { clientPointForDrop, worldTopLeftCenteredOnCursor } from '../utils/dropCoordinates'
+import {
+  clientPointForDrop,
+  worldTopLeftCenteredOnScreenPoint,
+} from '../utils/dropCoordinates'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
 import {
   applyStylePropertyBindings,
@@ -3207,6 +3210,20 @@ const isAllowedDropEvent = (event: DragEvent): boolean => {
 /** Last reliable pointer from dragover (drop event coords are often wrong). */
 let lastDragOverClient: { x: number; y: number } | null = null
 
+const resolveModelNodeDropSize = (modelNodeId: string): { width: number; height: number } => {
+  const node = props.nodes.find(item => item.id === modelNodeId)
+  if (!node) return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
+
+  const notationId = activeNotationId.value
+  const binding = notationId ? node.parsedAttrs.notationComponents[notationId] : undefined
+  const component = binding ? props.components.find(item => item.id === binding.componentId) : undefined
+  const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
+  return {
+    width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
+    height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
+  }
+}
+
 const resolveDropSize = (event: DragEvent): { width: number; height: number } => {
   const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) {
@@ -3224,21 +3241,7 @@ const resolveDropSize = (event: DragEvent): { width: number; height: number } =>
     return { width: 240, height: 160 }
   }
   const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
-  if (modelNodeId) {
-    const node = props.nodes.find(item => item.id === modelNodeId)
-    if (node) {
-      const notationId = activeNotationId.value
-      const binding = notationId ? node.parsedAttrs.notationComponents[notationId] : undefined
-      const component = binding
-        ? props.components.find(item => item.id === binding.componentId)
-        : undefined
-      const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
-      return {
-        width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
-        height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
-      }
-    }
-  }
+  if (modelNodeId) return resolveModelNodeDropSize(modelNodeId)
   return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
 }
 
@@ -3251,10 +3254,36 @@ const normalizeDropCoordinates = (
     { x: event.clientX, y: event.clientY },
     lastDragOverClient
   )
-  const world = renderer.screenToWorld(client.x, client.y)
   const snapTo = (value: number) =>
     snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
-  return worldTopLeftCenteredOnCursor(world, size, snapTo)
+  return worldTopLeftCenteredOnScreenPoint(
+    client,
+    point => renderer!.screenToWorld(point.x, point.y),
+    size,
+    snapTo
+  )
+}
+
+const addExistingNodeAtViewportCenter = (modelNodeId: string): void => {
+  if (
+    !renderer ||
+    !containerRef.value ||
+    !props.activeDiagram ||
+    props.readOnly ||
+    props.navigationOnlyMode ||
+    !canDropModelNodeToDiagram(modelNodeId)
+  ) {
+    return
+  }
+  const snapTo = (value: number) =>
+    snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  const { x, y } = worldTopLeftCenteredOnScreenPoint(
+    getCanvasCenter(),
+    point => renderer!.screenToWorld(point.x, point.y),
+    resolveModelNodeDropSize(modelNodeId),
+    snapTo
+  )
+  emit('addExistingNode', modelNodeId, x, y)
 }
 
 const onDragOver = (event: DragEvent) => {
@@ -3714,6 +3743,7 @@ defineExpose({
   redo,
   getCanUndo,
   getCanRedo,
+  addExistingNodeAtViewportCenter,
   flushCanvasState,
   resetHistory,
 })

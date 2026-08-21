@@ -28,3 +28,13 @@ export function worldTopLeftCenteredOnCursor(
     y: snap(world.y - size.height / 2),
   }
 }
+
+/** Convert a canvas screen point and align the node like a regular DnD drop. */
+export function worldTopLeftCenteredOnScreenPoint(
+  screen: { x: number; y: number },
+  screenToWorld: (point: { x: number; y: number }) => { x: number; y: number },
+  size: { width: number; height: number },
+  snap: (value: number) => number = value => value
+): { x: number; y: number } {
+  return worldTopLeftCenteredOnCursor(screenToWorld(screen), size, snap)
+}

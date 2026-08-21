@@ -19,7 +19,10 @@ const makeNode = (
   parsedAttrs: { ...parseNodeAttrs(null), treeOrder },
 })
 
-function setup(completeScopeKeys: string[]) {
+function setup(
+  completeScopeKeys: string[],
+  ensureChildrenScopeComplete = vi.fn(async (_scope: TreeParentScope) => {})
+) {
   const state = ref(createEmptyModelEditorState())
   state.value.modelId = 'model-1'
   state.value.ownerId = 'owner-1'
@@ -41,34 +44,54 @@ function setup(completeScopeKeys: string[]) {
     markDiagramDirty: vi.fn(),
     isChildrenScopeComplete: (scope: TreeParentScope) =>
       complete.has(scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`),
+    ensureChildrenScopeComplete,
     reconcileMaterializedRows,
   })
-  return { state, operations, setUiError, reconcileMaterializedRows }
+  return {
+    state,
+    operations,
+    setUiError,
+    reconcileMaterializedRows,
+    ensureChildrenScopeComplete,
+    complete,
+  }
 }
 
 describe('useModelTreeOperations partial scope safety', () => {
-  it('blocks create for an incomplete explicit root scope', () => {
-    const { operations, setUiError } = setup([])
+  it('ensures the explicit root scope before creating a node', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async (_scope: TreeParentScope) => {
+      complete.add('root')
+    })
+    const { state, operations, setUiError, complete } = setup([], ensureChildrenScopeComplete)
 
     operations.openCreateRegularNode(null)
+    operations.newNodeName.value = 'Created'
+    await operations.createNode()
 
-    expect(operations.showCreateNodeModal.value).toBe(false)
-    expect(operations.getNextTreeOrderForParent('hidden-root')).toBeNull()
-    expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
+    expect(ensureChildrenScopeComplete).toHaveBeenCalledWith({ kind: 'root' })
+    expect(state.value.nodes).toHaveLength(1)
+    expect(state.value.nodes[0]?.parentNodeId).toBe('hidden-root')
+    expect(setUiError).not.toHaveBeenCalled()
   })
 
-  it('blocks create for an incomplete child scope', () => {
-    const { state, operations, setUiError } = setup(['root'])
+  it('does not create when sibling loading fails', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async () => {
+      throw new Error('load failed')
+    })
+    const { state, operations, setUiError } = setup(['root'], ensureChildrenScopeComplete)
     state.value.nodes = [makeNode('folder-a', 'hidden-root', 'directory')]
 
     operations.openCreateFolder('folder-a')
+    operations.newNodeName.value = 'Nested'
+    await operations.createNode()
 
-    expect(operations.showCreateNodeModal.value).toBe(false)
+    expect(state.value.nodes.map(node => node.id)).toEqual(['folder-a'])
     expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
   })
 
-  it('allows first child creation when persisted folder authoritatively has no children', () => {
-    const { state, operations, setUiError } = setup(['root'])
+  it('allows first child creation without loading when persisted folder has no children', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async () => {})
+    const { state, operations, setUiError } = setup(['root'], ensureChildrenScopeComplete)
     state.value.nodes = [
       {
         ...makeNode('empty-folder', 'hidden-root', 'directory'),
@@ -81,50 +104,65 @@ describe('useModelTreeOperations partial scope safety', () => {
     expect(operations.showCreateNodeModal.value).toBe(true)
     expect(setUiError).not.toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
     operations.newNodeName.value = 'First child'
-    operations.createNode()
+    await operations.createNode()
     expect(state.value.nodes.find(node => node.id === 'empty-folder')?.hasChildren).toBe(true)
+    expect(ensureChildrenScopeComplete).not.toHaveBeenCalled()
   })
 
-  it('blocks move when either source or destination sibling scope is incomplete', () => {
-    const { state, operations, setUiError } = setup(['node:source-parent'])
+  it('does not move when either source or destination sibling loading fails', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async (scope: TreeParentScope) => {
+      if (scope.kind === 'node' && scope.nodeId === 'target-parent') throw new Error('load failed')
+    })
+    const { state, operations, setUiError } = setup(
+      ['node:source-parent'],
+      ensureChildrenScopeComplete
+    )
     state.value.nodes = [
       makeNode('moving', 'source-parent', 'regular', 0),
       makeNode('target-parent', 'hidden-root', 'directory', 0),
     ]
 
-    operations.handleMoveNode('moving', 'target-parent', 'inside')
+    await operations.handleMoveNode('moving', 'target-parent', 'inside')
 
     expect(state.value.nodes.find(node => node.id === 'moving')?.parentNodeId).toBe('source-parent')
+    expect(ensureChildrenScopeComplete).toHaveBeenCalledWith({
+      kind: 'node',
+      nodeId: 'target-parent',
+    })
     expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
   })
 
-  it('blocks reorder inside an incomplete sibling scope', () => {
-    const { state, operations, setUiError } = setup([])
+  it('ensures one sibling scope once before reordering inside it', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async (_scope: TreeParentScope) => {
+      complete.add('node:parent-a')
+    })
+    const { state, operations, complete } = setup([], ensureChildrenScopeComplete)
     state.value.nodes = [
       makeNode('first', 'parent-a', 'regular', 0),
       makeNode('second', 'parent-a', 'regular', 1),
     ]
 
-    operations.handleMoveNode('second', 'first', 'above')
+    await operations.handleMoveNode('second', 'first', 'above')
 
-    expect(state.value.nodes.map(node => node.id)).toEqual(['first', 'second'])
+    expect(ensureChildrenScopeComplete).toHaveBeenCalledTimes(1)
+    expect(ensureChildrenScopeComplete).toHaveBeenCalledWith({ kind: 'node', nodeId: 'parent-a' })
+    expect(state.value.nodes.map(node => node.id)).toEqual(['second', 'first'])
     expect(state.value.nodes.map(node => node.parsedAttrs.treeOrder)).toEqual([0, 1])
-    expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
   })
 
-  it('reconciles the store after a permitted create mutation', () => {
+  it('reconciles the store after a permitted create mutation', async () => {
     const { state, operations, reconcileMaterializedRows } = setup(['root'])
     operations.openCreateRegularNode(null)
     operations.newNodeName.value = 'Created'
 
-    operations.createNode()
+    await operations.createNode()
 
     expect(state.value.nodes).toHaveLength(1)
     expect(state.value.nodes[0]?.parentNodeId).toBe('hidden-root')
     expect(reconcileMaterializedRows).toHaveBeenCalledWith([{ kind: 'root' }])
   })
 
-  it('reconciles the store after a permitted move mutation', () => {
+  it('reconciles the store after a permitted move mutation', async () => {
     const { state, operations, reconcileMaterializedRows } = setup([
       'node:source-parent',
       'node:target-parent',
@@ -135,7 +173,7 @@ describe('useModelTreeOperations partial scope safety', () => {
       makeNode('unloaded-sibling', 'incomplete-parent', 'regular', 10),
     ]
 
-    operations.handleMoveNode('moving', 'target-parent', 'inside')
+    await operations.handleMoveNode('moving', 'target-parent', 'inside')
 
     expect(state.value.nodes.find(node => node.id === 'moving')?.parentNodeId).toBe('target-parent')
     expect(
@@ -145,5 +183,57 @@ describe('useModelTreeOperations partial scope safety', () => {
       { kind: 'node', nodeId: 'source-parent' },
       { kind: 'node', nodeId: 'target-parent' },
     ])
+  })
+
+  it('ensures existing directory scopes before creating a missing path segment', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async (scope: TreeParentScope) => {
+      if (scope.kind === 'root') complete.add('root')
+      else complete.add(`node:${scope.nodeId}`)
+    })
+    const { state, operations, complete } = setup([], ensureChildrenScopeComplete)
+    state.value.nodes = [makeNode('existing', 'hidden-root', 'directory')]
+    state.value.nodes[0]!.name = 'Existing'
+
+    const result = await operations.ensureDirectoryPath('Existing/New')
+
+    expect(ensureChildrenScopeComplete.mock.calls.map(([scope]) => scope)).toEqual([
+      { kind: 'root' },
+      { kind: 'node', nodeId: 'existing' },
+    ])
+    expect(result.createdDirectoryIds).toHaveLength(1)
+    expect(state.value.nodes.find(node => node.name === 'New')?.parentNodeId).toBe('existing')
+  })
+
+  it('leaves the directory path unchanged when a required scope fails to load', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async (scope: TreeParentScope) => {
+      if (scope.kind === 'root') complete.add('root')
+      else throw new Error('load failed')
+    })
+    const { state, operations, setUiError, complete } = setup([], ensureChildrenScopeComplete)
+    state.value.nodes = [makeNode('existing', 'hidden-root', 'directory')]
+    state.value.nodes[0]!.name = 'Existing'
+
+    const result = await operations.ensureDirectoryPath('Existing/New')
+
+    expect(result).toEqual({ parentNodeId: null, createdDirectoryIds: [] })
+    expect(state.value.nodes.map(node => node.id)).toEqual(['existing'])
+    expect(setUiError).toHaveBeenCalledWith('models.treeScopeIncompleteMutation')
+  })
+
+  it('ensures the final existing directory before returning it as a create parent', async () => {
+    const ensureChildrenScopeComplete = vi.fn(async (scope: TreeParentScope) => {
+      if (scope.kind === 'root') complete.add('root')
+      else complete.add(`node:${scope.nodeId}`)
+    })
+    const { state, operations, complete } = setup([], ensureChildrenScopeComplete)
+    state.value.nodes = [makeNode('existing', 'hidden-root', 'directory')]
+    state.value.nodes[0]!.name = 'Existing'
+
+    await operations.ensureDirectoryPath('Existing')
+
+    expect(ensureChildrenScopeComplete).toHaveBeenLastCalledWith({
+      kind: 'node',
+      nodeId: 'existing',
+    })
   })
 })

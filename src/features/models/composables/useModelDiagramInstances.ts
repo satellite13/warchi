@@ -40,8 +40,9 @@ export type UseModelDiagramInstancesOptions = {
   showNoteEditorModal: Ref<boolean>
   isDirectoryNode: (modelNodeId: string) => boolean
   isNoteInstance: (instance: DiagramNodeInstance) => boolean
-  ensureDirectoryPath: (path: string) => DirectoryPathResult
-  getNextTreeOrderForParent: (parentNodeId: string | null) => number | null
+  ensureDirectoryPath: (path: string) => Promise<DirectoryPathResult>
+  ensureCompleteSiblingScope: (parentNodeId: string | null) => Promise<boolean>
+  getNextTreeOrderForParent: (parentNodeId: string | null) => number
   treeScopeForParent: (parentNodeId: string | null) => TreeParentScope
   executeDiagramHistoryCommand: (command: DiagramHistoryCommand) => void
   markDiagramDirty: (diagramId: string) => void
@@ -298,7 +299,11 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     }
   }
 
-  const createNodeFromPaletteComponent = (componentId: string, x: number, y: number): void => {
+  const createNodeFromPaletteComponent = async (
+    componentId: string,
+    x: number,
+    y: number
+  ): Promise<void> => {
     if (options.isDiagramReadOnly.value) return
     const diagram = options.activeDiagram.value
     if (!diagram || !diagram.nodeId) {
@@ -314,6 +319,20 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       return
     }
 
+    let parentNodeId: string | null = diagram.nodeId ?? null
+    let createdDirectoryIds: string[] = []
+    if (defaultDirectoryPath) {
+      const ensuredPath = await options.ensureDirectoryPath(defaultDirectoryPath)
+      if (!ensuredPath.parentNodeId) return
+      parentNodeId = ensuredPath.parentNodeId
+      createdDirectoryIds = ensuredPath.createdDirectoryIds
+    } else if (!(await options.ensureCompleteSiblingScope(parentNodeId))) {
+      return
+    }
+
+    const createdDirectoryNodes = options.state.value.nodes
+      .filter(item => createdDirectoryIds.includes(item.id))
+      .map(item => deepClone(item))
     const nodeId = createId()
     const instanceId = createId()
     const notationId = options.activeNotationId.value
@@ -330,21 +349,15 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
         ...(diagramStyle ? { diagramStyle: deepClone(diagramStyle) } : {}),
       },
     }
-    let createdDirectoryIds: string[] = []
-
     options.executeDiagramHistoryCommand({
       execute: () => {
-        createdDirectoryIds = []
-        let parentNodeId: string | null = diagram.nodeId ?? null
-        if (defaultDirectoryPath) {
-          const ensuredPath = options.ensureDirectoryPath(defaultDirectoryPath)
-          if (!ensuredPath.parentNodeId) return
-          parentNodeId = ensuredPath.parentNodeId
-          createdDirectoryIds = ensuredPath.createdDirectoryIds
+        for (const directory of createdDirectoryNodes) {
+          if (!options.state.value.nodes.some(item => item.id === directory.id)) {
+            options.state.value.nodes.push(deepClone(directory))
+          }
         }
         const parsedAttrs = parseNodeAttrs(null)
         const treeOrder = options.getNextTreeOrderForParent(parentNodeId)
-        if (treeOrder === null) return
         parsedAttrs.treeOrder = treeOrder
         if (notationId) {
           parsedAttrs.notationComponents[notationId] = { componentId }

@@ -886,6 +886,7 @@ const {
   nonDirectoryNodeTypes,
   treeRootNodeId,
   treeScopeForParent,
+  ensureCompleteSiblingScope,
   canCreateNodeFromModal,
   getNextTreeOrderForParent,
   ensureDirectoryPath,
@@ -915,6 +916,7 @@ const {
   },
   isChildrenScopeComplete: scope =>
     partialStore.store.loadedChildrenFor.has(partialStore.store.scopeKey(scope)),
+  ensureChildrenScopeComplete: partialStore.ensureChildrenScopeComplete,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
 })
 
@@ -1183,6 +1185,7 @@ const {
   isDirectoryNode,
   isNoteInstance,
   ensureDirectoryPath,
+  ensureCompleteSiblingScope,
   getNextTreeOrderForParent,
   treeScopeForParent,
   executeDiagramHistoryCommand,

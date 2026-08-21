@@ -196,6 +196,8 @@ describe('useDiagramCopyWizard', () => {
     wizard.diagramVersion.value = '1.0.0'
     await wizard.open('source-diagram')
     await flushWatcher()
+    wizard.folderNodeId.value = 'folder-1'
+    wizard.createParentNodeId.value = 'create-parent-1'
     commitDiagramCopyMock.mockResolvedValue({
       success: true,
       data: { diagram: { id: 'copied-diagram' } },
@@ -205,6 +207,13 @@ describe('useDiagramCopyWizard', () => {
       targetModelId: 'target-model',
       diagramId: 'copied-diagram',
     })
+    expect(commitDiagramCopyMock).toHaveBeenCalledWith(
+      'target-model',
+      expect.objectContaining({
+        nodeId: 'folder-1',
+        createParentNodeId: 'create-parent-1',
+      })
+    )
     scope.stop()
   })
 })

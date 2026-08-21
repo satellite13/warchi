@@ -45,7 +45,16 @@ function createState(): ModelEditorState {
   }
 }
 
-function createHarness(stateValue = createState()) {
+function createHarness(
+  stateValue = createState(),
+  overrides: {
+    ensureDirectoryPath?: () => Promise<{
+      parentNodeId: string | null
+      createdDirectoryIds: string[]
+    }>
+    ensureCompleteSiblingScope?: (parentNodeId: string | null) => Promise<boolean>
+  } = {}
+) {
   const state = ref(stateValue)
   const selectedModelNodeIds = ref<string[]>([])
   const selectedInstanceIds = ref<string[]>([])
@@ -88,7 +97,10 @@ function createHarness(stateValue = createState()) {
     showNoteEditorModal,
     isDirectoryNode: () => false,
     isNoteInstance: instance => instance.attrs?.isNote === true,
-    ensureDirectoryPath: () => ({ parentNodeId: 'parent-node', createdDirectoryIds: [] }),
+    ensureDirectoryPath:
+      overrides.ensureDirectoryPath ??
+      (async () => ({ parentNodeId: 'parent-node', createdDirectoryIds: [] })),
+    ensureCompleteSiblingScope: overrides.ensureCompleteSiblingScope ?? (async () => true),
     getNextTreeOrderForParent: () => 0,
     treeScopeForParent: parentNodeId =>
       parentNodeId ? { kind: 'node', nodeId: parentNodeId } : { kind: 'root' },
@@ -179,10 +191,10 @@ describe('useModelDiagramInstances', () => {
     expect(markNodeDirty).toHaveBeenCalledWith('existing-node')
   })
 
-  it('creates a palette node and its diagram instance in one history command', () => {
+  it('creates a palette node and its diagram instance in one history command', async () => {
     const { state, diagram, instances, historyCommands, reconcileMaterializedRows } = createHarness()
 
-    instances.createNodeFromPaletteComponent('component-1', 75, 95)
+    await instances.createNodeFromPaletteComponent('component-1', 75, 95)
 
     expect(state.value.nodes).toHaveLength(2)
     expect(state.value.nodes[1]).toMatchObject({
@@ -205,6 +217,20 @@ describe('useModelDiagramInstances', () => {
     expect(state.value.nodes).toHaveLength(1)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
     expect(reconcileMaterializedRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not create a palette node or history command when sibling loading fails', async () => {
+    const ensureCompleteSiblingScope = vi.fn(async () => false)
+    const { state, diagram, instances, historyCommands } = createHarness(createState(), {
+      ensureCompleteSiblingScope,
+    })
+
+    await instances.createNodeFromPaletteComponent('component-1', 75, 95)
+
+    expect(ensureCompleteSiblingScope).toHaveBeenCalledWith('parent-node')
+    expect(state.value.nodes).toHaveLength(1)
+    expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
+    expect(historyCommands).toHaveLength(0)
   })
 
   it('defers an existing-node placement until the selected component is finalized', () => {

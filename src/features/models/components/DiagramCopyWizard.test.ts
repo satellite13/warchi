@@ -10,6 +10,8 @@ const folderTestState = vi.hoisted(() => ({
   rootLoading: false,
   setModel: vi.fn(),
   loadRoot: vi.fn(async () => {}),
+  apiGet: vi.fn(),
+  wizardOpen: vi.fn(async () => {}),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -20,14 +22,7 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('@/composables/useApi', () => ({
-  apiGet: vi.fn(async (path: string) => ({
-    success: true,
-    data: {
-      content: path.startsWith('/models')
-        ? [{ id: 'target-model', name: 'Target', version: '1.0.0' }]
-        : [{ id: 'notation-1', name: 'Notation', version: '1.0.0' }],
-    },
-  })),
+  apiGet: folderTestState.apiGet,
 }))
 
 vi.mock('../composables/useDiagramCopyWizard', () => ({
@@ -59,7 +54,7 @@ vi.mock('../composables/useDiagramCopyWizard', () => ({
     sourceDiagramId: ref('source-diagram'),
     error: ref<string | null>(null),
     canFinish: computed(() => true),
-    open: vi.fn(async () => {}),
+    open: folderTestState.wizardOpen,
     close: vi.fn(),
     setResolution: vi.fn(),
     commit: vi.fn(async () => null),
@@ -110,6 +105,23 @@ const modalStub = {
   template: '<section><slot /></section>',
 }
 
+const catalogResult = (path: string) => ({
+  success: true,
+  data: {
+    content: path.startsWith('/models')
+      ? [{ id: 'target-model', name: 'Target', version: '1.0.0' }]
+      : [{ id: 'notation-1', name: 'Notation', version: '1.0.0' }],
+  },
+})
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 describe('DiagramCopyWizard folder picker', () => {
   beforeEach(() => {
     folderTestState.rootError = null
@@ -117,6 +129,9 @@ describe('DiagramCopyWizard folder picker', () => {
     folderTestState.rootLoading = false
     folderTestState.setModel.mockClear()
     folderTestState.loadRoot.mockClear()
+    folderTestState.apiGet.mockReset()
+    folderTestState.apiGet.mockImplementation(async (path: string) => catalogResult(path))
+    folderTestState.wizardOpen.mockClear()
   })
 
   it('renders an accessible hierarchical folder choice', async () => {
@@ -215,5 +230,49 @@ describe('DiagramCopyWizard folder picker', () => {
         'target-model',
       ])
     })
+  })
+
+  it('does not let an old initialize cancel or reopen after close and reopen', async () => {
+    const oldModels = deferred<ReturnType<typeof catalogResult>>()
+    const oldNotations = deferred<ReturnType<typeof catalogResult>>()
+    let requestCount = 0
+    folderTestState.apiGet.mockImplementation((path: string) => {
+      requestCount += 1
+      if (requestCount === 1) return oldModels.promise
+      if (requestCount === 2) return oldNotations.promise
+      return Promise.resolve(catalogResult(path))
+    })
+    const wrapper = mount(DiagramCopyWizard, {
+      props: {
+        open: true,
+        sourceModelId: 'source-model',
+        sourceDiagramId: 'source-diagram',
+      },
+      global: {
+        stubs: {
+          BaseModal: modalStub,
+          SearchableSelect: true,
+        },
+      },
+    })
+    await vi.waitFor(() => {
+      expect(folderTestState.apiGet).toHaveBeenCalledTimes(2)
+    })
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await vi.waitFor(() => {
+      expect(folderTestState.wizardOpen).toHaveBeenCalledTimes(1)
+    })
+
+    oldModels.resolve(catalogResult('/models'))
+    oldNotations.resolve(catalogResult('/notations'))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(folderTestState.wizardOpen).toHaveBeenCalledTimes(1)
+    expect(folderTestState.setModel.mock.calls.map(([modelId]) => modelId)).toEqual([
+      '',
+      'target-model',
+    ])
   })
 })

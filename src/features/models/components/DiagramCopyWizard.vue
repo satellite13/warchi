@@ -94,7 +94,11 @@ function formatWizardError(message: string): string {
   return isDiagramNameVersionConflict(message) ? t('models.diagramCopy.nameVersionExists') : message
 }
 
-async function loadCatalog(): Promise<void> {
+let initializeGeneration = 0
+const isCurrentInitialize = (generation: number): boolean =>
+  generation === initializeGeneration && props.open
+
+async function loadCatalog(generation: number): Promise<boolean> {
   loadingCatalog.value = true
   catalogError.value = null
   try {
@@ -103,6 +107,7 @@ async function loadCatalog(): Promise<void> {
       apiGet<PaginatedResponse<NotationData>>('/notations?page=0&size=2000'),
     ])
 
+    if (!isCurrentInitialize(generation)) return false
     if (!modelsResult.success) throw new Error(modelsResult.error.message)
     if (!notationsResult.success) throw new Error(notationsResult.error.message)
 
@@ -110,11 +115,14 @@ async function loadCatalog(): Promise<void> {
       model => model.id !== props.sourceModelId && isEditableModel(model)
     )
     wizard.availableNotations.value = paginatedContent(notationsResult.data)
+    return true
   } catch (error) {
+    if (!isCurrentInitialize(generation)) return false
     catalogError.value =
       error instanceof Error && error.message ? error.message : t('models.diagramCopy.error')
+    return false
   } finally {
-    loadingCatalog.value = false
+    if (isCurrentInitialize(generation)) loadingCatalog.value = false
   }
 }
 
@@ -131,22 +139,34 @@ const folderScopeState = (scope: TreeParentScope) =>
   folderTree.scopes.value.get(scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`)
 
 async function initialize(): Promise<void> {
-  await loadCatalog()
-  if (!props.open || !props.sourceDiagramId) return
+  const generation = ++initializeGeneration
+  if (!(await loadCatalog(generation)) || !isCurrentInitialize(generation)) return
+  if (!props.sourceDiagramId) return
 
   const firstModel = wizard.availableModels.value[0]
+  if (!isCurrentInitialize(generation)) return
   wizard.targetModelId.value = firstModel?.id ?? ''
   wizard.targetNotationId.value = pickDefaultTargetNotationId(
     wizard.availableNotations.value,
     props.sourceNotationId
   )
-  if (wizard.targetModelId.value) await loadFolders(wizard.targetModelId.value)
+  if (wizard.targetModelId.value) {
+    if (!isCurrentInitialize(generation)) return
+    await loadFolders(wizard.targetModelId.value)
+    if (!isCurrentInitialize(generation)) return
+  }
+  if (!isCurrentInitialize(generation)) return
   await wizard.open(props.sourceDiagramId)
+}
+
+function invalidateInitialize(): void {
+  initializeGeneration += 1
+  folderTree.setModel('')
 }
 
 function closeWizard(): void {
   if (wizard.loading.value) return
-  folderTree.setModel('')
+  invalidateInitialize()
   wizard.close()
   emit('close')
 }
@@ -199,7 +219,7 @@ watch(
   isOpen => {
     if (isOpen) void initialize()
     else {
-      folderTree.setModel('')
+      invalidateInitialize()
       wizard.close()
     }
   },

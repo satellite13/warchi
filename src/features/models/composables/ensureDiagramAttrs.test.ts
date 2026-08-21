@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet } from '@/composables/useApi'
+import { apiFetch } from '@/composables/useApi'
 import { createEmptyModelEditorState } from '../types'
 import {
   ensureDiagramAttrsLoaded,
@@ -8,12 +8,103 @@ import {
 import { toEditorDiagram, toEditorDiagramPreservingLocalAttrs } from './modelEditorMappers'
 
 vi.mock('@/composables/useApi', () => ({
-  apiGet: vi.fn(),
+  apiFetch: vi.fn(),
 }))
 
 describe('ensureDiagramAttrsLoaded', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('passes AbortSignal and preserves API status/code on hydration failure', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [
+      toEditorDiagram({
+        id: 'diagram-1',
+        name: 'D',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: null,
+        createdAt: null,
+        updatedAt: null,
+      }),
+    ]
+    const controller = new AbortController()
+    vi.mocked(apiFetch).mockResolvedValue({
+      success: false,
+      error: {
+        status: 413,
+        message: 'Diagram attrs too large',
+        details: { code: 'DIAGRAM_ATTRS_LIMIT_EXCEEDED' },
+      },
+    })
+
+    await expect(
+      ensureDiagramAttrsLoaded(() => state, 'diagram-1', {
+        expectedModelId: 'model-1',
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({
+      status: 413,
+      code: 'DIAGRAM_ATTRS_LIMIT_EXCEEDED',
+      message: 'Diagram attrs too large',
+    })
+    expect(apiFetch).toHaveBeenCalledWith('/diagrams/diagram-1', {
+      method: 'GET',
+      signal: controller.signal,
+    })
+  })
+
+  it('deduplicates guarded hydration calls that share the same AbortSignal', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [
+      toEditorDiagram({
+        id: 'diagram-1',
+        name: 'D',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: null,
+        createdAt: null,
+        updatedAt: null,
+      }),
+    ]
+    const controller = new AbortController()
+    vi.mocked(apiFetch).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'diagram-1',
+        name: 'D',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: '{"instances":{"nodes":[],"edges":[]}}',
+        createdAt: null,
+        updatedAt: null,
+      },
+    })
+
+    await Promise.all([
+      ensureDiagramAttrsLoaded(() => state, 'diagram-1', {
+        expectedModelId: 'model-1',
+        signal: controller.signal,
+      }),
+      ensureDiagramAttrsLoaded(() => state, 'diagram-1', {
+        expectedModelId: 'model-1',
+        signal: controller.signal,
+      }),
+    ])
+
+    expect(apiFetch).toHaveBeenCalledTimes(1)
   })
 
   it('hydrates pending diagram attrs from GET /diagrams/{id}', async () => {
@@ -34,7 +125,7 @@ describe('ensureDiagramAttrsLoaded', () => {
     ]
     expect(state.diagrams[0]?._attrsPending).toBe(true)
 
-    vi.mocked(apiGet).mockResolvedValueOnce({
+    vi.mocked(apiFetch).mockResolvedValueOnce({
       success: true,
       data: {
         id: 'diagram-1',
@@ -52,7 +143,10 @@ describe('ensureDiagramAttrsLoaded', () => {
 
     const hydrated = await ensureDiagramAttrsLoaded(() => state, 'diagram-1')
 
-    expect(apiGet).toHaveBeenCalledWith('/diagrams/diagram-1')
+    expect(apiFetch).toHaveBeenCalledWith('/diagrams/diagram-1', {
+      method: 'GET',
+      signal: undefined,
+    })
     expect(hydrated?._attrsPending).toBe(false)
     expect(hydrated?.parsedAttrs.instances.nodes).toHaveLength(1)
     expect(state.diagrams[0]?._attrsPending).toBe(false)
@@ -76,7 +170,7 @@ describe('ensureDiagramAttrsLoaded', () => {
     ]
 
     await ensureDiagramAttrsLoaded(state, 'diagram-1')
-    expect(apiGet).not.toHaveBeenCalled()
+    expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('keeps a local folder move when hydrating a dirty pending diagram', async () => {
@@ -100,7 +194,7 @@ describe('ensureDiagramAttrsLoaded', () => {
       },
     ]
 
-    vi.mocked(apiGet).mockResolvedValueOnce({
+    vi.mocked(apiFetch).mockResolvedValueOnce({
       success: true,
       data: {
         id: 'diagram-1',
@@ -141,8 +235,8 @@ describe('ensureDiagramAttrsLoaded', () => {
         updatedAt: null,
       }),
     ]
-    let finishRequest!: (value: Awaited<ReturnType<typeof apiGet>>) => void
-    vi.mocked(apiGet).mockReturnValueOnce(
+    let finishRequest!: (value: Awaited<ReturnType<typeof apiFetch>>) => void
+    vi.mocked(apiFetch).mockReturnValueOnce(
       new Promise(resolve => {
         finishRequest = resolve
       })
@@ -220,7 +314,7 @@ describe('ensureDiagramAttrsLoaded', () => {
       }),
     ]
 
-    vi.mocked(apiGet).mockResolvedValue({
+    vi.mocked(apiFetch).mockResolvedValue({
       success: true,
       data: {
         id: 'dirty-pending',
@@ -238,8 +332,11 @@ describe('ensureDiagramAttrsLoaded', () => {
 
     await ensureDirtyPendingDiagramAttrsLoaded(() => state)
 
-    expect(apiGet).toHaveBeenCalledTimes(1)
-    expect(apiGet).toHaveBeenCalledWith('/diagrams/dirty-pending')
+    expect(apiFetch).toHaveBeenCalledTimes(1)
+    expect(apiFetch).toHaveBeenCalledWith('/diagrams/dirty-pending', {
+      method: 'GET',
+      signal: undefined,
+    })
     expect(state.diagrams[0]?._attrsPending).toBe(false)
     expect(state.diagrams[1]?._attrsPending).toBe(true)
   })

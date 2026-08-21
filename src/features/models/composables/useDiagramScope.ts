@@ -1,10 +1,13 @@
-import { computed, onScopeDispose, ref, type Ref } from 'vue'
+import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 import type { ApiError } from '@/composables/useApi'
 import type { LinkResponse, NodeResponse } from '@/types/api'
 import type { ModelEditorState } from '../types'
-import { ensureDiagramAttrsLoaded } from './ensureDiagramAttrs'
+import { DiagramAttrsLoadError, ensureDiagramAttrsLoaded } from './ensureDiagramAttrs'
 import { resolveModelLinks, resolveModelNodes } from './modelScopedApi'
 import type { useModelPartialStore } from './useModelPartialStore'
+
+const DIAGRAM_SCOPE_LINK_LIMIT = 5000
+const LINK_LIMIT_ERROR_CODE = 'MODEL_LINK_RESOLVE_RESULT_LIMIT_EXCEEDED'
 
 export type DiagramScopeProgress = {
   phase: 'diagram' | 'nodes' | 'links' | 'endpoints'
@@ -55,6 +58,8 @@ export function useDiagramScope(options: {
   state: Ref<ModelEditorState>
   selectedDiagramId: Ref<string | null>
   partialStore: ReturnType<typeof useModelPartialStore>
+  autoOpen?: boolean
+  beforeOpen?: () => Promise<void>
 }) {
   const progress = ref<DiagramScopeProgress | null>(null)
   const error = ref<DiagramScopeError | null>(null)
@@ -73,7 +78,7 @@ export function useDiagramScope(options: {
     )
   }
   const diagramScopeReady = computed(isReady)
-  const readyDiagramId = computed(() => (isReady() ? ready.value?.diagramId ?? null : null))
+  const readyDiagramId = computed(() => (isReady() ? (ready.value?.diagramId ?? null) : null))
 
   const isCurrent = (session: DiagramScopeSession): boolean =>
     active === session &&
@@ -116,6 +121,7 @@ export function useDiagramScope(options: {
       const diagram = await ensureDiagramAttrsLoaded(() => options.state.value, diagramId, {
         expectedModelId: modelId,
         shouldApply: () => isCurrent(session),
+        signal: session.controller.signal,
       })
       if (!diagram || !isCurrent(session)) return
       updateProgress(session, 'diagram', 1, 1)
@@ -147,7 +153,20 @@ export function useDiagramScope(options: {
         error.value = toScopeError(linksResult.error)
         return
       }
-      updateProgress(session, 'links', nodeIds.length + linkIds.length, nodeIds.length + linkIds.length)
+      if (linksResult.data.links.length > DIAGRAM_SCOPE_LINK_LIMIT) {
+        error.value = {
+          status: 413,
+          code: LINK_LIMIT_ERROR_CODE,
+          message: `Resolved diagram scope exceeds ${DIAGRAM_SCOPE_LINK_LIMIT} links.`,
+        }
+        return
+      }
+      updateProgress(
+        session,
+        'links',
+        nodeIds.length + linkIds.length,
+        nodeIds.length + linkIds.length
+      )
 
       const nodes: NodeResponse[] = [...nodesResult.data.nodes]
       const links: LinkResponse[] = linksResult.data.links
@@ -155,9 +174,9 @@ export function useDiagramScope(options: {
         ...options.partialStore.store.nodeById.keys(),
         ...nodes.map(node => node.id),
       ])
-      const endpointIds = uniqueIds(
-        links.flatMap(link => [link.sourceId, link.targetId])
-      ).filter(id => !knownNodeIds.has(id))
+      const endpointIds = uniqueIds(links.flatMap(link => [link.sourceId, link.targetId])).filter(
+        id => !knownNodeIds.has(id)
+      )
 
       if (endpointIds.length > 0) {
         updateProgress(session, 'endpoints', 0, endpointIds.length)
@@ -186,11 +205,18 @@ export function useDiagramScope(options: {
       error.value = null
     } catch (caught) {
       if (!isCurrent(session)) return
-      error.value = {
-        status: 0,
-        message:
-          caught instanceof Error ? caught.message : 'Не удалось загрузить данные диаграммы.',
-      }
+      error.value =
+        caught instanceof DiagramAttrsLoadError
+          ? {
+              status: caught.status,
+              message: caught.message,
+              ...(caught.code ? { code: caught.code } : {}),
+            }
+          : {
+              status: 0,
+              message:
+                caught instanceof Error ? caught.message : 'Не удалось загрузить данные диаграммы.',
+            }
     } finally {
       if (isCurrent(session)) progress.value = null
     }
@@ -203,6 +229,26 @@ export function useDiagramScope(options: {
       return
     }
     await open(diagramId)
+  }
+
+  if (options.autoOpen) {
+    let watchToken = 0
+    watch(
+      [
+        options.selectedDiagramId,
+        () => options.state.value.modelId,
+        options.partialStore.generation,
+      ],
+      async ([diagramId]) => {
+        const token = ++watchToken
+        cancel()
+        if (typeof diagramId !== 'string' || !diagramId) return
+        await options.beforeOpen?.()
+        if (token !== watchToken || options.selectedDiagramId.value !== diagramId) return
+        await open(diagramId)
+      },
+      { immediate: true }
+    )
   }
 
   onScopeDispose(cancel)

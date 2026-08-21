@@ -1,6 +1,6 @@
 import { effectScope, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch, apiGet } from '@/composables/useApi'
+import { apiFetch } from '@/composables/useApi'
 import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
 import { createEmptyModelEditorState, type ModelEditorState } from '../types'
 import { parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
@@ -10,7 +10,6 @@ import { useModelPartialStore } from './useModelPartialStore'
 
 vi.mock('@/composables/useApi', () => ({
   apiFetch: vi.fn(),
-  apiGet: vi.fn(),
 }))
 
 const ok = <T>(data: T) => ({ success: true as const, data })
@@ -81,7 +80,11 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve }
 }
 
-function mountScope(stateValue?: ModelEditorState, selectedId = 'diagram-1') {
+function mountScope(
+  stateValue?: ModelEditorState,
+  selectedId = 'diagram-1',
+  options: { autoOpen?: boolean; beforeOpen?: () => Promise<void> } = {}
+) {
   const state = ref(stateValue ?? createEmptyModelEditorState())
   const selectedDiagramId = ref<string | null>(selectedId)
   const vueScope = effectScope()
@@ -90,7 +93,7 @@ function mountScope(stateValue?: ModelEditorState, selectedId = 'diagram-1') {
     partialStore.store.replaceMaterializedRows(state.value.nodes, state.value.links)
     return {
       partialStore,
-      diagramScope: useDiagramScope({ state, selectedDiagramId, partialStore }),
+      diagramScope: useDiagramScope({ state, selectedDiagramId, partialStore, ...options }),
     }
   })!
   return { state, selectedDiagramId, vueScope, ...result }
@@ -111,11 +114,12 @@ describe('useDiagramScope', () => {
         attrs: null,
       }),
     ]
-    vi.mocked(apiGet).mockResolvedValue(ok(diagramResponse('diagram-1', [...nodeIds, 'n-0'], [
-      'link-explicit',
-      'link-explicit',
-    ])))
     vi.mocked(apiFetch).mockImplementation(async (path, options) => {
+      if (path === '/diagrams/diagram-1') {
+        return ok(
+          diagramResponse('diagram-1', [...nodeIds, 'n-0'], ['link-explicit', 'link-explicit'])
+        )
+      }
       const body = JSON.parse(String(options?.body)) as {
         nodeIds?: string[]
         linkIds?: string[]
@@ -148,8 +152,9 @@ describe('useDiagramScope', () => {
     const linkBodies = vi
       .mocked(apiFetch)
       .mock.calls.filter(([path]) => path.endsWith('/links:resolve'))
-      .map(([, options]) =>
-        JSON.parse(String(options?.body)) as { linkIds: string[]; endpointNodeIds: string[] }
+      .map(
+        ([, options]) =>
+          JSON.parse(String(options?.body)) as { linkIds: string[]; endpointNodeIds: string[] }
       )
     expect(nodeBodies.slice(0, 3).map(body => body.nodeIds.length)).toEqual([2000, 2000, 501])
     expect(nodeBodies[3]?.nodeIds).toEqual(['outside-source', 'outside-target'])
@@ -275,9 +280,7 @@ describe('useDiagramScope', () => {
   it('keeps a 413 link-union error local and retries the same diagram', async () => {
     const state = createEmptyModelEditorState()
     state.modelId = 'model-1'
-    state.diagrams = [
-      toEditorDiagram(diagramResponse('diagram-1', ['node-1'], ['link-explicit'])),
-    ]
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', ['node-1'], ['link-explicit']))]
     let rejectLinks = true
     vi.mocked(apiFetch).mockImplementation(async path => {
       if (path.endsWith('/nodes:resolve')) {
@@ -321,6 +324,49 @@ describe('useDiagramScope', () => {
     mounted.vueScope.stop()
   })
 
+  it('rejects an aggregate deduplicated link union above 5000 before any partial merge', async () => {
+    const nodeIds = Array.from({ length: 3001 }, (_, index) => `n-${index}`)
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', nodeIds))]
+    let linkBatch = 0
+    vi.mocked(apiFetch).mockImplementation(async (path, options) => {
+      const body = JSON.parse(String(options?.body)) as {
+        nodeIds?: string[]
+        endpointNodeIds?: string[]
+      }
+      if (path.endsWith('/nodes:resolve')) {
+        return ok({
+          nodes: (body.nodeIds ?? []).map(id => nodeResponse(id)),
+          missingIds: [],
+        })
+      }
+      const start = linkBatch * 2500
+      const count = linkBatch === 0 ? 2500 : 2501
+      linkBatch += 1
+      return ok({
+        links: Array.from({ length: count }, (_, index) =>
+          linkResponse(`resolved-${start + index}`, 'n-0', 'n-1')
+        ),
+        missingLinkIds: [],
+      })
+    })
+    const mounted = mountScope(state)
+
+    await mounted.diagramScope.open('diagram-1')
+
+    expect(linkBatch).toBe(2)
+    expect(mounted.diagramScope.error.value).toEqual({
+      status: 413,
+      code: 'MODEL_LINK_RESOLVE_RESULT_LIMIT_EXCEEDED',
+      message: 'Resolved diagram scope exceeds 5000 links.',
+    })
+    expect(mounted.state.value.nodes).toEqual([])
+    expect(mounted.state.value.links).toEqual([])
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(false)
+    mounted.vueScope.stop()
+  })
+
   it('invalidates readiness when the partial-store generation changes', async () => {
     const state = createEmptyModelEditorState()
     state.modelId = 'model-1'
@@ -334,6 +380,32 @@ describe('useDiagramScope', () => {
 
     expect(mounted.diagramScope.diagramScopeReady.value).toBe(false)
     expect(mounted.diagramScope.readyDiagramId.value).toBeNull()
+    mounted.vueScope.stop()
+  })
+
+  it('reopens the same selected diagram after a partial-store generation reset', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', ['n-1']))]
+    let nodeResolveCalls = 0
+    vi.mocked(apiFetch).mockImplementation(async path => {
+      if (path.endsWith('/nodes:resolve')) {
+        nodeResolveCalls += 1
+        return ok({ nodes: [nodeResponse('n-1')], missingIds: [] })
+      }
+      return ok({ links: [], missingLinkIds: [] })
+    })
+    const mounted = mountScope(state, 'diagram-1', { autoOpen: true })
+
+    await vi.waitFor(() => {
+      expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
+    })
+    mounted.partialStore.resetPartialScopes('model-1')
+    await vi.waitFor(() => {
+      expect(nodeResolveCalls).toBe(2)
+      expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
+    })
+
     mounted.vueScope.stop()
   })
 })

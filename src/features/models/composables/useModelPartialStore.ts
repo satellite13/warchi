@@ -6,11 +6,7 @@ import {
 } from '@/utils/paginatedResponse'
 import type { PaginatedResponse } from '@/types/entities'
 import type { LinkResponse, NodeResponse } from '@/types/api'
-import type {
-  ModelEditorState,
-  ModelPartialRequestGuard,
-  TreeParentScope,
-} from '../types'
+import type { ModelEditorState, ModelPartialRequestGuard, TreeParentScope } from '../types'
 import { ModelPartialStore } from '../utils/modelPartialStore'
 import { toEditorLink, toEditorNode } from './modelEditorMappers'
 import { fetchNodeChildren } from './modelScopedApi'
@@ -34,6 +30,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
   const store = new ModelPartialStore()
   const childrenLoading = ref<Set<string>>(new Set())
   const childrenErrors = ref<Map<string, string>>(new Map())
+  const generation = ref(store.generation)
   const sessions = new Map<string, ScopeRequestSession>()
   const inFlight = new Map<string, { promise: Promise<void> }>()
   let modelId: string | null = null
@@ -139,7 +136,8 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     if (!modelId) return Promise.resolve()
 
     const requestedModelId = modelId
-    const session = restart || !sessions.has(scopeKey) ? startSession(scope) : sessions.get(scopeKey)!
+    const session =
+      restart || !sessions.has(scopeKey) ? startSession(scope) : sessions.get(scopeKey)!
     setLoading(scopeKey, true)
     setError(scopeKey, null)
     const entry = { promise: Promise.resolve() }
@@ -201,14 +199,12 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
     }
   }
 
-  const resetPartialScopes = (
-    nextModelId: string | null,
-    initial?: InitialChildrenScope
-  ): void => {
+  const resetPartialScopes = (nextModelId: string | null, initial?: InitialChildrenScope): void => {
     for (const session of sessions.values()) session.controller.abort()
     sessions.clear()
     inFlight.clear()
     store.reset()
+    generation.value = store.generation
     modelId = nextModelId
     childrenLoading.value = new Set()
     childrenErrors.value = new Map()
@@ -250,6 +246,7 @@ export function useModelPartialStore(state: Ref<ModelEditorState>) {
 
   return {
     store,
+    generation,
     childrenLoading,
     childrenErrors,
     loadChildren,

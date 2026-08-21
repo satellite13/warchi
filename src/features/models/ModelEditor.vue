@@ -21,11 +21,13 @@ import type { EditorLink } from './types'
 import {
   useModelBatchConflictUi,
   useDiagramScope,
+  mergeDetachedModelLinks,
   isDiagramOnlyEdgeModelLinkId,
   useModelDiagramConnections,
   useModelDiagramInstances,
   useModelDiagramExport,
   useModelEditor,
+  useDetachedModelLinks,
   useModelEditorSync,
   useModelSelection,
   useModelToolbarState,
@@ -61,6 +63,7 @@ import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import ModelDiagramScopeStatus from './components/ModelDiagramScopeStatus.vue'
 import LayoutPreviewModal from './components/LayoutPreviewModal.vue'
 import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
@@ -103,9 +106,7 @@ import {
   ensureDiagramAttrsLoaded,
 } from './composables/ensureDiagramAttrs'
 import { useModelEditorRouteNavigation } from './composables/useModelEditorRouteNavigation'
-import {
-  validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
-} from './utils/requiredCustomPropertiesValidation'
+import { validateRequiredCustomProperties as validateRequiredCustomPropertiesState } from './utils/requiredCustomPropertiesValidation'
 import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
@@ -148,6 +149,10 @@ const {
 
 const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
+const detachedModelLinks = useDetachedModelLinks(computed(() => state.value.modelId || null))
+const detachedConsumerLinks = computed(() =>
+  mergeDetachedModelLinks(detachedModelLinks.links.value, state.value.links)
+)
 
 const modelLiveSyncEnabled = computed(
   () => !!model.value && !isLoading.value && !errorMessage.value
@@ -196,8 +201,15 @@ const {
   selectedLinkEdgeInstanceId,
   applyDiagramSelection,
 } = useModelSelection({ state })
-const diagramScope = useDiagramScope({ state, selectedDiagramId, partialStore })
+const diagramScope = useDiagramScope({
+  state,
+  selectedDiagramId,
+  partialStore,
+  autoOpen: true,
+  beforeOpen: whenCatalogReady,
+})
 const diagramScopeError = diagramScope.error
+const diagramScopeReady = diagramScope.diagramScopeReady
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
 
@@ -347,10 +359,7 @@ const diagramVersionsForCurrentName = computed(() => {
   const diagram = activeDiagram.value
   if (!diagram) return []
   const sameName = state.value.diagrams.filter(
-    d =>
-      !d._isDeleted &&
-      d.modelId === diagram.modelId &&
-      d.name.trim() === diagram.name.trim()
+    d => !d._isDeleted && d.modelId === diagram.modelId && d.name.trim() === diagram.name.trim()
   )
   return [...sameName].sort((a, b) => compareVersions(b.version, a.version))
 })
@@ -446,13 +455,13 @@ async function handleCreateBaseline() {
     if (created) {
       if (diagramRenderer.value) {
         await nextTick()
-        await new Promise<void>(r =>
-          requestAnimationFrame(() => requestAnimationFrame(() => r()))
-        )
+        await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))
         const exporter = new SvgExporter(diagramRenderer.value)
         let svg = exporter.exportSVG({
           includeBackground: true,
-          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff',
+          backgroundColor:
+            getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() ||
+            '#ffffff',
           padding: 24,
         })
         svg = appendDiagramCaption(svg, {
@@ -472,35 +481,18 @@ async function handleCreateBaseline() {
   }
 }
 
-const isPreparingDiagramCatalog = ref(false)
-const isPreparingDiagram = computed(
-  () => isPreparingDiagramCatalog.value || diagramScope.progress.value !== null
-)
-watch(selectedDiagramId, async diagramId => {
+const diagramScopeLoadingText = computed(() => {
+  const current = diagramScope.progress.value
+  if (!current || current.total === 0) return t('models.diagramLoading')
+  return `${t('models.diagramLoading')} ${current.loaded}/${current.total}`
+})
+watch(selectedDiagramId, () => {
   baselineError.value = null
-  if (!diagramId) {
-    isPreparingDiagramCatalog.value = false
-    diagramScope.cancel()
-    return
-  }
-  isPreparingDiagramCatalog.value = true
-  try {
-    // Components/relations must be present before canvas resolves shapes.
-    await Promise.all([whenCatalogReady(), diagramScope.open(diagramId)])
-  } finally {
-    if (selectedDiagramId.value === diagramId) {
-      isPreparingDiagramCatalog.value = false
-    }
-  }
 })
 
 async function retryDiagramScope(): Promise<void> {
-  isPreparingDiagramCatalog.value = true
-  try {
-    await Promise.all([whenCatalogReady(), diagramScope.reload()])
-  } finally {
-    isPreparingDiagramCatalog.value = false
-  }
+  await whenCatalogReady()
+  await diagramScope.reload()
 }
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
@@ -521,7 +513,8 @@ const nodeBindingComponentId = computed(() => {
   if (!notationId || !node) return null
   const instanceId = selectedNodeInstanceId.value
   const instance = instanceId
-    ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ?? null)
+    ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ??
+      null)
     : null
   return resolveInstanceComponentId({ instance, node, notationId })
 })
@@ -596,8 +589,8 @@ const nodeScopedValues = computed<Record<string, unknown>>(() => {
 
 const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
   state.value.diagrams
-    .filter((d) => !d._isDeleted)
-    .map((d) => ({ id: d.id, label: `${d.name} ${d.version}` }))
+    .filter(d => !d._isDeleted)
+    .map(d => ({ id: d.id, label: `${d.name} ${d.version}` }))
 )
 
 const documentsFromApi = ref<{ fileId: string; label: string }[]>([])
@@ -800,7 +793,10 @@ const traceabilityNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
 const traceabilityLinks = computed(() =>
-  state.value.links.filter(link => !link._isDeleted && !isUntypedLinkTypeId(link.linkTypeId))
+  (detachedModelLinks.loadedModelId.value === state.value.modelId
+    ? detachedConsumerLinks.value
+    : []
+  ).filter(link => !link._isDeleted && !isUntypedLinkTypeId(link.linkTypeId))
 )
 const treeVisibleNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
@@ -829,7 +825,7 @@ const canShowStyleTab = computed(
   () => !!activeDiagram.value && !isDiagramReadOnly.value && canEditSelectedElementStyle.value
 )
 const selectedElementIsComposite = computed(
-  () => selectedElementDiagramStyle.value?.nodeShape === 'composite',
+  () => selectedElementDiagramStyle.value?.nodeShape === 'composite'
 )
 const rightPanelTabs = computed(() => {
   const tabs: { id: string; label: string; icon: string }[] = []
@@ -841,7 +837,11 @@ const rightPanelTabs = computed(() => {
   }
   if (canShowStyleTab.value) {
     if (selectedElementIsComposite.value) {
-      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'dashboard_customize' })
+      tabs.push({
+        id: 'composite-style',
+        label: t('notations.compositeFigureStyleTab'),
+        icon: 'dashboard_customize',
+      })
     } else {
       tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
     }
@@ -852,6 +852,17 @@ const rightPanelTabs = computed(() => {
 watch([rightPanelTabs, activeRightTab], () => {
   if (!rightPanelTabs.value.some(tab => tab.id === activeRightTab.value)) {
     activeRightTab.value = rightPanelTabs.value[0]?.id ?? 'properties'
+  }
+})
+watch(activeRightTab, tab => {
+  if (tab === 'traceability') {
+    void detachedModelLinks.load()
+  }
+})
+watch(partialStore.generation, () => {
+  detachedModelLinks.reset()
+  if (activeRightTab.value === 'traceability') {
+    void whenCatalogReady().then(() => detachedModelLinks.load())
   }
 })
 
@@ -944,6 +955,7 @@ const {
   t: (key, params) => String(t(key, params ?? {})),
   setUiError,
   loadModel,
+  getExistingLinks: () => detachedConsumerLinks.value,
 })
 
 async function ensureImportNotationCatalog(notationId: string): Promise<void> {
@@ -1052,9 +1064,7 @@ const formatCustomPropertyValue = (value: unknown): string => {
   }
 }
 
-const getReuseLinkCustomProperties = (
-  link: EditorLink
-): Array<{ name: string; value: string }> => {
+const getReuseLinkCustomProperties = (link: EditorLink): Array<{ name: string; value: string }> => {
   const notationId = activeNotationId.value
   if (!notationId) return []
 
@@ -1314,7 +1324,7 @@ const bindLinkRelation = (
   if (relation) {
     applyDefaultCustomPropertyValuesFromAttrs(
       link.parsedAttrs.relationProperties[notationId][relationId]!,
-      relation.attrs,
+      relation.attrs
     )
   }
   const linkType = state.value.linkTypes.find(item => item.id === link.linkTypeId)
@@ -1437,7 +1447,7 @@ const markDiagramDeleted = (diagramId: string) => {
     .filter(diagram => diagram.id !== diagramId && !diagram._isDeleted)
     .flatMap(diagram => canvasModelNodeIds(diagram.parsedAttrs.instances))
   const untypedNodeTypeIds = new Set(
-    state.value.nodeTypes.filter(type => isUntypedTypeName(type.name)).map(type => type.id),
+    state.value.nodeTypes.filter(type => isUntypedTypeName(type.name)).map(type => type.id)
   )
   for (const nodeId of orphanedUntypedNodeIds({
     deletedCanvasNodeIds,
@@ -1777,10 +1787,7 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
 
   if (!selectedModelLinkId.value) return
   event.preventDefault()
-  openLinkDeleteDialog(
-    selectedModelLinkId.value,
-    selectedEdgeInstanceId.value ?? undefined
-  )
+  openLinkDeleteDialog(selectedModelLinkId.value, selectedEdgeInstanceId.value ?? undefined)
 }
 
 watch(
@@ -1805,9 +1812,7 @@ const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
     isDiagramOnlyEdgeModelLinkId,
   })
 
-  const idx = state.value.diagrams.findIndex(
-    d => d.id === diagram.id && !d._isDeleted
-  )
+  const idx = state.value.diagrams.findIndex(d => d.id === diagram.id && !d._isDeleted)
   if (idx >= 0) {
     const diagrams = [...state.value.diagrams]
     const current = diagrams[idx]
@@ -1816,11 +1821,7 @@ const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
     diagrams[idx] = {
       ...current,
       parsedAttrs: next,
-      ...(keepDirty
-        ? current._isNew
-          ? {}
-          : { _isDirty: true }
-        : { _isDirty: false }),
+      ...(keepDirty ? (current._isNew ? {} : { _isDirty: true }) : { _isDirty: false }),
     }
     state.value.diagrams = diagrams
   } else if (options?.dirty !== false) {
@@ -2127,7 +2128,6 @@ const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {
   openNodeDeleteDialog([], 'canvas', [instanceId])
 }
 
-
 const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
   if (isDiagramReadOnly.value) return
   selectedModelNodeIds.value = []
@@ -2145,10 +2145,10 @@ const boundaryRelationIds = (notationId: string): Set<string> =>
           relation.notationId === notationId &&
           hasSystemBooleanDefault(
             parseEntityAttrs(relation.attrs ?? null).customProperties,
-            'boundary',
-          ),
+            'boundary'
+          )
       )
-      .map(relation => relation.id),
+      .map(relation => relation.id)
   )
 
 const guestBoundaryLinks = (guestModelNodeId: string, hostModelNodeId?: string | null) => {
@@ -2172,7 +2172,7 @@ const removeBoundaryLinkEdges = (linkId: string, guestInstanceId: string): void 
         !(
           edge.modelLinkId === linkId &&
           (edge.targetInstanceId === guestInstanceId || edge.sourceInstanceId === guestInstanceId)
-        ),
+        )
     )
     if (diagram.parsedAttrs.instances.edges.length !== initial) {
       markDiagramDirty(diagram.id)
@@ -2183,7 +2183,7 @@ const removeBoundaryLinkEdges = (linkId: string, guestInstanceId: string): void 
 const handleRequestBoundaryDetach = (
   guestModelNodeId: string,
   guestInstanceId: string,
-  oldHostModelNodeId?: string | null,
+  oldHostModelNodeId?: string | null
 ) => {
   if (isDiagramReadOnly.value) return
   for (const link of guestBoundaryLinks(guestModelNodeId, oldHostModelNodeId)) {
@@ -2197,7 +2197,7 @@ const handleRequestBoundaryRebind = (
   guestInstanceId: string,
   newHostModelNodeId: string,
   _newHostInstanceId: string,
-  oldHostModelNodeId?: string | null,
+  oldHostModelNodeId?: string | null
 ) => {
   if (isDiagramReadOnly.value) return
   const diagram = activeDiagram.value
@@ -2225,7 +2225,7 @@ const handleRequestBoundaryRebind = (
   const keepIds = new Set(linksToKeep.map(link => link.id))
   const beforeEdges = diagram.parsedAttrs.instances.edges.length
   diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-    edge => !keepIds.has(edge.modelLinkId),
+    edge => !keepIds.has(edge.modelLinkId)
   )
   if (diagram.parsedAttrs.instances.edges.length !== beforeEdges) {
     markDiagramDirty(diagram.id)
@@ -2387,6 +2387,11 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'import-oef':
       if (canInspectDiagramJson.value) {
+        const loadedLinks = await detachedModelLinks.load()
+        if (!loadedLinks) {
+          setUiError(detachedModelLinks.error.value ?? t('common.error'))
+          break
+        }
         showImportWizard.value = true
       }
       break
@@ -2568,9 +2573,7 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   const diagram = activeDiagram.value
   if (!notationId || !relationId || !link || !diagram) return
   const edgeId = selectedLinkEdgeInstanceId.value
-  const edge = edgeId
-    ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
-    : null
+  const edge = edgeId ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId) : null
   const beforeAttrs = clonePlainDeep(edge?.attrs)
   const changed = setDiagramScopedLinkValue({
     diagram: diagram.parsedAttrs,
@@ -2621,11 +2624,13 @@ const {
   setNodeScopedValue,
   setNodeTypePropertyValue,
   t,
-  onDocLinkFailed: (message: string) =>
-    setUiError(t('models.docLinkRegisterFailed', { message })),
+  onDocLinkFailed: (message: string) => setUiError(t('models.docLinkRegisterFailed', { message })),
 })
 
-const handleCanvasContextChange = (ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }) => {
+const handleCanvasContextChange = (ctx: {
+  renderer: DiagramRenderer | null
+  interactionManager: InteractionManager | null
+}) => {
   diagramRenderer.value = ctx.renderer
   diagramInteractionManager.value = ctx.interactionManager
 }
@@ -2754,10 +2759,7 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
     if (!componentId) return withInstanceDimensions(undefined, instance)
     const component = state.value.components.find(item => item.id === componentId)
     if (!component) return withInstanceDimensions(undefined, instance)
-    return withInstanceDimensions(
-      parseEntityAttrs(component.attrs ?? null).diagramStyle,
-      instance
-    )
+    return withInstanceDimensions(parseEntityAttrs(component.attrs ?? null).diagramStyle, instance)
   }
 
   if (selectedElementId.startsWith('edge-')) {
@@ -2982,16 +2984,16 @@ const cancelLeave = () => {
 /** Админ снял блокировку — выкинуть из диаграммы без сохранения */
 watch(
   () => diagramEditLock.lockForceRevoked.value,
-  (revoked) => {
+  revoked => {
     if (!revoked) return
     dismissForceRevoked()
     alert(t('models.diagramLockForceRevoked'))
     allowLeave.value = true
     router.push({ name: 'models' })
-  },
+  }
 )
 
-onBeforeRouteLeave((to) => {
+onBeforeRouteLeave(to => {
   if (allowLeave.value) {
     allowLeave.value = false
     return true
@@ -3097,7 +3099,7 @@ onBeforeUnmount(() => {
     </template>
     <template #default>
       <div
-        v-if="catalogLoadWarning || diagramScopeError"
+        v-if="catalogLoadWarning"
         class="background-load-warnings"
         role="status"
         aria-live="polite"
@@ -3105,12 +3107,6 @@ onBeforeUnmount(() => {
         <div v-if="catalogLoadWarning" class="background-load-warnings__item">
           <span>{{ catalogLoadWarning }}</span>
           <button type="button" class="btn btn--secondary" @click="retryCatalogLoad">
-            {{ t('common.retry') }}
-          </button>
-        </div>
-        <div v-if="diagramScopeError" class="background-load-warnings__item">
-          <span>{{ diagramScopeError.message }}</span>
-          <button type="button" class="btn btn--secondary" @click="retryDiagramScope">
             {{ t('common.retry') }}
           </button>
         </div>
@@ -3156,10 +3152,13 @@ onBeforeUnmount(() => {
           class="model-canvas-area"
           :class="{
             'model-canvas-area--has-newer-banner':
-              newerNotationVersions.length > 0 && !!activeDiagram && !isDiagramReadOnly,
+              newerNotationVersions.length > 0 &&
+              !!activeDiagram &&
+              diagramScopeReady &&
+              !isDiagramReadOnly,
           }"
         >
-          <template v-if="activeDiagram && !isDiagramReadOnly">
+          <template v-if="activeDiagram && diagramScopeReady && !isDiagramReadOnly">
             <button
               v-if="!canvasSettingsVisible"
               type="button"
@@ -3218,10 +3217,17 @@ onBeforeUnmount(() => {
             </div>
           </template>
           <div
-            v-if="newerNotationVersions.length > 0 && activeDiagram && !isDiagramReadOnly"
+            v-if="
+              newerNotationVersions.length > 0 &&
+              activeDiagram &&
+              diagramScopeReady &&
+              !isDiagramReadOnly
+            "
             class="model-canvas-area__newer-notation-banner"
           >
-            <span class="material-symbols-outlined model-canvas-area__newer-notation-icon">info</span>
+            <span class="material-symbols-outlined model-canvas-area__newer-notation-icon"
+              >info</span
+            >
             <span class="model-canvas-area__newer-notation-text">
               {{
                 t('diagram.newerNotationVersionsBanner', {
@@ -3248,7 +3254,7 @@ onBeforeUnmount(() => {
               :show-diagram-wiki-button="showDiagramWikiToolbarButton"
               :model-name="model?.name"
               :model-version="model?.version"
-              :has-active-diagram="!!activeDiagram"
+              :has-active-diagram="!!activeDiagram && diagramScopeReady"
               :can-undo="canUndo"
               :can-redo="canRedo"
               :can-share="canShareModel"
@@ -3269,6 +3275,7 @@ onBeforeUnmount(() => {
             />
           </div>
           <ModelDiagramCanvas
+            v-if="!activeDiagram || diagramScopeReady"
             :key="activeDiagram?.id ?? 'none'"
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
@@ -3303,8 +3310,8 @@ onBeforeUnmount(() => {
             @update-diagram="setDiagramAttrs"
             @flush-diagram-history="diagramHistoryBatcher.flush"
             @select-nodes="handleCanvasSelectNodes"
-            @select-instance-ids="(ids) => (selectedInstanceIds = ids)"
-            @select-edge-instance-id="(id) => (selectedEdgeInstanceId = id)"
+            @select-instance-ids="ids => (selectedInstanceIds = ids)"
+            @select-edge-instance-id="id => (selectedEdgeInstanceId = id)"
             @select-link="
               ($event: string | null) => {
                 selectedModelLinkId = $event
@@ -3338,6 +3345,14 @@ onBeforeUnmount(() => {
             @palette-visible-change="paletteVisible = $event"
             @open-diagram="selectDiagram"
             @open-document="handleOpenDocumentFromBadge"
+          />
+          <ModelDiagramScopeStatus
+            v-else
+            :loading="!diagramScopeError"
+            :loading-text="diagramScopeLoadingText"
+            :error="diagramScopeError?.message"
+            :retry-text="t('common.retry')"
+            @retry="retryDiagramScope"
           />
           <div
             v-if="activeDiagram && isActiveNotationRulesLoading"
@@ -3373,9 +3388,15 @@ onBeforeUnmount(() => {
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
               @bind-node-component="handleBindNodeComponent"
-              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)"
-              @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
-              @set-link-type-property-value="(k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)"
+              @bind-link-relation="
+                id => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)
+              "
+              @set-node-type-property-value="
+                (k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)
+              "
+              @set-link-type-property-value="
+                (k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)
+              "
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               @create-document-for-property="
@@ -3384,7 +3405,13 @@ onBeforeUnmount(() => {
               :on-open-node-document="handleOpenNodeDoc"
             />
             <ModelTraceabilityPanel
-              v-if="activeRightTab === 'traceability' && canShowTraceabilityTab && selectedNode"
+              v-if="
+                activeRightTab === 'traceability' &&
+                canShowTraceabilityTab &&
+                selectedNode &&
+                !detachedModelLinks.loading.value &&
+                !detachedModelLinks.error.value
+              "
               :selected-node="selectedNode"
               :nodes="traceabilityNodes"
               :links="traceabilityLinks"
@@ -3399,6 +3426,36 @@ onBeforeUnmount(() => {
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
             />
+            <div
+              v-else-if="
+                activeRightTab === 'traceability' &&
+                canShowTraceabilityTab &&
+                detachedModelLinks.loading.value
+              "
+              class="background-load-warnings__item"
+              role="status"
+            >
+              <UiIcon name="sync" class="spin" />
+              <span>{{ t('common.loading') }}</span>
+            </div>
+            <div
+              v-else-if="
+                activeRightTab === 'traceability' &&
+                canShowTraceabilityTab &&
+                detachedModelLinks.error.value
+              "
+              class="background-load-warnings__item"
+              role="status"
+            >
+              <span>{{ detachedModelLinks.error.value }}</span>
+              <button
+                type="button"
+                class="btn btn--secondary"
+                @click="detachedModelLinks.load(true)"
+              >
+                {{ t('common.retry') }}
+              </button>
+            </div>
             <NodeStylePanel
               v-if="activeRightTab === 'style' && canShowStyleTab"
               :selected-element-id="selectedCanvasElementId"
@@ -3464,7 +3521,7 @@ onBeforeUnmount(() => {
     :busy="layoutBusy"
     @close="handleLayoutPreviewClose"
     @apply="handleLayoutPreviewApply"
-    @error="(msg) => setUiError(msg || t('toolbar.autoLayoutFailed'))"
+    @error="msg => setUiError(msg || t('toolbar.autoLayoutFailed'))"
   />
 
   <BaseModal
@@ -3492,7 +3549,9 @@ onBeforeUnmount(() => {
         <span>{{ t('models.nodeTypeLabel') }}</span>
         <SearchableSelect
           v-model="newNodeTypeId"
-          :options="nonDirectoryNodeTypes.map((typeItem) => ({ id: typeItem.id, label: typeItem.name }))"
+          :options="
+            nonDirectoryNodeTypes.map(typeItem => ({ id: typeItem.id, label: typeItem.name }))
+          "
           :placeholder="t('models.selectType')"
           :search-placeholder="t('models.typeSearchPlaceholder')"
           :empty-text="t('common.nothingFound')"
@@ -3556,7 +3615,12 @@ onBeforeUnmount(() => {
       </p>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" :disabled="isMigrating" @click="closeMigrateModal">
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="isMigrating"
+        @click="closeMigrateModal"
+      >
         {{ t('common.cancel') }}
       </button>
       <button
@@ -3565,7 +3629,9 @@ onBeforeUnmount(() => {
         :disabled="isMigrating"
         @click="confirmMigrateNotation"
       >
-        {{ isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction') }}
+        {{
+          isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction')
+        }}
       </button>
     </template>
   </BaseModal>
@@ -3764,7 +3830,11 @@ onBeforeUnmount(() => {
         {{ t('models.removeLinkFromDiagram') }}
       </button>
       <button
-        v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) && !isUntypedModelLinkId(pendingDeleteLinkId)"
+        v-if="
+          pendingDeleteLinkId &&
+          !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) &&
+          !isUntypedModelLinkId(pendingDeleteLinkId)
+        "
         type="button"
         class="btn btn--danger"
         @click="removeLinkFromModel"
@@ -3840,7 +3910,7 @@ onBeforeUnmount(() => {
     :relations="state.relations"
     :relation-rules="state.relationRules"
     :existing-nodes="state.nodes"
-    :existing-links="state.links"
+    :existing-links="detachedConsumerLinks"
     :existing-diagrams="state.diagrams"
     :import-busy="isImportingOef"
     :import-progress="oefImportProgress"
@@ -3874,10 +3944,18 @@ onBeforeUnmount(() => {
         {{ t('models.oefImportReportUpdatedLinks', { count: oefImportReport.linksUpdated }) }}
       </li>
       <li>
-        {{ t('models.oefImportReportDiagramNodeInstances', { count: oefImportReport.diagramNodeInstances }) }}
+        {{
+          t('models.oefImportReportDiagramNodeInstances', {
+            count: oefImportReport.diagramNodeInstances,
+          })
+        }}
       </li>
       <li>
-        {{ t('models.oefImportReportDiagramEdgeInstances', { count: oefImportReport.diagramConnectionInstances }) }}
+        {{
+          t('models.oefImportReportDiagramEdgeInstances', {
+            count: oefImportReport.diagramConnectionInstances,
+          })
+        }}
       </li>
     </ul>
     <p v-if="oefImportReport.warningsCount > 0" class="leave-text leave-text--warning">
@@ -3893,17 +3971,33 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="oefImportReport.missingRequired.total > 0" class="model-import-report__warnings">
       <p class="leave-text leave-text--warning">
-        {{ t('models.oefImportReportMissingRequiredTitle', { count: oefImportReport.missingRequired.total }) }}
+        {{
+          t('models.oefImportReportMissingRequiredTitle', {
+            count: oefImportReport.missingRequired.total,
+          })
+        }}
       </p>
       <ul class="model-import-report model-import-report--warnings">
         <li>
-          {{ t('models.oefImportReportMissingRequiredNodeType', { count: oefImportReport.missingRequired.nodeType }) }}
+          {{
+            t('models.oefImportReportMissingRequiredNodeType', {
+              count: oefImportReport.missingRequired.nodeType,
+            })
+          }}
         </li>
         <li>
-          {{ t('models.oefImportReportMissingRequiredComponent', { count: oefImportReport.missingRequired.component }) }}
+          {{
+            t('models.oefImportReportMissingRequiredComponent', {
+              count: oefImportReport.missingRequired.component,
+            })
+          }}
         </li>
         <li>
-          {{ t('models.oefImportReportMissingRequiredRelation', { count: oefImportReport.missingRequired.relation }) }}
+          {{
+            t('models.oefImportReportMissingRequiredRelation', {
+              count: oefImportReport.missingRequired.relation,
+            })
+          }}
         </li>
       </ul>
     </div>
@@ -3941,11 +4035,7 @@ onBeforeUnmount(() => {
     v-if="loadProgress && !initialSnapshotReady && !errorMessage"
     :progress="loadProgress"
   />
-  <div v-if="!isLoading && isPreparingDiagram" class="overlay-loading overlay-loading--soft">
-    <UiIcon name="sync" class="overlay-loading__icon spin" />
-    <span>{{ t('models.diagramLoading') }}</span>
-  </div>
-  <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">
+  <div v-if="errorMessage" class="overlay-loading overlay-loading--error">
     <UiIcon name="error" class="overlay-loading__icon" />
     <span>{{ errorMessage }}</span>
   </div>
@@ -4311,5 +4401,4 @@ onBeforeUnmount(() => {
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
 }
-
 </style>

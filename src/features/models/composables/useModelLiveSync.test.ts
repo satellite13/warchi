@@ -261,7 +261,11 @@ describe('useModelLiveSync snapshot pull', () => {
     let modelGets = 0
 
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
-      if (path.startsWith('/nodes?') || path.startsWith('/links?') || path.startsWith('/diagrams?')) {
+      if (
+        path.startsWith('/nodes?') ||
+        path.startsWith('/links?') ||
+        path.startsWith('/diagrams?')
+      ) {
         return { success: true, data: page([]) }
       }
       if (path === '/models/model-gone') {
@@ -342,8 +346,13 @@ describe('useModelLiveSync snapshot pull', () => {
 
   it('does not pull unscoped collections when websocket connects immediately after shell readiness', async () => {
     const snapshotReady = ref(false)
-    vi.mocked(apiGet).mockImplementation(async () => {
-      throw new Error('websocket connect must reuse the materialized shell baseline')
+    let modelGets = 0
+    vi.mocked(apiGet).mockImplementation(async path => {
+      if (path === '/models/model-1') {
+        modelGets += 1
+        return { success: true, data: model({ updatedAt: '2026-01-01T00:00:00.000Z' }) }
+      }
+      throw new Error('unchanged websocket connect must not pull unscoped collections')
     })
 
     const wrapper = mount(
@@ -354,7 +363,7 @@ describe('useModelLiveSync snapshot pull', () => {
           useModelLiveSync({
             modelId: ref('model-1'),
             state: ref(state),
-            model: ref(model()),
+            model: ref(model({ updatedAt: '2026-01-01T00:00:00.000Z' })),
             enabled: ref(true),
             isLoading: ref(false),
             initialSnapshotReady: snapshotReady,
@@ -374,7 +383,71 @@ describe('useModelLiveSync snapshot pull', () => {
     client?.options.onConnect()
     await flushPromises()
 
-    expect(apiGet).not.toHaveBeenCalled()
+    expect(modelGets).toBe(1)
+    expect(
+      vi
+        .mocked(apiGet)
+        .mock.calls.filter(([path]) => path.startsWith('/nodes?') || path.startsWith('/links?'))
+    ).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('uses a safe transitional resync when model revision changes before subscription', async () => {
+    const snapshotReady = ref(false)
+    let nodePulls = 0
+    let linkPulls = 0
+    let modelGets = 0
+    vi.mocked(apiGet).mockImplementation(async path => {
+      if (path === '/models/model-1') {
+        modelGets += 1
+        return { success: true, data: model({ updatedAt: '2026-01-02T00:00:00.000Z' }) }
+      }
+      if (path.startsWith('/nodes?')) {
+        nodePulls += 1
+        return { success: true, data: page([]) }
+      }
+      if (path.startsWith('/links?')) {
+        linkPulls += 1
+        return { success: true, data: page([]) }
+      }
+      if (path.startsWith('/diagrams?')) {
+        return { success: true, data: page([]) }
+      }
+      throw new Error(`Unexpected apiGet path: ${path}`)
+    })
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          const state = createEmptyModelEditorState()
+          state.modelId = 'model-1'
+          useModelLiveSync({
+            modelId: ref('model-1'),
+            state: ref(state),
+            model: ref(model({ updatedAt: '2026-01-01T00:00:00.000Z' })),
+            enabled: ref(true),
+            isLoading: ref(false),
+            initialSnapshotReady: snapshotReady,
+            isSaving: ref(false),
+            modelDirty: ref(false),
+            ensureNotationRelationsAndRules: vi.fn(async () => undefined),
+            mode: 'ws',
+          })
+          return () => null
+        },
+      })
+    )
+    await flushPromises()
+    const client = stompMock.clients.at(-1)
+
+    snapshotReady.value = true
+    client?.options.onConnect()
+    await flushPromises()
+    await flushPromises()
+
+    expect(modelGets).toBe(2)
+    expect(nodePulls).toBe(1)
+    expect(linkPulls).toBe(1)
     wrapper.unmount()
   })
 
@@ -972,7 +1045,11 @@ describe('useModelLiveSync snapshot pull', () => {
     await flushPromises()
 
     expect(onModelTopicBroadcast).not.toHaveBeenCalled()
-    expect(apiGet).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(apiGet)
+        .mock.calls.filter(([path]) => path.startsWith('/nodes?') || path.startsWith('/links?'))
+    ).toEqual([])
     wrapper.unmount()
   })
 })

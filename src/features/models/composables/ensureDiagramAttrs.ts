@@ -1,4 +1,4 @@
-import { apiGet } from '@/composables/useApi'
+import { apiFetch, type ApiError } from '@/composables/useApi'
 import type { DiagramResponse } from '@/types/api'
 import type { EditorDiagram, ModelEditorState } from '../types'
 import { toEditorDiagram } from './modelEditorMappers'
@@ -7,17 +7,43 @@ type StateSource = ModelEditorState | (() => ModelEditorState)
 export type EnsureDiagramAttrsOptions = {
   expectedModelId?: string
   shouldApply?: () => boolean
+  signal?: AbortSignal
 }
 
 function resolveState(source: StateSource): ModelEditorState {
   return typeof source === 'function' ? source() : source
 }
 
-const inFlightById = new Map<string, Promise<EditorDiagram | null>>()
+type DiagramAttrsRequest = {
+  signal?: AbortSignal
+  promise: Promise<DiagramResponse>
+}
+
+export class DiagramAttrsLoadError extends Error {
+  readonly status: number
+  readonly code?: string
+  readonly cancelled: boolean
+
+  constructor(error: ApiError) {
+    super(error.message)
+    this.name = 'DiagramAttrsLoadError'
+    this.status = error.status
+    this.cancelled = error.cancelled === true
+    if (error.details && typeof error.details === 'object' && !Array.isArray(error.details)) {
+      const code = (error.details as Record<string, unknown>).code
+      if (typeof code === 'string' && code) this.code = code
+    }
+  }
+}
+
+const inFlightById = new Map<string, DiagramAttrsRequest>()
 let writeTail: Promise<unknown> = Promise.resolve()
 
 function enqueueWrite<T>(task: () => T): Promise<T> {
-  const run = writeTail.then(() => task(), () => task())
+  const run = writeTail.then(
+    () => task(),
+    () => task()
+  )
   writeTail = run.then(
     () => undefined,
     () => undefined
@@ -36,59 +62,64 @@ export async function ensureDiagramAttrsLoaded(
   if (index < 0) return null
   const current = initialState.diagrams[index]!
   const expectedModelId = options.expectedModelId ?? (initialState.modelId || current.modelId)
-  const guarded = options.expectedModelId !== undefined || options.shouldApply !== undefined
   const requestKey = `${expectedModelId}:${diagramId}`
-  const existing = guarded ? undefined : inFlightById.get(requestKey)
-  if (existing) return existing
 
   if (current.modelId !== expectedModelId) return null
   if (!current._attrsPending) return current
 
-  const promise = (async () => {
-    const result = await apiGet<DiagramResponse>(`/diagrams/${diagramId}`)
-    if (!result.success) {
-      throw new Error(result.error.message)
+  let request = inFlightById.get(requestKey)
+  if (!request || request.signal !== options.signal) {
+    const promise = (async (): Promise<DiagramResponse> => {
+      const result = await apiFetch<DiagramResponse>(`/diagrams/${diagramId}`, {
+        method: 'GET',
+        signal: options.signal,
+      })
+      if (!result.success) throw new DiagramAttrsLoadError(result.error)
+      return result.data
+    })()
+    const nextRequest: DiagramAttrsRequest = { signal: options.signal, promise }
+    const clearRequest = (): void => {
+      if (inFlightById.get(requestKey) === nextRequest) inFlightById.delete(requestKey)
     }
+    void promise.then(clearRequest, clearRequest)
+    request = nextRequest
+    inFlightById.set(requestKey, request)
+  }
 
-    const hydrated = toEditorDiagram(result.data, { attrsPending: false })
-    return enqueueWrite(() => {
-      const latest = resolveState(stateSource)
-      if (
-        (!!latest.modelId && latest.modelId !== expectedModelId) ||
-        result.data.modelId !== expectedModelId ||
-        options.shouldApply?.() === false
-      ) {
-        return null
-      }
-      const writeIndex = latest.diagrams.findIndex(
-        item => item.id === diagramId && item.modelId === expectedModelId
-      )
-      if (writeIndex < 0) return null
-      const previous = latest.diagrams[writeIndex]!
-      const next: EditorDiagram = {
-        ...hydrated,
-        _isNew: previous._isNew,
-        _isDirty: previous._isDirty,
-        _isDeleted: previous._isDeleted,
-      }
-      // Tree move / rename can happen while GET is in flight — keep local placement.
-      if (previous._isDirty || previous._isNew) {
-        next.nodeId = previous.nodeId
-        next.name = previous.name
-        next.version = previous.version
-        next.notationId = previous.notationId
-      }
-      const diagrams = [...latest.diagrams]
-      diagrams[writeIndex] = next
-      latest.diagrams = diagrams
-      return next
-    })
-  })().finally(() => {
-    if (!guarded) inFlightById.delete(requestKey)
+  const response = await request.promise
+  const hydrated = toEditorDiagram(response, { attrsPending: false })
+  return enqueueWrite(() => {
+    const latest = resolveState(stateSource)
+    if (
+      (!!latest.modelId && latest.modelId !== expectedModelId) ||
+      response.modelId !== expectedModelId ||
+      options.shouldApply?.() === false
+    ) {
+      return null
+    }
+    const writeIndex = latest.diagrams.findIndex(
+      item => item.id === diagramId && item.modelId === expectedModelId
+    )
+    if (writeIndex < 0) return null
+    const previous = latest.diagrams[writeIndex]!
+    const next: EditorDiagram = {
+      ...hydrated,
+      _isNew: previous._isNew,
+      _isDirty: previous._isDirty,
+      _isDeleted: previous._isDeleted,
+    }
+    // Tree move / rename can happen while GET is in flight — keep local placement.
+    if (previous._isDirty || previous._isNew) {
+      next.nodeId = previous.nodeId
+      next.name = previous.name
+      next.version = previous.version
+      next.notationId = previous.notationId
+    }
+    const diagrams = [...latest.diagrams]
+    diagrams[writeIndex] = next
+    latest.diagrams = diagrams
+    return next
   })
-
-  if (!guarded) inFlightById.set(requestKey, promise)
-  return promise
 }
 
 /** Hydrate attrs for every non-deleted diagram still pending (OEF label reuse matching). */
@@ -112,8 +143,7 @@ export async function ensureDirtyPendingDiagramAttrsLoaded(
   const state = resolveState(stateSource)
   const pendingIds = state.diagrams
     .filter(
-      diagram =>
-        !diagram._isDeleted && !diagram._isNew && diagram._isDirty && diagram._attrsPending
+      diagram => !diagram._isDeleted && !diagram._isNew && diagram._isDirty && diagram._attrsPending
     )
     .map(diagram => diagram.id)
   for (const id of pendingIds) {

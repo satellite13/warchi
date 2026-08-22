@@ -121,4 +121,35 @@ describe('validateRequiredCustomProperties', () => {
       params: { link: 'Relation A', prop: 'weight' },
     })
   })
+
+  it('ignores clean entities outside the validation candidates', () => {
+    const issue = validateRequiredCustomProperties({
+      state: stateWith({
+        nodeTypes: [
+          {
+            id: 'nt1',
+            attrs: JSON.stringify({ customProperties: [prop('code')] }),
+          } as never,
+        ],
+        nodes: [
+          {
+            id: 'clean-node',
+            name: 'Clean',
+            nodeTypeId: 'nt1',
+            parsedAttrs: {
+              treeOrder: 0,
+              notationComponents: {},
+              componentProperties: {},
+              typeProperties: { code: '' },
+            },
+          } as never,
+        ],
+      }),
+      activeDiagram: null,
+      nodes: [],
+      links: [],
+    })
+
+    expect(issue).toBeNull()
+  })
 })

@@ -1,4 +1,4 @@
-import type { Ref } from "vue"
+import { markRaw, type Ref } from "vue"
 import type { ModelData } from "@/types/entities"
 import type { ModelEditorState } from "../types"
 
@@ -23,13 +23,19 @@ export function useModelEditorStateHelpers(options: UseModelEditorStateHelpersOp
   let saveErrorTimer: ReturnType<typeof setTimeout> | null = null
 
   const markNodeDirty = (id: string): void => {
-    const row = options.state.value.nodes.find(item => item.id === id)
-    if (row && !row._isNew) row._isDirty = true
+    const index = options.state.value.nodes.findIndex(item => item.id === id)
+    const row = options.state.value.nodes[index]
+    if (row && !row._isNew) {
+      options.state.value.nodes[index] = markRaw({ ...row, _isDirty: true })
+    }
   }
 
   const markLinkDirty = (id: string): void => {
-    const row = options.state.value.links.find(item => item.id === id)
-    if (row && !row._isNew) row._isDirty = true
+    const index = options.state.value.links.findIndex(item => item.id === id)
+    const row = options.state.value.links[index]
+    if (row && !row._isNew) {
+      options.state.value.links[index] = markRaw({ ...row, _isDirty: true })
+    }
   }
 
   const markDiagramDirty = (id: string): void => {

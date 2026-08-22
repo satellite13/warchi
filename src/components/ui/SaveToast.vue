@@ -10,6 +10,7 @@ const props = withDefaults(
     successMessage?: string | null
     error?: string | null
     progress?: string | null
+    cancellable?: boolean
   }>(),
   {
     saving: false,
@@ -17,8 +18,13 @@ const props = withDefaults(
     successMessage: null,
     error: null,
     progress: null,
+    cancellable: false,
   },
 )
+
+const emit = defineEmits<{
+  cancel: []
+}>()
 
 const { t } = useI18n()
 
@@ -58,6 +64,14 @@ const iconName = computed(() => {
           :class="{ spin: mode === 'progress' }"
         />
         <span>{{ message }}</span>
+        <button
+          v-if="mode === 'progress' && cancellable"
+          type="button"
+          class="save-toast__cancel"
+          @click="emit('cancel')"
+        >
+          {{ t('common.cancel') }}
+        </button>
       </div>
     </Transition>
   </Teleport>
@@ -79,6 +93,22 @@ const iconName = computed(() => {
   z-index: 2100;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   pointer-events: none;
+}
+
+.save-toast--progress:has(.save-toast__cancel) {
+  pointer-events: auto;
+}
+
+.save-toast__cancel {
+  margin-left: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .save-toast--progress {

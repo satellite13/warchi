@@ -87,6 +87,12 @@ The left panel displays the hierarchical structure of the model:
 - **Components** — architecture elements (services, modules, databases, etc.)
 - **Diagrams** — graphical representations of the model
 
+Large models load incrementally: the editor first opens the tree root and diagram
+list, then loads the contents of an expanded folder. **Load more** fetches the
+next branch page; an error in one branch does not close the editor and can be
+retried. Opening a diagram loads only its instances and the required nodes and
+links.
+
 Use **search** above the tree: the list narrows to matches and their ancestor path, and non-matching ancestors are muted. Clearing search keeps the selected node in view.
 
 Actions are toolbar buttons and per-row mini-buttons (there is no context menu):
@@ -207,7 +213,7 @@ If a model with the same **name and version** already exists, a dialog lets you 
 
 ## Saving
 
-The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply.
+The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply. For a complete large-model check, the editor temporarily prepares a detached model snapshot and shows cancellable progress; this snapshot does not replace the open tree branches.
 
 When switching or closing a diagram with unsaved changes, the system will prompt to save, discard, or return to editing.
 
@@ -222,8 +228,8 @@ If you and another user **changed the same node, link, or diagram** so the serve
 
 Pick **one** of the two main actions at the bottom:
 
-- **Reload from server** — **full model reload** from the API. Conflicting **nodes and links** get **current server values** for every field (including attrs) so others’ tree edits are preserved; fields where you and the server already matched stay matched. If a **diagram** is listed: metadata and diagram attrs (except the canvas) come from the server; if the on-canvas **instances** block differed, **your** canvas copy is kept (no parallel canvas editing). Then **Save** again.  
-  **Note:** unsaved edits to **other** model objects (not in the conflict list) are **lost** on full reload — you keep server data plus the diagram canvas exception above.
+- **Reload from server** — the editor reloads the available tree branches and the open diagram. Conflicting **nodes and links** get **current server values** for every field (including attrs) so others’ tree edits are preserved; fields where you and the server already matched stay matched. If a **diagram** is listed: metadata and diagram attrs (except the canvas) come from the server; if the on-canvas **instances** block differed, **your** canvas copy is kept (no parallel canvas editing). Then **Save** again.
+  **Note:** unsaved edits to **other** model objects can be discarded while reloading; if loading fails, the conflict dialog remains open and the action can be retried.
 - **Overwrite server with my data** — save again with force overwrite; other users’ changes to those objects are lost.
 - **Cancel** — close the dialog; local edits stay, but you cannot finish saving until you choose a strategy.
 
@@ -235,7 +241,7 @@ Button labels match the in-app `models` locale strings.
 
 The model editor uses live sync for shared models:
 
-- when other users change model data, the client pulls fresh model, node, link, and diagram state;
+- when other users change model data, the client reloads only affected open branches, entities, and diagrams;
 - synchronization uses WebSocket notifications with periodic polling fallback;
 - your local unsaved draft remains visible in the current tab, and conflicting records are resolved via the save conflict dialog.
 

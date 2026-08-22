@@ -66,4 +66,10 @@ export default defineConfig([
       'vue/html-indent': 'off',
     },
   },
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      'vue/one-component-per-file': 'off',
+    },
+  },
 ]);

@@ -69,6 +69,10 @@ export const modelsMessages = {
         noNotations: 'Нет доступных нотаций',
         noFolders: 'В модели нет папок',
         rootFolder: 'Корень модели',
+        loadingFolders: 'Загружаем папки…',
+        loadMoreFolders: 'Загрузить ещё',
+        expandFolder: 'Раскрыть папку',
+        collapseFolder: 'Свернуть папку',
         nodes: 'Ноды',
         links: 'Связи',
         autoMatched: 'Найдено соответствие',
@@ -261,6 +265,18 @@ export const modelsMessages = {
       addRootFolder: 'Добавить корневую папку',
       addRootNode: 'Добавить корневую ноду',
       noNodes: 'Нет нод',
+      treeLoading: 'Загрузка...',
+      treeLoadError: 'Не удалось загрузить ветку',
+      treeLoadMore: 'Загрузить ещё',
+      treeSearchLoading: 'Поиск...',
+      treeSearchError: 'Не удалось выполнить поиск',
+      searchHitPath: 'Путь: {path}',
+      treeFocusLoading: 'Загрузка пути в дереве...',
+      selectedNodeLoading: 'Загрузка выбранного узла...',
+      treeScopeIncompleteMutation:
+        'Не удалось загрузить все элементы папки. Повторите изменение после восстановления соединения.',
+      expandTreeNode: 'Развернуть «{name}»',
+      collapseTreeNode: 'Свернуть «{name}»',
       noSearchResults: 'Ничего не найдено',
       searchResultsTruncated: 'Показаны первые {count} результатов. Уточните запрос.',
       createFolderOrNodeHint: 'Создайте папку или ноду в шапке',
@@ -315,6 +331,12 @@ export const modelsMessages = {
       modelNoLongerAvailable: 'Модель удалена или больше недоступна.',
       modelAccessRevoked: 'Доступ к модели отозван или отсутствует.',
       diagramLoading: 'Загрузка диаграммы…',
+      modelLoadNodes: 'Загрузка элементов… {loaded}/{total}',
+      modelLoadDiagrams: 'Загрузка диаграмм… {loaded}/{total}',
+      modelLoadCatalog: 'Загрузка каталога нотации…',
+      modelLoadLinks: 'Загрузка связей… {loaded}/{total}',
+      modelLoadPreparing: 'Подготовка интерфейса… {loaded}/{total}',
+      modelLoadComplete: 'Модель загружена',
       existingLinksFoundTitle: 'Найдены существующие связи',
       useExistingLink: 'Существующая связь модели',
       reuseLinkSelectHint: 'Выберите связь из списка или создайте новую.',
@@ -467,10 +489,16 @@ export const modelsMessages = {
       traceabilityUnknownLinkType: 'Неизвестный тип',
       traceabilityDiagramsTitle: 'Используется в диаграммах',
       traceabilityNoDiagrams: 'Эта нода не размещена ни на одной диаграмме',
+      traceabilityLoadingDiagrams: 'Загрузка диаграмм…',
       traceabilityTreeTitle: 'Дерево трассировки',
+      traceabilityLoadingBranch: 'Загрузка связей…',
+      traceabilityLoadMore: 'Загрузить ещё',
+      traceabilityAddNodeToDiagram: 'Добавить ноду «{name}» на диаграмму',
       traceabilityDragHint: 'Перетащите связь на диаграмму',
       traceabilityDragDisabledNoActiveDiagram: 'Откройте диаграмму, чтобы перетащить связь',
       traceabilityDragDisabledReadOnly: 'Диаграмма открыта в режиме только чтение',
+      traceabilityDragDisabledMissingComponent:
+        'В активной нотации нет компонента для этого типа узла',
       traceabilityDragDisabledAlreadyOnDiagram: 'Эта связь уже размещена на диаграмме',
       traceabilityDragDisabledMissingEndpointInstances:
         'Для перетаскивания оба конца связи должны быть размещены на диаграмме',
@@ -529,6 +557,8 @@ export const modelsMessages = {
       directoryTypeNotFound: 'Тип Directory не найден. Невозможно создать папку.',
       noAvailableNodeTypes: 'Нет доступных типов нод, кроме Directory.',
       diagramSwitchFailed: 'Не удалось открыть выбранную диаграмму после обновления данных.',
+      discardUnsavedFailed:
+        'Не удалось отменить несохранённые изменения. Текущая диаграмма не закрыта и не переключена.',
       noDiagramSelected: 'Диаграмма не выбрана',
       noteName: 'Заметка',
       containerName: 'Контейнер',
@@ -539,6 +569,21 @@ export const modelsMessages = {
       batchSaveVersionConflict: 'Конфликт версий при сохранении (данные изменены на сервере).',
       batchSaveBlankNodeName:
         'Нельзя сохранить: у {count} элемент(ов) пустое имя. Укажите имя и повторите сохранение.',
+      remoteCascadeSaveBlocked:
+        'Нельзя сохранить: удалённый узел конфликтует с {count} локальной связью. Отмените затронутые связи или перезагрузите модель, затем повторите сохранение.',
+      remoteCascadeConflictTitle:
+        'Удаление узла на сервере конфликтует с локальными связями: {count}.',
+      remoteCascadeConflictHelp:
+        'Отмените затронутые связи или перезагрузите модель, затем повторите сохранение.',
+      remoteCascadeDiscard: 'Отменить затронутые связи',
+      remoteCascadeReload: 'Перезагрузить модель',
+      detachedLinksStale: 'Связи модели изменились на сервере.',
+      detachedLinksRefresh: 'Обновить связи',
+      granularSyncError:
+        'Не удалось обновить сущность «{entity}». Локальные данные помечены как устаревшие.',
+      granularSyncRetry: 'Повторить синхронизацию',
+      oefDetachedLinksStale:
+        'Связи модели изменились. Обновите полный список связей перед продолжением импорта.',
       validationNodeTypePropRequired:
         'У ноды «{node}» не заполнено обязательное свойство типа «{prop}».',
       validationNodeComponentPropRequired:
@@ -557,6 +602,19 @@ export const modelsMessages = {
       edgeRelationNotFound: 'Для выбранной связи не найден relation нотации.',
       saveConflictNameVersion: 'Модель с таким именем и версией уже существует.',
       saveModelUpdateError: 'Ошибка обновления модели: {message}',
+      savePreparingValidation: 'Подготовка проверки модели',
+      saveValidationSnapshotFailed:
+        'Не удалось загрузить полную модель для проверки. Повторите сохранение.',
+      detachedSnapshotFailed: 'Не удалось загрузить полную модель для проверки.',
+      validationScriptsPreparing: 'Подготовка проверки скриптом',
+      validationScriptsSnapshotFailed:
+        'Не удалось загрузить полную модель для проверки. Повторите запуск скрипта.',
+      scopedReloadModelMissing: 'Не удалось определить модель.',
+      scopedReloadFailed: 'Не удалось перезагрузить модель.',
+      batchSaveConflictReloadFailed:
+        'Не удалось перезагрузить модель после конфликта. Повторите попытку.',
+      batchSaveConflictHydrateFailed:
+        'Не удалось загрузить атрибуты диаграммы после конфликта. Локальный холст сохранён, повторите попытку.',
       saveUpdatingModel: 'Обновление модели: {name}',
       saveCreatingNode: 'Создание узла: {name}',
       saveUpdatingNode: 'Обновление узла: {name}',
@@ -649,6 +707,10 @@ export const modelsMessages = {
         noNotations: 'No available notations',
         noFolders: 'This model has no folders',
         rootFolder: 'Model root',
+        loadingFolders: 'Loading folders…',
+        loadMoreFolders: 'Load more',
+        expandFolder: 'Expand folder',
+        collapseFolder: 'Collapse folder',
         nodes: 'Nodes',
         links: 'Links',
         autoMatched: 'Match found',
@@ -840,6 +902,18 @@ export const modelsMessages = {
       addRootFolder: 'Add root folder',
       addRootNode: 'Add root node',
       noNodes: 'No nodes',
+      treeLoading: 'Loading...',
+      treeLoadError: 'Could not load branch',
+      treeLoadMore: 'Load more',
+      treeSearchLoading: 'Searching...',
+      treeSearchError: 'Could not search the model',
+      searchHitPath: 'Path: {path}',
+      treeFocusLoading: 'Loading tree path...',
+      selectedNodeLoading: 'Loading selected node...',
+      treeScopeIncompleteMutation:
+        'Could not load every item in this folder. Retry the change after the connection recovers.',
+      expandTreeNode: 'Expand “{name}”',
+      collapseTreeNode: 'Collapse “{name}”',
       noSearchResults: 'No results',
       searchResultsTruncated: 'Showing the first {count} results. Refine your query.',
       createFolderOrNodeHint: 'Create a folder or node in the header',
@@ -895,6 +969,12 @@ export const modelsMessages = {
       modelNoLongerAvailable: 'The model was deleted or is no longer available.',
       modelAccessRevoked: 'Access to this model was revoked or is missing.',
       diagramLoading: 'Loading diagram…',
+      modelLoadNodes: 'Loading elements… {loaded}/{total}',
+      modelLoadDiagrams: 'Loading diagrams… {loaded}/{total}',
+      modelLoadCatalog: 'Loading notation catalog…',
+      modelLoadLinks: 'Loading links… {loaded}/{total}',
+      modelLoadPreparing: 'Preparing interface… {loaded}/{total}',
+      modelLoadComplete: 'Model loaded',
       existingLinksFoundTitle: 'Existing links found',
       useExistingLink: 'Existing model link',
       reuseLinkSelectHint: 'Pick a link from the list or create a new one.',
@@ -1045,10 +1125,16 @@ export const modelsMessages = {
       traceabilityUnknownLinkType: 'Unknown type',
       traceabilityDiagramsTitle: 'Used in diagrams',
       traceabilityNoDiagrams: 'This node is not placed on any diagram',
+      traceabilityLoadingDiagrams: 'Loading diagrams…',
       traceabilityTreeTitle: 'Trace tree',
+      traceabilityLoadingBranch: 'Loading links…',
+      traceabilityLoadMore: 'Load more',
+      traceabilityAddNodeToDiagram: 'Add node “{name}” to diagram',
       traceabilityDragHint: 'Drag the link onto the diagram',
       traceabilityDragDisabledNoActiveDiagram: 'Open a diagram to drag this link',
       traceabilityDragDisabledReadOnly: 'The active diagram is read-only',
+      traceabilityDragDisabledMissingComponent:
+        'The active notation has no component for this node type',
       traceabilityDragDisabledAlreadyOnDiagram: 'This link is already placed on the diagram',
       traceabilityDragDisabledMissingEndpointInstances:
         'Both link endpoints must be present on the diagram to drag it',
@@ -1107,6 +1193,8 @@ export const modelsMessages = {
       directoryTypeNotFound: 'Directory type not found. Cannot create folder.',
       noAvailableNodeTypes: 'No available node types besides Directory.',
       diagramSwitchFailed: 'Failed to open the selected diagram after refreshing data.',
+      discardUnsavedFailed:
+        'Could not discard unsaved changes. The current diagram was not closed or switched.',
       noDiagramSelected: 'No diagram selected',
       noteName: 'Note',
       containerName: 'Container',
@@ -1117,6 +1205,21 @@ export const modelsMessages = {
       batchSaveVersionConflict: 'Version conflict while saving (data changed on server).',
       batchSaveBlankNodeName:
         'Cannot save: {count} element(s) have an empty name. Set a name and try again.',
+      remoteCascadeSaveBlocked:
+        'Cannot save: a remote node deletion conflicts with {count} local link(s). Discard the affected links or reload the model, then retry saving.',
+      remoteCascadeConflictTitle:
+        'Remote node deletion conflicts with {count} local link(s).',
+      remoteCascadeConflictHelp:
+        'Discard the affected links or reload the model, then retry saving.',
+      remoteCascadeDiscard: 'Discard affected links',
+      remoteCascadeReload: 'Reload model',
+      detachedLinksStale: 'Model links changed on the server.',
+      detachedLinksRefresh: 'Refresh links',
+      granularSyncError:
+        'Could not refresh {entity}. Local data is marked stale.',
+      granularSyncRetry: 'Retry sync',
+      oefDetachedLinksStale:
+        'Model links changed. Refresh the complete links snapshot before continuing the import.',
       validationNodeTypePropRequired:
         'Node "{node}" is missing required type property "{prop}".',
       validationNodeComponentPropRequired:
@@ -1135,6 +1238,18 @@ export const modelsMessages = {
       edgeRelationNotFound: 'Notation relation not found for the selected edge.',
       saveConflictNameVersion: 'A model with this name and version already exists.',
       saveModelUpdateError: 'Error updating model: {message}',
+      savePreparingValidation: 'Preparing model validation',
+      saveValidationSnapshotFailed:
+        'Could not load the full model for validation. Retry save.',
+      detachedSnapshotFailed: 'Could not load the full model for validation.',
+      validationScriptsPreparing: 'Preparing script validation',
+      validationScriptsSnapshotFailed:
+        'Could not load the full model for validation. Retry the script.',
+      scopedReloadModelMissing: 'Could not determine the model.',
+      scopedReloadFailed: 'Could not reload the model.',
+      batchSaveConflictReloadFailed: 'Could not reload the model after a conflict. Retry.',
+      batchSaveConflictHydrateFailed:
+        'Could not load diagram attributes after the conflict. The local canvas was kept; retry.',
       saveUpdatingModel: 'Updating model: {name}',
       saveCreatingNode: 'Creating node: {name}',
       saveUpdatingNode: 'Updating node: {name}',

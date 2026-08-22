@@ -1,7 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { bumpMinor, compareVersions } from '@/utils/version'
 import { createId, parseNodeAttrs } from '../modelAttrs'
-import type { ModelEditorState } from '../types'
+import type { EditorNode, ModelEditorState, TreeParentScope } from '../types'
+import { applyDefaultsToEditorNode } from '../utils/syncDefaultsOnLoad'
 import { parseTypeAttrs } from '@/domain/attrs/notationAttrs'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
@@ -16,12 +17,18 @@ export function useModelTreeOperations(options: {
   markNodeDirty: (nodeId: string) => void
   markDiagramDirty: (diagramId: string) => void
   ensureDiagramAttrsLoaded?: (diagramId: string) => void
+  isChildrenScopeComplete?: (scope: TreeParentScope) => boolean
+  ensureChildrenScopeComplete?: (scope: TreeParentScope) => Promise<void>
+  reconcileMaterializedRows?: (
+    affectedScopes?: readonly TreeParentScope[] | 'all'
+  ) => void
 }) {
   const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
     parentNodeId: null,
     kind: 'node',
   })
   const showCreateNodeModal = ref(false)
+  const createNodePending = ref(false)
   const newNodeName = ref('')
   const newNodeTypeId = ref('')
 
@@ -110,6 +117,41 @@ export function useModelTreeOperations(options: {
   const resolveTreeParentId = (parentNodeId: string | null): string | null =>
     parentNodeId ?? treeRootNodeId.value ?? null
 
+  const treeScopeForParent = (parentNodeId: string | null): TreeParentScope =>
+    parentNodeId == null || parentNodeId === treeRootNodeId.value
+      ? { kind: 'root' }
+      : { kind: 'node', nodeId: parentNodeId }
+
+  const isSiblingScopeComplete = (parentNodeId: string | null): boolean => {
+    const parent = parentNodeId
+      ? options.state.value.nodes.find(node => node.id === parentNodeId && !node._isDeleted)
+      : null
+    if (parent?._isNew || parent?.hasChildren === false) return true
+    return options.isChildrenScopeComplete?.(treeScopeForParent(parentNodeId)) ?? true
+  }
+
+  const ensureCompleteSiblingScope = async (parentNodeId: string | null): Promise<boolean> => {
+    if (isSiblingScopeComplete(parentNodeId)) return true
+    try {
+      await options.ensureChildrenScopeComplete?.(treeScopeForParent(parentNodeId))
+    } catch {
+      // The shared mutation error below intentionally hides transport details.
+    }
+    if (isSiblingScopeComplete(parentNodeId)) return true
+    options.setUiError(options.t('models.treeScopeIncompleteMutation'))
+    return false
+  }
+
+  const syncParentHasChildren = (parentNodeId: string | null): void => {
+    if (!parentNodeId) return
+    const parent = options.state.value.nodes.find(node => node.id === parentNodeId && !node._isDeleted)
+    if (parent) {
+      parent.hasChildren = options.state.value.nodes.some(
+        node => !node._isDeleted && node.parentNodeId === parentNodeId
+      )
+    }
+  }
+
   const canCreateNodeFromModal = computed(() => {
     if (!newNodeName.value.trim()) return false
     if (createNodeModal.value.kind === 'folder') return !!directoryNodeType.value
@@ -124,15 +166,41 @@ export function useModelTreeOperations(options: {
     return Math.max(...siblingOrders) + 1
   }
 
+  const createLocalNode = (input: {
+    id: string
+    name: string
+    nodeTypeId: string
+    parentNodeId: string | null
+    treeOrder: number
+  }): EditorNode => {
+    const node: EditorNode = {
+      id: input.id,
+      name: input.name,
+      modelId: options.state.value.modelId,
+      ownerId: options.state.value.ownerId,
+      nodeTypeId: input.nodeTypeId,
+      parentNodeId: input.parentNodeId,
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: {
+        ...parseNodeAttrs(null),
+        treeOrder: input.treeOrder,
+      },
+      _isNew: true,
+    }
+    applyDefaultsToEditorNode(node, options.state.value)
+    return node
+  }
+
   const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
     rawPath
       .split(/[\\/]+/)
       .map(segment => segment.trim())
       .filter(segment => segment.length > 0)
 
-  const ensureDirectoryPath = (
+  const ensureDirectoryPath = async (
     rawPath: string
-  ): { parentNodeId: string | null; createdDirectoryIds: string[] } => {
+  ): Promise<{ parentNodeId: string | null; createdDirectoryIds: string[] }> => {
     const directoryTypeId = directoryNodeType.value?.id
     if (!directoryTypeId) return { parentNodeId: null, createdDirectoryIds: [] }
 
@@ -144,6 +212,9 @@ export function useModelTreeOperations(options: {
     const createdDirectoryIds: string[] = []
 
     for (const segment of segments) {
+      if (!(await ensureCompleteSiblingScope(currentParentNodeId))) {
+        return { parentNodeId: null, createdDirectoryIds: [] }
+      }
       const normalizedSegment = segment.toLowerCase()
       const existingDirectory = options.state.value.nodes.find(node => {
         if (node._isDeleted) return false
@@ -158,39 +229,37 @@ export function useModelTreeOperations(options: {
       }
 
       const createdDirectoryId = createId()
-      options.state.value.nodes.push({
-        id: createdDirectoryId,
-        name: segment,
-        modelId: options.state.value.modelId,
-        ownerId: options.state.value.ownerId,
-        nodeTypeId: directoryTypeId,
-        parentNodeId: currentParentNodeId,
-        createdAt: null,
-        updatedAt: null,
-        parsedAttrs: {
-          ...parseNodeAttrs(null),
-          treeOrder: getNextTreeOrderForParent(currentParentNodeId),
-        },
-        _isNew: true,
-      })
+      const treeOrder = getNextTreeOrderForParent(currentParentNodeId)
+      options.state.value.nodes.push(
+        createLocalNode({
+          id: createdDirectoryId,
+          name: segment,
+          nodeTypeId: directoryTypeId,
+          parentNodeId: currentParentNodeId,
+          treeOrder,
+        })
+      )
+      syncParentHasChildren(currentParentNodeId)
+      options.reconcileMaterializedRows?.([treeScopeForParent(currentParentNodeId)])
       createdDirectoryIds.push(createdDirectoryId)
       currentParentNodeId = createdDirectoryId
     }
 
+    if (!(await ensureCompleteSiblingScope(currentParentNodeId))) {
+      return { parentNodeId: null, createdDirectoryIds: [] }
+    }
     return { parentNodeId: currentParentNodeId, createdDirectoryIds }
   }
 
-  const reindexTreeOrders = () => {
-    const counters = new Map<string, number>()
+  const reindexTreeOrders = (parentNodeId: string | null): void => {
+    let nextOrder = 0
     for (const node of options.state.value.nodes) {
-      if (node._isDeleted) continue
-      const parentKey = node.parentNodeId ?? '__root__'
-      const nextOrder = counters.get(parentKey) ?? 0
-      counters.set(parentKey, nextOrder + 1)
+      if (node._isDeleted || (node.parentNodeId ?? null) !== parentNodeId) continue
       if (node.parsedAttrs.treeOrder !== nextOrder) {
         node.parsedAttrs.treeOrder = nextOrder
         options.markNodeDirty(node.id)
       }
+      nextOrder += 1
     }
   }
 
@@ -199,7 +268,8 @@ export function useModelTreeOperations(options: {
       options.setUiError(options.t('models.directoryTypeNotFound'))
       return
     }
-    createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'folder' }
+    const resolvedParentNodeId = resolveTreeParentId(parentNodeId)
+    createNodeModal.value = { parentNodeId: resolvedParentNodeId, kind: 'folder' }
     newNodeName.value = ''
     newNodeTypeId.value = directoryNodeType.value.id
     options.clearUiError()
@@ -211,7 +281,8 @@ export function useModelTreeOperations(options: {
       options.setUiError(options.t('models.noAvailableNodeTypes'))
       return
     }
-    createNodeModal.value = { parentNodeId: resolveTreeParentId(parentNodeId), kind: 'node' }
+    const resolvedParentNodeId = resolveTreeParentId(parentNodeId)
+    createNodeModal.value = { parentNodeId: resolvedParentNodeId, kind: 'node' }
     newNodeName.value = ''
     newNodeTypeId.value = nonDirectoryNodeTypes.value[0]?.id ?? ''
     nodeTypeSearchQuery.value = ''
@@ -220,30 +291,34 @@ export function useModelTreeOperations(options: {
     showCreateNodeModal.value = true
   }
 
-  const createNode = () => {
-    if (!newNodeName.value.trim()) return
+  const createNode = async (): Promise<void> => {
+    if (createNodePending.value || !newNodeName.value.trim()) return
     const nodeTypeId =
       createNodeModal.value.kind === 'folder'
         ? (directoryNodeType.value?.id ?? '')
         : newNodeTypeId.value
     if (!nodeTypeId) return
+    createNodePending.value = true
+    const nodeName = newNodeName.value.trim()
     const parentNodeId = createNodeModal.value.parentNodeId ?? null
-    options.state.value.nodes.push({
-      id: createId(),
-      name: newNodeName.value.trim(),
-      modelId: options.state.value.modelId,
-      ownerId: options.state.value.ownerId,
-      nodeTypeId,
-      parentNodeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: {
-        ...parseNodeAttrs(null),
-        treeOrder: getNextTreeOrderForParent(parentNodeId),
-      },
-      _isNew: true,
-    })
-    showCreateNodeModal.value = false
+    try {
+      if (!(await ensureCompleteSiblingScope(parentNodeId))) return
+      const treeOrder = getNextTreeOrderForParent(parentNodeId)
+      options.state.value.nodes.push(
+        createLocalNode({
+          id: createId(),
+          name: nodeName,
+          nodeTypeId,
+          parentNodeId,
+          treeOrder,
+        })
+      )
+      syncParentHasChildren(parentNodeId)
+      options.reconcileMaterializedRows?.([treeScopeForParent(parentNodeId)])
+      showCreateNodeModal.value = false
+    } finally {
+      createNodePending.value = false
+    }
   }
 
   const openCreateDiagram = (nodeId: string | null) => {
@@ -298,33 +373,82 @@ export function useModelTreeOperations(options: {
     return false
   }
 
-  const handleMoveNode = (
+  const moveOperationTokens = new Map<string, number>()
+
+  const handleMoveNode = async (
     nodeId: string,
     targetNodeId: string | null,
     position: 'above' | 'below' | 'inside'
-  ) => {
-    const nodes = options.state.value.nodes
-    const fromIndex = nodes.findIndex(item => item.id === nodeId)
-    if (fromIndex < 0) return
-    const movingNode = nodes[fromIndex]!
+  ): Promise<void> => {
+    const operationToken = (moveOperationTokens.get(nodeId) ?? 0) + 1
+    moveOperationTokens.set(nodeId, operationToken)
+    const isCurrentOperation = (): boolean => moveOperationTokens.get(nodeId) === operationToken
+    const ensuredParentIds = new Set<string | null>()
 
+    let nodes = options.state.value.nodes
+    let movingNode = nodes.find(item => item.id === nodeId)
+    if (!movingNode) return
     if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
 
-    const targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
+    let targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
     if (targetNodeId && !targetNode) return
+    let previousParentNodeId = movingNode.parentNodeId ?? null
+    let newParentNodeId =
+      !targetNode
+        ? (treeRootNodeId.value ?? null)
+        : position === 'inside' && isDirectoryNode(targetNode.id)
+          ? targetNode.id
+          : (targetNode.parentNodeId ?? null)
 
-    let newParentNodeId: string | null
+    while (true) {
+      const missingParentIds = [...new Set([previousParentNodeId, newParentNodeId])].filter(
+        parentNodeId => !ensuredParentIds.has(parentNodeId)
+      )
+      for (const parentNodeId of missingParentIds) {
+        if (!(await ensureCompleteSiblingScope(parentNodeId)) || !isCurrentOperation()) return
+        ensuredParentIds.add(parentNodeId)
+      }
+      if (!isCurrentOperation()) return
+
+      nodes = options.state.value.nodes
+      movingNode = nodes.find(item => item.id === nodeId)
+      if (!movingNode) return
+      if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
+      targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
+      if (targetNodeId && !targetNode) return
+
+      previousParentNodeId = movingNode.parentNodeId ?? null
+      newParentNodeId =
+        !targetNode
+          ? (treeRootNodeId.value ?? null)
+          : position === 'inside' && isDirectoryNode(targetNode.id)
+            ? targetNode.id
+            : (targetNode.parentNodeId ?? null)
+      if (
+        ensuredParentIds.has(previousParentNodeId) &&
+        ensuredParentIds.has(newParentNodeId)
+      ) {
+        break
+      }
+    }
+
+    const fromIndex = nodes.indexOf(movingNode)
+    if (fromIndex < 0) return
+
     let insertIndex: number
 
     if (!targetNode) {
-      newParentNodeId = treeRootNodeId.value ?? null
       const rootIndices = nodes
         .map((item, index) => ({ item, index }))
-        .filter(({ item }) => item.id !== nodeId && !item._isDeleted && !item.parentNodeId)
+        .filter(
+          ({ item }) =>
+            item.id !== nodeId &&
+            !item._isDeleted &&
+            (item.parentNodeId ?? null) === newParentNodeId
+        )
         .map(({ index }) => index)
       insertIndex = rootIndices.length > 0 ? rootIndices[rootIndices.length - 1]! + 1 : nodes.length
     } else if (position === 'inside' && isDirectoryNode(targetNode.id)) {
-      newParentNodeId = targetNode.id
       const childIndices = nodes
         .map((item, index) => ({ item, index }))
         .filter(
@@ -336,7 +460,6 @@ export function useModelTreeOperations(options: {
           ? childIndices[childIndices.length - 1]! + 1
           : nodes.indexOf(targetNode) + 1
     } else {
-      newParentNodeId = targetNode.parentNodeId ?? null
       const targetIndex = nodes.indexOf(targetNode)
       insertIndex = position === 'above' ? targetIndex : targetIndex + 1
     }
@@ -352,7 +475,15 @@ export function useModelTreeOperations(options: {
     const orderChanged = fromIndex !== insertIndex
     if (parentChanged || orderChanged) {
       options.markNodeDirty(movingNode.id)
-      reindexTreeOrders()
+      for (const parentNodeId of new Set([previousParentNodeId, newParentNodeId])) {
+        reindexTreeOrders(parentNodeId)
+      }
+      syncParentHasChildren(previousParentNodeId)
+      syncParentHasChildren(newParentNodeId)
+      options.reconcileMaterializedRows?.([
+        treeScopeForParent(previousParentNodeId),
+        treeScopeForParent(newParentNodeId),
+      ])
     }
   }
 
@@ -394,6 +525,7 @@ export function useModelTreeOperations(options: {
   return {
     createNodeModal,
     showCreateNodeModal,
+    createNodePending,
     newNodeName,
     newNodeTypeId,
     showCreateDiagramModal,
@@ -411,7 +543,9 @@ export function useModelTreeOperations(options: {
     filteredNodeTypes,
     selectedNodeTypeName,
     treeRootNodeId,
+    treeScopeForParent,
     resolveTreeParentId,
+    ensureCompleteSiblingScope,
     canCreateNodeFromModal,
     getNextTreeOrderForParent,
     ensureDirectoryPath,

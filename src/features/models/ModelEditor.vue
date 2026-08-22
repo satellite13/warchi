@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
@@ -12,20 +12,32 @@ import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
+  hasEligibleNotationComponent,
   resolveComponentByNodeType,
   resolveInstanceComponentId,
   resolveRelationByLinkType,
   type DiagramAttrs,
 } from './modelAttrs'
-import type { EditorLink } from './types'
+import type {
+  EditorGraphNeighbor,
+  EditorLink,
+  ModelPartialRequestGuard,
+  TraceabilityBranchQuery,
+  TraceabilityNeighborRef,
+} from './types'
 import {
   useModelBatchConflictUi,
+  useDiagramScope,
   isDiagramOnlyEdgeModelLinkId,
   useModelDiagramConnections,
   useModelDiagramInstances,
   useModelDiagramExport,
   useModelEditor,
+  useDetachedModelSnapshot,
+  useModelScopedReload,
+  prepareModelSaveValidation,
   useModelEditorSync,
+  useLazyTreeSearch,
   useModelSelection,
   useModelToolbarState,
   useModelTreeOperations,
@@ -36,6 +48,10 @@ import {
   useOefImport,
   ensureNotationImportCatalog,
 } from './composables'
+import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
+import { cancelDetachedProgress } from './utils/cancelDetachedProgress'
+import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
+import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -60,11 +76,15 @@ import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
 import ModelDiagramCanvas from './components/ModelDiagramCanvas.vue'
+import ModelDiagramScopeStatus from './components/ModelDiagramScopeStatus.vue'
 import LayoutPreviewModal from './components/LayoutPreviewModal.vue'
 import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
 import ModelImportWizard from './components/ModelImportWizard.vue'
+import ModelEditorLoadProgress from './components/ModelEditorLoadProgress.vue'
+import RemoteCascadeConflictNotice from './components/RemoteCascadeConflictNotice.vue'
+import GranularSyncErrorNotice from './components/GranularSyncErrorNotice.vue'
 import DiagramCopyWizard from './components/DiagramCopyWizard.vue'
 import {
   parseEntityAttrs,
@@ -91,34 +111,48 @@ import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
 import { downloadModelPackage } from './composables/useModelPackage'
 import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
-import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
 import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
-import type { RelationResponse } from '@/types/api'
+import type {
+  DiagramReferenceResponse,
+  LinkResponse,
+  ModelSearchHit,
+  NodeResponse,
+  RelationResponse,
+} from '@/types/api'
+import { resolveTraceabilityDiagramReferences as resolveLocalDiagramReferences } from './utils/traceabilityDiagramReferences'
 import { useWikiDocuments } from '@/composables/useWikiDocuments'
 import { useDocumentModal } from './composables'
 import {
   ensureAllDiagramAttrsLoaded,
   ensureDiagramAttrsLoaded,
 } from './composables/ensureDiagramAttrs'
-import { useModelEditorRouteNavigation } from './composables/useModelEditorRouteNavigation'
 import {
-  validateRequiredCustomProperties as validateRequiredCustomPropertiesState,
-} from './utils/requiredCustomPropertiesValidation'
-import { syncDefaultsOnLoadChunked } from './utils/syncDefaultsOnLoad'
+  focusRouteDiagramTree,
+  useModelEditorRouteNavigation,
+} from './composables/useModelEditorRouteNavigation'
+import type { LazyTreeSearchSelection } from './composables/useLazyTreeSearch'
+import { applyLocalModelDelta } from './utils/applyLocalModelDelta'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
 const {
   model,
   state,
   isLoading,
+  loadProgress,
+  initialSnapshotReady,
+  catalogReady,
   errorMessage,
+  catalogLoadWarning,
+  retryCatalogLoad,
   modelDirty,
+  modelInitialName,
   isSaving,
   saveError,
   saveSuccess,
   saveProgress,
   hasUnsavedChanges,
   loadModel,
+  assignScopedReload,
   discardUnsavedChanges,
   saveChanges,
   startSave,
@@ -126,6 +160,8 @@ const {
   markNodeDirty,
   markLinkDirty,
   markDiagramDirty,
+  traceabilityDiagramRevision,
+  invalidateTraceabilityDiagrams,
   markModelDirty,
   renameModel,
   createDiagramBaseline,
@@ -137,7 +173,62 @@ const {
   resolveBatchSaveReload,
   resolveBatchSaveOverwrite,
   dismissBatchSaveConflict,
+  partialStore,
 } = useModelEditor()
+
+const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
+const childrenPages = computed(() => partialStore.store.childrenPages)
+const detachedModelId = computed(() => state.value.modelId || null)
+const detachedSnapshotOptions = { defaultsCatalog: () => state.value }
+const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
+const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
+const isPreparingValidation = ref(false)
+const isPreparingScripts = ref(false)
+const scriptsProgress = ref('')
+/** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
+const yieldToUiPaint = (): Promise<void> =>
+  new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+const detachedOverlayReady = computed(
+  () =>
+    oefDetachedSnapshot.loadedModelId.value === state.value.modelId &&
+    !oefDetachedSnapshot.stale.value &&
+    oefDetachedSnapshot.snapshot.value !== null
+)
+const detachedOverlay = computed(() => {
+  const remote = oefDetachedSnapshot.snapshot.value
+  if (!detachedOverlayReady.value || !remote) {
+    return { nodes: [] as typeof state.value.nodes, links: [] as typeof state.value.links }
+  }
+  return applyLocalModelDelta(remote, state.value)
+})
+const detachedConsumerLinks = computed(() => detachedOverlay.value.links)
+const remoteCascadeConflictCount = computed(
+  () =>
+    state.value.links.filter(link =>
+      partialStore.store.remoteCascadeConflictLinkIds.has(link.id)
+    ).length
+)
+const granularSyncFailures = ref(
+  new Map<string, { entity: string; message: string; retry: () => void }>()
+)
+const firstGranularSyncFailure = computed(
+  () => granularSyncFailures.value.values().next().value ?? null
+)
+
+function discardRemoteCascadeConflictLinks(): void {
+  partialStore.discardRemoteCascadeConflictLinks()
+  saveError.value = null
+}
+
+async function reloadAfterRemoteCascadeConflict(): Promise<void> {
+  saveError.value = null
+  const result = await scopedReload.reloadPartialEditor()
+  if (!result.ok && result.error) setUiError(result.error)
+}
 
 const modelLiveSyncEnabled = computed(
   () => !!model.value && !isLoading.value && !errorMessage.value
@@ -184,23 +275,93 @@ const {
   selectedLink,
   selectedNodeInstanceId,
   selectedLinkEdgeInstanceId,
+  selectedNodeLoading,
+  selectedNodeError,
+  retrySelectedNode,
   applyDiagramSelection,
-} = useModelSelection({ state })
+} = useModelSelection({
+  state,
+  mergeNodes: (nodes, guard) => partialStore.mergePartialEntities(nodes, [], guard),
+  beginRequest: () => partialStore.store.beginRequest('selection-node'),
+  isRequestCurrent: guard => partialStore.store.isRequestCurrent(guard),
+})
+const diagramScope = useDiagramScope({
+  state,
+  selectedDiagramId,
+  partialStore,
+  autoOpen: true,
+  beforeOpen: whenCatalogReady,
+})
+const diagramScopeError = diagramScope.error
+const diagramScopeReady = diagramScope.diagramScopeReady
+const scopedReload = useModelScopedReload({
+  state,
+  model,
+  modelDirty,
+  modelInitialName,
+  selectedDiagramId,
+  partialStore,
+  reopenDiagramScope: async diagramId => {
+    if (selectedDiagramId.value !== diagramId) return
+    await diagramScope.reload()
+    if (diagramScope.error.value) {
+      throw new Error(diagramScope.error.value.message)
+    }
+  },
+  refreshTreeScopes: async scopes => {
+    await Promise.all(scopes.map(scope => partialStore.refreshChildrenScope(scope)))
+  },
+  t: key => t(key),
+})
+assignScopedReload({
+  reload: async () => {
+    const result = await scopedReload.reloadPartialEditor()
+    if (!result.ok && result.error) setUiError(result.error)
+    return result.ok
+  },
+  invalidate: scopedReload.invalidate,
+})
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
+const validationRunPayload = ref<
+  Extract<Awaited<ReturnType<typeof prepareValidationScriptRun>>, { ok: true }>['payload'] | null
+>(null)
 
-const validationRunPayload = computed(() => {
-  if (!model.value) return null
-  return buildValidationSnapshot({
-    state: state.value,
-    modelName: model.value.name,
-    modelVersion: model.value.version,
-    openDiagramId: selectedDiagramId.value,
-  })
-})
+async function loadDetachedValidationPayload(): Promise<boolean> {
+  if (!model.value) return false
+  isPreparingScripts.value = true
+  scriptsProgress.value = t('models.validationScriptsPreparing')
+  await nextTick()
+  await yieldToUiPaint()
+  try {
+    const prepared = await prepareValidationScriptRun({
+      loader: scriptsDetachedSnapshot,
+      state: state.value,
+      modelName: model.value.name,
+      modelVersion: model.value.version,
+      openDiagramId: selectedDiagramId.value,
+    })
+    if (!prepared.ok) {
+      if (!prepared.cancelled) {
+        setUiError(prepared.error ?? t('models.validationScriptsSnapshotFailed'))
+      }
+      return false
+    }
+    validationRunPayload.value = prepared.payload
+    return true
+  } finally {
+    isPreparingScripts.value = false
+    scriptsDetachedSnapshot.release()
+  }
+}
+
+function closeValidationScriptsModal(): void {
+  showValidationScriptsModal.value = false
+  validationRunPayload.value = null
+}
 
 function handleValidationIssueSelect(issue: ValidationIssue): void {
-  showValidationScriptsModal.value = false
+  closeValidationScriptsModal()
   const target = issue.target
   if (!target) return
   if (target.kind === 'diagram') {
@@ -335,10 +496,7 @@ const diagramVersionsForCurrentName = computed(() => {
   const diagram = activeDiagram.value
   if (!diagram) return []
   const sameName = state.value.diagrams.filter(
-    d =>
-      !d._isDeleted &&
-      d.modelId === diagram.modelId &&
-      d.name.trim() === diagram.name.trim()
+    d => !d._isDeleted && d.modelId === diagram.modelId && d.name.trim() === diagram.name.trim()
   )
   return [...sameName].sort((a, b) => compareVersions(b.version, a.version))
 })
@@ -385,6 +543,8 @@ const {
   model,
   enabled: modelLiveSyncEnabled,
   isLoading,
+  initialSnapshotReady,
+  catalogReady,
   isSaving,
   modelDirty,
   selectedDiagramId,
@@ -402,6 +562,55 @@ const {
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
   ensureNotationRelationsAndRules,
+  granularSync: {
+    store: partialStore.store,
+    publishMaterializedRows: partialStore.publishMaterializedRows,
+    refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
+    invalidateChildrenScope: partialStore.invalidateChildrenScope,
+    onDetachedSnapshotInvalidated: () => {
+      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+      oefDetachedSnapshot.invalidateAfterRemoteSync()
+    },
+    onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
+    onSyncError: (event, message, retry) => {
+      const next = new Map(granularSyncFailures.value)
+      next.set(`${event.entity}:${event.id}`, { entity: event.entity, message, retry })
+      granularSyncFailures.value = next
+    },
+    onSyncRecovered: event => {
+      const next = new Map(granularSyncFailures.value)
+      next.delete(`${event.entity}:${event.id}`)
+      granularSyncFailures.value = next
+    },
+  },
+  boundedSync: {
+    materializedScopes: partialStore.materializedChildrenScopes,
+    refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
+    prepareVisibleChildrenScopeRefresh: partialStore.prepareVisibleChildrenScopeRefresh,
+    reloadOpenDiagramScope: async (diagramId, signal) => {
+      if (selectedDiagramId.value !== diagramId) return
+      await diagramScope.reload(signal)
+      if (signal.aborted) return
+      if (diagramScope.error.value) {
+        throw new Error(diagramScope.error.value.message)
+      }
+    },
+    onDetachedSnapshotInvalidated: () => {
+      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+      oefDetachedSnapshot.invalidateAfterRemoteSync()
+      invalidateTraceabilityDiagrams()
+    },
+    onSyncError: (_reason, message, retry) => {
+      const next = new Map(granularSyncFailures.value)
+      next.set('bounded:model', { entity: 'model', message, retry })
+      granularSyncFailures.value = next
+    },
+    onSyncRecovered: () => {
+      const next = new Map(granularSyncFailures.value)
+      next.delete('bounded:model')
+      granularSyncFailures.value = next
+    },
+  },
   onModelUnavailable: status => {
     errorMessage.value =
       status === 403 ? t('models.modelAccessRevoked') : t('models.modelNoLongerAvailable')
@@ -409,7 +618,10 @@ const {
 })
 
 async function handleReloadModelForDiagramLock() {
-  await reloadModelForDiagramLock(loadModel)
+  await reloadModelForDiagramLock(async () => {
+    const result = await scopedReload.reloadPartialEditor({ mode: 'lock' })
+    if (!result.ok && result.error) setUiError(result.error)
+  })
 }
 
 watch(
@@ -432,13 +644,13 @@ async function handleCreateBaseline() {
     if (created) {
       if (diagramRenderer.value) {
         await nextTick()
-        await new Promise<void>(r =>
-          requestAnimationFrame(() => requestAnimationFrame(() => r()))
-        )
+        await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))
         const exporter = new SvgExporter(diagramRenderer.value)
         let svg = exporter.exportSVG({
           includeBackground: true,
-          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff',
+          backgroundColor:
+            getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() ||
+            '#ffffff',
           padding: 24,
         })
         svg = appendDiagramCaption(svg, {
@@ -458,28 +670,19 @@ async function handleCreateBaseline() {
   }
 }
 
-const isPreparingDiagram = ref(false)
-watch(selectedDiagramId, async diagramId => {
-  baselineError.value = null
-  if (!diagramId) {
-    isPreparingDiagram.value = false
-    return
-  }
-  isPreparingDiagram.value = true
-  try {
-    // Components/relations must be present before canvas resolves shapes.
-    await whenCatalogReady()
-    if (selectedDiagramId.value !== diagramId) return
-    await ensureDiagramAttrsLoaded(() => state.value, diagramId)
-  } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : t('models.diagramLoadError')
-  } finally {
-    if (selectedDiagramId.value === diagramId) {
-      isPreparingDiagram.value = false
-    }
-  }
+const diagramScopeLoadingText = computed(() => {
+  const current = diagramScope.progress.value
+  if (!current || current.total === 0) return t('models.diagramLoading')
+  return `${t('models.diagramLoading')} ${current.loaded}/${current.total}`
 })
+watch(selectedDiagramId, () => {
+  baselineError.value = null
+})
+
+async function retryDiagramScope(): Promise<void> {
+  await whenCatalogReady()
+  await diagramScope.reload()
+}
 
 const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
 const isActiveNotationRulesLoading = computed(() =>
@@ -499,7 +702,8 @@ const nodeBindingComponentId = computed(() => {
   if (!notationId || !node) return null
   const instanceId = selectedNodeInstanceId.value
   const instance = instanceId
-    ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ?? null)
+    ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ??
+      null)
     : null
   return resolveInstanceComponentId({ instance, node, notationId })
 })
@@ -574,8 +778,8 @@ const nodeScopedValues = computed<Record<string, unknown>>(() => {
 
 const diagramsForProps = computed<{ id: string; label: string }[]>(() =>
   state.value.diagrams
-    .filter((d) => !d._isDeleted)
-    .map((d) => ({ id: d.id, label: `${d.name} ${d.version}` }))
+    .filter(d => !d._isDeleted)
+    .map(d => ({ id: d.id, label: `${d.name} ${d.version}` }))
 )
 
 const documentsFromApi = ref<{ fileId: string; label: string }[]>([])
@@ -777,9 +981,56 @@ const canShowPropertiesTab = computed(() => true)
 const traceabilityNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
-const traceabilityLinks = computed(() =>
-  state.value.links.filter(link => !link._isDeleted && !isUntypedLinkTypeId(link.linkTypeId))
+const traceabilityLinkTypes = computed(() =>
+  state.value.linkTypes.filter(linkType => !isUntypedLinkTypeId(linkType.id))
 )
+const canDragTraceabilityNodeToDiagram = (
+  nodeId: string
+): { allowed: boolean; reason: string } => {
+  if (!activeDiagram.value) {
+    return { allowed: false, reason: 'models.traceabilityDragDisabledNoActiveDiagram' }
+  }
+  if (isDiagramReadOnly.value) {
+    return { allowed: false, reason: 'models.traceabilityDragDisabledReadOnly' }
+  }
+
+  const node = state.value.nodes.find(item => item.id === nodeId && !item._isDeleted)
+  if (!node) {
+    return { allowed: false, reason: 'models.traceabilityDragDisabledMissingComponent' }
+  }
+  const nodeType = state.value.nodeTypes.find(item => item.id === node.nodeTypeId)
+  if ((nodeType?.name ?? '').trim().toLowerCase() === 'directory') {
+    return { allowed: true, reason: 'models.traceabilityDragHint' }
+  }
+
+  const notationId = activeNotationId.value
+  const hasComponent = hasEligibleNotationComponent({
+    node,
+    notationId,
+    components: state.value.components,
+  })
+  return hasComponent
+    ? { allowed: true, reason: 'models.traceabilityDragHint' }
+    : { allowed: false, reason: 'models.traceabilityDragDisabledMissingComponent' }
+}
+const beginTraceabilityRequest = (requestKey: string): ModelPartialRequestGuard =>
+  partialStore.store.beginRequest(requestKey)
+const isTraceabilityRequestCurrent = (guard: ModelPartialRequestGuard): boolean =>
+  partialStore.store.isRequestCurrent(guard)
+const mergeTraceabilityEntities = (
+  nodes: readonly NodeResponse[],
+  links: readonly LinkResponse[],
+  guard: ModelPartialRequestGuard
+): boolean => partialStore.mergePartialEntities(nodes, links, guard)
+const resolveTraceabilityRows = (
+  rowIds: readonly TraceabilityNeighborRef[],
+  query: TraceabilityBranchQuery
+): EditorGraphNeighbor[] => partialStore.store.resolveTraceabilityRows(rowIds, query)
+const resolveTraceabilityDiagramReferences = (
+  remoteRows: readonly DiagramReferenceResponse[],
+  selectedNodeId: string
+): DiagramReferenceResponse[] =>
+  resolveLocalDiagramReferences(remoteRows, toRaw(state.value).diagrams, selectedNodeId)
 const treeVisibleNodes = computed(() =>
   state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
 )
@@ -807,7 +1058,7 @@ const canShowStyleTab = computed(
   () => !!activeDiagram.value && !isDiagramReadOnly.value && canEditSelectedElementStyle.value
 )
 const selectedElementIsComposite = computed(
-  () => selectedElementDiagramStyle.value?.nodeShape === 'composite',
+  () => selectedElementDiagramStyle.value?.nodeShape === 'composite'
 )
 const rightPanelTabs = computed(() => {
   const tabs: { id: string; label: string; icon: string }[] = []
@@ -819,7 +1070,11 @@ const rightPanelTabs = computed(() => {
   }
   if (canShowStyleTab.value) {
     if (selectedElementIsComposite.value) {
-      tabs.push({ id: 'composite-style', label: t('notations.compositeFigureStyleTab'), icon: 'dashboard_customize' })
+      tabs.push({
+        id: 'composite-style',
+        label: t('notations.compositeFigureStyleTab'),
+        icon: 'dashboard_customize',
+      })
     } else {
       tabs.push({ id: 'style', label: t('models.figureStyleTab'), icon: 'palette' })
     }
@@ -831,6 +1086,11 @@ watch([rightPanelTabs, activeRightTab], () => {
   if (!rightPanelTabs.value.some(tab => tab.id === activeRightTab.value)) {
     activeRightTab.value = rightPanelTabs.value[0]?.id ?? 'properties'
   }
+})
+watch(partialStore.generation, () => {
+  granularSyncFailures.value = new Map()
+  scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+  oefDetachedSnapshot.invalidateAfterRemoteSync()
 })
 
 const {
@@ -858,6 +1118,7 @@ const handleOpenNotationEditor = (notationId: string) => {
 const {
   createNodeModal,
   showCreateNodeModal,
+  createNodePending,
   newNodeName,
   newNodeTypeId,
   showCreateDiagramModal,
@@ -870,6 +1131,8 @@ const {
   createNodeModalTitle,
   nonDirectoryNodeTypes,
   treeRootNodeId,
+  treeScopeForParent,
+  ensureCompleteSiblingScope,
   canCreateNodeFromModal,
   getNextTreeOrderForParent,
   ensureDirectoryPath,
@@ -897,7 +1160,65 @@ const {
   ensureDiagramAttrsLoaded: diagramId => {
     void ensureDiagramAttrsLoaded(() => state.value, diagramId)
   },
+  isChildrenScopeComplete: scope =>
+    partialStore.store.loadedChildrenFor.has(partialStore.store.scopeKey(scope)),
+  ensureChildrenScopeComplete: partialStore.ensureChildrenScopeComplete,
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
 })
+const lazyTreeSearchQuery = ref('')
+const lazyTreeSearch = useLazyTreeSearch({
+  modelId: computed(() => state.value.modelId),
+  treeRootNodeId,
+  query: lazyTreeSearchQuery,
+  mergeNodes: (nodes, guard) => partialStore.mergePartialEntities(nodes, [], guard),
+  beginRequest: () => partialStore.store.beginRequest('tree-search-selection'),
+  isRequestCurrent: guard => partialStore.store.isRequestCurrent(guard),
+})
+
+const applyLazyTreeSelection = async (
+  selection: LazyTreeSearchSelection,
+  hit: ModelSearchHit
+): Promise<void> => {
+  if (selection.nodePath.length === 0 && !selection.diagramId) return
+
+  if (selection.nodePath.length > 0) {
+    treePanelRef.value?.expandPath?.(
+      hit.kind === 'node' ? selection.nodePath.slice(0, -1) : selection.nodePath
+    )
+    if (hit.kind === 'node') {
+      handleTreeSelectNode(hit.id)
+    }
+  }
+
+  lazyTreeSearchQuery.value = ''
+  await nextTick()
+
+  if (hit.kind === 'node') {
+    await treePanelRef.value?.focusNode?.(hit.id)
+    return
+  }
+  if (selection.diagramId) {
+    await treePanelRef.value?.focusDiagram?.(selection.diagramId, () => true)
+  }
+}
+
+let lastTreeSearchHit: ModelSearchHit | null = null
+
+const handleTreeSearchHit = async (hit: ModelSearchHit): Promise<void> => {
+  lastTreeSearchHit = hit
+  const selection = await lazyTreeSearch.selectHit(hit)
+  if (lazyTreeSearch.selectionError.value) return
+  await applyLazyTreeSelection(selection, hit)
+}
+
+const retryTreeSearchSelection = async (): Promise<void> => {
+  const selection = await lazyTreeSearch.retrySelection()
+  if (!lastTreeSearchHit || lazyTreeSearch.selectionError.value) return
+  await applyLazyTreeSelection(selection, lastTreeSearchHit)
+}
+const closeCreateNodeModal = (): void => {
+  if (!createNodePending.value) showCreateNodeModal.value = false
+}
 
 const {
   showImportWizard,
@@ -911,7 +1232,13 @@ const {
   treeRootNodeId,
   t: (key, params) => String(t(key, params ?? {})),
   setUiError,
-  loadModel,
+  loadModel: async () => {
+    const result = await scopedReload.reloadPartialEditor()
+    if (!result.ok && result.error) setUiError(result.error)
+  },
+  getExistingNodes: () => detachedOverlay.value.nodes,
+  getExistingLinks: () => detachedOverlay.value.links,
+  isExistingLinksReady: () => detachedOverlayReady.value,
 })
 
 async function ensureImportNotationCatalog(notationId: string): Promise<void> {
@@ -1020,9 +1347,7 @@ const formatCustomPropertyValue = (value: unknown): string => {
   }
 }
 
-const getReuseLinkCustomProperties = (
-  link: EditorLink
-): Array<{ name: string; value: string }> => {
+const getReuseLinkCustomProperties = (link: EditorLink): Array<{ name: string; value: string }> => {
   const notationId = activeNotationId.value
   if (!notationId) return []
 
@@ -1164,10 +1489,14 @@ const {
   isDirectoryNode,
   isNoteInstance,
   ensureDirectoryPath,
+  ensureCompleteSiblingScope,
   getNextTreeOrderForParent,
+  treeScopeForParent,
   executeDiagramHistoryCommand,
   markDiagramDirty,
+  onDiagramInstancesChanged: invalidateTraceabilityDiagrams,
   markNodeDirty,
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   setUiError,
   t: key => String(t(key)),
 })
@@ -1250,16 +1579,6 @@ const bindLinkRelationFromPanel = (relationId: string): void => {
   })
 }
 
-const scheduleSyncDefaultsOnLoad = (): void => {
-  const modelId = state.value.modelId
-  void whenCatalogReady()
-    .then(() => whenBackgroundReady())
-    .then(async () => {
-      if (state.value.modelId !== modelId) return
-      await syncDefaultsOnLoadChunked(state.value)
-    })
-}
-
 const bindLinkRelation = (
   link: EditorLink,
   relationId: string,
@@ -1279,7 +1598,7 @@ const bindLinkRelation = (
   if (relation) {
     applyDefaultCustomPropertyValuesFromAttrs(
       link.parsedAttrs.relationProperties[notationId][relationId]!,
-      relation.attrs,
+      relation.attrs
     )
   }
   const linkType = state.value.linkTypes.find(item => item.id === link.linkTypeId)
@@ -1323,6 +1642,7 @@ const {
   executeDiagramHistoryCommand,
   markDiagramDirty,
   markLinkDirty,
+  reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
   bindLinkRelation,
   setUiError,
   t: key => String(t(key)),
@@ -1368,7 +1688,9 @@ const markNodeDeleted = (nodeId: string) => {
   } else {
     node._isDeleted = true
     node._isDirty = true
+    markNodeDirty(node.id)
   }
+  partialStore.reconcileMaterializedRows([treeScopeForParent(node.parentNodeId ?? null)])
   state.value.diagrams.forEach(diagram => {
     if (diagram.nodeId !== nodeId) return
     if (diagram._isNew) {
@@ -1378,6 +1700,7 @@ const markNodeDeleted = (nodeId: string) => {
       diagram._isDirty = true
     }
   })
+  invalidateTraceabilityDiagrams()
 
   selectedModelNodeIds.value = selectedModelNodeIds.value.filter(id => id !== nodeId)
   if (selectedNodeId.value === nodeId) selectedNodeId.value = null
@@ -1393,13 +1716,14 @@ const markDiagramDeleted = (diagramId: string) => {
     row._isDeleted = true
     row._isDirty = true
   }
+  invalidateTraceabilityDiagrams()
   if (selectedDiagramId.value === diagramId) selectedDiagramId.value = null
 
   const remainingCanvasNodeIds = state.value.diagrams
     .filter(diagram => diagram.id !== diagramId && !diagram._isDeleted)
     .flatMap(diagram => canvasModelNodeIds(diagram.parsedAttrs.instances))
   const untypedNodeTypeIds = new Set(
-    state.value.nodeTypes.filter(type => isUntypedTypeName(type.name)).map(type => type.id),
+    state.value.nodeTypes.filter(type => isUntypedTypeName(type.name)).map(type => type.id)
   )
   for (const nodeId of orphanedUntypedNodeIds({
     deletedCanvasNodeIds,
@@ -1455,7 +1779,9 @@ const markLinkDeleted = (linkId: string) => {
   } else {
     row._isDeleted = true
     row._isDirty = true
+    markLinkDirty(row.id)
   }
+  partialStore.reconcileMaterializedRows([])
 
   if (selectedModelLinkId.value === linkId) {
     selectedModelLinkId.value = null
@@ -1478,10 +1804,19 @@ const switchDiagramWithoutSave = async () => {
   // Close the modal immediately so the UI does not feel stuck on large models.
   cancelDiagramSwitch()
 
-  await discardUnsavedChanges()
+  const result = await applyPendingDiagramSwitch({
+    discard: discardUnsavedChanges,
+    action,
+    targetDiagramId,
+  })
+  if (!result.ok) {
+    setUiError(t('models.discardUnsavedFailed'))
+    return
+  }
+
   diagramInteractionManager.value?.history?.clear?.()
 
-  if (action === 'close') {
+  if (result.effect === 'close') {
     selectedDiagramId.value = null
     selectedModelNodeIds.value = []
     selectedInstanceIds.value = []
@@ -1490,9 +1825,9 @@ const switchDiagramWithoutSave = async () => {
     return
   }
 
-  if (!targetDiagramId) return
+  if (result.effect !== 'switch') return
   const restoredTarget = state.value.diagrams.find(
-    diagram => diagram.id === targetDiagramId && !diagram._isDeleted
+    diagram => diagram.id === result.diagramId && !diagram._isDeleted
   )
   if (!restoredTarget) {
     setUiError(t('models.diagramSwitchFailed'))
@@ -1502,37 +1837,28 @@ const switchDiagramWithoutSave = async () => {
   applyDiagramSelection(restoredTarget.id)
 }
 
-const validateRequiredCustomProperties = (): string | null => {
-  const issue = validateRequiredCustomPropertiesState({
-    state: state.value,
-    activeDiagram: activeDiagram.value?.parsedAttrs,
-  })
-  return issue ? t(issue.key, issue.params) : null
-}
-
-/** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
-const yieldToUiPaint = (): Promise<void> =>
-  new Promise(resolve => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve())
-    })
-  })
-
 const saveWithValidation = async (): Promise<boolean> => {
   if (isSaving.value) return false
 
-  // Show toast immediately — validation/lock/flush can block the main thread for a while.
+  // Show toast immediately — snapshot load/validation/lock/flush can block for a while.
   startSave()
-  saveProgress.value = t('common.saving')
+  isPreparingValidation.value = true
+  saveProgress.value = t('models.savePreparingValidation')
   await nextTick()
   await yieldToUiPaint()
 
   try {
-    const validationError = validateRequiredCustomProperties()
-    if (validationError) {
-      setUiError(validationError)
+    const prepared = await prepareModelSaveValidation({
+      state: state.value,
+      activeDiagram: activeDiagram.value?.parsedAttrs,
+      t: (key, params) => String(t(key, params ?? {})),
+    })
+    if (!prepared.ok) {
+      setUiError(prepared.error)
       return false
     }
+    isPreparingValidation.value = false
+    saveProgress.value = t('common.saving')
     // Проверить, что лок ещё наш, до начала сохранения
     const lockOk = await verifyLockBeforeSave()
     if (!lockOk) return false
@@ -1542,6 +1868,8 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
+      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
+      oefDetachedSnapshot.invalidateAfterRemoteSync()
       diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
         void uploadDiagramPreview()
@@ -1549,6 +1877,7 @@ const saveWithValidation = async (): Promise<boolean> => {
     }
     return ok
   } finally {
+    isPreparingValidation.value = false
     if (isSaving.value) finishSave()
   }
 }
@@ -1737,10 +2066,7 @@ const onDeleteKeydown = (event: KeyboardEvent) => {
 
   if (!selectedModelLinkId.value) return
   event.preventDefault()
-  openLinkDeleteDialog(
-    selectedModelLinkId.value,
-    selectedEdgeInstanceId.value ?? undefined
-  )
+  openLinkDeleteDialog(selectedModelLinkId.value, selectedEdgeInstanceId.value ?? undefined)
 }
 
 watch(
@@ -1765,9 +2091,7 @@ const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
     isDiagramOnlyEdgeModelLinkId,
   })
 
-  const idx = state.value.diagrams.findIndex(
-    d => d.id === diagram.id && !d._isDeleted
-  )
+  const idx = state.value.diagrams.findIndex(d => d.id === diagram.id && !d._isDeleted)
   if (idx >= 0) {
     const diagrams = [...state.value.diagrams]
     const current = diagrams[idx]
@@ -1776,11 +2100,7 @@ const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
     diagrams[idx] = {
       ...current,
       parsedAttrs: next,
-      ...(keepDirty
-        ? current._isNew
-          ? {}
-          : { _isDirty: true }
-        : { _isDirty: false }),
+      ...(keepDirty ? (current._isNew ? {} : { _isDirty: true }) : { _isDirty: false }),
     }
     state.value.diagrams = diagrams
   } else if (options?.dirty !== false) {
@@ -1889,6 +2209,11 @@ const handleTraceabilityFocusNode = (modelNodeId: string) => {
   })
 }
 
+const handleTraceabilityAddNodeToDiagram = (modelNodeId: string): void => {
+  if (!canDragTraceabilityNodeToDiagram(modelNodeId).allowed) return
+  diagramCanvasRef.value?.addExistingNodeAtViewportCenter(modelNodeId)
+}
+
 const handleTreeSelectNode = (nodeId: string) => {
   selectedNodeId.value = nodeId
   if (!selectionSyncEnabled.value) return
@@ -1978,6 +2303,7 @@ const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
     selectedInstanceIds.value = []
     selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const restoreRemoved = () => {
@@ -2000,6 +2326,7 @@ const removeNodesFromCurrentDiagramByInstances = (instanceIds: string[]) => {
     }
 
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const history = diagramInteractionManager.value?.history
@@ -2044,6 +2371,7 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
     selectedInstanceIds.value = []
     selectedCanvasElementId.value = null
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const restoreRemoved = () => {
@@ -2066,6 +2394,7 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
     }
 
     markDiagramDirty(diagram.id)
+    invalidateTraceabilityDiagrams()
   }
 
   const history = diagramInteractionManager.value?.history
@@ -2087,7 +2416,6 @@ const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {
   openNodeDeleteDialog([], 'canvas', [instanceId])
 }
 
-
 const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
   if (isDiagramReadOnly.value) return
   selectedModelNodeIds.value = []
@@ -2105,10 +2433,10 @@ const boundaryRelationIds = (notationId: string): Set<string> =>
           relation.notationId === notationId &&
           hasSystemBooleanDefault(
             parseEntityAttrs(relation.attrs ?? null).customProperties,
-            'boundary',
-          ),
+            'boundary'
+          )
       )
-      .map(relation => relation.id),
+      .map(relation => relation.id)
   )
 
 const guestBoundaryLinks = (guestModelNodeId: string, hostModelNodeId?: string | null) => {
@@ -2132,7 +2460,7 @@ const removeBoundaryLinkEdges = (linkId: string, guestInstanceId: string): void 
         !(
           edge.modelLinkId === linkId &&
           (edge.targetInstanceId === guestInstanceId || edge.sourceInstanceId === guestInstanceId)
-        ),
+        )
     )
     if (diagram.parsedAttrs.instances.edges.length !== initial) {
       markDiagramDirty(diagram.id)
@@ -2143,7 +2471,7 @@ const removeBoundaryLinkEdges = (linkId: string, guestInstanceId: string): void 
 const handleRequestBoundaryDetach = (
   guestModelNodeId: string,
   guestInstanceId: string,
-  oldHostModelNodeId?: string | null,
+  oldHostModelNodeId?: string | null
 ) => {
   if (isDiagramReadOnly.value) return
   for (const link of guestBoundaryLinks(guestModelNodeId, oldHostModelNodeId)) {
@@ -2157,7 +2485,7 @@ const handleRequestBoundaryRebind = (
   guestInstanceId: string,
   newHostModelNodeId: string,
   _newHostInstanceId: string,
-  oldHostModelNodeId?: string | null,
+  oldHostModelNodeId?: string | null
 ) => {
   if (isDiagramReadOnly.value) return
   const diagram = activeDiagram.value
@@ -2185,7 +2513,7 @@ const handleRequestBoundaryRebind = (
   const keepIds = new Set(linksToKeep.map(link => link.id))
   const beforeEdges = diagram.parsedAttrs.instances.edges.length
   diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-    edge => !keepIds.has(edge.modelLinkId),
+    edge => !keepIds.has(edge.modelLinkId)
   )
   if (diagram.parsedAttrs.instances.edges.length !== beforeEdges) {
     markDiagramDirty(diagram.id)
@@ -2226,6 +2554,7 @@ const confirmDiagramDelete = () => {
 }
 
 const handleToolbarAction = async (event: string) => {
+  if (isSaveLockedToolbarEvent(event, isSaving.value)) return
   switch (event) {
     case 'save': {
       const openedBeforeSave = activeDiagram.value
@@ -2347,6 +2676,11 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'import-oef':
       if (canInspectDiagramJson.value) {
+        const loadedSnapshot = await oefDetachedSnapshot.load()
+        if (!loadedSnapshot) {
+          setUiError(oefDetachedSnapshot.error.value ?? t('common.error'))
+          break
+        }
         showImportWizard.value = true
       }
       break
@@ -2363,7 +2697,9 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'run-validation-script':
-      showValidationScriptsModal.value = true
+      if (await loadDetachedValidationPayload()) {
+        showValidationScriptsModal.value = true
+      }
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -2528,9 +2864,7 @@ const setLinkScopedValue = (key: string, value: unknown) => {
   const diagram = activeDiagram.value
   if (!notationId || !relationId || !link || !diagram) return
   const edgeId = selectedLinkEdgeInstanceId.value
-  const edge = edgeId
-    ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
-    : null
+  const edge = edgeId ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId) : null
   const beforeAttrs = clonePlainDeep(edge?.attrs)
   const changed = setDiagramScopedLinkValue({
     diagram: diagram.parsedAttrs,
@@ -2581,11 +2915,13 @@ const {
   setNodeScopedValue,
   setNodeTypePropertyValue,
   t,
-  onDocLinkFailed: (message: string) =>
-    setUiError(t('models.docLinkRegisterFailed', { message })),
+  onDocLinkFailed: (message: string) => setUiError(t('models.docLinkRegisterFailed', { message })),
 })
 
-const handleCanvasContextChange = (ctx: { renderer: DiagramRenderer | null; interactionManager: InteractionManager | null }) => {
+const handleCanvasContextChange = (ctx: {
+  renderer: DiagramRenderer | null
+  interactionManager: InteractionManager | null
+}) => {
   diagramRenderer.value = ctx.renderer
   diagramInteractionManager.value = ctx.interactionManager
 }
@@ -2714,10 +3050,7 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
     if (!componentId) return withInstanceDimensions(undefined, instance)
     const component = state.value.components.find(item => item.id === componentId)
     if (!component) return withInstanceDimensions(undefined, instance)
-    return withInstanceDimensions(
-      parseEntityAttrs(component.attrs ?? null).diagramStyle,
-      instance
-    )
+    return withInstanceDimensions(parseEntityAttrs(component.attrs ?? null).diagramStyle, instance)
   }
 
   if (selectedElementId.startsWith('edge-')) {
@@ -2902,25 +3235,64 @@ const routeModelId = computed(() => (typeof route.params.id === 'string' ? route
 const routeDiagramId = computed(() =>
   typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
 )
-const applyRouteDiagramSelection = () => {
-  if (!routeDiagramId.value) return
+const applyRouteDiagramSelection = (diagramId: string): void => {
+  if (!diagramId) return
   const target = state.value.diagrams.find(
-    diagram => diagram.id === routeDiagramId.value && !diagram._isDeleted
+    diagram => diagram.id === diagramId && !diagram._isDeleted
   )
   if (!target) return
   applyDiagramSelection(target.id)
 }
-useModelEditorRouteNavigation({
-  modelId: routeModelId,
-  diagramId: routeDiagramId,
-  loadModel,
-  applyRouteDiagramSelection,
-  afterModelLoad: () => {
-    scheduleFetchDocumentsFromApi()
-    scheduleSyncDefaultsOnLoad()
-    void whenBackgroundReady().then(() => fetchWikiDocuments())
-  },
-})
+const routeTreeFocusLoading = ref(false)
+const routeTreeFocusError = ref<string | null>(null)
+const focusRouteDiagramInTree = async (
+  diagramId: string,
+  isCurrent: () => boolean
+): Promise<void> => {
+  if (!isCurrent()) return
+  routeTreeFocusLoading.value = false
+  routeTreeFocusError.value = null
+  if (!diagramId) return
+  const target = state.value.diagrams.find(
+    diagram => diagram.id === diagramId && !diagram._isDeleted
+  )
+  if (!target) return
+  const needsTreePath = !!target.nodeId && target.nodeId !== treeRootNodeId.value
+  routeTreeFocusLoading.value = true
+  routeTreeFocusError.value = null
+  try {
+    await focusRouteDiagramTree({
+      diagramId,
+      nodeId: target.nodeId,
+      treeRootNodeId: treeRootNodeId.value,
+      selectHit: async (nodeId, isCurrent) => {
+        const result = await lazyTreeSearch.selectHit({ kind: 'node', id: nodeId }, isCurrent)
+        return result.nodePath
+      },
+      waitForRender: nextTick,
+      expandPath: path => treePanelRef.value?.expandPath?.(path),
+      focusDiagram: (id, guard) => treePanelRef.value?.focusDiagram?.(id, guard),
+      isCurrent,
+    })
+  } finally {
+    if (isCurrent()) {
+      routeTreeFocusLoading.value = false
+      routeTreeFocusError.value = needsTreePath ? lazyTreeSearch.selectionError.value : null
+    }
+  }
+}
+const { applyCurrentDiagramNavigation, retryCurrentDiagramTreeFocus } =
+  useModelEditorRouteNavigation({
+    modelId: routeModelId,
+    diagramId: routeDiagramId,
+    loadModel: async () => loadModel(),
+    applyRouteDiagramSelection,
+    focusRouteDiagramInTree,
+    afterModelLoad: () => {
+      scheduleFetchDocumentsFromApi()
+      void whenBackgroundReady().then(() => fetchWikiDocuments())
+    },
+  })
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null
@@ -2942,16 +3314,16 @@ const cancelLeave = () => {
 /** Админ снял блокировку — выкинуть из диаграммы без сохранения */
 watch(
   () => diagramEditLock.lockForceRevoked.value,
-  (revoked) => {
+  revoked => {
     if (!revoked) return
     dismissForceRevoked()
     alert(t('models.diagramLockForceRevoked'))
     allowLeave.value = true
     router.push({ name: 'models' })
-  },
+  }
 )
 
-onBeforeRouteLeave((to) => {
+onBeforeRouteLeave(to => {
   if (allowLeave.value) {
     allowLeave.value = false
     return true
@@ -2985,9 +3357,8 @@ const onBeforeUnload = (event: BeforeUnloadEvent) => {
 
 onMounted(async () => {
   await loadModel()
-  applyRouteDiagramSelection()
+  applyCurrentDiagramNavigation()
   scheduleFetchDocumentsFromApi()
-  scheduleSyncDefaultsOnLoad()
   // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
   void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)
@@ -3021,6 +3392,7 @@ onBeforeUnmount(() => {
         hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :can-save="!isSaving && !isDiagramReadOnly"
+        :toolbar-locked="isSaving"
         :can-edit-model="canInspectDiagramJson"
         :show-model-wiki-button="showModelWikiHeaderButton"
         :model-name="model?.name"
@@ -3056,6 +3428,19 @@ onBeforeUnmount(() => {
       />
     </template>
     <template #default>
+      <div
+        v-if="catalogLoadWarning"
+        class="background-load-warnings"
+        role="status"
+        aria-live="polite"
+      >
+        <div v-if="catalogLoadWarning" class="background-load-warnings__item">
+          <span>{{ catalogLoadWarning }}</span>
+          <button type="button" class="btn btn--secondary" @click="retryCatalogLoad">
+            {{ t('common.retry') }}
+          </button>
+        </div>
+      </div>
       <ModelMainPanelLayout>
         <template #left>
           <ModelTreePalettePanel
@@ -3071,7 +3456,27 @@ onBeforeUnmount(() => {
             :model-name="model?.name"
             :sync-selection-enabled="selectionSyncEnabled"
             :navigation-only-mode="diagramNavigationOnlyMode"
+            :loaded-children-for="loadedChildrenFor"
+            :children-pages="childrenPages"
+            :children-loading="partialStore.childrenLoading.value"
+            :children-errors="partialStore.childrenErrors.value"
+            :search-hits="lazyTreeSearch.hits.value"
+            :search-query="lazyTreeSearchQuery"
+            :search-loading="lazyTreeSearch.loading.value || lazyTreeSearch.selectionLoading.value"
+            :search-error="lazyTreeSearch.error.value || lazyTreeSearch.selectionError.value"
+            :tree-focus-loading="routeTreeFocusLoading"
+            :tree-focus-error="routeTreeFocusError"
             @select-node="handleTreeSelectNode"
+            @search-query-change="lazyTreeSearchQuery = $event"
+            @select-search-hit="handleTreeSearchHit"
+            @retry-search="
+              lazyTreeSearch.selectionError.value
+                ? retryTreeSearchSelection()
+                : lazyTreeSearch.retry()
+            "
+            @retry-tree-focus="retryCurrentDiagramTreeFocus"
+            @load-children="partialStore.loadChildren"
+            @load-next-children-page="partialStore.loadNextChildrenPage"
             @toggle-sync-selection="toggleSelectionSync"
             @open-diagram="selectDiagram"
             @create-folder="openCreateFolder"
@@ -3091,10 +3496,13 @@ onBeforeUnmount(() => {
           class="model-canvas-area"
           :class="{
             'model-canvas-area--has-newer-banner':
-              newerNotationVersions.length > 0 && !!activeDiagram && !isDiagramReadOnly,
+              newerNotationVersions.length > 0 &&
+              !!activeDiagram &&
+              diagramScopeReady &&
+              !isDiagramReadOnly,
           }"
         >
-          <template v-if="activeDiagram && !isDiagramReadOnly">
+          <template v-if="activeDiagram && diagramScopeReady && !isDiagramReadOnly">
             <button
               v-if="!canvasSettingsVisible"
               type="button"
@@ -3153,10 +3561,17 @@ onBeforeUnmount(() => {
             </div>
           </template>
           <div
-            v-if="newerNotationVersions.length > 0 && activeDiagram && !isDiagramReadOnly"
+            v-if="
+              newerNotationVersions.length > 0 &&
+              activeDiagram &&
+              diagramScopeReady &&
+              !isDiagramReadOnly
+            "
             class="model-canvas-area__newer-notation-banner"
           >
-            <span class="material-symbols-outlined model-canvas-area__newer-notation-icon">info</span>
+            <span class="material-symbols-outlined model-canvas-area__newer-notation-icon"
+              >info</span
+            >
             <span class="model-canvas-area__newer-notation-text">
               {{
                 t('diagram.newerNotationVersionsBanner', {
@@ -3178,12 +3593,13 @@ onBeforeUnmount(() => {
               canvas-mode
               :has-unsaved-changes="hasUnsavedChanges"
               :can-save="!isSaving && !isDiagramReadOnly"
+              :toolbar-locked="isSaving"
               :can-edit-model="canInspectDiagramJson"
               :show-model-wiki-button="showModelWikiHeaderButton"
               :show-diagram-wiki-button="showDiagramWikiToolbarButton"
               :model-name="model?.name"
               :model-version="model?.version"
-              :has-active-diagram="!!activeDiagram"
+              :has-active-diagram="!!activeDiagram && diagramScopeReady"
               :can-undo="canUndo"
               :can-redo="canRedo"
               :can-share="canShareModel"
@@ -3204,6 +3620,7 @@ onBeforeUnmount(() => {
             />
           </div>
           <ModelDiagramCanvas
+            v-if="!activeDiagram || diagramScopeReady"
             :key="activeDiagram?.id ?? 'none'"
             ref="diagramCanvasRef"
             :active-diagram="activeDiagram"
@@ -3238,8 +3655,8 @@ onBeforeUnmount(() => {
             @update-diagram="setDiagramAttrs"
             @flush-diagram-history="diagramHistoryBatcher.flush"
             @select-nodes="handleCanvasSelectNodes"
-            @select-instance-ids="(ids) => (selectedInstanceIds = ids)"
-            @select-edge-instance-id="(id) => (selectedEdgeInstanceId = id)"
+            @select-instance-ids="ids => (selectedInstanceIds = ids)"
+            @select-edge-instance-id="id => (selectedEdgeInstanceId = id)"
             @select-link="
               ($event: string | null) => {
                 selectedModelLinkId = $event
@@ -3274,6 +3691,14 @@ onBeforeUnmount(() => {
             @open-diagram="selectDiagram"
             @open-document="handleOpenDocumentFromBadge"
           />
+          <ModelDiagramScopeStatus
+            v-else
+            :loading="!diagramScopeError"
+            :loading-text="diagramScopeLoadingText"
+            :error="diagramScopeError?.message"
+            :retry-text="t('common.retry')"
+            @retry="retryDiagramScope"
+          />
           <div
             v-if="activeDiagram && isActiveNotationRulesLoading"
             class="relation-rules-loading-badge"
@@ -3287,8 +3712,27 @@ onBeforeUnmount(() => {
 
         <template #right>
           <TabPanel v-model="activeRightTab" :tabs="rightPanelTabs">
+            <div
+              v-if="activeRightTab === 'properties' && selectedNodeLoading"
+              class="selection-scope-status"
+              role="status"
+              aria-live="polite"
+            >
+              {{ t('models.selectedNodeLoading') }}
+            </div>
+            <div
+              v-else-if="activeRightTab === 'properties' && selectedNodeError"
+              class="selection-scope-status selection-scope-status--error"
+              role="status"
+              aria-live="polite"
+            >
+              <span>{{ selectedNodeError }}</span>
+              <button type="button" class="btn btn--secondary" @click="retrySelectedNode">
+                {{ t('common.retry') }}
+              </button>
+            </div>
             <ModelPropertiesPanel
-              v-if="activeRightTab === 'properties' && canShowPropertiesTab"
+              v-else-if="activeRightTab === 'properties' && canShowPropertiesTab"
               :active-notation-id="activeNotationId"
               :selected-node="selectedNode"
               :selected-link="selectedLink"
@@ -3308,9 +3752,15 @@ onBeforeUnmount(() => {
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
               @bind-node-component="handleBindNodeComponent"
-              @bind-link-relation="(id) => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)"
-              @set-node-type-property-value="(k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)"
-              @set-link-type-property-value="(k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)"
+              @bind-link-relation="
+                id => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)
+              "
+              @set-node-type-property-value="
+                (k, v) => !isDiagramReadOnly && setNodeTypePropertyValue(k, v)
+              "
+              @set-link-type-property-value="
+                (k, v) => !isDiagramReadOnly && setLinkTypePropertyValue(k, v)
+              "
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               @create-document-for-property="
@@ -3320,19 +3770,27 @@ onBeforeUnmount(() => {
             />
             <ModelTraceabilityPanel
               v-if="activeRightTab === 'traceability' && canShowTraceabilityTab && selectedNode"
+              :model-id="state.modelId"
               :selected-node="selectedNode"
               :nodes="traceabilityNodes"
-              :links="traceabilityLinks"
-              :diagrams="state.diagrams.filter(diagram => !diagram._isDeleted)"
-              :link-types="state.linkTypes"
+              :link-types="traceabilityLinkTypes"
+              :authoritative-revision="partialStore.materializedRevision.value"
+              :diagram-revision="traceabilityDiagramRevision"
               :active-diagram="activeDiagram"
               :active-notation-id="activeNotationId"
               :is-diagram-read-only="isDiagramReadOnly"
               :relations="state.relations"
               :can-connect="canConnect"
+              :can-drag-node-to-diagram="canDragTraceabilityNodeToDiagram"
               :is-diagram-only-edge-model-link-id="isDiagramOnlyEdgeModelLinkId"
+              :begin-request="beginTraceabilityRequest"
+              :is-request-current="isTraceabilityRequestCurrent"
+              :merge-partial-entities="mergeTraceabilityEntities"
+              :resolve-branch-rows="resolveTraceabilityRows"
+              :resolve-diagram-references="resolveTraceabilityDiagramReferences"
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
+              @add-node-to-diagram="handleTraceabilityAddNodeToDiagram"
             />
             <NodeStylePanel
               v-if="activeRightTab === 'style' && canShowStyleTab"
@@ -3363,11 +3821,36 @@ onBeforeUnmount(() => {
   </MainLayout>
 
   <SaveToast
-    :saving="isSaving"
+    :saving="isSaving || isPreparingScripts"
     :success="saveSuccess || diagramCopySuccess"
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
-    :progress="saveProgress"
+    :progress="isPreparingScripts ? scriptsProgress : saveProgress"
+    :cancellable="isPreparingScripts"
+    @cancel="
+      cancelDetachedProgress({
+        scriptsPreparing: isPreparingScripts,
+        scriptsCancel: scriptsDetachedSnapshot.cancel,
+      })
+    "
+  />
+  <RemoteCascadeConflictNotice
+    v-if="remoteCascadeConflictCount > 0"
+    :count="remoteCascadeConflictCount"
+    @discard="discardRemoteCascadeConflictLinks"
+    @reload="reloadAfterRemoteCascadeConflict"
+  />
+  <GranularSyncErrorNotice
+    v-if="firstGranularSyncFailure"
+    :entity="firstGranularSyncFailure.entity"
+    :message="firstGranularSyncFailure.message"
+    @retry="firstGranularSyncFailure.retry"
+  />
+  <GranularSyncErrorNotice
+    v-if="showImportWizard && oefDetachedSnapshot.stale.value"
+    entity="links"
+    :message="t('models.oefDetachedLinksStale')"
+    @retry="oefDetachedSnapshot.load"
   />
 
   <DiagramCopyWizard
@@ -3399,14 +3882,14 @@ onBeforeUnmount(() => {
     :busy="layoutBusy"
     @close="handleLayoutPreviewClose"
     @apply="handleLayoutPreviewApply"
-    @error="(msg) => setUiError(msg || t('toolbar.autoLayoutFailed'))"
+    @error="msg => setUiError(msg || t('toolbar.autoLayoutFailed'))"
   />
 
   <BaseModal
     v-if="showCreateNodeModal"
     :title="createNodeModalTitle"
     max-width="440px"
-    @close="showCreateNodeModal = false"
+    @close="closeCreateNodeModal"
   >
     <div class="form-grid">
       <label>
@@ -3414,34 +3897,43 @@ onBeforeUnmount(() => {
         <input
           v-model="newNodeName"
           class="form-input"
+          :disabled="createNodePending"
           :placeholder="
             createNodeModal.kind === 'folder'
               ? t('models.newFolderPlaceholder')
               : t('models.newNodePlaceholder')
           "
-          @keydown.enter.prevent="canCreateNodeFromModal && createNode()"
+          @keydown.enter.prevent="canCreateNodeFromModal && !createNodePending && createNode()"
         />
       </label>
       <label v-if="createNodeModal.kind === 'node'">
         <span>{{ t('models.nodeTypeLabel') }}</span>
         <SearchableSelect
           v-model="newNodeTypeId"
-          :options="nonDirectoryNodeTypes.map((typeItem) => ({ id: typeItem.id, label: typeItem.name }))"
+          :options="
+            nonDirectoryNodeTypes.map(typeItem => ({ id: typeItem.id, label: typeItem.name }))
+          "
           :placeholder="t('models.selectType')"
           :search-placeholder="t('models.typeSearchPlaceholder')"
           :empty-text="t('common.nothingFound')"
+          :disabled="createNodePending"
         />
       </label>
       <div v-else class="form-hint">{{ t('models.directoryTypeHint') }}</div>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateNodeModal = false">
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="createNodePending"
+        @click="closeCreateNodeModal"
+      >
         {{ t('common.cancel') }}
       </button>
       <button
         type="button"
         class="btn btn--primary"
-        :disabled="!canCreateNodeFromModal"
+        :disabled="!canCreateNodeFromModal || createNodePending"
         @click="createNode"
       >
         {{ t('common.create') }}
@@ -3484,7 +3976,12 @@ onBeforeUnmount(() => {
       </p>
     </div>
     <template #footer>
-      <button type="button" class="btn btn--secondary" :disabled="isMigrating" @click="closeMigrateModal">
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="isMigrating"
+        @click="closeMigrateModal"
+      >
         {{ t('common.cancel') }}
       </button>
       <button
@@ -3493,7 +3990,9 @@ onBeforeUnmount(() => {
         :disabled="isMigrating"
         @click="confirmMigrateNotation"
       >
-        {{ isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction') }}
+        {{
+          isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction')
+        }}
       </button>
     </template>
   </BaseModal>
@@ -3692,7 +4191,11 @@ onBeforeUnmount(() => {
         {{ t('models.removeLinkFromDiagram') }}
       </button>
       <button
-        v-if="pendingDeleteLinkId && !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) && !isUntypedModelLinkId(pendingDeleteLinkId)"
+        v-if="
+          pendingDeleteLinkId &&
+          !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) &&
+          !isUntypedModelLinkId(pendingDeleteLinkId)
+        "
         type="button"
         class="btn btn--danger"
         @click="removeLinkFromModel"
@@ -3743,7 +4246,7 @@ onBeforeUnmount(() => {
     v-if="showValidationScriptsModal && validationRunPayload"
     :snapshot="validationRunPayload.snapshot"
     :open-diagram-id="validationRunPayload.openDiagramId"
-    @close="showValidationScriptsModal = false"
+    @close="closeValidationScriptsModal"
     @select-issue="handleValidationIssueSelect"
   />
 
@@ -3768,7 +4271,7 @@ onBeforeUnmount(() => {
     :relations="state.relations"
     :relation-rules="state.relationRules"
     :existing-nodes="state.nodes"
-    :existing-links="state.links"
+    :existing-links="detachedConsumerLinks"
     :existing-diagrams="state.diagrams"
     :import-busy="isImportingOef"
     :import-progress="oefImportProgress"
@@ -3802,10 +4305,18 @@ onBeforeUnmount(() => {
         {{ t('models.oefImportReportUpdatedLinks', { count: oefImportReport.linksUpdated }) }}
       </li>
       <li>
-        {{ t('models.oefImportReportDiagramNodeInstances', { count: oefImportReport.diagramNodeInstances }) }}
+        {{
+          t('models.oefImportReportDiagramNodeInstances', {
+            count: oefImportReport.diagramNodeInstances,
+          })
+        }}
       </li>
       <li>
-        {{ t('models.oefImportReportDiagramEdgeInstances', { count: oefImportReport.diagramConnectionInstances }) }}
+        {{
+          t('models.oefImportReportDiagramEdgeInstances', {
+            count: oefImportReport.diagramConnectionInstances,
+          })
+        }}
       </li>
     </ul>
     <p v-if="oefImportReport.warningsCount > 0" class="leave-text leave-text--warning">
@@ -3821,17 +4332,33 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="oefImportReport.missingRequired.total > 0" class="model-import-report__warnings">
       <p class="leave-text leave-text--warning">
-        {{ t('models.oefImportReportMissingRequiredTitle', { count: oefImportReport.missingRequired.total }) }}
+        {{
+          t('models.oefImportReportMissingRequiredTitle', {
+            count: oefImportReport.missingRequired.total,
+          })
+        }}
       </p>
       <ul class="model-import-report model-import-report--warnings">
         <li>
-          {{ t('models.oefImportReportMissingRequiredNodeType', { count: oefImportReport.missingRequired.nodeType }) }}
+          {{
+            t('models.oefImportReportMissingRequiredNodeType', {
+              count: oefImportReport.missingRequired.nodeType,
+            })
+          }}
         </li>
         <li>
-          {{ t('models.oefImportReportMissingRequiredComponent', { count: oefImportReport.missingRequired.component }) }}
+          {{
+            t('models.oefImportReportMissingRequiredComponent', {
+              count: oefImportReport.missingRequired.component,
+            })
+          }}
         </li>
         <li>
-          {{ t('models.oefImportReportMissingRequiredRelation', { count: oefImportReport.missingRequired.relation }) }}
+          {{
+            t('models.oefImportReportMissingRequiredRelation', {
+              count: oefImportReport.missingRequired.relation,
+            })
+          }}
         </li>
       </ul>
     </div>
@@ -3865,21 +4392,31 @@ onBeforeUnmount(() => {
     @select-version="versionDiff.loadCompareTarget"
   />
 
-  <div v-if="isLoading" class="overlay-loading">
-    <UiIcon name="sync" class="overlay-loading__icon spin" />
-    <span>{{ t('common.loading') }}</span>
-  </div>
-  <div v-else-if="isPreparingDiagram" class="overlay-loading overlay-loading--soft">
-    <UiIcon name="sync" class="overlay-loading__icon spin" />
-    <span>{{ t('models.diagramLoading') }}</span>
-  </div>
-  <div v-else-if="errorMessage" class="overlay-loading overlay-loading--error">
+  <ModelEditorLoadProgress
+    v-if="loadProgress && !initialSnapshotReady && !errorMessage"
+    :progress="loadProgress"
+  />
+  <div v-if="errorMessage" class="overlay-loading overlay-loading--error">
     <UiIcon name="error" class="overlay-loading__icon" />
     <span>{{ errorMessage }}</span>
   </div>
 </template>
 
 <style scoped>
+.selection-scope-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.selection-scope-status--error {
+  color: var(--danger);
+}
+
 .overlay-loading {
   position: fixed;
   inset: 0;
@@ -3906,6 +4443,23 @@ onBeforeUnmount(() => {
 .overlay-loading__icon {
   width: 24px;
   height: 24px;
+}
+
+.background-load-warnings {
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+
+.background-load-warnings__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
 }
 
 .form-grid {
@@ -4222,5 +4776,4 @@ onBeforeUnmount(() => {
 .model-canvas-area__toolbar :deep(*) {
   pointer-events: auto;
 }
-
 </style>

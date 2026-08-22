@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { parseDiagramAttrs } from '../modelAttrs'
 import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
-import type { EditorNode } from '../types'
+import type { ChildrenPageState, EditorDiagram, EditorNode } from '../types'
+import type { ModelSearchHit } from '@/types/api'
 
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
@@ -94,17 +95,40 @@ function mountPanel(props: {
   nodes: EditorNode[]
   selectedNodeId?: string | null
   selectedDiagramId?: string | null
+  treeRootNodeId?: string | null
+  loadedChildrenFor?: Set<string>
+  childrenPages?: Map<string, ChildrenPageState>
+  childrenLoading?: Set<string>
+  childrenErrors?: Map<string, string>
+  searchHits?: ModelSearchHit[]
+  searchQuery?: string
+  searchLoading?: boolean
+  searchError?: string | null
+  treeFocusLoading?: boolean
+  treeFocusError?: string | null
+  diagrams?: EditorDiagram[]
 }) {
   return mount(ModelTreePalettePanel, {
     props: {
       nodes: props.nodes,
-      diagrams: [],
+      diagrams: props.diagrams ?? [],
       nodeTypes: [
         { id: 'dir', name: 'Directory', version: '1.0.0', ownerId: 'o1' } as never,
         { id: 'nt1', name: 'Application Component', version: '1.0.0', ownerId: 'o1' } as never,
       ],
       selectedNodeId: props.selectedNodeId ?? null,
       selectedDiagramId: props.selectedDiagramId ?? null,
+      treeRootNodeId: props.treeRootNodeId,
+      loadedChildrenFor: props.loadedChildrenFor,
+      childrenPages: props.childrenPages,
+      childrenLoading: props.childrenLoading,
+      childrenErrors: props.childrenErrors,
+      searchHits: props.searchHits,
+      searchQuery: props.searchQuery,
+      searchLoading: props.searchLoading,
+      searchError: props.searchError,
+      treeFocusLoading: props.treeFocusLoading,
+      treeFocusError: props.treeFocusError,
     },
     // Needed so focusNode/focusDiagram and querySelector work against document
     attachTo: document.body,
@@ -210,6 +234,194 @@ describe('ModelTreePalettePanel', () => {
     expect(wrapper.find('.tree-node__type').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Application Component')
   })
+
+  it('requests children on first expand but not for a complete scope', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],
+    })
+    await flushTree(wrapper)
+
+    const toggle = wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.attributes('aria-label')).toBe('models.expandTreeNode')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(toggle.attributes('aria-label')).toBe('models.collapseTreeNode')
+    expect(wrapper.emitted('loadChildren')).toEqual([[{ kind: 'node', nodeId: 'folder' }]])
+
+    await wrapper.setProps({ loadedChildrenFor: new Set(['node:folder']) })
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    expect(wrapper.emitted('loadChildren')).toHaveLength(1)
+  })
+
+  it('hides the expand toggle when scoped hasChildren is false', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: false })],
+    })
+    await flushTree(wrapper)
+
+    expect(wrapper.find('[data-tree-node-id="folder"] .tree-node__toggle').exists()).toBe(false)
+  })
+
+  it('expands a complete-empty folder when it contains diagrams', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Diagrams', nodeTypeId: 'dir', hasChildren: false })],
+      diagrams: [
+        {
+          id: 'diagram-1',
+          name: 'Simple BPMN',
+          version: '1.0.0',
+          notationId: 'notation-1',
+          ownerId: 'owner-1',
+          modelId: 'm1',
+          nodeId: 'folder',
+          parsedAttrs: parseDiagramAttrs(null),
+        },
+      ],
+    })
+    await flushTree(wrapper)
+
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+
+    expect(wrapper.get('[data-tree-diagram-id="diagram-1"]').text()).toContain('Simple BPMN')
+    expect(wrapper.emitted('loadChildren')).toBeUndefined()
+  })
+
+  it('can expand a hasChildren root row before node-type catalog arrives', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({
+          id: 'uncatalogued-folder',
+          name: 'Folder',
+          nodeTypeId: 'not-loaded-yet',
+          hasChildren: true,
+        }),
+      ],
+    })
+    await flushTree(wrapper)
+
+    await wrapper
+      .get('[data-tree-node-id="uncatalogued-folder"] .tree-node__toggle')
+      .trigger('click')
+
+    expect(wrapper.emitted('loadChildren')).toEqual([
+      [{ kind: 'node', nodeId: 'uncatalogued-folder' }],
+    ])
+  })
+
+  it('allows sibling-dependent actions to load incomplete scopes on demand', async () => {
+    const wrapper = mountPanel({
+      treeRootNodeId: 'hidden-root',
+      nodes: [
+        makeNode({
+          id: 'root-child',
+          name: 'Root child',
+          nodeTypeId: 'dir',
+          parentNodeId: 'hidden-root',
+          hasChildren: true,
+        }),
+      ],
+      loadedChildrenFor: new Set(),
+    })
+    await flushTree(wrapper)
+
+    expect(wrapper.get('[data-tree-node-id="root-child"]').attributes('draggable')).toBe('true')
+    expect(wrapper.get('[title="models.addRootNode"]').attributes('disabled')).toBeUndefined()
+    expect(
+      wrapper.get('[data-tree-node-id="root-child"] [title="models.addChildNode"]').attributes(
+        'disabled'
+      )
+    ).toBeUndefined()
+  })
+
+  it('keeps the known-empty child scope of a new local folder mutable', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({
+          id: 'new-folder',
+          name: 'New folder',
+          nodeTypeId: 'dir',
+          _isNew: true,
+        }),
+      ],
+      loadedChildrenFor: new Set(['root']),
+    })
+    await flushTree(wrapper)
+
+    expect(
+      wrapper.get('[data-tree-node-id="new-folder"] [title="models.addChildNode"]').attributes(
+        'disabled'
+      )
+    ).toBeUndefined()
+  })
+
+  it('keeps an authoritative hasChildren=false folder mutable without an expand toggle', async () => {
+    const wrapper = mountPanel({
+      nodes: [
+        makeNode({
+          id: 'persisted-empty-folder',
+          name: 'Persisted empty folder',
+          nodeTypeId: 'dir',
+          hasChildren: false,
+        }),
+      ],
+      loadedChildrenFor: new Set(['root']),
+    })
+    await flushTree(wrapper)
+
+    expect(
+      wrapper.find('[data-tree-node-id="persisted-empty-folder"] .tree-node__toggle').exists()
+    ).toBe(false)
+    expect(
+      wrapper
+        .get('[data-tree-node-id="persisted-empty-folder"] [title="models.addChildNode"]')
+        .attributes('disabled')
+    ).toBeUndefined()
+  })
+
+  it('renders non-draggable local loading, error and load-more rows', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Folder', nodeTypeId: 'dir', hasChildren: true })],
+      childrenLoading: new Set(['node:folder']),
+      childrenErrors: new Map([['node:folder', 'branch failed']]),
+      childrenPages: new Map([
+        [
+          'node:folder',
+          { loadedPages: new Set([0]), nextPage: 1, totalElements: 501 },
+        ],
+      ]),
+    })
+    await flushTree(wrapper)
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+    await flushTree(wrapper)
+
+    for (const selector of ['[data-tree-loading]', '[data-tree-error]', '[data-tree-load-more]']) {
+      expect(wrapper.get(selector).attributes('draggable')).not.toBe('true')
+    }
+    for (const selector of ['[data-tree-loading]', '[data-tree-error]']) {
+      expect(wrapper.get(selector).attributes('role')).toBe('status')
+      expect(wrapper.get(selector).attributes('aria-live')).toBe('polite')
+    }
+    await wrapper.get('[data-tree-load-more] button').trigger('click')
+    expect(wrapper.emitted('loadNextChildrenPage')).toEqual([
+      [{ kind: 'node', nodeId: 'folder' }],
+    ])
+  })
+
+  it('pages a wide root scope with a root load-more row', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'root-child', name: 'Root child' })],
+      childrenPages: new Map([
+        ['root', { loadedPages: new Set([0]), nextPage: 1, totalElements: 501 }],
+      ]),
+    })
+    await flushTree(wrapper)
+
+    await wrapper.get('[data-tree-load-more] button').trigger('click')
+
+    expect(wrapper.emitted('loadNextChildrenPage')).toEqual([[{ kind: 'root' }]])
+  })
 })
 
 describe('ModelTreePalettePanel search', () => {
@@ -309,6 +521,148 @@ describe('ModelTreePalettePanel search', () => {
       'tree-node__name--ancestor',
     )
   })
+
+  it('renders server hits instead of scanning only materialized nodes', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'local-hit', name: 'Special local node' })],
+      searchHits: [{ kind: 'node', id: 'server-hit', name: 'Special server node' }],
+    })
+    await flushTree(wrapper)
+    await wrapper.get('.search-input').setValue('special')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushTree(wrapper)
+
+    expect(wrapper.emitted('searchQueryChange')).toEqual([['special']])
+    expect(wrapper.find('[data-tree-node-id="local-hit"]').exists()).toBe(false)
+    expect(wrapper.get('[data-tree-search-hit-id="server-hit"]').text()).toContain(
+      'Special server node'
+    )
+
+    await wrapper.get('[data-tree-search-hit-id="server-hit"] button').trigger('click')
+    expect(wrapper.emitted('selectSearchHit')).toEqual([
+      [{ kind: 'node', id: 'server-hit', name: 'Special server node' }],
+    ])
+  })
+
+  it('syncs the search input when the parent clears searchQuery', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits: [],
+      searchQuery: 'diagram',
+    })
+    await flushTree(wrapper)
+    expect((wrapper.get('.search-input').element as HTMLInputElement).value).toBe('diagram')
+
+    await wrapper.setProps({ searchQuery: '' })
+    await flushTree(wrapper)
+
+    expect((wrapper.get('.search-input').element as HTMLInputElement).value).toBe('')
+  })
+
+  it('renders search hit icons, breadcrumbs, and emits the full hit object', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits: [
+        {
+          kind: 'node',
+          id: 'folder-hit',
+          name: 'Diagrams',
+          nodeTypeId: 'dir',
+          pathNames: ['Apps', 'Diagrams'],
+        },
+        {
+          kind: 'node',
+          id: 'node-hit',
+          name: 'Service',
+          nodeTypeId: 'nt1',
+          pathNames: ['Apps', 'Service'],
+        },
+        {
+          kind: 'diagram',
+          id: 'diagram-hit',
+          name: 'Simple BPMN',
+          pathNames: ['Apps', 'Diagrams', 'Simple BPMN'],
+        },
+        {
+          kind: 'diagram',
+          id: 'broken-hit',
+          name: 'Broken',
+          pathNames: null,
+        },
+      ],
+    })
+    await flushTree(wrapper)
+    await wrapper.get('.search-input').setValue('hit')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushTree(wrapper)
+
+    expect(
+      wrapper.get('[data-tree-search-hit-id="folder-hit"] ui-icon-stub').attributes('name')
+    ).toBe('folder')
+    expect(
+      wrapper.get('[data-tree-search-hit-id="diagram-hit"] ui-icon-stub').attributes('name')
+    ).toBe('dashboard')
+    expect(wrapper.get('[data-tree-search-hit-id="node-hit"] .tree-search-hit__breadcrumb').text()).toBe(
+      'Apps'
+    )
+    expect(wrapper.get('[data-tree-search-hit-id="diagram-hit"] .tree-search-hit__breadcrumb').text()).toBe(
+      'Apps / Diagrams'
+    )
+    expect(wrapper.find('[data-tree-search-hit-id="broken-hit"] .tree-search-hit__breadcrumb').exists()).toBe(
+      false
+    )
+
+    await wrapper.get('[data-tree-search-hit-id="diagram-hit"] button').trigger('click')
+    expect(wrapper.emitted('selectSearchHit')?.at(-1)).toEqual([
+      {
+        kind: 'diagram',
+        id: 'diagram-hit',
+        name: 'Simple BPMN',
+        pathNames: ['Apps', 'Diagrams', 'Simple BPMN'],
+      },
+    ])
+  })
+
+  it('keeps search loading/error/retry local and caps only rendered server rows', async () => {
+    const searchHits: ModelSearchHit[] = Array.from({ length: 300 }, (_, index) => ({
+      kind: 'node',
+      id: `hit-${index}`,
+      name: `Hit ${index}`,
+    }))
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits,
+      searchLoading: true,
+      searchError: 'search failed',
+    })
+    await flushTree(wrapper)
+    await wrapper.get('.search-input').setValue('hit')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushTree(wrapper)
+
+    expect(wrapper.find('[data-tree-search-loading]').exists()).toBe(true)
+    expect(wrapper.get('[data-tree-search-error]').text()).toContain('models.treeSearchError')
+    expect(wrapper.text()).toContain('models.searchResultsTruncated')
+    await wrapper.get('[data-tree-search-error] button').trigger('click')
+    expect(wrapper.emitted('retrySearch')).toHaveLength(1)
+  })
+
+  it('shows deep-link tree focus error with an empty search and retries only tree focus', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits: [],
+      treeFocusLoading: false,
+      treeFocusError: 'ancestors failed',
+    })
+    await flushTree(wrapper)
+
+    expect((wrapper.get('.search-input').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[data-tree-focus-error]').text()).toContain('ancestors failed')
+    await wrapper.get('[data-tree-focus-error] button').trigger('click')
+
+    expect(wrapper.emitted('retryTreeFocus')).toHaveLength(1)
+    expect(wrapper.emitted('retrySearch')).toBeUndefined()
+  })
 })
 
 describe('ModelTreePalettePanel virtualization', () => {
@@ -373,9 +727,45 @@ describe('ModelTreePalettePanel virtualization', () => {
 
     expect(wrapper.find('[data-tree-node-id="n-70"]').exists()).toBe(false)
 
-    ;(wrapper.vm as unknown as { focusNode: (id: string) => void }).focusNode('n-70')
+    const focusing = (
+      wrapper.vm as unknown as { focusNode: (id: string) => Promise<void> }
+    ).focusNode('n-70')
+    expect(focusing).toBeInstanceOf(Promise)
+    await focusing
     await flushTree(wrapper)
 
     expect(wrapper.find('[data-tree-node-id="n-70"]').exists()).toBe(true)
+  })
+
+  it('does not scroll a diagram after its route generation becomes stale', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      diagrams: [
+        {
+          id: 'diagram-1',
+          name: 'Diagram',
+          version: '1.0.0',
+          notationId: 'notation-1',
+          ownerId: 'owner-1',
+          modelId: 'model-1',
+          nodeId: null,
+          parsedAttrs: parseDiagramAttrs(null),
+        },
+      ],
+    })
+    await flushTree(wrapper)
+    const tree = wrapper.get('.tree').element as HTMLElement
+    const scrollTo = vi.spyOn(tree, 'scrollTo')
+    let current = true
+
+    const focusing = (
+      wrapper.vm as unknown as {
+        focusDiagram: (id: string, isCurrent: () => boolean) => Promise<void>
+      }
+    ).focusDiagram('diagram-1', () => current)
+    current = false
+    await focusing
+
+    expect(scrollTo).not.toHaveBeenCalled()
   })
 })

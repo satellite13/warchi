@@ -169,6 +169,42 @@ describe("executeModelEditorSave", () => {
     expect(mocks.buildBatchSaveRequest).not.toHaveBeenCalled()
   })
 
+  it("blocks save for remote cascade conflicts with an actionable error", async () => {
+    const state = ref(createState())
+    const conflicted = state.value.links[0]
+    if (!conflicted) throw new Error("expected link")
+    conflicted._isDirty = true
+    const saveError = ref<string | null>(null)
+    const scheduleSaveErrorClear = vi.fn()
+
+    const result = await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref([]),
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError,
+      remoteCascadeConflictLinkIds: new Set(["l-1"]),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear,
+    })
+
+    expect(result).toBe(false)
+    expect(saveError.value).toContain("перезагруз")
+    expect(saveError.value).toContain("повторите сохранение")
+    expect(scheduleSaveErrorClear).not.toHaveBeenCalled()
+    expect(mocks.buildBatchSaveRequest).not.toHaveBeenCalled()
+    expect(mocks.batchSave).not.toHaveBeenCalled()
+  })
+
   it("skips legacy entity pipeline when there are no batch changes", async () => {
     const state = ref(createState())
     // Local-only soft deletes (new+deleted) and clean rows — nothing for entity pipelines.
@@ -360,6 +396,58 @@ describe("executeModelEditorSave", () => {
     expect(batchSaveConflict.value).toEqual(conflicts)
     expect(scheduleSaveErrorClear).not.toHaveBeenCalled()
     expect(mocks.saveNodes).not.toHaveBeenCalled()
+  })
+
+  it("builds the batch request only from materialized editor rows", async () => {
+    const state = ref(createState())
+    state.value.nodes = [
+      {
+        id: "n-dirty",
+        name: "Dirty",
+        modelId: "model-1",
+        ownerId: "owner-1",
+        nodeTypeId: "type-1",
+        parentNodeId: null,
+        parsedAttrs: parseNodeAttrs(null),
+        _isDirty: true,
+      },
+    ]
+    state.value.links = []
+    state.value.diagrams = []
+
+    await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref<ModelData[]>([]),
+      state,
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      saveError: ref<string | null>(null),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear: vi.fn(),
+    })
+
+    expect(mocks.buildBatchSaveRequest).toHaveBeenCalledTimes(1)
+    expect(mocks.buildBatchSaveRequest).toHaveBeenCalledWith(
+      state.value.nodes,
+      state.value.links,
+      state.value.diagrams,
+      { force: false }
+    )
+    const [nodesArg, linksArg] = mocks.buildBatchSaveRequest.mock.calls[0] as [
+      Array<{ id: string }>,
+      Array<{ id: string }>,
+    ]
+    expect(nodesArg.map(row => row.id)).toEqual(["n-dirty"])
+    expect(linksArg.map(row => row.id)).toEqual([])
+    expect(nodesArg.map(row => row.id)).not.toContain("unloaded-remote-node")
   })
 
   it("falls back to legacy entity pipeline only when dirty state is missing from the batch request", async () => {

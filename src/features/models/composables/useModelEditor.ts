@@ -1,6 +1,7 @@
 import { computed, onScopeDispose, ref, type ComputedRef, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiPost } from '@/composables/useApi'
+import i18n from '@/i18n'
 import { useSaveState } from '@/composables/useSaveState'
 import type { ModelData } from '@/types/entities'
 import type { DiagramResponse } from '@/types/api'
@@ -9,40 +10,59 @@ import {
   type EditorDiagram,
   type ModelEditorState,
 } from '../types'
+import {
+  createModelEditorLoadProgressTracker,
+  type ModelEditorLoadProgress,
+} from '../utils/modelEditorLoadProgress'
 import type { BatchConflictItem } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
-import { markModelEditorSnapshotFresh } from '../utils/modelEditorSnapshotFreshness'
 import {
   loadModelEditorCatalog,
-  loadModelEditorLinks,
   loadModelEditorShell,
+  type ModelEditorLoadCancellationOptions,
 } from './modelEditorLoadModel'
 import { discardUnsavedModelChanges } from './discardUnsavedModelChanges'
 import { executeModelEditorSave } from './modelEditorSaveCoordinator'
 import { useModelBatchConflictResolution } from './useModelBatchConflictResolution'
 import { useModelEditorStateHelpers } from './useModelEditorStateHelpers'
+import { useModelPartialStore } from './useModelPartialStore'
 import { useNotationRelationsAndRulesLoader } from './useNotationRelationsAndRulesLoader'
 import { resetLoadedNotationCatalogIds } from './ensureNotationImportCatalog'
+
+export type ScopedReloadBinding = {
+  reload: () => Promise<boolean>
+  invalidate: () => void
+}
 
 type ModelEditorReturn = {
   model: Ref<ModelData | null>
   state: Ref<ModelEditorState>
   isLoading: Ref<boolean>
+  loadProgress: Ref<ModelEditorLoadProgress | null>
   errorMessage: Ref<string | null>
+  catalogLoadWarning: Ref<string | null>
+  retryCatalogLoad: () => Promise<void>
+  /** Catalog completion gate for default-aware live materialization. */
+  catalogReady: Ref<boolean>
   /** true, если менялись метаданные модели (имя/версия/attrs) без сохранения */
   modelDirty: Ref<boolean>
+  modelInitialName: Ref<string>
   isSaving: Ref<boolean>
   saveError: Ref<string | null>
   saveSuccess: Ref<boolean>
   saveProgress: Ref<string>
   hasUnsavedChanges: ComputedRef<boolean>
   loadModel: () => Promise<void>
+  /** Bind the scoped partial reload used by conflict/discard fallbacks. */
+  assignScopedReload: (binding: ScopedReloadBinding | null) => void
   /** Discard local dirty/new/deleted edits without a full model reload. */
   discardUnsavedChanges: () => Promise<boolean>
   /** Wait until notation components/relations/types are applied (diagram open). */
   whenCatalogReady: () => Promise<void>
-  /** Wait until links and other background model extras finished. */
+  /** Wait until nonblocking catalog work finished. */
   whenBackgroundReady: () => Promise<void>
+  /** Becomes true once model metadata, root children and slim diagrams form a usable shell. */
+  initialSnapshotReady: Ref<boolean>
   saveChanges: () => Promise<boolean>
   /** Show saving toast before heavy pre-save work (flush/validate). */
   startSave: () => void
@@ -50,6 +70,8 @@ type ModelEditorReturn = {
   markNodeDirty: (id: string) => void
   markLinkDirty: (id: string) => void
   markDiagramDirty: (id: string) => void
+  traceabilityDiagramRevision: Ref<number>
+  invalidateTraceabilityDiagrams: () => void
   markModelDirty: () => void
   renameModel: (nextName: string) => string | null
   handleBack: () => void
@@ -67,6 +89,7 @@ type ModelEditorReturn = {
   resolveBatchSaveOverwrite: () => Promise<boolean>
   /** Закрыть диалог конфликта без действия */
   dismissBatchSaveConflict: () => void
+  partialStore: ReturnType<typeof useModelPartialStore>
 }
 
 export const useModelEditor = (): ModelEditorReturn => {
@@ -76,17 +99,31 @@ export const useModelEditor = (): ModelEditorReturn => {
   const model = ref<ModelData | null>(null)
   const state = ref<ModelEditorState>(createEmptyModelEditorState())
   const isLoading = ref(true)
+  const loadProgress = ref<ModelEditorLoadProgress | null>(null)
+  const initialSnapshotReady = ref(false)
   const errorMessage = ref<string | null>(null)
+  const catalogLoadWarning = ref<string | null>(null)
+  const catalogReady = ref(true)
   const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
   const modelDirty = ref(false)
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
+  const partialStore = useModelPartialStore(state)
+  const traceabilityDiagramRevision = ref(0)
+  const invalidateTraceabilityDiagrams = (): void => {
+    traceabilityDiagramRevision.value += 1
+  }
   let catalogReadyPromise: Promise<void> = Promise.resolve()
   let backgroundReadyPromise: Promise<void> = Promise.resolve()
+  let loadGeneration = 0
   /** Guards concurrent save pipeline; separate from isSaving so UI can start early. */
   let saveOperationActive = false
+  let scopedReloadBinding: ScopedReloadBinding | null = null
+  const assignScopedReload = (binding: ScopedReloadBinding | null): void => {
+    scopedReloadBinding = binding
+  }
 
   const {
     ensureNotationRelationsAndRules,
@@ -94,8 +131,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     resetLoadedNotationIds,
   } = useNotationRelationsAndRulesLoader(state)
   const {
-    markNodeDirty,
-    markLinkDirty,
+    markNodeDirty: markNodeDirtyInState,
+    markLinkDirty: markLinkDirtyInState,
     markDiagramDirty,
     markModelDirty,
     renameModel,
@@ -110,8 +147,21 @@ export const useModelEditor = (): ModelEditorReturn => {
     saveError,
   })
 
+  const markNodeDirty = (id: string): void => {
+    markNodeDirtyInState(id)
+    const node = state.value.nodes.find(item => item.id === id)
+    if (node) partialStore.syncLocalNode(node)
+  }
+
+  const markLinkDirty = (id: string): void => {
+    markLinkDirtyInState(id)
+    const link = state.value.links.find(item => item.id === id)
+    if (link) partialStore.syncLocalLink(link)
+  }
+
   onScopeDispose(() => {
     disposeSaveErrorTimer()
+    scopedReloadBinding = null
   })
 
   const hasUnsavedChanges = computed(() => {
@@ -129,18 +179,81 @@ export const useModelEditor = (): ModelEditorReturn => {
 
   const whenCatalogReady = (): Promise<void> => catalogReadyPromise
   const whenBackgroundReady = (): Promise<void> => backgroundReadyPromise
+  const isLoadSessionActive = (generation: number, modelId: string): boolean =>
+    generation === loadGeneration && route.params.id === modelId
+  const applyCatalog = (
+    catalog: Awaited<ReturnType<typeof loadModelEditorCatalog>>,
+    notationIds: string[]
+  ): void => {
+    modelCatalog.value = catalog.modelCatalog
+    state.value = {
+      ...state.value,
+      notations: catalog.notations,
+      nodeTypes: catalog.nodeTypes,
+      linkTypes: catalog.linkTypes,
+      components: catalog.components,
+      relations: catalog.relations,
+      relationRules: catalog.relationRules,
+    }
+    resetLoadedNotationIds(notationIds)
+    resetLoadedNotationCatalogIds(notationIds)
+  }
+  const loadCatalogForSession = async (
+    modelId: string,
+    generation: number,
+    notationIds: string[],
+    cancellation?: ModelEditorLoadCancellationOptions
+  ): Promise<boolean> => {
+    catalogLoadWarning.value = null
+    try {
+      const catalog = await loadModelEditorCatalog(modelId, notationIds, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) return false
+      applyCatalog(catalog, notationIds)
+      return true
+    } catch (error) {
+      if (isLoadSessionActive(generation, modelId)) {
+        catalogLoadWarning.value =
+          error instanceof Error ? error.message : 'Не удалось догрузить каталог модели.'
+      }
+      return false
+    }
+  }
+  const retryCatalogLoad = async (): Promise<void> => {
+    const modelId = route.params.id
+    if (typeof modelId !== 'string') return
+    const generation = loadGeneration
+    catalogReady.value = false
+    const notationIds = Array.from(
+      new Set(state.value.diagrams.map(diagram => diagram.notationId).filter(Boolean))
+    )
+    const applied = await loadCatalogForSession(modelId, generation, notationIds, {
+      isCancelled: () => !isLoadSessionActive(generation, modelId),
+    })
+    if (isLoadSessionActive(generation, modelId)) catalogReady.value = applied
+  }
+  const markBackgroundReady = (
+    resolve: () => void,
+    generation: number,
+    modelId: string
+  ): void => {
+    resolve()
+    if (isLoadSessionActive(generation, modelId)) {
+      initialSnapshotReady.value = true
+    }
+  }
+  const modelTreeRootNodeId = (attrs: string | null | undefined): string | null => {
+    if (!attrs) return null
+    try {
+      const value = (JSON.parse(attrs) as Record<string, unknown>).treeRootNodeId
+      return typeof value === 'string' && value.trim() ? value : null
+    } catch {
+      return null
+    }
+  }
 
   const loadModel = async (): Promise<void> => {
-    const modelId = route.params.id
-    if (!modelId || typeof modelId !== 'string') {
-      errorMessage.value = 'Не удалось определить модель.'
-      isLoading.value = false
-      return
-    }
-
-    isLoading.value = true
-    errorMessage.value = null
-    let notationIds: string[]
+    scopedReloadBinding?.invalidate()
+    const generation = ++loadGeneration
     let resolveCatalogReady: () => void = () => undefined
     let resolveBackgroundReady: () => void = () => undefined
     catalogReadyPromise = new Promise<void>(resolve => {
@@ -149,13 +262,45 @@ export const useModelEditor = (): ModelEditorReturn => {
     backgroundReadyPromise = new Promise<void>(resolve => {
       resolveBackgroundReady = resolve
     })
+    const modelId = route.params.id
+    if (!modelId || typeof modelId !== 'string') {
+      loadProgress.value = null
+      errorMessage.value = String(i18n.global.t('models.scopedReloadModelMissing'))
+      isLoading.value = false
+      initialSnapshotReady.value = true
+      catalogReady.value = false
+      resolveCatalogReady()
+      resolveBackgroundReady()
+      return
+    }
+
+    isLoading.value = true
+    initialSnapshotReady.value = false
+    catalogReady.value = false
+    errorMessage.value = null
+    catalogLoadWarning.value = null
+    // Cancel child-page requests from the previous load before starting a new shell.
+    partialStore.resetPartialScopes(modelId)
+    const progressTracker = createModelEditorLoadProgressTracker({ generation, modelId })
+    loadProgress.value = progressTracker.current()
+    let notationIds: string[]
+    const cancellation = {
+      isCancelled: () => !isLoadSessionActive(generation, modelId),
+      onProgress: (event: Parameters<typeof progressTracker.update>[0]) => {
+        if (!isLoadSessionActive(generation, modelId)) return
+        loadProgress.value = progressTracker.update(event)
+      },
+    }
+    const settleStaleSession = (): void => {
+      resolveCatalogReady()
+      markBackgroundReady(resolveBackgroundReady, generation, modelId)
+    }
 
     try {
       // Critical path: tree + diagram list (without heavy diagram attrs).
-      const shell = await loadModelEditorShell(modelId)
-      if (route.params.id !== modelId) {
-        resolveCatalogReady()
-        resolveBackgroundReady()
+      const shell = await loadModelEditorShell(modelId, cancellation)
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
         return
       }
 
@@ -168,61 +313,61 @@ export const useModelEditor = (): ModelEditorReturn => {
       resetLoadedNotationIds([])
       resetLoadedNotationCatalogIds([])
       state.value = shell.state
-      // Avoid an immediate duplicate full pull from live sync after this load.
-      markModelEditorSnapshotFresh()
+      partialStore.resetPartialScopes(modelId, {
+        scope: { kind: 'root' },
+        page: shell.rootChildrenPage,
+        rootParentNodeId: modelTreeRootNodeId(shell.model.attrs),
+      })
       isLoading.value = false
+      // A usable initial snapshot is model metadata + root tree page + slim diagrams.
+      // Catalog is independent; graph entities are loaded only for the active diagram.
+      initialSnapshotReady.value = true
+      progressTracker.setBlocking(false)
+      loadProgress.value = progressTracker.current()
       // Let Vue paint the tree and handle expand clicks before catalog/links work.
       await new Promise<void>(resolve => {
         setTimeout(resolve, 0)
       })
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
+        return
+      }
     } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить модель.'
+      if (!isLoadSessionActive(generation, modelId)) {
+        settleStaleSession()
+        return
+      }
+      errorMessage.value =
+        error instanceof Error ? error.message : String(i18n.global.t('models.scopedReloadFailed'))
       isLoading.value = false
+      loadProgress.value = null
       resolveCatalogReady()
-      resolveBackgroundReady()
+      catalogReady.value = false
+      markBackgroundReady(resolveBackgroundReady, generation, modelId)
       return
     }
 
-    try {
-      // Catalog first: needed to render/open diagrams (must not wait for huge links).
-      const catalog = await loadModelEditorCatalog(modelId, notationIds)
-      if (route.params.id !== modelId) {
+    let catalogApplied = false
+    await (async (): Promise<void> => {
+      try {
+        catalogApplied = await loadCatalogForSession(modelId, generation, notationIds, cancellation)
+      } finally {
         resolveCatalogReady()
-        resolveBackgroundReady()
-        return
+        if (isLoadSessionActive(generation, modelId)) catalogReady.value = catalogApplied
+        markBackgroundReady(resolveBackgroundReady, generation, modelId)
       }
-
-      state.value = {
-        ...state.value,
-        nodeTypes: catalog.nodeTypes,
-        linkTypes: catalog.linkTypes,
-        components: catalog.components,
-        relations: catalog.relations,
-        relationRules: catalog.relationRules,
-      }
-      resetLoadedNotationIds(notationIds)
-      resetLoadedNotationCatalogIds(notationIds)
-      markModelEditorSnapshotFresh()
-      resolveCatalogReady()
-
-      // Links are large and only needed for connections/traceability.
-      const links = await loadModelEditorLinks(modelId)
-      if (route.params.id !== modelId) {
-        resolveBackgroundReady()
-        return
-      }
-      state.value = {
-        ...state.value,
-        links,
-      }
-      markModelEditorSnapshotFresh()
-      resolveBackgroundReady()
-    } catch (error) {
-      resolveCatalogReady()
-      resolveBackgroundReady()
-      // Tree is already visible; surface catalog/links failure without blanking the editor.
-      errorMessage.value = error instanceof Error ? error.message : 'Не удалось догрузить данные модели.'
+    })()
+    if (isLoadSessionActive(generation, modelId)) {
+      loadProgress.value = progressTracker.update({ kind: 'complete' })
     }
+  }
+
+  const reloadEditorState = async (): Promise<boolean> => {
+    if (scopedReloadBinding) {
+      return scopedReloadBinding.reload()
+    }
+    await loadModel()
+    return !errorMessage.value
   }
 
   const saveChanges = async (): Promise<boolean> => {
@@ -242,6 +387,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         pendingForceBatch,
         batchSaveConflict,
         saveError,
+        remoteCascadeConflictLinkIds: partialStore.store.remoteCascadeConflictLinkIds,
         onProgress: (msg: string) => {
           saveProgress.value = msg
         },
@@ -252,6 +398,8 @@ export const useModelEditor = (): ModelEditorReturn => {
         return false
       }
 
+      partialStore.reconcileMaterializedRows()
+      invalidateTraceabilityDiagrams()
       completeSave(2500)
       return true
     } finally {
@@ -272,12 +420,12 @@ export const useModelEditor = (): ModelEditorReturn => {
       },
     })
     if (result.ok) {
+      partialStore.reconcileMaterializedRows()
       if (modelDirty.value) modelDirty.value = false
       return true
     }
-    // Fallback for partial API failures: full reload is slow but consistent.
-    await loadModel()
-    return true
+    // Fallback for point-restore failures: scoped partial reset, not a full collection load.
+    return reloadEditorState()
   }
 
   const handleBack = () => {
@@ -296,9 +444,10 @@ export const useModelEditor = (): ModelEditorReturn => {
     useModelBatchConflictResolution({
       state,
       batchSaveConflict,
-      errorMessage,
+      saveError,
+      scheduleSaveErrorClear,
       pendingForceBatch,
-      loadModel,
+      loadModel: reloadEditorState,
       saveChanges,
     })
 
@@ -306,14 +455,21 @@ export const useModelEditor = (): ModelEditorReturn => {
     model,
     state,
     isLoading,
+    loadProgress,
+    initialSnapshotReady,
     errorMessage,
+    catalogLoadWarning,
+    retryCatalogLoad,
+    catalogReady,
     modelDirty,
+    modelInitialName,
     isSaving,
     saveError,
     saveSuccess,
     saveProgress,
     hasUnsavedChanges,
     loadModel,
+    assignScopedReload,
     discardUnsavedChanges,
     whenCatalogReady,
     whenBackgroundReady,
@@ -323,6 +479,8 @@ export const useModelEditor = (): ModelEditorReturn => {
     markNodeDirty,
     markLinkDirty,
     markDiagramDirty,
+    traceabilityDiagramRevision,
+    invalidateTraceabilityDiagrams,
     markModelDirty,
     renameModel,
     handleBack,
@@ -333,5 +491,6 @@ export const useModelEditor = (): ModelEditorReturn => {
     resolveBatchSaveReload,
     resolveBatchSaveOverwrite,
     dismissBatchSaveConflict,
+    partialStore,
   }
 }

@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { apiGet } from '@/composables/useApi'
-import type { NodeResponse, NodeTypeResponse } from '@/types/api'
 import type { ModelData, NotationData, PaginatedResponse } from '@/types/entities'
 import { paginatedContent } from '@/utils/paginatedResponse'
 import {
@@ -20,8 +19,9 @@ import {
   diagramCopyBlockerI18nKey,
   diagramCopyWarningI18nKey,
 } from '../composables/diagramCopyIssueText'
-import { fetchAllByModelId } from '../composables/modelEditorLoadModel'
 import { isDiagramNameVersionConflict, useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
+import { useLazyFolderTree } from '../composables/useLazyFolderTree'
+import type { TreeParentScope } from '../types'
 
 const props = defineProps<{
   open: boolean
@@ -41,9 +41,9 @@ const wizard = useDiagramCopyWizard({
   sourceModelId: computed(() => props.sourceModelId),
 })
 
-const folders = ref<NodeResponse[]>([])
 const loadingCatalog = ref(false)
 const catalogError = ref<string | null>(null)
+const folderTree = useLazyFolderTree()
 
 const modelOptions = computed(() =>
   wizard.availableModels.value.map(model => ({
@@ -56,13 +56,6 @@ const notationOptions = computed(() =>
   wizard.availableNotations.value.map(notation => ({
     id: notation.id,
     label: `${notation.name} (${notation.version})`,
-  }))
-)
-
-const folderOptions = computed(() =>
-  folders.value.map(folder => ({
-    id: folder.id,
-    label: folder.name,
   }))
 )
 
@@ -101,7 +94,11 @@ function formatWizardError(message: string): string {
   return isDiagramNameVersionConflict(message) ? t('models.diagramCopy.nameVersionExists') : message
 }
 
-async function loadCatalog(): Promise<void> {
+let initializeGeneration = 0
+const isCurrentInitialize = (generation: number): boolean =>
+  generation === initializeGeneration && props.open
+
+async function loadCatalog(generation: number): Promise<boolean> {
   loadingCatalog.value = true
   catalogError.value = null
   try {
@@ -110,6 +107,7 @@ async function loadCatalog(): Promise<void> {
       apiGet<PaginatedResponse<NotationData>>('/notations?page=0&size=2000'),
     ])
 
+    if (!isCurrentInitialize(generation)) return false
     if (!modelsResult.success) throw new Error(modelsResult.error.message)
     if (!notationsResult.success) throw new Error(notationsResult.error.message)
 
@@ -117,61 +115,58 @@ async function loadCatalog(): Promise<void> {
       model => model.id !== props.sourceModelId && isEditableModel(model)
     )
     wizard.availableNotations.value = paginatedContent(notationsResult.data)
+    return true
   } catch (error) {
+    if (!isCurrentInitialize(generation)) return false
     catalogError.value =
       error instanceof Error && error.message ? error.message : t('models.diagramCopy.error')
+    return false
   } finally {
-    loadingCatalog.value = false
+    if (isCurrentInitialize(generation)) loadingCatalog.value = false
   }
 }
 
 async function loadFolders(modelId: string): Promise<void> {
-  folders.value = []
   wizard.folderNodeId.value = null
+  wizard.createParentNodeId.value = null
+  folderTree.setModel(modelId)
   if (!modelId) return
-
-  try {
-    const nodeTypesQuery = new URLSearchParams({
-      page: '0',
-      size: '2000',
-      modelId,
-    })
-    const [nodes, nodeTypesResult] = await Promise.all([
-      fetchAllByModelId<NodeResponse>('/nodes', modelId),
-      apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
-    ])
-    if (!nodeTypesResult.success) throw new Error(nodeTypesResult.error.message)
-
-    const directoryTypeIds = new Set(
-      paginatedContent(nodeTypesResult.data)
-        .filter(type => type.name.trim().toLowerCase() === 'directory')
-        .map(type => type.id)
-    )
-    folders.value = nodes
-      .filter(node => directoryTypeIds.has(node.nodeTypeId))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  } catch (error) {
-    catalogError.value =
-      error instanceof Error && error.message ? error.message : t('models.diagramCopy.folderError')
-  }
+  await folderTree.loadRoot()
 }
 
+const folderScope = (nodeId: string): TreeParentScope => ({ kind: 'node', nodeId })
+const folderScopeState = (scope: TreeParentScope) =>
+  folderTree.scopes.value.get(scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`)
+
 async function initialize(): Promise<void> {
-  await loadCatalog()
-  if (!props.open || !props.sourceDiagramId) return
+  const generation = ++initializeGeneration
+  if (!(await loadCatalog(generation)) || !isCurrentInitialize(generation)) return
+  if (!props.sourceDiagramId) return
 
   const firstModel = wizard.availableModels.value[0]
+  if (!isCurrentInitialize(generation)) return
   wizard.targetModelId.value = firstModel?.id ?? ''
   wizard.targetNotationId.value = pickDefaultTargetNotationId(
     wizard.availableNotations.value,
     props.sourceNotationId
   )
-  if (wizard.targetModelId.value) await loadFolders(wizard.targetModelId.value)
+  if (wizard.targetModelId.value) {
+    if (!isCurrentInitialize(generation)) return
+    await loadFolders(wizard.targetModelId.value)
+    if (!isCurrentInitialize(generation)) return
+  }
+  if (!isCurrentInitialize(generation)) return
   await wizard.open(props.sourceDiagramId)
+}
+
+function invalidateInitialize(): void {
+  initializeGeneration += 1
+  folderTree.setModel('')
 }
 
 function closeWizard(): void {
   if (wizard.loading.value) return
+  invalidateInitialize()
   wizard.close()
   emit('close')
 }
@@ -223,7 +218,10 @@ watch(
   () => props.open,
   isOpen => {
     if (isOpen) void initialize()
-    else wizard.close()
+    else {
+      invalidateInitialize()
+      wizard.close()
+    }
   },
   { immediate: true }
 )
@@ -305,20 +303,130 @@ watch(wizard.targetModelId, modelId => {
             <input v-model="wizard.diagramVersion.value" class="form-input" type="text" />
           </label>
         </div>
-        <label class="diagram-copy__field">
-          <span>{{ t('models.diagramCopy.folder') }}</span>
-          <SearchableSelect
-            :model-value="wizard.folderNodeId.value ?? ''"
-            :options="folderOptions"
-            :placeholder="t('models.diagramCopy.rootFolder')"
-            :search-placeholder="t('models.diagramCopy.search')"
-            :empty-text="t('models.diagramCopy.noFolders')"
-            allow-empty
-            :empty-label="t('models.diagramCopy.rootFolder')"
-            :disabled="!wizard.targetModelId.value || wizard.loading.value"
-            @update:model-value="wizard.folderNodeId.value = $event || null"
-          />
-        </label>
+        <fieldset class="diagram-copy__field diagram-copy__folder-picker">
+          <legend>{{ t('models.diagramCopy.folder') }}</legend>
+          <label class="diagram-copy__folder-row">
+            <input
+              v-model="wizard.folderNodeId.value"
+              type="radio"
+              name="diagram-copy-folder"
+              :value="null"
+            />
+            <span>{{ t('models.diagramCopy.rootFolder') }}</span>
+          </label>
+          <div
+            v-if="folderScopeState({ kind: 'root' })?.loading"
+            class="diagram-copy__hint"
+            role="status"
+            aria-live="polite"
+          >
+            {{ t('models.diagramCopy.loadingFolders') }}
+          </div>
+          <div
+            v-if="folderScopeState({ kind: 'root' })?.error"
+            class="diagram-copy__folder-status"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span class="diagram-copy__error">{{ folderScopeState({ kind: 'root' })?.error }}</span>
+            <button type="button" class="btn btn--secondary" @click="folderTree.retry({ kind: 'root' })">
+              {{ t('common.retry') }}
+            </button>
+          </div>
+          <template
+            v-if="
+              (folderScopeState({ kind: 'root' })?.nextPage ?? 0) > 0 ||
+              (!folderScopeState({ kind: 'root' })?.loading &&
+                !folderScopeState({ kind: 'root' })?.error)
+            "
+          >
+            <div
+              v-for="row in folderTree.visibleRows.value"
+              :key="row.node.id"
+              class="diagram-copy__folder-branch"
+            >
+              <div
+                class="diagram-copy__folder-row"
+                :style="{ paddingLeft: `${row.depth * 20}px` }"
+              >
+                <button
+                  v-if="row.node.hasChildren !== false"
+                  type="button"
+                  class="diagram-copy__folder-toggle"
+                  :aria-label="
+                    t(
+                      folderScopeState(folderScope(row.node.id))?.expanded
+                        ? 'models.diagramCopy.collapseFolder'
+                        : 'models.diagramCopy.expandFolder'
+                    )
+                  "
+                  :aria-expanded="folderScopeState(folderScope(row.node.id))?.expanded === true"
+                  @click="folderTree.toggleFolder(row.node.id)"
+                >
+                  {{ folderScopeState(folderScope(row.node.id))?.expanded ? '▾' : '▸' }}
+                </button>
+                <span v-else class="diagram-copy__folder-toggle-spacer" />
+                <label>
+                  <input
+                    v-model="wizard.folderNodeId.value"
+                    type="radio"
+                    name="diagram-copy-folder"
+                    :value="row.node.id"
+                  />
+                  <span>{{ row.node.name }}</span>
+                </label>
+              </div>
+              <div
+                v-if="folderScopeState(folderScope(row.node.id))?.expanded"
+                class="diagram-copy__folder-status"
+                :style="{ paddingLeft: `${(row.depth + 1) * 20}px` }"
+              >
+                <span
+                  v-if="folderScopeState(folderScope(row.node.id))?.loading"
+                  class="diagram-copy__hint"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {{ t('models.diagramCopy.loadingFolders') }}
+                </span>
+                <template v-else-if="folderScopeState(folderScope(row.node.id))?.error">
+                  <span class="diagram-copy__error" role="alert" aria-live="assertive">
+                    {{ folderScopeState(folderScope(row.node.id))?.error }}
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    @click="folderTree.retry(folderScope(row.node.id))"
+                  >
+                    {{ t('common.retry') }}
+                  </button>
+                </template>
+                <button
+                  v-else-if="folderScopeState(folderScope(row.node.id))?.hasMore"
+                  type="button"
+                  class="btn btn--secondary"
+                  @click="folderTree.loadMore(folderScope(row.node.id))"
+                >
+                  {{ t('models.diagramCopy.loadMoreFolders') }}
+                </button>
+              </div>
+            </div>
+            <p v-if="folderTree.visibleRows.value.length === 0" class="diagram-copy__hint">
+              {{ t('models.diagramCopy.noFolders') }}
+            </p>
+            <button
+              v-if="
+                folderScopeState({ kind: 'root' })?.hasMore &&
+                !folderScopeState({ kind: 'root' })?.error
+              "
+              type="button"
+              class="btn btn--secondary"
+              @click="folderTree.loadMore({ kind: 'root' })"
+            >
+              {{ t('models.diagramCopy.loadMoreFolders') }}
+            </button>
+          </template>
+        </fieldset>
       </div>
 
       <div v-else-if="wizard.step.value === 2" class="diagram-copy__panel">
@@ -549,6 +657,49 @@ watch(wizard.targetModelId, modelId => {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
+}
+
+.diagram-copy__folder-picker {
+  max-height: 280px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.diagram-copy__folder-branch {
+  display: flex;
+  flex-direction: column;
+}
+
+.diagram-copy__folder-row,
+.diagram-copy__folder-row label,
+.diagram-copy__folder-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.diagram-copy__folder-row {
+  min-height: 30px;
+}
+
+.diagram-copy__folder-toggle {
+  width: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.diagram-copy__folder-toggle-spacer {
+  width: 24px;
+}
+
+.diagram-copy__folder-status {
+  min-height: 28px;
 }
 
 .diagram-copy__field-grid {

@@ -1,0 +1,381 @@
+import { PAGE_SIZE_MODEL_DIAGRAMS, pagedListParams } from '@/api/queryHelpers'
+import { apiFetch, type ApiResult } from '@/composables/useApi'
+import type { DiagramResponse } from '@/types/api'
+import type { ModelData, PaginatedResponse } from '@/types/entities'
+import {
+  paginatedContent,
+  paginatedIsLastPage,
+} from '@/utils/paginatedResponse'
+import type { EditorDiagram, TreeParentScope } from '../types'
+import {
+  mergeEntityListFromRemote,
+} from '../utils/modelEntityMerge'
+import type { ModelLiveSyncPullReason } from '../utils/modelLiveSyncTelemetry'
+import { toEditorDiagramPreservingLocalAttrs } from './modelEditorMappers'
+
+export type BoundedModelReconcileFetchers = {
+  fetchModel: (modelId: string, signal: AbortSignal) => Promise<ApiResult<ModelData>>
+  fetchSlimDiagrams: (
+    modelId: string,
+    signal: AbortSignal
+  ) => Promise<ApiResult<DiagramResponse[]>>
+}
+
+export type BoundedModelReconcile = {
+  request: (reason: ModelLiveSyncPullReason) => void
+  flush: () => Promise<void>
+  invalidate: () => void
+  dispose: () => void
+}
+
+export type PreparedChildrenScopeRefresh = {
+  isCurrent: () => boolean
+  commit: () => void
+}
+
+type BoundedModelReconcileOptions = {
+  modelId: () => string | null | undefined
+  model: () => ModelData | null
+  replaceModel: (model: ModelData) => void
+  modelDirty: () => boolean
+  diagrams: () => EditorDiagram[]
+  replaceDiagrams: (diagrams: EditorDiagram[]) => void
+  materializedScopes: () => TreeParentScope[]
+  refreshVisibleChildrenScope: (scope: TreeParentScope, signal: AbortSignal) => Promise<void>
+  prepareVisibleChildrenScopeRefresh?: (
+    scope: TreeParentScope,
+    signal: AbortSignal
+  ) => Promise<PreparedChildrenScopeRefresh>
+  openDiagramId?: () => string | null | undefined
+  reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
+  fetchers?: BoundedModelReconcileFetchers
+  onDetachedSnapshotInvalidated?: () => void
+  onError?: (
+    reason: ModelLiveSyncPullReason,
+    error: unknown,
+    retry: () => void
+  ) => void
+  onRecovered?: (reason: ModelLiveSyncPullReason) => void
+  onModelUnavailable?: (status: number) => void
+  acceptedRevision?: () => string | null
+  acceptModelMetadata?: (remote: ModelData) => boolean
+}
+
+const SCOPE_REFRESH_CONCURRENCY = 4
+const REVISION_FENCE_RETRY_DELAY_MS = 100
+
+const errorResult = <T>(error: unknown): ApiResult<T> => ({
+  success: false,
+  error: {
+    status: 0,
+    message: error instanceof Error ? error.message : String(error),
+  },
+})
+
+const defaultFetchers: BoundedModelReconcileFetchers = {
+  fetchModel: (modelId, signal) =>
+    apiFetch<ModelData>(`/models/${encodeURIComponent(modelId)}`, {
+      method: 'GET',
+      signal,
+    }),
+  fetchSlimDiagrams: async (modelId, signal) => {
+    const diagrams: DiagramResponse[] = []
+    try {
+      for (let page = 0; ; page += 1) {
+        const query = pagedListParams(page, PAGE_SIZE_MODEL_DIAGRAMS)
+        query.set('modelId', modelId)
+        query.set('includeAttrs', 'false')
+        const result = await apiFetch<PaginatedResponse<DiagramResponse>>(
+          `/diagrams?${query.toString()}`,
+          { method: 'GET', signal }
+        )
+        if (!result.success) return result
+        diagrams.push(...paginatedContent(result.data))
+        if (paginatedIsLastPage(result.data, page)) return { success: true, data: diagrams }
+      }
+    } catch (error) {
+      return errorResult(error)
+    }
+  },
+}
+
+const revision = (value: ModelData | null): string | null => value?.updatedAt ?? null
+
+const compareRevisions = (left: string | null, right: string | null): number => {
+  if (left === right) return 0
+  if (left == null) return -1
+  if (right == null) return 1
+  const leftTime = Date.parse(left)
+  const rightTime = Date.parse(right)
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) return leftTime - rightTime
+  return left.localeCompare(right)
+}
+
+export function createBoundedModelReconcile(
+  options: BoundedModelReconcileOptions
+): BoundedModelReconcile {
+  const fetchers = options.fetchers ?? defaultFetchers
+  let generation = 0
+  let controller: AbortController | null = null
+  let scheduled: Promise<void> | null = null
+  let pendingReason: ModelLiveSyncPullReason | null = null
+  let lastObservedModelId: string | null = null
+  let lastObservedRevision: string | null = null
+  let disposed = false
+  let hasReportedError = false
+
+  const recover = (reason: ModelLiveSyncPullReason): void => {
+    if (!hasReportedError) return
+    hasReportedError = false
+    options.onRecovered?.(reason)
+  }
+
+  const waitForFenceRetry = (signal: AbortSignal): Promise<void> =>
+    new Promise(resolve => {
+      if (signal.aborted) {
+        resolve()
+        return
+      }
+      const timer = setTimeout(done, REVISION_FENCE_RETRY_DELAY_MS)
+      function done(): void {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', done)
+        resolve()
+      }
+      signal.addEventListener('abort', done, { once: true })
+    })
+
+  const isCurrent = (
+    requestGeneration: number,
+    requestModelId: string,
+    requestController: AbortController
+  ): boolean =>
+    !disposed &&
+    generation === requestGeneration &&
+    options.modelId() === requestModelId &&
+    controller === requestController &&
+    !requestController.signal.aborted
+
+  const replaceModelMetadata = (remote: ModelData): void => {
+    const local = options.model()
+    if (!local || options.modelDirty()) return
+    if (local.id !== remote.id) {
+      options.replaceModel(remote)
+      return
+    }
+    options.replaceModel({
+      ...local,
+      name: remote.name,
+      version: remote.version,
+      ownerId: remote.ownerId,
+      attrs: remote.attrs,
+      sourceId: remote.sourceId,
+      accessPermission: remote.accessPermission,
+      createdAt: remote.createdAt,
+      updatedAt: remote.updatedAt,
+    })
+  }
+
+  const mergeSlimDiagrams = (
+    remoteRows: DiagramResponse[],
+    openDiagramId: string | null
+  ): void => {
+    const previous = options.diagrams()
+    const merged = mergeEntityListFromRemote(
+      previous,
+      remoteRows,
+      row => toEditorDiagramPreservingLocalAttrs(row, previous)
+    ).items
+    options.replaceDiagrams(
+      merged.map(row =>
+        row.id === openDiagramId && !row._isDirty && !row._isNew && !row._isDeleted
+          ? { ...row, _attrsPending: true }
+          : row
+      )
+    )
+  }
+
+  const runOnce = async (reason: ModelLiveSyncPullReason): Promise<boolean> => {
+    const modelId = options.modelId()
+    if (!modelId || typeof modelId !== 'string') return false
+    const requestGeneration = generation
+    const requestController = new AbortController()
+    controller = requestController
+
+    if (lastObservedModelId !== modelId) {
+      lastObservedModelId = modelId
+      lastObservedRevision = revision(options.model())
+    }
+    const acceptedRevision = options.acceptedRevision?.() ?? revision(options.model())
+    const baselineRevision =
+      compareRevisions(lastObservedRevision, acceptedRevision) >= 0
+        ? lastObservedRevision
+        : acceptedRevision
+
+    try {
+      const modelResult = await fetchers.fetchModel(modelId, requestController.signal)
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
+      if (!modelResult.success) {
+        if (modelResult.error.cancelled) return false
+        if (modelResult.error.status === 403 || modelResult.error.status === 404) {
+          options.onModelUnavailable?.(modelResult.error.status)
+          return false
+        }
+        throw new Error(modelResult.error.message)
+      }
+
+      const remoteRevision = revision(modelResult.data)
+      const comparison = compareRevisions(remoteRevision, baselineRevision)
+      if (comparison <= 0) {
+        if (comparison === 0) recover(reason)
+        return false
+      }
+
+      const diagramsResult = await fetchers.fetchSlimDiagrams(modelId, requestController.signal)
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
+      if (!diagramsResult.success) {
+        if (diagramsResult.error.cancelled) return false
+        throw new Error(diagramsResult.error.message)
+      }
+
+      const scopes = options.materializedScopes()
+      const preparedScopes: PreparedChildrenScopeRefresh[] = new Array(scopes.length)
+      let nextScopeIndex = 0
+      const workers = Array.from(
+        { length: Math.min(SCOPE_REFRESH_CONCURRENCY, scopes.length) },
+        async () => {
+          while (nextScopeIndex < scopes.length) {
+            const index = nextScopeIndex
+            nextScopeIndex += 1
+            const scope = scopes[index]!
+            if (options.prepareVisibleChildrenScopeRefresh) {
+              preparedScopes[index] = await options.prepareVisibleChildrenScopeRefresh(
+                scope,
+                requestController.signal
+              )
+            } else {
+              await options.refreshVisibleChildrenScope(scope, requestController.signal)
+              preparedScopes[index] = {
+                isCurrent: () => !requestController.signal.aborted,
+                commit: () => undefined,
+              }
+            }
+          }
+        }
+      )
+      const refreshResults = await Promise.allSettled(workers)
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
+      const failedRefresh = refreshResults.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected'
+      )
+      if (failedRefresh) throw failedRefresh.reason
+
+      const openDiagramId = options.openDiagramId?.() ?? null
+      if (openDiagramId && options.reloadOpenDiagramScope) {
+        await options.reloadOpenDiagramScope(openDiagramId, requestController.signal)
+        if (!isCurrent(requestGeneration, modelId, requestController)) return false
+      }
+
+      const fenceResult = await fetchers.fetchModel(modelId, requestController.signal)
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
+      if (!fenceResult.success) {
+        if (fenceResult.error.cancelled) return false
+        if (fenceResult.error.status === 403 || fenceResult.error.status === 404) {
+          options.onModelUnavailable?.(fenceResult.error.status)
+          return false
+        }
+        throw new Error(fenceResult.error.message)
+      }
+      if (revision(fenceResult.data) !== remoteRevision) {
+        return true
+      }
+      if (preparedScopes.some(prepared => !prepared.isCurrent())) {
+        return true
+      }
+      if (options.acceptModelMetadata && !options.acceptModelMetadata(modelResult.data)) return false
+
+      mergeSlimDiagrams(diagramsResult.data, openDiagramId)
+      preparedScopes.forEach(prepared => prepared.commit())
+      lastObservedRevision = remoteRevision
+      if (!options.acceptModelMetadata) replaceModelMetadata(modelResult.data)
+      options.onDetachedSnapshotInvalidated?.()
+      recover(reason)
+      return false
+    } catch (error) {
+      if (!isCurrent(requestGeneration, modelId, requestController)) return false
+      hasReportedError = true
+      options.onError?.(reason, error, () => request(reason))
+      return false
+    }
+  }
+
+  const drain = async (firstReason: ModelLiveSyncPullReason): Promise<void> => {
+    let reason: ModelLiveSyncPullReason | null = firstReason
+    let fenceRetried = false
+    while (reason && !disposed) {
+      pendingReason = null
+      const fenceMoved = await runOnce(reason)
+      if (fenceMoved) {
+        if (!fenceRetried) {
+          fenceRetried = true
+          const retrySignal = controller?.signal
+          if (!retrySignal) break
+          await waitForFenceRetry(retrySignal)
+          if (retrySignal.aborted || disposed) break
+          reason = pendingReason ?? reason
+          continue
+        }
+        hasReportedError = true
+        const failedReason = reason
+        options.onError?.(
+          failedReason,
+          new Error('Model revision changed during bounded reconciliation.'),
+          () => request(failedReason)
+        )
+        pendingReason = null
+        break
+      }
+      reason = pendingReason
+    }
+  }
+
+  const request = (reason: ModelLiveSyncPullReason): void => {
+    if (disposed) return
+    if (scheduled) {
+      pendingReason = reason
+      return
+    }
+    scheduled = drain(reason).finally(() => {
+      scheduled = null
+      controller = null
+      if (pendingReason && !disposed) {
+        const followUp = pendingReason
+        pendingReason = null
+        request(followUp)
+      }
+    })
+  }
+
+  const invalidate = (): void => {
+    generation += 1
+    controller?.abort()
+    pendingReason = null
+    lastObservedModelId = null
+    lastObservedRevision = null
+    hasReportedError = false
+  }
+
+  const dispose = (): void => {
+    disposed = true
+    invalidate()
+  }
+
+  return {
+    request,
+    flush: async () => {
+      while (scheduled) await scheduled
+    },
+    invalidate,
+    dispose,
+  }
+}

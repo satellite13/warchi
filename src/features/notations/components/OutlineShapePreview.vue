@@ -12,7 +12,7 @@ const props = withDefaults(
     height?: number
     label?: string
   }>(),
-  { width: 96, height: 72, outlineJson: null }
+  { width: 96, height: 72, outlineJson: null, segments: () => [], label: '' }
 )
 
 const pathD = computed(() => {

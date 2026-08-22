@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiGet } from '@/composables/useApi'
-import { listParams } from '@/api/queryHelpers'
+import { listParams, MODEL_PAGE_FETCH_CONCURRENCY } from '@/api/queryHelpers'
 import { fetchAllComponentsByNotationIds } from './modelNotationComponentsApi'
+import { withModelEditorPageSlot } from '../utils/modelEditorPagePool'
 import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
 } from './modelNotationRelationsApi'
-import { fetchAllByModelId, loadModelEditorData } from './modelEditorLoadModel'
+import { fetchNodeChildren } from './modelScopedApi'
+import {
+  fetchAllByModelId,
+  loadModelEditorCatalog,
+  loadModelEditorData,
+} from './modelEditorLoadModel'
 
 vi.mock('@/composables/useApi', () => ({
   apiGet: vi.fn(),
@@ -19,6 +25,10 @@ vi.mock('./modelNotationRelationsApi', () => ({
 
 vi.mock('./modelNotationComponentsApi', () => ({
   fetchAllComponentsByNotationIds: vi.fn(),
+}))
+
+vi.mock('./modelScopedApi', () => ({
+  fetchNodeChildren: vi.fn(),
 }))
 
 vi.mock('@/api/queryHelpers', async () => {
@@ -34,10 +44,14 @@ const fail = (status: number, message: string) => ({
   success: false as const,
   error: { status, message },
 })
-const page = <T>(content: T[], meta?: { last?: boolean; totalPages?: number }) => ({
+const page = <T>(
+  content: T[],
+  meta?: { last?: boolean; totalPages?: number; totalElements?: number }
+) => ({
   content,
   last: meta?.last ?? true,
   totalPages: meta?.totalPages ?? 1,
+  totalElements: meta?.totalElements ?? content.length,
 })
 /** arepos ListResponse for GET /models (items, not Spring content). */
 const listResponse = <T>(items: T[]) => ({
@@ -46,6 +60,14 @@ const listResponse = <T>(items: T[]) => ({
   page: 0,
   size: items.length,
 })
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
 
 describe('fetchAllByModelId', () => {
   beforeEach(() => {
@@ -72,12 +94,222 @@ describe('fetchAllByModelId', () => {
     )
   })
 
+  it('reports cumulative row progress from page metadata', async () => {
+    vi.mocked(apiGet)
+      .mockResolvedValueOnce(
+        ok(page([{ id: 'n1' }, { id: 'n2' }], { last: false, totalPages: 2, totalElements: 3 }))
+      )
+      .mockResolvedValueOnce(ok(page([{ id: 'n3' }], { totalElements: 3 })))
+    const onProgress = vi.fn()
+
+    await fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000, undefined, {
+      onProgress,
+    })
+
+    expect(onProgress.mock.calls.map(call => call[0])).toEqual([
+      { kind: 'collection', collection: 'nodes', loaded: 2, total: 3 },
+      { kind: 'collection', collection: 'nodes', loaded: 3, total: 3 },
+    ])
+  })
+
   it('forwards extra query params (includeAttrs=false for diagrams)', async () => {
     vi.mocked(apiGet).mockResolvedValueOnce(ok(page([{ id: 'd1' }])))
 
     await fetchAllByModelId('/diagrams', 'model-1', 100, { includeAttrs: 'false' })
 
     expect(String(vi.mocked(apiGet).mock.calls[0]?.[0])).toContain('includeAttrs=false')
+  })
+
+  it(`fetches remaining pages with a concurrency cap of ${MODEL_PAGE_FETCH_CONCURRENCY}`, async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const pageMatch = String(path).match(/page=(\d+)/)
+      const pageNum = Number(pageMatch?.[1] ?? 0)
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, 20)
+      })
+      inFlight -= 1
+      return ok(page([{ id: `n${pageNum}` }], { last: pageNum === 9, totalPages: 10 }))
+    })
+
+    const result = await fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+
+    expect(result).toHaveLength(10)
+    expect(maxInFlight).toBeLessThanOrEqual(MODEL_PAGE_FETCH_CONCURRENCY)
+    expect(apiGet).toHaveBeenCalledTimes(10)
+  })
+
+  it('shares one global page request limit across parallel node and link loads', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const requestPath = String(path)
+      const pageNum = Number(requestPath.match(/page=(\d+)/)?.[1] ?? 0)
+      const collection = requestPath.startsWith('/nodes?') ? 'node' : 'link'
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, 20)
+      })
+      inFlight -= 1
+      return ok(
+        page([{ id: `${collection}-${pageNum}` }], {
+          last: pageNum === 7,
+          totalPages: 8,
+        })
+      )
+    })
+
+    const [nodes, links] = await Promise.all([
+      fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000),
+      fetchAllByModelId<{ id: string }>('/links', 'model-1', 1000),
+    ])
+
+    expect(nodes).toHaveLength(8)
+    expect(links).toHaveLength(8)
+    expect(maxInFlight).toBeLessThanOrEqual(MODEL_PAGE_FETCH_CONCURRENCY)
+    expect(apiGet).toHaveBeenCalledTimes(16)
+  })
+
+  it('stops scheduling new pages after an error and drains active workers', async () => {
+    const firstError = new Error('page failed')
+    const drainActivePages = deferred()
+    const releaseFollowUps = deferred()
+    const startedNodePages: number[] = []
+    const startedFollowUps: string[] = []
+    const expectedStartedNodePages = Array.from(
+      { length: MODEL_PAGE_FETCH_CONCURRENCY + 1 },
+      (_, index) => index
+    )
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const requestPath = String(path)
+      const params = new URLSearchParams(requestPath.split('?')[1])
+      const pageNum = Number(params.get('page') ?? 0)
+      const modelId = params.get('modelId') ?? ''
+
+      if (requestPath.startsWith('/nodes?')) {
+        startedNodePages.push(pageNum)
+        if (pageNum === 0) {
+          return ok(page([{ id: 'node-0' }], { last: false, totalPages: 8 }))
+        }
+        if (pageNum === 1) throw firstError
+        await drainActivePages.promise
+        return ok(page([{ id: `node-${pageNum}` }], { last: false, totalPages: 8 }))
+      }
+
+      startedFollowUps.push(modelId)
+      await releaseFollowUps.promise
+      return ok(page([{ id: `link-${modelId}` }]))
+    })
+
+    let loadSettled = false
+    const loadOutcome = fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+      .then(
+        value => ({ value }),
+        error => ({ error })
+      )
+      .finally(() => {
+        loadSettled = true
+      })
+    let followUps: Array<Promise<Array<{ id: string }>>> = []
+
+    try {
+      await vi.waitFor(() => {
+        expect(startedNodePages).toEqual(expectedStartedNodePages)
+      })
+      expect(loadSettled).toBe(MODEL_PAGE_FETCH_CONCURRENCY === 1)
+
+      drainActivePages.resolve()
+      const outcome = await loadOutcome
+
+      expect('error' in outcome ? outcome.error : undefined).toBe(firstError)
+      expect(startedNodePages).toEqual(expectedStartedNodePages)
+
+      followUps = Array.from({ length: MODEL_PAGE_FETCH_CONCURRENCY }, (_, index) =>
+        fetchAllByModelId<{ id: string }>('/links', `model-${index}`, 1000)
+      )
+      await vi.waitFor(() => {
+        expect(startedFollowUps).toHaveLength(MODEL_PAGE_FETCH_CONCURRENCY)
+      })
+    } finally {
+      drainActivePages.resolve()
+      releaseFollowUps.resolve()
+      await loadOutcome
+      await Promise.allSettled(followUps)
+    }
+  })
+
+  it('does not start queued page requests after the first page error', async () => {
+    const releaseSlotHolders = deferred()
+    const firstError = new Error('page failed')
+    const startedPages: number[] = []
+    let slotHolders: Promise<void>[] = []
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const pageNum = Number(String(path).match(/page=(\d+)/)?.[1] ?? 0)
+      startedPages.push(pageNum)
+      if (pageNum === 0) {
+        slotHolders = Array.from({ length: MODEL_PAGE_FETCH_CONCURRENCY - 1 }, () =>
+          withModelEditorPageSlot(async () => {
+            await releaseSlotHolders.promise
+          })
+        )
+        return ok(
+          page([{ id: 'node-0' }], {
+            last: false,
+            totalPages: MODEL_PAGE_FETCH_CONCURRENCY + 1,
+          })
+        )
+      }
+      if (pageNum === 1) throw firstError
+      return ok(page([{ id: `node-${pageNum}` }]))
+    })
+
+    const load = fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000)
+
+    try {
+      await expect(load).rejects.toBe(firstError)
+      expect(startedPages).toEqual([0, 1])
+    } finally {
+      releaseSlotHolders.resolve()
+      await Promise.allSettled(slotHolders)
+      await load.catch(() => undefined)
+    }
+  })
+
+  it('stops scheduling pages after cancellation and drains active requests', async () => {
+    const releaseActivePages = deferred()
+    const startedPages: number[] = []
+    const expectedStartedPages = Array.from(
+      { length: MODEL_PAGE_FETCH_CONCURRENCY + 1 },
+      (_, index) => index
+    )
+    let cancelled = false
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      const pageNum = Number(String(path).match(/page=(\d+)/)?.[1] ?? 0)
+      startedPages.push(pageNum)
+      if (pageNum === 0) {
+        return ok(page([{ id: 'node-0' }], { last: false, totalPages: 8 }))
+      }
+      await releaseActivePages.promise
+      if (pageNum === 2) throw new Error('active request failed after cancellation')
+      return ok(page([{ id: `node-${pageNum}` }], { last: false, totalPages: 8 }))
+    })
+
+    const load = fetchAllByModelId<{ id: string }>('/nodes', 'model-1', 1000, undefined, {
+      isCancelled: () => cancelled,
+    })
+
+    await vi.waitFor(() => {
+      expect(startedPages).toEqual(expectedStartedPages)
+    })
+    cancelled = true
+    releaseActivePages.resolve()
+
+    await expect(load).resolves.toEqual([])
+    expect(startedPages).toEqual(expectedStartedPages)
   })
 
   it('dedupes entities that appear on multiple pages', async () => {
@@ -94,6 +326,7 @@ describe('fetchAllByModelId', () => {
 describe('loadModelEditorData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(fetchNodeChildren).mockResolvedValue(ok(page([])))
     vi.mocked(fetchAllRelationRulesByNotationIds).mockResolvedValue([])
     vi.mocked(fetchAllRelationsByNotationId).mockResolvedValue([
       {
@@ -215,6 +448,20 @@ describe('loadModelEditorData', () => {
     })
   })
 
+  it('aggregates catalog API failures instead of returning successful empty collections', async () => {
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path.startsWith('/models?')) return fail(503, 'models unavailable')
+      if (path.startsWith('/notations?')) return fail(403, 'notations forbidden')
+      if (path.startsWith('/node-types?')) return ok(page([]))
+      if (path.startsWith('/link-types?')) return fail(502, 'link types unavailable')
+      throw new Error(`Unexpected apiGet path: ${path}`)
+    })
+
+    await expect(loadModelEditorCatalog('model-1', ['notation-1'])).rejects.toThrow(
+      /models unavailable.*notations forbidden.*link types unavailable/
+    )
+  })
+
   it('throws a localized not found error for 404 model load failure', async () => {
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
       if (path === '/models/missing') return fail(404, 'Not found')
@@ -245,33 +492,67 @@ describe('loadModelEditorData', () => {
     )
   })
 
-  it('loads node types in the shell so Directory folders can expand before catalog', async () => {
+  it('does not wait for model, notation or node-type catalogs on the shell critical path', async () => {
     const { loadModelEditorShell } = await import('./modelEditorLoadModel')
     vi.mocked(apiGet).mockImplementation(async (path: string) => {
       if (path === '/models/model-1') {
         return ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' })
       }
-      if (path.startsWith('/models?')) {
-        return ok(
-          listResponse([{ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' }])
-        )
-      }
-      if (path.startsWith('/nodes?')) return ok(page([]))
       if (path.startsWith('/diagrams?')) return ok(page([]))
-      if (path.startsWith('/notations?')) return ok(page([]))
-      if (path.startsWith('/node-types?')) {
-        expect(path).toContain('modelId=model-1')
-        return ok(page([{ id: 'nt-dir', name: 'Directory', ownerId: 'owner-1' }]))
-      }
-      throw new Error(`Unexpected apiGet path: ${path}`)
+      throw new Error(`Catalog request blocked the shell: ${path}`)
     })
 
     const shell = await loadModelEditorShell('model-1')
 
-    expect(shell.state.nodeTypes).toEqual([
-      expect.objectContaining({ id: 'nt-dir', name: 'Directory' }),
-    ])
+    expect(shell.model.id).toBe('model-1')
+    expect(shell.modelCatalog).toEqual([])
+    expect(shell.state.notations).toEqual([])
+    expect(shell.state.nodeTypes).toEqual([])
     expect(shell.state.links).toEqual([])
-    expect(shell.state.components).toEqual([])
+    const paths = vi.mocked(apiGet).mock.calls.map(call => String(call[0]))
+    expect(paths).toEqual(['/models/model-1', expect.stringMatching(/^\/diagrams\?/)])
+  })
+
+  it('loads the normal shell from the scoped root without unscoped nodes or links', async () => {
+    const { loadModelEditorShell } = await import('./modelEditorLoadModel')
+    vi.mocked(fetchNodeChildren).mockResolvedValue(
+      ok(
+        page([
+          {
+            id: 'root-child',
+            name: 'Root child',
+            modelId: 'model-1',
+            ownerId: 'owner-1',
+            nodeTypeId: 'nt-dir',
+            parentNodeId: 'hidden-root',
+            attrs: null,
+            hasChildren: true,
+          },
+        ])
+      )
+    )
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path === '/models/model-1') {
+        return ok({ id: 'model-1', name: 'Model', version: '1.0.0', ownerId: 'owner-1' })
+      }
+      if (path.startsWith('/models?')) return ok(listResponse([]))
+      if (path.startsWith('/diagrams?')) return ok(page([]))
+      if (path.startsWith('/notations?')) return ok(page([]))
+      if (path.startsWith('/node-types?')) return ok(page([]))
+      throw new Error(`Unscoped shell request: ${path}`)
+    })
+
+    const shell = await loadModelEditorShell('model-1')
+
+    expect(fetchNodeChildren).toHaveBeenCalledWith(
+      'model-1',
+      { kind: 'root' },
+      expect.objectContaining({ page: 0 })
+    )
+    expect(shell.state.nodes.map(row => row.id)).toEqual(['root-child'])
+    expect(shell.rootChildrenPage.content?.map(row => row.id)).toEqual(['root-child'])
+    const paths = vi.mocked(apiGet).mock.calls.map(call => String(call[0]))
+    expect(paths.some(path => path.startsWith('/nodes?'))).toBe(false)
+    expect(paths.some(path => path.startsWith('/links?'))).toBe(false)
   })
 })

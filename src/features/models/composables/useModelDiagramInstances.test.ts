@@ -45,7 +45,17 @@ function createState(): ModelEditorState {
   }
 }
 
-function createHarness(stateValue = createState()) {
+function createHarness(
+  stateValue = createState(),
+  overrides: {
+    ensureDirectoryPath?: () => Promise<{
+      parentNodeId: string | null
+      createdDirectoryIds: string[]
+    }>
+    ensureCompleteSiblingScope?: (parentNodeId: string | null) => Promise<boolean>
+    nodeTypeDefaultDirectoryById?: Map<string, string>
+  } = {}
+) {
   const state = ref(stateValue)
   const selectedModelNodeIds = ref<string[]>([])
   const selectedInstanceIds = ref<string[]>([])
@@ -59,6 +69,8 @@ function createHarness(stateValue = createState()) {
   const markDiagramDirty = vi.fn()
   const markNodeDirty = vi.fn()
   const setUiError = vi.fn()
+  const reconcileMaterializedRows = vi.fn()
+  const onDiagramInstancesChanged = vi.fn()
   const diagram = ref<EditorDiagram>({
     id: 'diagram-1',
     name: 'Diagram',
@@ -76,7 +88,9 @@ function createHarness(stateValue = createState()) {
     activeNotationId: computed(() => 'notation-1'),
     isDiagramReadOnly: computed(() => false),
     directoryNodeType: computed(() => ({ id: 'directory-type' }) as never),
-    nodeTypeDefaultDirectoryById: computed(() => new Map<string, string>()),
+    nodeTypeDefaultDirectoryById: computed(
+      () => overrides.nodeTypeDefaultDirectoryById ?? new Map<string, string>()
+    ),
     selectedModelNodeIds,
     selectedInstanceIds,
     selectedNodeId,
@@ -87,14 +101,21 @@ function createHarness(stateValue = createState()) {
     showNoteEditorModal,
     isDirectoryNode: () => false,
     isNoteInstance: instance => instance.attrs?.isNote === true,
-    ensureDirectoryPath: () => ({ parentNodeId: 'parent-node', createdDirectoryIds: [] }),
+    ensureDirectoryPath:
+      overrides.ensureDirectoryPath ??
+      (async () => ({ parentNodeId: 'parent-node', createdDirectoryIds: [] })),
+    ensureCompleteSiblingScope: overrides.ensureCompleteSiblingScope ?? (async () => true),
     getNextTreeOrderForParent: () => 0,
+    treeScopeForParent: parentNodeId =>
+      parentNodeId ? { kind: 'node', nodeId: parentNodeId } : { kind: 'root' },
     executeDiagramHistoryCommand: command => {
       historyCommands.push(command)
       command.execute()
     },
     markDiagramDirty,
     markNodeDirty,
+    onDiagramInstancesChanged,
+    reconcileMaterializedRows,
     setUiError,
     t: key => `translated:${key}`,
   })
@@ -107,12 +128,25 @@ function createHarness(stateValue = createState()) {
     markDiagramDirty,
     markNodeDirty,
     setUiError,
+    reconcileMaterializedRows,
+    onDiagramInstancesChanged,
     selectedModelNodeIds,
     selectedInstanceIds,
   }
 }
 
 describe('useModelDiagramInstances', () => {
+  it('explicitly invalidates traceability when node instance membership changes', () => {
+    const { state, instances, historyCommands, onDiagramInstancesChanged } = createHarness()
+    state.value.components = [state.value.components[0]!]
+
+    instances.addExistingNodeToDiagram('existing-node', 40, 60)
+    expect(onDiagramInstancesChanged).toHaveBeenCalledTimes(1)
+
+    historyCommands[0]!.undo()
+    expect(onDiagramInstancesChanged).toHaveBeenCalledTimes(2)
+  })
+
   it('creates a note with diagram attrs and an undoable history command', () => {
     const { diagram, instances, historyCommands, markDiagramDirty } = createHarness()
 
@@ -174,10 +208,26 @@ describe('useModelDiagramInstances', () => {
     expect(markNodeDirty).toHaveBeenCalledWith('existing-node')
   })
 
-  it('creates a palette node and its diagram instance in one history command', () => {
-    const { state, diagram, instances, historyCommands } = createHarness()
+  it('uses a valid explicit notation binding before node type component matching', () => {
+    const { state, diagram, instances, markNodeDirty } = createHarness()
+    state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1'] = {
+      componentId: 'component-2',
+    }
 
-    instances.createNodeFromPaletteComponent('component-1', 75, 95)
+    instances.addExistingNodeToDiagram('existing-node', 15, 25)
+
+    expect(instances.showComponentChoiceModal.value).toBe(false)
+    expect(diagram.value.parsedAttrs.instances.nodes[0]).toMatchObject({
+      modelNodeId: 'existing-node',
+      attrs: { notationComponentId: 'component-2' },
+    })
+    expect(markNodeDirty).not.toHaveBeenCalled()
+  })
+
+  it('creates a palette node and its diagram instance in one history command', async () => {
+    const { state, diagram, instances, historyCommands, reconcileMaterializedRows } = createHarness()
+
+    await instances.createNodeFromPaletteComponent('component-1', 75, 95)
 
     expect(state.value.nodes).toHaveLength(2)
     expect(state.value.nodes[1]).toMatchObject({
@@ -194,16 +244,54 @@ describe('useModelDiagramInstances', () => {
       y: 95,
       attrs: { notationComponentId: 'component-1' },
     })
+    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(1)
 
     historyCommands[0]!.undo()
     expect(state.value.nodes).toHaveLength(1)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
+    expect(reconcileMaterializedRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not create a palette node or history command when sibling loading fails', async () => {
+    const ensureCompleteSiblingScope = vi.fn(async () => false)
+    const { state, diagram, instances, historyCommands } = createHarness(createState(), {
+      ensureCompleteSiblingScope,
+    })
+
+    await instances.createNodeFromPaletteComponent('component-1', 75, 95)
+
+    expect(ensureCompleteSiblingScope).toHaveBeenCalledWith('parent-node')
+    expect(state.value.nodes).toHaveLength(1)
+    expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
+    expect(historyCommands).toHaveLength(0)
+  })
+
+  it('leaves local state unchanged when default-directory loading is cancelled', async () => {
+    const state = createState()
+    const beforeNodes = structuredClone(state.nodes)
+    const ensureDirectoryPath = vi.fn(async () => ({
+      parentNodeId: null,
+      createdDirectoryIds: [],
+    }))
+    const { diagram, instances, historyCommands } = createHarness(state, {
+      ensureDirectoryPath,
+      nodeTypeDefaultDirectoryById: new Map([['type-1', 'Applications/CRM']]),
+    })
+
+    await instances.createNodeFromPaletteComponent('component-1', 75, 95)
+
+    expect(ensureDirectoryPath).toHaveBeenCalledWith('Applications/CRM')
+    expect(state.nodes).toEqual(beforeNodes)
+    expect(diagram.value.parsedAttrs.instances.nodes).toEqual([])
+    expect(historyCommands).toEqual([])
   })
 
   it('defers an existing-node placement until the selected component is finalized', () => {
-    const { diagram, instances } = createHarness()
+    const state = createState()
+    state.components[1]!.attrs = JSON.stringify({ diagramStyle: { width: 100, height: 40 } })
+    const { diagram, instances } = createHarness(state)
 
-    instances.addExistingNodeToDiagram('existing-node', 10, 20)
+    instances.addExistingNodeToDiagram('existing-node', 300, 200, { centered: true })
 
     expect(instances.showComponentChoiceModal.value).toBe(true)
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(0)
@@ -216,28 +304,29 @@ describe('useModelDiagramInstances', () => {
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
       'component-2',
     )
+    expect(diagram.value.parsedAttrs.instances.nodes[0]).toMatchObject({
+      x: 250,
+      y: 180,
+      width: 100,
+      height: 40,
+    })
   })
 
-  it('asks again on second drop so two instances can use different visuals', () => {
+  it('uses the node default binding for later drops', () => {
     const { state, diagram, instances } = createHarness()
     state.value.nodes[0]!.parsedAttrs.notationComponents['notation-1'] = {
       componentId: 'component-1',
     }
 
     instances.addExistingNodeToDiagram('existing-node', 10, 20)
-    expect(instances.showComponentChoiceModal.value).toBe(true)
-    instances.finalizeComponentChoiceForDiagram('component-1')
-
     instances.addExistingNodeToDiagram('existing-node', 40, 50)
-    expect(instances.showComponentChoiceModal.value).toBe(true)
-    instances.finalizeComponentChoiceForDiagram('component-2')
 
     expect(diagram.value.parsedAttrs.instances.nodes).toHaveLength(2)
     expect(diagram.value.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe(
       'component-1',
     )
     expect(diagram.value.parsedAttrs.instances.nodes[1]?.attrs?.notationComponentId).toBe(
-      'component-2',
+      'component-1',
     )
   })
 

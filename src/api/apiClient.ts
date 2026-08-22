@@ -17,6 +17,8 @@ import {
 export type ApiError = {
   status: number
   message: string
+  /** True only when fetch was cancelled through AbortSignal. */
+  cancelled?: true
   /** Сырой JSON тела ответа при ошибке (если объект), напр. старые 409 или произвольные поля */
   details?: unknown
 }
@@ -25,9 +27,15 @@ export type ApiResult<T> =
   | { success: true; data: T }
   | { success: false; error: ApiError }
 
-const createApiError = (status: number, message: string, details?: unknown): ApiError => ({
+const createApiError = (
+  status: number,
+  message: string,
+  details?: unknown,
+  cancelled?: true,
+): ApiError => ({
   status,
   message,
+  ...(cancelled ? { cancelled } : {}),
   ...(details !== undefined ? { details } : {}),
 })
 
@@ -285,6 +293,12 @@ export async function apiFetch<T>(
       : ((text.length > 0 ? JSON.parse(text) : undefined) as T)
     return { success: true, data }
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        success: false,
+        error: createApiError(0, "Request cancelled.", undefined, true),
+      }
+    }
     const fallbackMessage = error instanceof Error ? error.message : "Ошибка подключения"
     reportAvailabilityOutage("backend_unavailable", fallbackMessage)
     return {

@@ -92,10 +92,16 @@ export async function loginViaUi(
   password: string
 ): Promise<void> {
   await page.goto('/login')
-  await page.locator('#email').fill(email)
-  await page.locator('#password').fill(password)
-  await page.locator('button.submit').click()
-  await page.waitForURL('/home', { timeout: 15000 })
+  const emailInput = page.locator('#email')
+  if (page.url().includes('/login')) {
+    await emailInput.waitFor({ state: 'visible', timeout: 15000 })
+    await emailInput.fill(email)
+    await page.locator('#password').fill(password)
+    await page.locator('button.submit').click()
+    await page.waitForURL('/home', { timeout: 15000 })
+  } else {
+    await page.waitForURL('/home', { timeout: 15000 })
+  }
   await page.evaluate(() => {
     window.localStorage.setItem('warchi.locale', 'en')
   })

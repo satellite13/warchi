@@ -1,30 +1,74 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LinkTypeResponse, RelationResponse } from '@/types/api'
-import type { EditorDiagram, EditorLink, EditorNode } from '../types'
-import { computeTraceabilityLinkStatus, type TraceabilityLinkStatus } from '../utils/traceabilityLinkStatus'
+import type {
+  DiagramReferenceResponse,
+  LinkResponse,
+  LinkTypeResponse,
+  NodeResponse,
+  RelationResponse,
+} from '@/types/api'
+import {
+  useLazyTraceability,
+  type TraceabilityBranchQuery,
+  type TraceabilityDirection,
+} from '../composables/useLazyTraceability'
+import type {
+  EditorDiagram,
+  EditorGraphNeighbor,
+  EditorLink,
+  EditorNode,
+  ModelPartialRequestGuard,
+  TraceabilityNeighborRef,
+} from '../types'
+import {
+  computeTraceabilityLinkStatus,
+  type TraceabilityLinkStatus,
+} from '../utils/traceabilityLinkStatus'
 import ModelTraceBranch from './ModelTraceBranch.vue'
 
 type DirectionMode = 'down' | 'up'
 
+type NodeDragEligibility = {
+  allowed: boolean
+  reason: string
+}
+
 const props = defineProps<{
+  modelId: string
   selectedNode: EditorNode | null
   nodes: EditorNode[]
-  links: EditorLink[]
-  diagrams: EditorDiagram[]
   linkTypes: LinkTypeResponse[]
   activeDiagram: EditorDiagram | null
   activeNotationId: string | null
   isDiagramReadOnly: boolean
   relations: RelationResponse[]
   canConnect: (sourceModelNodeId: string, targetModelNodeId: string) => boolean
+  canDragNodeToDiagram: (nodeId: string) => NodeDragEligibility
   isDiagramOnlyEdgeModelLinkId?: (modelLinkId: string) => boolean
+  authoritativeRevision: number
+  diagramRevision: number
+  beginRequest: (requestKey: string) => ModelPartialRequestGuard
+  isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
+  mergePartialEntities: (
+    nodes: readonly NodeResponse[],
+    links: readonly LinkResponse[],
+    guard: ModelPartialRequestGuard
+  ) => boolean
+  resolveBranchRows: (
+    rowIds: readonly TraceabilityNeighborRef[],
+    query: TraceabilityBranchQuery
+  ) => EditorGraphNeighbor[]
+  resolveDiagramReferences: (
+    remoteRows: readonly DiagramReferenceResponse[],
+    selectedNodeId: string
+  ) => DiagramReferenceResponse[]
 }>()
 
 const emit = defineEmits<{
   'open-diagram': [diagramId: string]
   'focus-node': [nodeId: string]
+  'add-node-to-diagram': [nodeId: string]
 }>()
 
 const { t } = useI18n()
@@ -39,28 +83,26 @@ const expandedLinkKeys = ref<Set<string>>(new Set())
 const diagramsOpen = ref(true)
 const treeOpen = ref(true)
 const suppressNextSelectionReset = ref(false)
+const traceability = useLazyTraceability({
+  modelId: computed(() => props.modelId || null),
+  authoritativeRevision: computed(() => props.authoritativeRevision),
+  diagramRevision: computed(() => props.diagramRevision),
+  beginRequest: props.beginRequest,
+  isRequestCurrent: props.isRequestCurrent,
+  mergePartialEntities: props.mergePartialEntities,
+  resolveBranchRows: props.resolveBranchRows,
+  resolveDiagramReferences: props.resolveDiagramReferences,
+})
+
+const openDiagramFromKeyboard = (event: KeyboardEvent, diagramId: string): void => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  emit('open-diagram', diagramId)
+}
 
 const nodeById = computed(() => {
   const map = new Map<string, EditorNode>()
   for (const node of props.nodes) map.set(node.id, node)
-  return map
-})
-
-const linksBySourceId = computed(() => {
-  const map = new Map<string, EditorLink[]>()
-  for (const link of props.links) {
-    if (!map.has(link.sourceId)) map.set(link.sourceId, [])
-    map.get(link.sourceId)!.push(link)
-  }
-  return map
-})
-
-const linksByTargetId = computed(() => {
-  const map = new Map<string, EditorLink[]>()
-  for (const link of props.links) {
-    if (!map.has(link.targetId)) map.set(link.targetId, [])
-    map.get(link.targetId)!.push(link)
-  }
   return map
 })
 
@@ -75,16 +117,23 @@ const linkTypeNameById = computed(() => {
 const getLinkTypeName = (linkTypeId: string): string =>
   linkTypeNameById.value.get(linkTypeId) ?? t('models.traceabilityUnknownLinkType')
 
-const linkTypeOptions = computed(() => {
-  const usedTypeIds = new Set(props.links.map((link) => link.linkTypeId))
-  return Array.from(usedTypeIds)
-    .map((id) => ({ id, name: getLinkTypeName(id) }))
+const linkTypeOptions = computed(() =>
+  props.linkTypes
+    .map(linkType => ({ id: linkType.id, name: linkType.name }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-})
+)
 
-const matchesSelectedLinkType = (link: EditorLink): boolean =>
-  selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER ||
-  link.linkTypeId === selectedLinkTypeFilter.value
+const traceDirection = computed<TraceabilityDirection>(() =>
+  direction.value === 'down' ? 'outgoing' : 'incoming'
+)
+const selectedLinkTypeId = computed<string | null>(() =>
+  selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER ? null : selectedLinkTypeFilter.value
+)
+const branchQuery = (nodeId: string): TraceabilityBranchQuery => ({
+  nodeId,
+  direction: traceDirection.value,
+  linkTypeId: selectedLinkTypeId.value,
+})
 
 const rootNode = computed(() => {
   const rootId = rootNodeId.value
@@ -92,13 +141,7 @@ const rootNode = computed(() => {
   return nodeById.value.get(rootId) ?? null
 })
 
-const diagramsUsingRootNode = computed(() => {
-  const rootId = rootNodeId.value
-  if (!rootId) return []
-  return props.diagrams.filter((diagram) =>
-    diagram.parsedAttrs.instances.nodes.some((instance) => instance.modelNodeId === rootId),
-  )
-})
+const diagramsUsingRootNode = traceability.diagramReferences
 
 const canGoBack = computed(() => backStack.value.length > 0)
 const canGoForward = computed(() => forwardStack.value.length > 0)
@@ -115,21 +158,15 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-const outgoingCount = computed(() => {
+const rootBranchCount = computed(() => {
   const rootId = rootNodeId.value
   if (!rootId) return 0
-  return (linksBySourceId.value.get(rootId) ?? []).filter(matchesSelectedLinkType).length
-})
-
-const incomingCount = computed(() => {
-  const rootId = rootNodeId.value
-  if (!rootId) return 0
-  return (linksByTargetId.value.get(rootId) ?? []).filter(matchesSelectedLinkType).length
+  return traceability.getBranchState(branchQuery(rootId)).totalElements
 })
 
 watch(
   () => props.selectedNode?.id ?? null,
-  (nodeId) => {
+  nodeId => {
     if (suppressNextSelectionReset.value && nodeId === rootNodeId.value) {
       suppressNextSelectionReset.value = false
       return
@@ -141,15 +178,21 @@ watch(
     expandedLinkKeys.value = new Set()
     direction.value = 'down'
   },
-  { immediate: true },
+  { immediate: true }
 )
 
-watch(linkTypeOptions, (options) => {
-  if (selectedLinkTypeFilter.value === ALL_LINK_TYPES_FILTER) return
-  const selectedExists = options.some((option) => option.id === selectedLinkTypeFilter.value)
-  if (!selectedExists) {
-    selectedLinkTypeFilter.value = ALL_LINK_TYPES_FILTER
-  }
+watch(
+  rootNodeId,
+  nodeId => {
+    if (nodeId) void traceability.selectRoot(branchQuery(nodeId))
+  },
+  { immediate: true }
+)
+
+watch([traceDirection, selectedLinkTypeId], () => {
+  expandedLinkKeys.value = new Set()
+  const rootId = rootNodeId.value
+  if (rootId) void traceability.changeFilter(branchQuery(rootId))
 })
 
 const focusRootOnDiagram = () => {
@@ -158,13 +201,36 @@ const focusRootOnDiagram = () => {
   emit('focus-node', rootNodeId.value)
 }
 
-const getLinksForNode = (nodeId: string): EditorLink[] =>
-  direction.value === 'down'
-    ? (linksBySourceId.value.get(nodeId) ?? []).filter(matchesSelectedLinkType)
-    : (linksByTargetId.value.get(nodeId) ?? []).filter(matchesSelectedLinkType)
+const onNodeDragStart = (event: DragEvent, nodeId: string): void => {
+  const eligibility = props.canDragNodeToDiagram(nodeId)
+  if (!eligibility.allowed) {
+    event.preventDefault()
+    return
+  }
+  event.dataTransfer?.setData('application/x-model-node-id', nodeId)
+  event.dataTransfer?.setData('text/plain', `node:${nodeId}`)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+}
 
-const resolveNextNodeId = (link: EditorLink): string =>
-  direction.value === 'down' ? link.targetId : link.sourceId
+const requestNodeAddToDiagram = (nodeId: string): void => {
+  if (!props.canDragNodeToDiagram(nodeId).allowed) return
+  emit('add-node-to-diagram', nodeId)
+}
+
+const nodeDragAriaLabel = (nodeId: string, nodeName: string): string => {
+  const eligibility = props.canDragNodeToDiagram(nodeId)
+  return eligibility.allowed
+    ? t('models.traceabilityAddNodeToDiagram', { name: nodeName })
+    : t(eligibility.reason)
+}
+
+const onNodeKeyboardRequest = (event: KeyboardEvent, nodeId: string): void => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  requestNodeAddToDiagram(nodeId)
+}
 
 const isLinkExpanded = (nodeId: string, linkId: string): boolean =>
   expandedLinkKeys.value.has(`${nodeId}:${linkId}`)
@@ -279,6 +345,8 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
         <button
           type="button"
           class="tp-section__head tp-section__head--no-hover"
+          :aria-expanded="diagramsOpen"
+          aria-controls="traceability-diagrams-panel"
           @click="diagramsOpen = !diagramsOpen"
         >
           <UiIcon
@@ -287,27 +355,76 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
             :class="{ 'tp-section__chevron--open': diagramsOpen }"
           />
           <span class="tp-section__label">{{ t('models.traceabilityDiagramsTitle') }}</span>
-          <span class="tp-section__count">{{ diagramsUsingRootNode.length }}</span>
+          <span class="tp-section__count">{{ traceability.diagramsTotalElements.value }}</span>
         </button>
 
         <Transition name="tp-collapse">
-          <div v-if="diagramsOpen" class="tp-section__body">
-            <div v-if="diagramsUsingRootNode.length === 0" class="tp-section__empty">
+          <div
+            v-show="diagramsOpen"
+            id="traceability-diagrams-panel"
+            class="tp-section__body"
+          >
+            <div
+              v-if="traceability.diagramsLoading.value && diagramsUsingRootNode.length === 0"
+              class="tp-section__status"
+              role="status"
+              aria-live="polite"
+            >
+              <UiIcon name="sync" class="spin" />
+              <span>{{ t('models.traceabilityLoadingDiagrams') }}</span>
+            </div>
+            <div
+              v-if="traceability.diagramsError.value"
+              class="tp-section__status tp-section__status--error"
+              role="alert"
+            >
+              <span>{{ traceability.diagramsError.value }}</span>
+              <button
+                type="button"
+                class="tp-section__action"
+                data-testid="diagram-references-retry"
+                @click="traceability.retryDiagrams"
+              >
+                {{ t('common.retry') }}
+              </button>
+            </div>
+            <div
+              v-if="
+                diagramsUsingRootNode.length === 0 &&
+                !traceability.diagramsLoading.value &&
+                !traceability.diagramsError.value
+              "
+              class="tp-section__empty"
+            >
               {{ t('models.traceabilityNoDiagrams') }}
             </div>
-            <div v-else class="tp-diagrams">
+            <div v-if="diagramsUsingRootNode.length > 0" class="tp-diagrams">
               <div
                 v-for="diagram in diagramsUsingRootNode"
                 :key="diagram.id"
                 class="tp-diagram"
+                role="button"
+                tabindex="0"
                 @mousedown.prevent
                 @selectstart.prevent
+                @keydown="openDiagramFromKeyboard($event, diagram.id)"
                 @dblclick.prevent="emit('open-diagram', diagram.id)"
               >
                 <UiIcon name="dashboard" class="tp-diagram__icon" />
                 <span class="tp-diagram__name">{{ diagram.name }}</span>
                 <span class="tp-diagram__version">{{ diagram.version }}</span>
               </div>
+              <button
+                v-if="
+                  traceability.diagramsNextPage.value !== null &&
+                  !traceability.diagramsError.value
+                "
+                type="button"
+                class="tp-section__action tp-section__action--more"
+                @click="traceability.loadMoreDiagrams"
+              >
+                {{ t('models.traceabilityLoadMore') }}
+              </button>
             </div>
           </div>
         </Transition>
@@ -316,7 +433,13 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
       <!-- Trace tree section -->
       <div class="tp-section tp-section--tree">
         <div class="tp-section__head tp-section__head--tree">
-          <button type="button" class="tp-section__toggle" @click="treeOpen = !treeOpen">
+          <button
+            type="button"
+            class="tp-section__toggle"
+            :aria-expanded="treeOpen"
+            aria-controls="traceability-tree-panel"
+            @click="treeOpen = !treeOpen"
+          >
             <UiIcon
               name="chevron_right"
               class="tp-section__chevron"
@@ -344,7 +467,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 }}
               </span>
               <span class="tp-nav__dir-count">
-                {{ direction === 'down' ? outgoingCount : incomingCount }}
+                {{ rootBranchCount }}
               </span>
             </button>
             <label class="tp-nav__filter">
@@ -353,7 +476,11 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 <option :value="ALL_LINK_TYPES_FILTER">
                   {{ t('models.traceabilityAllLinkTypes') }}
                 </option>
-                <option v-for="typeOption in linkTypeOptions" :key="typeOption.id" :value="typeOption.id">
+                <option
+                  v-for="typeOption in linkTypeOptions"
+                  :key="typeOption.id"
+                  :value="typeOption.id"
+                >
                   {{ typeOption.name }}
                 </option>
               </select>
@@ -382,7 +509,11 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
         </div>
 
         <Transition name="tp-collapse">
-          <div v-if="treeOpen && rootNode" class="tp-section__body tp-section__body--tree">
+          <div
+            v-show="treeOpen && rootNode"
+            id="traceability-tree-panel"
+            class="tp-section__body tp-section__body--tree"
+          >
             <div v-if="breadcrumbs.length > 1" class="tp-breadcrumb tp-breadcrumb--in-tree">
               <template v-for="(crumb, idx) in breadcrumbs" :key="crumb.id">
                 <span v-if="idx > 0" class="tp-breadcrumb__sep">/</span>
@@ -397,22 +528,47 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
                 </button>
               </template>
             </div>
-            <div class="tp-tree">
-              <div class="tp-tree__root" @click="focusRootOnDiagram">
+            <div v-if="rootNode" class="tp-tree">
+              <button type="button" class="tp-tree__root" @click="focusRootOnDiagram">
                 <span class="tp-tree__root-dot" />
                 <span class="tp-tree__root-name">{{ rootNode.name }}</span>
-              </div>
+                <span
+                  class="tp-tree__drag-handle"
+                  :class="{ 'tp-tree__drag-handle--disabled': !canDragNodeToDiagram(rootNode.id).allowed }"
+                  :title="t(canDragNodeToDiagram(rootNode.id).reason)"
+                  :draggable="canDragNodeToDiagram(rootNode.id).allowed"
+                  :aria-disabled="!canDragNodeToDiagram(rootNode.id).allowed"
+                  :aria-label="nodeDragAriaLabel(rootNode.id, rootNode.name)"
+                  :tabindex="canDragNodeToDiagram(rootNode.id).allowed ? 0 : -1"
+                  data-testid="trace-node-drag-root"
+                  role="button"
+                  @click.stop
+                  @mousedown.stop
+                  @pointerdown.stop
+                  @dragstart.stop="onNodeDragStart($event, rootNode.id)"
+                  @keydown.stop="onNodeKeyboardRequest($event, rootNode.id)"
+                >
+                  <UiIcon name="drag_indicator" class="tp-tree__drag-handle-icon" />
+                </span>
+              </button>
               <ModelTraceBranch
                 :node-id="rootNode.id"
                 :path="[rootNode.id]"
+                :instance-path="[]"
                 :node-by-id="nodeById"
-                :get-links-for-node="getLinksForNode"
+                :direction="traceDirection"
+                :link-type-id="selectedLinkTypeId"
+                :get-branch-state="traceability.getBranchState"
+                :load-branch="traceability.loadBranch"
+                :load-more="traceability.loadMore"
+                :retry="traceability.retry"
                 :get-link-type-name="getLinkTypeName"
-                :resolve-next-node-id="resolveNextNodeId"
                 :is-link-expanded="isLinkExpanded"
                 :toggle-link="toggleLink"
                 :get-link-status="getLinkStatus"
+                :can-drag-node-to-diagram="canDragNodeToDiagram"
                 @set-root="setRootFromTree"
+                @request-add-node="requestNodeAddToDiagram"
               />
             </div>
           </div>
@@ -501,7 +657,9 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .tp-breadcrumb__item:hover:not(:disabled) {
@@ -623,7 +781,7 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .tp-section__body--tree::-webkit-scrollbar {
@@ -647,6 +805,33 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   padding: 10px 12px;
   font-size: 11px;
   color: var(--text-subtle);
+}
+
+.tp-section__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  color: var(--text-subtle);
+}
+
+.tp-section__status--error {
+  color: var(--danger);
+}
+
+.tp-section__action {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.tp-section__action--more {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 12px;
 }
 
 /* ---- Navigation ---- */
@@ -864,6 +1049,43 @@ const getLinkStatus = (link: EditorLink): TraceabilityLinkStatus =>
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+}
+
+.tp-tree__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border-radius: 4px;
+  color: var(--text-subtle);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.tp-tree__drag-handle:hover {
+  background: var(--surface);
+  color: var(--base-text);
+}
+
+.tp-tree__drag-handle:active {
+  cursor: grabbing;
+}
+
+.tp-tree__drag-handle--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tp-tree__drag-handle--disabled:hover {
+  background: transparent;
+  color: var(--text-subtle);
+}
+
+.tp-tree__drag-handle-icon {
+  width: 14px;
+  height: 14px;
 }
 
 /* ---- Collapse transition ---- */

@@ -10,9 +10,36 @@ function slotKey(e: GranularSyncEventPayload): string {
   return `${e.entity}:${e.id}`
 }
 
+type SemanticAction = "created" | "updated" | "deleted"
+
+function semanticAction(event: GranularSyncEventPayload): SemanticAction | null {
+  const prefix = `${event.entity}_`
+  if (!event.type.startsWith(prefix)) return null
+  const action = event.type.slice(prefix.length)
+  return action === "created" || action === "updated" || action === "deleted"
+    ? action
+    : null
+}
+
+export function reduceModelSyncGranularEvent(
+  previous: GranularSyncEventPayload,
+  next: GranularSyncEventPayload
+): GranularSyncEventPayload {
+  const previousAction = semanticAction(previous)
+  const nextAction = semanticAction(next)
+  if (!previousAction || !nextAction) return next
+
+  let intent = nextAction
+  if (previousAction === "deleted" && nextAction !== "created") {
+    intent = "deleted"
+  } else if (previousAction === "created" && nextAction === "updated") {
+    intent = "created"
+  }
+  return { ...next, type: `${next.entity}_${intent}` }
+}
+
 /**
- * Коалесценция по ключу entity:id: **последнее** событие в массиве побеждает
- * (сервер отдаёт упорядоченный список в рамках одной транзакции / envelope).
+ * Семантическая коалесценция по ключу entity:id с сохранением create/delete intent.
  */
 export function coalesceModelSyncGranularEvents(
   events: GranularSyncEventPayload[]
@@ -23,8 +50,10 @@ export function coalesceModelSyncGranularEvents(
     const k = slotKey(e)
     if (!map.has(k)) {
       order.push(k)
+      map.set(k, e)
+    } else {
+      map.set(k, reduceModelSyncGranularEvent(map.get(k)!, e))
     }
-    map.set(k, e)
   }
   return order.map((k) => map.get(k)!)
 }

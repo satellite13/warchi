@@ -56,8 +56,13 @@ import { createDiagramScriptQueryHost } from '@/features/validation-scripts/sand
 import {
   fetchGraphNeighbors,
   resolveModelLinks,
+  resolveModelNodes,
   searchModelNodes,
 } from './composables/modelScopedApi'
+import { applyDiagramScriptCommands } from '@/features/validation-scripts/sandbox/applyDiagramScriptCommands'
+import { validateCommandQueue } from '@/features/validation-scripts/sandbox/diagramScriptCommands'
+import type { DiagramScriptCommand } from '@/features/validation-scripts/sandbox/diagramScriptCommands'
+import { resolveCompatibleNotationComponents } from './modelAttrs'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -362,6 +367,108 @@ async function handleDiagramScriptQuery(
   const result = await host.handle({ method, args })
   if ('error' in result) throw new Error(result.error)
   return result.data
+}
+
+async function handleApplyDiagramScriptCommands(commands: DiagramScriptCommand[]): Promise<void> {
+  const diagram = activeDiagram.value
+  if (!diagram || isDiagramReadOnly.value) {
+    setUiError(t('validationScripts.applyReadOnly'))
+    return
+  }
+  const addNodeIds = commands
+    .filter((command): command is Extract<DiagramScriptCommand, { type: 'addInstance' }> =>
+      command.type === 'addInstance'
+    )
+    .map((command) => command.nodeId)
+  const addLinkIds = commands
+    .filter((command): command is Extract<DiagramScriptCommand, { type: 'addEdge' }> =>
+      command.type === 'addEdge'
+    )
+    .map((command) => command.linkId)
+
+  const nodesResult = await resolveModelNodes(state.value.modelId, addNodeIds)
+  if (!nodesResult.success) {
+    setUiError(nodesResult.error.message)
+    return
+  }
+  const linksResult = await resolveModelLinks(state.value.modelId, {
+    linkIds: addLinkIds,
+    endpointNodeIds: [],
+  })
+  if (!linksResult.success) {
+    setUiError(linksResult.error.message)
+    return
+  }
+  if (nodesResult.data.missingIds.length > 0 || linksResult.data.missingLinkIds.length > 0) {
+    setUiError(t('validationScripts.applyMissingEntity'))
+    return
+  }
+
+  const guard = partialStore.store.beginRequest('diagram-script-apply')
+  if (!partialStore.mergePartialEntities(nodesResult.data.nodes, linksResult.data.links, guard)) {
+    setUiError(t('validationScripts.applyMissingEntity'))
+    return
+  }
+
+  const linkEndpoints: Record<string, { sourceId: string; targetId: string }> = {}
+  for (const link of linksResult.data.links) {
+    linkEndpoints[link.id] = { sourceId: link.sourceId, targetId: link.targetId }
+  }
+
+  const validated = validateCommandQueue({
+    instanceModelNodeIds: new Set(
+      diagram.parsedAttrs.instances.nodes.map((instance) => instance.modelNodeId)
+    ),
+    instanceIds: new Set(diagram.parsedAttrs.instances.nodes.map((instance) => instance.id)),
+    edgeIds: new Set(diagram.parsedAttrs.instances.edges.map((instance) => instance.id)),
+    linkEndpoints,
+    commands,
+  })
+  if (!validated.ok) {
+    setUiError(t('validationScripts.applyInvalidCommands'))
+    return
+  }
+
+  const componentByNodeId: Record<string, string> = {}
+  for (const nodeId of addNodeIds) {
+    const node = state.value.nodes.find((item) => item.id === nodeId && !item._isDeleted)
+    if (!node) {
+      setUiError(t('validationScripts.applyMissingEntity'))
+      return
+    }
+    const matching = resolveCompatibleNotationComponents({
+      node,
+      notationId: diagram.notationId,
+      components: state.value.components,
+    })
+    if (matching.length !== 1) {
+      setUiError(t('validationScripts.applyNeedComponent'))
+      return
+    }
+    componentByNodeId[nodeId] = matching[0]!.id
+  }
+
+  applyDiagramScriptCommands({
+    diagram,
+    commands,
+    linkEndpoints,
+    componentByNodeId,
+    executeHistory: executeDiagramHistoryCommand,
+    onApplied: () => {
+      markDiagramDirty(diagram.id)
+      invalidateTraceabilityDiagrams()
+    },
+  })
+
+  if (model.value) {
+    const prepared = prepareValidationScriptRun({
+      state: state.value,
+      modelName: model.value.name,
+      modelVersion: model.value.version,
+      openDiagramId: diagram.id,
+    })
+    if (prepared.ok) validationRunPayload.value = prepared.payload
+  }
 }
 
 function closeValidationScriptsModal(): void {
@@ -4246,6 +4353,7 @@ onBeforeUnmount(() => {
     :can-edit="canInspectDiagramJson"
     @close="closeValidationScriptsModal"
     @select-issue="handleValidationIssueSelect"
+    @apply-commands="handleApplyDiagramScriptCommands"
   />
 
   <DiagramImageShareModal

@@ -44,6 +44,10 @@ export const validationScriptsMessages = {
       applyPreviewTitle: 'Изменения на холсте',
       applyPreviewSummary:
         'Добавить нод: {addNodes}, связей: {addEdges}, снять: {remove}, раскладка: {layout}. Закройте окно, чтобы не менять диаграмму.',
+      applyReadOnly: 'Диаграмма недоступна для записи. Холст не изменён.',
+      applyMissingEntity: 'Не удалось найти ноду или связь модели. Холст не изменён.',
+      applyInvalidCommands: 'Очередь команд некорректна. Холст не изменён.',
+      applyNeedComponent: 'Для ноды нет однозначного компонента нотации. Холст не изменён.',
       toolbarRun: 'Скрипты',
       issuesTitle: 'Результаты ({count})',
       issueError: 'Ошибка',
@@ -143,6 +147,11 @@ export const validationScriptsMessages = {
       applyPreviewTitle: 'Canvas changes',
       applyPreviewSummary:
         'Add nodes: {addNodes}, edges: {addEdges}, remove: {remove}, layout: {layout}. Close the dialog to leave the diagram unchanged.',
+      applyReadOnly: 'The diagram is not writable. The canvas was not changed.',
+      applyMissingEntity: 'A model node or link could not be resolved. The canvas was not changed.',
+      applyInvalidCommands: 'The command queue is invalid. The canvas was not changed.',
+      applyNeedComponent:
+        'The node has no unique notation component. The canvas was not changed.',
       toolbarRun: 'Scripts',
       issuesTitle: 'Results ({count})',
       issueError: 'Error',

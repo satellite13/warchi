@@ -186,4 +186,52 @@ test.describe('Model editor lazy loading', () => {
       await cleanupLazyModelFixture(page, fixture)
     }
   })
+
+  test('navigates to a diagram search hit without opening it', async ({ page }) => {
+    test.setTimeout(60000)
+    const fixture = await createLazyModelFixture(page)
+    const apiRequests: URL[] = []
+    page.on('request', request => {
+      const url = new URL(request.url())
+      if (url.pathname.startsWith('/api/v1/')) apiRequests.push(url)
+    })
+
+    try {
+      await openLazyModelEditor(page, fixture)
+      const searchResponse = page.waitForResponse(response => {
+        const url = new URL(response.url())
+        return (
+          url.pathname === `/api/v1/search/models/${fixture.modelId}` &&
+          response.request().method() === 'GET' &&
+          response.ok()
+        )
+      })
+
+      await page.locator('.search-input').fill(fixture.diagramName)
+      const response = await searchResponse
+      const searchUrl = new URL(response.url())
+      expect(searchUrl.searchParams.get('kinds')).toBe('nodes,diagrams')
+
+      const searchHit = page.locator(`[data-tree-search-hit-id="${fixture.diagramId}"]`)
+      await expect(searchHit).toBeVisible()
+      await expect(searchHit.locator('.tree-search-hit__breadcrumb')).toContainText(
+        fixture.rootFolderName
+      )
+      await searchHit.getByRole('button').click()
+
+      await expect(page.locator('.search-input')).toHaveValue('')
+      await expect(page.locator(`[data-tree-diagram-id="${fixture.diagramId}"]`)).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: `${fixture.diagramName} Opened`, exact: true })
+      ).toHaveCount(0)
+      expect(
+        apiRequests.some(
+          url =>
+            url.pathname.includes('/diagram-locks/') && url.pathname.endsWith('/acquire')
+        )
+      ).toBe(false)
+    } finally {
+      await cleanupLazyModelFixture(page, fixture)
+    }
+  })
 })

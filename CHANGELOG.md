@@ -9,6 +9,8 @@ All notable changes to this project are documented in this file.
   traceability neighbors, and the active diagram are fetched on demand. Live
   sync and polling update only materialized scopes instead of walking every
   node and link.
+- Model tree search finds nodes and diagrams, shows a breadcrumb path from the
+  root, and navigates to the hit in the hierarchy without opening the diagram.
 - Notation node label position can sit outside the shape (top/bottom/left/right + gap). Applies to both simple shapes and composite nodes (the inner `__name__` text is hidden so the name is not duplicated).
 - Notation style flag **Lock size** (`lockTransform`): when on, the model-canvas transformer cannot resize instances of that component.
 - The notation **palette icon** can override the figure icon: when set, palettes and lists use it even if the component already has an icon.

@@ -11,6 +11,7 @@ export type LazyModelFixture = {
   modelName: string
   notationId: string
   rootFolderId: string
+  rootFolderName: string
   childFolderName: string
   diagramId: string
   diagramName: string
@@ -146,11 +147,12 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     throw new Error(`get created model failed: ${createdModel.status} ${createdModel.raw}`)
   }
   const treeRootNodeId = requireTreeRootNodeId(createdModel.data)
+  const rootFolderName = `Root folder ${suffix}`
   const rootFolderId = requireId(
     await apiJson<EntityId>(page.request, 'POST', '/nodes', {
       csrf,
       data: {
-        name: `Root folder ${suffix}`,
+        name: rootFolderName,
         modelId,
         ownerId: owner.id,
         nodeTypeId: directoryTypeId,
@@ -250,6 +252,7 @@ export async function createLazyModelFixture(page: Page): Promise<LazyModelFixtu
     modelName,
     notationId,
     rootFolderId,
+    rootFolderName,
     childFolderName,
     diagramId,
     diagramName,

@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.3] - 2026-08-22
+
 ### Fixed
 - Diagram copy wizard now pre-selects **Match** when the backend finds an automatic
   correspondence, and **Create** when there is no match candidate.
@@ -13,6 +15,7 @@ All notable changes to this project are documented in this file.
 ### Changed
 - Diagram copy commit now mirrors the source model folder path when creating new
   nodes in the target model (missing folders are created under the target root).
+
 ## [0.22.2] - 2026-08-22
 
 ### Fixed

@@ -41,7 +41,7 @@ export const validationScriptApiCatalog: ValidationScriptApiCatalogItem[] = [
     info: 'Snapshot context: model, open diagram, notations, types.',
   },
   { label: 'model', type: 'property', parent: 'ctx', detail: 'Snapshot model graph' },
-  { label: 'diagram', type: 'property', parent: 'ctx', detail: 'Open diagram or null' },
+  { label: 'diagram', type: 'property', parent: 'ctx', detail: 'Open diagram with instances' },
   { label: 'notations', type: 'property', parent: 'ctx', detail: 'Notation packages in snapshot' },
   {
     label: 'types',

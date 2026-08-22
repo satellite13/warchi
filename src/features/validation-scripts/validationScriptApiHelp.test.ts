@@ -17,6 +17,7 @@ describe('validationScriptApiHelp', () => {
     for (const name of VALIDATION_SCRIPT_TOP_LEVEL_NAMES) {
       expect(labels.has(name)).toBe(true)
     }
+    expect(groups.some((group) => group.id === 'apply')).toBe(true)
   })
 
   it('builds dotted keys for nested members', () => {

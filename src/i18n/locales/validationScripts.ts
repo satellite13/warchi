@@ -60,6 +60,7 @@ export const validationScriptsMessages = {
         groups: {
           ctx: 'Контекст',
           report: 'Отчёт',
+          apply: 'Применить',
           helpers: 'Хелперы',
           structures: 'Структуры',
         },
@@ -78,8 +79,8 @@ export const validationScriptsMessages = {
         items: {
           ctx: {
             root: 'Снимок модели, открытая диаграмма, нотации и типы.',
-            model: 'Граф модели: nodes, links, folders, diagrams.',
-            diagram: 'Текущая открытая диаграмма или null.',
+            model: 'Срез холста: nodes и links открытой диаграммы.',
+            diagram: 'Открытая диаграмма с instances и edges.',
             notations: 'Нотации из снимка с компонентами и правилами.',
             types: 'Справочники nodeTypes и linkTypes.',
           },
@@ -93,7 +94,20 @@ export const validationScriptsMessages = {
           diagramLinks: 'Связи модели на указанной диаграмме.',
           nodesOfType: 'Все ноды модели с типом по id или имени.',
           linksOfType: 'Все связи модели с типом по id или имени.',
-          linksBetween: 'Связи между двумя нодами; опционально фильтр linkType.',
+          linksBetween: 'Query: все связи модели между парой (оба направления).',
+          neighbors: 'Query: соседи в модели, { items, last }.',
+          searchNodes: 'Query: поиск нод. Нужен q или type.',
+          apply: {
+            root: 'Очередь команд холста. Запись только после кнопки Применить.',
+            setBounds: 'Задать геометрию instance.',
+            addInstance: 'Положить существующую ноду модели на холст.',
+            addEdge: 'Положить существующую связь модели (только linkId).',
+            removeInstance: 'Снять фигуру с диаграммы, нода в дереве остаётся.',
+            removeEdge: 'Снять ребро с диаграммы, связь в дереве остаётся.',
+            align: 'Выровнять instances.',
+            distribute: 'Распределить instances.',
+            stack: 'Сложить instances стопкой или внахлёст.',
+          },
           findDuplicateLinks:
             'Дубликаты связей по концам и типу; по умолчанию учитывается направление (source→target).',
           componentForNode: 'Компонент нотации для ноды (или null).',
@@ -164,6 +178,7 @@ export const validationScriptsMessages = {
         groups: {
           ctx: 'Context',
           report: 'Report',
+          apply: 'Apply',
           helpers: 'Helpers',
           structures: 'Structures',
         },
@@ -182,8 +197,8 @@ export const validationScriptsMessages = {
         items: {
           ctx: {
             root: 'Model snapshot, open diagram, notations, and types.',
-            model: 'Model graph: nodes, links, folders, diagrams.',
-            diagram: 'Currently open diagram, or null.',
+            model: 'Canvas slice: nodes and links of the open diagram.',
+            diagram: 'Open diagram with instances and edges.',
             notations: 'Notations in the snapshot with components and rules.',
             types: 'nodeTypes and linkTypes catalogs.',
           },
@@ -197,7 +212,20 @@ export const validationScriptsMessages = {
           diagramLinks: 'Model links on the given diagram.',
           nodesOfType: 'All model nodes matching a type id or name.',
           linksOfType: 'All model links matching a type id or name.',
-          linksBetween: 'Links between two nodes; optional linkType filter.',
+          linksBetween: 'Query: all model links between a pair (both directions).',
+          neighbors: 'Query: model neighbors, { items, last }.',
+          searchNodes: 'Query: search nodes. Requires q or type.',
+          apply: {
+            root: 'Canvas command queue. Written only after Apply.',
+            setBounds: 'Set instance geometry.',
+            addInstance: 'Place an existing model node on the canvas.',
+            addEdge: 'Place an existing model link (linkId only).',
+            removeInstance: 'Remove a figure; the tree node stays.',
+            removeEdge: 'Remove an edge; the tree link stays.',
+            align: 'Align instances.',
+            distribute: 'Distribute instances.',
+            stack: 'Stack instances vertically or overlapping.',
+          },
           findDuplicateLinks:
             'Duplicate links by endpoints and type; direction (source→target) matters by default.',
           componentForNode: 'Notation component for a node (or null).',

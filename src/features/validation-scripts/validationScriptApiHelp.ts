@@ -3,7 +3,7 @@ import {
   type ValidationScriptApiCatalogItem,
 } from './validationScriptApiCatalog'
 
-export type ValidationScriptApiHelpGroupId = 'ctx' | 'report' | 'helpers'
+export type ValidationScriptApiHelpGroupId = 'ctx' | 'report' | 'apply' | 'helpers'
 
 export type ValidationScriptApiHelpGroup = {
   id: ValidationScriptApiHelpGroupId
@@ -26,12 +26,20 @@ export function getValidationScriptApiHelpGroups(): ValidationScriptApiHelpGroup
   const reportItems = validationScriptApiCatalog.filter(
     (item) => item.label === 'report' || item.parent === 'report'
   )
+  const applyItems = validationScriptApiCatalog.filter(
+    (item) => item.label === 'apply' || item.parent === 'apply'
+  )
   const helperItems = validationScriptApiCatalog.filter(
-    (item) => !item.parent && item.label !== 'ctx' && item.label !== 'report'
+    (item) =>
+      !item.parent &&
+      item.label !== 'ctx' &&
+      item.label !== 'report' &&
+      item.label !== 'apply'
   )
   return [
     { id: 'ctx', items: ctxItems },
     { id: 'report', items: reportItems },
+    { id: 'apply', items: applyItems },
     { id: 'helpers', items: helperItems },
   ]
 }
@@ -70,7 +78,7 @@ export const VALIDATION_SCRIPT_API_STRUCTURES: ValidationScriptApiStructure[] = 
   },
   {
     id: 'diagram',
-    fields: '{ id, name, version, notationId, nodeIds[], linkIds[] }',
+    fields: '{ id, name, version, notationId, nodeIds[], linkIds[], instances[], edges[] }',
   },
   {
     id: 'component',

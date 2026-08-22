@@ -1,28 +1,21 @@
 # Scripts
 
-The **Scripts** section lets you write and share JavaScript validation scripts for a model. A script only **reports** issues via `report` — it does not modify the model or diagram.
+The **Scripts** section lets you write and share JavaScript for the **open diagram**: check the canvas, move shapes, or place existing model nodes and links.
 
-Run from the model editor toolbar (**Scripts**, terminal icon).
+A script **does not load the model tree** and **does not change the graph** (it cannot create or delete tree nodes/links). Canvas writes go through the `apply.*` queue after a preview.
 
-## Run context
+Run from the model editor (**Scripts**). A run requires an open diagram.
 
-The script always receives a snapshot of the **entire model**. The open diagram only affects `ctx.diagram`:
-
-| Situation | `ctx.diagram` |
-|-----------|----------------|
-| A diagram is open in the editor | that diagram object |
-| No diagram open | `null` |
-
-Permissions: **view** on the script and **view** on the model.
+Permissions: view the script and model to produce a report; **Apply** also needs model edit rights and the usual diagram lock.
 
 ## Built-in objects
 
 ### `ctx`
 
-- `ctx.model` — model graph: `nodes`, `links`, `folders`, `diagrams`, plus `id` / `name` / `version`
-- `ctx.diagram` — open diagram or `null` (`id`, `name`, `notationId`, `nodeIds`, `linkIds`)
-- `ctx.notations` — notations used by diagrams in the snapshot (components, relations, rules)
-- `ctx.types` — `{ nodeTypes, linkTypes }` with `id`, `name`, `attrs`
+- `ctx.model` — **canvas slice** only: nodes and links already on the open diagram (`folders` is empty)
+- `ctx.diagram` — the open diagram (`id`, `name`, `notationId`, `nodeIds`, `linkIds`, `instances`, `edges`)
+- `ctx.notations` — this diagram's notation
+- `ctx.types` — types of the nodes/links on the canvas
 
 ## Snapshot structures
 
@@ -63,8 +56,10 @@ Model folders (Directory type) are not in `nodes` — they live in `ctx.model.fo
   name: string
   version: string
   notationId: string
-  nodeIds: string[]   // ids of nodes visible on the diagram
-  linkIds: string[]   // ids of links on the diagram
+  nodeIds: string[]
+  linkIds: string[]
+  instances: Array<{ id, modelNodeId, x, y, width?, height? }>
+  edges: Array<{ id, modelLinkId, sourceInstanceId, targetInstanceId }>
 }
 ```
 
@@ -174,7 +169,10 @@ This is **not** `console.log`: without text in `message` (or a name on a node/li
 | `diagramLinks(diagram)` | Model links on the diagram |
 | `nodesOfType(typeIdOrName)` | Nodes by type id or name |
 | `linksOfType(typeIdOrName)` | Links by type id or name |
-| `linksBetween(a, b, { linkType? })` | Links between two nodes (node or id) |
+| `neighbors(nodeId, { direction, linkType?, page? })` | Model neighbors. Returns `{ items, last }` |
+| `searchNodes({ q?, type?, limit? })` | Search model nodes. Requires `q` or `type`, limit ≤ 50 |
+| `linksBetween(a, b, { linkType? })` | All model links between a pair (both directions); async query |
+| `apply.*` | Canvas command queue. Nothing is written until **Apply** |
 | `findDuplicateLinks({ by, directed? })` | Duplicate links; direction matters by default |
 | `componentForNode(node)` | Notation component for a node (or `null`) |
 | `relationRules(notationId)` | Relation rules for a notation |
@@ -183,26 +181,46 @@ Names are available via editor autocomplete (Ctrl+Space).
 
 ## Sandbox limits
 
-- No network (`fetch` / XHR / WebSocket)
+- No network (`fetch` / XHR / WebSocket). Model queries go through `neighbors` / `searchNodes` / `linksBetween`
 - No access to the app DOM
-- Execution timeout (a few seconds by default)
+- Timeout covers the whole run including queries
 - Cap on the number of messages per run
+- `apply.addEdge({ linkId })` takes only a model link id; the host resolves endpoints
 
-## Example
+## Examples
+
+Canvas check:
 
 ```js
-if (!ctx.diagram) {
-  report.warn('Open a diagram before running')
-} else {
-  for (const n of diagramNodes(ctx.diagram)) {
-    report.info('Node:', n)
-  }
-  for (const dup of findDuplicateLinks({ by: 'endpoints+type' })) {
-    report.warn('Duplicate link', { kind: 'link', id: dup.linkIds[0] })
-  }
+const locations = diagramNodes(ctx.diagram).filter((n) =>
+  nodesOfType('Location').some((loc) => loc.id === n.id)
+)
+if (locations.length === 0) {
+  report.error('No Location on the diagram', { kind: 'diagram', id: ctx.diagram.id })
 }
 ```
 
+Layout:
+
+```js
+const ids = ctx.diagram.instances.map((i) => i.id)
+apply.align({ instanceIds: ids, mode: 'left' })
+apply.distribute({ instanceIds: ids, axis: 'vertical' })
+```
+
+Place existing neighbors:
+
+```js
+const id = ctx.diagram.instances[0].modelNodeId
+const ns = await neighbors(id, { direction: 'outgoing', linkType: 'Flow' })
+for (const item of ns.items) {
+  apply.addInstance({ nodeId: item.node.id, x: 40, y: 40 })
+  apply.addEdge({ linkId: item.link.id })
+}
+```
+
+After a run: issues plus a command summary. **Close** leaves the canvas unchanged. **Apply** is one Undo step.
+
 ## Catalog and sharing
 
-In the **Scripts** menu, create a script with **+** in the sidebar, edit the source, and grant `VIEW` / `EDIT` via sharing — same pattern as other catalog entities. A script is a single entity **without** semver versions. Run it from the model editor (you need view access to both the script and the model).
+In the **Scripts** menu, create a script with **+** in the sidebar, edit the source, and grant `VIEW` / `EDIT` via sharing — same pattern as other catalog entities. A script is a single entity **without** semver versions and without a script-kind field.

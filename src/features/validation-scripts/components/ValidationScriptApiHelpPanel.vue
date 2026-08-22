@@ -27,7 +27,7 @@ function itemInfo(item: ValidationScriptApiCatalogItem): string {
   const key =
     item.parent != null
       ? `validationScripts.apiHelp.items.${item.parent}.${item.label}`
-      : item.label === 'ctx' || item.label === 'report'
+      : item.label === 'ctx' || item.label === 'report' || item.label === 'apply'
         ? `validationScripts.apiHelp.items.${item.label}.root`
         : `validationScripts.apiHelp.items.${item.label}`
   return te(key) ? t(key) : ''

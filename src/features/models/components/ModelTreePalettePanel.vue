@@ -916,7 +916,6 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                   <path d="M3.5 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
                 </svg>
               </span>
-              <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
             </button>
             <div v-else class="diagram-row__select diagram-row__rename-wrap">
               <UiIcon name="dashboard" />
@@ -1387,18 +1386,6 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 
 .diagram-row--active .diagram-row__select {
   color: var(--accent);
-}
-
-.diagram-row__badge {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  padding: 1px 6px;
-  margin-left: 8px;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .diagram-row__lock-pip {

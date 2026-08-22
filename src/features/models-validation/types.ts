@@ -31,6 +31,8 @@ export type ValidationReport = {
   generatedAt: string
   duplicateNodes: DuplicateNodeGroup[]
   duplicateLinks: DuplicateLinkGroup[]
+  duplicateNodesTotal?: number
+  duplicateLinksTotal?: number
 }
 
 export type DiagramRef = { diagramId: string; diagramName: string }

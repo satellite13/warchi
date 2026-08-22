@@ -42,9 +42,9 @@ test.describe('Model editor lazy loading', () => {
       expect(expandedFolderRequest).toBeDefined()
 
       await page.getByRole('button', { name: fixture.diagramName }).dblclick()
-      await expect(
-        page.getByRole('button', { name: `${fixture.diagramName} Opened`, exact: true })
-      ).toBeVisible()
+      await expect(page.locator(`[data-tree-diagram-id="${fixture.diagramId}"]`)).toHaveClass(
+        /diagram-row--active/
+      )
 
       expect(
         apiRequests.some(
@@ -134,9 +134,9 @@ test.describe('Model editor lazy loading', () => {
       await openLazyModelEditor(page, fixture)
       await page.locator(`[data-tree-node-id="${fixture.rootFolderId}"] .tree-node__toggle`).click()
       await page.getByRole('button', { name: fixture.diagramName }).dblclick()
-      await expect(
-        page.getByRole('button', { name: `${fixture.diagramName} Opened`, exact: true })
-      ).toBeVisible()
+      await expect(page.locator(`[data-tree-diagram-id="${fixture.diagramId}"]`)).toHaveClass(
+        /diagram-row--active/
+      )
       await page.locator(`[data-tree-node-id="${fixture.nodeIds[1]}"] .tree-node__toggle`).click()
       await page.locator(`[data-tree-node-id="${fixture.nodeIds[2]}"] .tree-node__select`).click()
       await page.getByRole('button', { name: 'Traceability', exact: true }).click()
@@ -221,9 +221,9 @@ test.describe('Model editor lazy loading', () => {
 
       await expect(page.locator('.search-input')).toHaveValue('')
       await expect(page.locator(`[data-tree-diagram-id="${fixture.diagramId}"]`)).toBeVisible()
-      await expect(
-        page.getByRole('button', { name: `${fixture.diagramName} Opened`, exact: true })
-      ).toHaveCount(0)
+      await expect(page.locator(`[data-tree-diagram-id="${fixture.diagramId}"]`)).not.toHaveClass(
+        /diagram-row--active/
+      )
       expect(
         apiRequests.some(
           url =>

@@ -467,7 +467,7 @@ git commit -m "Merge duplicate model nodes atomically with sync events."
 
 - [ ] **Step 2: Реализовать**
 
-`@PostMapping("/validation/merge-links")`. Право edit. Lock на диаграммах, где есть keep или drop edge. Remap `modelLinkId` drop→keep, не удалять сами edge. `broadcastModelChanged(..., "validation_merge_links", ...)`.
+`@PostMapping("/validation/merge-links")`. Право edit. Lock на диаграммах, где есть keep или drop edge. Remap `modelLinkId` drop→keep; если keep уже есть на холсте — удалить edge drop. `broadcastModelChanged(..., "validation_merge_links", ...)`.
 
 - [ ] **Step 3: Тесты + commit**
 

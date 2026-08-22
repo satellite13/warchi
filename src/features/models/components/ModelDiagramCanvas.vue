@@ -75,10 +75,16 @@ import {
   applyEditablePolylineControlPointChangesToDiagram as applyEditablePolylineControlPointChangesToDiagramAttrs,
   applyNodeAndEditablePolylineChangesToDiagram as applyNodeAndEditablePolylineChangesToDiagramAttrs,
   applyNodePositionsToDiagram as applyNodePositionsToDiagramAttrs,
+  persistHistoryRendererLayout,
   areControlPointsEqual,
   readControlPointsFromAttrs,
   readControlPointsFromEdge,
 } from '../utils/diagramCanvasSync'
+import { collectNestedGroupFollowers } from '../utils/groupDragFollowers'
+import {
+  applyHistoryPersistDirty,
+  type HistoryPersistKind,
+} from '../utils/historyPersistDirty'
 import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
@@ -327,6 +333,8 @@ const canRedo = ref(false)
  * both break undo and can leave an extra no-op history step.
  */
 let suppressHistoryCanvasPersist = false
+const dirtyBeforeHistoryCommand: boolean[] = []
+let pendingHistoryPersistKind: HistoryPersistKind = 'execute'
 /** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
 const viewportRev = ref(0)
 
@@ -578,18 +586,6 @@ const isNodeFullyInside = (
   )
 }
 
-const findContainedNodes = (containerPapNodeId: string): string[] => {
-  if (!renderer) return []
-  const contained: string[] = []
-  for (const [papNodeId] of renderer.nodes) {
-    if (papNodeId === containerPapNodeId) continue
-    if (isNodeFullyInside(papNodeId, containerPapNodeId)) {
-      contained.push(papNodeId)
-    }
-  }
-  return contained
-}
-
 const findBoundaryGuestPapIds = (hostPapNodeId: string): string[] => {
   const hostEntity = nodeIdToInstance.get(hostPapNodeId)
   if (!hostEntity || !renderer) return []
@@ -631,8 +627,23 @@ const rePinAllBoundaryGuests = (): void => {
 }
 
 const startGroupDrag = (leaderPapNodeId: string) => {
-  const contained = isNodeGroupingEnabled(leaderPapNodeId) ? findContainedNodes(leaderPapNodeId) : []
-  const guests = findBoundaryGuestPapIds(leaderPapNodeId)
+  const contained =
+    renderer && isNodeGroupingEnabled(leaderPapNodeId)
+      ? collectNestedGroupFollowers({
+          leaderId: leaderPapNodeId,
+          ids: Array.from(renderer.nodes.keys()),
+          boundsOf: getNodeBounds,
+          isGroupingEnabled: isNodeGroupingEnabled,
+        })
+      : []
+  const guests = new Set<string>()
+  for (const hostId of [leaderPapNodeId, ...contained]) {
+    if (hostId === leaderPapNodeId || isNodeGroupingEnabled(hostId)) {
+      for (const guestId of findBoundaryGuestPapIds(hostId)) {
+        guests.add(guestId)
+      }
+    }
+  }
   const followers = [...new Set([...contained, ...guests])]
   if (followers.length === 0) {
     groupDragData = null
@@ -2178,10 +2189,8 @@ function clearLockedPortsFromRendererEdges(): void {
   }
 }
 
-function detectEdgePortChanges() {
-  if (!renderer) return
-
-  const next = cloneDiagramAttrs()
+function applyEdgePortChangesToAttrs(next: DiagramAttrs): boolean {
+  if (!renderer) return false
   let changed = false
 
   for (const [papEdgeId, entity] of edgeIdToInstance) {
@@ -2246,7 +2255,14 @@ function detectEdgePortChanges() {
     changed = true
   }
 
-  if (changed) {
+  return changed
+}
+
+function detectEdgePortChanges() {
+  if (!renderer) return
+
+  const next = cloneDiagramAttrs()
+  if (applyEdgePortChangesToAttrs(next)) {
     emit('updateDiagram', next)
   }
 }
@@ -2315,6 +2331,33 @@ function persistNodePositions(papNodeIds: string[]) {
   if (changed) {
     syncEdgePortIds(next)
     emit('updateDiagram', next)
+  }
+}
+
+function persistHistoryLayoutFromRenderer(options?: { dirty?: boolean }): void {
+  if (props.readOnly || !renderer) return
+  const source = props.activeDiagram?.parsedAttrs
+  if (!source) return
+  const { next, changed: layoutChanged } = persistHistoryRendererLayout({
+    source,
+    papNodeIds: Array.from(nodeIdToInstance.keys()),
+    nodeIdToInstance,
+    edgeIdToInstance,
+    getNodeByPapId: papNodeId => renderer?.getNode(papNodeId),
+    getEdgeByPapId: papEdgeId => renderer?.getEdge(papEdgeId),
+  })
+  const portsChanged = applyEdgePortChangesToAttrs(next)
+  let anchorsChanged = false
+  const midpoints = collectHostEdgeMidpoints()
+  if (midpoints.size > 0) {
+    const result = syncEdgeAnchorPositions(next.instances.nodes, midpoints)
+    next.instances.nodes = result.nodes
+    anchorsChanged = result.changed
+  }
+  const changed = layoutChanged || portsChanged || anchorsChanged
+  if (changed || options?.dirty === false) {
+    if (changed) syncEdgePortIds(next)
+    emit('updateDiagram', next, options)
   }
 }
 
@@ -2548,19 +2591,37 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
   }
 
+  manager.history.on('undo', () => {
+    pendingHistoryPersistKind = 'undo'
+  })
+  manager.history.on('redo', () => {
+    pendingHistoryPersistKind = 'redo'
+  })
+
   // History → sync canUndo/canRedo + detect label changes
   manager.history.on('change', () => {
     if (props.readOnly) return
     canUndo.value = manager.history.canUndo
     canRedo.value = manager.history.canRedo
+    const persistDirty = applyHistoryPersistDirty(
+      dirtyBeforeHistoryCommand,
+      pendingHistoryPersistKind,
+      Boolean(props.diagramDirty)
+    )
+    pendingHistoryPersistKind = 'execute'
+    while (dirtyBeforeHistoryCommand.length > manager.history.undoCount) {
+      dirtyBeforeHistoryCommand.shift()
+    }
     if (suppressHistoryCanvasPersist) return
-    // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
-    persistNodePositions(Array.from(nodeIdToInstance.keys()))
-    detectEdgePortChanges()
-    detectEditablePolylineControlPointChanges()
-    detectLabelChanges()
-    detectEdgeLabelChanges()
-    syncEdgeAnchors({ persist: true, updateRenderer: true })
+    // One attrs write: nodes + editable-polyline bends + ports + anchors.
+    // A later cloneDiagramAttrs() still sees pre-undo props and would restore
+    // post-drag controlPoints after nested group undo.
+    persistHistoryLayoutFromRenderer({ dirty: persistDirty.dirty })
+    if (persistDirty.dirty) {
+      detectLabelChanges()
+      detectEdgeLabelChanges()
+    }
+    syncEdgeAnchors({ persist: false, updateRenderer: true })
   })
 
   // Connection → emit connectNodes / connectNodeToEdge
@@ -3152,6 +3213,8 @@ const resetHistory = () => {
   } finally {
     suppressHistoryCanvasPersist = false
   }
+  dirtyBeforeHistoryCommand.length = 0
+  pendingHistoryPersistKind = 'execute'
   canUndo.value = false
   canRedo.value = false
 }

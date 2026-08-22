@@ -36,6 +36,13 @@ const isEmpty = computed(() => {
   return current.duplicateNodes.length === 0 && current.duplicateLinks.length === 0
 })
 
+function groupCountLabel(shown: number, total?: number): string {
+  if (total != null && total > shown) {
+    return t('models.validationReportShownOf', { shown, total })
+  }
+  return String(shown)
+}
+
 async function load(): Promise<void> {
   const id = modelId.value
   if (!id) return
@@ -125,7 +132,7 @@ async function onWizardRefresh(): Promise<void> {
           <section class="model-validation__section">
             <h2 class="model-validation__heading">
               {{ t('models.validationReportNodes') }}
-              {{ report.duplicateNodes.length }}
+              {{ groupCountLabel(report.duplicateNodes.length, report.duplicateNodesTotal) }}
             </h2>
             <div class="model-validation__groups">
               <ValidationDuplicateGroup
@@ -143,7 +150,7 @@ async function onWizardRefresh(): Promise<void> {
           <section class="model-validation__section">
             <h2 class="model-validation__heading">
               {{ t('models.validationReportLinks') }}
-              {{ report.duplicateLinks.length }}
+              {{ groupCountLabel(report.duplicateLinks.length, report.duplicateLinksTotal) }}
             </h2>
             <div class="model-validation__groups">
               <ValidationDuplicateGroup

@@ -7,11 +7,13 @@ export type DiagramScriptCommand =
   | { type: 'align'; instanceIds: string[]; mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom' }
   | { type: 'distribute'; instanceIds: string[]; axis: 'horizontal' | 'vertical' }
   | { type: 'stack'; instanceIds: string[]; mode: 'vertical' | 'overlap' }
+  | { type: 'setEdgeStyle'; edgeInstanceId?: string; linkId?: string; strokeColor: string }
 
 export type ValidateCommandQueueInput = {
   instanceModelNodeIds: Set<string>
   instanceIds: Set<string>
   edgeIds: Set<string>
+  canvasLinkIds?: Set<string>
   linkEndpoints: Record<string, { sourceId: string; targetId: string }>
   commands: DiagramScriptCommand[]
 }
@@ -19,6 +21,8 @@ export type ValidateCommandQueueInput = {
 export type ValidateCommandQueueResult =
   | { ok: true }
   | { ok: false; error: string }
+
+const HEX_STROKE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
 
 function requireInstances(
   instanceIds: Set<string>,
@@ -88,6 +92,21 @@ export function validateCommandQueue(input: ValidateCommandQueueInput): Validate
       case 'stack': {
         const missing = requireInstances(instanceIds, command.instanceIds, 'stack')
         if (missing) return missing
+        break
+      }
+      case 'setEdgeStyle': {
+        if (!HEX_STROKE.test(command.strokeColor ?? '')) {
+          return { ok: false, error: 'setEdgeStyle: strokeColor must be #rgb, #rrggbb or #rrggbbaa' }
+        }
+        if (!command.edgeInstanceId && !command.linkId) {
+          return { ok: false, error: 'setEdgeStyle: edgeInstanceId or linkId required' }
+        }
+        if (command.edgeInstanceId && !edgeIds.has(command.edgeInstanceId)) {
+          return { ok: false, error: `setEdgeStyle: unknown edge ${command.edgeInstanceId}` }
+        }
+        if (command.linkId && input.canvasLinkIds && !input.canvasLinkIds.has(command.linkId)) {
+          return { ok: false, error: `setEdgeStyle: link ${command.linkId} is not on the diagram` }
+        }
         break
       }
     }

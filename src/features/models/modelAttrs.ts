@@ -54,6 +54,7 @@ export const parseBoundaryAttach = (value: unknown): BoundaryAttach | undefined 
 
 export type DiagramEdgeInstanceAttrs = JsonObject & {
   relationProperties?: ScopedCustomValues
+  diagramStyle?: JsonObject
 }
 
 export type DiagramNodeInstance = {

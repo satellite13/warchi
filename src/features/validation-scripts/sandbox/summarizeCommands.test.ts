@@ -14,12 +14,14 @@ describe('summarizeCommands', () => {
       { type: 'align', instanceIds: ['ia'], mode: 'left' },
       { type: 'distribute', instanceIds: ['ia', 'ib'], axis: 'horizontal' },
       { type: 'stack', instanceIds: ['ia', 'ib'], mode: 'vertical' },
+      { type: 'setEdgeStyle', linkId: 'l1', strokeColor: '#dc3545' },
     ]
     expect(summarizeCommands(commands)).toEqual({
       addNodes: 2,
       addEdges: 1,
       remove: 2,
       layout: 4,
+      style: 1,
     })
   })
 })

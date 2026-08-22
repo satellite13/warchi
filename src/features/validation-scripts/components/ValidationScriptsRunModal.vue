@@ -203,6 +203,7 @@ function levelLabel(level: ValidationIssue['level']): string {
                 addEdges: commandSummary.addEdges,
                 remove: commandSummary.remove,
                 layout: commandSummary.layout,
+                style: commandSummary.style,
               })
             }}
           </p>

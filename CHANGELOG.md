@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Scripts now run against the **open diagram** only: the snapshot is a canvas
+  slice (`instances` / `edges`), not a detached full-model dump. Helpers such
+  as `nodesOfType` and `findDuplicateLinks` see what is on the canvas.
+- After a run, the preview can **Apply** a queued canvas change (`setBounds`,
+  place existing nodes/links, remove figures, align / distribute / stack) as
+  one Undo step. The model tree is not created or deleted.
+- Scripts can query the rest of the model through `neighbors`, `searchNodes`,
+  and `linksBetween` (async, paged, no raw `fetch`).
+- Scripts can recolor a canvas edge: `apply.setEdgeStyle({ linkId, strokeColor })`.
+
 ## [0.22.3] - 2026-08-22
 
 ### Fixed

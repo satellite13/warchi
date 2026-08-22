@@ -110,6 +110,21 @@ function mutateInstances(
         instances.edges = instances.edges.filter((edge) => edge.id !== command.edgeInstanceId)
         break
       }
+      case 'setEdgeStyle': {
+        for (const edge of instances.edges) {
+          const byInstance = command.edgeInstanceId != null && edge.id === command.edgeInstanceId
+          const byLink = command.linkId != null && edge.modelLinkId === command.linkId
+          if (!byInstance && !byLink) continue
+          const attrs = { ...(edge.attrs ?? {}) }
+          const prevStyle =
+            attrs.diagramStyle && typeof attrs.diagramStyle === 'object' && !Array.isArray(attrs.diagramStyle)
+              ? { ...attrs.diagramStyle }
+              : {}
+          attrs.diagramStyle = { ...prevStyle, strokeColor: command.strokeColor }
+          edge.attrs = attrs
+        }
+        break
+      }
       default:
         break
     }

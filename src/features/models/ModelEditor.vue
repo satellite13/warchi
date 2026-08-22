@@ -331,12 +331,12 @@ assignScopedReload({
 })
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
-const validationRunPayload = ref<
+const validationRunPayload = shallowRef<
   Extract<ReturnType<typeof prepareValidationScriptRun>, { ok: true }>['payload'] | null
 >(null)
 
 function openValidationScriptsModal(): void {
-  if (!model.value) return
+  if (!model.value || !selectedDiagramId.value) return
   const prepared = prepareValidationScriptRun({
     state: state.value,
     modelName: model.value.name,
@@ -421,6 +421,9 @@ async function handleApplyDiagramScriptCommands(commands: DiagramScriptCommand[]
     ),
     instanceIds: new Set(diagram.parsedAttrs.instances.nodes.map((instance) => instance.id)),
     edgeIds: new Set(diagram.parsedAttrs.instances.edges.map((instance) => instance.id)),
+    canvasLinkIds: new Set(
+      diagram.parsedAttrs.instances.edges.map((instance) => instance.modelLinkId)
+    ),
     linkEndpoints,
     commands,
   })
@@ -459,16 +462,7 @@ async function handleApplyDiagramScriptCommands(commands: DiagramScriptCommand[]
       invalidateTraceabilityDiagrams()
     },
   })
-
-  if (model.value) {
-    const prepared = prepareValidationScriptRun({
-      state: state.value,
-      modelName: model.value.name,
-      modelVersion: model.value.version,
-      openDiagramId: diagram.id,
-    })
-    if (prepared.ok) validationRunPayload.value = prepared.payload
-  }
+  closeValidationScriptsModal()
 }
 
 function closeValidationScriptsModal(): void {

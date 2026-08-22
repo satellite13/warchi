@@ -38,9 +38,9 @@ export const validationScriptApiCatalog: ValidationScriptApiCatalogItem[] = [
     label: 'ctx',
     type: 'namespace',
     detail: 'Run context',
-    info: 'Snapshot context: model, open diagram, notations, types.',
+    info: 'Open-diagram slice: canvas nodes/links, this notation, and their types.',
   },
-  { label: 'model', type: 'property', parent: 'ctx', detail: 'Snapshot model graph' },
+  { label: 'model', type: 'property', parent: 'ctx', detail: 'Canvas-slice nodes and links' },
   { label: 'diagram', type: 'property', parent: 'ctx', detail: 'Open diagram with instances' },
   { label: 'notations', type: 'property', parent: 'ctx', detail: 'Notation packages in snapshot' },
   {
@@ -92,13 +92,13 @@ export const validationScriptApiCatalog: ValidationScriptApiCatalogItem[] = [
     label: 'nodesOfType',
     type: 'function',
     detail: '(typeIdOrName)',
-    info: 'All model nodes matching a node type id or name.',
+    info: 'Canvas-slice nodes matching a node type id or name.',
   },
   {
     label: 'linksOfType',
     type: 'function',
     detail: '(typeIdOrName)',
-    info: 'All model links matching a link type id or name.',
+    info: 'Canvas-slice links matching a link type id or name.',
   },
   {
     label: 'linksBetween',
@@ -173,10 +173,17 @@ export const validationScriptApiCatalog: ValidationScriptApiCatalogItem[] = [
     detail: "({ instanceIds, mode: 'vertical' | 'overlap' })",
   },
   {
+    label: 'setEdgeStyle',
+    type: 'method',
+    parent: 'apply',
+    detail: '({ linkId | edgeInstanceId, strokeColor })',
+    info: 'Override edge stroke on the canvas (hex color).',
+  },
+  {
     label: 'findDuplicateLinks',
     type: 'function',
     detail: '({ by, directed? })',
-    info: "Find duplicate links by 'endpoints' or 'endpoints+type'. Direction matters by default.",
+    info: "Find duplicate canvas links by 'endpoints' or 'endpoints+type'. Direction matters by default.",
   },
   {
     label: 'componentForNode',

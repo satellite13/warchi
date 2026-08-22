@@ -12,7 +12,7 @@ export const validationScriptsMessages = {
       descriptionLabel: 'Описание',
       descriptionPlaceholder: 'Краткое описание назначения скрипта',
       sourceLabel: 'Исходный код',
-      sourceHint: 'ctx, report и хелперы доступны через автодополнение',
+      sourceHint: 'ctx, report, apply, neighbors и остальные API — через автодополнение',
       noEditRights: 'Нет прав на редактирование этого скрипта.',
       delete: 'Удалить',
       deleteConfirm: 'Удалить скрипт «{name}»?',
@@ -37,13 +37,11 @@ export const validationScriptsMessages = {
         'Скрипт завершился без сообщений. Сохраните скрипт перед запуском и вызывайте report.* — иначе список результатов пуст.',
       runHintWithDiagram:
         'Скрипт видит только открытую диаграмму. Соседей и поиск в модели — через neighbors / searchNodes / linksBetween.',
-      runHintModelOnly:
-        'Откройте диаграмму, чтобы запустить скрипт. Дерево модели целиком не выгружается.',
       runNeedsDiagram: 'Откройте диаграмму, чтобы запустить скрипт.',
       apply: 'Применить',
       applyPreviewTitle: 'Изменения на холсте',
       applyPreviewSummary:
-        'Добавить нод: {addNodes}, связей: {addEdges}, снять: {remove}, раскладка: {layout}. Закройте окно, чтобы не менять диаграмму.',
+        'Добавить нод: {addNodes}, связей: {addEdges}, снять: {remove}, раскладка: {layout}, стиль: {style}. Закройте окно, чтобы не менять диаграмму.',
       applyReadOnly: 'Диаграмма недоступна для записи. Холст не изменён.',
       applyMissingEntity: 'Не удалось найти ноду или связь модели. Холст не изменён.',
       applyInvalidCommands: 'Очередь команд некорректна. Холст не изменён.',
@@ -67,7 +65,7 @@ export const validationScriptsMessages = {
         structures: {
           node: 'Нода — model.nodes, diagramNodes, nodesOfType',
           link: 'Связь — model.links, diagramLinks, linksOfType…',
-          folder: 'Папка — model.folders (Directory)',
+          folder: 'Папка — kind для report.target; folders в снимке пустой',
           diagram: 'Диаграмма — model.diagrams, ctx.diagram',
           component: 'Компонент — notation.components, componentForNode',
           relation: 'Отношение — notation.relations',
@@ -78,7 +76,7 @@ export const validationScriptsMessages = {
         },
         items: {
           ctx: {
-            root: 'Снимок модели, открытая диаграмма, нотации и типы.',
+            root: 'Срез открытой диаграммы, её нотация и типы. Дерево модели не входит.',
             model: 'Срез холста: nodes и links открытой диаграммы.',
             diagram: 'Открытая диаграмма с instances и edges.',
             notations: 'Нотации из снимка с компонентами и правилами.',
@@ -92,8 +90,8 @@ export const validationScriptsMessages = {
           },
           diagramNodes: 'Ноды модели, видимые на указанной диаграмме.',
           diagramLinks: 'Связи модели на указанной диаграмме.',
-          nodesOfType: 'Все ноды модели с типом по id или имени.',
-          linksOfType: 'Все связи модели с типом по id или имени.',
+          nodesOfType: 'Ноды среза холста с типом по id или имени.',
+          linksOfType: 'Связи среза холста с типом по id или имени.',
           linksBetween: 'Query: все связи модели между парой (оба направления).',
           neighbors: 'Query: соседи в модели, { items, last }.',
           searchNodes: 'Query: поиск нод. Нужен q или type.',
@@ -107,9 +105,10 @@ export const validationScriptsMessages = {
             align: 'Выровнять instances.',
             distribute: 'Распределить instances.',
             stack: 'Сложить instances стопкой или внахлёст.',
+            setEdgeStyle: 'Цвет обводки ребра на холсте (hex, по linkId или edgeInstanceId).',
           },
           findDuplicateLinks:
-            'Дубликаты связей по концам и типу; по умолчанию учитывается направление (source→target).',
+            'Дубликаты связей на холсте; по умолчанию учитывается направление (source→target).',
           componentForNode: 'Компонент нотации для ноды (или null).',
           relationRules: 'Правила отношений для нотации по id.',
         },
@@ -129,7 +128,7 @@ export const validationScriptsMessages = {
       descriptionLabel: 'Description',
       descriptionPlaceholder: 'Short description of what the script does',
       sourceLabel: 'Source code',
-      sourceHint: 'ctx, report and helpers are available via autocomplete',
+      sourceHint: 'ctx, report, apply, neighbors and the rest of the API via autocomplete',
       noEditRights: 'You do not have permission to edit this script.',
       delete: 'Delete',
       deleteConfirm: 'Delete script «{name}»?',
@@ -154,13 +153,11 @@ export const validationScriptsMessages = {
         'Script finished with no messages. Save the script before running and call report.* — otherwise the results list stays empty.',
       runHintWithDiagram:
         'The script sees only the open diagram. Use neighbors / searchNodes / linksBetween to query the model.',
-      runHintModelOnly:
-        'Open a diagram to run a script. The full model tree is not loaded.',
       runNeedsDiagram: 'Open a diagram to run a script.',
       apply: 'Apply',
       applyPreviewTitle: 'Canvas changes',
       applyPreviewSummary:
-        'Add nodes: {addNodes}, edges: {addEdges}, remove: {remove}, layout: {layout}. Close the dialog to leave the diagram unchanged.',
+        'Add nodes: {addNodes}, edges: {addEdges}, remove: {remove}, layout: {layout}, style: {style}. Close the dialog to leave the diagram unchanged.',
       applyReadOnly: 'The diagram is not writable. The canvas was not changed.',
       applyMissingEntity: 'A model node or link could not be resolved. The canvas was not changed.',
       applyInvalidCommands: 'The command queue is invalid. The canvas was not changed.',
@@ -185,7 +182,7 @@ export const validationScriptsMessages = {
         structures: {
           node: 'Node — model.nodes, diagramNodes, nodesOfType',
           link: 'Link — model.links, diagramLinks, linksOfType…',
-          folder: 'Folder — model.folders (Directory)',
+          folder: 'Folder — report.target kind; folders is empty in the snapshot',
           diagram: 'Diagram — model.diagrams, ctx.diagram',
           component: 'Component — notation.components, componentForNode',
           relation: 'Relation — notation.relations',
@@ -196,7 +193,7 @@ export const validationScriptsMessages = {
         },
         items: {
           ctx: {
-            root: 'Model snapshot, open diagram, notations, and types.',
+            root: 'Open-diagram slice, its notation and types. The model tree is not included.',
             model: 'Canvas slice: nodes and links of the open diagram.',
             diagram: 'Open diagram with instances and edges.',
             notations: 'Notations in the snapshot with components and rules.',
@@ -210,8 +207,8 @@ export const validationScriptsMessages = {
           },
           diagramNodes: 'Model nodes visible on the given diagram.',
           diagramLinks: 'Model links on the given diagram.',
-          nodesOfType: 'All model nodes matching a type id or name.',
-          linksOfType: 'All model links matching a type id or name.',
+          nodesOfType: 'Canvas-slice nodes matching a type id or name.',
+          linksOfType: 'Canvas-slice links matching a type id or name.',
           linksBetween: 'Query: all model links between a pair (both directions).',
           neighbors: 'Query: model neighbors, { items, last }.',
           searchNodes: 'Query: search nodes. Requires q or type.',
@@ -225,9 +222,10 @@ export const validationScriptsMessages = {
             align: 'Align instances.',
             distribute: 'Distribute instances.',
             stack: 'Stack instances vertically or overlapping.',
+            setEdgeStyle: 'Canvas edge stroke color (hex, by linkId or edgeInstanceId).',
           },
           findDuplicateLinks:
-            'Duplicate links by endpoints and type; direction (source→target) matters by default.',
+            'Duplicate links on the canvas; direction (source→target) matters by default.',
           componentForNode: 'Notation component for a node (or null).',
           relationRules: 'Relation rules for a notation by id.',
         },

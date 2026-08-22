@@ -78,6 +78,37 @@ describe('applyDiagramScriptCommands', () => {
     expect(diagram.parsedAttrs.instances.edges).toEqual([])
     history[0]!.undo()
     expect(diagram.parsedAttrs.instances.nodes.some((n) => n.id === 'ib')).toBe(true)
+  })
+
+  it('paints an existing edge via setEdgeStyle', () => {
+    const diagram = diagramWith()
+    diagram.parsedAttrs.instances.nodes.push({
+      id: 'ib',
+      modelNodeId: 'n2',
+      x: 20,
+      y: 0,
+      width: 10,
+      height: 10,
+    })
+    diagram.parsedAttrs.instances.edges.push({
+      id: 'e1',
+      modelLinkId: 'l1',
+      sourceInstanceId: 'ia',
+      targetInstanceId: 'ib',
+    })
+    const history: DiagramHistoryCommand[] = []
+    applyDiagramScriptCommands({
+      diagram,
+      commands: [{ type: 'setEdgeStyle', linkId: 'l1', strokeColor: '#dc3545' }],
+      linkEndpoints: {},
+      executeHistory: (cmd) => history.push(cmd),
+    })
+    history[0]!.execute()
+    expect(diagram.parsedAttrs.instances.edges[0]?.attrs?.diagramStyle).toEqual({
+      strokeColor: '#dc3545',
+    })
+    history[0]!.undo()
+    expect(diagram.parsedAttrs.instances.edges[0]?.attrs?.diagramStyle).toBeUndefined()
     expect(diagram.parsedAttrs.instances.edges).toHaveLength(1)
   })
 })

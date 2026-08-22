@@ -69,6 +69,7 @@ export type ValidationScriptApi = {
     }) => void
     distribute: (command: { instanceIds: string[]; axis: 'horizontal' | 'vertical' }) => void
     stack: (command: { instanceIds: string[]; mode: 'vertical' | 'overlap' }) => void
+    setEdgeStyle: (command: { edgeInstanceId?: string; linkId?: string; strokeColor: string }) => void
   }
   findDuplicateLinks: (options?: {
     by?: 'endpoints' | 'endpoints+type'
@@ -347,6 +348,14 @@ export function createValidationScriptApi(
     },
     stack: (command) => {
       commands.push({ type: 'stack', instanceIds: command.instanceIds, mode: command.mode })
+    },
+    setEdgeStyle: (command) => {
+      commands.push({
+        type: 'setEdgeStyle',
+        strokeColor: command.strokeColor,
+        ...(command.edgeInstanceId != null ? { edgeInstanceId: command.edgeInstanceId } : {}),
+        ...(command.linkId != null ? { linkId: command.linkId } : {}),
+      })
     },
   }
 

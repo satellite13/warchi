@@ -4,7 +4,7 @@
 
 Скрипт **не выгружает дерево модели** и **не меняет граф** (не создаёт и не удаляет ноды/связи в дереве). Запись на холст идёт только через очередь `apply.*` после превью.
 
-Запуск: в редакторе модели кнопка **Скрипты**. Без открытой диаграммы запуск недоступен.
+Запуск: в редакторе модели кнопка **Скрипты** (пока диаграмма не открыта — неактивна).
 
 Права: просмотр скрипта и модели — для отчёта; чтобы нажать **Применить**, нужны право редактирования модели и обычный lock диаграммы.
 
@@ -33,9 +33,9 @@
 }
 ```
 
-Папки модели (тип Directory) в `nodes` не попадают — они в `ctx.model.folders[]`: `{ id, name, parentId }`.
+`nodes` — только ноды, уже лежащие на холсте. `ctx.model.folders` в этом снимке пустой: дерево модели скрипт не получает.
 
-### Связь (`ctx.model.links[]`, `diagramLinks`, `linksOfType`, `linksBetween`)
+### Связь (`ctx.model.links[]`, `diagramLinks`, `linksOfType`)
 
 ```ts
 {
@@ -63,7 +63,7 @@
 }
 ```
 
-Список нод/связей диаграммы — через `diagramNodes(ctx.diagram)` / `diagramLinks(ctx.diagram)`, а не через вложенные объекты.
+Геометрия фигур — в `ctx.diagram.instances` / `edges`. Объекты нод и связей модели с холста — `diagramNodes(ctx.diagram)` / `diagramLinks(ctx.diagram)`. Связи **вне** холста ищите через `await linksBetween(...)`.
 
 ### Нотация (`ctx.notations[]`)
 
@@ -165,17 +165,34 @@ report.info(message, target?)
 
 | Функция | Назначение |
 |---------|------------|
-| `diagramNodes(diagram)` | Ноды модели, видимые на диаграмме |
-| `diagramLinks(diagram)` | Связи модели на диаграмме |
-| `nodesOfType(typeIdOrName)` | Ноды по id или имени типа |
-| `linksOfType(typeIdOrName)` | Связи по id или имени типа |
-| `neighbors(nodeId, { direction, linkType?, page? })` | Соседи в модели. Возвращает `{ items, last }` |
+| `diagramNodes(diagram)` | Ноды **среза холста** |
+| `diagramLinks(diagram)` | Связи **среза холста** |
+| `nodesOfType(typeIdOrName)` | Ноды среза с типом по id или имени |
+| `linksOfType(typeIdOrName)` | Связи среза с типом по id или имени |
+| `neighbors(nodeId, { direction, linkType?, page? })` | Соседи в модели. `{ items, last }` |
 | `searchNodes({ q?, type?, limit? })` | Поиск нод модели. Нужен `q` или `type`, лимит ≤ 50 |
-| `linksBetween(a, b, { linkType? })` | Все связи модели между парой (оба направления); async query |
-| `apply.*` | Очередь команд холста. Ничего не пишет до кнопки **Применить** |
-| `findDuplicateLinks({ by, directed? })` | Дубликаты связей; по умолчанию с учётом направления |
+| `linksBetween(a, b, { linkType? })` | Все связи модели между парой (оба направления) |
+| `findDuplicateLinks({ by, directed? })` | Дубликаты связей **на холсте** |
 | `componentForNode(node)` | Компонент нотации для ноды (или `null`) |
 | `relationRules(notationId)` | Правила отношений нотации |
+
+`neighbors` / `searchNodes` / `linksBetween` — async query в модель, не снимок.
+
+### `apply` (очередь, не запись)
+
+| Команда | Смысл |
+|---------|--------|
+| `apply.setBounds({ instanceId, x, y, width?, height? })` | Геометрия фигуры |
+| `apply.addInstance({ nodeId, x?, y? })` | Положить существующую ноду модели |
+| `apply.addEdge({ linkId })` | Положить существующую связь; концы резолвит хост |
+| `apply.removeInstance({ instanceId })` | Снять фигуру; нода в дереве остаётся |
+| `apply.removeEdge({ edgeInstanceId })` | Снять ребро; связь в дереве остаётся |
+| `apply.align({ instanceIds, mode })` | `left` / `center` / `right` / `top` / `middle` / `bottom` |
+| `apply.distribute({ instanceIds, axis })` | `horizontal` / `vertical` |
+| `apply.stack({ instanceIds, mode })` | `vertical` (зазор 8px) или `overlap` |
+| `apply.setEdgeStyle({ linkId, strokeColor })` | Цвет обводки ребра на холсте (`#rgb` / `#rrggbb`) |
+
+Ничего не пишется до кнопки **Применить**.
 
 Имена доступны в автодополнении редактора (Ctrl+Space).
 
@@ -219,7 +236,7 @@ for (const item of ns.items) {
 }
 ```
 
-После запуска: список issue и сводка команд. **Закрыть** — холст не менять. **Применить** — одна операция Undo.
+После запуска: список issue и сводка команд. **Закрыть** — холст не менять. **Применить** — записать одной операцией Undo и закрыть окно.
 
 ## Каталог и доступ
 

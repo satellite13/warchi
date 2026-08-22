@@ -255,6 +255,29 @@ apply.addInstance({ nodeId: n.items[0].node.id, x: 10, y: 10 })
     expect(snapshot.model.diagrams[0]?.instances).toHaveLength(1)
   })
 
+  it('queues setEdgeStyle without mutating the snapshot', async () => {
+    const snapshot = sampleSnapshot()
+    snapshot.model.diagrams[0] = {
+      ...snapshot.model.diagrams[0]!,
+      edges: [{ id: 'e1', modelLinkId: 'l1', sourceInstanceId: 'ia', targetInstanceId: 'ib' }],
+    }
+    const issues: ValidationIssue[] = []
+    const commands: import('./diagramScriptCommands').DiagramScriptCommand[] = []
+    const api = createValidationScriptApi(snapshot, 'd1', issues, { commands })
+    const { error } = await executeValidationScript(
+      `apply.setEdgeStyle({ linkId: 'l1', strokeColor: '#dc3545' })`,
+      api
+    )
+    expect(error).toBeUndefined()
+    expect(commands).toEqual([{ type: 'setEdgeStyle', linkId: 'l1', strokeColor: '#dc3545' }])
+    expect(snapshot.model.diagrams[0]?.edges?.[0]).toEqual({
+      id: 'e1',
+      modelLinkId: 'l1',
+      sourceInstanceId: 'ia',
+      targetInstanceId: 'ib',
+    })
+  })
+
   it('still runs a sync report-only script', async () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), 'd1', issues)

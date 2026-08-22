@@ -1,3 +1,4 @@
+import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import {
   VALIDATION_SCRIPT_TIMEOUT_MS,
   type ValidationRunResult,
@@ -9,6 +10,11 @@ import {
   executeValidationScript,
   type DiagramScriptQueryFn,
 } from './validationScriptApi'
+
+/** postMessage cannot structured-clone Vue reactive proxies. */
+export function toIframePayload<T>(value: T): T {
+  return clonePlainDeep(value)
+}
 
 export type RunValidationScriptOptions = {
   source: string
@@ -107,16 +113,24 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
 
     const sendRun = () => {
       armTimeout()
-      iframe.contentWindow?.postMessage(
-        {
-          type: 'run',
-          requestId,
-          source: options.source,
-          snapshot: options.snapshot,
-          openDiagramId: options.openDiagramId,
-        },
-        '*'
-      )
+      try {
+        iframe.contentWindow?.postMessage(
+          toIframePayload({
+            type: 'run',
+            requestId,
+            source: options.source,
+            snapshot: options.snapshot,
+            openDiagramId: options.openDiagramId,
+          }),
+          '*'
+        )
+      } catch (err) {
+        finish({
+          issues: [],
+          commands: [],
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
 
     const onMessage = (event: MessageEvent) => {
@@ -149,15 +163,27 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
             reply = { error: err instanceof Error ? err.message : String(err) }
           }
           if (settled) return
-          iframe.contentWindow?.postMessage(
-            {
-              type: 'queryResult',
-              requestId,
-              queryId: data.queryId,
-              ...reply,
-            },
-            '*'
-          )
+          try {
+            iframe.contentWindow?.postMessage(
+              toIframePayload({
+                type: 'queryResult',
+                requestId,
+                queryId: data.queryId,
+                ...reply,
+              }),
+              '*'
+            )
+          } catch (err) {
+            iframe.contentWindow?.postMessage(
+              {
+                type: 'queryResult',
+                requestId,
+                queryId: data.queryId,
+                error: err instanceof Error ? err.message : String(err),
+              },
+              '*'
+            )
+          }
         })()
         return
       }

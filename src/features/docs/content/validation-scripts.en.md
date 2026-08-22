@@ -4,7 +4,7 @@ The **Scripts** section lets you write and share JavaScript for the **open diagr
 
 A script **does not load the model tree** and **does not change the graph** (it cannot create or delete tree nodes/links). Canvas writes go through the `apply.*` queue after a preview.
 
-Run from the model editor (**Scripts**). A run requires an open diagram.
+Run from the model editor (**Scripts**). The button stays disabled until a diagram is open.
 
 Permissions: view the script and model to produce a report; **Apply** also needs model edit rights and the usual diagram lock.
 
@@ -33,9 +33,9 @@ Fields of objects in `ctx` and values returned by helpers (read-only snapshot).
 }
 ```
 
-Model folders (Directory type) are not in `nodes` — they live in `ctx.model.folders[]`: `{ id, name, parentId }`.
+`nodes` are only nodes already on the canvas. `ctx.model.folders` is empty in this snapshot: the script does not receive the model tree.
 
-### Link (`ctx.model.links[]`, `diagramLinks`, `linksOfType`, `linksBetween`)
+### Link (`ctx.model.links[]`, `diagramLinks`, `linksOfType`)
 
 ```ts
 {
@@ -63,7 +63,7 @@ Model folders (Directory type) are not in `nodes` — they live in `ctx.model.fo
 }
 ```
 
-Use `diagramNodes(ctx.diagram)` / `diagramLinks(ctx.diagram)` for node/link objects — diagrams only store id lists.
+Figure geometry lives in `ctx.diagram.instances` / `edges`. Model node/link objects on the canvas come from `diagramNodes(ctx.diagram)` / `diagramLinks(ctx.diagram)`. Links **off** the canvas: `await linksBetween(...)`.
 
 ### Notation (`ctx.notations[]`)
 
@@ -165,17 +165,34 @@ This is **not** `console.log`: without text in `message` (or a name on a node/li
 
 | Function | Purpose |
 |----------|---------|
-| `diagramNodes(diagram)` | Model nodes visible on the diagram |
-| `diagramLinks(diagram)` | Model links on the diagram |
-| `nodesOfType(typeIdOrName)` | Nodes by type id or name |
-| `linksOfType(typeIdOrName)` | Links by type id or name |
-| `neighbors(nodeId, { direction, linkType?, page? })` | Model neighbors. Returns `{ items, last }` |
+| `diagramNodes(diagram)` | Nodes on the **canvas slice** |
+| `diagramLinks(diagram)` | Links on the **canvas slice** |
+| `nodesOfType(typeIdOrName)` | Canvas-slice nodes by type id or name |
+| `linksOfType(typeIdOrName)` | Canvas-slice links by type id or name |
+| `neighbors(nodeId, { direction, linkType?, page? })` | Model neighbors. `{ items, last }` |
 | `searchNodes({ q?, type?, limit? })` | Search model nodes. Requires `q` or `type`, limit ≤ 50 |
-| `linksBetween(a, b, { linkType? })` | All model links between a pair (both directions); async query |
-| `apply.*` | Canvas command queue. Nothing is written until **Apply** |
-| `findDuplicateLinks({ by, directed? })` | Duplicate links; direction matters by default |
+| `linksBetween(a, b, { linkType? })` | All model links between a pair (both directions) |
+| `findDuplicateLinks({ by, directed? })` | Duplicate links **on the canvas** |
 | `componentForNode(node)` | Notation component for a node (or `null`) |
 | `relationRules(notationId)` | Relation rules for a notation |
+
+`neighbors` / `searchNodes` / `linksBetween` are async model queries, not snapshot helpers.
+
+### `apply` (queue, not a write)
+
+| Command | Meaning |
+|---------|---------|
+| `apply.setBounds({ instanceId, x, y, width?, height? })` | Figure geometry |
+| `apply.addInstance({ nodeId, x?, y? })` | Place an existing model node |
+| `apply.addEdge({ linkId })` | Place an existing model link; the host resolves ends |
+| `apply.removeInstance({ instanceId })` | Remove the figure; the tree node stays |
+| `apply.removeEdge({ edgeInstanceId })` | Remove the edge; the tree link stays |
+| `apply.align({ instanceIds, mode })` | `left` / `center` / `right` / `top` / `middle` / `bottom` |
+| `apply.distribute({ instanceIds, axis })` | `horizontal` / `vertical` |
+| `apply.stack({ instanceIds, mode })` | `vertical` (8px gap) or `overlap` |
+| `apply.setEdgeStyle({ linkId, strokeColor })` | Canvas edge stroke (`#rgb` / `#rrggbb`) |
+
+Nothing is written until **Apply**.
 
 Names are available via editor autocomplete (Ctrl+Space).
 
@@ -219,7 +236,7 @@ for (const item of ns.items) {
 }
 ```
 
-After a run: issues plus a command summary. **Close** leaves the canvas unchanged. **Apply** is one Undo step.
+After a run: issues plus a command summary. **Close** leaves the canvas unchanged. **Apply** writes one Undo step and closes the dialog.
 
 ## Catalog and sharing
 

@@ -49,6 +49,30 @@ describe('validateCommandQueue', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('rejects setEdgeStyle without a valid hex color', () => {
+    const result = validateCommandQueue({
+      instanceModelNodeIds: new Set(['a', 'b']),
+      instanceIds: new Set(['ia', 'ib']),
+      edgeIds: new Set(['e1']),
+      canvasLinkIds: new Set(['l1']),
+      linkEndpoints: {},
+      commands: [{ type: 'setEdgeStyle', linkId: 'l1', strokeColor: 'red' }],
+    })
+    expect(result.ok).toBe(false)
+  })
+
+  it('accepts setEdgeStyle by canvas link id', () => {
+    const result = validateCommandQueue({
+      instanceModelNodeIds: new Set(['a', 'b']),
+      instanceIds: new Set(['ia', 'ib']),
+      edgeIds: new Set(['e1']),
+      canvasLinkIds: new Set(['l1']),
+      linkEndpoints: {},
+      commands: [{ type: 'setEdgeStyle', linkId: 'l1', strokeColor: '#dc3545' }],
+    })
+    expect(result.ok).toBe(true)
+  })
+
   it('rejects addEdge when link endpoints are unknown to the host', () => {
     const result = validateCommandQueue({
       instanceModelNodeIds: new Set(['a', 'b']),

@@ -11,7 +11,7 @@
 - **Diagram baselines** — create a new diagram version from current state and switch between versions
 - **Version comparison** — visual comparison for model versions and diagram versions with highlights and property table
 - **Types** — manage node/link types including custom and system properties
-- **Scripts** — JavaScript model checks with a sandbox and issues report (no data changes)
+- **Scripts** — JavaScript on the open diagram: report, layout, and place existing model nodes/links (the model tree is not loaded or changed)
 - **Custom properties** — `string`, `number`, `boolean`, `enum` with defaults and validation
 - **Sharing** — ACL sharing for models, notations, types, shapes, and scripts with `VIEW`/`EDIT` access levels
 - **Model package and diagram copy** — ZIP transfer between environments and copying a diagram into another model
@@ -28,7 +28,7 @@ The application consists of several main sections available through the navigati
 | Notations | Notation list, visual editor for components/relations, and relation rules |
 | Types | Node/link type editor with fields (`icon`, `defaultDirectoryPath`, custom properties) |
 | Shapes | Custom node shape catalog with visual outline editor |
-| [Scripts](/docs/validationScripts) | JavaScript model checks (report-only, no data changes) |
+| [Scripts](/docs/validationScripts) | JS on the open diagram: report, canvas `apply`, model queries |
 | Documentation | Product help section (available without signing in) |
 | Wiki | Entity-linked pages for models, notations, types, shapes, and other entities |
 
@@ -44,7 +44,7 @@ This section includes focused pages:
 - **Diagrams** — editing flow, navigation, export, baselines, and version comparison;
 - **Types** — system/custom fields and attribute management;
 - **Shapes** — creation and reuse of custom node outlines;
-- **Scripts** — JavaScript model checks with a sandbox and issues report;
+- **Scripts** — JS on the open diagram: report, layout, and canvas enrichment;
 - **Hotkeys** — keyboard shortcuts for faster daily work;
 - **FAQ** — answers to frequently asked questions;
 - **Changelog** — recent product updates.

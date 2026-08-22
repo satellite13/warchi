@@ -666,6 +666,7 @@ watch(
     if (query === undefined || query === treeSearchQuery.value) return
     treeSearchQuery.value = query
   },
+  { immediate: true },
 )
 
 defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })

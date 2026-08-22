@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-22
+
 ### Added
 - Large-model editing now loads the tree and diagrams lazily: branches,
   traceability neighbors, and the active diagram are fetched on demand. Live

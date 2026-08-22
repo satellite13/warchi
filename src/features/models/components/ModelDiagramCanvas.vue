@@ -115,7 +115,7 @@ import {
 } from '../utils/diagramOnlyInstances'
 import { syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
 import { buildEdgeAnchorLookup, resolveDiagramEdgeEndpoint } from '../utils/resolveDiagramEdgeEndpoint'
-import { pickNearestEdgeForDrop } from '../utils/noteEdgeDrop'
+import { pickNearestEdgeForDrop, shouldRemapConnectToExistingEdge } from '../utils/noteEdgeDrop'
 import { useLibraryIcons } from '@/composables/useLibraryIcons'
 
 const props = withDefaults(
@@ -2683,26 +2683,30 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
           edge.to.outlineParam !== undefined
             ? targetPapNode.getConnectionPointAtOutlineParam(edge.to.outlineParam)
             : { x: edge.endPoint.x, y: edge.endPoint.y }
-        const picked = pickNearestEdgeForDrop({
-          targetPapNodeId: toId,
-          targetCenter: targetPapNode.getCenter(),
-          dropPoint,
-          maxDistance: 40,
-          edges: [...currentRenderer.edges.values()]
-            .filter(item => item.id !== edge.id && item.visible)
-            .flatMap(item => {
-              const entity = edgeIdToInstance.get(item.id)
-              if (!entity) return []
-              return [
-                {
-                  instanceEdgeId: entity.edgeId,
-                  fromPapNodeId: item.from.nodeId,
-                  toPapNodeId: item.to.nodeId,
-                  path: item.path,
-                },
-              ]
-            }),
+        const picked = shouldRemapConnectToExistingEdge({
+          isDiagramOnlyVisual: isDiagramOnlyVisualInstance(sourceEntity),
         })
+          ? pickNearestEdgeForDrop({
+              targetPapNodeId: toId,
+              targetCenter: targetPapNode.getCenter(),
+              dropPoint,
+              maxDistance: 40,
+              edges: [...currentRenderer.edges.values()]
+                .filter(item => item.id !== edge.id && item.visible)
+                .flatMap(item => {
+                  const entity = edgeIdToInstance.get(item.id)
+                  if (!entity) return []
+                  return [
+                    {
+                      instanceEdgeId: entity.edgeId,
+                      fromPapNodeId: item.from.nodeId,
+                      toPapNodeId: item.to.nodeId,
+                      path: item.path,
+                    },
+                  ]
+                }),
+            })
+          : null
         if (picked) {
           emit(
             'connectNodeToEdge',

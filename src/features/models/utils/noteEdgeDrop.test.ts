@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { pickNearestEdgeForDrop } from './noteEdgeDrop'
+import { pickNearestEdgeForDrop, shouldRemapConnectToExistingEdge } from './noteEdgeDrop'
+
+describe('shouldRemapConnectToExistingEdge', () => {
+  it('keeps model-tree nodes on node-to-node so the notation picker can open', () => {
+    expect(shouldRemapConnectToExistingEdge({ isDiagramOnlyVisual: false })).toBe(false)
+  })
+
+  it('allows notes and other diagram-only visuals to glue onto an existing stroke', () => {
+    expect(shouldRemapConnectToExistingEdge({ isDiagramOnlyVisual: true })).toBe(true)
+  })
+})
 
 describe('pickNearestEdgeForDrop', () => {
   const groupId = 'instance-group'

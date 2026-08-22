@@ -57,6 +57,17 @@ function distanceToPath(
 }
 
 /**
+ * Notes and other diagram-only visuals may glue onto an existing stroke.
+ * Model-tree nodes stay node→node so the notation relation picker can open,
+ * even when the drop lands on the outline next to another edge.
+ */
+export function shouldRemapConnectToExistingEdge(source: {
+  isDiagramOnlyVisual: boolean
+}): boolean {
+  return source.isDiagramOnlyVisual
+}
+
+/**
  * When a drop lands on a node (often a pool/lane), pick the nearest visible
  * relation by path — including strokes that only cross the fill and are not
  * incident to the container.

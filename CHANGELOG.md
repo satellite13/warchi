@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-08-23
+
+### Added
+- Model validation report: groups of duplicate nodes and links, diagram chips,
+  a merge wizard with field and typeProperties diff, and opening the editor
+  focused on the selected entity.
+
+### Changed
+- The model tree no longer shows a separate Opened badge; an open locked
+  diagram is already visible from the row highlight and lock icon.
+
+### Fixed
+- Undoing a move of a grouping element, including a group nested in another
+  group, restores inner arrow bends.
+- After that undo, the save indicator turns off when there were no other
+  local edits.
+
 ## [0.23.0] - 2026-08-22
 
 ### Added

@@ -10,17 +10,18 @@ import {
   DEFAULT_EDGE_ANCHOR_DIAGRAM_STYLE,
   DIAGRAM_EDGE_ANCHOR_NODE_PREFIX,
   DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
+  DIAGRAM_UNTYPED_EDGE_MODEL_LINK_PREFIX,
   EDGE_ANCHOR_SIZE,
+  isDiagramOnlyEdgeModelLinkId,
   isEdgeAnchorInstance,
 } from '../utils/diagramOnlyInstances'
 import type { DiagramNodeInstance } from '../modelAttrs'
 
 export const NOTE_EDGE_PREFIX = DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX
-export const UNTYPED_EDGE_PREFIX = '__diagram-untyped-edge__:'
+export const UNTYPED_EDGE_PREFIX = DIAGRAM_UNTYPED_EDGE_MODEL_LINK_PREFIX
 const UNTYPED_TYPE_NAMES = new Set(['diagram only'])
 
-export const isDiagramOnlyEdgeModelLinkId = (modelLinkId: string): boolean =>
-  modelLinkId.startsWith(NOTE_EDGE_PREFIX) || modelLinkId.startsWith(UNTYPED_EDGE_PREFIX)
+export { isDiagramOnlyEdgeModelLinkId }
 
 type PendingConnection = {
   sourceModelNodeId: string

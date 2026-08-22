@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-08-22
+
+### Fixed
+- Opening a diagram with diagram-only note links no longer fails with a malformed
+  resolve request when lazy scope hydrates instances.
+
 ## [0.22.1] - 2026-08-22
 
 ### Added

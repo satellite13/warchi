@@ -2,7 +2,7 @@ import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 import type { ApiError } from '@/composables/useApi'
 import type { LinkResponse, NodeResponse } from '@/types/api'
 import type { ModelEditorState } from '../types'
-import { isDiagramOnlyNodeModelNodeId } from '../utils/diagramOnlyInstances'
+import { isDiagramOnlyEdgeModelLinkId, isDiagramOnlyNodeModelNodeId } from '../utils/diagramOnlyInstances'
 import { DiagramAttrsLoadError, ensureDiagramAttrsLoaded } from './ensureDiagramAttrs'
 import { resolveModelLinks, resolveModelNodes } from './modelScopedApi'
 import type { useModelPartialStore } from './useModelPartialStore'
@@ -143,7 +143,7 @@ export function useDiagramScope(options: {
       ).filter(modelNodeId => !isDiagramOnlyNodeModelNodeId(modelNodeId))
       const linkIds = uniqueIds(
         diagram.parsedAttrs.instances.edges.map(instance => instance.modelLinkId)
-      )
+      ).filter(modelLinkId => !isDiagramOnlyEdgeModelLinkId(modelLinkId))
 
       updateProgress(session, 'nodes', 0, nodeIds.length)
       const nodesResult = await resolveModelNodes(modelId, nodeIds, session.controller.signal)

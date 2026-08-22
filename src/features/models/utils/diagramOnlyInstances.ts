@@ -4,6 +4,7 @@ export const DIAGRAM_NOTE_NODE_PREFIX = '__diagram-note__:'
 export const DIAGRAM_CONTAINER_NODE_PREFIX = '__diagram-container__:'
 export const DIAGRAM_EDGE_ANCHOR_NODE_PREFIX = '__diagram-edge-anchor__:'
 export const DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX = '__diagram-note-edge__:'
+export const DIAGRAM_UNTYPED_EDGE_MODEL_LINK_PREFIX = '__diagram-untyped-edge__:'
 
 export const DEFAULT_CONTAINER_DIAGRAM_STYLE = {
   nodeShape: 'rectangle',
@@ -47,6 +48,13 @@ export function isDiagramContainerModelNodeId(modelNodeId: string): boolean {
 
 export function isEdgeAnchorModelNodeId(modelNodeId: string): boolean {
   return modelNodeId.startsWith(DIAGRAM_EDGE_ANCHOR_NODE_PREFIX)
+}
+
+export function isDiagramOnlyEdgeModelLinkId(modelLinkId: string): boolean {
+  return (
+    modelLinkId.startsWith(DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX) ||
+    modelLinkId.startsWith(DIAGRAM_UNTYPED_EDGE_MODEL_LINK_PREFIX)
+  )
 }
 
 export function isDiagramOnlyNodeModelNodeId(modelNodeId: string): boolean {

@@ -165,6 +165,40 @@ describe('useDiagramScope', () => {
     mounted.vueScope.stop()
   })
 
+  it('does not resolve diagram-only note edge link ids as model links', async () => {
+    const diagramNodeId = '8c865e01-108f-4b99-a46a-421d4fa54a64'
+    const noteEdgeId = '__diagram-note-edge__:4caa98b6-b4c7-4ac8-829c-a13ae5bde88e'
+    const realLinkId = '2eee41d5-a848-93ed-d5c5-e621a92ad985'
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', [diagramNodeId], [noteEdgeId, realLinkId]))]
+    vi.mocked(apiFetch).mockImplementation(async (path, options) => {
+      if (path.endsWith('/nodes:resolve')) {
+        return ok({ nodes: [nodeResponse(diagramNodeId)], missingIds: [] })
+      }
+      if (path.endsWith('/links:resolve')) {
+        const body = JSON.parse(String(options?.body)) as { linkIds?: string[] }
+        return ok({
+          links: (body.linkIds ?? []).map(id => linkResponse(id, diagramNodeId, diagramNodeId)),
+          missingLinkIds: [],
+        })
+      }
+      return ok({ links: [], missingLinkIds: [] })
+    })
+    const mounted = mountScope(state)
+
+    await mounted.diagramScope.open('diagram-1')
+
+    const linkResolveBodies = vi
+      .mocked(apiFetch)
+      .mock.calls.filter(([path]) => path.endsWith('/links:resolve'))
+      .map(([, options]) => JSON.parse(String(options?.body)) as { linkIds: string[] })
+    expect(linkResolveBodies).toHaveLength(1)
+    expect(linkResolveBodies[0]?.linkIds).toEqual([realLinkId])
+    expect(linkResolveBodies[0]?.linkIds).not.toContain(noteEdgeId)
+    mounted.vueScope.stop()
+  })
+
   it('hydrates attrs and resolves 4501 node ids in 2000/2000/501 chunks with only explicit and incident links', async () => {
     const nodeIds = Array.from({ length: 4501 }, (_, index) => `n-${index}`)
     const state = createEmptyModelEditorState()

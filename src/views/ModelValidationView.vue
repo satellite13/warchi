@@ -7,9 +7,16 @@ import { fetchValidationReport } from '@/features/models-validation/api'
 import type { ValidationReport } from '@/features/models-validation/types'
 import type { ModelData } from '@/types/entities'
 import ValidationDuplicateGroup from '@/features/models-validation/components/ValidationDuplicateGroup.vue'
+import ValidationMergeWizard from '@/features/models-validation/components/ValidationMergeWizard.vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
+
+type PendingMerge = {
+  keepId: string
+  dropId: string
+  kind: 'node' | 'link'
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +27,8 @@ const model = ref<Pick<ModelData, 'name' | 'version'> | null>(null)
 const report = ref<ValidationReport | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const success = ref<string | null>(null)
+const pendingMerge = ref<PendingMerge | null>(null)
 
 const isEmpty = computed(() => {
   const current = report.value
@@ -64,8 +73,25 @@ watch(
   { immediate: true }
 )
 
-function onMerge(_payload: { keepId: string; dropId: string; kind: 'node' | 'link' }): void {
-  // Task 9 will open the merge wizard from this pair. Do not POST merge here.
+function onMerge(payload: PendingMerge): void {
+  success.value = null
+  pendingMerge.value = payload
+}
+
+function onWizardClose(): void {
+  pendingMerge.value = null
+}
+
+async function onMerged(): Promise<void> {
+  pendingMerge.value = null
+  success.value = t('common.saved')
+  await load()
+}
+
+async function onWizardRefresh(): Promise<void> {
+  pendingMerge.value = null
+  success.value = null
+  await load()
 }
 </script>
 
@@ -91,6 +117,7 @@ function onMerge(_payload: { keepId: string; dropId: string; kind: 'node' | 'lin
           </div>
         </div>
 
+        <p v-if="success" class="model-validation__success">{{ success }}</p>
         <p v-if="error" class="model-validation__error">{{ error }}</p>
         <p v-else-if="loading" class="model-validation__loading">{{ t('common.loading') }}</p>
         <p v-else-if="isEmpty" class="model-validation__empty">{{ t('models.validationReportEmpty') }}</p>
@@ -132,6 +159,17 @@ function onMerge(_payload: { keepId: string; dropId: string; kind: 'node' | 'lin
             </div>
           </section>
         </div>
+
+        <ValidationMergeWizard
+          v-if="pendingMerge"
+          :model-id="modelId"
+          :kind="pendingMerge.kind"
+          :keep-id="pendingMerge.keepId"
+          :drop-id="pendingMerge.dropId"
+          @close="onWizardClose"
+          @merged="onMerged"
+          @refresh="onWizardRefresh"
+        />
       </div>
     </template>
     <template #footer>
@@ -183,12 +221,17 @@ function onMerge(_payload: { keepId: string; dropId: string; kind: 'node' | 'lin
   color: var(--text-subtle);
 }
 
+.model-validation__success,
 .model-validation__error,
 .model-validation__loading,
 .model-validation__empty {
   margin: 0;
   padding: 14px 16px;
   color: var(--text-muted);
+}
+
+.model-validation__success {
+  color: var(--success);
 }
 
 .model-validation__error {

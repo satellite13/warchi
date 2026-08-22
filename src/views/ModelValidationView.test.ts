@@ -27,7 +27,7 @@ function mountView() {
     locale: 'en',
     messages: {
       en: {
-        common: { loading: 'Loading...' },
+        common: { loading: 'Loading...', saved: 'Saved' },
         toolbar: { backToModels: 'Back' },
         models: {
           validationReportTitle: 'Model validation',
@@ -52,6 +52,11 @@ function mountView() {
         },
         AppHeader: true,
         AppFooter: true,
+        ValidationMergeWizard: {
+          props: ['modelId', 'kind', 'keepId', 'dropId'],
+          template:
+            '<div class="wizard-stub" @click="$emit(\'merged\')" @dblclick="$emit(\'refresh\')">wizard</div>',
+        },
       },
     },
   })
@@ -123,6 +128,42 @@ describe('ModelValidationView', () => {
     expect(wrapper.text()).toContain('2 copies')
     expect(wrapper.text()).toContain('CRM → ERP · Serving')
     expect(wrapper.text()).toContain('3 copies')
+  })
+
+  it('opens the merge wizard and reloads the report after merge', async () => {
+    fetchReportMock.mockResolvedValue({
+      success: true,
+      data: {
+        modelId: 'model-1',
+        generatedAt: '2026-08-22T12:00:00.000Z',
+        duplicateNodes: [
+          {
+            nodeTypeId: 'nt1',
+            nodeTypeName: 'Application',
+            name: 'CRM',
+            count: 2,
+            nodes: [
+              { id: 'n1', name: 'CRM', parentId: null, parentName: null },
+              { id: 'n2', name: 'CRM', parentId: null, parentName: null },
+            ],
+          },
+        ],
+        duplicateLinks: [],
+      },
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('.validation-duplicate-group__merge').trigger('click')
+
+    expect(wrapper.find('.wizard-stub').exists()).toBe(true)
+
+    await wrapper.get('.wizard-stub').trigger('click')
+    await flushPromises()
+
+    expect(fetchReportMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Saved')
+    expect(wrapper.find('.wizard-stub').exists()).toBe(false)
   })
 
   it('shows load error with server message', async () => {

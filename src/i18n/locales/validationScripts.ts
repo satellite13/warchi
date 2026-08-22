@@ -40,6 +40,10 @@ export const validationScriptsMessages = {
       runHintModelOnly:
         'Откройте диаграмму, чтобы запустить скрипт. Дерево модели целиком не выгружается.',
       runNeedsDiagram: 'Откройте диаграмму, чтобы запустить скрипт.',
+      apply: 'Применить',
+      applyPreviewTitle: 'Изменения на холсте',
+      applyPreviewSummary:
+        'Добавить нод: {addNodes}, связей: {addEdges}, снять: {remove}, раскладка: {layout}. Закройте окно, чтобы не менять диаграмму.',
       toolbarRun: 'Скрипты',
       issuesTitle: 'Результаты ({count})',
       issueError: 'Ошибка',
@@ -135,6 +139,10 @@ export const validationScriptsMessages = {
       runHintModelOnly:
         'Open a diagram to run a script. The full model tree is not loaded.',
       runNeedsDiagram: 'Open a diagram to run a script.',
+      apply: 'Apply',
+      applyPreviewTitle: 'Canvas changes',
+      applyPreviewSummary:
+        'Add nodes: {addNodes}, edges: {addEdges}, remove: {remove}, layout: {layout}. Close the dialog to leave the diagram unchanged.',
       toolbarRun: 'Scripts',
       issuesTitle: 'Results ({count})',
       issueError: 'Error',

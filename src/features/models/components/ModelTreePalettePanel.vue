@@ -119,8 +119,6 @@ const nodeIndexById = computed(() => {
 
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
-const isExpandable = (node: EditorNode): boolean =>
-  node.hasChildren === true || (isDirectory(node) && node.hasChildren !== false)
 
 const isRootDiagram = (d: EditorDiagram): boolean => {
   if (d._isDeleted) return false
@@ -156,6 +154,11 @@ const latestDiagramsByNodeId = computed(() => {
 /** Диаграммы узла: по одному на имя (последняя версия), без baseline-дубликатов в списке */
 const nodeDiagrams = (nodeId: string): EditorDiagram[] =>
   latestDiagramsByNodeId.value.get(nodeId) ?? []
+
+const isExpandable = (node: EditorNode): boolean =>
+  node.hasChildren === true ||
+  (isDirectory(node) && node.hasChildren !== false) ||
+  nodeDiagrams(node.id).length > 0
 
 const rootDiagrams = computed<EditorDiagram[]>(() => {
   const list = props.diagrams.filter(isRootDiagram)
@@ -208,7 +211,7 @@ const onToggleNode = (node: EditorNode): void => {
   if (wasExpanded) return
   const scope = nodeScope(node.id)
   const key = scopeKey(scope)
-  if (!isScopeComplete(scope) && !props.childrenLoading?.has(key)) {
+  if (node.hasChildren !== false && !isScopeComplete(scope) && !props.childrenLoading?.has(key)) {
     emit("loadChildren", scope)
   }
 }

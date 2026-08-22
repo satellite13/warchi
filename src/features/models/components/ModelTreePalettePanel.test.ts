@@ -262,6 +262,30 @@ describe('ModelTreePalettePanel', () => {
     expect(wrapper.find('[data-tree-node-id="folder"] .tree-node__toggle').exists()).toBe(false)
   })
 
+  it('expands a complete-empty folder when it contains diagrams', async () => {
+    const wrapper = mountPanel({
+      nodes: [makeNode({ id: 'folder', name: 'Diagrams', nodeTypeId: 'dir', hasChildren: false })],
+      diagrams: [
+        {
+          id: 'diagram-1',
+          name: 'Simple BPMN',
+          version: '1.0.0',
+          notationId: 'notation-1',
+          ownerId: 'owner-1',
+          modelId: 'm1',
+          nodeId: 'folder',
+          parsedAttrs: parseDiagramAttrs(null),
+        },
+      ],
+    })
+    await flushTree(wrapper)
+
+    await wrapper.get('[data-tree-node-id="folder"] .tree-node__toggle').trigger('click')
+
+    expect(wrapper.get('[data-tree-diagram-id="diagram-1"]').text()).toContain('Simple BPMN')
+    expect(wrapper.emitted('loadChildren')).toBeUndefined()
+  })
+
   it('can expand a hasChildren root row before node-type catalog arrives', async () => {
     const wrapper = mountPanel({
       nodes: [

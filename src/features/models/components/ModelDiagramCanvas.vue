@@ -2683,8 +2683,9 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
           edge.to.outlineParam !== undefined
             ? targetPapNode.getConnectionPointAtOutlineParam(edge.to.outlineParam)
             : { x: edge.endPoint.x, y: edge.endPoint.y }
+        const sourceInst = instanceNodes.value.find(item => item.id === sourceEntity.instanceId)
         const picked = shouldRemapConnectToExistingEdge({
-          isDiagramOnlyVisual: isDiagramOnlyVisualInstance(sourceEntity),
+          isDiagramOnlyVisual: !!sourceInst && isDiagramOnlyVisualInstance(sourceInst),
         })
           ? pickNearestEdgeForDrop({
               targetPapNodeId: toId,

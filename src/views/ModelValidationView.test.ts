@@ -35,6 +35,8 @@ function mountView() {
           validationReportNodes: 'Instances',
           validationReportLinks: 'Links',
           validationReportCopies: '{count} copies',
+          validationReportKeep: 'Keep this',
+          validationReportMergeInto: 'Merge into selected',
           validationReportLoadError: 'Failed to load validation report',
         },
       },
@@ -117,8 +119,10 @@ describe('ModelValidationView', () => {
 
     expect(wrapper.text()).toContain('Instances 1')
     expect(wrapper.text()).toContain('Links 1')
-    expect(wrapper.text()).toContain('CRM — 2 copies')
-    expect(wrapper.text()).toContain('CRM → ERP — 3 copies')
+    expect(wrapper.text()).toContain('Application · CRM')
+    expect(wrapper.text()).toContain('2 copies')
+    expect(wrapper.text()).toContain('CRM → ERP · Serving')
+    expect(wrapper.text()).toContain('3 copies')
   })
 
   it('shows load error with server message', async () => {

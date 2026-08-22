@@ -6,6 +6,7 @@ import { apiGet } from '@/composables/useApi'
 import { fetchValidationReport } from '@/features/models-validation/api'
 import type { ValidationReport } from '@/features/models-validation/types'
 import type { ModelData } from '@/types/entities'
+import ValidationDuplicateGroup from '@/features/models-validation/components/ValidationDuplicateGroup.vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
@@ -62,6 +63,10 @@ watch(
   },
   { immediate: true }
 )
+
+function onMerge(_payload: { keepId: string; dropId: string; kind: 'node' | 'link' }): void {
+  // Task 9 will open the merge wizard from this pair. Do not POST merge here.
+}
 </script>
 
 <template>
@@ -95,31 +100,36 @@ watch(
               {{ t('models.validationReportNodes') }}
               {{ report.duplicateNodes.length }}
             </h2>
-            <ul class="model-validation__list">
-              <li
+            <div class="model-validation__groups">
+              <ValidationDuplicateGroup
                 v-for="group in report.duplicateNodes"
                 :key="`${group.nodeTypeId}:${group.name}`"
-                class="model-validation__item"
-              >
-                {{ group.name }} — {{ t('models.validationReportCopies', { count: group.count }) }}
-              </li>
-            </ul>
+                kind="node"
+                :model-id="modelId"
+                :title="`${group.nodeTypeName} · ${group.name}`"
+                :count="group.count"
+                :node-members="group.nodes"
+                @merge="onMerge"
+              />
+            </div>
           </section>
           <section class="model-validation__section">
             <h2 class="model-validation__heading">
               {{ t('models.validationReportLinks') }}
               {{ report.duplicateLinks.length }}
             </h2>
-            <ul class="model-validation__list">
-              <li
+            <div class="model-validation__groups">
+              <ValidationDuplicateGroup
                 v-for="group in report.duplicateLinks"
                 :key="`${group.sourceId}:${group.targetId}:${group.linkTypeId}`"
-                class="model-validation__item"
-              >
-                {{ group.sourceName }} → {{ group.targetName }} —
-                {{ t('models.validationReportCopies', { count: group.count }) }}
-              </li>
-            </ul>
+                kind="link"
+                :model-id="modelId"
+                :title="`${group.sourceName} → ${group.targetName} · ${group.linkTypeName}`"
+                :count="group.count"
+                :link-members="group.links"
+                @merge="onMerge"
+              />
+            </div>
           </section>
         </div>
       </div>
@@ -199,13 +209,9 @@ watch(
   font-size: 14px;
 }
 
-.model-validation__list {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.model-validation__item {
-  color: var(--base-text);
-  font-size: 13px;
+.model-validation__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 </style>

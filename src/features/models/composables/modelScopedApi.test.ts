@@ -134,4 +134,43 @@ describe('modelScopedApi', () => {
       Promise<ApiResult<PaginatedResponse<DiagramReferenceResponse>>>
     >()
   })
+
+  it('requests node and diagram hits with extended search contract fields', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      ok({
+        modelId: 'model-1',
+        q: 'BPMN',
+        limit: 50,
+        totalEstimate: 1,
+        hits: [
+          {
+            kind: 'diagram',
+            id: 'diagram-1',
+            name: 'Simple BPMN',
+            parentId: 'folder-1',
+            pathNames: ['Diagrams', 'Simple BPMN'],
+          },
+          {
+            kind: 'node',
+            id: 'node-1',
+            name: 'Service',
+            nodeTypeId: 'type-1',
+            parentId: 'folder-1',
+            pathNames: ['Apps', 'Service'],
+          },
+        ],
+      })
+    )
+
+    const result = await searchModelNodes('model-1', 'BPMN', {
+      kinds: ['nodes', 'diagrams'],
+    })
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/search/models/model-1?q=BPMN&kinds=nodes%2Cdiagrams&limit=50',
+      { method: 'GET', signal: undefined }
+    )
+    expect(result.success && result.data.hits[0]?.pathNames).toEqual(['Diagrams', 'Simple BPMN'])
+    expect(result.success && result.data.hits[1]?.nodeTypeId).toBe('type-1')
+  })
 })

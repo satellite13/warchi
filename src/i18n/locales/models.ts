@@ -270,6 +270,7 @@ export const modelsMessages = {
       treeLoadMore: 'Загрузить ещё',
       treeSearchLoading: 'Поиск...',
       treeSearchError: 'Не удалось выполнить поиск',
+      searchHitPath: 'Путь: {path}',
       treeFocusLoading: 'Загрузка пути в дереве...',
       selectedNodeLoading: 'Загрузка выбранного узла...',
       treeScopeIncompleteMutation:
@@ -906,6 +907,7 @@ export const modelsMessages = {
       treeLoadMore: 'Load more',
       treeSearchLoading: 'Searching...',
       treeSearchError: 'Could not search the model',
+      searchHitPath: 'Path: {path}',
       treeFocusLoading: 'Loading tree path...',
       selectedNodeLoading: 'Loading selected node...',
       treeScopeIncompleteMutation:

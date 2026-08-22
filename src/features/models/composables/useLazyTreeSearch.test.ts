@@ -65,6 +65,7 @@ describe('useLazyTreeSearch', () => {
 
     expect(searchModelNodesMock).toHaveBeenCalledWith('model-1', 'special', {
       limit: 50,
+      kinds: ['nodes', 'diagrams'],
       signal: expect.any(AbortSignal),
     })
     expect(search.hits.value.map(hit => hit.id)).toEqual(['hit'])
@@ -156,7 +157,7 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    const path = await search.selectHit('hit')
+    const path = await search.selectHit({ kind: 'node', id: 'hit' })
 
     expect(fetchNodeAncestorsMock).toHaveBeenCalledWith('model-1', 'hit', expect.any(AbortSignal))
     expect(resolveModelNodesMock).toHaveBeenCalledWith('model-1', ['hit'], expect.any(AbortSignal))
@@ -164,7 +165,7 @@ describe('useLazyTreeSearch', () => {
       resolveModelNodesMock.mock.invocationCallOrder[0]!
     )
     expect(mergeNodes).toHaveBeenCalledWith([...ancestors, selected], guard)
-    expect(path).toEqual(['folder-a', 'folder-b', 'hit'])
+    expect(path).toEqual({ nodePath: ['folder-a', 'folder-b', 'hit'], diagramId: null })
     scope.stop()
   })
 
@@ -187,7 +188,10 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    expect(await search.selectHit('hit')).toEqual(['folder', 'hit'])
+    expect(await search.selectHit({ kind: 'node', id: 'hit' })).toEqual({
+      nodePath: ['folder', 'hit'],
+      diagramId: null,
+    })
     const mergedRows = mergeNodes.mock.calls[0] as unknown as [NodeResponse[]]
     expect(mergedRows[0].map(row => row.id)).toEqual(['folder', 'hit'])
     scope.stop()
@@ -254,10 +258,16 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    expect(await search.selectHit('hit')).toEqual([])
+    expect(await search.selectHit({ kind: 'node', id: 'hit' })).toEqual({
+      nodePath: [],
+      diagramId: null,
+    })
     expect(search.selectionError.value).toBe('ancestors failed')
 
-    expect(await search.retrySelection()).toEqual(['folder', 'hit'])
+    expect(await search.retrySelection()).toEqual({
+      nodePath: ['folder', 'hit'],
+      diagramId: null,
+    })
     expect(search.selectionError.value).toBeNull()
     expect(mergeNodes).toHaveBeenCalledTimes(1)
     scope.stop()
@@ -285,14 +295,14 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    const selecting = search.selectHit('hit')
+    const selecting = search.selectHit({ kind: 'node', id: 'hit' })
     const signal = fetchNodeAncestorsMock.mock.calls[0]?.[2]
     modelId.value = 'model-2'
     await nextTick()
 
     expect(signal?.aborted).toBe(true)
     finishAncestors(ok([]))
-    await expect(selecting).resolves.toEqual([])
+    await expect(selecting).resolves.toEqual({ nodePath: [], diagramId: null })
     expect(resolveModelNodesMock).not.toHaveBeenCalled()
     expect(mergeNodes).not.toHaveBeenCalled()
     scope.stop()
@@ -323,7 +333,7 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    const selecting = search.selectHit('hit')
+    const selecting = search.selectHit({ kind: 'node', id: 'hit' })
     await Promise.resolve()
     const resolveSignal = resolveModelNodesMock.mock.calls[0]?.[2]
     query.value = 'new query'
@@ -331,7 +341,7 @@ describe('useLazyTreeSearch', () => {
 
     expect(resolveSignal?.aborted).toBe(true)
     finishResolve(ok({ nodes: [node('hit', 'folder')], missingIds: [] }))
-    await expect(selecting).resolves.toEqual([])
+    await expect(selecting).resolves.toEqual({ nodePath: [], diagramId: null })
     expect(mergeNodes).not.toHaveBeenCalled()
     expect(search.selectionLoading.value).toBe(false)
     expect(search.selectionError.value).toBeNull()
@@ -359,14 +369,14 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    const selecting = search.selectHit('hit')
+    const selecting = search.selectHit({ kind: 'node', id: 'hit' })
     const signal = fetchNodeAncestorsMock.mock.calls[0]?.[2]
     search.cancel()
 
     expect(signal?.aborted).toBe(true)
     finishAncestors(ok([]))
-    await expect(selecting).resolves.toEqual([])
-    expect(await search.retrySelection()).toEqual([])
+    await expect(selecting).resolves.toEqual({ nodePath: [], diagramId: null })
+    expect(await search.retrySelection()).toEqual({ nodePath: [], diagramId: null })
     expect(mergeNodes).not.toHaveBeenCalled()
     scope.stop()
   })
@@ -396,12 +406,156 @@ describe('useLazyTreeSearch', () => {
       })
     )!
 
-    const selecting = search.selectHit('hit', () => routeCurrent)
+    const selecting = search.selectHit({ kind: 'node', id: 'hit' }, () => routeCurrent)
     await Promise.resolve()
     routeCurrent = false
     finishResolve(ok({ nodes: [node('hit', 'folder')], missingIds: [] }))
 
-    await expect(selecting).resolves.toEqual([])
+    await expect(selecting).resolves.toEqual({ nodePath: [], diagramId: null })
+    expect(mergeNodes).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('keeps diagram hits in search results', async () => {
+    searchModelNodesMock.mockResolvedValue(
+      ok({
+        modelId: 'model-1',
+        q: 'bpmn',
+        limit: 50,
+        totalEstimate: 2,
+        hits: [
+          { kind: 'diagram', id: 'diagram-1', name: 'Simple BPMN', parentId: 'folder' },
+          { kind: 'node', id: 'node-1', name: 'Service' },
+          { kind: 'link', id: 'link-1', name: 'ignored' },
+        ],
+      })
+    )
+    const query = ref('bpmn')
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref(null),
+        query,
+        mergeNodes: vi.fn(() => true),
+        beginRequest: () => ({ generation: 1, requestKey: 'search', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    query.value = 'bpmn'
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(search.hits.value.map(hit => hit.id)).toEqual(['diagram-1', 'node-1'])
+    scope.stop()
+  })
+
+  it('resolves diagram parent ancestors and returns diagram id without resolving the diagram', async () => {
+    const ancestors = [node('folder-a', 'hidden-root')]
+    const parent = node('folder-b', 'folder-a')
+    fetchNodeAncestorsMock.mockResolvedValue(ok(ancestors))
+    resolveModelNodesMock.mockResolvedValue(ok({ nodes: [parent], missingIds: [] }))
+    const mergeNodes = vi.fn(() => true)
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref('hidden-root'),
+        query: ref('bpmn'),
+        mergeNodes,
+        beginRequest: () => ({ generation: 1, requestKey: 'select', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    const result = await search.selectHit({
+      kind: 'diagram',
+      id: 'diagram-1',
+      name: 'Simple BPMN',
+      parentId: 'folder-b',
+    })
+
+    expect(fetchNodeAncestorsMock).toHaveBeenCalledWith(
+      'model-1',
+      'folder-b',
+      expect.any(AbortSignal)
+    )
+    expect(resolveModelNodesMock).toHaveBeenCalledWith(
+      'model-1',
+      ['folder-b'],
+      expect.any(AbortSignal)
+    )
+    expect(result).toEqual({
+      nodePath: ['folder-a', 'folder-b'],
+      diagramId: 'diagram-1',
+    })
+    scope.stop()
+  })
+
+  it('returns an empty node path for a root diagram hit', async () => {
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref('hidden-root'),
+        query: ref('bpmn'),
+        mergeNodes: vi.fn(() => true),
+        beginRequest: () => ({ generation: 1, requestKey: 'select', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    const result = await search.selectHit({
+      kind: 'diagram',
+      id: 'diagram-root',
+      name: 'Root BPMN',
+      parentId: null,
+    })
+
+    expect(fetchNodeAncestorsMock).not.toHaveBeenCalled()
+    expect(result).toEqual({ nodePath: [], diagramId: 'diagram-root' })
+    scope.stop()
+  })
+
+  it('cancels stale diagram selection when the query changes', async () => {
+    fetchNodeAncestorsMock.mockResolvedValue(ok([node('folder', 'hidden-root')]))
+    let finishResolve!: (
+      value: ReturnType<typeof ok<{ nodes: NodeResponse[]; missingIds: string[] }>>
+    ) => void
+    resolveModelNodesMock.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishResolve = resolve
+        })
+    )
+    const query = ref('old query')
+    const mergeNodes = vi.fn(() => true)
+    const scope = effectScope()
+    const search = scope.run(() =>
+      useLazyTreeSearch({
+        modelId: ref('model-1'),
+        treeRootNodeId: ref('hidden-root'),
+        query,
+        mergeNodes,
+        beginRequest: () => ({ generation: 1, requestKey: 'select', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    const selecting = search.selectHit({
+      kind: 'diagram',
+      id: 'diagram-1',
+      parentId: 'folder',
+    })
+    await Promise.resolve()
+    const resolveSignal = resolveModelNodesMock.mock.calls[0]?.[2]
+    query.value = 'new query'
+    await nextTick()
+
+    expect(resolveSignal?.aborted).toBe(true)
+    finishResolve(ok({ nodes: [node('folder', 'hidden-root')], missingIds: [] }))
+    await expect(selecting).resolves.toEqual({ nodePath: [], diagramId: null })
     expect(mergeNodes).not.toHaveBeenCalled()
     scope.stop()
   })

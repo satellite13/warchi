@@ -89,7 +89,7 @@ const emit = defineEmits<{
   loadChildren: [scope: TreeParentScope]
   loadNextChildrenPage: [scope: TreeParentScope]
   searchQueryChange: [query: string]
-  selectSearchHit: [nodeId: string]
+  selectSearchHit: [hit: ModelSearchHit]
   retrySearch: []
   retryTreeFocus: []
 }>()
@@ -119,6 +119,27 @@ const nodeIndexById = computed(() => {
 
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
+
+const isSearchHitDirectory = (hit: ModelSearchHit): boolean => {
+  if (hit.kind !== "node" || !hit.nodeTypeId) return false
+  return (nodeTypeNameById.value.get(hit.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
+}
+
+const searchHitTypeIconId = (hit: ModelSearchHit): string | null => {
+  if (hit.kind !== "node" || !hit.nodeTypeId) return null
+  return nodeTypeIconById.value.get(hit.nodeTypeId) ?? null
+}
+
+const searchHitIconName = (hit: ModelSearchHit): string => {
+  if (hit.kind === "diagram") return "dashboard"
+  if (isSearchHitDirectory(hit)) return DEFAULT_ENTITY_ICONS.folder
+  return DEFAULT_ENTITY_ICONS.node
+}
+
+const searchHitBreadcrumb = (hit: ModelSearchHit): string | null => {
+  if (!hit.pathNames || hit.pathNames.length <= 1) return null
+  return hit.pathNames.slice(0, -1).join(" / ")
+}
 
 const isRootDiagram = (d: EditorDiagram): boolean => {
   if (d._isDeleted) return false
@@ -933,11 +954,30 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
               <span class="tree-node__toggle" aria-hidden="true"></span>
               <button
                 type="button"
-                class="tree-node__select"
-                @click="emit('selectSearchHit', row.hit.id)"
+                class="tree-node__select tree-search-hit__select"
+                @click="emit('selectSearchHit', row.hit)"
               >
-                <UiIcon :name="DEFAULT_ENTITY_ICONS.node" class="tree-node__icon-symbol" />
-                <span class="tree-node__name">{{ row.hit.name || row.hit.id }}</span>
+                <LazyIconImg
+                  v-if="searchHitTypeIconId(row.hit)"
+                  :icon-id="searchHitTypeIconId(row.hit)!"
+                  :alt="row.hit.name || row.hit.id"
+                  img-class="tree-node__icon-svg"
+                />
+                <UiIcon
+                  v-else
+                  :name="searchHitIconName(row.hit)"
+                  class="tree-node__icon-symbol"
+                />
+                <span class="tree-search-hit__label">
+                  <span class="tree-node__name">{{ row.hit.name || row.hit.id }}</span>
+                  <span
+                    v-if="searchHitBreadcrumb(row.hit)"
+                    class="tree-search-hit__breadcrumb"
+                    :aria-label="t('models.searchHitPath', { path: searchHitBreadcrumb(row.hit) })"
+                  >
+                    {{ searchHitBreadcrumb(row.hit) }}
+                  </span>
+                </span>
               </button>
             </div>
           </div>
@@ -1200,6 +1240,26 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 .tree-node__name--ancestor {
   color: var(--text-subtle);
   font-weight: 400;
+}
+
+.tree-search-hit__select {
+  align-items: flex-start;
+}
+
+.tree-search-hit__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.tree-search-hit__breadcrumb {
+  color: var(--text-subtle);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tree-node__rename-input {

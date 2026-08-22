@@ -12,11 +12,20 @@ type LazyTreeSearchOptions = {
   isRequestCurrent: (guard: ModelPartialRequestGuard) => boolean
 }
 
+export type LazyTreeSearchSelection = {
+  nodePath: string[]
+  diagramId: string | null
+}
+
 const SEARCH_DEBOUNCE_MS = 200
 const SEARCH_LIMIT = 50
+const SEARCH_KINDS = ['nodes', 'diagrams'] as const
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : 'Не удалось выполнить поиск.'
+
+const isTreeSearchHit = (hit: ModelSearchHit): hit is ModelSearchHit & { kind: 'node' | 'diagram' } =>
+  hit.kind === 'node' || hit.kind === 'diagram'
 
 export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
   const hits = ref<ModelSearchHit[]>([])
@@ -29,7 +38,7 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
   let selectionController: AbortController | null = null
   let sequence = 0
   let selectionSequence = 0
-  let lastSelectedNodeId: string | null = null
+  let lastSelectedHit: ModelSearchHit | null = null
 
   const cancelSearch = (): void => {
     if (timer) clearTimeout(timer)
@@ -46,7 +55,7 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
     selectionSequence += 1
     selectionLoading.value = false
     selectionError.value = null
-    if (forgetLastSelection) lastSelectedNodeId = null
+    if (forgetLastSelection) lastSelectedHit = null
   }
 
   const runSearch = async (): Promise<void> => {
@@ -68,6 +77,7 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
     try {
       const result = await searchModelNodes(modelId, query, {
         limit: SEARCH_LIMIT,
+        kinds: [...SEARCH_KINDS],
         signal: requestController.signal,
       })
       if (
@@ -83,7 +93,7 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
         hits.value = []
         return
       }
-      hits.value = result.data.hits.filter(hit => hit.kind === 'node')
+      hits.value = result.data.hits.filter(isTreeSearchHit)
     } catch (cause) {
       if (!requestController.signal.aborted && requestSequence === sequence) {
         error.value = errorMessage(cause)
@@ -99,20 +109,14 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
 
   const retry = (): Promise<void> => runSearch()
 
-  const selectHit = async (
+  const materializeNodePath = async (
     nodeId: string,
-    externalGuard: () => boolean = () => true
+    requestController: AbortController,
+    requestSequence: number,
+    modelId: string,
+    guard: ModelPartialRequestGuard,
+    externalGuard: () => boolean
   ): Promise<string[]> => {
-    selectionController?.abort()
-    const requestController = new AbortController()
-    selectionController = requestController
-    const requestSequence = ++selectionSequence
-    lastSelectedNodeId = nodeId
-    const modelId = options.modelId.value
-    const guard = options.beginRequest()
-    if (!modelId) return []
-    selectionLoading.value = true
-    selectionError.value = null
     const isCurrent = (): boolean =>
       !requestController.signal.aborted &&
       requestSequence === selectionSequence &&
@@ -120,33 +124,91 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
       options.isRequestCurrent(guard) &&
       externalGuard()
 
+    const ancestorsResult = await fetchNodeAncestors(modelId, nodeId, requestController.signal)
+    if (!isCurrent()) return []
+    if (!ancestorsResult.success) {
+      selectionError.value = ancestorsResult.error.message
+      return []
+    }
+    const nodeResult = await resolveModelNodes(modelId, [nodeId], requestController.signal)
+    if (!isCurrent()) return []
+    if (!nodeResult.success) {
+      selectionError.value = nodeResult.error.message
+      return []
+    }
+
+    const hiddenRootId = options.treeRootNodeId.value
+    const ancestors = ancestorsResult.data.filter(node => node.id !== hiddenRootId)
+    const selectedNode = nodeResult.data.nodes.find(node => node.id === nodeId)
+    if (!selectedNode) {
+      selectionError.value = 'Узел не найден.'
+      return []
+    }
+    const rows = [...ancestors, selectedNode]
+    if (!options.mergeNodes(rows, guard)) return []
+    return rows.map(node => node.id)
+  }
+
+  const selectHit = async (
+    hit: ModelSearchHit,
+    externalGuard: () => boolean = () => true
+  ): Promise<LazyTreeSearchSelection> => {
+    if (!isTreeSearchHit(hit)) {
+      return { nodePath: [], diagramId: null }
+    }
+
+    selectionController?.abort()
+    const requestController = new AbortController()
+    selectionController = requestController
+    const requestSequence = ++selectionSequence
+    lastSelectedHit = hit
+    const modelId = options.modelId.value
+    const guard = options.beginRequest()
+    if (!modelId) return { nodePath: [], diagramId: null }
+    selectionLoading.value = true
+    selectionError.value = null
+
     try {
-      const ancestorsResult = await fetchNodeAncestors(modelId, nodeId, requestController.signal)
-      if (!isCurrent()) return []
-      if (!ancestorsResult.success) {
-        selectionError.value = ancestorsResult.error.message
-        return []
-      }
-      const nodeResult = await resolveModelNodes(modelId, [nodeId], requestController.signal)
-      if (!isCurrent()) return []
-      if (!nodeResult.success) {
-        selectionError.value = nodeResult.error.message
-        return []
+      if (hit.kind === 'node') {
+        const nodePath = await materializeNodePath(
+          hit.id,
+          requestController,
+          requestSequence,
+          modelId,
+          guard,
+          externalGuard
+        )
+        return { nodePath, diagramId: null }
       }
 
-      const hiddenRootId = options.treeRootNodeId.value
-      const ancestors = ancestorsResult.data.filter(node => node.id !== hiddenRootId)
-      const selectedNode = nodeResult.data.nodes.find(node => node.id === nodeId)
-      if (!selectedNode) {
-        selectionError.value = 'Узел не найден.'
-        return []
+      const parentId = hit.parentId
+      if (!parentId) {
+        return { nodePath: [], diagramId: hit.id }
       }
-      const rows = [...ancestors, selectedNode]
-      if (!options.mergeNodes(rows, guard)) return []
-      return rows.map(node => node.id)
+
+      const nodePath = await materializeNodePath(
+        parentId,
+        requestController,
+        requestSequence,
+        modelId,
+        guard,
+        externalGuard
+      )
+      if (nodePath.length === 0) {
+        return { nodePath: [], diagramId: null }
+      }
+      return { nodePath, diagramId: hit.id }
     } catch (cause) {
-      if (isCurrent()) selectionError.value = errorMessage(cause)
-      return []
+      if (
+        !requestController.signal.aborted &&
+        requestSequence === selectionSequence &&
+        options.modelId.value === modelId &&
+        options.isRequestCurrent(guard) &&
+        externalGuard()
+      ) {
+        selectionError.value = errorMessage(cause)
+      }
+      return { nodePath: [], diagramId: null }
     } finally {
       if (requestSequence === selectionSequence) {
         selectionLoading.value = false
@@ -155,8 +217,8 @@ export function useLazyTreeSearch(options: LazyTreeSearchOptions) {
     }
   }
 
-  const retrySelection = (): Promise<string[]> =>
-    lastSelectedNodeId ? selectHit(lastSelectedNodeId) : Promise.resolve([])
+  const retrySelection = (): Promise<LazyTreeSearchSelection> =>
+    lastSelectedHit ? selectHit(lastSelectedHit) : Promise.resolve({ nodePath: [], diagramId: null })
 
   const cancel = (): void => {
     cancelSearch()

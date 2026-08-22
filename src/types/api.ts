@@ -236,7 +236,9 @@ export interface ModelSearchHit {
   id: string
   name?: string | null
   typeName?: string | null
+  nodeTypeId?: string | null
   parentId?: string | null
+  pathNames?: string[] | null
   sourceId?: string | null
   targetId?: string | null
   sourceName?: string | null

@@ -115,6 +115,7 @@ import type { ValidationIssue } from '@/features/validation-scripts/sandbox/type
 import type {
   DiagramReferenceResponse,
   LinkResponse,
+  ModelSearchHit,
   NodeResponse,
   RelationResponse,
 } from '@/types/api'
@@ -129,6 +130,7 @@ import {
   focusRouteDiagramTree,
   useModelEditorRouteNavigation,
 } from './composables/useModelEditorRouteNavigation'
+import type { LazyTreeSearchSelection } from './composables/useLazyTreeSearch'
 import { applyLocalModelDelta } from './utils/applyLocalModelDelta'
 import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/customPropertyValues'
 
@@ -1173,22 +1175,46 @@ const lazyTreeSearch = useLazyTreeSearch({
   isRequestCurrent: guard => partialStore.store.isRequestCurrent(guard),
 })
 
-const applyLazyTreePath = async (nodeId: string, path: readonly string[]): Promise<void> => {
-  if (path.length === 0) return
-  treePanelRef.value?.expandPath?.(path.slice(0, -1))
-  handleTreeSelectNode(nodeId)
+const applyLazyTreeSelection = async (
+  selection: LazyTreeSearchSelection,
+  hit: ModelSearchHit
+): Promise<void> => {
+  if (selection.nodePath.length === 0 && !selection.diagramId) return
+
+  if (selection.nodePath.length > 0) {
+    treePanelRef.value?.expandPath?.(
+      hit.kind === 'node' ? selection.nodePath.slice(0, -1) : selection.nodePath
+    )
+    if (hit.kind === 'node') {
+      handleTreeSelectNode(hit.id)
+    }
+  }
+
+  lazyTreeSearchQuery.value = ''
   await nextTick()
-  await treePanelRef.value?.focusNode?.(nodeId)
+
+  if (hit.kind === 'node') {
+    await treePanelRef.value?.focusNode?.(hit.id)
+    return
+  }
+  if (selection.diagramId) {
+    await treePanelRef.value?.focusDiagram?.(selection.diagramId, () => true)
+  }
 }
 
-const handleTreeSearchHit = async (nodeId: string): Promise<void> => {
-  await applyLazyTreePath(nodeId, await lazyTreeSearch.selectHit(nodeId))
+let lastTreeSearchHit: ModelSearchHit | null = null
+
+const handleTreeSearchHit = async (hit: ModelSearchHit): Promise<void> => {
+  lastTreeSearchHit = hit
+  const selection = await lazyTreeSearch.selectHit(hit)
+  if (lazyTreeSearch.selectionError.value) return
+  await applyLazyTreeSelection(selection, hit)
 }
 
 const retryTreeSearchSelection = async (): Promise<void> => {
-  const path = await lazyTreeSearch.retrySelection()
-  const nodeId = path.at(-1)
-  if (nodeId) await applyLazyTreePath(nodeId, path)
+  const selection = await lazyTreeSearch.retrySelection()
+  if (!lastTreeSearchHit || lazyTreeSearch.selectionError.value) return
+  await applyLazyTreeSelection(selection, lastTreeSearchHit)
 }
 const closeCreateNodeModal = (): void => {
   if (!createNodePending.value) showCreateNodeModal.value = false
@@ -3239,7 +3265,10 @@ const focusRouteDiagramInTree = async (
       diagramId,
       nodeId: target.nodeId,
       treeRootNodeId: treeRootNodeId.value,
-      selectHit: lazyTreeSearch.selectHit,
+      selectHit: async (nodeId, isCurrent) => {
+        const result = await lazyTreeSearch.selectHit({ kind: 'node', id: nodeId }, isCurrent)
+        return result.nodePath
+      },
       waitForRender: nextTick,
       expandPath: path => treePanelRef.value?.expandPath?.(path),
       focusDiagram: (id, guard) => treePanelRef.value?.focusDiagram?.(id, guard),

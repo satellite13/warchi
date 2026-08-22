@@ -537,7 +537,73 @@ describe('ModelTreePalettePanel search', () => {
     )
 
     await wrapper.get('[data-tree-search-hit-id="server-hit"] button').trigger('click')
-    expect(wrapper.emitted('selectSearchHit')).toEqual([['server-hit']])
+    expect(wrapper.emitted('selectSearchHit')).toEqual([
+      [{ kind: 'node', id: 'server-hit', name: 'Special server node' }],
+    ])
+  })
+
+  it('renders search hit icons, breadcrumbs, and emits the full hit object', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits: [
+        {
+          kind: 'node',
+          id: 'folder-hit',
+          name: 'Diagrams',
+          nodeTypeId: 'dir',
+          pathNames: ['Apps', 'Diagrams'],
+        },
+        {
+          kind: 'node',
+          id: 'node-hit',
+          name: 'Service',
+          nodeTypeId: 'nt1',
+          pathNames: ['Apps', 'Service'],
+        },
+        {
+          kind: 'diagram',
+          id: 'diagram-hit',
+          name: 'Simple BPMN',
+          pathNames: ['Apps', 'Diagrams', 'Simple BPMN'],
+        },
+        {
+          kind: 'diagram',
+          id: 'broken-hit',
+          name: 'Broken',
+          pathNames: null,
+        },
+      ],
+    })
+    await flushTree(wrapper)
+    await wrapper.get('.search-input').setValue('hit')
+    await vi.advanceTimersByTimeAsync(200)
+    await flushTree(wrapper)
+
+    expect(
+      wrapper.get('[data-tree-search-hit-id="folder-hit"] ui-icon-stub').attributes('name')
+    ).toBe('folder')
+    expect(
+      wrapper.get('[data-tree-search-hit-id="diagram-hit"] ui-icon-stub').attributes('name')
+    ).toBe('dashboard')
+    expect(wrapper.get('[data-tree-search-hit-id="node-hit"] .tree-search-hit__breadcrumb').text()).toBe(
+      'Apps'
+    )
+    expect(wrapper.get('[data-tree-search-hit-id="diagram-hit"] .tree-search-hit__breadcrumb').text()).toBe(
+      'Apps / Diagrams'
+    )
+    expect(wrapper.find('[data-tree-search-hit-id="broken-hit"] .tree-search-hit__breadcrumb').exists()).toBe(
+      false
+    )
+
+    await wrapper.get('[data-tree-search-hit-id="diagram-hit"] button').trigger('click')
+    expect(wrapper.emitted('selectSearchHit')?.at(-1)).toEqual([
+      {
+        kind: 'diagram',
+        id: 'diagram-hit',
+        name: 'Simple BPMN',
+        pathNames: ['Apps', 'Diagrams', 'Simple BPMN'],
+      },
+    ])
   })
 
   it('keeps search loading/error/retry local and caps only rendered server rows', async () => {

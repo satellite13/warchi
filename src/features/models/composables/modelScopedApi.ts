@@ -21,8 +21,11 @@ export type FetchNodeChildrenOptions = {
   signal?: AbortSignal
 }
 
+export type SearchModelKind = 'nodes' | 'diagrams' | 'links'
+
 export type SearchModelNodesOptions = {
   limit?: number
+  kinds?: SearchModelKind[]
   signal?: AbortSignal
 }
 
@@ -160,7 +163,7 @@ export function searchModelNodes(
 ): Promise<ApiResult<ModelSearchResponse>> {
   const query = new URLSearchParams({
     q: queryText,
-    kinds: 'nodes',
+    kinds: (options.kinds ?? ['nodes']).join(','),
     limit: String(options.limit ?? 50),
   })
   return apiFetch<ModelSearchResponse>(

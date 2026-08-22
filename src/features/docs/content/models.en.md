@@ -184,6 +184,21 @@ The model editor header includes **Relation matrix**. It opens a separate matrix
 
 Use the matrix to audit relation coverage and produce reports without walking every diagram manually.
 
+### Validation
+
+The model editor header has a **Validation** button next to the relation matrix. It opens a separate report of duplicate instances in the model tree — without downloading the full graph into the browser.
+
+The server runs two checks:
+
+- **Instances** — nodes of the same type whose names match after trim, case-insensitive. The Directory type is excluded.
+- **Links** — two or more directed edges with the same endpoints and type. `A→B` and `B→A` of the same type are not duplicates.
+
+Expand a member to see diagrams that contain it. A chip opens that diagram and focuses the entity; clicking a node name selects it in the tree without opening a canvas.
+
+**Merge into selected** opens a one-pair wizard: resulting type properties, which unique links to transfer (nodes only), then confirm. The merge is atomic on the server. Documentation of the dropped instance is not moved in v1. On conflict (the pair changed), refresh the report — the wizard does not retry the request.
+
+Diagram scripts in the editor are a separate tool: they see the open canvas only, not the whole model tree.
+
 ### Open Exchange (XML) import
 
 The editor header also offers the **Import Open Exchange (XML)** wizard to load an architecture model from OEF XML:

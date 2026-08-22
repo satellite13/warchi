@@ -4,16 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-22
+
+### Added
+- Diagram scripts can query the rest of the model through `neighbors`,
+  `searchNodes`, and `linksBetween`, then queue canvas changes: place existing
+  nodes and links, remove figures, align / distribute / stack, and recolor
+  edges with `apply.setEdgeStyle`.
+
 ### Changed
-- Scripts now run against the **open diagram** only: the snapshot is a canvas
-  slice (`instances` / `edges`), not a detached full-model dump. Helpers such
-  as `nodesOfType` and `findDuplicateLinks` see what is on the canvas.
-- After a run, the preview can **Apply** a queued canvas change (`setBounds`,
-  place existing nodes/links, remove figures, align / distribute / stack) as
-  one Undo step. The model tree is not created or deleted.
-- Scripts can query the rest of the model through `neighbors`, `searchNodes`,
-  and `linksBetween` (async, paged, no raw `fetch`).
-- Scripts can recolor a canvas edge: `apply.setEdgeStyle({ linkId, strokeColor })`.
+- Scripts run against the **open diagram** only: the snapshot is a canvas
+  slice, not a detached full-model dump. Helpers such as `nodesOfType` and
+  `findDuplicateLinks` see what is on the canvas.
+- The **Scripts** toolbar button stays disabled until a diagram is open.
+- **Apply** writes one Undo step and closes the run dialog.
+
+### Fixed
+- Running a script no longer times out when the diagram snapshot is a Vue
+  reactive proxy (`postMessage` cannot clone it).
 
 ## [0.22.3] - 2026-08-22
 

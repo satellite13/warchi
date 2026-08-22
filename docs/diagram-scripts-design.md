@@ -102,9 +102,9 @@ id. Клик по issue выделяет сущность на холсте.
 
 | Функция | Куда ходит хост |
 |---|---|
-| `neighbors(nodeId, { direction, linkType?, page? })` | `GET /models/{id}/graph/neighbors` |
+| `neighbors(nodeId, { direction, linkType?, page? })` | `GET /models/{id}/graph/neighbors` → в скрипт `{ items, last }` |
 | `searchNodes({ q?, type?, limit? })` | `GET /search/models/{id}` (nodes) |
-| `linksBetween(a, b, { linkType? })` | точечный resolve связей по двум id (существующий resolve/neighbors), не полный список links модели |
+| `linksBetween(a, b, { linkType? })` | все связи между парой (оба направления), опциональный фильтр типа; хост — `links:resolve` по двум endpoint id, не полный список links модели |
 
 Лимиты как у REST (страница neighbors, limit поиска ≤ 50). Хост проверяет, что
 `nodeId` принадлежит этой модели.
@@ -117,7 +117,7 @@ id. Клик по issue выделяет сущность на холсте.
 |---|---|
 | `setBounds({ instanceId, x, y, width?, height? })` | геометрия существующего instance |
 | `addInstance({ nodeId, x?, y? })` | положить на холст ноду, которая уже есть в модели |
-| `addEdge({ linkId })` | положить на холст связь, которая уже есть в модели; оба конца должны оказаться на диаграмме после очереди (уже были или добавлены раньше в этой же очереди) |
+| `addEdge({ linkId })` | положить на холст связь, которая уже есть в модели. Концы хост резолвит сам (`links:resolve`). Оба конца должны оказаться на диаграмме после очереди (уже были или добавлены раньше через `addInstance`) |
 | `removeInstance({ instanceId })` | снять фигуру с диаграммы, нода в дереве остаётся |
 | `removeEdge({ edgeInstanceId })` | снять ребро с диаграммы, связь в дереве остаётся |
 | `align({ instanceIds, mode })` | существующий align редактора / papirus `alignNodes` |

@@ -4,7 +4,7 @@
 
 **Goal:** Диаграммные скрипты работают на снимке открытого холста, умеют искать в модели через REST и копить команды; запись на холст — только после превью, одной history-транзакцией.
 
-**Architecture:** Тот же iframe (`sandbox=allow-scripts`). Хост отдаёт узкий snapshot, отвечает на `query` RPC (`neighbors` / `searchNodes` / `linksBetween`) и после `done` показывает issue + очередь `apply`. Apply идёт через существующие `addExistingNodeToDiagram`, `placeTraceLinkOnDiagram` / createOrReuseLink, setBounds и papirus `alignNodes` / `distributeNodes`. Граф модели не меняется. arepos-server не трогаем.
+**Architecture:** Тот же iframe (`sandbox=allow-scripts`). Хост отдаёт узкий snapshot, отвечает на `query` RPC и после `done` показывает issue + очередь `apply`. Перед записью хост резолвит ноды/связи в partial store, затем **одним** `DiagramHistoryCommand` мутирует `diagram.parsedAttrs.instances` (не вызывает `addExistingNodeToDiagram` / `placeTraceLinkOnDiagram` — у них свой history и silent no-op). Граф модели не меняется. arepos-server не трогаем.
 
 **Tech Stack:** Vue 3 / TypeScript / Vitest; iframe postMessage; уже существующие `modelScopedApi` и papirus AlignDistribute.
 
@@ -19,6 +19,17 @@
 - Убрать полный detached snapshot для запуска скриптов (`prepareValidationScriptRun` / `useDetachedModelSnapshot` на этом пути).
 - Каждый task: failing test → implement → `npx vitest run <файлы>` → commit.
 - Скрипт не вызывает `fetch`. Query только через postMessage.
+
+## Зафиксированные решения (не открывать заново)
+
+- `apply.addEdge({ linkId })` — только `linkId`. Концы хост берёт из `resolveModelLinks({ linkIds: [linkId] })`.
+- `linksBetween(a, b, { linkType? })` возвращает **все** связи между парой (оба направления), затем фильтр типа.
+- `neighbors` в скрипт: `{ items, last }` из Spring `Page` (`content` + `last`).
+- `searchNodes` требует `q` или `type`; оба пустые → ошибка query, не «все ноды модели».
+- `prepareValidationScriptRun` **сузить** до `buildDiagramScriptSnapshot`, `loadOverlayed` не вызывать.
+- Apply: сначала `validateCommandQueue`, затем resolve в store, затем одна history-команда. Если диаграмма read-only / lock потерян — ошибка, холст не менять.
+- Несколько notation component: взять единственный или уже записанный binding; иначе ошибка команды, **без** модалки выбора.
+- Клик по issue — по `modelNodeId` / `modelLinkId`, как сейчас. Kind `instance` не добавляем.
 
 ## Карта файлов
 
@@ -43,7 +54,7 @@
 - `src/features/validation-scripts/validationScriptApiCatalog.ts`
 - `src/features/validation-scripts/components/ValidationScriptsRunModal.vue`
 - `src/features/models/ModelEditor.vue` — не готовить full snapshot; apply hook
-- `src/features/models/composables/prepareValidationScriptRun.ts` — удалить или сузить до diagram snapshot
+- `src/features/models/composables/prepareValidationScriptRun.ts` — только `buildDiagramScriptSnapshot`, без detached overlay
 - `src/i18n/locales/validationScripts.ts`
 - `src/features/docs/content/validation-scripts.md` и `.en.md`
 
@@ -76,8 +87,9 @@ it('rejects addEdge when endpoints are not on diagram and not added earlier', ()
     instanceModelNodeIds: new Set(['a']),
     instanceIds: new Set(['ia']),
     edgeIds: new Set(),
+    linkEndpoints: { l1: { sourceId: 'a', targetId: 'b' } },
     commands: [
-      { type: 'addEdge', linkId: 'l1', sourceId: 'a', targetId: 'b' },
+      { type: 'addEdge', linkId: 'l1' },
     ],
   })
   expect(result.ok).toBe(false)
@@ -88,22 +100,17 @@ it('accepts addInstance then addEdge', () => {
     instanceModelNodeIds: new Set(['a']),
     instanceIds: new Set(['ia']),
     edgeIds: new Set(),
+    linkEndpoints: { l1: { sourceId: 'a', targetId: 'b' } },
     commands: [
       { type: 'addInstance', nodeId: 'b', x: 0, y: 0 },
-      { type: 'addEdge', linkId: 'l1', sourceId: 'a', targetId: 'b' },
+      { type: 'addEdge', linkId: 'l1' },
     ],
   })
   expect(result.ok).toBe(true)
 })
 ```
 
-`addEdge` в очереди должен нести `sourceId`/`targetId` модели (хост дополнит из query/resolve при построении команды, либо `validate` получит их из preview context). В v1: `addEdge` = `{ type: 'addEdge', linkId }` + отдельная карта `linkEndpoints: Record<linkId, { sourceId, targetId }>` которую хост заполняет, когда скрипт вызывает `apply.addEdge` — песочница знает концы из результата `linksBetween` / `neighbors`. Проще: команда
-
-```ts
-{ type: 'addEdge', linkId: string, sourceId: string, targetId: string }
-```
-
-Скриптовый `apply.addEdge({ linkId, sourceId, targetId })` требует три поля (документировать в help).
+Команда в очереди: `{ type: 'addEdge', linkId }`. Карта `linkEndpoints` в `validateCommandQueue` заполняет **хост** после `resolveModelLinks({ linkIds })`, не скрипт. Песочница в `done` шлёт только `linkId`.
 
 - [ ] **Step 2: `npx vitest run` — FAIL**
 
@@ -117,7 +124,7 @@ npx vitest run src/features/validation-scripts/sandbox/diagramScriptCommands.tes
 export type DiagramScriptCommand =
   | { type: 'setBounds'; instanceId: string; x: number; y: number; width?: number; height?: number }
   | { type: 'addInstance'; nodeId: string; x?: number; y?: number }
-  | { type: 'addEdge'; linkId: string; sourceId: string; targetId: string }
+  | { type: 'addEdge'; linkId: string }
   | { type: 'removeInstance'; instanceId: string }
   | { type: 'removeEdge'; edgeInstanceId: string }
   | { type: 'align'; instanceIds: string[]; mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom' }
@@ -194,9 +201,11 @@ it('linksBetween uses resolveModelLinks with two endpoint ids', async () => {
 })
 ```
 
-После resolve хост фильтрует связи, у которых концы `{a,b}` (в любом порядке? spec: точечно по id; направление: вернуть оба, фильтр `linkType` если задан).
+`linksBetween`: `resolveModelLinks({ endpointNodeIds: [a, b], linkIds: [] })`, оставить связи, чьи концы — множество `{a, b}` (оба направления: A→B и B→A). Если задан `linkType` — фильтр по `linkTypeId` или имени типа.
 
-`searchNodes`: `searchModelNodes(modelId, q ?? '', { kinds: ['nodes'], limit: min(limit ?? 50, 50) })`, затем фильтр по `type` (id или имя) на клиенте, если search API не принимает type — проверить `ModelSearchHit.nodeTypeId`. Если тип задан и hit без него — отфильтровать.
+`neighbors` наружу скрипта: `{ items: GraphNeighborResponse[], last: boolean }` (из `Page.content` / `Page.last`).
+
+`searchNodes`: если нет `q` и нет `type` — `{ error: 'q or type required' }`. Иначе `searchModelNodes(modelId, q ?? type, { kinds: ['nodes'], limit: min(limit ?? 50, 50) })` и при наличии `type` фильтр по `nodeTypeId` / `typeName`.
 
 - [ ] **Step 2: Реализация + commit**
 
@@ -288,7 +297,7 @@ git commit -m "Run diagram scripts asynchronously with query RPC and apply queue
 
 - [ ] **Step 1: Падающий тест prepare**
 
-`prepareValidationScriptRun` больше не вызывает `loadOverlayed`. Строит snapshot из **открытой** диаграммы в `state` (instance уже в editor — Stage 3 грузит scope диаграммы). Если `openDiagramId` null — `{ ok: false }`.
+`prepareValidationScriptRun` вызывает только `buildDiagramScriptSnapshot` из текущего `state` и `openDiagramId`. `loadOverlayed` / detached snapshot на этом пути не использовать. Если диаграмма не открыта — `{ ok: false }`. Instance открытой диаграммы Stage 3 уже держит в editor state.
 
 - [ ] **Step 2: Редактор**
 
@@ -345,67 +354,7 @@ git commit -m "Show apply preview after a diagram script run."
 
 ---
 
-### Task 7: Применить команды одной history-транзакцией
-
-**Files:**
-
-- Create: `src/features/validation-scripts/sandbox/applyDiagramScriptCommands.ts`
-- Test: `src/features/validation-scripts/sandbox/applyDiagramScriptCommands.test.ts`
-- Modify: `src/features/models/ModelEditor.vue`
-
-- [ ] **Step 1: Тест apply**
-
-Мок зависимостей:
-
-```ts
-const added: string[] = []
-applyDiagramScriptCommands({
-  commands: [{ type: 'addInstance', nodeId: 'n2', x: 1, y: 2 }],
-  addExistingNode: (id, x, y) => { added.push(id) },
-  placeExistingLink: vi.fn(),
-  setInstanceBounds: vi.fn(),
-  removeInstance: vi.fn(),
-  removeEdge: vi.fn(),
-  executeHistory: cmd => { cmd.execute() },
-})
-expect(added).toEqual(['n2'])
-```
-
-Ошибка на второй команде: `executeHistory` получил одну команду, чей `undo` откатывает первую (собрать undo stack в обратном порядке внутри одной `DiagramHistoryCommand`).
-
-- [ ] **Step 2: Реализация**
-
-Одна обёртка:
-
-```ts
-executeDiagramHistoryCommand({
-  execute: () => { for (const c of commands) applyOne(c) },
-  undo: () => { for (const u of undos.reverse()) u() },
-})
-```
-
-Маппинг:
-
-| command | editor |
-|---|---|
-| addInstance | `addExistingNodeToDiagram(nodeId, x ?? 0, y ?? 0)` |
-| addEdge | `placeTraceLinkOnDiagram(linkId)` (уже не создаёт модельную связь, если link существует) |
-| setBounds | записать x/y/width/height instance + `markDiagramDirty` |
-| removeInstance / removeEdge | существующий remove instance/edge с диаграммы (найти в `useModelDiagramInstances` / delete selection) |
-| align / distribute / stack | Task 8 (пока развернуть в setBounds через `layoutCommands`) |
-
-Проверить `placeTraceLinkOnDiagram`: не создаёт новый link в state, если id уже есть. Если создаёт — не использовать, положить только edge instance на существующий `linkId`.
-
-- [ ] **Step 3: ModelEditor** слушает `@apply-commands` и вызывает apply. Commit
-
-```bash
-npx vitest run src/features/validation-scripts src/features/models/composables/useModelDiagramInstances.test.ts
-git commit -m "Apply diagram script commands in one undoable history transaction."
-```
-
----
-
-### Task 8: align / distribute / stack
+### Task 7: align / distribute / stack → bounds
 
 **Files:**
 
@@ -425,8 +374,62 @@ git commit -m "Apply diagram script commands in one undoable history transaction
 - [ ] **Step 3: Commit**
 
 ```bash
-npx vitest run src/features/validation-scripts/sandbox/layoutCommands.test.ts src/features/validation-scripts/sandbox/applyDiagramScriptCommands.test.ts
+npx vitest run src/features/validation-scripts/sandbox/layoutCommands.test.ts
 git commit -m "Expand diagram script layout commands via existing align math."
+```
+
+---
+
+### Task 8: Применить команды одной history-транзакцией
+
+**Files:**
+
+- Create: `src/features/validation-scripts/sandbox/applyDiagramScriptCommands.ts`
+- Test: `src/features/validation-scripts/sandbox/applyDiagramScriptCommands.test.ts`
+- Modify: `src/features/models/ModelEditor.vue`
+
+- [ ] **Step 1: Падающие тесты apply**
+
+Одна `executeHistory` на всю очередь. `addExistingNodeToDiagram` / `placeTraceLinkOnDiagram` в тестах **не** мокаются и не вызываются.
+
+```ts
+it('pushes instances and edges in one history command', () => {
+  const history: DiagramHistoryCommand[] = []
+  applyDiagramScriptCommands({
+    diagram,
+    commands: [
+      { type: 'addInstance', nodeId: 'n2', x: 1, y: 2 },
+      { type: 'addEdge', linkId: 'l1' },
+    ],
+    linkEndpoints: { l1: { sourceId: 'n1', targetId: 'n2' } },
+    executeHistory: cmd => history.push(cmd),
+  })
+  expect(history).toHaveLength(1)
+  history[0]!.execute()
+  expect(diagram.parsedAttrs.instances.nodes.some(n => n.modelNodeId === 'n2')).toBe(true)
+  expect(diagram.parsedAttrs.instances.edges.some(e => e.modelLinkId === 'l1')).toBe(true)
+  history[0]!.undo()
+  expect(diagram.parsedAttrs.instances.nodes.some(n => n.modelNodeId === 'n2')).toBe(false)
+})
+```
+
+- [ ] **Step 2: Хост перед apply (ModelEditor)**
+
+1. Если `isDiagramReadOnly` — ошибка, не вызывать apply.
+2. Собрать id из `addInstance` / `addEdge`. `resolveModelNodes` + `resolveModelLinks({ linkIds })`. Отсутствующие id → ошибка превью, холст не менять. Положить найденные сущности в partial store (тот же merge, что diagram scope / `resolve` в редакторе).
+3. Построить `linkEndpoints` из resolved links.
+4. `validateCommandQueue`.
+5. Notation: для каждой add-ноды ровно один совместимый component **или** уже есть binding. Иначе ошибка, без модалки.
+6. `executeDiagramHistoryCommand` один раз: внутри мутировать `parsedAttrs.instances` (push node/edge, splice remove, присвоить x/y/width/height). `align`/`distribute`/`stack` сначала прогнать через `layoutCommands` → набор setBounds, затем применить. `markDiagramDirty` + `onDiagramInstancesChanged`.
+7. Remove instance: логика как `removeNodesFromCurrentDiagramByInstances` (снять фигуру и инцидентные edge instance), но **внутри** этой же history-команды, не отдельным вызовом с собственным undo.
+
+Не создавать ноды/связи в `state.nodes` / `state.links` кроме merge уже существующих с сервера.
+
+- [ ] **Step 3: Модалка `@apply-commands` → этот пайплайн. Тесты + commit**
+
+```bash
+npx vitest run src/features/validation-scripts/sandbox/applyDiagramScriptCommands.test.ts src/features/validation-scripts/sandbox/layoutCommands.test.ts
+git commit -m "Apply diagram script commands in one undoable history transaction."
 ```
 
 ---
@@ -447,7 +450,7 @@ git commit -m "Expand diagram script layout commands via existing align math."
 2. `apply.align` / `apply.distribute`;
 3. `const ns = await neighbors(id, { linkType: '...' })` + `apply.addInstance`.
 
-Явно: дерево не выгружается и не меняется. `apply.addEdge` требует `sourceId`/`targetId`.
+Явно: дерево не выгружается и не меняется. `apply.addEdge({ linkId })` — только id связи модели.
 
 - [ ] **Step 2: Commit**
 
@@ -468,12 +471,12 @@ Task 0 ветка
   → Task 4 async iframe
   → Task 5 убрать full load
   → Task 6 превью UI
-  → Task 7 apply
-  → Task 8 layout
+  → Task 7 layout math
+  → Task 8 apply (нужен Task 7)
   → Task 9 docs
 ```
 
-Task 1–3 независимы после ветки и могут идти подряд. Task 4 зависит от 1 и 3. Task 5–7 — от 2 и 4.
+Task 1–3 независимы после ветки и могут идти подряд. Task 4 зависит от 1 и 3. Task 5–6 — от 2 и 4. Task 8 — от 1 и 7.
 
 ## Покрытие spec
 
@@ -483,8 +486,8 @@ Task 1–3 независимы после ветки и могут идти п�
 | neighbors / searchNodes / linksBetween | 3, 4 |
 | apply очередь, не запись во время run | 1, 4 |
 | Превью + Apply / Закрыть | 6 |
-| Одна history-транзакция | 7 |
-| align / distribute / stack | 8 |
+| Одна history-транзакция, resolve в store, lock | 8 |
+| align / distribute / stack | 7 |
 | Нет create node/link в дереве | 7 (только addExisting*) |
 | Запуск без диаграммы нельзя | 5 |
 | Timeout сбрасывает команды | 4 |

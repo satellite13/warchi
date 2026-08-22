@@ -1,76 +1,89 @@
-import { effectScope, ref } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { parseNodeAttrs } from '../modelAttrs'
 import { createEmptyModelEditorState } from '../types'
-import { fetchAllByModelId } from './modelEditorLoadModel'
-import { prepareModelSaveValidation } from './prepareModelSaveValidation'
-import { useDetachedModelSnapshot } from './useDetachedModelSnapshot'
-
-vi.mock('./modelEditorLoadModel', async importOriginal => {
-  const actual = await importOriginal<typeof import('./modelEditorLoadModel')>()
-  return {
-    ...actual,
-    fetchAllByModelId: vi.fn(),
-  }
-})
-
-const fetchAllByModelIdMock = vi.mocked(fetchAllByModelId)
-
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>(done => {
-    resolve = done
-  })
-  return { promise, resolve }
-}
+import {
+  collectModelSaveValidationCandidates,
+  prepareModelSaveValidation,
+} from './prepareModelSaveValidation'
 
 describe('prepareModelSaveValidation', () => {
-  beforeEach(() => {
-    fetchAllByModelIdMock.mockReset()
-  })
-
-  it('cancels without treating the editor as invalid and releases the snapshot', async () => {
-    const nodesRequest = deferred<unknown[]>()
-    fetchAllByModelIdMock.mockImplementation(async (path, _modelId, _pageSize, _extra, options) => {
-      if (path === '/nodes') {
-        await nodesRequest.promise
-        if (options?.isCancelled?.()) return []
-      }
-      return []
-    })
+  it('selects dirty entities and entities represented in dirty diagrams', () => {
     const state = createEmptyModelEditorState()
     state.nodes = [
       {
-        id: 'n1',
-        name: 'Local',
+        id: 'clean-node',
+        name: 'Clean',
         modelId: 'model-1',
         ownerId: 'owner-1',
         nodeTypeId: 'type-1',
         parentNodeId: null,
         parsedAttrs: parseNodeAttrs(null),
+      },
+      {
+        id: 'dirty-node',
+        name: 'Dirty',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
+        parentNodeId: null,
+        parsedAttrs: { ...parseNodeAttrs(null), typeProperties: { code: 'APP-1' } },
+        _isDirty: true,
+      },
+      {
+        id: 'deleted-node',
+        name: 'Deleted',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        nodeTypeId: 'type-1',
+        parentNodeId: null,
+        parsedAttrs: parseNodeAttrs(null),
+        _isDeleted: true,
+      },
+    ]
+    state.links = [
+      {
+        id: 'diagram-link',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        sourceId: 'clean-node',
+        targetId: 'dirty-node',
+        linkTypeId: 'type-1',
+        parsedAttrs: { notationRelations: {}, relationProperties: {}, typeProperties: {} },
+      },
+    ]
+    state.diagrams = [
+      {
+        id: 'dirty-diagram',
+        name: 'Diagram',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        version: '1.0.0',
+        parsedAttrs: {
+          instances: {
+            nodes: [{ id: 'i1', modelNodeId: 'clean-node', x: 0, y: 0 }],
+            edges: [
+              {
+                id: 'e1',
+                modelLinkId: 'diagram-link',
+                sourceInstanceId: 'i1',
+                targetInstanceId: 'i1',
+              },
+            ],
+          },
+        },
         _isDirty: true,
       },
     ]
-    const vueScope = effectScope()
-    const loader = vueScope.run(() => useDetachedModelSnapshot(ref('model-1')))!
-    const prepare = prepareModelSaveValidation({
-      loader,
-      state,
-      activeDiagram: null,
-    })
-    loader.cancel()
-    nodesRequest.resolve([])
-    const result = await prepare
 
-    expect(result).toEqual({ ok: false, cancelled: true, error: null })
-    expect(loader.snapshot.value).toBeNull()
-    expect(state.nodes).toHaveLength(1)
-    expect(state.nodes[0]?._isDirty).toBe(true)
-    vueScope.stop()
+    const candidates = collectModelSaveValidationCandidates(state)
+
+    expect(candidates.nodes.map(node => node.id)).toEqual(['dirty-node', 'clean-node'])
+    expect(candidates.links.map(link => link.id)).toEqual(['diagram-link'])
   })
 
-  it('blocks save with a retryable load error and does not change editor arrays', async () => {
-    fetchAllByModelIdMock.mockRejectedValue(new Error('full list failed'))
+  it('validates changed local entities without loading the full model', async () => {
     const state = createEmptyModelEditorState()
     state.nodes = [
       {
@@ -80,46 +93,10 @@ describe('prepareModelSaveValidation', () => {
         ownerId: 'owner-1',
         nodeTypeId: 'type-1',
         parentNodeId: null,
-        parsedAttrs: parseNodeAttrs(null),
+        parsedAttrs: { ...parseNodeAttrs(null), typeProperties: { code: 'APP-1' } },
+        _isDirty: true,
       },
     ]
-    const vueScope = effectScope()
-    const loader = vueScope.run(() => useDetachedModelSnapshot(ref('model-1')))!
-
-    const result = await prepareModelSaveValidation({
-      loader,
-      state,
-      activeDiagram: null,
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      cancelled: false,
-      error: 'full list failed',
-    })
-    expect(loader.snapshot.value).toBeNull()
-    expect(state.nodes.map(row => row.id)).toEqual(['n1'])
-    vueScope.stop()
-  })
-
-  it('validates the overlayed snapshot and releases the server reference afterwards', async () => {
-    fetchAllByModelIdMock.mockImplementation(async path => {
-      if (path === '/nodes') {
-        return [
-          {
-            id: 'hidden',
-            name: 'Hidden',
-            modelId: 'model-1',
-            ownerId: 'owner-1',
-            nodeTypeId: 'type-1',
-            parentNodeId: null,
-            attrs: null,
-          },
-        ]
-      }
-      return []
-    })
-    const state = createEmptyModelEditorState()
     state.nodeTypes = [
       {
         id: 'type-1',
@@ -130,22 +107,9 @@ describe('prepareModelSaveValidation', () => {
         }),
       } as never,
     ]
-    const vueScope = effectScope()
-    const loader = vueScope.run(() => useDetachedModelSnapshot(ref('model-1')))!
 
-    const result = await prepareModelSaveValidation({
-      loader,
-      state,
-      activeDiagram: null,
-    })
+    const result = await prepareModelSaveValidation({ state, activeDiagram: null })
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.cancelled).toBe(false)
-      expect(result.error).toContain('code')
-    }
-    expect(loader.snapshot.value).toBeNull()
-    expect(state.nodes).toEqual([])
-    vueScope.stop()
+    expect(result).toEqual({ ok: true })
   })
 })

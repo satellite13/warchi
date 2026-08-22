@@ -178,7 +178,6 @@ const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
 const detachedModelId = computed(() => state.value.modelId || null)
 const detachedSnapshotOptions = { defaultsCatalog: () => state.value }
-const saveDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const isPreparingValidation = ref(false)
@@ -567,7 +566,6 @@ const {
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
-      saveDetachedSnapshot.invalidateAfterRemoteSync()
       scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
     },
@@ -596,7 +594,6 @@ const {
       }
     },
     onDetachedSnapshotInvalidated: () => {
-      saveDetachedSnapshot.invalidateAfterRemoteSync()
       scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
       invalidateTraceabilityDiagrams()
@@ -1090,7 +1087,6 @@ watch([rightPanelTabs, activeRightTab], () => {
 })
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
-  saveDetachedSnapshot.invalidateAfterRemoteSync()
   scriptsDetachedSnapshot.invalidateAfterRemoteSync()
   oefDetachedSnapshot.invalidateAfterRemoteSync()
 })
@@ -1827,15 +1823,12 @@ const saveWithValidation = async (): Promise<boolean> => {
 
   try {
     const prepared = await prepareModelSaveValidation({
-      loader: saveDetachedSnapshot,
       state: state.value,
       activeDiagram: activeDiagram.value?.parsedAttrs,
       t: (key, params) => String(t(key, params ?? {})),
     })
     if (!prepared.ok) {
-      if (!prepared.cancelled) {
-        setUiError(prepared.error ?? t('models.saveValidationSnapshotFailed'))
-      }
+      setUiError(prepared.error)
       return false
     }
     isPreparingValidation.value = false
@@ -1849,7 +1842,6 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
-      saveDetachedSnapshot.invalidateAfterRemoteSync()
       scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
       diagramCanvasRef.value?.resetHistory()
@@ -1860,7 +1852,6 @@ const saveWithValidation = async (): Promise<boolean> => {
     return ok
   } finally {
     isPreparingValidation.value = false
-    saveDetachedSnapshot.release()
     if (isSaving.value) finishSave()
   }
 }
@@ -3805,12 +3796,10 @@ onBeforeUnmount(() => {
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
     :progress="isPreparingScripts ? scriptsProgress : saveProgress"
-    :cancellable="isPreparingValidation || isPreparingScripts"
+    :cancellable="isPreparingScripts"
     @cancel="
       cancelDetachedProgress({
-        savePreparing: isPreparingValidation,
         scriptsPreparing: isPreparingScripts,
-        saveCancel: saveDetachedSnapshot.cancel,
         scriptsCancel: scriptsDetachedSnapshot.cancel,
       })
     "

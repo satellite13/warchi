@@ -3461,6 +3461,7 @@ onBeforeUnmount(() => {
             :children-loading="partialStore.childrenLoading.value"
             :children-errors="partialStore.childrenErrors.value"
             :search-hits="lazyTreeSearch.hits.value"
+            :search-query="lazyTreeSearchQuery"
             :search-loading="lazyTreeSearch.loading.value || lazyTreeSearch.selectionLoading.value"
             :search-error="lazyTreeSearch.error.value || lazyTreeSearch.selectionError.value"
             :tree-focus-loading="routeTreeFocusLoading"

@@ -42,6 +42,7 @@ const props = defineProps<{
   childrenLoading?: Set<string>
   childrenErrors?: Map<string, string>
   searchHits?: ModelSearchHit[]
+  searchQuery?: string
   searchLoading?: boolean
   searchError?: string | null
   treeFocusLoading?: boolean
@@ -658,6 +659,14 @@ watch(normalizedQuery, (query, prev) => {
 })
 
 watch(treeSearchQuery, query => emit("searchQueryChange", query))
+
+watch(
+  () => props.searchQuery,
+  query => {
+    if (query === undefined || query === treeSearchQuery.value) return
+    treeSearchQuery.value = query
+  },
+)
 
 defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 </script>

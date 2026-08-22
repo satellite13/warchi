@@ -101,6 +101,7 @@ function mountPanel(props: {
   childrenLoading?: Set<string>
   childrenErrors?: Map<string, string>
   searchHits?: ModelSearchHit[]
+  searchQuery?: string
   searchLoading?: boolean
   searchError?: string | null
   treeFocusLoading?: boolean
@@ -123,6 +124,7 @@ function mountPanel(props: {
       childrenLoading: props.childrenLoading,
       childrenErrors: props.childrenErrors,
       searchHits: props.searchHits,
+      searchQuery: props.searchQuery,
       searchLoading: props.searchLoading,
       searchError: props.searchError,
       treeFocusLoading: props.treeFocusLoading,
@@ -540,6 +542,21 @@ describe('ModelTreePalettePanel search', () => {
     expect(wrapper.emitted('selectSearchHit')).toEqual([
       [{ kind: 'node', id: 'server-hit', name: 'Special server node' }],
     ])
+  })
+
+  it('syncs the search input when the parent clears searchQuery', async () => {
+    const wrapper = mountPanel({
+      nodes: [],
+      searchHits: [],
+      searchQuery: 'diagram',
+    })
+    await flushTree(wrapper)
+    expect((wrapper.get('.search-input').element as HTMLInputElement).value).toBe('diagram')
+
+    await wrapper.setProps({ searchQuery: '' })
+    await flushTree(wrapper)
+
+    expect((wrapper.get('.search-input').element as HTMLInputElement).value).toBe('')
   })
 
   it('renders search hit icons, breadcrumbs, and emits the full hit object', async () => {

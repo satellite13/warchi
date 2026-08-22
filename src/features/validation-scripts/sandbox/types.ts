@@ -1,3 +1,5 @@
+import type { DiagramScriptCommand } from './diagramScriptCommands'
+
 export type ValidationIssueLevel = 'error' | 'warn' | 'info'
 
 export type ValidationIssueTargetKind = 'node' | 'link' | 'diagram' | 'folder'
@@ -125,6 +127,7 @@ export type ValidationRunContext = {
 
 export type ValidationRunResult = {
   issues: ValidationIssue[]
+  commands?: DiagramScriptCommand[]
   error?: string
   timedOut?: boolean
 }

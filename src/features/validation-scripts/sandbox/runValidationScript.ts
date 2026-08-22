@@ -3,7 +3,12 @@ import {
   type ValidationRunResult,
   type ValidationSnapshot,
 } from './types'
-import { createValidationScriptApi, executeValidationScript } from './validationScriptApi'
+import type { DiagramScriptCommand } from './diagramScriptCommands'
+import {
+  createValidationScriptApi,
+  executeValidationScript,
+  type DiagramScriptQueryFn,
+} from './validationScriptApi'
 
 export type RunValidationScriptOptions = {
   source: string
@@ -13,18 +18,28 @@ export type RunValidationScriptOptions = {
   /** Prefer in-process for tests / environments without DOM iframe. */
   inProcess?: boolean
   signal?: AbortSignal
+  query?: DiagramScriptQueryFn
 }
 
 type SandboxDoneMessage = {
   type: 'done'
   requestId: string
   issues?: ValidationRunResult['issues']
+  commands?: DiagramScriptCommand[]
   error?: string
   timedOut?: boolean
 }
 
 type SandboxReadyMessage = {
   type: 'ready'
+}
+
+type SandboxQueryMessage = {
+  type: 'query'
+  requestId: string
+  queryId: string
+  method: string
+  args?: Record<string, unknown>
 }
 
 function sandboxPageUrl(): string {
@@ -41,11 +56,15 @@ export async function runValidationScript(
   return runInIframe(options)
 }
 
-function runInProcess(options: RunValidationScriptOptions): ValidationRunResult {
+async function runInProcess(options: RunValidationScriptOptions): Promise<ValidationRunResult> {
   const issues: ValidationRunResult['issues'] = []
-  const api = createValidationScriptApi(options.snapshot, options.openDiagramId, issues)
-  const { error } = executeValidationScript(options.source, api)
-  return error ? { issues, error } : { issues }
+  const commands: DiagramScriptCommand[] = []
+  const api = createValidationScriptApi(options.snapshot, options.openDiagramId, issues, {
+    commands,
+    query: options.query,
+  })
+  const { error } = await executeValidationScript(options.source, api)
+  return error ? { issues, commands, error } : { issues, commands }
 }
 
 function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRunResult> {
@@ -57,18 +76,18 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
 
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe')
-    // No allow-same-origin: opaque origin so user script cannot touch parent DOM.
     iframe.setAttribute('sandbox', 'allow-scripts')
     iframe.setAttribute('title', 'validation-script-sandbox')
     iframe.style.display = 'none'
 
     let settled = false
     let ready = false
+    let timer: ReturnType<typeof setTimeout> | null = null
 
     const finish = (result: ValidationRunResult) => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
+      if (timer != null) clearTimeout(timer)
       window.removeEventListener('message', onMessage)
       options.signal?.removeEventListener('abort', onAbort)
       iframe.remove()
@@ -76,10 +95,18 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
     }
 
     const onAbort = () => {
-      finish({ issues: [], error: 'Cancelled' })
+      finish({ issues: [], commands: [], error: 'Cancelled' })
+    }
+
+    const armTimeout = () => {
+      if (timer != null) clearTimeout(timer)
+      timer = setTimeout(() => {
+        finish({ issues: [], commands: [], error: 'Script timed out', timedOut: true })
+      }, timeoutMs)
     }
 
     const sendRun = () => {
+      armTimeout()
       iframe.contentWindow?.postMessage(
         {
           type: 'run',
@@ -94,7 +121,11 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
 
     const onMessage = (event: MessageEvent) => {
       if (event.source !== iframe.contentWindow) return
-      const data = event.data as SandboxReadyMessage | SandboxDoneMessage | null
+      const data = event.data as
+        | SandboxReadyMessage
+        | SandboxDoneMessage
+        | SandboxQueryMessage
+        | null
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'ready') {
@@ -104,24 +135,48 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
         return
       }
 
+      if (data.type === 'query' && data.requestId === requestId) {
+        if (settled) return
+        void (async () => {
+          let reply: { data?: unknown; error?: string }
+          try {
+            if (!options.query) {
+              reply = { error: 'Query is not available' }
+            } else {
+              reply = { data: await options.query(data.method, data.args ?? {}) }
+            }
+          } catch (err) {
+            reply = { error: err instanceof Error ? err.message : String(err) }
+          }
+          if (settled) return
+          iframe.contentWindow?.postMessage(
+            {
+              type: 'queryResult',
+              requestId,
+              queryId: data.queryId,
+              ...reply,
+            },
+            '*'
+          )
+        })()
+        return
+      }
+
       if (data.type === 'done' && data.requestId === requestId) {
         finish({
           issues: data.issues ?? [],
+          commands: data.error || data.timedOut ? [] : (data.commands ?? []),
           error: data.error,
           timedOut: data.timedOut,
         })
       }
     }
 
-    const timer = setTimeout(() => {
-      finish({ issues: [], error: 'Script timed out', timedOut: true })
-    }, timeoutMs)
-
     options.signal?.addEventListener('abort', onAbort, { once: true })
     window.addEventListener('message', onMessage)
 
     iframe.onerror = () => {
-      finish({ issues: [], error: 'Failed to load script sandbox' })
+      finish({ issues: [], commands: [], error: 'Failed to load script sandbox' })
     }
 
     iframe.src = sandboxPageUrl()

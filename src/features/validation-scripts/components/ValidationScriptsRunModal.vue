@@ -5,11 +5,14 @@ import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { useValidationScripts } from '@/composables/useValidationScripts'
 import type { ValidationIssue, ValidationSnapshot } from '../sandbox/types'
+import type { DiagramScriptQueryFn } from '../sandbox/validationScriptApi'
 import { runValidationScript } from '../sandbox/runValidationScript'
 
 const props = defineProps<{
   snapshot: ValidationSnapshot
   openDiagramId: string | null
+  query?: DiagramScriptQueryFn
+  canEdit?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,7 +38,12 @@ const scriptOptions = computed(() =>
 )
 
 const canRun = computed(
-  () => !!selectedId.value && !isRunning.value && !isLoading.value && list.value.length > 0,
+  () =>
+    !!selectedId.value &&
+    !!props.openDiagramId &&
+    !isRunning.value &&
+    !isLoading.value &&
+    list.value.length > 0,
 )
 
 onMounted(async () => {
@@ -71,6 +79,7 @@ async function handleRun(): Promise<void> {
       snapshot: props.snapshot,
       openDiagramId: props.openDiagramId,
       signal: controller.signal,
+      query: props.query,
     })
     issues.value = result.issues
     hasRun.value = true
@@ -107,7 +116,7 @@ function levelLabel(level: ValidationIssue['level']): string {
         {{
           openDiagramId
             ? t('validationScripts.runHintWithDiagram')
-            : t('validationScripts.runHintModelOnly')
+            : t('validationScripts.runNeedsDiagram')
         }}
       </p>
 

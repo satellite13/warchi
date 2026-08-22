@@ -49,9 +49,15 @@ import {
   ensureNotationImportCatalog,
 } from './composables'
 import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
-import { cancelDetachedProgress } from './utils/cancelDetachedProgress'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
 import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
+import { buildDiagramScriptSnapshot } from '@/features/validation-scripts/sandbox/buildDiagramScriptSnapshot'
+import { createDiagramScriptQueryHost } from '@/features/validation-scripts/sandbox/diagramScriptQueryHost'
+import {
+  fetchGraphNeighbors,
+  resolveModelLinks,
+  searchModelNodes,
+} from './composables/modelScopedApi'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -180,11 +186,8 @@ const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
 const detachedModelId = computed(() => state.value.modelId || null)
 const detachedSnapshotOptions = { defaultsCatalog: () => state.value }
-const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const isPreparingValidation = ref(false)
-const isPreparingScripts = ref(false)
-const scriptsProgress = ref('')
 /** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
 const yieldToUiPaint = (): Promise<void> =>
   new Promise(resolve => {
@@ -324,35 +327,41 @@ assignScopedReload({
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
 const validationRunPayload = ref<
-  Extract<Awaited<ReturnType<typeof prepareValidationScriptRun>>, { ok: true }>['payload'] | null
+  Extract<ReturnType<typeof prepareValidationScriptRun>, { ok: true }>['payload'] | null
 >(null)
 
-async function loadDetachedValidationPayload(): Promise<boolean> {
-  if (!model.value) return false
-  isPreparingScripts.value = true
-  scriptsProgress.value = t('models.validationScriptsPreparing')
-  await nextTick()
-  await yieldToUiPaint()
-  try {
-    const prepared = await prepareValidationScriptRun({
-      loader: scriptsDetachedSnapshot,
-      state: state.value,
-      modelName: model.value.name,
-      modelVersion: model.value.version,
-      openDiagramId: selectedDiagramId.value,
-    })
-    if (!prepared.ok) {
-      if (!prepared.cancelled) {
-        setUiError(prepared.error ?? t('models.validationScriptsSnapshotFailed'))
-      }
-      return false
-    }
-    validationRunPayload.value = prepared.payload
-    return true
-  } finally {
-    isPreparingScripts.value = false
-    scriptsDetachedSnapshot.release()
-  }
+function openValidationScriptsModal(): void {
+  if (!model.value) return
+  const prepared = prepareValidationScriptRun({
+    state: state.value,
+    modelName: model.value.name,
+    modelVersion: model.value.version,
+    openDiagramId: selectedDiagramId.value,
+  })
+  validationRunPayload.value = prepared.ok
+    ? prepared.payload
+    : buildDiagramScriptSnapshot({
+        state: state.value,
+        modelName: model.value.name,
+        modelVersion: model.value.version,
+        openDiagramId: null,
+      })
+  showValidationScriptsModal.value = true
+}
+
+async function handleDiagramScriptQuery(
+  method: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const host = createDiagramScriptQueryHost({
+    modelId: state.value.modelId,
+    fetchNeighbors: fetchGraphNeighbors,
+    search: searchModelNodes,
+    resolveLinks: resolveModelLinks,
+  })
+  const result = await host.handle({ method, args })
+  if ('error' in result) throw new Error(result.error)
+  return result.data
 }
 
 function closeValidationScriptsModal(): void {
@@ -568,7 +577,6 @@ const {
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
-      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
     },
     onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
@@ -596,7 +604,6 @@ const {
       }
     },
     onDetachedSnapshotInvalidated: () => {
-      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
       invalidateTraceabilityDiagrams()
     },
@@ -1089,7 +1096,6 @@ watch([rightPanelTabs, activeRightTab], () => {
 })
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
-  scriptsDetachedSnapshot.invalidateAfterRemoteSync()
   oefDetachedSnapshot.invalidateAfterRemoteSync()
 })
 
@@ -1868,7 +1874,6 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
-      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
       diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
@@ -2697,9 +2702,7 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'run-validation-script':
-      if (await loadDetachedValidationPayload()) {
-        showValidationScriptsModal.value = true
-      }
+      openValidationScriptsModal()
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -3821,18 +3824,11 @@ onBeforeUnmount(() => {
   </MainLayout>
 
   <SaveToast
-    :saving="isSaving || isPreparingScripts"
+    :saving="isSaving"
     :success="saveSuccess || diagramCopySuccess"
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
-    :progress="isPreparingScripts ? scriptsProgress : saveProgress"
-    :cancellable="isPreparingScripts"
-    @cancel="
-      cancelDetachedProgress({
-        scriptsPreparing: isPreparingScripts,
-        scriptsCancel: scriptsDetachedSnapshot.cancel,
-      })
-    "
+    :progress="saveProgress"
   />
   <RemoteCascadeConflictNotice
     v-if="remoteCascadeConflictCount > 0"
@@ -4246,6 +4242,8 @@ onBeforeUnmount(() => {
     v-if="showValidationScriptsModal && validationRunPayload"
     :snapshot="validationRunPayload.snapshot"
     :open-diagram-id="validationRunPayload.openDiagramId"
+    :query="handleDiagramScriptQuery"
+    :can-edit="canInspectDiagramJson"
     @close="closeValidationScriptsModal"
     @select-issue="handleValidationIssueSelect"
   />

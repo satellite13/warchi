@@ -36,9 +36,10 @@ export const validationScriptsMessages = {
       runNoIssues:
         'Скрипт завершился без сообщений. Сохраните скрипт перед запуском и вызывайте report.* — иначе список результатов пуст.',
       runHintWithDiagram:
-        'Скрипт получит всю модель; ctx.diagram — текущая открытая диаграмма.',
+        'Скрипт видит только открытую диаграмму. Соседей и поиск в модели — через neighbors / searchNodes / linksBetween.',
       runHintModelOnly:
-        'Скрипт получит всю модель; ctx.diagram = null (диаграмма не открыта).',
+        'Откройте диаграмму, чтобы запустить скрипт. Дерево модели целиком не выгружается.',
+      runNeedsDiagram: 'Откройте диаграмму, чтобы запустить скрипт.',
       toolbarRun: 'Скрипты',
       issuesTitle: 'Результаты ({count})',
       issueError: 'Ошибка',
@@ -130,9 +131,10 @@ export const validationScriptsMessages = {
       runNoIssues:
         'Script finished with no messages. Save the script before running and call report.* — otherwise the results list stays empty.',
       runHintWithDiagram:
-        'The script receives the full model; ctx.diagram is the currently open diagram.',
+        'The script sees only the open diagram. Use neighbors / searchNodes / linksBetween to query the model.',
       runHintModelOnly:
-        'The script receives the full model; ctx.diagram is null (no diagram open).',
+        'Open a diagram to run a script. The full model tree is not loaded.',
+      runNeedsDiagram: 'Open a diagram to run a script.',
       toolbarRun: 'Scripts',
       issuesTitle: 'Results ({count})',
       issueError: 'Error',

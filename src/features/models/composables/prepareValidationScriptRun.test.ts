@@ -1,66 +1,99 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptyModelEditorState } from '../types'
-import { parseNodeAttrs } from '../modelAttrs'
+import type { EditorDiagram, EditorNode } from '../types'
 import { prepareValidationScriptRun } from './prepareValidationScriptRun'
 
 describe('prepareValidationScriptRun', () => {
-  it('does not start a script when the detached load is cancelled', async () => {
-    const loader = {
-      loadOverlayed: vi.fn(async () => ({ ok: false as const, cancelled: true, error: null })),
-      cancel: vi.fn(),
-    }
+  it('fails when no diagram is open and does not load a detached overlay', async () => {
+    const loadOverlayed = vi.fn()
+    const state = createEmptyModelEditorState()
+    state.modelId = 'm1'
+    state.nodes = [
+      {
+        id: 'off-canvas',
+        name: 'Off',
+        parentNodeId: null,
+        nodeTypeId: 'nt1',
+        ownerId: 'u1',
+        modelId: 'm1',
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs: {},
+      } as EditorNode,
+    ]
 
     const result = await prepareValidationScriptRun({
-      loader,
-      state: createEmptyModelEditorState(),
-      modelName: 'Model',
-      modelVersion: '1.0.0',
-      openDiagramId: 'diagram-1',
-    })
-
-    expect(result).toEqual({ ok: false, cancelled: true, error: null })
-  })
-
-  it('builds a payload from the scripts loader without touching a save loader', async () => {
-    const saveLoader = {
-      loadOverlayed: vi.fn(),
-      cancel: vi.fn(),
-    }
-    const scriptsLoader = {
-      loadOverlayed: vi.fn(async () => ({
-        ok: true as const,
-        snapshot: {
-          nodes: [
-            {
-              id: 'n-1',
-              name: 'N',
-              modelId: 'model-1',
-              ownerId: 'owner-1',
-              nodeTypeId: 'type-1',
-              parentNodeId: null,
-              parsedAttrs: parseNodeAttrs(null),
-            },
-          ],
-          links: [],
-        },
-      })),
-      cancel: vi.fn(),
-    }
-
-    const result = await prepareValidationScriptRun({
-      loader: scriptsLoader,
-      state: createEmptyModelEditorState(),
+      state,
       modelName: 'Model',
       modelVersion: '1.0.0',
       openDiagramId: null,
     })
 
+    expect(result.ok).toBe(false)
+    expect(loadOverlayed).not.toHaveBeenCalled()
+  })
+
+  it('builds a diagram-scoped snapshot from the current editor state', async () => {
+    const loadOverlayed = vi.fn()
+    const state = createEmptyModelEditorState()
+    state.modelId = 'm1'
+    state.nodes = [
+      {
+        id: 'on-canvas',
+        name: 'On',
+        parentNodeId: null,
+        nodeTypeId: 'nt1',
+        ownerId: 'u1',
+        modelId: 'm1',
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs: {},
+      } as EditorNode,
+      {
+        id: 'off-canvas',
+        name: 'Off',
+        parentNodeId: null,
+        nodeTypeId: 'nt1',
+        ownerId: 'u1',
+        modelId: 'm1',
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs: {},
+      } as EditorNode,
+    ]
+    state.diagrams = [
+      {
+        id: 'd1',
+        name: 'Open',
+        version: '1.0.0',
+        notationId: 'not1',
+        modelId: 'm1',
+        ownerId: 'u1',
+        createdAt: null,
+        updatedAt: null,
+        parsedAttrs: {
+          instances: {
+            nodes: [{ id: 'inst1', modelNodeId: 'on-canvas', x: 4, y: 8 }],
+            edges: [],
+          },
+        },
+      } as EditorDiagram,
+    ]
+    state.nodeTypes = [{ id: 'nt1', name: 'App', ownerId: 'u1' } as never]
+
+    const result = await prepareValidationScriptRun({
+      state,
+      modelName: 'Model',
+      modelVersion: '1.0.0',
+      openDiagramId: 'd1',
+    })
+
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.payload.snapshot.model.nodes.map(node => node.id)).toEqual(['n-1'])
+      expect(result.payload.openDiagramId).toBe('d1')
+      expect(result.payload.snapshot.model.nodes.map((n) => n.id)).toEqual(['on-canvas'])
+      expect(result.payload.snapshot.model.diagrams[0]?.instances).toHaveLength(1)
     }
-    expect(scriptsLoader.loadOverlayed).toHaveBeenCalledTimes(1)
-    expect(saveLoader.loadOverlayed).not.toHaveBeenCalled()
-    expect(saveLoader.cancel).not.toHaveBeenCalled()
+    expect(loadOverlayed).not.toHaveBeenCalled()
   })
 })

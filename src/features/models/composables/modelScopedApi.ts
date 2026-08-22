@@ -192,14 +192,18 @@ export function fetchGraphNeighbors(
 
 export function fetchDiagramReferences(
   modelId: string,
-  nodeId: string,
+  target: { nodeId: string } | { linkId: string },
   options: FetchDiagramReferencesOptions = {}
 ): Promise<ApiResult<PaginatedResponse<DiagramReferenceResponse>>> {
-  const query = new URLSearchParams({
-    nodeId,
-    page: String(options.page ?? 0),
-    size: String(options.size ?? 50),
-  })
+  const record = target as { nodeId?: string; linkId?: string }
+  if (record.nodeId != null && record.linkId != null) {
+    throw new Error('fetchDiagramReferences accepts exactly one of nodeId or linkId')
+  }
+  const query = new URLSearchParams()
+  if (record.nodeId != null) query.set('nodeId', record.nodeId)
+  if (record.linkId != null) query.set('linkId', record.linkId)
+  query.set('page', String(options.page ?? 0))
+  query.set('size', String(options.size ?? 50))
   return apiFetch<PaginatedResponse<DiagramReferenceResponse>>(
     `/models/${encodePath(modelId)}/diagram-references?${query.toString()}`,
     { method: 'GET', signal: options.signal }

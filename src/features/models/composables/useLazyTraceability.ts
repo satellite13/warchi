@@ -318,7 +318,7 @@ export function useLazyTraceability(options: {
     })
 
     try {
-      const result = await fetchDiagramReferences(modelId, nodeId, {
+      const result = await fetchDiagramReferences(modelId, { nodeId }, {
         page,
         size: TRACEABILITY_PAGE_SIZE,
         signal: session.controller.signal,

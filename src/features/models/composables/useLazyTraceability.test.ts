@@ -149,7 +149,7 @@ describe('useLazyTraceability', () => {
       size: 50,
       signal: expect.any(AbortSignal),
     })
-    expect(fetchDiagramReferences).toHaveBeenCalledWith('model-1', 'root', {
+    expect(fetchDiagramReferences).toHaveBeenCalledWith('model-1', { nodeId: 'root' }, {
       page: 0,
       size: 50,
       signal: expect.any(AbortSignal),

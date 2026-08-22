@@ -100,7 +100,7 @@ describe('modelScopedApi', () => {
       size: 40,
       signal: controller.signal,
     })
-    await fetchDiagramReferences('m', 'n1', {
+    await fetchDiagramReferences('m', { nodeId: 'n1' }, {
       page: 1,
       size: 20,
       signal: controller.signal,
@@ -133,6 +133,25 @@ describe('modelScopedApi', () => {
     expectTypeOf<ReturnType<typeof fetchDiagramReferences>>().toEqualTypeOf<
       Promise<ApiResult<PaginatedResponse<DiagramReferenceResponse>>>
     >()
+  })
+
+  it('queries diagram references by linkId without nodeId', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(ok({ content: [] }))
+
+    await fetchDiagramReferences('m', { linkId: 'l1' }, { page: 1, size: 20 })
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/models/m/diagram-references?linkId=l1&page=1&size=20',
+      { method: 'GET', signal: undefined }
+    )
+    expect(String(vi.mocked(apiFetch).mock.calls[0]?.[0])).not.toContain('nodeId')
+  })
+
+  it('throws and does not fetch when both nodeId and linkId are present', () => {
+    expect(() =>
+      fetchDiagramReferences('m', { nodeId: 'n1', linkId: 'l1' } as { nodeId: string })
+    ).toThrow()
+    expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('requests node and diagram hits with extended search contract fields', async () => {

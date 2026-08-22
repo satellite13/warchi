@@ -87,6 +87,11 @@ const router = createRouter({
       component: () => import("../views/ModelRelationMatrixView.vue")
     },
     {
+      path: "/models/:id/validation",
+      name: "model-validation",
+      component: () => import("../views/ModelValidationView.vue")
+    },
+    {
       path: "/notations",
       name: "notations",
       component: () => import("../views/NotationsView.vue")

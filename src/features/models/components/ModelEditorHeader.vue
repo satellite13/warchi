@@ -105,6 +105,7 @@ const emit = defineEmits<{
   createBaseline: []
   compare: []
   openRelationMatrix: []
+  openValidation: []
   diagramLockReload: []
 }>()
 
@@ -416,6 +417,15 @@ function spectatorInitials(name: string): string {
         @click="emit('openRelationMatrix')"
       >
         <UiIcon name="grid_view" />
+      </button>
+      <button
+        v-if="modelId"
+        type="button"
+        class="deh-icon-btn"
+        :title="t('models.validationReportOpen')"
+        @click="emit('openValidation')"
+      >
+        <UiIcon name="fact_check" />
       </button>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button

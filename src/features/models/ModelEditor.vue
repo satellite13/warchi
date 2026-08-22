@@ -511,6 +511,12 @@ function handleOpenRelationMatrix(): void {
   router.push({ name: 'model-relation-matrix', params: { id: modelId } })
 }
 
+function handleOpenValidation(): void {
+  const modelId = state.value.modelId
+  if (!modelId) return
+  router.push({ name: 'model-validation', params: { id: modelId } })
+}
+
 function handleCompareModalClose() {
   showCompareModal.value = false
   versionDiff.clearCompare()
@@ -3526,6 +3532,7 @@ onBeforeUnmount(() => {
         @share="showShareModal = true"
         @compare="handleOpenCompareModal"
         @open-relation-matrix="handleOpenRelationMatrix"
+        @open-validation="handleOpenValidation"
         @open-notation="handleOpenNotationEditor"
         @select-diagram-version="selectedDiagramId = $event"
         @create-baseline="handleCreateBaseline"

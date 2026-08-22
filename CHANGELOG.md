@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-08-23
+
+### Fixed
+- Connecting two model-tree nodes by outline opens the notation relation picker instead of creating a diagram-only dashed edge onto a nearby stroke.
+
 ## [0.24.0] - 2026-08-23
 
 ### Added

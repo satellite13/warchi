@@ -3345,6 +3345,12 @@ const routeModelId = computed(() => (typeof route.params.id === 'string' ? route
 const routeDiagramId = computed(() =>
   typeof route.query.diagramId === 'string' ? route.query.diagramId : ''
 )
+const routeNodeId = computed(() =>
+  typeof route.query.nodeId === 'string' ? route.query.nodeId : ''
+)
+const routeLinkId = computed(() =>
+  typeof route.query.linkId === 'string' ? route.query.linkId : ''
+)
 const applyRouteDiagramSelection = (diagramId: string): void => {
   if (!diagramId) return
   const target = state.value.diagrams.find(
@@ -3352,6 +3358,15 @@ const applyRouteDiagramSelection = (diagramId: string): void => {
   )
   if (!target) return
   applyDiagramSelection(target.id)
+}
+const applyRouteNodeSelection = (nodeId: string): void => {
+  if (!nodeId) return
+  selectedNodeId.value = nodeId
+  treePanelRef.value?.focusNode?.(nodeId)
+}
+const applyRouteLinkSelection = (linkId: string): void => {
+  if (!linkId) return
+  selectedModelLinkId.value = linkId
 }
 const routeTreeFocusLoading = ref(false)
 const routeTreeFocusError = ref<string | null>(null)
@@ -3391,13 +3406,50 @@ const focusRouteDiagramInTree = async (
     }
   }
 }
+const focusRouteNodeInTree = async (
+  nodeId: string,
+  isCurrent: () => boolean
+): Promise<void> => {
+  if (!isCurrent()) return
+  routeTreeFocusLoading.value = false
+  routeTreeFocusError.value = null
+  if (!nodeId) return
+  const needsTreePath = nodeId !== treeRootNodeId.value
+  routeTreeFocusLoading.value = true
+  routeTreeFocusError.value = null
+  try {
+    await focusRouteDiagramTree({
+      diagramId: nodeId,
+      nodeId,
+      treeRootNodeId: treeRootNodeId.value,
+      selectHit: async (id, guard) => {
+        const result = await lazyTreeSearch.selectHit({ kind: 'node', id }, guard)
+        return result.nodePath
+      },
+      waitForRender: nextTick,
+      expandPath: path => treePanelRef.value?.expandPath?.(path),
+      focusDiagram: (id, guard) => treePanelRef.value?.focusNode?.(id, guard),
+      isCurrent,
+    })
+  } finally {
+    if (isCurrent()) {
+      routeTreeFocusLoading.value = false
+      routeTreeFocusError.value = needsTreePath ? lazyTreeSearch.selectionError.value : null
+    }
+  }
+}
 const { applyCurrentDiagramNavigation, retryCurrentDiagramTreeFocus } =
   useModelEditorRouteNavigation({
     modelId: routeModelId,
     diagramId: routeDiagramId,
+    nodeId: routeNodeId,
+    linkId: routeLinkId,
     loadModel: async () => loadModel(),
     applyRouteDiagramSelection,
+    applyRouteNodeSelection,
+    applyRouteLinkSelection,
     focusRouteDiagramInTree,
+    focusRouteNodeInTree,
     afterModelLoad: () => {
       scheduleFetchDocumentsFromApi()
       void whenBackgroundReady().then(() => fetchWikiDocuments())

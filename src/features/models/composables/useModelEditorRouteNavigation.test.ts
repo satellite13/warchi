@@ -209,6 +209,98 @@ describe('useModelEditorRouteNavigation', () => {
     expect(loadModel).not.toHaveBeenCalled()
     expect(applyRouteDiagramSelection).not.toHaveBeenCalled()
   })
+
+  it('focuses a node in the tree without opening a diagram when only nodeId is present', async () => {
+    const applyRouteDiagramSelection = vi.fn()
+    const applyRouteNodeSelection = vi.fn()
+    const focusRouteNodeInTree = vi.fn()
+    const nodeId = ref('')
+
+    useModelEditorRouteNavigation({
+      modelId: ref('model-1'),
+      diagramId: ref(''),
+      nodeId,
+      linkId: ref(''),
+      loadModel: vi.fn(),
+      applyRouteDiagramSelection,
+      applyRouteNodeSelection,
+      focusRouteNodeInTree,
+    })
+
+    nodeId.value = 'node-1'
+    await nextTick()
+
+    expect(focusRouteNodeInTree).toHaveBeenCalledWith('node-1', expect.any(Function))
+    expect(applyRouteNodeSelection).toHaveBeenCalledWith('node-1')
+    expect(applyRouteDiagramSelection).not.toHaveBeenCalled()
+  })
+
+  it('opens the diagram and then selects the node when diagramId and nodeId are present', async () => {
+    const events: string[] = []
+    const applyRouteDiagramSelection = vi.fn((requestedDiagramId: string) => {
+      events.push(`diagram:${requestedDiagramId}`)
+    })
+    const applyRouteNodeSelection = vi.fn((requestedNodeId: string) => {
+      events.push(`node:${requestedNodeId}`)
+    })
+    const focusRouteNodeInTree = vi.fn((requestedNodeId: string) => {
+      events.push(`focus-node:${requestedNodeId}`)
+    })
+    const diagramId = ref('')
+    const nodeId = ref('')
+
+    useModelEditorRouteNavigation({
+      modelId: ref('model-1'),
+      diagramId,
+      nodeId,
+      linkId: ref(''),
+      loadModel: vi.fn(),
+      applyRouteDiagramSelection,
+      applyRouteNodeSelection,
+      focusRouteNodeInTree,
+    })
+
+    diagramId.value = 'diagram-1'
+    nodeId.value = 'node-1'
+    await nextTick()
+
+    expect(applyRouteDiagramSelection).toHaveBeenCalledWith('diagram-1')
+    expect(applyRouteNodeSelection).toHaveBeenCalledWith('node-1')
+    expect(focusRouteNodeInTree).toHaveBeenCalledWith('node-1', expect.any(Function))
+    expect(events[0]).toBe('diagram:diagram-1')
+    expect(events).toContain('node:node-1')
+    expect(events).toContain('focus-node:node-1')
+  })
+
+  it('opens the diagram and then selects the link when diagramId and linkId are present', async () => {
+    const events: string[] = []
+    const applyRouteDiagramSelection = vi.fn((requestedDiagramId: string) => {
+      events.push(`diagram:${requestedDiagramId}`)
+    })
+    const applyRouteLinkSelection = vi.fn((requestedLinkId: string) => {
+      events.push(`link:${requestedLinkId}`)
+    })
+    const diagramId = ref('')
+    const linkId = ref('')
+
+    useModelEditorRouteNavigation({
+      modelId: ref('model-1'),
+      diagramId,
+      nodeId: ref(''),
+      linkId,
+      loadModel: vi.fn(),
+      applyRouteDiagramSelection,
+      applyRouteLinkSelection,
+    })
+
+    diagramId.value = 'diagram-1'
+    linkId.value = 'link-1'
+    await nextTick()
+
+    expect(applyRouteDiagramSelection).toHaveBeenCalledWith('diagram-1')
+    expect(applyRouteLinkSelection).toHaveBeenCalledWith('link-1')
+    expect(events).toEqual(['diagram:diagram-1', 'link:link-1'])
+  })
 })
 
 describe('focusRouteDiagramTree', () => {

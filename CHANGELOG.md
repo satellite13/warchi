@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-08-23
+
+### Fixed
+- Saving a model no longer fails after removing a figure from a diagram and then deleting that node from the tree.
+
 ## [0.24.1] - 2026-08-23
 
 ### Fixed

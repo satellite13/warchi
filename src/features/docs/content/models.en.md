@@ -77,7 +77,7 @@ Comparison covers both node/link presence and properties, including diagram-scop
 
 ## Model Editor
 
-The model editor includes several areas. The header also has **model validation scripts** — see [Scripts](/docs/validationScripts).
+The model editor includes several areas. The header also has **scripts** for the open diagram — see [Scripts](/docs/validationScripts).
 
 ### Model Tree (left panel)
 

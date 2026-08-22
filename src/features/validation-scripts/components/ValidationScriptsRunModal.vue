@@ -4,17 +4,23 @@ import { useI18n } from 'vue-i18n'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { useValidationScripts } from '@/composables/useValidationScripts'
+import type { DiagramScriptCommand } from '../sandbox/diagramScriptCommands'
+import { summarizeCommands } from '../sandbox/summarizeCommands'
 import type { ValidationIssue, ValidationSnapshot } from '../sandbox/types'
+import type { DiagramScriptQueryFn } from '../sandbox/validationScriptApi'
 import { runValidationScript } from '../sandbox/runValidationScript'
 
 const props = defineProps<{
   snapshot: ValidationSnapshot
   openDiagramId: string | null
+  query?: DiagramScriptQueryFn
+  canEdit?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
   selectIssue: [issue: ValidationIssue]
+  applyCommands: [commands: DiagramScriptCommand[]]
 }>()
 
 const { t } = useI18n()
@@ -25,7 +31,12 @@ const isRunning = ref(false)
 const hasRun = ref(false)
 const runError = ref<string | null>(null)
 const issues = ref<ValidationIssue[]>([])
+const commands = ref<DiagramScriptCommand[]>([])
 const abortController = ref<AbortController | null>(null)
+const commandSummary = computed(() => summarizeCommands(commands.value))
+const canApply = computed(
+  () => !!props.canEdit && commands.value.length > 0 && !runError.value && hasRun.value
+)
 
 const scriptOptions = computed(() =>
   list.value.map((script) => ({
@@ -35,7 +46,12 @@ const scriptOptions = computed(() =>
 )
 
 const canRun = computed(
-  () => !!selectedId.value && !isRunning.value && !isLoading.value && list.value.length > 0,
+  () =>
+    !!selectedId.value &&
+    !!props.openDiagramId &&
+    !isRunning.value &&
+    !isLoading.value &&
+    list.value.length > 0,
 )
 
 onMounted(async () => {
@@ -47,6 +63,7 @@ onMounted(async () => {
 
 watch(selectedId, () => {
   issues.value = []
+  commands.value = []
   runError.value = null
   hasRun.value = false
 })
@@ -55,6 +72,7 @@ async function handleRun(): Promise<void> {
   if (!selectedId.value || isRunning.value) return
   runError.value = null
   issues.value = []
+  commands.value = []
   hasRun.value = false
   isRunning.value = true
   const controller = new AbortController()
@@ -71,14 +89,19 @@ async function handleRun(): Promise<void> {
       snapshot: props.snapshot,
       openDiagramId: props.openDiagramId,
       signal: controller.signal,
+      query: props.query,
     })
-    issues.value = result.issues
     hasRun.value = true
     if (result.error) {
       runError.value = result.timedOut
         ? t('validationScripts.runTimeout')
         : result.error
+      issues.value = []
+      commands.value = []
+      return
     }
+    issues.value = result.issues
+    commands.value = result.commands ?? []
   } finally {
     isRunning.value = false
     abortController.value = null
@@ -87,6 +110,11 @@ async function handleRun(): Promise<void> {
 
 function handleCancel(): void {
   abortController.value?.abort()
+}
+
+function handleApply(): void {
+  if (!canApply.value) return
+  emit('applyCommands', commands.value)
 }
 
 function levelLabel(level: ValidationIssue['level']): string {
@@ -107,7 +135,7 @@ function levelLabel(level: ValidationIssue['level']): string {
         {{
           openDiagramId
             ? t('validationScripts.runHintWithDiagram')
-            : t('validationScripts.runHintModelOnly')
+            : t('validationScripts.runNeedsDiagram')
         }}
       </p>
 
@@ -163,6 +191,23 @@ function levelLabel(level: ValidationIssue['level']): string {
         >
           {{ t('validationScripts.runNoIssues') }}
         </p>
+
+        <div v-if="canApply" class="validation-run__preview">
+          <div class="validation-run__issues-title">
+            {{ t('validationScripts.applyPreviewTitle') }}
+          </div>
+          <p class="validation-run__hint">
+            {{
+              t('validationScripts.applyPreviewSummary', {
+                addNodes: commandSummary.addNodes,
+                addEdges: commandSummary.addEdges,
+                remove: commandSummary.remove,
+                layout: commandSummary.layout,
+                style: commandSummary.style,
+              })
+            }}
+          </p>
+        </div>
       </template>
     </div>
 
@@ -177,6 +222,14 @@ function levelLabel(level: ValidationIssue['level']): string {
         @click="handleCancel"
       >
         {{ t('validationScripts.cancelRun') }}
+      </button>
+      <button
+        v-if="canApply"
+        type="button"
+        class="btn btn--primary"
+        @click="handleApply"
+      >
+        {{ t('validationScripts.apply') }}
       </button>
       <button
         type="button"
@@ -233,6 +286,7 @@ function levelLabel(level: ValidationIssue['level']): string {
   word-break: break-word;
 }
 
+.validation-run__preview,
 .validation-run__issues-wrap {
   display: flex;
   flex-direction: column;

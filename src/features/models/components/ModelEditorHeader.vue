@@ -245,8 +245,10 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   {
     icon: 'terminal',
     event: 'run-validation-script',
-    title: t('validationScripts.toolbarRun'),
-    disabled: props.toolbarLocked,
+    title: props.hasActiveDiagram
+      ? t('validationScripts.toolbarRun')
+      : t('validationScripts.runNeedsDiagram'),
+    disabled: !props.hasActiveDiagram || props.toolbarLocked,
   },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin

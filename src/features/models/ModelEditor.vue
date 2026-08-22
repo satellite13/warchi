@@ -49,9 +49,20 @@ import {
   ensureNotationImportCatalog,
 } from './composables'
 import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
-import { cancelDetachedProgress } from './utils/cancelDetachedProgress'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
 import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
+import { buildDiagramScriptSnapshot } from '@/features/validation-scripts/sandbox/buildDiagramScriptSnapshot'
+import { createDiagramScriptQueryHost } from '@/features/validation-scripts/sandbox/diagramScriptQueryHost'
+import {
+  fetchGraphNeighbors,
+  resolveModelLinks,
+  resolveModelNodes,
+  searchModelNodes,
+} from './composables/modelScopedApi'
+import { applyDiagramScriptCommands } from '@/features/validation-scripts/sandbox/applyDiagramScriptCommands'
+import { validateCommandQueue } from '@/features/validation-scripts/sandbox/diagramScriptCommands'
+import type { DiagramScriptCommand } from '@/features/validation-scripts/sandbox/diagramScriptCommands'
+import { resolveCompatibleNotationComponents } from './modelAttrs'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -180,11 +191,8 @@ const loadedChildrenFor = computed(() => partialStore.store.loadedChildrenFor)
 const childrenPages = computed(() => partialStore.store.childrenPages)
 const detachedModelId = computed(() => state.value.modelId || null)
 const detachedSnapshotOptions = { defaultsCatalog: () => state.value }
-const scriptsDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const isPreparingValidation = ref(false)
-const isPreparingScripts = ref(false)
-const scriptsProgress = ref('')
 /** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
 const yieldToUiPaint = (): Promise<void> =>
   new Promise(resolve => {
@@ -323,36 +331,138 @@ assignScopedReload({
 })
 const showShareModal = ref(false)
 const showValidationScriptsModal = ref(false)
-const validationRunPayload = ref<
-  Extract<Awaited<ReturnType<typeof prepareValidationScriptRun>>, { ok: true }>['payload'] | null
+const validationRunPayload = shallowRef<
+  Extract<ReturnType<typeof prepareValidationScriptRun>, { ok: true }>['payload'] | null
 >(null)
 
-async function loadDetachedValidationPayload(): Promise<boolean> {
-  if (!model.value) return false
-  isPreparingScripts.value = true
-  scriptsProgress.value = t('models.validationScriptsPreparing')
-  await nextTick()
-  await yieldToUiPaint()
-  try {
-    const prepared = await prepareValidationScriptRun({
-      loader: scriptsDetachedSnapshot,
-      state: state.value,
-      modelName: model.value.name,
-      modelVersion: model.value.version,
-      openDiagramId: selectedDiagramId.value,
-    })
-    if (!prepared.ok) {
-      if (!prepared.cancelled) {
-        setUiError(prepared.error ?? t('models.validationScriptsSnapshotFailed'))
-      }
-      return false
-    }
-    validationRunPayload.value = prepared.payload
-    return true
-  } finally {
-    isPreparingScripts.value = false
-    scriptsDetachedSnapshot.release()
+function openValidationScriptsModal(): void {
+  if (!model.value || !selectedDiagramId.value) return
+  const prepared = prepareValidationScriptRun({
+    state: state.value,
+    modelName: model.value.name,
+    modelVersion: model.value.version,
+    openDiagramId: selectedDiagramId.value,
+  })
+  validationRunPayload.value = prepared.ok
+    ? prepared.payload
+    : buildDiagramScriptSnapshot({
+        state: state.value,
+        modelName: model.value.name,
+        modelVersion: model.value.version,
+        openDiagramId: null,
+      })
+  showValidationScriptsModal.value = true
+}
+
+async function handleDiagramScriptQuery(
+  method: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const host = createDiagramScriptQueryHost({
+    modelId: state.value.modelId,
+    fetchNeighbors: fetchGraphNeighbors,
+    search: searchModelNodes,
+    resolveLinks: resolveModelLinks,
+  })
+  const result = await host.handle({ method, args })
+  if ('error' in result) throw new Error(result.error)
+  return result.data
+}
+
+async function handleApplyDiagramScriptCommands(commands: DiagramScriptCommand[]): Promise<void> {
+  const diagram = activeDiagram.value
+  if (!diagram || isDiagramReadOnly.value) {
+    setUiError(t('validationScripts.applyReadOnly'))
+    return
   }
+  const addNodeIds = commands
+    .filter((command): command is Extract<DiagramScriptCommand, { type: 'addInstance' }> =>
+      command.type === 'addInstance'
+    )
+    .map((command) => command.nodeId)
+  const addLinkIds = commands
+    .filter((command): command is Extract<DiagramScriptCommand, { type: 'addEdge' }> =>
+      command.type === 'addEdge'
+    )
+    .map((command) => command.linkId)
+
+  const nodesResult = await resolveModelNodes(state.value.modelId, addNodeIds)
+  if (!nodesResult.success) {
+    setUiError(nodesResult.error.message)
+    return
+  }
+  const linksResult = await resolveModelLinks(state.value.modelId, {
+    linkIds: addLinkIds,
+    endpointNodeIds: [],
+  })
+  if (!linksResult.success) {
+    setUiError(linksResult.error.message)
+    return
+  }
+  if (nodesResult.data.missingIds.length > 0 || linksResult.data.missingLinkIds.length > 0) {
+    setUiError(t('validationScripts.applyMissingEntity'))
+    return
+  }
+
+  const guard = partialStore.store.beginRequest('diagram-script-apply')
+  if (!partialStore.mergePartialEntities(nodesResult.data.nodes, linksResult.data.links, guard)) {
+    setUiError(t('validationScripts.applyMissingEntity'))
+    return
+  }
+
+  const linkEndpoints: Record<string, { sourceId: string; targetId: string }> = {}
+  for (const link of linksResult.data.links) {
+    linkEndpoints[link.id] = { sourceId: link.sourceId, targetId: link.targetId }
+  }
+
+  const validated = validateCommandQueue({
+    instanceModelNodeIds: new Set(
+      diagram.parsedAttrs.instances.nodes.map((instance) => instance.modelNodeId)
+    ),
+    instanceIds: new Set(diagram.parsedAttrs.instances.nodes.map((instance) => instance.id)),
+    edgeIds: new Set(diagram.parsedAttrs.instances.edges.map((instance) => instance.id)),
+    canvasLinkIds: new Set(
+      diagram.parsedAttrs.instances.edges.map((instance) => instance.modelLinkId)
+    ),
+    linkEndpoints,
+    commands,
+  })
+  if (!validated.ok) {
+    setUiError(t('validationScripts.applyInvalidCommands'))
+    return
+  }
+
+  const componentByNodeId: Record<string, string> = {}
+  for (const nodeId of addNodeIds) {
+    const node = state.value.nodes.find((item) => item.id === nodeId && !item._isDeleted)
+    if (!node) {
+      setUiError(t('validationScripts.applyMissingEntity'))
+      return
+    }
+    const matching = resolveCompatibleNotationComponents({
+      node,
+      notationId: diagram.notationId,
+      components: state.value.components,
+    })
+    if (matching.length !== 1) {
+      setUiError(t('validationScripts.applyNeedComponent'))
+      return
+    }
+    componentByNodeId[nodeId] = matching[0]!.id
+  }
+
+  applyDiagramScriptCommands({
+    diagram,
+    commands,
+    linkEndpoints,
+    componentByNodeId,
+    executeHistory: executeDiagramHistoryCommand,
+    onApplied: () => {
+      markDiagramDirty(diagram.id)
+      invalidateTraceabilityDiagrams()
+    },
+  })
+  closeValidationScriptsModal()
 }
 
 function closeValidationScriptsModal(): void {
@@ -568,7 +678,6 @@ const {
     refreshVisibleChildrenScope: partialStore.refreshVisibleChildrenScope,
     invalidateChildrenScope: partialStore.invalidateChildrenScope,
     onDetachedSnapshotInvalidated: () => {
-      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
     },
     onDiagramReferencesInvalidated: invalidateTraceabilityDiagrams,
@@ -596,7 +705,6 @@ const {
       }
     },
     onDetachedSnapshotInvalidated: () => {
-      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
       invalidateTraceabilityDiagrams()
     },
@@ -1089,7 +1197,6 @@ watch([rightPanelTabs, activeRightTab], () => {
 })
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
-  scriptsDetachedSnapshot.invalidateAfterRemoteSync()
   oefDetachedSnapshot.invalidateAfterRemoteSync()
 })
 
@@ -1868,7 +1975,6 @@ const saveWithValidation = async (): Promise<boolean> => {
     await nextTick()
     const ok = await saveChanges()
     if (ok) {
-      scriptsDetachedSnapshot.invalidateAfterRemoteSync()
       oefDetachedSnapshot.invalidateAfterRemoteSync()
       diagramCanvasRef.value?.resetHistory()
       if (activeDiagram.value?.id && diagramRenderer.value) {
@@ -2697,9 +2803,7 @@ const handleToolbarAction = async (event: string) => {
       break
     }
     case 'run-validation-script':
-      if (await loadDetachedValidationPayload()) {
-        showValidationScriptsModal.value = true
-      }
+      openValidationScriptsModal()
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
@@ -3821,18 +3925,11 @@ onBeforeUnmount(() => {
   </MainLayout>
 
   <SaveToast
-    :saving="isSaving || isPreparingScripts"
+    :saving="isSaving"
     :success="saveSuccess || diagramCopySuccess"
     :success-message="diagramCopySuccess ? t('models.diagramCopy.success') : null"
     :error="saveError || uiError"
-    :progress="isPreparingScripts ? scriptsProgress : saveProgress"
-    :cancellable="isPreparingScripts"
-    @cancel="
-      cancelDetachedProgress({
-        scriptsPreparing: isPreparingScripts,
-        scriptsCancel: scriptsDetachedSnapshot.cancel,
-      })
-    "
+    :progress="saveProgress"
   />
   <RemoteCascadeConflictNotice
     v-if="remoteCascadeConflictCount > 0"
@@ -4246,8 +4343,11 @@ onBeforeUnmount(() => {
     v-if="showValidationScriptsModal && validationRunPayload"
     :snapshot="validationRunPayload.snapshot"
     :open-diagram-id="validationRunPayload.openDiagramId"
+    :query="handleDiagramScriptQuery"
+    :can-edit="canInspectDiagramJson"
     @close="closeValidationScriptsModal"
     @select-issue="handleValidationIssueSelect"
+    @apply-commands="handleApplyDiagramScriptCommands"
   />
 
   <DiagramImageShareModal

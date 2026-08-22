@@ -1,33 +1,27 @@
-import { buildValidationSnapshot } from '@/features/validation-scripts/sandbox/buildValidationSnapshot'
+import { buildDiagramScriptSnapshot } from '@/features/validation-scripts/sandbox/buildDiagramScriptSnapshot'
 import type { ModelEditorState } from '../types'
-import type { useDetachedModelSnapshot } from './useDetachedModelSnapshot'
 
 export type PrepareValidationScriptRunResult =
-  | { ok: true; payload: ReturnType<typeof buildValidationSnapshot> }
+  | { ok: true; payload: ReturnType<typeof buildDiagramScriptSnapshot> }
   | { ok: false; cancelled: boolean; error: string | null }
 
-export async function prepareValidationScriptRun(options: {
-  loader: Pick<ReturnType<typeof useDetachedModelSnapshot>, 'loadOverlayed'>
+export function prepareValidationScriptRun(options: {
   state: ModelEditorState
   modelName: string
   modelVersion: string
   openDiagramId: string | null
-}): Promise<PrepareValidationScriptRunResult> {
-  const overlay = await options.loader.loadOverlayed(options.state)
-  if (!overlay.ok) {
-    return { ok: false, cancelled: overlay.cancelled, error: overlay.error }
+}): PrepareValidationScriptRunResult {
+  if (!options.openDiagramId) {
+    return { ok: false, cancelled: false, error: null }
   }
-  return {
-    ok: true,
-    payload: buildValidationSnapshot({
-      state: {
-        ...options.state,
-        nodes: overlay.snapshot.nodes,
-        links: overlay.snapshot.links,
-      },
-      modelName: options.modelName,
-      modelVersion: options.modelVersion,
-      openDiagramId: options.openDiagramId,
-    }),
+  const payload = buildDiagramScriptSnapshot({
+    state: options.state,
+    modelName: options.modelName,
+    modelVersion: options.modelVersion,
+    openDiagramId: options.openDiagramId,
+  })
+  if (!payload.openDiagramId) {
+    return { ok: false, cancelled: false, error: null }
   }
+  return { ok: true, payload }
 }

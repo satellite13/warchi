@@ -1,3 +1,4 @@
+import type { DiagramScriptCommand } from './diagramScriptCommands'
 import type {
   SnapshotDiagram,
   SnapshotLink,
@@ -9,6 +10,16 @@ import type {
   ValidationSnapshot,
 } from './types'
 import { VALIDATION_SCRIPT_MAX_ISSUES } from './types'
+
+export type DiagramScriptQueryFn = (
+  method: string,
+  args: Record<string, unknown>
+) => Promise<unknown>
+
+export type ValidationScriptApiOptions = {
+  commands?: DiagramScriptCommand[]
+  query?: DiagramScriptQueryFn
+}
 
 export type ValidationScriptApi = {
   ctx: ValidationRunContext
@@ -34,10 +45,34 @@ export type ValidationScriptApi = {
     a: SnapshotNode | string,
     b: SnapshotNode | string,
     options?: { linkType?: string }
-  ) => SnapshotLink[]
+  ) => Promise<unknown>
+  neighbors: (
+    nodeId: string,
+    options?: { direction?: 'outgoing' | 'incoming'; linkType?: string; page?: number }
+  ) => Promise<unknown>
+  searchNodes: (options?: { q?: string; type?: string; limit?: number }) => Promise<unknown>
+  apply: {
+    setBounds: (command: {
+      instanceId: string
+      x: number
+      y: number
+      width?: number
+      height?: number
+    }) => void
+    addInstance: (command: { nodeId: string; x?: number; y?: number }) => void
+    addEdge: (command: { linkId: string }) => void
+    removeInstance: (command: { instanceId: string }) => void
+    removeEdge: (command: { edgeInstanceId: string }) => void
+    align: (command: {
+      instanceIds: string[]
+      mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'
+    }) => void
+    distribute: (command: { instanceIds: string[]; axis: 'horizontal' | 'vertical' }) => void
+    stack: (command: { instanceIds: string[]; mode: 'vertical' | 'overlap' }) => void
+    setEdgeStyle: (command: { edgeInstanceId?: string; linkId?: string; strokeColor: string }) => void
+  }
   findDuplicateLinks: (options?: {
     by?: 'endpoints' | 'endpoints+type'
-    /** When true (default), source→target order matters. When false, A→B and B→A share a group. */
     directed?: boolean
   }) => Array<{ linkIds: string[]; sourceId: string; targetId: string; linkTypeId?: string }>
   componentForNode: (node: SnapshotNode | string) => SnapshotNotation['components'][number] | null
@@ -104,8 +139,12 @@ function resolveTypeIds(
 export function createValidationScriptApi(
   snapshot: ValidationSnapshot,
   openDiagramId: string | null,
-  issues: ValidationIssue[]
+  issues: ValidationIssue[],
+  options: ValidationScriptApiOptions = {}
 ): ValidationScriptApi {
+  const commands = options.commands ?? []
+  const query = options.query
+
   const ctx: ValidationRunContext = {
     model: snapshot.model,
     diagram: openDiagramId
@@ -155,33 +194,52 @@ export function createValidationScriptApi(
     return snapshot.model.links.filter((l) => ids.has(l.linkTypeId))
   }
 
+  const runQuery = async (method: string, args: Record<string, unknown>): Promise<unknown> => {
+    if (!query) {
+      throw new Error('Query is not available')
+    }
+    return query(method, args)
+  }
+
+  const neighbors = (
+    nodeId: string,
+    neighborOptions?: { direction?: 'outgoing' | 'incoming'; linkType?: string; page?: number }
+  ): Promise<unknown> =>
+    runQuery('neighbors', {
+      nodeId,
+      direction: neighborOptions?.direction,
+      linkType: neighborOptions?.linkType,
+      page: neighborOptions?.page,
+    })
+
+  const searchNodes = (searchOptions?: {
+    q?: string
+    type?: string
+    limit?: number
+  }): Promise<unknown> =>
+    runQuery('searchNodes', {
+      q: searchOptions?.q,
+      type: searchOptions?.type,
+      limit: searchOptions?.limit,
+    })
+
   const linksBetween = (
     a: SnapshotNode | string,
     b: SnapshotNode | string,
-    options?: { linkType?: string }
-  ): SnapshotLink[] => {
-    const aId = nodeId(a)
-    const bId = nodeId(b)
-    let typeFilter: Set<string> | null = null
-    if (options?.linkType) {
-      typeFilter = resolveTypeIds(snapshot.types.linkTypes, options.linkType)
-    }
-    return snapshot.model.links.filter((link) => {
-      const endpoints =
-        (link.sourceId === aId && link.targetId === bId) ||
-        (link.sourceId === bId && link.targetId === aId)
-      if (!endpoints) return false
-      if (typeFilter && !typeFilter.has(link.linkTypeId)) return false
-      return true
+    linkOptions?: { linkType?: string }
+  ): Promise<unknown> =>
+    runQuery('linksBetween', {
+      a: nodeId(a),
+      b: nodeId(b),
+      linkType: linkOptions?.linkType,
     })
-  }
 
-  const findDuplicateLinks = (options?: {
+  const findDuplicateLinks = (dupOptions?: {
     by?: 'endpoints' | 'endpoints+type'
     directed?: boolean
   }): Array<{ linkIds: string[]; sourceId: string; targetId: string; linkTypeId?: string }> => {
-    const by = options?.by ?? 'endpoints+type'
-    const directed = options?.directed ?? true
+    const by = dupOptions?.by ?? 'endpoints+type'
+    const directed = dupOptions?.directed ?? true
     const groups = new Map<string, string[]>()
     for (const link of snapshot.model.links) {
       let left = link.sourceId
@@ -250,6 +308,57 @@ export function createValidationScriptApi(
     return notation?.relationRules ?? []
   }
 
+  const apply: ValidationScriptApi['apply'] = {
+    setBounds: (command) => {
+      commands.push({
+        type: 'setBounds',
+        instanceId: command.instanceId,
+        x: command.x,
+        y: command.y,
+        ...(command.width != null ? { width: command.width } : {}),
+        ...(command.height != null ? { height: command.height } : {}),
+      })
+    },
+    addInstance: (command) => {
+      commands.push({
+        type: 'addInstance',
+        nodeId: command.nodeId,
+        ...(command.x != null ? { x: command.x } : {}),
+        ...(command.y != null ? { y: command.y } : {}),
+      })
+    },
+    addEdge: (command) => {
+      commands.push({ type: 'addEdge', linkId: command.linkId })
+    },
+    removeInstance: (command) => {
+      commands.push({ type: 'removeInstance', instanceId: command.instanceId })
+    },
+    removeEdge: (command) => {
+      commands.push({ type: 'removeEdge', edgeInstanceId: command.edgeInstanceId })
+    },
+    align: (command) => {
+      commands.push({ type: 'align', instanceIds: command.instanceIds, mode: command.mode })
+    },
+    distribute: (command) => {
+      commands.push({
+        type: 'distribute',
+        instanceIds: command.instanceIds,
+        axis: command.axis,
+      })
+    },
+    stack: (command) => {
+      commands.push({ type: 'stack', instanceIds: command.instanceIds, mode: command.mode })
+    },
+    setEdgeStyle: (command) => {
+      commands.push({
+        type: 'setEdgeStyle',
+        strokeColor: command.strokeColor,
+        ...(command.edgeInstanceId != null ? { edgeInstanceId: command.edgeInstanceId } : {}),
+        ...(command.linkId != null ? { linkId: command.linkId } : {}),
+      })
+    },
+  }
+
   return {
     ctx,
     report: {
@@ -262,47 +371,46 @@ export function createValidationScriptApi(
     nodesOfType,
     linksOfType,
     linksBetween,
+    neighbors,
+    searchNodes,
+    apply,
     findDuplicateLinks,
     componentForNode,
     relationRules,
   }
 }
 
-/** Execute script source against a sandbox API (sync, same semantics as Worker). */
-export function executeValidationScript(
+const SCRIPT_BINDING_NAMES = [
+  'ctx',
+  'report',
+  'diagramNodes',
+  'diagramLinks',
+  'nodesOfType',
+  'linksOfType',
+  'linksBetween',
+  'neighbors',
+  'searchNodes',
+  'apply',
+  'findDuplicateLinks',
+  'componentForNode',
+  'relationRules',
+] as const
+
+/** Execute script source against a sandbox API (async IIFE). */
+export async function executeValidationScript(
   source: string,
   api: ValidationScriptApi
-): { error?: string } {
+): Promise<{ error?: string }> {
   const trimmed = source.trim()
   if (!trimmed) {
     return { error: 'Script source is empty' }
   }
   try {
     const fn = new Function(
-      'ctx',
-      'report',
-      'diagramNodes',
-      'diagramLinks',
-      'nodesOfType',
-      'linksOfType',
-      'linksBetween',
-      'findDuplicateLinks',
-      'componentForNode',
-      'relationRules',
-      `"use strict";\n${trimmed}`
-    ) as (
-      ctx: ValidationRunContext,
-      report: ValidationScriptApi['report'],
-      diagramNodes: ValidationScriptApi['diagramNodes'],
-      diagramLinks: ValidationScriptApi['diagramLinks'],
-      nodesOfType: ValidationScriptApi['nodesOfType'],
-      linksOfType: ValidationScriptApi['linksOfType'],
-      linksBetween: ValidationScriptApi['linksBetween'],
-      findDuplicateLinks: ValidationScriptApi['findDuplicateLinks'],
-      componentForNode: ValidationScriptApi['componentForNode'],
-      relationRules: ValidationScriptApi['relationRules']
-    ) => void
-    fn(
+      ...SCRIPT_BINDING_NAMES,
+      `"use strict"; return (async () => { ${trimmed} })()`
+    ) as (...args: unknown[]) => Promise<unknown>
+    await fn(
       api.ctx,
       api.report,
       api.diagramNodes,
@@ -310,6 +418,9 @@ export function executeValidationScript(
       api.nodesOfType,
       api.linksOfType,
       api.linksBetween,
+      api.neighbors,
+      api.searchNodes,
+      api.apply,
       api.findDuplicateLinks,
       api.componentForNode,
       api.relationRules

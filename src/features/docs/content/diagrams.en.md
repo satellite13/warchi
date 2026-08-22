@@ -113,6 +113,8 @@ Elements can be added to the diagram in several ways:
 2. **From model tree** — drag an existing component from the model tree
 3. **Note or container** — from the canvas context menu (diagram-only; no new node in the model tree)
 
+Existing model nodes and links can also be placed by a script (**Scripts** in the header). A script does not create tree entities — it only puts on the canvas what already exists in the model. See [Scripts](/docs/validationScripts).
+
 ### Moving and Resizing
 
 - **Move** — click an element and drag it to the desired location

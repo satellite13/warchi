@@ -128,9 +128,22 @@ describe('validationScriptApi', () => {
     expect(api.nodesOfType('nt-db')).toHaveLength(1)
   })
 
-  it('runs diagram checklist golden script', () => {
+  it('runs diagram checklist golden script', async () => {
+    const snapshot = sampleSnapshot()
     const issues: ValidationIssue[] = []
-    const api = createValidationScriptApi(sampleSnapshot(), 'd1', issues)
+    const api = createValidationScriptApi(snapshot, 'd1', issues, {
+      query: async (method, args) => {
+        if (method !== 'linksBetween') return []
+        const a = String(args.a)
+        const b = String(args.b)
+        return snapshot.model.links.filter((link) => {
+          const pair =
+            (link.sourceId === a && link.targetId === b) ||
+            (link.sourceId === b && link.targetId === a)
+          return pair && link.linkTypeId === 'lt-flow'
+        })
+      },
+    })
     const source = `
 if (!ctx.diagram) {
   report.error('Open a diagram before running this script')
@@ -143,7 +156,7 @@ if (!ctx.diagram) {
       id: ctx.diagram.id,
     })
   }
-  const between = linksBetween(apps[0], apps[1], { linkType: 'Flow' })
+  const between = await linksBetween(apps[0], apps[1], { linkType: 'Flow' })
   if (between.length === 0) {
     report.warn('No Flow link between applications on diagram')
   } else {
@@ -151,12 +164,12 @@ if (!ctx.diagram) {
   }
 }
 `
-    const { error } = executeValidationScript(source, api)
+    const { error } = await executeValidationScript(source, api)
     expect(error).toBeUndefined()
     expect(issues.some((i) => i.level === 'info' && i.message.includes('Flow'))).toBe(true)
   })
 
-  it('runs duplicate-links golden script', () => {
+  it('runs duplicate-links golden script', async () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), null, issues)
     const source = `
@@ -164,7 +177,7 @@ for (const dup of findDuplicateLinks({ by: 'endpoints+type' })) {
   report.warn('Duplicate link', { kind: 'link', id: dup.linkIds[0] })
 }
 `
-    const { error } = executeValidationScript(source, api)
+    const { error } = await executeValidationScript(source, api)
     expect(error).toBeUndefined()
     expect(issues).toHaveLength(1)
     expect(issues[0]?.level).toBe('warn')
@@ -183,10 +196,10 @@ for (const dup of findDuplicateLinks({ by: 'endpoints+type' })) {
     expect(resolved.target).toEqual({ kind: 'node', id: 'n1' })
   })
 
-  it('report.info accepts a snapshot node as second argument', () => {
+  it('report.info accepts a snapshot node as second argument', async () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), 'd1', issues)
-    const { error } = executeValidationScript(
+    const { error } = await executeValidationScript(
       `
 if (ctx.diagram) {
   diagramNodes(ctx.diagram).forEach((n) => report.info('Node:', n))
@@ -201,14 +214,75 @@ if (ctx.diagram) {
     expect(issues.every((i) => i.target?.kind === 'node')).toBe(true)
   })
 
-  it('captures runtime errors and keeps prior issues', () => {
+  it('captures runtime errors and keeps prior issues', async () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), null, issues)
-    const { error } = executeValidationScript(
+    const { error } = await executeValidationScript(
       `report.info('before'); throw new Error('boom')`,
       api
     )
     expect(error).toContain('boom')
     expect(issues).toEqual([{ level: 'info', message: 'before' }])
+  })
+
+  it('supports await neighbors and queues apply without mutating the snapshot', async () => {
+    const snapshot = sampleSnapshot()
+    snapshot.model.diagrams[0] = {
+      ...snapshot.model.diagrams[0]!,
+      instances: [{ id: 'ia', modelNodeId: 'n1', x: 0, y: 0 }],
+      edges: [],
+    }
+    const issues: ValidationIssue[] = []
+    const commands: import('./diagramScriptCommands').DiagramScriptCommand[] = []
+    const api = createValidationScriptApi(snapshot, 'd1', issues, {
+      commands,
+      query: async (method) => {
+        expect(method).toBe('neighbors')
+        return {
+          items: [{ node: { id: 'n3' }, link: { id: 'l3' } }],
+          last: true,
+        }
+      },
+    })
+    const source = `
+const n = await neighbors(ctx.diagram.instances[0].modelNodeId, { direction: 'outgoing' })
+apply.addInstance({ nodeId: n.items[0].node.id, x: 10, y: 10 })
+`
+    const { error } = await executeValidationScript(source, api)
+    expect(error).toBeUndefined()
+    expect(commands).toEqual([{ type: 'addInstance', nodeId: 'n3', x: 10, y: 10 }])
+    expect(snapshot.model.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3'])
+    expect(snapshot.model.diagrams[0]?.instances).toHaveLength(1)
+  })
+
+  it('queues setEdgeStyle without mutating the snapshot', async () => {
+    const snapshot = sampleSnapshot()
+    snapshot.model.diagrams[0] = {
+      ...snapshot.model.diagrams[0]!,
+      edges: [{ id: 'e1', modelLinkId: 'l1', sourceInstanceId: 'ia', targetInstanceId: 'ib' }],
+    }
+    const issues: ValidationIssue[] = []
+    const commands: import('./diagramScriptCommands').DiagramScriptCommand[] = []
+    const api = createValidationScriptApi(snapshot, 'd1', issues, { commands })
+    const { error } = await executeValidationScript(
+      `apply.setEdgeStyle({ linkId: 'l1', strokeColor: '#dc3545' })`,
+      api
+    )
+    expect(error).toBeUndefined()
+    expect(commands).toEqual([{ type: 'setEdgeStyle', linkId: 'l1', strokeColor: '#dc3545' }])
+    expect(snapshot.model.diagrams[0]?.edges?.[0]).toEqual({
+      id: 'e1',
+      modelLinkId: 'l1',
+      sourceInstanceId: 'ia',
+      targetInstanceId: 'ib',
+    })
+  })
+
+  it('still runs a sync report-only script', async () => {
+    const issues: ValidationIssue[] = []
+    const api = createValidationScriptApi(sampleSnapshot(), 'd1', issues)
+    const { error } = await executeValidationScript(`report.info('x')`, api)
+    expect(error).toBeUndefined()
+    expect(issues).toEqual([{ level: 'info', message: 'x' }])
   })
 })

@@ -92,6 +92,9 @@ export function buildBatchSaveRequest(
   diagrams: EditorDiagram[],
   options?: { force?: boolean }
 ): BatchSaveRequest {
+  const deletedNodeIds = new Set(nodes.filter(n => n._isDeleted && !n._isNew).map(n => n.id))
+  const isIncidentToDeletedNode = (link: EditorLink): boolean =>
+    deletedNodeIds.has(link.sourceId) || deletedNodeIds.has(link.targetId)
   return {
     ...(options?.force === true ? { force: true } : {}),
     nodes: {
@@ -118,7 +121,7 @@ export function buildBatchSaveRequest(
     },
     links: {
       create: links
-        .filter(l => l._isNew && !l._isDeleted)
+        .filter(l => l._isNew && !l._isDeleted && !isIncidentToDeletedNode(l))
         .map(l => ({
           tempId: l.id,
           sourceId: l.sourceId,
@@ -127,7 +130,7 @@ export function buildBatchSaveRequest(
           attrs: serializeLinkAttrs(l.parsedAttrs),
         })),
       update: links
-        .filter(l => l._isDirty && !l._isDeleted && !l._isNew)
+        .filter(l => l._isDirty && !l._isDeleted && !l._isNew && !isIncidentToDeletedNode(l))
         .map(l => ({
           id: l.id,
           sourceId: l.sourceId,
@@ -136,7 +139,13 @@ export function buildBatchSaveRequest(
           attrs: serializeLinkAttrs(l.parsedAttrs),
           baseUpdatedAt: l.updatedAt ?? null,
         })),
-      delete: links.filter(l => l._isDeleted && !l._isNew).map(l => l.id),
+      delete: [
+        ...new Set(
+          links
+            .filter(l => !l._isNew && (l._isDeleted || isIncidentToDeletedNode(l)))
+            .map(l => l.id)
+        ),
+      ],
     },
     diagrams: {
       create: diagrams

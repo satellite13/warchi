@@ -1803,6 +1803,11 @@ const markNodeDeleted = (nodeId: string) => {
     node._isDirty = true
     markNodeDirty(node.id)
   }
+  for (const link of [...state.value.links]) {
+    if (link.sourceId === nodeId || link.targetId === nodeId) {
+      markLinkDeleted(link.id)
+    }
+  }
   partialStore.reconcileMaterializedRows([treeScopeForParent(node.parentNodeId ?? null)])
   state.value.diagrams.forEach(diagram => {
     if (diagram.nodeId !== nodeId) return

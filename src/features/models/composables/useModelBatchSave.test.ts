@@ -105,6 +105,38 @@ describe('useModelBatchSave', () => {
     expect(request.diagrams.delete).toEqual(['diagram-delete'])
   })
 
+  it('deletes incident links when an endpoint node is deleted instead of updating them', () => {
+    const request = buildBatchSaveRequest(
+      [createNode({ id: 'gone', _isDeleted: true })],
+      [
+        createLink({
+          id: 'incident-dirty',
+          sourceId: 'gone',
+          targetId: 'keep',
+          _isDirty: true,
+          updatedAt: '2026-01-02T00:00:00.000Z',
+        }),
+        createLink({
+          id: 'incident-clean',
+          sourceId: 'keep',
+          targetId: 'gone',
+        }),
+        createLink({
+          id: 'unrelated-dirty',
+          sourceId: 'keep',
+          targetId: 'other',
+          _isDirty: true,
+          updatedAt: '2026-01-03T00:00:00.000Z',
+        }),
+      ],
+      []
+    )
+
+    expect(request.links.delete).toEqual(['incident-dirty', 'incident-clean'])
+    expect(request.links.update).toMatchObject([{ id: 'unrelated-dirty' }])
+    expect(request.links.create).toEqual([])
+  })
+
   it('omits canvas attrs when a dirty diagram is still pending hydration', () => {
     const request = buildBatchSaveRequest(
       [],

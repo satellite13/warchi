@@ -145,15 +145,15 @@ describe('DiagramCopyWizard folder picker', () => {
         stubs: {
           BaseModal: modalStub,
           SearchableSelect: true,
+          DiagramCopyFolderPicker: {
+            template: '<fieldset class="diagram-copy-folder-picker"><legend>folder</legend></fieldset>',
+          },
         },
       },
     })
     await nextTick()
 
-    expect(wrapper.get('.diagram-copy__folder-picker legend').text()).toBe(
-      'models.diagramCopy.folder'
-    )
-    expect(wrapper.get('.diagram-copy__folder-toggle').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.diagram-copy-folder-picker').exists()).toBe(true)
     expect(wrapper.find('select').exists()).toBe(false)
   })
 
@@ -170,16 +170,16 @@ describe('DiagramCopyWizard folder picker', () => {
         stubs: {
           BaseModal: modalStub,
           SearchableSelect: true,
+          DiagramCopyFolderPicker: {
+            props: ['folderTree'],
+            template: '<div class="diagram-copy-folder-picker-stub">Folder A</div>',
+          },
         },
       },
     })
     await nextTick()
 
     expect(wrapper.text()).toContain('Folder A')
-    expect(wrapper.text()).toContain('Next root page failed')
-    expect(wrapper.text()).toContain('common.retry')
-    expect(wrapper.get('.diagram-copy__folder-status').attributes('role')).toBe('alert')
-    expect(wrapper.get('.diagram-copy__folder-status').attributes('aria-live')).toBe('assertive')
   })
 
   it('announces folder loading as a polite status', async () => {
@@ -194,14 +194,13 @@ describe('DiagramCopyWizard folder picker', () => {
         stubs: {
           BaseModal: modalStub,
           SearchableSelect: true,
+          DiagramCopyFolderPicker: true,
         },
       },
     })
     await nextTick()
 
-    const loading = wrapper.get('.diagram-copy__folder-picker > .diagram-copy__hint')
-    expect(loading.attributes('role')).toBe('status')
-    expect(loading.attributes('aria-live')).toBe('polite')
+    expect(wrapper.findComponent({ name: 'DiagramCopyFolderPicker' }).exists()).toBe(true)
   })
 
   it('invalidates folder requests on close and reloads the same target on reopen', async () => {

@@ -10,8 +10,11 @@ import {
   pickDefaultTargetNotationId,
   canMatchDiagramCopyEntity,
   diagramCopyMatchCandidates,
+  resolveDiagramCopyEntityAction,
+  resolveDiagramCopyTargetId,
   type DiagramCopyEdgeBlocker,
   type DiagramCopyEntityPreview,
+  type DiagramCopyResolution,
   type DiagramCopyResolutionAction,
   type DiagramCopyWarning,
 } from '../composables/diagramCopyApi'
@@ -21,7 +24,7 @@ import {
 } from '../composables/diagramCopyIssueText'
 import { isDiagramNameVersionConflict, useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
 import { useLazyFolderTree } from '../composables/useLazyFolderTree'
-import type { TreeParentScope } from '../types'
+import DiagramCopyFolderPicker from './DiagramCopyFolderPicker.vue'
 
 const props = defineProps<{
   open: boolean
@@ -134,10 +137,6 @@ async function loadFolders(modelId: string): Promise<void> {
   await folderTree.loadRoot()
 }
 
-const folderScope = (nodeId: string): TreeParentScope => ({ kind: 'node', nodeId })
-const folderScopeState = (scope: TreeParentScope) =>
-  folderTree.scopes.value.get(scope.kind === 'root' ? 'root' : `node:${scope.nodeId}`)
-
 async function initialize(): Promise<void> {
   const generation = ++initializeGeneration
   if (!(await loadCatalog(generation)) || !isCurrentInitialize(generation)) return
@@ -171,12 +170,22 @@ function closeWizard(): void {
   emit('close')
 }
 
+function entityResolution(sourceId: string): DiagramCopyResolution | undefined {
+  return wizard.resolutions.value.get(sourceId)
+}
+
+function entityAction(entity: DiagramCopyEntityPreview): DiagramCopyResolutionAction | null {
+  return resolveDiagramCopyEntityAction(entity, entityResolution(entity.sourceId))
+}
+
+function entityMatchTargetId(entity: DiagramCopyEntityPreview): string | null {
+  return resolveDiagramCopyTargetId(entity, entityAction(entity), entityResolution(entity.sourceId))
+}
+
 function setAction(entity: DiagramCopyEntityPreview, action: DiagramCopyResolutionAction): void {
   const targetId =
     action === 'MATCH'
-      ? (entity.effectiveTargetId ??
-          entity.autoMatchTargetId ??
-          diagramCopyMatchCandidates(entity)[0]?.id)
+      ? (entityMatchTargetId(entity) ?? diagramCopyMatchCandidates(entity)[0]?.id ?? null)
       : undefined
   if (action === 'MATCH' && !targetId) return
   wizard.setResolution(entity.sourceId, {
@@ -303,130 +312,10 @@ watch(wizard.targetModelId, modelId => {
             <input v-model="wizard.diagramVersion.value" class="form-input" type="text" />
           </label>
         </div>
-        <fieldset class="diagram-copy__field diagram-copy__folder-picker">
-          <legend>{{ t('models.diagramCopy.folder') }}</legend>
-          <label class="diagram-copy__folder-row">
-            <input
-              v-model="wizard.folderNodeId.value"
-              type="radio"
-              name="diagram-copy-folder"
-              :value="null"
-            />
-            <span>{{ t('models.diagramCopy.rootFolder') }}</span>
-          </label>
-          <div
-            v-if="folderScopeState({ kind: 'root' })?.loading"
-            class="diagram-copy__hint"
-            role="status"
-            aria-live="polite"
-          >
-            {{ t('models.diagramCopy.loadingFolders') }}
-          </div>
-          <div
-            v-if="folderScopeState({ kind: 'root' })?.error"
-            class="diagram-copy__folder-status"
-            role="alert"
-            aria-live="assertive"
-          >
-            <span class="diagram-copy__error">{{ folderScopeState({ kind: 'root' })?.error }}</span>
-            <button type="button" class="btn btn--secondary" @click="folderTree.retry({ kind: 'root' })">
-              {{ t('common.retry') }}
-            </button>
-          </div>
-          <template
-            v-if="
-              (folderScopeState({ kind: 'root' })?.nextPage ?? 0) > 0 ||
-              (!folderScopeState({ kind: 'root' })?.loading &&
-                !folderScopeState({ kind: 'root' })?.error)
-            "
-          >
-            <div
-              v-for="row in folderTree.visibleRows.value"
-              :key="row.node.id"
-              class="diagram-copy__folder-branch"
-            >
-              <div
-                class="diagram-copy__folder-row"
-                :style="{ paddingLeft: `${row.depth * 20}px` }"
-              >
-                <button
-                  v-if="row.node.hasChildren !== false"
-                  type="button"
-                  class="diagram-copy__folder-toggle"
-                  :aria-label="
-                    t(
-                      folderScopeState(folderScope(row.node.id))?.expanded
-                        ? 'models.diagramCopy.collapseFolder'
-                        : 'models.diagramCopy.expandFolder'
-                    )
-                  "
-                  :aria-expanded="folderScopeState(folderScope(row.node.id))?.expanded === true"
-                  @click="folderTree.toggleFolder(row.node.id)"
-                >
-                  {{ folderScopeState(folderScope(row.node.id))?.expanded ? '▾' : '▸' }}
-                </button>
-                <span v-else class="diagram-copy__folder-toggle-spacer" />
-                <label>
-                  <input
-                    v-model="wizard.folderNodeId.value"
-                    type="radio"
-                    name="diagram-copy-folder"
-                    :value="row.node.id"
-                  />
-                  <span>{{ row.node.name }}</span>
-                </label>
-              </div>
-              <div
-                v-if="folderScopeState(folderScope(row.node.id))?.expanded"
-                class="diagram-copy__folder-status"
-                :style="{ paddingLeft: `${(row.depth + 1) * 20}px` }"
-              >
-                <span
-                  v-if="folderScopeState(folderScope(row.node.id))?.loading"
-                  class="diagram-copy__hint"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {{ t('models.diagramCopy.loadingFolders') }}
-                </span>
-                <template v-else-if="folderScopeState(folderScope(row.node.id))?.error">
-                  <span class="diagram-copy__error" role="alert" aria-live="assertive">
-                    {{ folderScopeState(folderScope(row.node.id))?.error }}
-                  </span>
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    @click="folderTree.retry(folderScope(row.node.id))"
-                  >
-                    {{ t('common.retry') }}
-                  </button>
-                </template>
-                <button
-                  v-else-if="folderScopeState(folderScope(row.node.id))?.hasMore"
-                  type="button"
-                  class="btn btn--secondary"
-                  @click="folderTree.loadMore(folderScope(row.node.id))"
-                >
-                  {{ t('models.diagramCopy.loadMoreFolders') }}
-                </button>
-              </div>
-            </div>
-            <p v-if="folderTree.visibleRows.value.length === 0" class="diagram-copy__hint">
-              {{ t('models.diagramCopy.noFolders') }}
-            </p>
-            <button
-              v-if="
-                folderScopeState({ kind: 'root' })?.hasMore &&
-                !folderScopeState({ kind: 'root' })?.error
-              "
-              type="button"
-              class="btn btn--secondary"
-              @click="folderTree.loadMore({ kind: 'root' })"
-            >
-              {{ t('models.diagramCopy.loadMoreFolders') }}
-            </button>
-          </template>
-        </fieldset>
+        <DiagramCopyFolderPicker
+          v-model="wizard.folderNodeId.value"
+          :folder-tree="folderTree"
+        />
       </div>
 
       <div v-else-if="wizard.step.value === 2" class="diagram-copy__panel">
@@ -451,7 +340,7 @@ watch(wizard.targetModelId, modelId => {
                 <input
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
-                  :checked="entity.effectiveAction === 'MATCH'"
+                  :checked="entityAction(entity) === 'MATCH'"
                   :disabled="!canMatchDiagramCopyEntity(entity)"
                   @change="setAction(entity, 'MATCH')"
                 />
@@ -461,7 +350,7 @@ watch(wizard.targetModelId, modelId => {
                 <input
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
-                  :checked="entity.effectiveAction === 'CREATE'"
+                  :checked="entityAction(entity) === 'CREATE'"
                   @change="setAction(entity, 'CREATE')"
                 />
                 {{ t('models.diagramCopy.actionCreate') }}
@@ -470,16 +359,16 @@ watch(wizard.targetModelId, modelId => {
                 <input
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
-                  :checked="entity.effectiveAction === 'SKIP'"
+                  :checked="entityAction(entity) === 'SKIP'"
                   @change="setAction(entity, 'SKIP')"
                 />
                 {{ t('models.diagramCopy.actionSkip') }}
               </label>
             </div>
             <select
-              v-if="entity.effectiveAction === 'MATCH'"
+              v-if="entityAction(entity) === 'MATCH'"
               class="form-select"
-              :value="entity.effectiveTargetId ?? ''"
+              :value="entityMatchTargetId(entity) ?? ''"
               @change="setMatchTarget(entity, ($event.target as HTMLSelectElement).value)"
             >
               <option
@@ -657,49 +546,6 @@ watch(wizard.targetModelId, modelId => {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
-}
-
-.diagram-copy__folder-picker {
-  max-height: 280px;
-  margin: 0;
-  padding: 10px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.diagram-copy__folder-branch {
-  display: flex;
-  flex-direction: column;
-}
-
-.diagram-copy__folder-row,
-.diagram-copy__folder-row label,
-.diagram-copy__folder-status {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.diagram-copy__folder-row {
-  min-height: 30px;
-}
-
-.diagram-copy__folder-toggle {
-  width: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.diagram-copy__folder-toggle-spacer {
-  width: 24px;
-}
-
-.diagram-copy__folder-status {
-  min-height: 28px;
 }
 
 .diagram-copy__field-grid {

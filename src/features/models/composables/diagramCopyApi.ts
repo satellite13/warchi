@@ -120,6 +120,31 @@ export function canMatchDiagramCopyEntity(
   return entity.candidates.length > 0 || entity.autoMatchTargetId != null
 }
 
+export function resolveDiagramCopyEntityAction(
+  entity: DiagramCopyEntityPreview,
+  override?: DiagramCopyResolution | null,
+  options?: { defaultCreate?: boolean }
+): DiagramCopyResolutionAction | null {
+  if (override) return override.action
+  if (entity.effectiveAction) return entity.effectiveAction
+  if (entity.autoMatchTargetId) return 'MATCH'
+  if (entity.candidates.length === 1) return 'MATCH'
+  if (options?.defaultCreate !== false && !canMatchDiagramCopyEntity(entity)) return 'CREATE'
+  return null
+}
+
+export function resolveDiagramCopyTargetId(
+  entity: DiagramCopyEntityPreview,
+  action: DiagramCopyResolutionAction | null,
+  override?: DiagramCopyResolution | null
+): string | null {
+  if (action !== 'MATCH') return null
+  if (override?.targetId) return override.targetId
+  if (entity.effectiveTargetId) return entity.effectiveTargetId
+  if (entity.autoMatchTargetId) return entity.autoMatchTargetId
+  return entity.candidates[0]?.id ?? null
+}
+
 export function diagramCopyMatchCandidates(
   entity: DiagramCopyEntityPreview
 ): DiagramCopyCandidate[] {
@@ -155,20 +180,28 @@ export function buildResolutionsFromPreview(
     const override = overrides.get(entity.sourceId)
     if (override) return [override]
 
-    if (entity.effectiveAction === 'MATCH' && entity.effectiveTargetId) {
+    const action = resolveDiagramCopyEntityAction(entity, override, {
+      defaultCreate: fillUnresolvedWithCreate,
+    })
+    if (action === 'MATCH') {
+      const targetId = resolveDiagramCopyTargetId(entity, action)
+      if (!targetId) {
+        if (!fillUnresolvedWithCreate) return []
+        return [{ sourceId: entity.sourceId, action: 'CREATE' as const, kind: entity.kind }]
+      }
       return [
         {
           sourceId: entity.sourceId,
           action: 'MATCH' as const,
-          targetId: entity.effectiveTargetId,
+          targetId,
           kind: entity.kind,
         },
       ]
     }
-    if (entity.effectiveAction === 'CREATE') {
+    if (action === 'CREATE') {
       return [{ sourceId: entity.sourceId, action: 'CREATE' as const, kind: entity.kind }]
     }
-    if (entity.effectiveAction === 'SKIP') {
+    if (action === 'SKIP') {
       return [{ sourceId: entity.sourceId, action: 'SKIP' as const, kind: entity.kind }]
     }
     if (!fillUnresolvedWithCreate) return []

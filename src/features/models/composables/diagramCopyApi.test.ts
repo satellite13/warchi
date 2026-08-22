@@ -11,6 +11,8 @@ import {
   diagramCopyMatchCandidates,
   pickDefaultTargetNotationId,
   previewDiagramCopy,
+  resolveDiagramCopyEntityAction,
+  resolveDiagramCopyTargetId,
 } from './diagramCopyApi'
 import { apiPost } from '@/composables/useApi'
 
@@ -61,7 +63,77 @@ function createPreview(
   }
 }
 
+describe('resolveDiagramCopyEntityAction', () => {
+  it('prefers an explicit override', () => {
+    expect(
+      resolveDiagramCopyEntityAction(
+        createEntityPreview({ autoMatchTargetId: 'target-1' }),
+        { sourceId: 'source-1', action: 'SKIP', kind: 'NODE' }
+      )
+    ).toBe('SKIP')
+  })
+
+  it('treats auto-match targets as MATCH in the UI', () => {
+    expect(
+      resolveDiagramCopyEntityAction(
+        createEntityPreview({
+          effectiveAction: null,
+          autoMatchTargetId: 'target-1',
+          autoMatchReason: 'NAME_AND_TYPE',
+        })
+      )
+    ).toBe('MATCH')
+  })
+
+  it('defaults unmatched entities to CREATE', () => {
+    expect(resolveDiagramCopyEntityAction(createEntityPreview())).toBe('CREATE')
+  })
+
+  it('leaves ambiguous candidates unresolved', () => {
+    expect(
+      resolveDiagramCopyEntityAction(
+        createEntityPreview({
+          candidates: [
+            { id: 'a', label: 'A', stableId: null, typeId: null },
+            { id: 'b', label: 'B', stableId: null, typeId: null },
+          ],
+        })
+      )
+    ).toBeNull()
+  })
+})
+
+describe('resolveDiagramCopyTargetId', () => {
+  it('resolves auto-match targets without effectiveTargetId', () => {
+    expect(
+      resolveDiagramCopyTargetId(
+        createEntityPreview({ autoMatchTargetId: 'target-1' }),
+        'MATCH'
+      )
+    ).toBe('target-1')
+  })
+})
+
 describe('buildResolutionsFromPreview', () => {
+  it('builds a match resolution from auto-match metadata', () => {
+    const result = buildResolutionsFromPreview(
+      createPreview({
+        nodes: [
+          createEntityPreview({
+            sourceId: 'node-1',
+            autoMatchTargetId: 'target-1',
+            autoMatchReason: 'STABLE_ID',
+          }),
+        ],
+      }),
+      new Map()
+    )
+
+    expect(result).toEqual([
+      { sourceId: 'node-1', action: 'MATCH', targetId: 'target-1', kind: 'NODE' },
+    ])
+  })
+
   it('uses override for a source entity before its effective action', () => {
     const override: DiagramCopyResolution = {
       sourceId: 'node-1',

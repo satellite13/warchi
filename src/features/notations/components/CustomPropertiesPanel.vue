@@ -213,10 +213,7 @@ const handlePaletteGroupChange = (value: string) => {
 }
 
 const showPaletteIconSection = computed(
-  () =>
-    props.selectedItem &&
-    !('linkTypeId' in props.selectedItem) &&
-    !(props.selectedItem.parsedAttrs.diagramStyle?.iconName?.trim())
+  () => props.selectedItem && !('linkTypeId' in props.selectedItem),
 )
 
 const handlePaletteMaterialIconChange = (value: string) => {

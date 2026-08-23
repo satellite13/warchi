@@ -40,7 +40,7 @@ const emit = defineEmits<{
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 .toggle-switch--disabled {
@@ -108,5 +108,6 @@ const emit = defineEmits<{
   font-size: 12px;
   color: var(--text-muted);
   user-select: none;
+  white-space: nowrap;
 }
 </style>

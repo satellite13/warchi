@@ -66,7 +66,7 @@ A link type defines the **relation semantics** (what the link means), while visu
 |----------|-------------|
 | Name | Unique link type name |
 
-> In projects that use grouping, the `group` system property (`boolean`) is commonly added to a link type to mark it as a grouping relation. This affects diagram editor behavior (auto-links in groups, hiding structural links inside containers).
+> In projects that use grouping, the `group` system property (`boolean`) is commonly added to a link type to mark it as a grouping relation. This affects diagram editor behavior (auto-links in groups, hiding structural links inside containers). For events on a host outline (BPMN boundary) use a separate `boundary` system flag — do not reuse `group`.
 
 ### Creating a Link Type
 
@@ -112,7 +112,7 @@ For each property you can specify:
 
 > When adding a new required property with a default value, existing instances in models will automatically receive the default value on next model open.
 
-System properties are used for special editor logic. A common example is `group` (`boolean`), which is used in component grouping and grouping-relation flows.
+System properties are used for special editor logic. Common examples: `group` (`boolean`) for containment, and `boundary` / `boundaryAllow` for a guest glued to a host outline.
 
 ## Relation Rules
 

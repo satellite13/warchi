@@ -147,7 +147,7 @@ export async function openDiagramByName(page: Page, diagramName: string): Promis
   const row = page.locator('.diagram-row').filter({ hasText: diagramName })
   await row.waitFor({ state: 'visible', timeout: 15000 })
   await row.locator('.diagram-row__select').dblclick()
-  await page.locator('.diagram-row__badge', { hasText: 'Opened' }).waitFor({
+  await row.locator('.diagram-row--active').waitFor({
     state: 'visible',
     timeout: 15000,
   })

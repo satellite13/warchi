@@ -11,6 +11,33 @@ import type {
 import type { NotationData } from '@/types/entities'
 import type { DiagramAttrs, ModelLinkAttrs, ModelNodeAttrs } from './modelAttrs'
 
+export type TreeParentScope = { kind: 'root' } | { kind: 'node'; nodeId: string }
+
+export type EntityMergeMode =
+  | { kind: 'partial' }
+  | {
+      kind: 'childrenPage'
+      scope: TreeParentScope
+      page: number
+      total: number
+      last: boolean
+      token: number
+    }
+  | { kind: 'childrenScope'; scope: TreeParentScope; token: number }
+  | { kind: 'full' }
+
+export type ModelPartialRequestGuard = {
+  generation: number
+  requestKey: string
+  token: number
+}
+
+export type ChildrenPageState = {
+  loadedPages: Set<number>
+  nextPage: number | null
+  totalElements: number
+}
+
 export type EditorNode = Omit<NodeResponse, 'attrs'> & {
   parsedAttrs: ModelNodeAttrs
   _isNew?: boolean
@@ -23,6 +50,24 @@ export type EditorLink = Omit<LinkResponse, 'attrs'> & {
   _isNew?: boolean
   _isDirty?: boolean
   _isDeleted?: boolean
+}
+
+export type TraceabilityDirection = 'outgoing' | 'incoming'
+
+export type TraceabilityBranchQuery = {
+  nodeId: string
+  direction: TraceabilityDirection
+  linkTypeId: string | null
+}
+
+export type TraceabilityNeighborRef = {
+  linkId: string
+  nodeId: string
+}
+
+export type EditorGraphNeighbor = {
+  link: EditorLink
+  node: EditorNode
 }
 
 export type EditorDiagram = Omit<DiagramResponse, 'attrs'> & {

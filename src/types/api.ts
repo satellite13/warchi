@@ -124,6 +124,8 @@ export interface NodeResponse extends BaseEntityResponse {
   ownerId: string
   nodeTypeId: string
   parentNodeId?: string | null
+  /** Вычисляется для parent-scoped tree/ancestor ответов; в остальных ответах отсутствует. */
+  hasChildren?: boolean | null
 }
 
 export interface NodeRequest {
@@ -206,6 +208,63 @@ export interface LinkUpdateRequest {
   ownerId?: string | null
   linkTypeId?: string | null
   attrs?: string | null
+}
+
+// ── Scoped model reads ──
+
+export interface ModelNodeResolveRequest {
+  nodeIds: string[]
+}
+
+export interface ModelNodeResolveResponse {
+  nodes: NodeResponse[]
+  missingIds: string[]
+}
+
+export interface ModelLinkResolveRequest {
+  linkIds: string[]
+  endpointNodeIds: string[]
+}
+
+export interface ModelLinkResolveResponse {
+  links: LinkResponse[]
+  missingLinkIds: string[]
+}
+
+export interface ModelSearchHit {
+  kind: 'node' | 'link' | 'diagram'
+  id: string
+  name?: string | null
+  typeName?: string | null
+  nodeTypeId?: string | null
+  parentId?: string | null
+  pathNames?: string[] | null
+  sourceId?: string | null
+  targetId?: string | null
+  sourceName?: string | null
+  targetName?: string | null
+  notationName?: string | null
+}
+
+export interface ModelSearchResponse {
+  modelId: string
+  q: string
+  limit: number
+  totalEstimate: number
+  hits: ModelSearchHit[]
+}
+
+export interface GraphNeighborResponse {
+  link: LinkResponse
+  node: NodeResponse
+}
+
+export interface DiagramReferenceResponse {
+  id: string
+  name: string
+  version: string
+  notationId: string
+  nodeId: string | null
 }
 
 // ── Notations ──

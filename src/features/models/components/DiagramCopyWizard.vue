@@ -4,15 +4,17 @@ import { useI18n } from 'vue-i18n'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { apiGet } from '@/composables/useApi'
-import type { NodeResponse, NodeTypeResponse } from '@/types/api'
 import type { ModelData, NotationData, PaginatedResponse } from '@/types/entities'
 import { paginatedContent } from '@/utils/paginatedResponse'
 import {
   pickDefaultTargetNotationId,
   canMatchDiagramCopyEntity,
   diagramCopyMatchCandidates,
+  resolveDiagramCopyEntityAction,
+  resolveDiagramCopyTargetId,
   type DiagramCopyEdgeBlocker,
   type DiagramCopyEntityPreview,
+  type DiagramCopyResolution,
   type DiagramCopyResolutionAction,
   type DiagramCopyWarning,
 } from '../composables/diagramCopyApi'
@@ -20,8 +22,9 @@ import {
   diagramCopyBlockerI18nKey,
   diagramCopyWarningI18nKey,
 } from '../composables/diagramCopyIssueText'
-import { fetchAllByModelId } from '../composables/modelEditorLoadModel'
-import { useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
+import { isDiagramNameVersionConflict, useDiagramCopyWizard } from '../composables/useDiagramCopyWizard'
+import { useLazyFolderTree } from '../composables/useLazyFolderTree'
+import DiagramCopyFolderPicker from './DiagramCopyFolderPicker.vue'
 
 const props = defineProps<{
   open: boolean
@@ -41,9 +44,9 @@ const wizard = useDiagramCopyWizard({
   sourceModelId: computed(() => props.sourceModelId),
 })
 
-const folders = ref<NodeResponse[]>([])
 const loadingCatalog = ref(false)
 const catalogError = ref<string | null>(null)
+const folderTree = useLazyFolderTree()
 
 const modelOptions = computed(() =>
   wizard.availableModels.value.map(model => ({
@@ -56,13 +59,6 @@ const notationOptions = computed(() =>
   wizard.availableNotations.value.map(notation => ({
     id: notation.id,
     label: `${notation.name} (${notation.version})`,
-  }))
-)
-
-const folderOptions = computed(() =>
-  folders.value.map(folder => ({
-    id: folder.id,
-    label: folder.name,
   }))
 )
 
@@ -97,7 +93,15 @@ function formatWarning(warning: DiagramCopyWarning): string {
   return te(key) ? t(key) : warning.message
 }
 
-async function loadCatalog(): Promise<void> {
+function formatWizardError(message: string): string {
+  return isDiagramNameVersionConflict(message) ? t('models.diagramCopy.nameVersionExists') : message
+}
+
+let initializeGeneration = 0
+const isCurrentInitialize = (generation: number): boolean =>
+  generation === initializeGeneration && props.open
+
+async function loadCatalog(generation: number): Promise<boolean> {
   loadingCatalog.value = true
   catalogError.value = null
   try {
@@ -106,6 +110,7 @@ async function loadCatalog(): Promise<void> {
       apiGet<PaginatedResponse<NotationData>>('/notations?page=0&size=2000'),
     ])
 
+    if (!isCurrentInitialize(generation)) return false
     if (!modelsResult.success) throw new Error(modelsResult.error.message)
     if (!notationsResult.success) throw new Error(notationsResult.error.message)
 
@@ -113,71 +118,74 @@ async function loadCatalog(): Promise<void> {
       model => model.id !== props.sourceModelId && isEditableModel(model)
     )
     wizard.availableNotations.value = paginatedContent(notationsResult.data)
+    return true
   } catch (error) {
+    if (!isCurrentInitialize(generation)) return false
     catalogError.value =
       error instanceof Error && error.message ? error.message : t('models.diagramCopy.error')
+    return false
   } finally {
-    loadingCatalog.value = false
+    if (isCurrentInitialize(generation)) loadingCatalog.value = false
   }
 }
 
 async function loadFolders(modelId: string): Promise<void> {
-  folders.value = []
   wizard.folderNodeId.value = null
+  wizard.createParentNodeId.value = null
+  folderTree.setModel(modelId)
   if (!modelId) return
-
-  try {
-    const nodeTypesQuery = new URLSearchParams({
-      page: '0',
-      size: '2000',
-      modelId,
-    })
-    const [nodes, nodeTypesResult] = await Promise.all([
-      fetchAllByModelId<NodeResponse>('/nodes', modelId),
-      apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${nodeTypesQuery.toString()}`),
-    ])
-    if (!nodeTypesResult.success) throw new Error(nodeTypesResult.error.message)
-
-    const directoryTypeIds = new Set(
-      paginatedContent(nodeTypesResult.data)
-        .filter(type => type.name.trim().toLowerCase() === 'directory')
-        .map(type => type.id)
-    )
-    folders.value = nodes
-      .filter(node => directoryTypeIds.has(node.nodeTypeId))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  } catch (error) {
-    catalogError.value =
-      error instanceof Error && error.message ? error.message : t('models.diagramCopy.folderError')
-  }
+  await folderTree.loadRoot()
 }
 
 async function initialize(): Promise<void> {
-  await loadCatalog()
-  if (!props.open || !props.sourceDiagramId) return
+  const generation = ++initializeGeneration
+  if (!(await loadCatalog(generation)) || !isCurrentInitialize(generation)) return
+  if (!props.sourceDiagramId) return
 
   const firstModel = wizard.availableModels.value[0]
+  if (!isCurrentInitialize(generation)) return
   wizard.targetModelId.value = firstModel?.id ?? ''
   wizard.targetNotationId.value = pickDefaultTargetNotationId(
     wizard.availableNotations.value,
     props.sourceNotationId
   )
-  if (wizard.targetModelId.value) await loadFolders(wizard.targetModelId.value)
+  if (wizard.targetModelId.value) {
+    if (!isCurrentInitialize(generation)) return
+    await loadFolders(wizard.targetModelId.value)
+    if (!isCurrentInitialize(generation)) return
+  }
+  if (!isCurrentInitialize(generation)) return
   await wizard.open(props.sourceDiagramId)
+}
+
+function invalidateInitialize(): void {
+  initializeGeneration += 1
+  folderTree.setModel('')
 }
 
 function closeWizard(): void {
   if (wizard.loading.value) return
+  invalidateInitialize()
   wizard.close()
   emit('close')
+}
+
+function entityResolution(sourceId: string): DiagramCopyResolution | undefined {
+  return wizard.resolutions.value.get(sourceId)
+}
+
+function entityAction(entity: DiagramCopyEntityPreview): DiagramCopyResolutionAction | null {
+  return resolveDiagramCopyEntityAction(entity, entityResolution(entity.sourceId))
+}
+
+function entityMatchTargetId(entity: DiagramCopyEntityPreview): string | null {
+  return resolveDiagramCopyTargetId(entity, entityAction(entity), entityResolution(entity.sourceId))
 }
 
 function setAction(entity: DiagramCopyEntityPreview, action: DiagramCopyResolutionAction): void {
   const targetId =
     action === 'MATCH'
-      ? (entity.effectiveTargetId ??
-          entity.autoMatchTargetId ??
-          diagramCopyMatchCandidates(entity)[0]?.id)
+      ? (entityMatchTargetId(entity) ?? diagramCopyMatchCandidates(entity)[0]?.id ?? null)
       : undefined
   if (action === 'MATCH' && !targetId) return
   wizard.setResolution(entity.sourceId, {
@@ -219,7 +227,10 @@ watch(
   () => props.open,
   isOpen => {
     if (isOpen) void initialize()
-    else wizard.close()
+    else {
+      invalidateInitialize()
+      wizard.close()
+    }
   },
   { immediate: true }
 )
@@ -266,7 +277,7 @@ watch(wizard.targetModelId, modelId => {
         {{ t('models.diagramCopy.loading') }}
       </p>
       <p v-if="catalogError" class="diagram-copy__error">{{ catalogError }}</p>
-      <p v-if="wizard.error.value" class="diagram-copy__error">{{ wizard.error.value }}</p>
+      <p v-if="wizard.error.value" class="diagram-copy__error">{{ formatWizardError(wizard.error.value) }}</p>
 
       <div v-if="wizard.step.value === 1" class="diagram-copy__panel">
         <label class="diagram-copy__field">
@@ -301,20 +312,10 @@ watch(wizard.targetModelId, modelId => {
             <input v-model="wizard.diagramVersion.value" class="form-input" type="text" />
           </label>
         </div>
-        <label class="diagram-copy__field">
-          <span>{{ t('models.diagramCopy.folder') }}</span>
-          <SearchableSelect
-            :model-value="wizard.folderNodeId.value ?? ''"
-            :options="folderOptions"
-            :placeholder="t('models.diagramCopy.rootFolder')"
-            :search-placeholder="t('models.diagramCopy.search')"
-            :empty-text="t('models.diagramCopy.noFolders')"
-            allow-empty
-            :empty-label="t('models.diagramCopy.rootFolder')"
-            :disabled="!wizard.targetModelId.value || wizard.loading.value"
-            @update:model-value="wizard.folderNodeId.value = $event || null"
-          />
-        </label>
+        <DiagramCopyFolderPicker
+          v-model="wizard.folderNodeId.value"
+          :folder-tree="folderTree"
+        />
       </div>
 
       <div v-else-if="wizard.step.value === 2" class="diagram-copy__panel">
@@ -339,7 +340,7 @@ watch(wizard.targetModelId, modelId => {
                 <input
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
-                  :checked="entity.effectiveAction === 'MATCH'"
+                  :checked="entityAction(entity) === 'MATCH'"
                   :disabled="!canMatchDiagramCopyEntity(entity)"
                   @change="setAction(entity, 'MATCH')"
                 />
@@ -349,7 +350,7 @@ watch(wizard.targetModelId, modelId => {
                 <input
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
-                  :checked="entity.effectiveAction === 'CREATE'"
+                  :checked="entityAction(entity) === 'CREATE'"
                   @change="setAction(entity, 'CREATE')"
                 />
                 {{ t('models.diagramCopy.actionCreate') }}
@@ -358,16 +359,16 @@ watch(wizard.targetModelId, modelId => {
                 <input
                   type="radio"
                   :name="`copy-${entity.kind}-${entity.sourceId}`"
-                  :checked="entity.effectiveAction === 'SKIP'"
+                  :checked="entityAction(entity) === 'SKIP'"
                   @change="setAction(entity, 'SKIP')"
                 />
                 {{ t('models.diagramCopy.actionSkip') }}
               </label>
             </div>
             <select
-              v-if="entity.effectiveAction === 'MATCH'"
+              v-if="entityAction(entity) === 'MATCH'"
               class="form-select"
-              :value="entity.effectiveTargetId ?? ''"
+              :value="entityMatchTargetId(entity) ?? ''"
               @change="setMatchTarget(entity, ($event.target as HTMLSelectElement).value)"
             >
               <option

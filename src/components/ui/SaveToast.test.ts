@@ -50,6 +50,18 @@ describe('SaveToast', () => {
     expect(wrapper.text()).toContain('boom')
   })
 
+  it('emits cancel from a cancellable progress toast', async () => {
+    const wrapper = mountToast({
+      saving: true,
+      cancellable: true,
+      progress: 'Preparing…',
+    })
+    const button = wrapper.find('.save-toast__cancel')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+  })
+
   it('prefers saving over success and error', () => {
     const wrapper = mountToast({
       saving: true,

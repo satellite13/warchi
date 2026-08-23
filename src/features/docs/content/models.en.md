@@ -77,7 +77,7 @@ Comparison covers both node/link presence and properties, including diagram-scop
 
 ## Model Editor
 
-The model editor includes several areas. The header also has **model validation scripts** — see [Scripts](/docs/validationScripts).
+The model editor includes several areas. The header also has **scripts** for the open diagram — see [Scripts](/docs/validationScripts).
 
 ### Model Tree (left panel)
 
@@ -86,6 +86,12 @@ The left panel displays the hierarchical structure of the model:
 - **Folders** — for grouping components
 - **Components** — architecture elements (services, modules, databases, etc.)
 - **Diagrams** — graphical representations of the model
+
+Large models load incrementally: the editor first opens the tree root and diagram
+list, then loads the contents of an expanded folder. **Load more** fetches the
+next branch page; an error in one branch does not close the editor and can be
+retried. Opening a diagram loads only its instances and the required nodes and
+links.
 
 Use **search** above the tree: the list narrows to matches and their ancestor path, and non-matching ancestors are muted. Clearing search keeps the selected node in view.
 
@@ -100,7 +106,7 @@ A panel-header toggle syncs selection between the tree and the canvas.
 
 ### Palette
 
-The palette lists element types from the **active diagram’s notation**. Drag an element from the palette onto the diagram to add a new component.
+The palette lists element types from the **active diagram’s notation**. Drag an element from the palette onto the diagram to add a new component. The palette icon comes from the notation component’s **Palette icon** field when set; otherwise from the figure icon.
 
 ### Properties Panel (right panel)
 
@@ -178,6 +184,22 @@ The model editor header includes **Relation matrix**. It opens a separate matrix
 
 Use the matrix to audit relation coverage and produce reports without walking every diagram manually.
 
+### Validation
+
+The model editor header has a **Validation** button next to the relation matrix. It opens a separate report of duplicate instances in the model tree — without downloading the full graph into the browser.
+
+The server runs two checks:
+
+- **Instances** — nodes of the same type whose names match after trim, case-insensitive. The Directory type is excluded.
+- **Links** — two or more directed edges with the same endpoints and type. `A→B` and `B→A` of the same type are not duplicates.
+
+The server returns at most 200 groups of each kind; if there are more, the heading shows “200 of N”.
+Expand a member to see diagrams that contain it. A chip opens that diagram and focuses the entity; clicking a node name selects it in the tree without opening a canvas.
+
+**Merge into selected** opens a one-pair wizard: resulting type properties, which unique links to transfer (nodes only), then confirm. The merge is atomic on the server. If both links already sat on the same diagram, one arrow remains. Documentation of the dropped instance is not moved in v1. On conflict (the pair changed), refresh the report — the wizard does not retry the request.
+
+Diagram scripts in the editor are a separate tool: they see the open canvas only, not the whole model tree.
+
 ### Open Exchange (XML) import
 
 The editor header also offers the **Import Open Exchange (XML)** wizard to load an architecture model from OEF XML:
@@ -207,7 +229,7 @@ If a model with the same **name and version** already exists, a dialog lets you 
 
 ## Saving
 
-The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply.
+The **Save** button on the toolbar is active when there are unsaved changes. The indicator (dot) on the button shows uncommitted changes. Before saving, required fields are validated, including **node type properties** and **notation component properties** wherever those schemas apply. For a complete large-model check, the editor temporarily prepares a detached model snapshot and shows cancellable progress; this snapshot does not replace the open tree branches.
 
 When switching or closing a diagram with unsaved changes, the system will prompt to save, discard, or return to editing.
 
@@ -222,8 +244,8 @@ If you and another user **changed the same node, link, or diagram** so the serve
 
 Pick **one** of the two main actions at the bottom:
 
-- **Reload from server** — **full model reload** from the API. Conflicting **nodes and links** get **current server values** for every field (including attrs) so others’ tree edits are preserved; fields where you and the server already matched stay matched. If a **diagram** is listed: metadata and diagram attrs (except the canvas) come from the server; if the on-canvas **instances** block differed, **your** canvas copy is kept (no parallel canvas editing). Then **Save** again.  
-  **Note:** unsaved edits to **other** model objects (not in the conflict list) are **lost** on full reload — you keep server data plus the diagram canvas exception above.
+- **Reload from server** — the editor reloads the available tree branches and the open diagram. Conflicting **nodes and links** get **current server values** for every field (including attrs) so others’ tree edits are preserved; fields where you and the server already matched stay matched. If a **diagram** is listed: metadata and diagram attrs (except the canvas) come from the server; if the on-canvas **instances** block differed, **your** canvas copy is kept (no parallel canvas editing). Then **Save** again.
+  **Note:** unsaved edits to **other** model objects can be discarded while reloading; if loading fails, the conflict dialog remains open and the action can be retried.
 - **Overwrite server with my data** — save again with force overwrite; other users’ changes to those objects are lost.
 - **Cancel** — close the dialog; local edits stay, but you cannot finish saving until you choose a strategy.
 
@@ -235,7 +257,7 @@ Button labels match the in-app `models` locale strings.
 
 The model editor uses live sync for shared models:
 
-- when other users change model data, the client pulls fresh model, node, link, and diagram state;
+- when other users change model data, the client reloads only affected open branches, entities, and diagrams;
 - synchronization uses WebSocket notifications with periodic polling fallback;
 - your local unsaved draft remains visible in the current tab, and conflicting records are resolved via the save conflict dialog.
 

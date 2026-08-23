@@ -41,6 +41,7 @@ import {
 import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
 import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
+import { hasSystemBooleanDefault } from '@/domain/attrs/systemBooleanProperty'
 import {
   parseEntityAttrs,
   type CustomProperty,
@@ -51,8 +52,19 @@ import {
   DEFAULT_INTERACTIVE_BADGE_ICON,
   getInteractiveBadgeIconIds,
 } from '@/config/interactiveBadgeIcons'
-import type { DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
-import { resolveInstanceComponentId } from '../modelAttrs'
+import type { BoundaryAttach, DiagramAttrs, DiagramNodeInstance, DiagramEdgeInstance } from '../modelAttrs'
+import {
+  parseBoundaryAttach,
+  resolveCompatibleNotationComponents,
+  resolveInstanceComponentId,
+} from '../modelAttrs'
+import {
+  guestCenter,
+  pickNearestOutlineHost,
+  placeGuestCenterAt,
+  shouldHideBoundaryEdge,
+  type OutlineCandidate,
+} from '../utils/boundaryAttach'
 import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import {
   flushPersistDiagramViewport,
@@ -63,10 +75,16 @@ import {
   applyEditablePolylineControlPointChangesToDiagram as applyEditablePolylineControlPointChangesToDiagramAttrs,
   applyNodeAndEditablePolylineChangesToDiagram as applyNodeAndEditablePolylineChangesToDiagramAttrs,
   applyNodePositionsToDiagram as applyNodePositionsToDiagramAttrs,
+  persistHistoryRendererLayout,
   areControlPointsEqual,
   readControlPointsFromAttrs,
   readControlPointsFromEdge,
 } from '../utils/diagramCanvasSync'
+import { collectNestedGroupFollowers } from '../utils/groupDragFollowers'
+import {
+  applyHistoryPersistDirty,
+  type HistoryPersistKind,
+} from '../utils/historyPersistDirty'
 import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
@@ -76,15 +94,18 @@ import {
   mergeEffectiveDiagramStyle,
   resolveModelEdgeOptions,
 } from '../utils/diagramCanvasBuilders'
-import { clientPointForDrop, worldTopLeftCenteredOnCursor } from '../utils/dropCoordinates'
+import {
+  clientPointForDrop,
+  worldTopLeftCenteredOnScreenPoint,
+} from '../utils/dropCoordinates'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
 import {
   applyStylePropertyBindings,
   BIND_TO_NAME,
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
-  resolveCompositeBoundIconName,
 } from '@/features/diagram-style/utils/compositeBindings'
+import { resolvePaletteIconName } from '@/utils/paletteIcon'
 import {
   applyContainerInlineLabel,
   getContainerLabel,
@@ -94,6 +115,7 @@ import {
 } from '../utils/diagramOnlyInstances'
 import { syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
 import { buildEdgeAnchorLookup, resolveDiagramEdgeEndpoint } from '../utils/resolveDiagramEdgeEndpoint'
+import { pickNearestEdgeForDrop, shouldRemapConnectToExistingEdge } from '../utils/noteEdgeDrop'
 import { useLibraryIcons } from '@/composables/useLibraryIcons'
 
 const props = withDefaults(
@@ -205,7 +227,12 @@ const emit = defineEmits<{
   createNodeFromComponent: [componentId: string, x: number, y: number]
   createNote: [x: number, y: number]
   createContainer: [x: number, y: number]
-  addExistingNode: [modelNodeId: string, x: number, y: number]
+  addExistingNode: [
+    modelNodeId: string,
+    x: number,
+    y: number,
+    placement?: { centered: true; snapGridSize?: number | null },
+  ]
   placeExistingModelLink: [modelLinkId: string]
   connectNodes: [
     sourceModelNodeId: string,
@@ -233,6 +260,12 @@ const emit = defineEmits<{
     portId?: string,
     outlineParam?: number,
   ]
+  reconnectEdgeToHost: [
+    edgeInstanceId: string,
+    endpoint: 'start' | 'end',
+    hostEdgeInstanceId: string,
+    pathParam: number,
+  ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
   openDiagram: [diagramId: string]
@@ -248,6 +281,26 @@ const emit = defineEmits<{
     targetInstanceId: string,
     availableRelations: RelationResponse[],
     existingLinksNotOnDiagram: EditorLink[],
+  ]
+  requestBoundaryAutoLink: [
+    sourceModelNodeId: string,
+    targetModelNodeId: string,
+    sourceInstanceId: string,
+    targetInstanceId: string,
+    availableRelations: RelationResponse[],
+    existingLinksNotOnDiagram: EditorLink[],
+  ]
+  requestBoundaryDetach: [
+    guestModelNodeId: string,
+    guestInstanceId: string,
+    oldHostModelNodeId?: string | null,
+  ]
+  requestBoundaryRebind: [
+    guestModelNodeId: string,
+    guestInstanceId: string,
+    newHostModelNodeId: string,
+    newHostInstanceId: string,
+    oldHostModelNodeId?: string | null,
   ]
   liveCollaborationGesture: [phase: 'block' | 'unblock']
   viewportChange: [viewport: ViewportState]
@@ -280,6 +333,8 @@ const canRedo = ref(false)
  * both break undo and can leave an extra no-op history step.
  */
 let suppressHistoryCanvasPersist = false
+const dirtyBeforeHistoryCommand: boolean[] = []
+let pendingHistoryPersistKind: HistoryPersistKind = 'execute'
 /** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
 const viewportRev = ref(0)
 
@@ -401,9 +456,14 @@ const getBoundRelation = (modelLinkId: string): RelationResponse | undefined => 
 
 const hasGroupProperty = (relation: RelationResponse | undefined): boolean => {
   if (!relation) return false
-  const parsed = parseEntityAttrs(relation.attrs ?? null)
-  return parsed.customProperties.some(
-    p => p.name === 'group' && p.type === 'boolean' && p.defaultValue === true
+  return hasSystemBooleanDefault(parseEntityAttrs(relation.attrs ?? null).customProperties, 'group')
+}
+
+const hasBoundaryProperty = (relation: RelationResponse | undefined): boolean => {
+  if (!relation) return false
+  return hasSystemBooleanDefault(
+    parseEntityAttrs(relation.attrs ?? null).customProperties,
+    'boundary',
   )
 }
 
@@ -442,6 +502,16 @@ const shouldSkipEdgeRendering = (edge: DiagramEdgeInstance): boolean => {
   // even when the relation has group=true (bounds equality would otherwise hide them).
   if (edge.sourceInstanceId === edge.targetInstanceId) return false
   const relation = getBoundRelation(edge.modelLinkId)
+  if (hasBoundaryProperty(relation)) {
+    const guestInst =
+      instanceNodes.value.find(item => item.id === edge.targetInstanceId) ??
+      instanceNodes.value.find(item => item.id === edge.sourceInstanceId)
+    return shouldHideBoundaryEdge({
+      sourceInstanceId: edge.sourceInstanceId,
+      targetInstanceId: edge.targetInstanceId,
+      attach: parseBoundaryAttach(guestInst?.attrs?.boundaryAttach),
+    })
+  }
   if (!hasGroupProperty(relation)) return false
   return isTargetInsideSource(edge.sourceInstanceId, edge.targetInstanceId)
 }
@@ -471,11 +541,22 @@ const isNodeGroupingEnabled = (papNodeId: string): boolean => {
   if (!componentId) return false
   const component = props.components.find(c => c.id === componentId)
   if (!component) return false
-  const parsed = parseEntityAttrs(component.attrs ?? null)
-  return parsed.customProperties.some(
-    p => p.name === 'group' && p.type === 'boolean' && p.defaultValue === true
-  )
+  return hasSystemBooleanDefault(parseEntityAttrs(component.attrs ?? null).customProperties, 'group')
 }
+
+const componentHasSystemBoolean = (papNodeId: string, name: string): boolean => {
+  const entity = nodeIdToInstance.get(papNodeId)
+  if (!entity) return false
+  const componentId = getComponentIdForInstance(entity.modelNodeId, entity.instanceId)
+  if (!componentId) return false
+  const component = props.components.find(item => item.id === componentId)
+  if (!component) return false
+  return hasSystemBooleanDefault(parseEntityAttrs(component.attrs ?? null).customProperties, name)
+}
+
+const isBoundaryGuest = (papNodeId: string): boolean => componentHasSystemBoolean(papNodeId, 'boundary')
+const isBoundaryHost = (papNodeId: string): boolean =>
+  componentHasSystemBoolean(papNodeId, 'boundaryAllow')
 
 const getNodeBounds = (papNodeId: string): { x: number; y: number; width: number; height: number } | null => {
   if (!renderer) return null
@@ -505,24 +586,65 @@ const isNodeFullyInside = (
   )
 }
 
-const findContainedNodes = (containerPapNodeId: string): string[] => {
-  if (!renderer) return []
-  const contained: string[] = []
-  for (const [papNodeId] of renderer.nodes) {
-    if (papNodeId === containerPapNodeId) continue
-    if (isNodeFullyInside(papNodeId, containerPapNodeId)) {
-      contained.push(papNodeId)
-    }
+const findBoundaryGuestPapIds = (hostPapNodeId: string): string[] => {
+  const hostEntity = nodeIdToInstance.get(hostPapNodeId)
+  if (!hostEntity || !renderer) return []
+  const guests: string[] = []
+  for (const instance of instanceNodes.value) {
+    const attach = parseBoundaryAttach(instance.attrs?.boundaryAttach)
+    if (attach?.hostInstanceId !== hostEntity.instanceId) continue
+    const papId = `instance-${instance.id}`
+    if (renderer.getNode(papId)) guests.push(papId)
   }
-  return contained
+  return guests
+}
+
+const rePinBoundaryGuests = (hostPapNodeId: string): void => {
+  if (!renderer) return
+  const host = renderer.getNode(hostPapNodeId)
+  if (!host) return
+  for (const guestPapId of findBoundaryGuestPapIds(hostPapNodeId)) {
+    const guest = renderer.getNode(guestPapId)
+    const entity = nodeIdToInstance.get(guestPapId)
+    if (!guest || !entity) continue
+    const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
+    const attach = parseBoundaryAttach(instance?.attrs?.boundaryAttach)
+    if (!attach) continue
+    placeGuestCenterAt(guest, host.getConnectionPointAtOutlineParam(attach.param))
+  }
+}
+
+const rePinAllBoundaryGuests = (): void => {
+  if (!renderer) return
+  const hostPapIds = new Set<string>()
+  for (const instance of instanceNodes.value) {
+    const attach = parseBoundaryAttach(instance.attrs?.boundaryAttach)
+    if (attach) hostPapIds.add(`instance-${attach.hostInstanceId}`)
+  }
+  for (const hostPapId of hostPapIds) {
+    rePinBoundaryGuests(hostPapId)
+  }
 }
 
 const startGroupDrag = (leaderPapNodeId: string) => {
-  if (!isNodeGroupingEnabled(leaderPapNodeId)) {
-    groupDragData = null
-    return
+  const contained =
+    renderer && isNodeGroupingEnabled(leaderPapNodeId)
+      ? collectNestedGroupFollowers({
+          leaderId: leaderPapNodeId,
+          ids: Array.from(renderer.nodes.keys()),
+          boundsOf: getNodeBounds,
+          isGroupingEnabled: isNodeGroupingEnabled,
+        })
+      : []
+  const guests = new Set<string>()
+  for (const hostId of [leaderPapNodeId, ...contained]) {
+    if (hostId === leaderPapNodeId || isNodeGroupingEnabled(hostId)) {
+      for (const guestId of findBoundaryGuestPapIds(hostId)) {
+        guests.add(guestId)
+      }
+    }
   }
-  const followers = findContainedNodes(leaderPapNodeId)
+  const followers = [...new Set([...contained, ...guests])]
   if (followers.length === 0) {
     groupDragData = null
     return
@@ -639,36 +761,36 @@ const getComponentIdForInstance = (
   return resolveInstanceComponentId({ instance, node, notationId }) ?? undefined
 }
 
-const findGroupRelations = (
+const findRelationsWithSystemBoolean = (
   sourceComponentId: string,
-  targetComponentId: string
+  targetComponentId: string,
+  propertyName: string,
 ): RelationResponse[] => {
   const notationId = activeNotationId.value
   if (!notationId) return []
 
-  // Find relation rules that allow connection between these components
-  const matchingRules = props.relationRules?.filter(rule => 
-    rule.fromComponentId === sourceComponentId && 
+  const matchingRules = props.relationRules?.filter(rule =>
+    rule.fromComponentId === sourceComponentId &&
     rule.toComponentId === targetComponentId
   ) ?? []
 
-  // Get allowed relation IDs from rules
   const allowedRelationIds = new Set(matchingRules.map(rule => rule.relationId))
 
-  // Find all relations with group=true property among allowed
   const result: RelationResponse[] = []
   for (const rel of props.relations) {
     if (rel.notationId !== notationId) continue
     if (!allowedRelationIds.has(rel.id)) continue
-    
-    const parsed = parseEntityAttrs(rel.attrs ?? null)
-    const hasGroup = parsed.customProperties.some(
-      p => p.name === 'group' && p.type === 'boolean' && p.defaultValue === true
-    )
-    if (hasGroup) result.push(rel)
+    if (hasSystemBooleanDefault(parseEntityAttrs(rel.attrs ?? null).customProperties, propertyName)) {
+      result.push(rel)
+    }
   }
   return result
 }
+
+const findGroupRelations = (
+  sourceComponentId: string,
+  targetComponentId: string
+): RelationResponse[] => findRelationsWithSystemBoolean(sourceComponentId, targetComponentId, 'group')
 
 const findExistingLinksForRelations = (
   sourceModelNodeId: string,
@@ -759,6 +881,133 @@ const tryCreateAutoLink = (draggedPapNodeId: string) => {
     groupRelations,
     [] // Нет существующих связей
   )
+}
+
+const pendingBoundaryAttachWrites = new Map<string, BoundaryAttach | null>()
+
+const tryCreateBoundaryAutoLink = (hostPapNodeId: string, guestPapNodeId: string): void => {
+  const hostEntity = nodeIdToInstance.get(hostPapNodeId)
+  const guestEntity = nodeIdToInstance.get(guestPapNodeId)
+  if (!hostEntity || !guestEntity) return
+
+  const sourceComponentId = getComponentIdForInstance(hostEntity.modelNodeId, hostEntity.instanceId)
+  const targetComponentId = getComponentIdForInstance(guestEntity.modelNodeId, guestEntity.instanceId)
+  if (!sourceComponentId || !targetComponentId) return
+
+  const relations = findRelationsWithSystemBoolean(sourceComponentId, targetComponentId, 'boundary')
+  if (relations.length === 0) return
+
+  const existingLinks = findExistingLinksForRelations(
+    hostEntity.modelNodeId,
+    guestEntity.modelNodeId,
+    relations,
+  )
+  if (existingLinks.length > 0) return
+
+  emit(
+    'requestBoundaryAutoLink',
+    hostEntity.modelNodeId,
+    guestEntity.modelNodeId,
+    hostEntity.instanceId,
+    guestEntity.instanceId,
+    relations,
+    [],
+  )
+}
+
+type BoundaryDropResult =
+  | { kind: 'none' }
+  | { kind: 'slide' }
+  | { kind: 'attach'; hostPapId: string; guestPapId: string }
+  | {
+      kind: 'reattach'
+      hostPapId: string
+      guestPapId: string
+      oldHostModelNodeId: string
+    }
+  | { kind: 'detach'; guestPapId: string; oldHostModelNodeId?: string }
+
+const readStoredAttach = (guestPapNodeId: string): BoundaryAttach | undefined => {
+  const entity = nodeIdToInstance.get(guestPapNodeId)
+  if (!entity) return undefined
+  const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
+  return parseBoundaryAttach(instance?.attrs?.boundaryAttach)
+}
+
+const collectBoundaryHostCandidates = (guestPapNodeId: string): OutlineCandidate[] => {
+  if (!renderer) return []
+  const guest = renderer.getNode(guestPapNodeId)
+  if (!guest) return []
+  const center = guestCenter(guest)
+  const candidates: OutlineCandidate[] = []
+  for (const [papId, host] of renderer.nodes) {
+    if (papId === guestPapNodeId) continue
+    if (!isBoundaryHost(papId)) continue
+    const closest = host.getClosestPointOnOutline(center)
+    candidates.push({ id: papId, point: closest.point, param: closest.param })
+  }
+  return candidates
+}
+
+const trySnapOrDetachBoundary = (guestPapNodeId: string): BoundaryDropResult => {
+  if (!renderer || !isBoundaryGuest(guestPapNodeId)) return { kind: 'none' }
+  const guest = renderer.getNode(guestPapNodeId)
+  const guestEntity = nodeIdToInstance.get(guestPapNodeId)
+  if (!guest || !guestEntity) return { kind: 'none' }
+
+  const previous = readStoredAttach(guestPapNodeId)
+  const nearest = pickNearestOutlineHost(guestCenter(guest), collectBoundaryHostCandidates(guestPapNodeId))
+  if (nearest) {
+    const host = renderer.getNode(nearest.id)
+    const hostEntity = nodeIdToInstance.get(nearest.id)
+    if (!host || !hostEntity) return { kind: 'none' }
+    const point = host.getConnectionPointAtOutlineParam(nearest.param)
+    placeGuestCenterAt(guest, point)
+    pendingBoundaryAttachWrites.set(guestEntity.instanceId, {
+      hostInstanceId: hostEntity.instanceId,
+      param: nearest.param,
+    })
+    if (previous?.hostInstanceId === hostEntity.instanceId) {
+      return { kind: 'slide' }
+    }
+    if (previous) {
+      const oldHostInst = instanceNodes.value.find(item => item.id === previous.hostInstanceId)
+      return {
+        kind: 'reattach',
+        hostPapId: nearest.id,
+        guestPapId: guestPapNodeId,
+        oldHostModelNodeId: oldHostInst?.modelNodeId ?? '',
+      }
+    }
+    return { kind: 'attach', hostPapId: nearest.id, guestPapId: guestPapNodeId }
+  }
+
+  if (previous) {
+    pendingBoundaryAttachWrites.set(guestEntity.instanceId, null)
+    const oldHostInst = instanceNodes.value.find(item => item.id === previous.hostInstanceId)
+    return { kind: 'detach', guestPapId: guestPapNodeId, oldHostModelNodeId: oldHostInst?.modelNodeId }
+  }
+  return { kind: 'none' }
+}
+
+const applyPendingBoundaryAttach = (diagramAttrs: DiagramAttrs): boolean => {
+  if (pendingBoundaryAttachWrites.size === 0) return false
+  let changed = false
+  for (const [instanceId, attach] of pendingBoundaryAttachWrites) {
+    const node = diagramAttrs.instances.nodes.find(item => item.id === instanceId)
+    if (!node) continue
+    if (!node.attrs) node.attrs = {}
+    if (attach) {
+      node.attrs.boundaryAttach = { ...attach }
+    } else if (node.attrs.boundaryAttach) {
+      delete node.attrs.boundaryAttach
+    } else {
+      continue
+    }
+    changed = true
+  }
+  pendingBoundaryAttachWrites.clear()
+  return changed
 }
 
 const getEffectiveEdgeStyle = (edgeInst: DiagramEdgeInstance): DiagramStyle | undefined => {
@@ -910,6 +1159,10 @@ function applyMinSizeConstraint(node: DiagramNode, instance: DiagramNodeInstance
       height: Math.max(contentMin.height, compMin.height),
     }
   }
+}
+
+function applyTransformLock(node: DiagramNode, instance: DiagramNodeInstance): void {
+  node.resizeHandlesEnabled = getEffectiveStyle(instance)?.lockTransform !== true
 }
 
 const getInstanceArea = (instance: DiagramNodeInstance): number => {
@@ -1232,6 +1485,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     specialRectangleShape,
   })
   applyMinSizeConstraint(node, instance)
+  applyTransformLock(node, instance)
   return node
 }
 
@@ -1355,9 +1609,13 @@ function syncDiagram() {
         getInteractiveBadgesForInstance(instance)
       applyContentInsetFromStyle(existing, ds, getBoundComponentStyle(instance))
       if (ds?.labelPlacement) {
-        ;(existing as unknown as { labelPlacement?: string }).labelPlacement = ds.labelPlacement
+        existing.labelPlacement = ds.labelPlacement
+      }
+      if (typeof ds?.labelGap === 'number') {
+        existing.labelGap = ds.labelGap
       }
       applyMinSizeConstraint(existing, instance)
+      applyTransformLock(existing, instance)
     } else {
       renderer.addNode(createInstanceNode(instance))
       if (resolveDiagramNodeShape(getEffectiveStyle(instance)) === 'composite') {
@@ -1369,6 +1627,8 @@ function syncDiagram() {
     }
   }
 
+  rePinAllBoundaryGuests()
+
   // Sync edges
   for (const edge of instanceEdges.value) {
     const modelLink = linkById.value.get(edge.modelLinkId)
@@ -1378,7 +1638,6 @@ function syncDiagram() {
     // Связи нет в props.links (например poll после удаления на сервере), но ребро ещё в attrs —
     // всё равно рисуем, иначе стрелка пропадает при неизменном JSON диаграммы.
 
-    // Skip rendering if relation has group=true and target is inside source
     if (shouldSkipEdgeRendering(edge)) continue
 
     const papEdgeId = `edge-${edge.id}`
@@ -1930,10 +2189,8 @@ function clearLockedPortsFromRendererEdges(): void {
   }
 }
 
-function detectEdgePortChanges() {
-  if (!renderer) return
-
-  const next = cloneDiagramAttrs()
+function applyEdgePortChangesToAttrs(next: DiagramAttrs): boolean {
+  if (!renderer) return false
   let changed = false
 
   for (const [papEdgeId, entity] of edgeIdToInstance) {
@@ -1998,7 +2255,14 @@ function detectEdgePortChanges() {
     changed = true
   }
 
-  if (changed) {
+  return changed
+}
+
+function detectEdgePortChanges() {
+  if (!renderer) return
+
+  const next = cloneDiagramAttrs()
+  if (applyEdgePortChangesToAttrs(next)) {
     emit('updateDiagram', next)
   }
 }
@@ -2070,6 +2334,33 @@ function persistNodePositions(papNodeIds: string[]) {
   }
 }
 
+function persistHistoryLayoutFromRenderer(options?: { dirty?: boolean }): void {
+  if (props.readOnly || !renderer) return
+  const source = props.activeDiagram?.parsedAttrs
+  if (!source) return
+  const { next, changed: layoutChanged } = persistHistoryRendererLayout({
+    source,
+    papNodeIds: Array.from(nodeIdToInstance.keys()),
+    nodeIdToInstance,
+    edgeIdToInstance,
+    getNodeByPapId: papNodeId => renderer?.getNode(papNodeId),
+    getEdgeByPapId: papEdgeId => renderer?.getEdge(papEdgeId),
+  })
+  const portsChanged = applyEdgePortChangesToAttrs(next)
+  let anchorsChanged = false
+  const midpoints = collectHostEdgeMidpoints()
+  if (midpoints.size > 0) {
+    const result = syncEdgeAnchorPositions(next.instances.nodes, midpoints)
+    next.instances.nodes = result.nodes
+    anchorsChanged = result.changed
+  }
+  const changed = layoutChanged || portsChanged || anchorsChanged
+  if (changed || options?.dirty === false) {
+    if (changed) syncEdgePortIds(next)
+    emit('updateDiagram', next, options)
+  }
+}
+
 /** Single updateDiagram for drag end: node positions + edge-anchor midpoints together. */
 function persistDragEndState(papNodeIds: string[]) {
   if (props.readOnly || !renderer) return
@@ -2090,7 +2381,8 @@ function persistDragEndState(papNodeIds: string[]) {
     anchorsChanged = result.changed
     renderer.markContentDirty()
   }
-  if (nodeChanged || controlPointsChanged || anchorsChanged) {
+  const attachChanged = applyPendingBoundaryAttach(next)
+  if (nodeChanged || controlPointsChanged || anchorsChanged || attachChanged) {
     syncEdgePortIds(next)
     emit('updateDiagram', next)
   }
@@ -2122,6 +2414,15 @@ function syncEdgePortIds(diagramAttrs: DiagramAttrs) {
   for (const edgeInst of diagramAttrs.instances.edges) {
     const papEdge = renderer.getEdge(`edge-${edgeInst.id}`)
     if (!papEdge) continue
+    // A later anchor-position update may start from stale props. Always carry
+    // live node bindings too, otherwise it can overwrite a reconnect emitted
+    // just before it for a host edge that has diagram-only junctions.
+    if (papEdge.from.nodeId?.startsWith('instance-')) {
+      edgeInst.sourceInstanceId = papEdge.from.nodeId.slice('instance-'.length)
+    }
+    if (papEdge.to.nodeId?.startsWith('instance-')) {
+      edgeInst.targetInstanceId = papEdge.to.nodeId.slice('instance-'.length)
+    }
     if (!edgeInst.attrs) edgeInst.attrs = {}
     if (papEdge.from.portId) edgeInst.attrs.fromPortId = papEdge.from.portId
     else delete edgeInst.attrs.fromPortId
@@ -2216,25 +2517,58 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   // Drag move → keep followers and inner polyline bends aligned with the leader
   manager.drag.on('drag', () => {
     syncGroupDragFromLeader()
+    if (groupDragData) {
+      rePinBoundaryGuests(groupDragData.leaderPapNodeId)
+    }
     syncEdgeAnchors({ persist: false, updateRenderer: true })
   })
 
   // Drag end → persist position changes (include grouped nodes) + auto-link
   manager.drag.on('dragend', (_nodeIds: string[]) => {
     if (props.readOnly) return
+    const draggedId = _nodeIds.length === 1 ? _nodeIds[0]! : undefined
+    const drop = draggedId && isBoundaryGuest(draggedId) ? trySnapOrDetachBoundary(draggedId) : { kind: 'none' as const }
     const allIds = endGroupDrag()
     const papNodeIds = allIds.length > 0 ? allIds : _nodeIds
-    persistDragEndState(papNodeIds)
-    // Try auto-create link if dragged node is inside container with group relation
-    if (_nodeIds.length === 1) {
-      tryCreateAutoLink(_nodeIds[0]!)
+    if (drop.kind === 'detach') {
+      const guestEntity = nodeIdToInstance.get(drop.guestPapId)
+      if (guestEntity) {
+        emit('requestBoundaryDetach', guestEntity.modelNodeId, guestEntity.instanceId, drop.oldHostModelNodeId)
+      }
+      persistDragEndState(papNodeIds)
+    } else {
+      if (drop.kind === 'reattach') {
+        const guestEntity = nodeIdToInstance.get(drop.guestPapId)
+        const hostEntity = nodeIdToInstance.get(drop.hostPapId)
+        if (guestEntity && hostEntity) {
+          emit(
+            'requestBoundaryRebind',
+            guestEntity.modelNodeId,
+            guestEntity.instanceId,
+            hostEntity.modelNodeId,
+            hostEntity.instanceId,
+            drop.oldHostModelNodeId || null,
+          )
+        }
+      }
+      persistDragEndState(papNodeIds)
+      if (drop.kind === 'attach' || drop.kind === 'reattach') {
+        tryCreateBoundaryAutoLink(drop.hostPapId, drop.guestPapId)
+      } else if (draggedId && !isBoundaryGuest(draggedId)) {
+        tryCreateAutoLink(draggedId)
+      }
     }
+  })
+
+  manager.resize.on('resize', (nodeId: string) => {
+    rePinBoundaryGuests(nodeId)
   })
 
   // Resize end → persist size changes
   manager.resize.on('resizeEnd', (nodeId: string) => {
     if (props.readOnly) return
-    persistNodePositions([nodeId])
+    rePinBoundaryGuests(nodeId)
+    persistNodePositions([nodeId, ...findBoundaryGuestPapIds(nodeId)])
   })
 
   // Connection validator: translate papirus node IDs to model node IDs and delegate
@@ -2242,26 +2576,52 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     sourcePapId: string,
     targetPapId: string
   ) => {
-    if (!props.connectionValidator) return true
     const sourceEntity = nodeIdToInstance.get(sourcePapId)
+    const sourceInst = sourceEntity
+      ? instanceNodes.value.find(item => item.id === sourceEntity.instanceId)
+      : undefined
+    // Notes and drops onto a group fill (pool/lane) may glue to a crossing
+    // relation. Do not show a forbidden cursor first — the connect handler
+    // remaps that drop to the stroke.
+    if (sourceInst && isNoteInstance(sourceInst)) return true
+    if (isNodeGroupingEnabled(targetPapId)) return true
+    if (!props.connectionValidator) return true
     const targetEntity = nodeIdToInstance.get(targetPapId)
     if (!sourceEntity || !targetEntity) return false
     return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
   }
+
+  manager.history.on('undo', () => {
+    pendingHistoryPersistKind = 'undo'
+  })
+  manager.history.on('redo', () => {
+    pendingHistoryPersistKind = 'redo'
+  })
 
   // History → sync canUndo/canRedo + detect label changes
   manager.history.on('change', () => {
     if (props.readOnly) return
     canUndo.value = manager.history.canUndo
     canRedo.value = manager.history.canRedo
+    const persistDirty = applyHistoryPersistDirty(
+      dirtyBeforeHistoryCommand,
+      pendingHistoryPersistKind,
+      Boolean(props.diagramDirty)
+    )
+    pendingHistoryPersistKind = 'execute'
+    while (dirtyBeforeHistoryCommand.length > manager.history.undoCount) {
+      dirtyBeforeHistoryCommand.shift()
+    }
     if (suppressHistoryCanvasPersist) return
-    // Keep model state in sync with renderer commands (undo/redo drag, resize, etc.)
-    persistNodePositions(Array.from(nodeIdToInstance.keys()))
-    detectEdgePortChanges()
-    detectEditablePolylineControlPointChanges()
-    detectLabelChanges()
-    detectEdgeLabelChanges()
-    syncEdgeAnchors({ persist: true, updateRenderer: true })
+    // One attrs write: nodes + editable-polyline bends + ports + anchors.
+    // A later cloneDiagramAttrs() still sees pre-undo props and would restore
+    // post-drag controlPoints after nested group undo.
+    persistHistoryLayoutFromRenderer({ dirty: persistDirty.dirty })
+    if (persistDirty.dirty) {
+      detectLabelChanges()
+      detectEdgeLabelChanges()
+    }
+    syncEdgeAnchors({ persist: false, updateRenderer: true })
   })
 
   // Connection → emit connectNodes / connectNodeToEdge
@@ -2316,6 +2676,61 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     const sourceEntity = nodeIdToInstance.get(fromId)
     const targetEntity = nodeIdToInstance.get(toId)
     if (sourceEntity && targetEntity) {
+      const targetPapNode = currentRenderer.getNode(toId)
+      if (targetPapNode) {
+        const targetIsGroup = isNodeGroupingEnabled(toId)
+        const dropPoint =
+          edge.to.outlineParam !== undefined
+            ? targetPapNode.getConnectionPointAtOutlineParam(edge.to.outlineParam)
+            : { x: edge.endPoint.x, y: edge.endPoint.y }
+        const sourceInst = instanceNodes.value.find(item => item.id === sourceEntity.instanceId)
+        const picked = shouldRemapConnectToExistingEdge({
+          isDiagramOnlyVisual: !!sourceInst && isDiagramOnlyVisualInstance(sourceInst),
+        })
+          ? pickNearestEdgeForDrop({
+              targetPapNodeId: toId,
+              targetCenter: targetPapNode.getCenter(),
+              dropPoint,
+              maxDistance: 40,
+              edges: [...currentRenderer.edges.values()]
+                .filter(item => item.id !== edge.id && item.visible)
+                .flatMap(item => {
+                  const entity = edgeIdToInstance.get(item.id)
+                  if (!entity) return []
+                  return [
+                    {
+                      instanceEdgeId: entity.edgeId,
+                      fromPapNodeId: item.from.nodeId,
+                      toPapNodeId: item.to.nodeId,
+                      path: item.path,
+                    },
+                  ]
+                }),
+            })
+          : null
+        if (picked) {
+          emit(
+            'connectNodeToEdge',
+            sourceEntity.modelNodeId,
+            sourceEntity.instanceId,
+            picked.instanceEdgeId,
+            picked.pathParam,
+            true,
+            edge.from.portId ?? undefined,
+            edge.from.outlineParam
+          )
+          currentRenderer.removeEdge(edge.id)
+          return
+        }
+        if (
+          targetIsGroup &&
+          props.connectionValidator &&
+          !props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
+        ) {
+          currentRenderer.removeEdge(edge.id)
+          return
+        }
+      }
       emit(
         'connectNodes',
         sourceEntity.modelNodeId,
@@ -2335,6 +2750,27 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   manager.connection.on('edgeReconnect', (edge: Edge, endpoint: 'start' | 'end') => {
     const entity = edgeIdToInstance.get(edge.id)
     if (!entity) return
+
+    const hostPapEdgeId = endpoint === 'start' ? edge.from.edgeId : edge.to.edgeId
+    const hostPathParam = endpoint === 'start' ? edge.from.pathParam : edge.to.pathParam
+    if (hostPapEdgeId) {
+      const hostEntity = edgeIdToInstance.get(hostPapEdgeId)
+      if (hostEntity && hostEntity.edgeId !== entity.edgeId) {
+        emit(
+          'reconnectEdgeToHost',
+          entity.edgeId,
+          endpoint,
+          hostEntity.edgeId,
+          hostPathParam ?? 0.5
+        )
+      }
+      nextTick(() => {
+        detectEdgePortChanges()
+        detectEditablePolylineControlPointChanges()
+        syncEdgeAnchors({ persist: true, updateRenderer: true })
+      })
+      return
+    }
 
     const newPapNodeId = endpoint === 'start' ? edge.from.nodeId : edge.to.nodeId
     if (!newPapNodeId) return
@@ -2776,7 +3212,14 @@ const redo = () => {
 }
 
 const resetHistory = () => {
-  interactionManager?.history.clear()
+  suppressHistoryCanvasPersist = true
+  try {
+    interactionManager?.history.clear()
+  } finally {
+    suppressHistoryCanvasPersist = false
+  }
+  dirtyBeforeHistoryCommand.length = 0
+  pendingHistoryPersistKind = 'execute'
   canUndo.value = false
   canRedo.value = false
 }
@@ -2812,16 +3255,11 @@ const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
   const notationId = activeNotationId.value
   if (!notationId) return false
 
-  const existingComponentId = node.parsedAttrs.notationComponents[notationId]?.componentId
-  if (existingComponentId) {
-    return props.components.some(
-      component => component.id === existingComponentId && component.notationId === notationId
-    )
-  }
-
-  return props.components.some(
-    component => component.notationId === notationId && component.nodeTypeId === node.nodeTypeId
-  )
+  return resolveCompatibleNotationComponents({
+    node,
+    notationId,
+    components: props.components,
+  }).length > 0
 }
 
 const hasDragType = (event: DragEvent, type: string): boolean =>
@@ -2844,6 +3282,49 @@ const isAllowedDropEvent = (event: DragEvent): boolean => {
 /** Last reliable pointer from dragover (drop event coords are often wrong). */
 let lastDragOverClient: { x: number; y: number } | null = null
 
+const resolveModelNodeDropSize = (modelNodeId: string): { width: number; height: number } => {
+  const node = props.nodes.find(item => item.id === modelNodeId)
+  if (!node) return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
+
+  const nodeType = props.nodeTypes.find(item => item.id === node.nodeTypeId)
+  if ((nodeType?.name ?? '').trim().toLowerCase() === 'directory') {
+    return { width: 230, height: 126 }
+  }
+
+  const notationId = activeNotationId.value
+  const component = resolveCompatibleNotationComponents({
+    node,
+    notationId,
+    components: props.components,
+  })[0]
+  const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
+  return {
+    width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
+    height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
+  }
+}
+
+const hasMultipleCompatibleComponents = (modelNodeId: string): boolean => {
+  const node = props.nodes.find(item => item.id === modelNodeId && !item._isDeleted)
+  if (!node) return false
+  return (
+    resolveCompatibleNotationComponents({
+      node,
+      notationId: activeNotationId.value,
+      components: props.components,
+    }).length > 1
+  )
+}
+
+const resolveDropWorldCenter = (event: DragEvent): { x: number; y: number } | null => {
+  if (!renderer) return null
+  const client = clientPointForDrop(
+    { x: event.clientX, y: event.clientY },
+    lastDragOverClient
+  )
+  return renderer.screenToWorld(client.x, client.y)
+}
+
 const resolveDropSize = (event: DragEvent): { width: number; height: number } => {
   const componentId = event.dataTransfer?.getData('application/x-notation-component-id')
   if (componentId) {
@@ -2861,21 +3342,7 @@ const resolveDropSize = (event: DragEvent): { width: number; height: number } =>
     return { width: 240, height: 160 }
   }
   const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
-  if (modelNodeId) {
-    const node = props.nodes.find(item => item.id === modelNodeId)
-    if (node) {
-      const notationId = activeNotationId.value
-      const binding = notationId ? node.parsedAttrs.notationComponents[notationId] : undefined
-      const component = binding
-        ? props.components.find(item => item.id === binding.componentId)
-        : undefined
-      const ds = component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
-      return {
-        width: typeof ds?.width === 'number' ? ds.width : DEFAULT_NODE_WIDTH,
-        height: typeof ds?.height === 'number' ? ds.height : DEFAULT_NODE_HEIGHT,
-      }
-    }
-  }
+  if (modelNodeId) return resolveModelNodeDropSize(modelNodeId)
   return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
 }
 
@@ -2888,10 +3355,45 @@ const normalizeDropCoordinates = (
     { x: event.clientX, y: event.clientY },
     lastDragOverClient
   )
-  const world = renderer.screenToWorld(client.x, client.y)
   const snapTo = (value: number) =>
     snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
-  return worldTopLeftCenteredOnCursor(world, size, snapTo)
+  return worldTopLeftCenteredOnScreenPoint(
+    client,
+    point => renderer!.screenToWorld(point.x, point.y),
+    size,
+    snapTo
+  )
+}
+
+const addExistingNodeAtViewportCenter = (modelNodeId: string): void => {
+  if (
+    !renderer ||
+    !containerRef.value ||
+    !props.activeDiagram ||
+    props.readOnly ||
+    props.navigationOnlyMode ||
+    !canDropModelNodeToDiagram(modelNodeId)
+  ) {
+    return
+  }
+  const snapTo = (value: number) =>
+    snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  if (hasMultipleCompatibleComponents(modelNodeId)) {
+    const canvasCenter = getCanvasCenter()
+    const center = renderer.screenToWorld(canvasCenter.x, canvasCenter.y)
+    emit('addExistingNode', modelNodeId, center.x, center.y, {
+      centered: true,
+      snapGridSize: snapEnabled.value ? GRID_SIZE : null,
+    })
+    return
+  }
+  const { x, y } = worldTopLeftCenteredOnScreenPoint(
+    getCanvasCenter(),
+    point => renderer!.screenToWorld(point.x, point.y),
+    resolveModelNodeDropSize(modelNodeId),
+    snapTo
+  )
+  emit('addExistingNode', modelNodeId, x, y)
 }
 
 const onDragOver = (event: DragEvent) => {
@@ -2942,6 +3444,18 @@ const onDrop = (event: DragEvent) => {
   if (props.readOnly || props.navigationOnlyMode || !props.activeDiagram) return
   if (!isAllowedDropEvent(event)) return
   event.preventDefault()
+  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
+  if (modelNodeId && hasMultipleCompatibleComponents(modelNodeId)) {
+    const center = resolveDropWorldCenter(event)
+    lastDragOverClient = null
+    if (center) {
+      emit('addExistingNode', modelNodeId, center.x, center.y, {
+        centered: true,
+        snapGridSize: snapEnabled.value ? GRID_SIZE : null,
+      })
+    }
+    return
+  }
   const size = resolveDropSize(event)
   const { x, y } = normalizeDropCoordinates(event, size)
   lastDragOverClient = null
@@ -2964,7 +3478,6 @@ const onDrop = (event: DragEvent) => {
     return
   }
 
-  const modelNodeId = event.dataTransfer?.getData('application/x-model-node-id')
   if (modelNodeId) {
     emit('addExistingNode', modelNodeId, x, y)
     return
@@ -3004,21 +3517,14 @@ const paletteItems = computed(() => {
     .filter(component => component.notationId === notationId)
     .map(component => {
       const parsedAttrs = parseEntityAttrs(component.attrs ?? null)
-      const iconName = parsedAttrs.diagramStyle?.iconName?.trim()
       const fillColor = parsedAttrs.diagramStyle?.fillColor?.trim()
       const paletteGroup =
         typeof parsedAttrs.paletteGroup === 'number' && parsedAttrs.paletteGroup >= 0
           ? parsedAttrs.paletteGroup
           : 0
-      const compositeIconName = resolveCompositeBoundIconName(parsedAttrs.diagramStyle?.compositeContent)
-      const hasSvgIcon = (iconName && iconName.length > 0) || !!compositeIconName
-      const resolvedIconName = iconName || compositeIconName
-      const paletteIconId = hasSvgIcon
-        ? undefined
-        : (parsedAttrs.paletteMaterialIcon?.trim() || undefined)
       return {
         ...component,
-        paletteIconName: hasSvgIcon ? resolvedIconName! : paletteIconId ?? 'component',
+        paletteIconName: resolvePaletteIconName(parsedAttrs, 'component'),
         paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : 'var(--accent)',
         paletteGroup,
       }
@@ -3358,7 +3864,9 @@ defineExpose({
   redo,
   getCanUndo,
   getCanRedo,
+  addExistingNodeAtViewportCenter,
   flushCanvasState,
+  resetHistory,
 })
 </script>
 

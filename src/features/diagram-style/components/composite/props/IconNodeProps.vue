@@ -10,6 +10,7 @@ import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import { ICON_SELECT_MIN_SEARCH_LENGTH } from '@/config/iconOptions'
 import { useLibraryIcons } from '@/composables/useLibraryIcons'
 import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
+import { iconNameFromSource, matchIconOptionId } from '@/utils/libraryIconResolve'
 
 const props = defineProps<{
   modelValue: CompositeSerializedCComponent
@@ -22,12 +23,9 @@ const { t } = useI18n()
 const { selectOptions: iconSelectOptions, ensureLoaded } = useLibraryIcons()
 void ensureLoaded()
 
-/** Extract icon ID from path like "/icons/widgets.svg" → "widgets" */
-const sourceIconId = computed(() => {
-  const src = props.modelValue.source ?? ''
-  const match = src.match(/^\/icons\/(.+)\.svg$/)
-  return match?.[1] ?? ''
-})
+const sourceIconId = computed(() =>
+  matchIconOptionId(iconNameFromSource(props.modelValue.source ?? ''), iconSelectOptions.value),
+)
 </script>
 
 <template>

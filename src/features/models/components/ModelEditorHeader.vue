@@ -52,6 +52,8 @@ const props = withDefaults(
     diagramLockServerNewer?: boolean
     /** Зрители смотрят диаграмму (только для держателя lock) */
     diagramSpectators?: { userId: string; displayName: string }[]
+    /** Toolbar actions that must not run during save validation. */
+    toolbarLocked?: boolean
   }>(),
   {
     hasUnsavedChanges: false,
@@ -88,6 +90,7 @@ const props = withDefaults(
     diagramLockHolderDisplay: '',
     diagramLockServerNewer: false,
     diagramSpectators: () => [],
+    toolbarLocked: false,
   }
 )
 
@@ -102,6 +105,7 @@ const emit = defineEmits<{
   createBaseline: []
   compare: []
   openRelationMatrix: []
+  openValidation: []
   diagramLockReload: []
 }>()
 
@@ -232,7 +236,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     icon: 'upload_file',
     event: 'import-oef',
     title: t('models.oefImportTitle'),
-    disabled: !props.canEditModel,
+    disabled: !props.canEditModel || props.toolbarLocked,
   },
   {
     icon: 'download',
@@ -242,7 +246,10 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
   {
     icon: 'terminal',
     event: 'run-validation-script',
-    title: t('validationScripts.toolbarRun'),
+    title: props.hasActiveDiagram
+      ? t('validationScripts.toolbarRun')
+      : t('validationScripts.runNeedsDiagram'),
+    disabled: !props.hasActiveDiagram || props.toolbarLocked,
   },
   { icon: 'separator', event: 'sep3', separator: true },
   ...(props.isAdmin
@@ -410,6 +417,15 @@ function spectatorInitials(name: string): string {
         @click="emit('openRelationMatrix')"
       >
         <UiIcon name="grid_view" />
+      </button>
+      <button
+        v-if="modelId"
+        type="button"
+        class="deh-icon-btn"
+        :title="t('models.validationReportOpen')"
+        @click="emit('openValidation')"
+      >
+        <UiIcon name="fact_check" />
       </button>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
       <button

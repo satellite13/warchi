@@ -4,16 +4,23 @@ import {
   DiagramRenderer,
   CompositeNode,
   deserializeCComponent,
+  isExternalLabelPlacement,
   type CContainer,
   type CComponent,
+  type CompositeShapeType,
+  type LabelPlacement,
 } from '@ngroznykh/papirus'
-import type { CompositeSerializedCComponent } from '@/domain/attrs/notationAttrs'
+import type { CompositeSerializedCComponent, DiagramStyle } from '@/domain/attrs/notationAttrs'
 
 const props = defineProps<{
   content: CompositeSerializedCComponent
   width?: number
   height?: number
   selectedNodeId?: string | null
+  label?: string
+  labelPlacement?: DiagramStyle['labelPlacement']
+  labelGap?: number
+  shapeType?: DiagramStyle['compositeShapeType']
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -83,6 +90,42 @@ function instrumentTree(
   }
 }
 
+function findBoundName(node: CompositeSerializedCComponent): string | undefined {
+  if (node.type === 'text' && node.bindToProperty === '__name__' && typeof node.text === 'string') {
+    return node.text
+  }
+  if (node.content) {
+    const nested = findBoundName(node.content)
+    if (nested) return nested
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findBoundName(child)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+function resolvePreviewShape(shape?: DiagramStyle['compositeShapeType']): CompositeShapeType {
+  if (shape === 'circle' || shape === 'diamond') return shape
+  return 'rectangle'
+}
+
+function resolvePreviewPlacement(value?: DiagramStyle['labelPlacement']): LabelPlacement {
+  if (
+    value === 'top' ||
+    value === 'bottom' ||
+    value === 'left' ||
+    value === 'right' ||
+    value === 'center' ||
+    value === 'auto'
+  ) {
+    return value
+  }
+  return 'center'
+}
+
 function renderPreview(): void {
   if (!renderer) return
   renderer.clear()
@@ -93,14 +136,20 @@ function renderPreview(): void {
 
   instrumentTree(content, boundsCollector, props.selectedNodeId ?? null)
 
+  const placement = resolvePreviewPlacement(props.labelPlacement)
+  const pad = isExternalLabelPlacement(placement) ? 36 : 20
+  const labelText = props.label?.trim() || findBoundName(props.content) || 'Name'
   const node = new CompositeNode({
     id: 'preview-composite',
-    x: 20,
-    y: 20,
-    width: w - 40,
-    height: h - 40,
+    x: pad,
+    y: pad,
+    width: Math.max(24, w - pad * 2),
+    height: Math.max(24, h - pad * 2),
     content,
-    shapeType: 'rectangle',
+    shapeType: resolvePreviewShape(props.shapeType),
+    label: labelText,
+    labelPlacement: placement,
+    ...(typeof props.labelGap === 'number' ? { labelGap: props.labelGap } : {}),
   })
   renderer.addNode(node)
   renderer.markDirty()
@@ -117,7 +166,14 @@ onMounted(() => {
 })
 
 watch(
-  [() => props.content, () => props.selectedNodeId],
+  [
+    () => props.content,
+    () => props.selectedNodeId,
+    () => props.label,
+    () => props.labelPlacement,
+    () => props.labelGap,
+    () => props.shapeType,
+  ],
   () => {
     renderPreview()
   },

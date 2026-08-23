@@ -218,18 +218,20 @@ function handleInteractiveIconChange(value: string) {
               {{ opt.label }}
             </option>
           </select>
-          <ToggleSwitch
-            :model-value="property.required"
-            @update:model-value="(v) => onMutateProperty?.((p) => { p.required = v })"
-          >
-            {{ t("types.requiredShort") }}
-          </ToggleSwitch>
-          <ToggleSwitch
-            :model-value="property.system ?? false"
-            @update:model-value="(v) => onMutateProperty?.((p) => { p.system = v })"
-          >
-            {{ t("types.systemShort") }}
-          </ToggleSwitch>
+          <div class="property-row__flags">
+            <ToggleSwitch
+              :model-value="property.required"
+              @update:model-value="(v) => onMutateProperty?.((p) => { p.required = v })"
+            >
+              {{ t("types.requiredShort") }}
+            </ToggleSwitch>
+            <ToggleSwitch
+              :model-value="property.system ?? false"
+              @update:model-value="(v) => onMutateProperty?.((p) => { p.system = v })"
+            >
+              {{ t("types.systemShort") }}
+            </ToggleSwitch>
+          </div>
         </div>
 
         <div v-if="property.type === 'string'" class="property-row__extra">
@@ -512,6 +514,27 @@ function handleInteractiveIconChange(value: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.property-row__main > .form-input {
+  flex: 1 1 120px;
+  min-width: 96px;
+  width: auto;
+}
+
+.property-row__main > .form-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 7em;
+}
+
+.property-row__flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 .property-row__extra {

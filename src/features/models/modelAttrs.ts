@@ -30,14 +30,32 @@ export type ModelLinkAttrs = {
 
 export type ScopedCustomValues = Record<string, Record<string, Record<string, unknown>>>
 
+export type BoundaryAttach = {
+  hostInstanceId: string
+  param: number
+}
+
 export type DiagramNodeInstanceAttrs = JsonObject & {
   componentProperties?: ScopedCustomValues
   /** Visual (notation component) for this diagram instance; falls back to node binding. */
   notationComponentId?: string
+  /** Guest glued to a host outline (BPMN boundary event). */
+  boundaryAttach?: BoundaryAttach
+}
+
+export const parseBoundaryAttach = (value: unknown): BoundaryAttach | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const hostInstanceId =
+    typeof record.hostInstanceId === 'string' ? record.hostInstanceId.trim() : ''
+  const param = record.param
+  if (!hostInstanceId || typeof param !== 'number' || !Number.isFinite(param)) return undefined
+  return { hostInstanceId, param }
 }
 
 export type DiagramEdgeInstanceAttrs = JsonObject & {
   relationProperties?: ScopedCustomValues
+  diagramStyle?: JsonObject
 }
 
 export type DiagramNodeInstance = {
@@ -144,6 +162,9 @@ const toDiagramNodeAttrs = (value: unknown): DiagramNodeInstanceAttrs => {
   } else if ('notationComponentId' in attrs) {
     delete attrs.notationComponentId
   }
+  const boundaryAttach = parseBoundaryAttach(attrs.boundaryAttach)
+  if (boundaryAttach) attrs.boundaryAttach = boundaryAttach
+  else delete attrs.boundaryAttach
   return attrs
 }
 
@@ -247,6 +268,34 @@ export const resolveComponentByNodeType = (
 ): ComponentResponse[] =>
   components.filter(item => item.notationId === notationId && item.nodeTypeId === nodeTypeId)
 
+/**
+ * Resolves components with the same precedence as notation eligibility:
+ * a present node binding is authoritative, while an absent binding falls back
+ * to components matching the node type.
+ */
+export const resolveCompatibleNotationComponents = <
+  T extends Pick<ComponentResponse, 'id' | 'notationId' | 'nodeTypeId'>,
+>(input: {
+  node: { nodeTypeId: string; parsedAttrs: ModelNodeAttrs }
+  notationId: string | null | undefined
+  components: readonly T[]
+}): T[] => {
+  const notationId = input.notationId
+  if (!notationId) return []
+
+  const componentId = input.node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (componentId) {
+    return input.components.filter(
+      component => component.id === componentId && component.notationId === notationId
+    )
+  }
+
+  return input.components.filter(
+    component =>
+      component.notationId === notationId && component.nodeTypeId === input.node.nodeTypeId
+  )
+}
+
 export type ResolveInstanceComponentIdInput = {
   instance?: DiagramNodeInstance | null
   node?: { parsedAttrs: ModelNodeAttrs } | null
@@ -264,6 +313,27 @@ export const resolveInstanceComponentId = (
   const notationId = input.notationId
   if (!notationId || !input.node) return null
   return input.node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+}
+
+export const hasEligibleNotationComponent = (input: {
+  node: { nodeTypeId: string; parsedAttrs: ModelNodeAttrs }
+  notationId: string | null | undefined
+  components: readonly Pick<ComponentResponse, 'id' | 'notationId' | 'nodeTypeId'>[]
+}): boolean => {
+  const notationId = input.notationId
+  if (!notationId) return false
+
+  const existingComponentId = input.node.parsedAttrs.notationComponents[notationId]?.componentId
+  if (existingComponentId) {
+    return input.components.some(
+      component => component.id === existingComponentId && component.notationId === notationId
+    )
+  }
+
+  return input.components.some(
+    component =>
+      component.notationId === notationId && component.nodeTypeId === input.node.nodeTypeId
+  )
 }
 
 export const resolveRelationByLinkType = (

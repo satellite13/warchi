@@ -4,6 +4,116 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-08-23
+
+### Fixed
+- Saving a model no longer fails after removing a figure from a diagram and then deleting that node from the tree.
+
+## [0.24.1] - 2026-08-23
+
+### Fixed
+- Connecting two model-tree nodes by outline opens the notation relation picker instead of creating a diagram-only dashed edge onto a nearby stroke.
+
+## [0.24.0] - 2026-08-23
+
+### Added
+- Model validation report: groups of duplicate nodes and links, diagram chips,
+  a merge wizard with field and typeProperties diff, and opening the editor
+  focused on the selected entity.
+
+### Changed
+- The model tree no longer shows a separate Opened badge; an open locked
+  diagram is already visible from the row highlight and lock icon.
+
+### Fixed
+- Undoing a move of a grouping element, including a group nested in another
+  group, restores inner arrow bends.
+- After that undo, the save indicator turns off when there were no other
+  local edits.
+
+## [0.23.0] - 2026-08-22
+
+### Added
+- Diagram scripts can query the rest of the model through `neighbors`,
+  `searchNodes`, and `linksBetween`, then queue canvas changes: place existing
+  nodes and links, remove figures, align / distribute / stack, and recolor
+  edges with `apply.setEdgeStyle`.
+
+### Changed
+- Scripts run against the **open diagram** only: the snapshot is a canvas
+  slice, not a detached full-model dump. Helpers such as `nodesOfType` and
+  `findDuplicateLinks` see what is on the canvas.
+- The **Scripts** toolbar button stays disabled until a diagram is open.
+- **Apply** writes one Undo step and closes the run dialog.
+
+### Fixed
+- Running a script no longer times out when the diagram snapshot is a Vue
+  reactive proxy (`postMessage` cannot clone it).
+
+## [0.22.3] - 2026-08-22
+
+### Fixed
+- Diagram copy wizard now pre-selects **Match** when the backend finds an automatic
+  correspondence, and **Create** when there is no match candidate.
+- Diagram copy folder picker uses a cleaner tree layout with proper expand/collapse
+  and loading states per branch.
+
+### Changed
+- Diagram copy commit now mirrors the source model folder path when creating new
+  nodes in the target model (missing folders are created under the target root).
+
+## [0.22.2] - 2026-08-22
+
+### Fixed
+- Opening a diagram with diagram-only note links no longer fails with a malformed
+  resolve request when lazy scope hydrates instances.
+
+## [0.22.1] - 2026-08-22
+
+### Added
+- Large-model editing now loads the tree and diagrams lazily: branches,
+  traceability neighbors, and the active diagram are fetched on demand. Live
+  sync and polling update only materialized scopes instead of walking every
+  node and link.
+- Model tree search finds nodes and diagrams, shows a breadcrumb path from the
+  root, and navigates to the hit in the hierarchy without opening the diagram.
+- Notation node label position can sit outside the shape (top/bottom/left/right + gap). Applies to both simple shapes and composite nodes (the inner `__name__` text is hidden so the name is not duplicated).
+- Notation style flag **Lock size** (`lockTransform`): when on, the model-canvas transformer cannot resize instances of that component.
+- The notation **palette icon** can override the figure icon: when set, palettes and lists use it even if the component already has an icon.
+- Saved notation style presets now include content insets (T/R/B/L), label position, lock-size, and width/height, and apply them to the next component.
+- Notation system flags `boundary` / `boundaryAllow`: a guest snaps to a host outline (BPMN boundary events), keeps a hidden Traceability link, and can be slid, reattached, or pulled off.
+
+### Changed
+- Saving or running a large-model validation script prepares a cancellable,
+  detached snapshot with local changes; it does not load a full snapshot into
+  the open editor state.
+- Opening a large model no longer walks `/nodes`, `/links`, and `/diagrams` twice: live sync waits for the editor snapshot and skips the first connect/resync pull. For the current 1 CPU / 1 GiB backend profile, model pages load 5000 rows at a time through one global request slot; the HTTP/2 benchmark found that wider pools exhaust or contend for backend resources.
+- Large-model loading now shows real page/phase progress. High-volume nodes and links no longer become deep Vue proxies: the benchmark max long task dropped from 2.54 s to 303 ms and used JS heap from roughly 811 to 339 MiB.
+- The bundled nginx enables HTTP/2 on its TLS listener, including the local Kubernetes service URL.
+
+### Fixed
+- Large-model loading ignores stale route sessions, drains or cancels queued pages after failures, and preserves foreign live-sync changes that arrive during an active snapshot pull.
+- Changing the target model in the diagram-copy wizard no longer keeps «Match» targets from the previous model (that produced `invalid match target` on commit).
+- Diagram copy now defaults unmatched nodes and links to **Create** when there is no match candidate, instead of leaving every row empty and blocking the wizard.
+- Custom property rows no longer collapse the name field into a square next to the type select and Required/System toggles.
+- Re-attaching a boundary guest no longer asks to reuse a link and then draws that structural `boundary` arrow on the diagram. The link stays in Traceability only. Save after moving a boundary to another host no longer stays dirty until a second click.
+- A diagram-only arrow from a nested child (E inside B inside A) can land on a visible C–D relation that crosses the group fill; the container no longer shows a lock or becomes the target. Snap uses the closest path within 40px, including when the stroke crosses a sibling node.
+- The junction end of a diagram-only arrow can be dragged onto another relation (or along the same stroke), not only onto nodes.
+- A normal relation can be reconnected to another component even when a diagram-only arrow is or was attached to it; edge-anchor synchronization no longer overwrites the new endpoint with the old one.
+- A normal relation can be reconnected to another component even when a diagram-only arrow is or was attached to it; edge-anchor synchronization no longer overwrites the new endpoint with the old one.
+- Choosing an imported library icon in figure styles no longer resets the select to None after the canvas applies the SVG markup.
+- Model and notation tree action icons no longer reserve width on every row, so unselected names are not truncated.
+
+## [0.21.4] - 2026-08-18
+
+### Changed
+- In contour-connect mode the floating port appears only close to the real shape outline, including non-rectangular figures, and no longer blocks corner resize.
+
+## [0.21.3] - 2026-08-18
+
+### Fixed
+- Copying a diagram into a model that already had a deleted diagram with the same name and version now suggests the next free version instead of failing with a generic conflict.
+
 ## [0.21.2] - 2026-08-17
 
 ### Fixed

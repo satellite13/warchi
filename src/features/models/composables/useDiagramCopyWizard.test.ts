@@ -1,18 +1,21 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiagramCopyPreviewResponse } from './diagramCopyApi'
-import { useDiagramCopyWizard } from './useDiagramCopyWizard'
+import { isDiagramNameVersionConflict, useDiagramCopyWizard } from './useDiagramCopyWizard'
 
 const { commitDiagramCopyMock, previewDiagramCopyMock } = vi.hoisted(() => ({
   commitDiagramCopyMock: vi.fn(),
   previewDiagramCopyMock: vi.fn(),
 }))
 
-vi.mock('./diagramCopyApi', () => ({
-  buildResolutionsFromPreview: vi.fn(() => []),
-  commitDiagramCopy: commitDiagramCopyMock,
-  previewDiagramCopy: previewDiagramCopyMock,
-}))
+vi.mock('./diagramCopyApi', async importOriginal => {
+  const actual = await importOriginal<typeof import('./diagramCopyApi')>()
+  return {
+    ...actual,
+    commitDiagramCopy: commitDiagramCopyMock,
+    previewDiagramCopy: previewDiagramCopyMock,
+  }
+})
 
 function createPreview(
   overrides: Partial<DiagramCopyPreviewResponse> = {}
@@ -68,6 +71,93 @@ describe('useDiagramCopyWizard', () => {
     scope.stop()
   })
 
+  it('detects a target name and version conflict', () => {
+    expect(
+      isDiagramNameVersionConflict(
+        "Diagram 'Use-Case 1' version '1.0.1' already exists in the target model"
+      )
+    ).toBe(true)
+    expect(isDiagramNameVersionConflict('Operation conflicts with existing data')).toBe(false)
+  })
+
+  it('resets name and version suggestions when the target model changes', async () => {
+    const scope = effectScope()
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
+
+    wizard.targetModelId.value = 'target-model-1'
+    wizard.targetNotationId.value = 'target-notation'
+    await wizard.open('source-diagram')
+    await flushWatcher()
+    wizard.diagramName.value = 'Use-Case 1'
+    wizard.diagramVersion.value = '1.0.1'
+
+    previewDiagramCopyMock.mockResolvedValueOnce({
+      success: true,
+      data: createPreview({ suggestedName: 'Use-Case 1', suggestedVersion: '1.0.2' }),
+    })
+    wizard.targetModelId.value = 'target-model-2'
+    await vi.waitFor(() => {
+      expect(wizard.diagramVersion.value).toBe('1.0.2')
+    })
+
+    expect(wizard.diagramName.value).toBe('Use-Case 1')
+    scope.stop()
+  })
+
+  it('does not replay match targets from the previous model preview', async () => {
+    const scope = effectScope()
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
+
+    const firstPreview = createPreview({
+      nodes: [
+        {
+          sourceId: '015b5538-39a8-4f4b-9ec9-d7b214108919',
+          kind: 'NODE',
+          label: 'Start Event',
+          stableId: null,
+          typeId: 'bpmn-start',
+          autoMatchTargetId: 'old-model-node',
+          autoMatchReason: 'NAME_AND_TYPE',
+          candidates: [
+            { id: 'old-model-node', label: 'Start Event', stableId: null, typeId: 'bpmn-start' },
+          ],
+          effectiveAction: 'MATCH',
+          effectiveTargetId: 'old-model-node',
+          isEndpointOfEdge: false,
+        },
+      ],
+    })
+    previewDiagramCopyMock.mockResolvedValue({ success: true, data: firstPreview })
+    wizard.targetModelId.value = 'other-bpmn-model'
+    wizard.targetNotationId.value = 'target-notation'
+    await wizard.open('source-diagram')
+    await vi.waitFor(() => {
+      expect(wizard.preview.value?.nodes).toHaveLength(1)
+    })
+
+    previewDiagramCopyMock.mockClear()
+    previewDiagramCopyMock.mockResolvedValue({ success: true, data: createPreview() })
+    wizard.targetModelId.value = 'project-1'
+    await vi.waitFor(() => {
+      expect(previewDiagramCopyMock).toHaveBeenCalled()
+    })
+
+    expect(previewDiagramCopyMock).toHaveBeenCalledWith(
+      'project-1',
+      expect.objectContaining({
+        sourceDiagramId: 'source-diagram',
+        resolutions: [],
+      })
+    )
+    expect(
+      previewDiagramCopyMock.mock.calls.some(call =>
+        JSON.stringify(call[1]).includes('old-model-node')
+      )
+    ).toBe(false)
+
+    scope.stop()
+  })
+
   it('resets resolutions when target model changes', async () => {
     const scope = effectScope()
     const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
@@ -98,6 +188,8 @@ describe('useDiagramCopyWizard', () => {
     wizard.diagramVersion.value = '1.0.0'
     await wizard.open('source-diagram')
     await flushWatcher()
+    wizard.folderNodeId.value = 'folder-1'
+    wizard.createParentNodeId.value = 'create-parent-1'
     commitDiagramCopyMock.mockResolvedValue({
       success: true,
       data: { diagram: { id: 'copied-diagram' } },
@@ -107,6 +199,13 @@ describe('useDiagramCopyWizard', () => {
       targetModelId: 'target-model',
       diagramId: 'copied-diagram',
     })
+    expect(commitDiagramCopyMock).toHaveBeenCalledWith(
+      'target-model',
+      expect.objectContaining({
+        nodeId: 'folder-1',
+        createParentNodeId: 'create-parent-1',
+      })
+    )
     scope.stop()
   })
 })

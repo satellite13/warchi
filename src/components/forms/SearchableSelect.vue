@@ -73,8 +73,7 @@ const selectedOption = computed(() =>
 
 const displayLabel = computed(() => {
   if (!props.modelValue) return props.placeholder
-  if (props.allowEmpty && !props.modelValue) return props.emptyLabel || props.placeholder
-  return selectedOption.value?.label ?? props.placeholder
+  return selectedOption.value?.label ?? props.modelValue
 })
 
 const selectOption = (id: string) => {

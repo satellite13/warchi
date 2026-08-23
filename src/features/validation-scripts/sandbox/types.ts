@@ -1,3 +1,5 @@
+import type { DiagramScriptCommand } from './diagramScriptCommands'
+
 export type ValidationIssueLevel = 'error' | 'warn' | 'info'
 
 export type ValidationIssueTargetKind = 'node' | 'link' | 'diagram' | 'folder'
@@ -36,6 +38,22 @@ export type SnapshotFolder = {
   parentId: string | null
 }
 
+export type SnapshotDiagramInstance = {
+  id: string
+  modelNodeId: string
+  x: number
+  y: number
+  width?: number
+  height?: number
+}
+
+export type SnapshotDiagramEdge = {
+  id: string
+  modelLinkId: string
+  sourceInstanceId: string
+  targetInstanceId: string
+}
+
 export type SnapshotDiagram = {
   id: string
   name: string
@@ -43,6 +61,8 @@ export type SnapshotDiagram = {
   notationId: string
   nodeIds: string[]
   linkIds: string[]
+  instances?: SnapshotDiagramInstance[]
+  edges?: SnapshotDiagramEdge[]
 }
 
 export type SnapshotComponent = {
@@ -107,6 +127,7 @@ export type ValidationRunContext = {
 
 export type ValidationRunResult = {
   issues: ValidationIssue[]
+  commands?: DiagramScriptCommand[]
   error?: string
   timedOut?: boolean
 }

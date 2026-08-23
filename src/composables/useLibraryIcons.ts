@@ -3,6 +3,7 @@ import { COMBINED_ICON_OPTIONS, type IconOption } from '@/config/iconOptions'
 import { apiGet } from '@/composables/useApi'
 import {
   libraryNameMap,
+  normalizeIconName,
   resolveIconMarkup,
   resolveIconSrc,
   type LibraryIconRecord,
@@ -52,9 +53,10 @@ export function useLibraryIcons() {
     const seen = new Set<string>()
     const out: IconOption[] = []
     for (const icon of icons.value) {
-      if (seen.has(icon.name)) continue
-      seen.add(icon.name)
-      out.push({ id: icon.name, label: icon.name.replace(/_/g, ' ') })
+      const id = normalizeIconName(icon.name) || icon.name
+      if (seen.has(id)) continue
+      seen.add(id)
+      out.push({ id, label: icon.name.replace(/_/g, ' ') })
     }
     for (const option of COMBINED_ICON_OPTIONS) {
       if (seen.has(option.id)) continue

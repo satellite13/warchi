@@ -51,7 +51,8 @@ For each node type you can configure:
 - Fill and stroke color
 - Font and text color
 - Default dimensions
-- Icon
+- Icon on the figure
+- A separate **palette icon** in component properties: when set, the palette uses it even if the figure already has an icon; empty — same as the figure
 
 For link types you configure:
 
@@ -157,6 +158,7 @@ See [Label alignment](#label-alignment) below for label position vs text alignme
 For compact layout, the style panel uses abbreviated labels:
 
 - `W/H/R` — width, height, radius;
+- **Lock size** — on a model diagram the transformer cannot resize instances of this component. `W`/`H` in the notation still set the initial size;
 - `PT/PB/PL/PR` — top/bottom/left/right ports;
 - `T/R/B/L` — top/right/bottom/left insets (content inset and label inset).
 
@@ -191,7 +193,8 @@ If a component type has the `group=true` system property, that component can act
 
 If a link type has the `group=true` system property, that link is treated as a grouping relation:
 
-- when `target` is fully inside `source`, the link may be hidden on the diagram (the structural relation still exists, visual noise is reduced); self-loops (`source === target`) are still shown;
+- when `target` is fully inside `source`, the stroke is hidden (the structural relation still exists); self-loops (`source === target`) are still shown;
+- a visible relation that crosses a container (pool, lane, including nested ones) remains a drop target: from any notation element you can draw a diagram-only arrow onto that stroke without pulling its endpoints out of the container;
 - when dropping one component inside another, if a `group=true` relation is allowed, the editor suggests reusing an existing relation or creating a new one;
 - if multiple relation types are possible, the relation type chooser is shown.
 
@@ -204,6 +207,28 @@ If a link type has the `group=true` system property, that link is treated as a g
 5. Configure this property for the required types:
    - for **component types** — to enable container behavior;
    - for **link types** — to mark a relation as grouping.
+
+### System properties `boundary` and `boundaryAllow`
+
+Separate from `group`: the guest **snaps to the host outline**, it is not placed inside. This is how BPMN boundary events work: a subprocess can both **contain** activities (`group`) and **hold events on its border** (`boundary`).
+
+| Who | Property | Meaning |
+|---|---|---|
+| Host (Task, Subprocess) | `boundaryAllow` | Guests may sit on this outline |
+| Guest (boundary event) | `boundary` | Snaps to a host that has `boundaryAllow` |
+| Relation type | `boundary` | Structural “attached to” (shown in **Traceability**). Do not reuse `group` |
+
+Setup matches `group`: property name, `boolean` type, default `true`, **Sys.** checkbox. Also add a relation rule: host → guest.
+
+#### Diagram behavior
+
+- Drag a guest onto a host outline — its center sits on the contour and a `boundary` link is created (or reused silently). The arrow is not placed on the diagram; the link appears only in **Traceability**.
+- Move or resize the host — the guest stays at the same relative outline point.
+- Drag the guest **along the same outline** — it stays attached and slides.
+- Drop it on **another** host outline — the same `boundary` link is rebound to the new host (id and properties stay). If a link to the new host already exists, that one is kept and the old one is removed.
+- Drag it **far** from every host — detach: the glue is cleared and the structural `boundary` link is deleted (no leftover arrow, unlike `group`).
+
+Snap threshold is about 28 world units. The glue is stored on the diagram instance (`attrs.boundaryAttach`).
 
 ### Interactive Properties on the Diagram
 
@@ -303,8 +328,9 @@ The label template can be set in two places:
 
 The node label has two independent positioning settings:
 
-- **Position** — which edge of the shape the label is aligned to (auto, center, top, bottom, left, right)
-- **Alignment** — how text lines are aligned within the label (center, left, right). Relevant for multi-line labels.
+- **Position** — inside the shape, or **outside** the contour (top, bottom, left, right). Outside is what BPMN events and gateways need: the name is not squeezed into a small circle/diamond. This works for both simple and composite nodes; on a composite, the inner name-bound text is hidden so the label is not drawn twice.
+- **Gap** — distance from the contour to an external label.
+- **Alignment** — how text lines are aligned within the label box (center, left, right). Relevant for multi-line labels.
 
 ## Notation Versioning
 

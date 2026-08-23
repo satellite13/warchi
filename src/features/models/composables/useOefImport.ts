@@ -45,6 +45,9 @@ export function useOefImport(options: {
   t: TranslateFn
   setUiError: (message: string) => void
   loadModel: () => Promise<void>
+  getExistingNodes?: () => ModelEditorState['nodes']
+  getExistingLinks?: () => ModelEditorState['links']
+  isExistingLinksReady?: () => boolean
 }) {
   const showImportWizard = ref(false)
   const isImportingOef = ref(false)
@@ -226,6 +229,10 @@ export function useOefImport(options: {
   }): Promise<void> {
     const modelId = options.state.value.modelId
     if (!modelId || isImportingOef.value) return
+    if (options.isExistingLinksReady && !options.isExistingLinksReady()) {
+      options.setUiError(options.t('models.oefDetachedLinksStale'))
+      return
+    }
 
     // Show busy UI before any heavy sync work so the wizard does not freeze blank.
     isImportingOef.value = true
@@ -302,8 +309,12 @@ export function useOefImport(options: {
         relationCustomPropertiesById,
         relationRules: options.state.value.relationRules,
         ruleDecisions: payload.ruleDecisions,
-        existingNodes: options.state.value.nodes.filter(node => !node._isDeleted),
-        existingLinks: options.state.value.links.filter(link => !link._isDeleted),
+        existingNodes: (options.getExistingNodes?.() ?? options.state.value.nodes).filter(
+          node => !node._isDeleted
+        ),
+        existingLinks: (options.getExistingLinks?.() ?? options.state.value.links).filter(
+          link => !link._isDeleted
+        ),
         existingDiagrams: options.state.value.diagrams.filter(diagram => !diagram._isDeleted),
         reuseSettings: payload.reuseSettings,
       })

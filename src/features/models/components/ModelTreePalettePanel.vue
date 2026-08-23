@@ -5,8 +5,13 @@ import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import { compareVersions } from "@/utils/version"
 import { parseTypeAttrs } from "@/domain/attrs/notationAttrs"
-import type { DiagramLockStatusResponse, NodeTypeResponse } from "@/types/api"
-import type { EditorDiagram, EditorNode } from "../types"
+import type { DiagramLockStatusResponse, ModelSearchHit, NodeTypeResponse } from "@/types/api"
+import type {
+  ChildrenPageState,
+  EditorDiagram,
+  EditorNode,
+  TreeParentScope,
+} from "../types"
 import { useTreeSearch } from "../composables"
 import LazyIconImg from "@/components/forms/LazyIconImg.vue"
 import SearchInput from "@/components/forms/SearchInput.vue"
@@ -32,6 +37,16 @@ const props = defineProps<{
   modelName?: string
   syncSelectionEnabled?: boolean
   navigationOnlyMode?: boolean
+  loadedChildrenFor?: Set<string>
+  childrenPages?: Map<string, ChildrenPageState>
+  childrenLoading?: Set<string>
+  childrenErrors?: Map<string, string>
+  searchHits?: ModelSearchHit[]
+  searchQuery?: string
+  searchLoading?: boolean
+  searchError?: string | null
+  treeFocusLoading?: boolean
+  treeFocusError?: string | null
 }>()
 
 const diagramLockById = computed(() => {
@@ -72,6 +87,12 @@ const emit = defineEmits<{
   renameDiagram: [diagramId: string, name: string]
   copyDiagramToModel: [diagramId: string]
   toggleSyncSelection: []
+  loadChildren: [scope: TreeParentScope]
+  loadNextChildrenPage: [scope: TreeParentScope]
+  searchQueryChange: [query: string]
+  selectSearchHit: [hit: ModelSearchHit]
+  retrySearch: []
+  retryTreeFocus: []
 }>()
 const { t } = useI18n()
 
@@ -99,6 +120,27 @@ const nodeIndexById = computed(() => {
 
 const isDirectory = (node: EditorNode): boolean =>
   (nodeTypeNameById.value.get(node.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
+
+const isSearchHitDirectory = (hit: ModelSearchHit): boolean => {
+  if (hit.kind !== "node" || !hit.nodeTypeId) return false
+  return (nodeTypeNameById.value.get(hit.nodeTypeId) ?? "").trim().toLowerCase() === "directory"
+}
+
+const searchHitTypeIconId = (hit: ModelSearchHit): string | null => {
+  if (hit.kind !== "node" || !hit.nodeTypeId) return null
+  return nodeTypeIconById.value.get(hit.nodeTypeId) ?? null
+}
+
+const searchHitIconName = (hit: ModelSearchHit): string => {
+  if (hit.kind === "diagram") return "dashboard"
+  if (isSearchHitDirectory(hit)) return DEFAULT_ENTITY_ICONS.folder
+  return DEFAULT_ENTITY_ICONS.node
+}
+
+const searchHitBreadcrumb = (hit: ModelSearchHit): string | null => {
+  if (!hit.pathNames || hit.pathNames.length <= 1) return null
+  return hit.pathNames.slice(0, -1).join(" / ")
+}
 
 const isRootDiagram = (d: EditorDiagram): boolean => {
   if (d._isDeleted) return false
@@ -134,6 +176,11 @@ const latestDiagramsByNodeId = computed(() => {
 /** Диаграммы узла: по одному на имя (последняя версия), без baseline-дубликатов в списке */
 const nodeDiagrams = (nodeId: string): EditorDiagram[] =>
   latestDiagramsByNodeId.value.get(nodeId) ?? []
+
+const isExpandable = (node: EditorNode): boolean =>
+  node.hasChildren === true ||
+  (isDirectory(node) && node.hasChildren !== false) ||
+  nodeDiagrams(node.id).length > 0
 
 const rootDiagrams = computed<EditorDiagram[]>(() => {
   const list = props.diagrams.filter(isRootDiagram)
@@ -175,6 +222,22 @@ const visibleRootNodes = computed<EditorNode[]>(() => filteredRootNodes.value)
 
 const visibleChildNodes = (nodeId: string): EditorNode[] => filteredChildNodes(nodeId)
 
+const nodeScope = (nodeId: string): TreeParentScope => ({ kind: "node", nodeId })
+const scopeKey = (scope: TreeParentScope): string =>
+  scope.kind === "root" ? "root" : `node:${scope.nodeId}`
+const isScopeComplete = (scope: TreeParentScope): boolean =>
+  props.loadedChildrenFor?.has(scopeKey(scope)) === true
+const onToggleNode = (node: EditorNode): void => {
+  const wasExpanded = expandedNodes.value.has(node.id)
+  toggleNode(node.id)
+  if (wasExpanded) return
+  const scope = nodeScope(node.id)
+  const key = scopeKey(scope)
+  if (node.hasChildren !== false && !isScopeComplete(scope) && !props.childrenLoading?.has(key)) {
+    emit("loadChildren", scope)
+  }
+}
+
 const visibleRootDiagrams = computed<EditorDiagram[]>(() => {
   const query = normalizedQuery.value
   if (!query) return rootDiagrams.value
@@ -208,6 +271,11 @@ const usedNodeIds = computed(() => {
 const isNodeUsed = (nodeId: string): boolean => usedNodeIds.value.has(nodeId)
 
 const onDragNodeStart = (event: DragEvent, nodeId: string) => {
+  const node = nodeById.value.get(nodeId)
+  if (!node || props.navigationOnlyMode) {
+    event.preventDefault()
+    return
+  }
   event.dataTransfer?.setData("application/x-model-node-id", nodeId)
   event.dataTransfer?.setData("text/plain", `node:${nodeId}`)
 
@@ -330,10 +398,11 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   }
 
   if (!draggedNodeId || draggedNodeId === targetNodeId) return
+  const draggedNode = nodeById.value.get(draggedNodeId)
+  if (!draggedNode || props.navigationOnlyMode) return
 
   // Prevent dropping a node onto its own descendant
   if (targetNodeId && isDescendant(targetNodeId, draggedNodeId)) return
-
   emit("moveNode", draggedNodeId, targetNodeId, targetPosition)
 }
 
@@ -403,16 +472,50 @@ type TreeDiagramRow = {
   depth: number
 }
 
-type TreeRow = TreeNodeRow | TreeDiagramRow
+type TreeStatusRow = {
+  kind: "loading" | "error" | "loadMore"
+  scope: TreeParentScope
+  depth: number
+  message?: string
+}
+
+type TreeSearchRow = {
+  kind: "search"
+  hit: ModelSearchHit
+}
+
+type TreeRow = TreeNodeRow | TreeDiagramRow | TreeStatusRow | TreeSearchRow
 
 const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
   const rows: TreeRow[] = []
   const query = normalizedQuery.value
   const limit = query ? MAX_SEARCH_TREE_ROWS : Number.POSITIVE_INFINITY
 
+  if (query && props.searchHits !== undefined) {
+    for (const hit of props.searchHits.slice(0, limit)) {
+      rows.push({ kind: "search", hit })
+    }
+    return { rows, truncated: props.searchHits.length > limit }
+  }
+
   const pushRow = (row: TreeRow): boolean => {
     rows.push(row)
     return rows.length >= limit
+  }
+
+  const pushScopeStatus = (scope: TreeParentScope, depth: number): boolean => {
+    const key = scopeKey(scope)
+    if (props.childrenLoading?.has(key)) {
+      if (pushRow({ kind: "loading", scope, depth })) return true
+    }
+    const branchError = props.childrenErrors?.get(key)
+    if (branchError) {
+      if (pushRow({ kind: "error", scope, depth, message: branchError })) return true
+    }
+    if (props.childrenPages?.get(key)?.nextPage != null) {
+      if (pushRow({ kind: "loadMore", scope, depth })) return true
+    }
+    return false
   }
 
   for (const diagram of visibleRootDiagrams.value) {
@@ -423,20 +526,23 @@ const treeRows = computed<{ rows: TreeRow[]; truncated: boolean }>(() => {
 
   const pushNode = (node: EditorNode, depth: number): boolean => {
     if (pushRow({ kind: "node", node, depth })) return true
-    if (!isDirectory(node) || !expandedNodes.value.has(node.id)) return false
+    if (!isExpandable(node) || !expandedNodes.value.has(node.id)) return false
     for (const diagram of visibleNodeDiagrams(node.id)) {
       if (pushRow({ kind: "diagram", nodeId: node.id, diagram, depth: depth + 1 })) return true
     }
     for (const child of visibleChildNodes(node.id)) {
       if (pushNode(child, depth + 1)) return true
     }
-    return false
+    return pushScopeStatus(nodeScope(node.id), depth + 1)
   }
 
   for (const rootNode of visibleRootNodes.value) {
     if (pushNode(rootNode, 0)) {
       return { rows, truncated: !!query }
     }
+  }
+  if (pushScopeStatus({ kind: "root" }, 0)) {
+    return { rows, truncated: !!query }
   }
   return { rows, truncated: false }
 })
@@ -475,24 +581,42 @@ const expandToNode = (nodeId: string): void => {
   expandedNodes.value = next
 }
 
-const scrollToTreeIndex = (index: number): void => {
-  if (index < 0) return
-  nextTick(() => {
-    rowVirtualizer.value.scrollToIndex(index, { align: "auto" })
-  })
+const expandPath = (nodeIds: readonly string[]): void => {
+  const next = new Set(expandedNodes.value)
+  for (const id of nodeIds) next.add(id)
+  expandedNodes.value = next
 }
 
-const focusNode = (nodeId: string): void => {
+const scrollToTreeIndex = async (
+  index: number,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (index < 0 || !isCurrent()) return
+  await nextTick()
+  if (!isCurrent()) return
+  rowVirtualizer.value.scrollToIndex(index, { align: "auto" })
+  await nextTick()
+}
+
+const focusNode = async (
+  nodeId: string,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (!isCurrent()) return
   expandToNode(nodeId)
-  nextTick(() => {
-    const index = visibleTreeRows.value.findIndex(
-      (row) => row.kind === "node" && row.node.id === nodeId,
-    )
-    scrollToTreeIndex(index)
-  })
+  await nextTick()
+  if (!isCurrent()) return
+  const index = visibleTreeRows.value.findIndex(
+    (row) => row.kind === "node" && row.node.id === nodeId,
+  )
+  await scrollToTreeIndex(index, isCurrent)
 }
 
-const focusDiagram = (diagramId: string): void => {
+const focusDiagram = async (
+  diagramId: string,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (!isCurrent()) return
   const diagram = props.diagrams.find((d) => d.id === diagramId && !d._isDeleted)
   if (diagram?.nodeId && !(props.treeRootNodeId && diagram.nodeId === props.treeRootNodeId)) {
     expandToNode(diagram.nodeId)
@@ -501,16 +625,17 @@ const focusDiagram = (diagramId: string): void => {
     next.add(diagram.nodeId)
     expandedNodes.value = next
   }
-  nextTick(() => {
-    const index = visibleTreeRows.value.findIndex(
-      (row) => row.kind === "diagram" && row.diagram.id === diagramId,
-    )
-    scrollToTreeIndex(index)
-  })
+  await nextTick()
+  if (!isCurrent()) return
+  const index = visibleTreeRows.value.findIndex(
+    (row) => row.kind === "diagram" && row.diagram.id === diagramId,
+  )
+  await scrollToTreeIndex(index, isCurrent)
 }
 
 watch(normalizedQuery, (query, prev) => {
   if (query) {
+    if (props.searchHits !== undefined) return
     const next = new Set(expandedNodes.value)
     for (const id of collectAncestorIds(matchingNodeIds.value)) {
       next.add(id)
@@ -533,7 +658,18 @@ watch(normalizedQuery, (query, prev) => {
   }
 })
 
-defineExpose({ expandToNode, focusNode, focusDiagram })
+watch(treeSearchQuery, query => emit("searchQueryChange", query))
+
+watch(
+  () => props.searchQuery,
+  query => {
+    if (query === undefined || query === treeSearchQuery.value) return
+    treeSearchQuery.value = query
+  },
+  { immediate: true },
+)
+
+defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 </script>
 
 <template>
@@ -576,7 +712,13 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
       @drop.self.prevent="onTreeDrop($event, null)"
     >
       <EmptyState
-        v-if="visibleTreeRows.length === 0"
+        v-if="
+          visibleTreeRows.length === 0 &&
+          !searchLoading &&
+          !searchError &&
+          !treeFocusLoading &&
+          !treeFocusError
+        "
         variant="compact"
         icon="account_tree"
         :title="normalizedQuery ? t('models.noSearchResults') : t('models.noNodes')"
@@ -584,6 +726,39 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
       />
       <div v-if="searchResultsTruncated" class="tree__truncated">
         {{ t('models.searchResultsTruncated', { count: MAX_SEARCH_TREE_ROWS }) }}
+      </div>
+      <div v-if="normalizedQuery && searchLoading" data-tree-search-loading class="tree-search-status" role="status">
+        {{ t("models.treeSearchLoading") }}
+      </div>
+      <div
+        v-if="normalizedQuery && searchError"
+        data-tree-search-error
+        class="tree-search-status tree-search-status--error"
+        role="status"
+      >
+        <span>{{ t("models.treeSearchError") }}</span>
+        <button type="button" class="tree-status-row__action" @click="emit('retrySearch')">
+          {{ t("common.retry") }}
+        </button>
+      </div>
+      <div
+        v-if="treeFocusLoading"
+        data-tree-focus-loading
+        class="tree-search-status"
+        role="status"
+      >
+        {{ t("models.treeFocusLoading") }}
+      </div>
+      <div
+        v-if="treeFocusError"
+        data-tree-focus-error
+        class="tree-search-status tree-search-status--error"
+        role="status"
+      >
+        <span>{{ treeFocusError }}</span>
+        <button type="button" class="tree-status-row__action" @click="emit('retryTreeFocus')">
+          {{ t("common.retry") }}
+        </button>
       </div>
       <div
         v-if="visibleTreeRows.length > 0"
@@ -612,10 +787,16 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
               @drop.prevent="onTreeDrop($event, row.node.id)"
             >
               <button
-                v-if="isDirectory(row.node)"
+                v-if="isExpandable(row.node)"
                 type="button"
                 class="tree-node__toggle"
-                @click="toggleNode(row.node.id)"
+                :aria-expanded="expandedNodes.has(row.node.id)"
+                :aria-label="
+                  expandedNodes.has(row.node.id)
+                    ? t('models.collapseTreeNode', { name: row.node.name })
+                    : t('models.expandTreeNode', { name: row.node.name })
+                "
+                @click="onToggleNode(row.node)"
               >
                 <UiIcon :name="expandedNodes.has(row.node.id) ? 'expand_more' : 'chevron_right'" />
               </button>
@@ -624,7 +805,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                 class="tree-node__select"
                 :class="{ 'tree-node__select--unused': !isDirectory(row.node) && !isNodeUsed(row.node.id) }"
                 @click="emit('selectNode', row.node.id)"
-                @dblclick="isDirectory(row.node) && toggleNode(row.node.id)"
+                @dblclick="isExpandable(row.node) && onToggleNode(row.node)"
               >
                 <LazyIconImg
                   v-if="nodeTypeIconById.get(row.node.nodeTypeId)"
@@ -707,7 +888,7 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
           </div>
 
           <div
-            v-else
+            v-else-if="row.kind === 'diagram'"
             class="diagram-row diagram-row--flattened"
             :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
             :style="{ '--tree-depth': String(row.depth) }"
@@ -735,7 +916,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
                   <path d="M3.5 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
                 </svg>
               </span>
-              <span v-if="selectedDiagramId === row.diagram.id" class="diagram-row__badge">{{ t("models.diagramOpened") }}</span>
             </button>
             <div v-else class="diagram-row__select diagram-row__rename-wrap">
               <UiIcon name="dashboard" />
@@ -773,6 +953,68 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
           >
             <UiIcon name="content_copy" />
           </button>
+          </div>
+          <div
+            v-else-if="row.kind === 'search'"
+            class="tree-node"
+            :data-tree-search-hit-id="row.hit.id"
+          >
+            <div class="tree-node__row tree-node__row--flattened">
+              <span class="tree-node__toggle" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="tree-node__select tree-search-hit__select"
+                @click="emit('selectSearchHit', row.hit)"
+              >
+                <LazyIconImg
+                  v-if="searchHitTypeIconId(row.hit)"
+                  :icon-id="searchHitTypeIconId(row.hit)!"
+                  :alt="row.hit.name || row.hit.id"
+                  img-class="tree-node__icon-svg"
+                />
+                <UiIcon
+                  v-else
+                  :name="searchHitIconName(row.hit)"
+                  class="tree-node__icon-symbol"
+                />
+                <span class="tree-search-hit__label">
+                  <span class="tree-node__name">{{ row.hit.name || row.hit.id }}</span>
+                  <span
+                    v-if="searchHitBreadcrumb(row.hit)"
+                    class="tree-search-hit__breadcrumb"
+                    :aria-label="t('models.searchHitPath', { path: searchHitBreadcrumb(row.hit) })"
+                  >
+                    {{ searchHitBreadcrumb(row.hit) }}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+          <div
+            v-else
+            class="tree-status-row"
+            :style="{ '--tree-depth': String(row.depth) }"
+            :data-tree-loading="row.kind === 'loading' ? '' : undefined"
+            :data-tree-error="row.kind === 'error' ? '' : undefined"
+            :data-tree-load-more="row.kind === 'loadMore' ? '' : undefined"
+            :role="row.kind === 'loading' || row.kind === 'error' ? 'status' : undefined"
+            :aria-live="row.kind === 'loading' || row.kind === 'error' ? 'polite' : undefined"
+          >
+            <span v-if="row.kind === 'loading'">{{ t("models.treeLoading") }}</span>
+            <template v-else-if="row.kind === 'error'">
+              <span :title="row.message">{{ t("models.treeLoadError") }}</span>
+              <button type="button" class="tree-status-row__action" @click="emit('loadChildren', row.scope)">
+                {{ t("common.retry") }}
+              </button>
+            </template>
+            <button
+              v-else
+              type="button"
+              class="tree-status-row__action"
+              @click="emit('loadNextChildrenPage', row.scope)"
+            >
+              {{ t("models.treeLoadMore") }}
+            </button>
           </div>
         </div>
       </div>
@@ -870,6 +1112,38 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   font-size: 12px;
   color: var(--text-muted);
   background: var(--surface-muted);
+}
+
+.tree-search-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tree-search-status--error {
+  color: var(--danger);
+}
+
+.tree-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding-left: calc(42px + (var(--tree-depth, 0) * 16px));
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tree-status-row__action {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
 }
 
 .tree-node {
@@ -977,6 +1251,26 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
   font-weight: 400;
 }
 
+.tree-search-hit__select {
+  align-items: flex-start;
+}
+
+.tree-search-hit__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.tree-search-hit__breadcrumb {
+  color: var(--text-subtle);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tree-node__rename-input {
   flex: 1;
   min-width: 0;
@@ -1011,15 +1305,15 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 }
 
 .tree-node__actions {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  flex-shrink: 0;
 }
 
+.tree-node__row--active .tree-node__actions,
 .tree-node__row:hover .tree-node__actions {
-  opacity: 1;
+  display: flex;
 }
 
 .diagram-row {
@@ -1053,14 +1347,17 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 .diagram-row .btn--icon--danger,
 .diagram-row .diagram-row__edit-btn,
 .diagram-row .diagram-row__copy-btn {
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  display: none;
+  flex-shrink: 0;
 }
 
+.diagram-row--active .btn--icon--danger,
+.diagram-row--active .diagram-row__edit-btn,
+.diagram-row--active .diagram-row__copy-btn,
 .diagram-row:hover .btn--icon--danger,
 .diagram-row:hover .diagram-row__edit-btn,
 .diagram-row:hover .diagram-row__copy-btn {
-  opacity: 1;
+  display: flex;
 }
 
 .diagram-row--active {
@@ -1089,18 +1386,6 @@ defineExpose({ expandToNode, focusNode, focusDiagram })
 
 .diagram-row--active .diagram-row__select {
   color: var(--accent);
-}
-
-.diagram-row__badge {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  padding: 1px 6px;
-  margin-left: 8px;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .diagram-row__lock-pip {

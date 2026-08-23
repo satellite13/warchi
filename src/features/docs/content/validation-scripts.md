@@ -1,28 +1,21 @@
 # Скрипты
 
-Раздел **Скрипты** позволяет писать и шарить JavaScript-скрипты проверки модели. Скрипт только **сообщает** о проблемах через `report` — модель и диаграмму он не изменяет.
+Раздел **Скрипты** позволяет писать и шарить JavaScript для **открытой диаграммы**: проверить холст, подвинуть фигуры или доложить уже существующие ноды и связи модели.
 
-Запуск: в редакторе модели кнопка **Скрипты** (иконка терминала) на панели инструментов.
+Скрипт **не выгружает дерево модели** и **не меняет граф** (не создаёт и не удаляет ноды/связи в дереве). Запись на холст идёт только через очередь `apply.*` после превью.
 
-## Контекст запуска
+Запуск: в редакторе модели кнопка **Скрипты** (пока диаграмма не открыта — неактивна).
 
-Скрипт всегда получает снимок **всей модели**. Открытая диаграмма влияет только на `ctx.diagram`:
-
-| Ситуация | `ctx.diagram` |
-|----------|----------------|
-| В редакторе открыта диаграмма | объект этой диаграммы |
-| Диаграмма не открыта | `null` |
-
-Права: нужны право **просмотра скрипта** и **просмотра модели**.
+Права: просмотр скрипта и модели — для отчёта; чтобы нажать **Применить**, нужны право редактирования модели и обычный lock диаграммы.
 
 ## Встроенные объекты
 
 ### `ctx`
 
-- `ctx.model` — граф модели: `nodes`, `links`, `folders`, `diagrams`, плюс `id` / `name` / `version`
-- `ctx.diagram` — открытая диаграмма или `null` (`id`, `name`, `notationId`, `nodeIds`, `linkIds`)
-- `ctx.notations` — нотации, используемые диаграммами снимка (компоненты, отношения, правила)
-- `ctx.types` — `{ nodeTypes, linkTypes }` с `id`, `name`, `attrs`
+- `ctx.model` — **срез холста**: только ноды и связи, которые уже лежат на открытой диаграмме (`folders` пустой)
+- `ctx.diagram` — открытая диаграмма (`id`, `name`, `notationId`, `nodeIds`, `linkIds`, `instances`, `edges`)
+- `ctx.notations` — нотация этой диаграммы
+- `ctx.types` — типы нод/связей с холста
 
 ## Структуры снимка
 
@@ -40,9 +33,9 @@
 }
 ```
 
-Папки модели (тип Directory) в `nodes` не попадают — они в `ctx.model.folders[]`: `{ id, name, parentId }`.
+`nodes` — только ноды, уже лежащие на холсте. `ctx.model.folders` в этом снимке пустой: дерево модели скрипт не получает.
 
-### Связь (`ctx.model.links[]`, `diagramLinks`, `linksOfType`, `linksBetween`)
+### Связь (`ctx.model.links[]`, `diagramLinks`, `linksOfType`)
 
 ```ts
 {
@@ -63,12 +56,14 @@
   name: string
   version: string
   notationId: string
-  nodeIds: string[]   // id нод, видимых на диаграмме
-  linkIds: string[]   // id связей на диаграмме
+  nodeIds: string[]
+  linkIds: string[]
+  instances: Array<{ id, modelNodeId, x, y, width?, height? }>
+  edges: Array<{ id, modelLinkId, sourceInstanceId, targetInstanceId }>
 }
 ```
 
-Список нод/связей диаграммы — через `diagramNodes(ctx.diagram)` / `diagramLinks(ctx.diagram)`, а не через вложенные объекты.
+Геометрия фигур — в `ctx.diagram.instances` / `edges`. Объекты нод и связей модели с холста — `diagramNodes(ctx.diagram)` / `diagramLinks(ctx.diagram)`. Связи **вне** холста ищите через `await linksBetween(...)`.
 
 ### Нотация (`ctx.notations[]`)
 
@@ -170,39 +165,79 @@ report.info(message, target?)
 
 | Функция | Назначение |
 |---------|------------|
-| `diagramNodes(diagram)` | Ноды модели, видимые на диаграмме |
-| `diagramLinks(diagram)` | Связи модели на диаграмме |
-| `nodesOfType(typeIdOrName)` | Ноды по id или имени типа |
-| `linksOfType(typeIdOrName)` | Связи по id или имени типа |
-| `linksBetween(a, b, { linkType? })` | Связи между двумя нодами (нода или id) |
-| `findDuplicateLinks({ by, directed? })` | Дубликаты связей; по умолчанию с учётом направления |
+| `diagramNodes(diagram)` | Ноды **среза холста** |
+| `diagramLinks(diagram)` | Связи **среза холста** |
+| `nodesOfType(typeIdOrName)` | Ноды среза с типом по id или имени |
+| `linksOfType(typeIdOrName)` | Связи среза с типом по id или имени |
+| `neighbors(nodeId, { direction, linkType?, page? })` | Соседи в модели. `{ items, last }` |
+| `searchNodes({ q?, type?, limit? })` | Поиск нод модели. Нужен `q` или `type`, лимит ≤ 50 |
+| `linksBetween(a, b, { linkType? })` | Все связи модели между парой (оба направления) |
+| `findDuplicateLinks({ by, directed? })` | Дубликаты связей **на холсте** |
 | `componentForNode(node)` | Компонент нотации для ноды (или `null`) |
 | `relationRules(notationId)` | Правила отношений нотации |
+
+`neighbors` / `searchNodes` / `linksBetween` — async query в модель, не снимок.
+
+### `apply` (очередь, не запись)
+
+| Команда | Смысл |
+|---------|--------|
+| `apply.setBounds({ instanceId, x, y, width?, height? })` | Геометрия фигуры |
+| `apply.addInstance({ nodeId, x?, y? })` | Положить существующую ноду модели |
+| `apply.addEdge({ linkId })` | Положить существующую связь; концы резолвит хост |
+| `apply.removeInstance({ instanceId })` | Снять фигуру; нода в дереве остаётся |
+| `apply.removeEdge({ edgeInstanceId })` | Снять ребро; связь в дереве остаётся |
+| `apply.align({ instanceIds, mode })` | `left` / `center` / `right` / `top` / `middle` / `bottom` |
+| `apply.distribute({ instanceIds, axis })` | `horizontal` / `vertical` |
+| `apply.stack({ instanceIds, mode })` | `vertical` (зазор 8px) или `overlap` |
+| `apply.setEdgeStyle({ linkId, strokeColor })` | Цвет обводки ребра на холсте (`#rgb` / `#rrggbb`) |
+
+Ничего не пишется до кнопки **Применить**.
 
 Имена доступны в автодополнении редактора (Ctrl+Space).
 
 ## Ограничения песочницы
 
-- Нет сети (`fetch` / XHR / WebSocket)
+- Нет сети (`fetch` / XHR / WebSocket). Запросы в модель — только `neighbors` / `searchNodes` / `linksBetween`
 - Нет доступа к DOM приложения
-- Таймаут выполнения (по умолчанию несколько секунд)
+- Таймаут на весь прогон вместе с query
 - Лимит числа сообщений в одном запуске
+- `apply.addEdge({ linkId })` — только id связи модели; концы хост резолвит сам
 
-## Пример
+## Примеры
+
+Проверка холста:
 
 ```js
-if (!ctx.diagram) {
-  report.warn('Откройте диаграмму перед запуском')
-} else {
-  for (const n of diagramNodes(ctx.diagram)) {
-    report.info('Node:', n)
-  }
-  for (const dup of findDuplicateLinks({ by: 'endpoints+type' })) {
-    report.warn('Дублирующая связь', { kind: 'link', id: dup.linkIds[0] })
-  }
+const locations = diagramNodes(ctx.diagram).filter((n) =>
+  nodesOfType('Location').some((loc) => loc.id === n.id)
+)
+if (locations.length === 0) {
+  report.error('На диаграмме нет Location', { kind: 'diagram', id: ctx.diagram.id })
 }
 ```
 
+Раскладка:
+
+```js
+const ids = ctx.diagram.instances.map((i) => i.id)
+apply.align({ instanceIds: ids, mode: 'left' })
+apply.distribute({ instanceIds: ids, axis: 'vertical' })
+```
+
+Доложить соседей (нода уже есть в модели):
+
+```js
+const id = ctx.diagram.instances[0].modelNodeId
+const ns = await neighbors(id, { direction: 'outgoing', linkType: 'Flow' })
+for (const item of ns.items) {
+  apply.addInstance({ nodeId: item.node.id, x: 40, y: 40 })
+  apply.addEdge({ linkId: item.link.id })
+}
+```
+
+После запуска: список issue и сводка команд. **Закрыть** — холст не менять. **Применить** — записать одной операцией Undo и закрыть окно.
+
 ## Каталог и доступ
 
-В меню **Скрипты** создавайте скрипты кнопкой **«+»** в боковой панели, редактируйте исходный код и выдавайте доступ `VIEW` / `EDIT` через шаринг — как у других сущностей каталога. Скрипт — одна сущность **без** semver-версий. Запуск — из редактора модели (нужны просмотр скрипта и просмотр модели).
+В меню **Скрипты** создавайте скрипты кнопкой **«+»** в боковой панели, редактируйте исходный код и выдавайте доступ `VIEW` / `EDIT` через шаринг — как у других сущностей каталога. Скрипт — одна сущность **без** semver-версий и без поля «тип скрипта».

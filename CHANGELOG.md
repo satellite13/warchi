@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.24.4] - 2026-08-24
+
+### Fixed
+- After Chrome drops the canvas while panning a large diagram, the picture comes back without a second blank flash.
+
 ## [0.24.3] - 2026-08-24
 
 ### Fixed

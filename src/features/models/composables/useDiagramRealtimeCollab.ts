@@ -1,8 +1,17 @@
 import type { DiagramRenderer } from "@ngroznykh/papirus"
 import { onBeforeUnmount, ref, watch, type Ref } from "vue"
 import { apiDelete, apiPost } from "@/composables/useApi"
-import type { DiagramAttrs } from "../modelAttrs"
 import type { ModelEditorState } from "../types"
+import { applyDiagramLiveMessage, createLiveSnapshotBuffer } from "../utils/applyDiagramLiveMessage"
+import {
+  LIVE_CHUNK_MAX_BYTES,
+  chunkLiveEnvelope,
+  diffDiagramInstances,
+  isEmptyLivePatch,
+  type DiagramInstances,
+  type DiagramLiveEnvelope,
+  type DiagramLivePatch,
+} from "../utils/diagramLivePayload"
 
 const POINTER_MIN_MS = 100
 const LIVE_DEBOUNCE_MS = 220
@@ -69,6 +78,18 @@ export function useDiagramRealtimeCollab(options: {
   let pointerLastSent = 0
   let spectatePingTimer: ReturnType<typeof setInterval> | null = null
   let lastSpectateDiagramId: string | null = null
+  let lastSentInstances: DiagramInstances | null = null
+  let liveSeq = 0
+  const incomingSnapshotBuffer = createLiveSnapshotBuffer()
+
+  const resetLivePushState = (): void => {
+    lastSentInstances = null
+    liveSeq = 0
+    incomingSnapshotBuffer.seq = null
+    incomingSnapshotBuffer.chunks.clear()
+  }
+
+  const hasSpectators = (): boolean => diagramSpectators.value.length > 0
 
   const clearLiveDebounce = (): void => {
     if (liveDebounceTimer !== null) {
@@ -119,7 +140,15 @@ export function useDiagramRealtimeCollab(options: {
     (holder) => {
       if (!holder) {
         diagramSpectators.value = []
+        resetLivePushState()
       }
+    }
+  )
+
+  watch(
+    () => options.selectedDiagramId.value,
+    () => {
+      resetLivePushState()
     }
   )
 
@@ -147,13 +176,56 @@ export function useDiagramRealtimeCollab(options: {
     return options.state.value.diagrams.find((d) => d.id === id && !d._isDeleted) ?? null
   }
 
+  async function postLiveChunks(
+    kind: "patch" | "snapshot-chunk",
+    payload: DiagramLivePatch | DiagramInstances
+  ): Promise<void> {
+    const diagram = getOpenDiagramRow()
+    if (!diagram) return
+    liveSeq += 1
+    const seq = liveSeq
+    const envelope: DiagramLiveEnvelope =
+      kind === "patch"
+        ? { v: 1, kind: "patch", seq, ...(payload as DiagramLivePatch) }
+        : {
+            v: 1,
+            kind: "snapshot-chunk",
+            seq,
+            upsertNodes: (payload as DiagramInstances).nodes,
+            upsertEdges: (payload as DiagramInstances).edges,
+            removeNodeIds: [],
+            removeEdgeIds: [],
+          }
+    const chunks = chunkLiveEnvelope(envelope, LIVE_CHUNK_MAX_BYTES)
+    for (const chunk of chunks) {
+      const result = await apiPost(`/diagram-locks/${diagram.id}/live`, chunk)
+      if (!result.success) {
+        return
+      }
+    }
+    lastSentInstances = JSON.parse(JSON.stringify(diagram.parsedAttrs.instances)) as DiagramInstances
+  }
+
   function flushLivePushNow(): void {
     if (!options.isLockHolder.value) return
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return
     const diagram = getOpenDiagramRow()
     if (!diagram) return
-    const instances = diagram.parsedAttrs.instances
-    void apiPost(`/diagram-locks/${diagram.id}/live`, instances)
+    if (!hasSpectators()) return
+    const current = diagram.parsedAttrs.instances
+    const previous = lastSentInstances ?? { nodes: [], edges: [] }
+    const patch = diffDiagramInstances(previous, current)
+    if (isEmptyLivePatch(patch)) return
+    void postLiveChunks("patch", patch)
+  }
+
+  function flushSnapshotNow(): void {
+    if (!options.isLockHolder.value) return
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+    const diagram = getOpenDiagramRow()
+    if (!diagram) return
+    if (!hasSpectators()) return
+    void postLiveChunks("snapshot-chunk", diagram.parsedAttrs.instances)
   }
 
   function scheduleDebouncedLivePush(): void {
@@ -205,16 +277,17 @@ export function useDiagramRealtimeCollab(options: {
       const actor = typeof msg.actorUserId === "string" ? msg.actorUserId : null
       if (self && actor === self) return
       const inst = msg.instances
-      if (!isRecord(inst)) return
-      const nodes = inst.nodes
-      const edges = inst.edges
-      if (!Array.isArray(nodes) || !Array.isArray(edges)) return
-      const nextInstances = { nodes, edges } as DiagramAttrs["instances"]
       const diagrams = options.state.value.diagrams
       const idx = diagrams.findIndex((d) => d.id === diagramId && !d._isDeleted)
       if (idx < 0) return
       const row = diagrams[idx]!
       if (row._isDirty || row._isNew || row._isDeleted) return
+      const nextInstances = applyDiagramLiveMessage(
+        row.parsedAttrs.instances,
+        inst,
+        incomingSnapshotBuffer
+      )
+      if (!nextInstances) return
       const nextDiagrams = [...diagrams]
       nextDiagrams[idx] = {
         ...row,
@@ -230,12 +303,19 @@ export function useDiagramRealtimeCollab(options: {
     if (type === "diagram_spectators") {
       if (!options.isLockHolder.value) return
       if (!diagramId || diagramId !== options.selectedDiagramId.value) return
-      diagramSpectators.value = parseSpectators(msg.viewers)
+      const previousIds = new Set(diagramSpectators.value.map((viewer) => viewer.userId))
+      const nextViewers = parseSpectators(msg.viewers)
+      const hasNewcomer = nextViewers.some((viewer) => !previousIds.has(viewer.userId))
+      diagramSpectators.value = nextViewers
+      if (hasNewcomer) {
+        flushSnapshotNow()
+      }
     }
   }
 
   function onCanvasMouseMoveForPointer(clientX: number, clientY: number): void {
     if (!options.isLockHolder.value) return
+    if (!hasSpectators()) return
     const diagram = getOpenDiagramRow()
     if (!diagram) return
     const renderer = options.getDiagramRenderer()
@@ -253,6 +333,7 @@ export function useDiagramRealtimeCollab(options: {
 
   function onCanvasMouseLeaveForPointer(): void {
     if (!options.isLockHolder.value) return
+    if (!hasSpectators()) return
     const diagram = getOpenDiagramRow()
     if (!diagram) return
     void apiPost(`/diagram-locks/${diagram.id}/pointer`, {

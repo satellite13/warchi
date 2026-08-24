@@ -150,9 +150,16 @@ describe('useDiagramRealtimeCollab', () => {
     expect(collab.diagramSpectators.value).toEqual(viewers)
   })
 
-  it('sends pointer coordinates in world space for the lock holder', () => {
+  it('sends pointer coordinates in world space for the lock holder', async () => {
     vi.setSystemTime(new Date('2026-01-01T00:00:00.200Z'))
     const { collab } = mountCollab({ isLockHolder: true })
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_spectators',
+      diagramId: 'diagram-1',
+      viewers: [{ userId: 'u2', displayName: 'B' }],
+    })
+    await Promise.resolve()
+    await Promise.resolve()
 
     collab.onCanvasMouseMoveForPointer(5, 6)
     collab.onCanvasMouseLeaveForPointer()
@@ -167,6 +174,161 @@ describe('useDiagramRealtimeCollab', () => {
       worldY: 0,
       visible: false,
     })
+  })
+
+  it('does not post live or pointer when there are no spectators', () => {
+    const { collab, state } = mountCollab({ isLockHolder: true })
+    state.value.diagrams[0]!.parsedAttrs.instances = {
+      nodes: [{ id: 'n1', modelNodeId: 'm-n1', x: 1, y: 0 }],
+      edges: [],
+    }
+
+    collab.flushLivePushNow()
+    collab.onCanvasMouseMoveForPointer(5, 6)
+    collab.onCanvasMouseLeaveForPointer()
+
+    const paths = vi.mocked(apiPost).mock.calls.map((call) => String(call[0]))
+    expect(paths.some((path) => path.endsWith('/live') || path.endsWith('/pointer'))).toBe(false)
+  })
+
+  it('posts a patch of changed instances after a spectator is present', async () => {
+    const { collab, state } = mountCollab({ isLockHolder: true })
+    const node = { id: 'n1', modelNodeId: 'm-n1', x: 1, y: 0 }
+    const edge = {
+      id: 'e1',
+      modelLinkId: 'l-e1',
+      sourceInstanceId: 'n1',
+      targetInstanceId: 'n1',
+    }
+    state.value.diagrams[0]!.parsedAttrs.instances = {
+      nodes: [node],
+      edges: [edge],
+    }
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_spectators',
+      diagramId: 'diagram-1',
+      viewers: [{ userId: 'u2', displayName: 'B' }],
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    state.value.diagrams[0]!.parsedAttrs.instances = {
+      nodes: [{ ...node, x: 9 }],
+      edges: [edge],
+    }
+    collab.flushLivePushNow()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const livePosts = vi
+      .mocked(apiPost)
+      .mock.calls.filter((call) => String(call[0]) === '/diagram-locks/diagram-1/live')
+    const last = livePosts.at(-1)?.[1] as Record<string, unknown>
+    expect(last.kind).toBe('patch')
+    expect(last.upsertNodes).toEqual([{ ...node, x: 9 }])
+    expect(last.upsertEdges ?? []).toEqual([])
+  })
+
+  it('sends snapshot chunks when a new spectator appears', async () => {
+    const { collab, state } = mountCollab({ isLockHolder: true })
+    state.value.diagrams[0]!.parsedAttrs.instances = {
+      nodes: [{ id: 'n1', modelNodeId: 'm-n1', x: 1, y: 0 }],
+      edges: [
+        {
+          id: 'e1',
+          modelLinkId: 'l-e1',
+          sourceInstanceId: 'n1',
+          targetInstanceId: 'n1',
+        },
+      ],
+    }
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_spectators',
+      diagramId: 'diagram-1',
+      viewers: [{ userId: 'u2', displayName: 'B' }],
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const livePosts = vi
+      .mocked(apiPost)
+      .mock.calls.filter((call) => String(call[0]) === '/diagram-locks/diagram-1/live')
+    expect(livePosts.length).toBeGreaterThan(0)
+    const body = livePosts[0]?.[1] as Record<string, unknown>
+    expect(body.kind).toBe('snapshot-chunk')
+    expect(typeof body.seq).toBe('number')
+    expect(body.upsertNodes).toEqual([{ id: 'n1', modelNodeId: 'm-n1', x: 1, y: 0 }])
+    expect(body.upsertEdges).toEqual([
+      {
+        id: 'e1',
+        modelLinkId: 'l-e1',
+        sourceInstanceId: 'n1',
+        targetInstanceId: 'n1',
+      },
+    ])
+    expect(body.nodes).toBeUndefined()
+    expect(body.edges).toBeUndefined()
+  })
+
+  it('does not snapshot again when the same spectator list is rebroadcast', async () => {
+    const { collab, state } = mountCollab({ isLockHolder: true })
+    state.value.diagrams[0]!.parsedAttrs.instances = {
+      nodes: [{ id: 'n1', modelNodeId: 'm-n1', x: 1, y: 0 }],
+      edges: [],
+    }
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_spectators',
+      diagramId: 'diagram-1',
+      viewers: [{ userId: 'u2', displayName: 'B' }],
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    vi.mocked(apiPost).mockClear()
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_spectators',
+      diagramId: 'diagram-1',
+      viewers: [{ userId: 'u2', displayName: 'B' }],
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const livePosts = vi
+      .mocked(apiPost)
+      .mock.calls.filter((call) => String(call[0]) === '/diagram-locks/diagram-1/live')
+    expect(livePosts).toHaveLength(0)
+  })
+
+  it('applies a remote patch for spectators', () => {
+    const { collab, state } = mountCollab({ isSpectator: true })
+    state.value.diagrams[0]!.parsedAttrs.instances = {
+      nodes: [
+        { id: 'n1', modelNodeId: 'm-n1', x: 1, y: 0 },
+        { id: 'gone', modelNodeId: 'm-gone', x: 0, y: 0 },
+      ],
+      edges: [],
+    }
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_live',
+      diagramId: 'diagram-1',
+      actorUserId: 'user-other',
+      instances: {
+        v: 1,
+        kind: 'patch',
+        seq: 2,
+        upsertNodes: [{ id: 'n1', modelNodeId: 'm-n1', x: 9, y: 0 }],
+        removeNodeIds: ['gone'],
+      },
+    })
+
+    expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes.map((node) => node.id)).toEqual([
+      'n1',
+    ])
+    expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes[0]?.x).toBe(9)
   })
 
   it('starts and leaves spectator sessions when spectator state changes', async () => {

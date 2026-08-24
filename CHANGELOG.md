@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-08-24
+
+### Fixed
+- Panning a large diagram no longer blanks the whole canvas (grid, rulers, and minimap included) until the next pan.
+
 ## [0.24.2] - 2026-08-23
 
 ### Fixed

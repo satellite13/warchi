@@ -1358,7 +1358,7 @@ async function ensureImportNotationCatalog(notationId: string): Promise<void> {
   await ensureNotationImportCatalog({
     modelId: state.value.modelId,
     notationId,
-    state: state.value,
+    state,
     ensureNotationRelationsAndRules,
   })
 }

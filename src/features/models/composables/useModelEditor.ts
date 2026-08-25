@@ -27,7 +27,16 @@ import { useModelBatchConflictResolution } from './useModelBatchConflictResoluti
 import { useModelEditorStateHelpers } from './useModelEditorStateHelpers'
 import { useModelPartialStore } from './useModelPartialStore'
 import { useNotationRelationsAndRulesLoader } from './useNotationRelationsAndRulesLoader'
-import { resetLoadedNotationCatalogIds } from './ensureNotationImportCatalog'
+import {
+  addLoadedNotationCatalogIds,
+  resetLoadedNotationCatalogIds,
+} from './ensureNotationImportCatalog'
+
+function mergeCatalogById<T extends { id: string }>(existing: T[], incoming: T[]): T[] {
+  const byId = new Map(existing.map(item => [item.id, item]))
+  for (const item of incoming) byId.set(item.id, item)
+  return [...byId.values()]
+}
 
 export type ScopedReloadBinding = {
   reload: () => Promise<boolean>
@@ -185,18 +194,36 @@ export const useModelEditor = (): ModelEditorReturn => {
     catalog: Awaited<ReturnType<typeof loadModelEditorCatalog>>,
     notationIds: string[]
   ): void => {
+    const catalogNotationIds = new Set(notationIds)
+    const keptComponents =
+      catalogNotationIds.size === 0
+        ? state.value.components
+        : state.value.components.filter(item => !catalogNotationIds.has(item.notationId))
+    const keptRelations =
+      catalogNotationIds.size === 0
+        ? state.value.relations
+        : state.value.relations.filter(item => !catalogNotationIds.has(item.notationId))
+    const replacedRelationIds = new Set(
+      state.value.relations
+        .filter(item => catalogNotationIds.has(item.notationId))
+        .map(item => item.id)
+    )
+    const keptRelationRules =
+      catalogNotationIds.size === 0
+        ? state.value.relationRules
+        : state.value.relationRules.filter(rule => !replacedRelationIds.has(rule.relationId))
     modelCatalog.value = catalog.modelCatalog
     state.value = {
       ...state.value,
       notations: catalog.notations,
-      nodeTypes: catalog.nodeTypes,
-      linkTypes: catalog.linkTypes,
-      components: catalog.components,
-      relations: catalog.relations,
-      relationRules: catalog.relationRules,
+      nodeTypes: mergeCatalogById(state.value.nodeTypes, catalog.nodeTypes),
+      linkTypes: mergeCatalogById(state.value.linkTypes, catalog.linkTypes),
+      components: mergeCatalogById(keptComponents, catalog.components),
+      relations: mergeCatalogById(keptRelations, catalog.relations),
+      relationRules: mergeCatalogById(keptRelationRules, catalog.relationRules),
     }
     resetLoadedNotationIds(notationIds)
-    resetLoadedNotationCatalogIds(notationIds)
+    addLoadedNotationCatalogIds(notationIds)
   }
   const loadCatalogForSession = async (
     modelId: string,

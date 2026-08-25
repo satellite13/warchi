@@ -92,7 +92,7 @@ export function useNotationVersionBanner(options: {
         await ensureNotationImportCatalog({
           modelId: options.state.value.modelId,
           notationId,
-          state: options.state.value,
+          state: options.state,
           ensureNotationRelationsAndRules: options.ensureNotationRelationsAndRules,
         })
       } catch (error) {

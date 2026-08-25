@@ -1,3 +1,4 @@
+import { isRef, unref, type MaybeRef } from 'vue'
 import { apiGet } from '@/composables/useApi'
 import { listParams } from '@/api/queryHelpers'
 import type { LinkTypeResponse, NodeTypeResponse } from '@/types/api'
@@ -15,6 +16,33 @@ export function resetLoadedNotationCatalogIds(notationIds: string[] = []): void 
   }
 }
 
+export function addLoadedNotationCatalogIds(notationIds: string[]): void {
+  for (const notationId of notationIds) {
+    loadedCatalogNotationIds.add(notationId)
+  }
+}
+
+function mergeById<T extends { id: string }>(existing: T[], incoming: T[]): T[] {
+  const byId = new Map(existing.map(item => [item.id, item]))
+  for (const item of incoming) {
+    byId.set(item.id, item)
+  }
+  return [...byId.values()]
+}
+
+function assignCatalog(
+  state: MaybeRef<ModelEditorState>,
+  patch: Pick<ModelEditorState, 'components' | 'nodeTypes' | 'linkTypes'>
+): void {
+  if (isRef(state)) {
+    state.value = { ...state.value, ...patch }
+    return
+  }
+  state.components = patch.components
+  state.nodeTypes = patch.nodeTypes
+  state.linkTypes = patch.linkTypes
+}
+
 /**
  * Loads components / node-types / link-types for a notation into model-editor state,
  * and ensures relations (+ rules) are loaded. Used when opening/creating a diagram whose
@@ -23,17 +51,19 @@ export function resetLoadedNotationCatalogIds(notationIds: string[] = []): void 
 export async function ensureNotationImportCatalog(params: {
   modelId: string
   notationId: string
-  state: ModelEditorState
+  state: MaybeRef<ModelEditorState>
   ensureNotationRelationsAndRules: (
     notationId: string,
     options?: { force?: boolean }
   ) => Promise<void>
   force?: boolean
 }): Promise<void> {
-  const { modelId, notationId, state, force = false } = params
+  const { modelId, notationId, force = false } = params
   if (!modelId || !notationId) return
 
-  if (!force && loadedCatalogNotationIds.has(notationId)) {
+  const currentAtStart = unref(params.state)
+  const alreadyHasComponents = currentAtStart.components.some(item => item.notationId === notationId)
+  if (!force && loadedCatalogNotationIds.has(notationId) && alreadyHasComponents) {
     await params.ensureNotationRelationsAndRules(notationId)
     return
   }
@@ -49,27 +79,16 @@ export async function ensureNotationImportCatalog(params: {
   ])
   await params.ensureNotationRelationsAndRules(notationId)
 
-  const componentById = new Map(state.components.map(item => [item.id, item]))
-  for (const component of components) {
-    componentById.set(component.id, component)
-  }
-  state.components = [...componentById.values()]
-
-  if (nodeTypesResult.success) {
-    const byId = new Map(state.nodeTypes.map(item => [item.id, item]))
-    for (const item of nodeTypesResult.data.content ?? []) {
-      byId.set(item.id, item)
-    }
-    state.nodeTypes = [...byId.values()]
-  }
-
-  if (linkTypesResult.success) {
-    const byId = new Map(state.linkTypes.map(item => [item.id, item]))
-    for (const item of linkTypesResult.data.content ?? []) {
-      byId.set(item.id, item)
-    }
-    state.linkTypes = [...byId.values()]
-  }
+  const current = unref(params.state)
+  assignCatalog(params.state, {
+    components: mergeById(current.components, components),
+    nodeTypes: nodeTypesResult.success
+      ? mergeById(current.nodeTypes, nodeTypesResult.data.content ?? [])
+      : current.nodeTypes,
+    linkTypes: linkTypesResult.success
+      ? mergeById(current.linkTypes, linkTypesResult.data.content ?? [])
+      : current.linkTypes,
+  })
 
   loadedCatalogNotationIds.add(notationId)
 }

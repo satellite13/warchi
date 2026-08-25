@@ -84,7 +84,7 @@ describe('useNotationVersionBanner', () => {
       expect.objectContaining({
         modelId: 'model-1',
         notationId: 'not-new',
-        state: state.value,
+        state,
         ensureNotationRelationsAndRules,
       })
     )

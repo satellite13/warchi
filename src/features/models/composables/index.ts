@@ -36,6 +36,7 @@ export * from './useModelBatchConflictResolution'
 export * from './useModelEditorStateHelpers'
 export * from './useNotationRelationsAndRulesLoader'
 export {
+  addLoadedNotationCatalogIds,
   ensureNotationImportCatalog,
   resetLoadedNotationCatalogIds,
 } from './ensureNotationImportCatalog'

@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-25
+
+### Added
+- Live diagram collaboration now sends patches and snapshot chunks instead of the full canvas, so large diagrams no longer fail with HTTP 413.
+
+### Fixed
+- Creating the first diagram in a new model now shows that notation’s components on the palette without closing and reopening the diagram.
+
+## [0.24.4] - 2026-08-24
+
+### Fixed
+- After Chrome drops the canvas while panning a large diagram, the picture comes back without a second blank flash.
+
+## [0.24.3] - 2026-08-24
+
+### Fixed
+- Panning a large diagram no longer blanks the whole canvas (grid, rulers, and minimap included) until the next pan.
+
 ## [0.24.2] - 2026-08-23
 
 ### Fixed

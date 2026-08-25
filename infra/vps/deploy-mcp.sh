@@ -15,7 +15,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
 
-MCP_VERSION="${MCP_VERSION:-0.1.1}"
+MCP_VERSION="${MCP_VERSION:-0.2.0}"
 MCP_REPO="${MCP_REPO:-${ROOT_DIR}/../warchi-mcp}"
 
 cleanup() {

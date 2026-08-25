@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-08-26
+
+### Fixed
+- Panning a large diagram in Chrome no longer blanks the canvas: the picture stays on a software 2D surface, so the GPU cannot drop it.
+
 ## [0.25.0] - 2026-08-25
 
 ### Added

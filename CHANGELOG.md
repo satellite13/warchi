@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-25
+
+### Added
+- Live diagram collaboration now sends patches and snapshot chunks instead of the full canvas, so large diagrams no longer fail with HTTP 413.
+
+### Fixed
+- Creating the first diagram in a new model now shows that notation’s components on the palette without closing and reopening the diagram.
+
 ## [0.24.4] - 2026-08-24
 
 ### Fixed

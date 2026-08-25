@@ -4,6 +4,7 @@ import type { NodeResponse } from '@/types/api'
 import type { ModelEditorState } from '../types'
 import type { ModelEditorLoadProgressEvent } from '../utils/modelEditorLoadProgress'
 import { useModelEditor } from './useModelEditor'
+import type { ModelEditorCatalog } from './modelEditorLoadModel'
 
 const { route, loadModelEditorShellMock, loadModelEditorCatalogMock, loadModelEditorLinksMock } =
   vi.hoisted(() => ({
@@ -69,7 +70,7 @@ function shell(modelId: string) {
   }
 }
 
-const emptyCatalog = {
+const emptyCatalog: ModelEditorCatalog = {
   modelCatalog: [],
   notations: [],
   nodeTypes: [],
@@ -105,6 +106,116 @@ describe('useModelEditor load sessions', () => {
     await loading
     await editor.whenBackgroundReady()
     expect(loadModelEditorLinksMock).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('does not wipe components loaded for a new diagram when the empty catalog arrives later', async () => {
+    const catalog = deferred<typeof emptyCatalog>()
+    loadModelEditorShellMock.mockResolvedValue(shell('model-a'))
+    loadModelEditorCatalogMock.mockReturnValue(catalog.promise)
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    const loading = editor.loadModel()
+
+    await vi.waitFor(() => {
+      expect(editor.initialSnapshotReady.value).toBe(true)
+    })
+
+    editor.state.value.diagrams.push({
+      id: 'diagram-new',
+      name: 'First diagram',
+      version: '1.0.0',
+      ownerId: 'owner-1',
+      modelId: 'model-a',
+      nodeId: null,
+      notationId: 'not-archi',
+      createdAt: null,
+      updatedAt: null,
+      parsedAttrs: { instances: { nodes: [], edges: [] } },
+      _isNew: true,
+    })
+    editor.state.value.components = [
+      {
+        id: 'cmp-1',
+        name: 'Business Actor',
+        version: '1.0.0',
+        ownerId: 'owner-1',
+        notationId: 'not-archi',
+        nodeTypeId: 'nt-1',
+        attrs: null,
+      },
+    ]
+
+    catalog.resolve({
+      ...emptyCatalog,
+      notations: [{ id: 'not-archi', name: 'ArchiMate', version: '1.0.0', ownerId: 'owner-1', attrs: null }],
+    })
+    await loading
+
+    expect(editor.state.value.components).toEqual([
+      expect.objectContaining({ id: 'cmp-1', notationId: 'not-archi' }),
+    ])
+    scope.stop()
+  })
+
+  it('replaces components for notations included in the arriving catalog batch', async () => {
+    const catalog = deferred<typeof emptyCatalog>()
+    loadModelEditorShellMock.mockResolvedValue({
+      ...shell('model-a'),
+      loadedNotationIds: ['not-archi'],
+    })
+    loadModelEditorCatalogMock.mockReturnValue(catalog.promise)
+
+    const scope = effectScope()
+    const editor = scope.run(() => useModelEditor())!
+    const loading = editor.loadModel()
+
+    await vi.waitFor(() => {
+      expect(editor.initialSnapshotReady.value).toBe(true)
+    })
+
+    editor.state.value.components = [
+      {
+        id: 'cmp-stale',
+        name: 'Stale',
+        version: '1.0.0',
+        ownerId: 'owner-1',
+        notationId: 'not-archi',
+        nodeTypeId: 'nt-1',
+        attrs: null,
+      },
+      {
+        id: 'cmp-keep',
+        name: 'Keep',
+        version: '1.0.0',
+        ownerId: 'owner-1',
+        notationId: 'not-other',
+        nodeTypeId: 'nt-2',
+        attrs: null,
+      },
+    ]
+
+    catalog.resolve({
+      ...emptyCatalog,
+      components: [
+        {
+          id: 'cmp-fresh',
+          name: 'Fresh',
+          version: '1.0.0',
+          ownerId: 'owner-1',
+          notationId: 'not-archi',
+          nodeTypeId: 'nt-1',
+          attrs: null,
+        },
+      ],
+    })
+    await loading
+
+    expect(editor.state.value.components.map(item => item.id).sort()).toEqual([
+      'cmp-fresh',
+      'cmp-keep',
+    ])
     scope.stop()
   })
 

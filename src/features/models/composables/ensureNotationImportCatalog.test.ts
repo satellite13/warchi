@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { apiGet } from '@/composables/useApi'
 import { fetchAllComponentsByNotationId } from './modelNotationComponentsApi'
 import {
@@ -122,8 +123,19 @@ describe('ensureNotationImportCatalog', () => {
     expect(state.relations).toHaveLength(1)
   })
 
-  it('skips component refetch for notations already marked loaded', async () => {
+  it('skips component refetch when the notation is marked loaded and already has components', async () => {
     const state = emptyState()
+    state.components = [
+      {
+        id: 'cmp-1',
+        name: 'Business Actor',
+        version: '1.0.0',
+        ownerId: 'owner-1',
+        notationId: 'not-archi',
+        nodeTypeId: 'nt-1',
+        attrs: null,
+      },
+    ]
     const ensureNotationRelationsAndRules = vi.fn(async () => undefined)
     mockCatalogApis()
     resetLoadedNotationCatalogIds(['not-archi'])
@@ -137,7 +149,66 @@ describe('ensureNotationImportCatalog', () => {
 
     expect(fetchAllComponentsByNotationId).not.toHaveBeenCalled()
     expect(ensureNotationRelationsAndRules).toHaveBeenCalledWith('not-archi')
-    expect(state.components).toHaveLength(0)
+    expect(state.components).toHaveLength(1)
+  })
+
+  it('refetches when the notation is marked loaded but components are missing', async () => {
+    const state = emptyState()
+    const ensureNotationRelationsAndRules = vi.fn(async () => undefined)
+    mockCatalogApis()
+    resetLoadedNotationCatalogIds(['not-archi'])
+
+    await ensureNotationImportCatalog({
+      modelId: 'model-1',
+      notationId: 'not-archi',
+      state,
+      ensureNotationRelationsAndRules,
+    })
+
+    expect(fetchAllComponentsByNotationId).toHaveBeenCalledWith('not-archi', { modelId: 'model-1' })
+    expect(state.components).toHaveLength(1)
+  })
+
+  it('writes the catalog onto the current state ref after a mid-await replacement', async () => {
+    const state = ref(emptyState())
+    const ensureNotationRelationsAndRules = vi.fn(async () => undefined)
+    let resolveComponents!: (value: Awaited<ReturnType<typeof fetchAllComponentsByNotationId>>) => void
+    vi.mocked(fetchAllComponentsByNotationId).mockReturnValue(
+      new Promise(resolve => {
+        resolveComponents = resolve
+      })
+    )
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true as const,
+      data: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 1000 },
+    })
+
+    const original = state.value
+    const pending = ensureNotationImportCatalog({
+      modelId: 'model-1',
+      notationId: 'not-archi',
+      state,
+      ensureNotationRelationsAndRules,
+    })
+
+    state.value = emptyState()
+
+    resolveComponents([
+      {
+        id: 'cmp-1',
+        name: 'Business Actor',
+        version: '1.0.0',
+        ownerId: 'owner-1',
+        notationId: 'not-archi',
+        nodeTypeId: 'nt-1',
+        attrs: null,
+      },
+    ])
+    await pending
+
+    expect(original.components).toHaveLength(0)
+    expect(state.value.components).toHaveLength(1)
+    expect(state.value.components[0]?.id).toBe('cmp-1')
   })
 
   it('refetches components when force is set', async () => {

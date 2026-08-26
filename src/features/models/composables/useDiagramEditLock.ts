@@ -332,6 +332,7 @@ export function useDiagramEditLock(options: {
   }
 
   async function reloadAfterRemoteChange(loadModel: () => Promise<void>): Promise<void> {
+    preserveLocalCanvasAfterLockLoss.value = false
     await loadModel()
     serverNewerWhileBlocked.value = false
     await applyLockForSelection()

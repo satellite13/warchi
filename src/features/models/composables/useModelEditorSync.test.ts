@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
 import type { ModelData } from '@/types/entities'
 import { createEmptyModelEditorState } from '../types'
@@ -47,11 +47,12 @@ function createFacade() {
     lockHolderDisplay: ref<string | null>(null),
     remoteDiagramUpdatedAt: ref<string | null>(null),
     serverNewerWhileBlocked: ref(false),
-    lockForceRevoked: ref(false),
+    lockLost: ref(false),
+    preserveLocalCanvasAfterLockLoss: ref(false),
     reloadAfterRemoteChange: vi.fn(async (loadModel: () => Promise<void>) => loadModel()),
     evaluateServerNewer: vi.fn(),
     verifyLockBeforeSave: vi.fn(async () => true),
-    dismissForceRevoked: vi.fn(),
+    retryAcquire: vi.fn(async () => undefined),
   }
   const collab = {
     remoteEditorPointer: ref(null),
@@ -114,6 +115,12 @@ function createFacade() {
 }
 
 describe('useModelEditorSync', () => {
+  beforeEach(() => {
+    mocks.useDiagramEditLock.mockClear()
+    mocks.useDiagramRealtimeCollab.mockClear()
+    mocks.useModelLiveSync.mockClear()
+  })
+
   it('wires lock, collab and live sync with shared derived state', () => {
     const { facade, lock, collab, shellReady, boundedSync } = createFacade()
 
@@ -156,5 +163,18 @@ describe('useModelEditorSync', () => {
 
     expect(lock.reloadAfterRemoteChange).toHaveBeenCalledWith(loadModel)
     expect(lock.verifyLockBeforeSave).toHaveBeenCalled()
+  })
+
+  it('preserves open diagram canvas after lock loss even when blocked by other', () => {
+    const { facade, lock } = createFacade()
+    const liveSyncOptions = vi.mocked(useModelLiveSync).mock.calls[0]?.[0]
+    lock.isBlockedByOther.value = true
+    lock.preserveLocalCanvasAfterLockLoss.value = true
+    expect(liveSyncOptions?.preserveOpenDiagramCanvasInstances?.value).toBe(true)
+    lock.preserveLocalCanvasAfterLockLoss.value = false
+    expect(liveSyncOptions?.preserveOpenDiagramCanvasInstances?.value).toBe(false)
+    expect(facade.lockLost).toBe(lock.lockLost)
+    expect(facade.retryAcquire).toBe(lock.retryAcquire)
+    expect(facade.preserveLocalCanvasAfterLockLoss).toBe(lock.preserveLocalCanvasAfterLockLoss)
   })
 })

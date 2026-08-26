@@ -109,7 +109,11 @@ export function useModelEditorSync(options: {
     onRemoteSnapshotApplied: options.onRemoteSnapshotApplied,
     openDiagramId: options.selectedDiagramId,
     currentUserId: options.currentUserId,
-    preserveOpenDiagramCanvasInstances: computed(() => !diagramEditLock.isBlockedByOther.value),
+    preserveOpenDiagramCanvasInstances: computed(
+      () =>
+        !diagramEditLock.isBlockedByOther.value ||
+        diagramEditLock.preserveLocalCanvasAfterLockLoss.value
+    ),
     onModelTopicBroadcast: collab.handleModelTopicBroadcast,
     onModelUnavailable: options.onModelUnavailable,
     granularSync: options.granularSync,
@@ -136,6 +140,8 @@ export function useModelEditorSync(options: {
     onCanvasMouseLeaveForPointer: collab.onCanvasMouseLeaveForPointer,
     handleReloadModelForDiagramLock,
     verifyLockBeforeSave: diagramEditLock.verifyLockBeforeSave,
-    dismissForceRevoked: diagramEditLock.dismissForceRevoked,
+    lockLost: diagramEditLock.lockLost,
+    retryAcquire: diagramEditLock.retryAcquire,
+    preserveLocalCanvasAfterLockLoss: diagramEditLock.preserveLocalCanvasAfterLockLoss,
   }
 }

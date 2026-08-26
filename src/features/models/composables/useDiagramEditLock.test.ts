@@ -349,6 +349,39 @@ describe('useDiagramEditLock', () => {
     expect(lock.lockLost.value).toBe(false)
   })
 
+  it('clears preserveLocalCanvasAfterLockLoss on reloadAfterRemoteChange', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: {
+            diagramId: 'diagram-1',
+            isLocked: true,
+            lockedByUserId: 'user-2',
+            lockedByDisplay: 'Other User',
+            reason: 'LOCKED_BY_OTHER',
+          },
+        }
+      }
+      return { success: true, data: {} }
+    })
+
+    await lock.fetchLocksList()
+    await flushPromises()
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(true)
+
+    await lock.reloadAfterRemoteChange(async () => undefined)
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(false)
+  })
+
   it('verifyLockBeforeSave returns false when another user holds the lock', async () => {
     const { lock, selectedDiagramId } = mountLock()
     selectedDiagramId.value = 'diagram-1'

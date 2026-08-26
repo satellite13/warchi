@@ -652,7 +652,6 @@ const {
   onCanvasMouseLeaveForPointer,
   handleReloadModelForDiagramLock: reloadModelForDiagramLock,
   verifyLockBeforeSave,
-  dismissForceRevoked,
 } = useModelEditorSync({
   modelId: computed(() => state.value.modelId || null),
   state,
@@ -1979,7 +1978,10 @@ const saveWithValidation = async (): Promise<boolean> => {
     saveProgress.value = t('common.saving')
     // Проверить, что лок ещё наш, до начала сохранения
     const lockOk = await verifyLockBeforeSave()
-    if (!lockOk) return false
+    if (!lockOk) {
+      setUiError(t('models.diagramLockLostSaveBlocked'))
+      return false
+    }
 
     diagramHistoryBatcher.flush()
     diagramCanvasRef.value?.flushCanvasState()
@@ -3477,18 +3479,6 @@ const cancelLeave = () => {
   showLeaveDialog.value = false
   pendingRoute = null
 }
-
-/** Админ снял блокировку — выкинуть из диаграммы без сохранения */
-watch(
-  () => diagramEditLock.lockForceRevoked.value,
-  revoked => {
-    if (!revoked) return
-    dismissForceRevoked()
-    alert(t('models.diagramLockForceRevoked'))
-    allowLeave.value = true
-    router.push({ name: 'models' })
-  }
-)
 
 onBeforeRouteLeave(to => {
   if (allowLeave.value) {

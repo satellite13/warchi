@@ -237,4 +237,18 @@ describe('useDiagramEditLock', () => {
     expect(lock.lockLost.value).toBe(false)
     expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(true)
   })
+
+  it('skips release+acquire when apply is invoked while already holding the eligible diagram', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+    vi.mocked(apiPost).mockClear()
+
+    await lock.retryAcquire()
+    await flushPromises()
+
+    expect(apiPost).not.toHaveBeenCalledWith('/diagram-locks/diagram-1/release', {})
+    expect(apiPost).not.toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
+    expect(lock.isLockHeld.value).toBe(true)
+  })
 })

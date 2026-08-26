@@ -196,6 +196,15 @@ export function useDiagramEditLock(options: {
   }
 
   async function applyLockForSelection(): Promise<void> {
+    const diagramId = options.selectedDiagramId.value
+    const canEdit = options.canEditModel.value
+    const latest = options.isActiveDiagramLatest.value
+    const persisted = options.isSelectedDiagramPersistedOnServer.value
+    const eligible = !!diagramId && canEdit && latest && persisted
+    if (eligible && heldDiagramId.value === diagramId) {
+      return
+    }
+
     const seq = ++lockOpSeq
     await releaseHeld()
     clearPoll()
@@ -203,11 +212,6 @@ export function useDiagramEditLock(options: {
     lockHolderDisplay.value = null
     remoteDiagramUpdatedAt.value = null
     serverNewerWhileBlocked.value = false
-
-    const diagramId = options.selectedDiagramId.value
-    const canEdit = options.canEditModel.value
-    const latest = options.isActiveDiagramLatest.value
-    const persisted = options.isSelectedDiagramPersistedOnServer.value
 
     if (!diagramId || !canEdit || !latest || !persisted) {
       if (seq !== lockOpSeq) return
@@ -373,6 +377,9 @@ export function useDiagramEditLock(options: {
   })
 
   async function retryAcquire(): Promise<void> {
+    if (heldDiagramId.value && heldDiagramId.value === options.selectedDiagramId.value) {
+      return
+    }
     await applyLockForSelection()
   }
 

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-08-26
+
+### Changed
+- Large diagrams skip drawing nodes and links that are off screen, so panning does less work.
+
 ## [0.25.2] - 2026-08-26
 
 ### Changed

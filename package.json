@@ -1,7 +1,7 @@
 {
   "name": "warchi",
   "private": true,
-  "version": "0.25.2",
+  "version": "0.25.3",
   "type": "module",
   "engines": {
     "node": ">=20.19.0 <21 || >=22.12.0"
@@ -42,7 +42,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/outfit": "^5.2.8",
-    "@ngroznykh/papirus": "^0.9.10",
+    "@ngroznykh/papirus": "^0.9.11",
     "@stomp/stompjs": "^7.3.0",
     "@tanstack/vue-virtual": "^3.13.35",
     "codemirror": "^6.0.2",

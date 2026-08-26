@@ -175,26 +175,66 @@ describe('useDiagramEditLock', () => {
     expect(lock.remoteDiagramUpdatedAt.value).toBe('2026-01-02T00:00:00.000Z')
   })
 
-  it('revokes local lock state when verify before save no longer finds our lock', async () => {
+  it('re-acquires when the locks list no longer contains our held lock', async () => {
     const { lock, selectedDiagramId } = mountLock()
-
     selectedDiagramId.value = 'diagram-1'
     await flushPromises()
     expect(lock.isLockHeld.value).toBe(true)
 
     vi.mocked(apiGet).mockResolvedValue({
       success: true,
-      data: {
-        content: [],
-        totalElements: 0,
-        totalPages: 0,
-        size: 20,
-        number: 0,
-      },
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+        }
+      }
+      return { success: true, data: {} }
     })
 
-    await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
+    await lock.fetchLocksList()
+    await flushPromises()
+
+    expect(lock.isLockHeld.value).toBe(true)
+    expect(lock.lockLost.value).toBe(false)
+    expect(apiPost).toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
+  })
+
+  it('becomes blocked and keeps lockLost false when another user took the lock', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: {
+            diagramId: 'diagram-1',
+            isLocked: true,
+            lockedByUserId: 'user-2',
+            lockedByDisplay: 'Other User',
+            reason: 'LOCKED_BY_OTHER',
+          },
+        }
+      }
+      return { success: true, data: {} }
+    })
+
+    await lock.fetchLocksList()
+    await flushPromises()
+
     expect(lock.isLockHeld.value).toBe(false)
-    expect(lock.lockForceRevoked.value).toBe(true)
+    expect(lock.isBlockedByOther.value).toBe(true)
+    expect(lock.lockHolderDisplay.value).toBe('Other User')
+    expect(lock.lockLost.value).toBe(false)
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(true)
   })
 })

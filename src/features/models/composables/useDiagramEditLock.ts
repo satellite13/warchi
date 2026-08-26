@@ -53,8 +53,10 @@ export function useDiagramEditLock(options: {
   /** diagramUpdatedAt с сервера: acquire при LOCKED_BY_OTHER и актуализация из GET /diagram-locks */
   const remoteDiagramUpdatedAt = ref<string | null>(null)
   const serverNewerWhileBlocked = ref(false)
-  /** Админ принудительно снял блокировку — пользователь должен быть уведомлён */
-  const lockForceRevoked = ref(false)
+  /** Лок потерян и повторный acquire не удался */
+  const lockLost = ref(false)
+  /** Сохранять локальный canvas после потери лока (до успешного recover / явной загрузки) */
+  const preserveLocalCanvasAfterLockLoss = ref(false)
 
   const heldDiagramId = ref<string | null>(null)
   const heldByUserId = ref<string | null>(null)
@@ -65,6 +67,8 @@ export function useDiagramEditLock(options: {
       heldDiagramId.value === options.selectedDiagramId.value
   )
   let lockOpSeq = 0
+  let lockOpInFlight = 0
+  let blockedPollInFlight = false
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let locksListTimer: ReturnType<typeof setInterval> | null = null
@@ -131,25 +135,45 @@ export function useDiagramEditLock(options: {
 
   /**
    * Если мы держали lock, но в списке его нет или он теперь у другого
-   * пользователя — админ снял блокировку (force-release) и, возможно,
-   * её уже перехватил другой пользователь. Останавливаем heartbeat,
-   * сбрасываем hold и уведомляем пользователя.
+   * пользователя — пробуем тихо перезахватить, а не считать это force-revoke.
    */
   function checkHeldLockRevoked(serverLocks: DiagramLockStatusResponse[]): void {
     if (!heldDiagramId.value) return
+    if (lockOpInFlight > 0) return
     const entry = serverLocks.find((l) => l.diagramId === heldDiagramId.value)
     const stillOurs =
       entry != null &&
       entry.isLocked &&
       (heldByUserId.value == null || entry.lockedByUserId === heldByUserId.value)
-    if (!stillOurs) {
-      heldDiagramId.value = null
-      heldByUserId.value = null
-      clearHeartbeat()
-      lockForceRevoked.value = true
-      // НЕ вызываем applyLockForSelection() — иначе можем заново
-      // взять лок, который никто не отпустит (пользователя выкидывает)
+    if (stillOurs) return
+    void recoverLostLock()
+  }
+
+  async function recoverLostLock(): Promise<"held" | "blocked" | "failed"> {
+    const diagramId = heldDiagramId.value ?? options.selectedDiagramId.value
+    heldDiagramId.value = null
+    heldByUserId.value = null
+    clearHeartbeat()
+    preserveLocalCanvasAfterLockLoss.value = true
+    lockLost.value = false
+    if (!diagramId) return "failed"
+    const res = await apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/acquire`, {})
+    if (res.success && res.data && res.data.reason !== LOCKED_BY_OTHER) {
+      heldDiagramId.value = diagramId
+      heldByUserId.value = res.data.lockedByUserId ?? null
+      startHeartbeat(diagramId)
+      preserveLocalCanvasAfterLockLoss.value = false
+      return "held"
     }
+    if (res.success && res.data?.reason === LOCKED_BY_OTHER) {
+      isBlockedByOther.value = true
+      lockHolderDisplay.value = res.data.lockedByDisplay ?? null
+      remoteDiagramUpdatedAt.value = res.data.diagramUpdatedAt ?? null
+      startBlockedPoll(diagramId)
+      return "blocked"
+    }
+    lockLost.value = true
+    return "failed"
   }
 
   /** Подтягивает свежий diagramUpdatedAt с сервера при поллинге списка locks (после сохранения держателем lock). */
@@ -257,11 +281,17 @@ export function useDiagramEditLock(options: {
   }
 
   async function pollWhileBlocked(diagramId: string): Promise<void> {
-    await fetchLocksList()
-    const entry = locksList.value.find((l) => l.diagramId === diagramId)
-    if (!entry || !entry.isLocked) {
-      clearPoll()
-      await applyLockForSelection()
+    if (blockedPollInFlight) return
+    blockedPollInFlight = true
+    try {
+      await fetchLocksList()
+      const entry = locksList.value.find((l) => l.diagramId === diagramId)
+      if (!entry || !entry.isLocked) {
+        clearPoll()
+        await applyLockForSelection()
+      }
+    } finally {
+      blockedPollInFlight = false
     }
   }
 
@@ -342,8 +372,8 @@ export function useDiagramEditLock(options: {
     void releaseHeld()
   })
 
-  function dismissForceRevoked(): void {
-    lockForceRevoked.value = false
+  async function retryAcquire(): Promise<void> {
+    await applyLockForSelection()
   }
 
   /**
@@ -365,11 +395,9 @@ export function useDiagramEditLock(options: {
       entry.isLocked &&
       (heldByUserId.value == null || entry.lockedByUserId === heldByUserId.value)
     if (!stillOurs) {
-      // Лок потерян — пользователя выкинет watch на lockForceRevoked
       heldDiagramId.value = null
       heldByUserId.value = null
       clearHeartbeat()
-      lockForceRevoked.value = true
       return false
     }
     return true
@@ -382,12 +410,13 @@ export function useDiagramEditLock(options: {
     lockHolderDisplay,
     remoteDiagramUpdatedAt,
     serverNewerWhileBlocked,
-    lockForceRevoked,
+    lockLost,
+    preserveLocalCanvasAfterLockLoss,
     fetchLocksList,
     reloadAfterRemoteChange,
     evaluateServerNewer,
     releaseHeld,
-    dismissForceRevoked,
+    retryAcquire,
     verifyLockBeforeSave,
   }
 }

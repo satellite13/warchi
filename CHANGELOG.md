@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-08-26
+
+### Changed
+- Chrome no longer forces a software canvas. That did not stop blank frames and made panning heavier.
+
+### Fixed
+- While panning a Retina diagram, the canvas drops to 1× and sharpens again when you release, so Chrome has a smaller buffer to keep during the drag.
+
 ## [0.25.1] - 2026-08-26
 
 ### Fixed

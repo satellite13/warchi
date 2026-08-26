@@ -412,6 +412,38 @@ describe('useDiagramEditLock', () => {
     expect(lock.lockLost.value).toBe(false)
   })
 
+  it('verifyLockBeforeSave returns false while recover acquire is in flight', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+    expect(lock.isLockHeld.value).toBe(true)
+
+    let resolveAcquire: ((value: unknown) => void) | null = null
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return new Promise((resolve) => {
+          resolveAcquire = resolve
+        })
+      }
+      return { success: true, data: {} }
+    })
+
+    const recoverPromise = lock.fetchLocksList()
+    await flushPromises()
+    await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
+
+    resolveAcquire?.({
+      success: true,
+      data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+    })
+    await recoverPromise
+    await flushPromises()
+  })
+
   it('verifyLockBeforeSave returns false when lockLost is already set', async () => {
     const { lock, selectedDiagramId } = mountLock()
     selectedDiagramId.value = 'diagram-1'

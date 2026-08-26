@@ -238,6 +238,46 @@ describe('useDiagramEditLock', () => {
     expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(true)
   })
 
+  it('ignores a locks-list response that arrives during release or acquire', async () => {
+    const resolveListFns: Array<(value: unknown) => void> = []
+    vi.mocked(apiGet).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveListFns.push(resolve)
+        })
+    )
+    vi.mocked(apiPost).mockResolvedValue({
+      success: true,
+      data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+    })
+
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    expect(lock.isLockHeld.value).toBe(true)
+    const acquireCountAfterHold = vi
+      .mocked(apiPost)
+      .mock.calls.filter((call) => String(call[0]).endsWith('/acquire')).length
+
+    const emptyList = {
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    }
+    for (const resolve of resolveListFns) {
+      resolve(emptyList)
+    }
+    await flushPromises()
+
+    expect(lock.lockLost.value).toBe(false)
+    expect(lock.isLockHeld.value).toBe(true)
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(false)
+    const acquireCountAfterList = vi
+      .mocked(apiPost)
+      .mock.calls.filter((call) => String(call[0]).endsWith('/acquire')).length
+    expect(acquireCountAfterList).toBe(acquireCountAfterHold)
+  })
+
   it('skips release+acquire when apply is invoked while already holding the eligible diagram', async () => {
     const { lock, selectedDiagramId } = mountLock()
     selectedDiagramId.value = 'diagram-1'

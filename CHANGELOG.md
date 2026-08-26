@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Losing a diagram edit lock is no longer shown as an administrator force-release and no longer kicks you out of the editor with unsaved canvas changes discarded.
+
 ## [0.25.3] - 2026-08-26
 
 ### Changed

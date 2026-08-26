@@ -652,6 +652,8 @@ const {
   onCanvasMouseLeaveForPointer,
   handleReloadModelForDiagramLock: reloadModelForDiagramLock,
   verifyLockBeforeSave,
+  lockLost,
+  retryAcquire,
 } = useModelEditorSync({
   modelId: computed(() => state.value.modelId || null),
   state,
@@ -3548,7 +3550,7 @@ onBeforeUnmount(() => {
       <ModelEditorHeader
         hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
-        :can-save="!isSaving && !isDiagramReadOnly"
+        :can-save="!isSaving && !isDiagramReadOnly && !lockLost"
         :toolbar-locked="isSaving"
         :can-edit-model="canInspectDiagramJson"
         :show-model-wiki-button="showModelWikiHeaderButton"
@@ -3569,6 +3571,11 @@ onBeforeUnmount(() => {
         :selected-diagram-id="selectedDiagramId"
         :is-diagram-read-only="isDiagramReadOnly"
         :layout-busy="layoutBusy"
+        :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
+        :diagram-lock-holder-display="diagramLockHolderName"
+        :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
+        :diagram-lock-lost="lockLost"
+        :diagram-spectators="diagramSpectators"
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="canInspectDiagramJson"
@@ -3583,6 +3590,8 @@ onBeforeUnmount(() => {
         @open-notation="handleOpenNotationEditor"
         @select-diagram-version="selectedDiagramId = $event"
         @create-baseline="handleCreateBaseline"
+        @diagram-lock-reload="handleReloadModelForDiagramLock"
+        @diagram-lock-retry="retryAcquire"
       />
     </template>
     <template #default>
@@ -3750,7 +3759,7 @@ onBeforeUnmount(() => {
             <ModelEditorHeader
               canvas-mode
               :has-unsaved-changes="hasUnsavedChanges"
-              :can-save="!isSaving && !isDiagramReadOnly"
+              :can-save="!isSaving && !isDiagramReadOnly && !lockLost"
               :toolbar-locked="isSaving"
               :can-edit-model="canInspectDiagramJson"
               :show-model-wiki-button="showModelWikiHeaderButton"
@@ -3767,6 +3776,7 @@ onBeforeUnmount(() => {
               :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
               :diagram-lock-holder-display="diagramLockHolderName"
               :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
+              :diagram-lock-lost="lockLost"
               :diagram-spectators="diagramSpectators"
               :is-admin="canInspectDiagramJson"
               :can-open-notation="canOpenActiveDiagramNotation"
@@ -3775,6 +3785,7 @@ onBeforeUnmount(() => {
               @share="showShareModal = true"
               @open-notation="handleOpenNotationEditor"
               @diagram-lock-reload="handleReloadModelForDiagramLock"
+              @diagram-lock-retry="retryAcquire"
             />
           </div>
           <ModelDiagramCanvas

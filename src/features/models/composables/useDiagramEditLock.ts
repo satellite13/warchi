@@ -422,6 +422,7 @@ export function useDiagramEditLock(options: {
    * Если лока нет в списке — пробует recoverLostLock и разрешает save только при 'held'.
    */
   async function verifyLockBeforeSave(): Promise<boolean> {
+    if (lockLost.value || isBlockedByOther.value) return false
     if (!heldDiagramId.value) return true // нет лока — сохранение модели без canvas-правок
     const mid = options.modelId.value
     if (!mid) return true

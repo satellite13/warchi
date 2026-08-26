@@ -50,6 +50,8 @@ const props = withDefaults(
     diagramLockHolderDisplay?: string
     /** На сервере диаграмма новее локальной — показать CTA «Загрузить с сервера» */
     diagramLockServerNewer?: boolean
+    /** Лок потерян (acquire не удался) — чип и кнопка «Попробовать редактировать» */
+    diagramLockLost?: boolean
     /** Зрители смотрят диаграмму (только для держателя lock) */
     diagramSpectators?: { userId: string; displayName: string }[]
     /** Toolbar actions that must not run during save validation. */
@@ -89,6 +91,7 @@ const props = withDefaults(
     diagramLockBlockedByOther: false,
     diagramLockHolderDisplay: '',
     diagramLockServerNewer: false,
+    diagramLockLost: false,
     diagramSpectators: () => [],
     toolbarLocked: false,
   }
@@ -107,6 +110,7 @@ const emit = defineEmits<{
   openRelationMatrix: []
   openValidation: []
   diagramLockReload: []
+  diagramLockRetry: []
 }>()
 
 const isRenamingModel = ref(false)
@@ -339,10 +343,11 @@ function spectatorInitials(name: string): string {
       >+{{ diagramSpectators!.length - 3 }}</span>
     </div>
     <div
-      v-if="isDiagramReadOnly && diagramLockBlockedByOther"
+      v-if="diagramLockBlockedByOther || diagramLockLost"
       class="model-header__diagram-lock-group"
     >
       <span
+        v-if="diagramLockBlockedByOther"
         class="lock-chip"
         :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
       >
@@ -353,6 +358,25 @@ function spectatorInitials(name: string): string {
         </svg>
         <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
       </span>
+      <span
+        v-else
+        class="lock-chip"
+        :title="t('models.diagramLockLost')"
+      >
+        <span class="lock-chip__pulse"></span>
+        <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
+          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <span class="lock-chip__name">{{ t('models.diagramLockLostChip') }}</span>
+      </span>
+      <button
+        type="button"
+        class="lock-reload-btn"
+        @click="emit('diagramLockRetry')"
+      >
+        {{ t('models.diagramLockRetryEdit') }}
+      </button>
       <button
         v-if="diagramLockServerNewer"
         type="button"
@@ -512,10 +536,11 @@ function spectatorInitials(name: string): string {
     </template>
     <template #center-extra>
       <div
-        v-if="isDiagramReadOnly && diagramLockBlockedByOther"
+        v-if="diagramLockBlockedByOther || diagramLockLost"
         class="model-header__diagram-lock-group"
       >
         <span
+          v-if="diagramLockBlockedByOther"
           class="lock-chip"
           :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
         >
@@ -526,6 +551,25 @@ function spectatorInitials(name: string): string {
           </svg>
           <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
         </span>
+        <span
+          v-else
+          class="lock-chip"
+          :title="t('models.diagramLockLost')"
+        >
+          <span class="lock-chip__pulse"></span>
+          <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
+            <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+            <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+          <span class="lock-chip__name">{{ t('models.diagramLockLostChip') }}</span>
+        </span>
+        <button
+          type="button"
+          class="lock-reload-btn"
+          @click="emit('diagramLockRetry')"
+        >
+          {{ t('models.diagramLockRetryEdit') }}
+        </button>
         <button
           v-if="diagramLockServerNewer"
           type="button"

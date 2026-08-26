@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet, apiPost } from '@/composables/useApi'
+import { apiGet, apiPost, type ApiResult } from '@/composables/useApi'
 import { isDiagramServerNewerThanLocal, useDiagramEditLock } from './useDiagramEditLock'
 
 vi.mock('@/composables/useApi', () => ({
@@ -239,10 +239,10 @@ describe('useDiagramEditLock', () => {
   })
 
   it('ignores a locks-list response that arrives during release or acquire', async () => {
-    const resolveListFns: Array<(value: unknown) => void> = []
+    const resolveListFns: Array<(value: ApiResult<unknown>) => void> = []
     vi.mocked(apiGet).mockImplementation(
       () =>
-        new Promise((resolve) => {
+        new Promise<ApiResult<unknown>>((resolve) => {
           resolveListFns.push(resolve)
         })
     )
@@ -260,7 +260,7 @@ describe('useDiagramEditLock', () => {
       .mocked(apiPost)
       .mock.calls.filter((call) => String(call[0]).endsWith('/acquire')).length
 
-    const emptyList = {
+    const emptyList: ApiResult<unknown> = {
       success: true,
       data: { items: [], total: 0, page: 0, size: 0 },
     }
@@ -418,14 +418,14 @@ describe('useDiagramEditLock', () => {
     await flushPromises()
     expect(lock.isLockHeld.value).toBe(true)
 
-    let resolveAcquire: ((value: unknown) => void) | null = null
+    let resolveAcquire!: (value: ApiResult<unknown>) => void
     vi.mocked(apiGet).mockResolvedValue({
       success: true,
       data: { items: [], total: 0, page: 0, size: 0 },
     })
     vi.mocked(apiPost).mockImplementation(async (url: string) => {
       if (String(url).endsWith('/acquire')) {
-        return new Promise((resolve) => {
+        return new Promise<ApiResult<unknown>>((resolve) => {
           resolveAcquire = resolve
         })
       }
@@ -436,7 +436,7 @@ describe('useDiagramEditLock', () => {
     await flushPromises()
     await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
 
-    resolveAcquire?.({
+    resolveAcquire({
       success: true,
       data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
     })

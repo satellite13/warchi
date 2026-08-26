@@ -637,7 +637,6 @@ const isSelectedDiagramPersistedOnServer = computed(() => {
 })
 
 const {
-  diagramEditLock,
   diagramLocksForTree,
   diagramLockBlockedByOther,
   diagramLockHolderName,

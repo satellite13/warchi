@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.4] - 2026-08-27
+
+### Changed
+- Panning a Retina diagram no longer drops the canvas to 1×. The picture stays sharp for the whole gesture.
+
 ### Fixed
 - Losing a diagram edit lock is no longer shown as an administrator force-release and no longer kicks you out of the editor with unsaved canvas changes discarded.
 

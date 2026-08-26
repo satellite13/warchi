@@ -418,7 +418,7 @@ export function useDiagramEditLock(options: {
   /**
    * Проверить перед сохранением, что наш лок ещё действует.
    * Делает GET /diagram-locks по модели и сверяет holder.
-   * Возвращает true если можно сохранять, false если лок потерян.
+   * Если лока нет в списке — пробует recoverLostLock и разрешает save только при 'held'.
    */
   async function verifyLockBeforeSave(): Promise<boolean> {
     if (!heldDiagramId.value) return true // нет лока — сохранение модели без canvas-правок
@@ -433,13 +433,8 @@ export function useDiagramEditLock(options: {
       entry != null &&
       entry.isLocked &&
       (heldByUserId.value == null || entry.lockedByUserId === heldByUserId.value)
-    if (!stillOurs) {
-      heldDiagramId.value = null
-      heldByUserId.value = null
-      clearHeartbeat()
-      return false
-    }
-    return true
+    if (stillOurs) return true
+    return (await recoverLostLock()) === "held"
   }
 
   return {

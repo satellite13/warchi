@@ -291,4 +291,37 @@ describe('useDiagramEditLock', () => {
     expect(apiPost).not.toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
     expect(lock.isLockHeld.value).toBe(true)
   })
+
+  it('recovers the lock when heartbeat reports the lock is gone', async () => {
+    vi.useFakeTimers()
+    try {
+      const { lock, selectedDiagramId } = mountLock()
+      selectedDiagramId.value = 'diagram-1'
+      await flushPromises()
+      expect(lock.isLockHeld.value).toBe(true)
+      vi.mocked(apiPost).mockClear()
+
+      vi.mocked(apiPost).mockImplementation(async (url: string) => {
+        if (String(url).endsWith('/heartbeat')) {
+          return { success: false, error: { status: 404, message: 'Lock expired' } }
+        }
+        if (String(url).endsWith('/acquire')) {
+          return {
+            success: true,
+            data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+          }
+        }
+        return { success: true, data: {} }
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      await flushPromises()
+
+      expect(apiPost).toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
+      expect(lock.isLockHeld.value).toBe(true)
+      expect(lock.lockLost.value).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

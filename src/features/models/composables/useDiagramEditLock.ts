@@ -104,7 +104,17 @@ export function useDiagramEditLock(options: {
   const startHeartbeat = (diagramId: string): void => {
     clearHeartbeat()
     heartbeatTimer = setInterval(() => {
-      void apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/heartbeat`, {})
+      void (async () => {
+        const res = await apiPost<DiagramLockStatusResponse>(
+          `/diagram-locks/${diagramId}/heartbeat`,
+          {}
+        )
+        if (res.success) return
+        const status = res.error.status
+        if (status === 404 || status === 403 || status === 409) {
+          await recoverLostLock()
+        }
+      })()
     }, HEARTBEAT_MS)
   }
 

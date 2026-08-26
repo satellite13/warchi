@@ -231,6 +231,7 @@ export function useDiagramEditLock(options: {
       const persisted = options.isSelectedDiagramPersistedOnServer.value
       const eligible = !!diagramId && canEdit && latest && persisted
       if (eligible && heldDiagramId.value === diagramId) {
+        lockLost.value = false
         return
       }
 
@@ -255,6 +256,7 @@ export function useDiagramEditLock(options: {
       if (res.success && res.data) {
         const d = res.data
         if (d.reason === LOCKED_BY_OTHER) {
+          lockLost.value = false
           isBlockedByOther.value = true
           lockHolderDisplay.value = d.lockedByDisplay ?? null
           remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
@@ -262,6 +264,7 @@ export function useDiagramEditLock(options: {
           await fetchLocksList()
           return
         }
+        lockLost.value = false
         heldDiagramId.value = diagramId
         heldByUserId.value = d.lockedByUserId ?? null
         startHeartbeat(diagramId)
@@ -273,6 +276,7 @@ export function useDiagramEditLock(options: {
       if (!res.success && res.error.status === 409 && isLockStatusPayload(res.error.details)) {
         const d = res.error.details
         if (d.reason === LOCKED_BY_OTHER) {
+          lockLost.value = false
           isBlockedByOther.value = true
           lockHolderDisplay.value = d.lockedByDisplay ?? null
           remoteDiagramUpdatedAt.value = d.diagramUpdatedAt ?? null
@@ -289,6 +293,7 @@ export function useDiagramEditLock(options: {
         if (seq !== lockOpSeq) return
         const entry = locksList.value.find((l) => l.diagramId === diagramId && l.isLocked)
         if (entry) {
+          lockLost.value = false
           isBlockedByOther.value = true
           lockHolderDisplay.value = entry.lockedByDisplay ?? null
           remoteDiagramUpdatedAt.value = entry.diagramUpdatedAt ?? null

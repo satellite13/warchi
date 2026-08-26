@@ -433,4 +433,39 @@ describe('useDiagramEditLock', () => {
     expect(lock.lockLost.value).toBe(true)
     await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
   })
+
+  it('clears lockLost after retryAcquire successfully re-acquires', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return { success: false, error: { status: 500, message: 'down' } }
+      }
+      return { success: true, data: {} }
+    })
+    await lock.fetchLocksList()
+    await flushPromises()
+    expect(lock.lockLost.value).toBe(true)
+
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+        }
+      }
+      return { success: true, data: {} }
+    })
+    await lock.retryAcquire()
+    await flushPromises()
+    expect(lock.lockLost.value).toBe(false)
+    expect(lock.isLockHeld.value).toBe(true)
+    await expect(lock.verifyLockBeforeSave()).resolves.toBe(true)
+  })
 })

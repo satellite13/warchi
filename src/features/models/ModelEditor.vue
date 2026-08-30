@@ -49,6 +49,11 @@ import {
   ensureNotationImportCatalog,
 } from './composables'
 import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
+import {
+  modelEditorDiagramHref,
+  selectedDiagramQueryMatches,
+  withSelectedDiagramQuery,
+} from './utils/modelEditorDiagramLink'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
 import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
 import { buildDiagramScriptSnapshot } from '@/features/validation-scripts/sandbox/buildDiagramScriptSnapshot'
@@ -2793,6 +2798,23 @@ const handleToolbarAction = async (event: string) => {
     case 'share-diagram-image':
       showDiagramImageShareModal.value = true
       break
+    case 'copy-diagram-link': {
+      const modelId = model.value?.id
+      const diagramId = activeDiagram.value?.id
+      if (!modelId || !diagramId) break
+      const href = modelEditorDiagramHref(
+        to => router.resolve(to),
+        window.location.origin,
+        modelId,
+        diagramId
+      )
+      try {
+        await navigator.clipboard.writeText(href)
+      } catch {
+        setUiError(t('models.copyDiagramLinkFailed'))
+      }
+      break
+    }
     case 'import-oef':
       if (canInspectDiagramJson.value) {
         const loadedSnapshot = await oefDetachedSnapshot.load()
@@ -3462,6 +3484,11 @@ const { applyCurrentDiagramNavigation, retryCurrentDiagramTreeFocus } =
       void whenBackgroundReady().then(() => fetchWikiDocuments())
     },
   })
+
+watch(selectedDiagramId, diagramId => {
+  if (selectedDiagramQueryMatches(route.query, diagramId)) return
+  void router.replace({ query: withSelectedDiagramQuery(route.query, diagramId) })
+})
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null

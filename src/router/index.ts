@@ -192,6 +192,10 @@ router.beforeEach(async (to) => {
   }
 
   if (!isAuthenticated.value) {
+    const redirect = to.fullPath;
+    if (!redirect.startsWith("/login")) {
+      return { name: "login", query: { redirect } };
+    }
     return { name: "login" };
   }
 

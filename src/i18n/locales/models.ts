@@ -324,6 +324,8 @@ export const modelsMessages = {
       notationLabel: 'Нотация',
       diagramConflictMessage: 'Диаграмма с таким именем и версией уже существует в модели.',
       diagramVersion: 'Версия диаграммы',
+      copyDiagramLink: 'Скопировать ссылку на диаграмму',
+      copyDiagramLinkFailed: 'Не удалось скопировать ссылку',
       viewOnly: 'Только просмотр',
       docLinkRegisterFailed: 'Не удалось привязать документ к модели: {message}',
       createBaseline: 'Создать базовую версию',
@@ -989,6 +991,8 @@ export const modelsMessages = {
       diagramConflictMessage:
         'A diagram with the same name and version already exists in the model.',
       diagramVersion: 'Diagram version',
+      copyDiagramLink: 'Copy diagram link',
+      copyDiagramLinkFailed: 'Could not copy the link',
       viewOnly: 'View only',
       docLinkRegisterFailed: 'Could not link the document to the model: {message}',
       createBaseline: 'Create baseline',

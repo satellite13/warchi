@@ -246,6 +246,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   {
+    icon: 'link',
+    event: 'copy-diagram-link',
+    title: t('models.copyDiagramLink'),
+    disabled: !props.hasActiveDiagram || !props.modelId,
+  },
+  {
     icon: 'upload_file',
     event: 'import-oef',
     title: t('models.oefImportTitle'),

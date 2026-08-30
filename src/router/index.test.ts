@@ -24,4 +24,10 @@ describe('router', () => {
     expect(router.currentRoute.value.name).toBe('docs-section')
     expect(router.currentRoute.value.meta.requiresAuth).toBe(false)
   })
+
+  it('sends guests to login with redirect back to the requested model diagram', async () => {
+    await router.push('/models/model-1?diagramId=diagram-9')
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query.redirect).toBe('/models/model-1?diagramId=diagram-9')
+  })
 })

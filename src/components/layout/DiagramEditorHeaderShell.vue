@@ -31,35 +31,31 @@ const emit = defineEmits<{
       <button type="button" class="deh__back" :title="backTitle" @click="emit('back')">
         <UiIcon name="arrow_back" />
       </button>
-      <AppLogo size="sm" />
+      <AppLogo size="sm" :show-title="false" />
       <span class="deh__divider">/</span>
       <slot name="title" />
       <span v-if="version" class="deh__version">{{ version }}</span>
       <slot name="left-extra" />
     </div>
-    <div v-if="hideToolbar" class="deh__info">
-      <slot name="info" />
-    </div>
-    <div v-if="!hideToolbar" class="deh__center">
-      <slot name="toolbar" />
+    <div class="deh__center">
+      <slot v-if="!hideToolbar" name="toolbar" />
       <slot name="center-extra" />
     </div>
-    <div v-if="!hideToolbar" class="deh__right-spacer" />
+    <div class="deh__info">
+      <slot name="info" />
+    </div>
   </header>
 </template>
 
 <style scoped>
 .deh {
   display: grid;
-  grid-template-columns: minmax(620px, max-content) minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 
-.deh--no-toolbar {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
 
 .deh-canvas {
   display: inline-flex;
@@ -123,18 +119,15 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  padding: 12px 16px;
-}
-
-.deh__right-spacer {
-  min-width: 0;
+  padding: 6px 8px;
 }
 
 .deh__info {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   min-width: 0;
   padding: 8px 16px 8px 0;

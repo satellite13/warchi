@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShell.vue"
 import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
+import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
+import type { EdgePathType } from "../composables/useModelToolbarState"
 
 import type { EditorDiagram } from '../types'
 
@@ -56,6 +58,9 @@ const props = withDefaults(
     diagramSpectators?: { userId: string; displayName: string }[]
     /** Toolbar actions that must not run during save validation. */
     toolbarLocked?: boolean
+    canvasToggleButtons?: ToolbarButton[]
+    defaultLinkTypeOptions?: { value: EdgePathType; label: string; icon: string }[]
+    defaultEdgeType?: EdgePathType
   }>(),
   {
     hasUnsavedChanges: false,
@@ -94,6 +99,9 @@ const props = withDefaults(
     diagramLockLost: false,
     diagramSpectators: () => [],
     toolbarLocked: false,
+    canvasToggleButtons: () => [],
+    defaultLinkTypeOptions: () => [],
+    defaultEdgeType: 'bezier',
   }
 )
 
@@ -111,6 +119,7 @@ const emit = defineEmits<{
   openValidation: []
   diagramLockReload: []
   diagramLockRetry: []
+  'update:defaultEdgeType': [value: EdgePathType]
 }>()
 
 const isRenamingModel = ref(false)
@@ -321,7 +330,19 @@ function spectatorInitials(name: string): string {
     @back="router.push({ name: 'models' })"
   >
     <template #toolbar>
-      <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      <div class="model-header__tools" role="toolbar">
+        <DiagramCanvasSettings
+          v-if="!isDiagramReadOnly"
+          :buttons="canvasToggleButtons"
+          :link-types="defaultLinkTypeOptions"
+          :default-edge-type="defaultEdgeType"
+          :disabled="!hasActiveDiagram"
+          @action="emit('action', $event)"
+          @update:default-edge-type="emit('update:defaultEdgeType', $event)"
+        />
+        <div v-if="!isDiagramReadOnly" class="model-header__tools-sep" />
+        <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      </div>
     </template>
     <template #canvas-extra>
     <div
@@ -473,13 +494,11 @@ function spectatorInitials(name: string): string {
     </template>
     <template #info>
       <template v-if="diagramName">
-        <span class="model-header__info-label">{{ t('toolbar.diagramLabel') }}:</span>
-        <span class="model-header__info-value model-header__info-value--diagram">{{ diagramName }}</span>
         <template v-if="diagramVersions && diagramVersions.length > 0">
           <select
             :value="selectedDiagramId ?? ''"
             class="model-header__version-select"
-            :title="t('models.diagramVersion')"
+            :title="diagramName"
             @change="emit('selectDiagramVersion', ($event.target as HTMLSelectElement).value)"
           >
             <option
@@ -511,7 +530,7 @@ function spectatorInitials(name: string): string {
           <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
         </template>
         <template v-else-if="diagramVersion">
-          <span class="model-header__version">{{ diagramVersion }}</span>
+          <span class="model-header__version" :title="diagramName">{{ diagramVersion }}</span>
         </template>
       </template>
       <template v-if="notationName">
@@ -535,6 +554,24 @@ function spectatorInitials(name: string): string {
       <span v-if="!diagramName" class="model-header__info-muted">{{ t('models.noDiagramSelected') }}</span>
     </template>
     <template #center-extra>
+      <div
+        v-if="hasActiveDiagram && !diagramLockBlockedByOther && (diagramSpectators?.length ?? 0) > 0"
+        class="model-header__spectators"
+      >
+        <span
+          v-for="(s, i) in diagramSpectators!.slice(0, 3)"
+          :key="s.userId"
+          class="model-header__spectator-avatar"
+          :style="{ zIndex: 3 - i }"
+          :title="s.displayName"
+        >{{ spectatorInitials(s.displayName) }}</span>
+        <span
+          v-if="diagramSpectators!.length > 3"
+          class="model-header__spectator-avatar model-header__spectator-avatar--overflow"
+          :style="{ zIndex: 0 }"
+          :title="diagramSpectators!.slice(3).map((s) => s.displayName).join(', ')"
+        >+{{ diagramSpectators!.length - 3 }}</span>
+      </div>
       <div
         v-if="diagramLockBlockedByOther || diagramLockLost"
         class="model-header__diagram-lock-group"
@@ -650,16 +687,37 @@ function spectatorInitials(name: string): string {
 
 /* (lock-reload-btn styles above) */
 
-:deep(.deh-canvas .icon-toolbar) {
-  padding: 2px 3px;
-  border-radius: 7px;
+.model-header__tools {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.model-header__tools-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.model-header__tools :deep(.icon-toolbar) {
+  padding: 1px 2px;
+}
+
+.model-header__tools :deep(.icon-toolbar__btn) {
+  width: 30px;
+  height: 30px;
+}
+
+.model-header__tools :deep(.icon-toolbar__sep) {
+  margin: 0 4px;
 }
 
 /* Diagram version & baseline in main header info */
-.model-header__info-value--diagram {
-  max-width: 160px;
-}
-
 .model-header__version-select {
   font-size: 12px;
   padding: 2px 6px;

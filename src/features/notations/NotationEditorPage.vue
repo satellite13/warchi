@@ -918,7 +918,6 @@ onBeforeUnmount(() => {
   <MainLayout>
     <template #header>
       <NotationEditorHeader
-        hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
         :notation-name="notation?.name"
         :notation-version="notation?.version"
@@ -955,26 +954,6 @@ onBeforeUnmount(() => {
           </template>
           <template #default>
             <div class="notation-canvas-area">
-              <div class="notation-canvas-area__toolbar">
-                <NotationEditorHeader
-                  canvas-mode
-                  :has-unsaved-changes="hasUnsavedChanges"
-                  :notation-name="notation?.name"
-                  :notation-version="notation?.version"
-                  :grid-visible="gridVisible"
-                  :mini-map-visible="miniMapVisible"
-                  :snap-enabled="snapEnabled"
-                  :align-enabled="alignEnabled"
-                  :rulers-enabled="rulersEnabled"
-                  :can-undo="canUndo"
-                  :can-redo="canRedo"
-                  :can-share="canShareNotation"
-                  :is-admin="canInspectAttrsJson"
-                  :show-wiki-button="showNotationWikiHeaderButton"
-                  @action="handleToolbarAction"
-                  @share="showShareModal = true"
-                />
-              </div>
               <NotationDiagramCanvas
                 ref="diagramRef"
                 v-if="!isLoading"
@@ -1283,24 +1262,6 @@ onBeforeUnmount(() => {
   width: 24px;
   height: 24px;
 }
-
-.notation-canvas-area__toolbar {
-  position: absolute;
-  top: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 11;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-}
-
-.notation-canvas-area__toolbar :deep(*) {
-  pointer-events: auto;
-}
-
 
 .leave-dialog__text {
   margin: 0;

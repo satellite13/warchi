@@ -16,7 +16,11 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, s
     global: {
       stubs: {
         UiIcon: { template: '<i class="ui-icon" :data-name="name" />', props: ['name'] },
-        AppLogo: { template: '<div class="app-logo" />' },
+        AppLogo: {
+          name: 'AppLogo',
+          props: ['size', 'showTitle'],
+          template: '<div class="app-logo" />',
+        },
       },
     },
   })
@@ -28,6 +32,7 @@ describe('DiagramEditorHeaderShell', () => {
     expect(wrapper.find('.deh__version').text()).toBe('1.2.0')
     expect(wrapper.find('.title-slot').text()).toBe('Title')
     expect(wrapper.find('.toolbar-slot').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'AppLogo' }).props('showTitle')).toBe(false)
     await wrapper.find('.deh__back').trigger('click')
     expect(wrapper.emitted('back')).toHaveLength(1)
   })
@@ -37,5 +42,15 @@ describe('DiagramEditorHeaderShell', () => {
     expect(wrapper.find('.deh-canvas').exists()).toBe(true)
     expect(wrapper.find('.deh').exists()).toBe(false)
     expect(wrapper.find('.toolbar-slot').exists()).toBe(true)
+  })
+
+  it('keeps the center and info columns when the main toolbar is hidden', () => {
+    const wrapper = mountShell(
+      { hideToolbar: true },
+      { info: '<span class="info-slot">info</span>' }
+    )
+    expect(wrapper.find('.toolbar-slot').exists()).toBe(false)
+    expect(wrapper.find('.info-slot').text()).toBe('info')
+    expect(wrapper.find('.deh__center').exists()).toBe(true)
   })
 })

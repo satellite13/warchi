@@ -4084,8 +4084,7 @@ defineExpose({
   padding: 8px 6px 8px 6px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(4px);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   gap: 8px;

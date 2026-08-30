@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.5] - 2026-08-31
+
+### Added
+- A shared editor link opens the same model and diagram. The toolbar copies it, and login returns to that URL.
+
+### Changed
+- Diagram tools and canvas settings sit in the header instead of floating on the canvas.
+- The editor header drops the wArchi wordmark and the “Diagram: name” label to leave more room.
+- Large diagrams pan lighter: hidden edges are skipped by their real path, the minimap and rulers no longer rebuild every pan, the grid stays readable while zooming, and dragging empty canvas feels as light as the hand tool.
+
 ## [0.25.4] - 2026-08-27
 
 ### Changed

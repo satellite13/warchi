@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShell.vue"
 import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
+import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
+import type { EdgePathType } from "../composables/useModelToolbarState"
 
 import type { EditorDiagram } from '../types'
 
@@ -50,10 +52,15 @@ const props = withDefaults(
     diagramLockHolderDisplay?: string
     /** На сервере диаграмма новее локальной — показать CTA «Загрузить с сервера» */
     diagramLockServerNewer?: boolean
+    /** Лок потерян (acquire не удался) — чип и кнопка «Попробовать редактировать» */
+    diagramLockLost?: boolean
     /** Зрители смотрят диаграмму (только для держателя lock) */
     diagramSpectators?: { userId: string; displayName: string }[]
     /** Toolbar actions that must not run during save validation. */
     toolbarLocked?: boolean
+    canvasToggleButtons?: ToolbarButton[]
+    defaultLinkTypeOptions?: { value: EdgePathType; label: string; icon: string }[]
+    defaultEdgeType?: EdgePathType
   }>(),
   {
     hasUnsavedChanges: false,
@@ -89,8 +96,12 @@ const props = withDefaults(
     diagramLockBlockedByOther: false,
     diagramLockHolderDisplay: '',
     diagramLockServerNewer: false,
+    diagramLockLost: false,
     diagramSpectators: () => [],
     toolbarLocked: false,
+    canvasToggleButtons: () => [],
+    defaultLinkTypeOptions: () => [],
+    defaultEdgeType: 'bezier',
   }
 )
 
@@ -107,6 +118,8 @@ const emit = defineEmits<{
   openRelationMatrix: []
   openValidation: []
   diagramLockReload: []
+  diagramLockRetry: []
+  'update:defaultEdgeType': [value: EdgePathType]
 }>()
 
 const isRenamingModel = ref(false)
@@ -233,6 +246,12 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   {
+    icon: 'link',
+    event: 'copy-diagram-link',
+    title: t('models.copyDiagramLink'),
+    disabled: !props.hasActiveDiagram || !props.modelId,
+  },
+  {
     icon: 'upload_file',
     event: 'import-oef',
     title: t('models.oefImportTitle'),
@@ -317,7 +336,19 @@ function spectatorInitials(name: string): string {
     @back="router.push({ name: 'models' })"
   >
     <template #toolbar>
-      <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      <div class="model-header__tools" role="toolbar">
+        <DiagramCanvasSettings
+          v-if="!isDiagramReadOnly"
+          :buttons="canvasToggleButtons"
+          :link-types="defaultLinkTypeOptions"
+          :default-edge-type="defaultEdgeType"
+          :disabled="!hasActiveDiagram"
+          @action="emit('action', $event)"
+          @update:default-edge-type="emit('update:defaultEdgeType', $event)"
+        />
+        <div v-if="!isDiagramReadOnly" class="model-header__tools-sep" />
+        <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      </div>
     </template>
     <template #canvas-extra>
     <div
@@ -339,10 +370,11 @@ function spectatorInitials(name: string): string {
       >+{{ diagramSpectators!.length - 3 }}</span>
     </div>
     <div
-      v-if="isDiagramReadOnly && diagramLockBlockedByOther"
+      v-if="diagramLockBlockedByOther || diagramLockLost"
       class="model-header__diagram-lock-group"
     >
       <span
+        v-if="diagramLockBlockedByOther"
         class="lock-chip"
         :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
       >
@@ -353,6 +385,25 @@ function spectatorInitials(name: string): string {
         </svg>
         <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
       </span>
+      <span
+        v-else
+        class="lock-chip"
+        :title="t('models.diagramLockLost')"
+      >
+        <span class="lock-chip__pulse"></span>
+        <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
+          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <span class="lock-chip__name">{{ t('models.diagramLockLostChip') }}</span>
+      </span>
+      <button
+        type="button"
+        class="lock-reload-btn"
+        @click="emit('diagramLockRetry')"
+      >
+        {{ t('models.diagramLockRetryEdit') }}
+      </button>
       <button
         v-if="diagramLockServerNewer"
         type="button"
@@ -400,62 +451,40 @@ function spectatorInitials(name: string): string {
       </div>
     </template>
     <template #left-extra>
-      <button
-        v-if="showCompareButton"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.compareWithVersion')"
-        @click="emit('compare')"
-      >
-        <UiIcon name="compare_arrows" />
-      </button>
-      <button
-        v-if="modelId"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.relationMatrixOpen')"
-        @click="emit('openRelationMatrix')"
-      >
-        <UiIcon name="grid_view" />
-      </button>
-      <button
-        v-if="modelId"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.validationReportOpen')"
-        @click="emit('openValidation')"
-      >
-        <UiIcon name="fact_check" />
-      </button>
+      <AppTooltip v-if="showCompareButton" :text="t('models.compareWithVersion')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('compare')">
+          <UiIcon name="compare_arrows" />
+        </button>
+      </AppTooltip>
+      <AppTooltip v-if="modelId" :text="t('models.relationMatrixOpen')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('openRelationMatrix')">
+          <UiIcon name="grid_view" />
+        </button>
+      </AppTooltip>
+      <AppTooltip v-if="modelId" :text="t('models.validationReportOpen')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('openValidation')">
+          <UiIcon name="fact_check" />
+        </button>
+      </AppTooltip>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
-      <button
-        v-if="canShare"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('toolbar.shareAccess')"
-        @click="emit('share')"
-      >
-        <UiIcon name="share" />
-      </button>
-      <button
-        v-if="showModelWikiButton"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.documentation')"
-        @click="emit('action', 'open-model-doc')"
-      >
-        <UiIcon name="article" />
-      </button>
+      <AppTooltip v-if="canShare" :text="t('toolbar.shareAccess')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('share')">
+          <UiIcon name="share" />
+        </button>
+      </AppTooltip>
+      <AppTooltip v-if="showModelWikiButton" :text="t('models.documentation')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('action', 'open-model-doc')">
+          <UiIcon name="article" />
+        </button>
+      </AppTooltip>
     </template>
     <template #info>
       <template v-if="diagramName">
-        <span class="model-header__info-label">{{ t('toolbar.diagramLabel') }}:</span>
-        <span class="model-header__info-value model-header__info-value--diagram">{{ diagramName }}</span>
         <template v-if="diagramVersions && diagramVersions.length > 0">
           <select
             :value="selectedDiagramId ?? ''"
             class="model-header__version-select"
-            :title="t('models.diagramVersion')"
+            :title="diagramName"
             @change="emit('selectDiagramVersion', ($event.target as HTMLSelectElement).value)"
           >
             <option
@@ -487,7 +516,7 @@ function spectatorInitials(name: string): string {
           <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
         </template>
         <template v-else-if="diagramVersion">
-          <span class="model-header__version">{{ diagramVersion }}</span>
+          <span class="model-header__version" :title="diagramName">{{ diagramVersion }}</span>
         </template>
       </template>
       <template v-if="notationName">
@@ -512,10 +541,29 @@ function spectatorInitials(name: string): string {
     </template>
     <template #center-extra>
       <div
-        v-if="isDiagramReadOnly && diagramLockBlockedByOther"
+        v-if="hasActiveDiagram && !diagramLockBlockedByOther && (diagramSpectators?.length ?? 0) > 0"
+        class="model-header__spectators"
+      >
+        <span
+          v-for="(s, i) in diagramSpectators!.slice(0, 3)"
+          :key="s.userId"
+          class="model-header__spectator-avatar"
+          :style="{ zIndex: 3 - i }"
+          :title="s.displayName"
+        >{{ spectatorInitials(s.displayName) }}</span>
+        <span
+          v-if="diagramSpectators!.length > 3"
+          class="model-header__spectator-avatar model-header__spectator-avatar--overflow"
+          :style="{ zIndex: 0 }"
+          :title="diagramSpectators!.slice(3).map((s) => s.displayName).join(', ')"
+        >+{{ diagramSpectators!.length - 3 }}</span>
+      </div>
+      <div
+        v-if="diagramLockBlockedByOther || diagramLockLost"
         class="model-header__diagram-lock-group"
       >
         <span
+          v-if="diagramLockBlockedByOther"
           class="lock-chip"
           :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
         >
@@ -526,6 +574,25 @@ function spectatorInitials(name: string): string {
           </svg>
           <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
         </span>
+        <span
+          v-else
+          class="lock-chip"
+          :title="t('models.diagramLockLost')"
+        >
+          <span class="lock-chip__pulse"></span>
+          <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
+            <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+            <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+          <span class="lock-chip__name">{{ t('models.diagramLockLostChip') }}</span>
+        </span>
+        <button
+          type="button"
+          class="lock-reload-btn"
+          @click="emit('diagramLockRetry')"
+        >
+          {{ t('models.diagramLockRetryEdit') }}
+        </button>
         <button
           v-if="diagramLockServerNewer"
           type="button"
@@ -606,16 +673,37 @@ function spectatorInitials(name: string): string {
 
 /* (lock-reload-btn styles above) */
 
-:deep(.deh-canvas .icon-toolbar) {
-  padding: 2px 3px;
-  border-radius: 7px;
+.model-header__tools {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.model-header__tools-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.model-header__tools :deep(.icon-toolbar) {
+  padding: 1px 2px;
+}
+
+.model-header__tools :deep(.icon-toolbar__btn) {
+  width: 30px;
+  height: 30px;
+}
+
+.model-header__tools :deep(.icon-toolbar__sep) {
+  margin: 0 4px;
 }
 
 /* Diagram version & baseline in main header info */
-.model-header__info-value--diagram {
-  max-width: 160px;
-}
-
 .model-header__version-select {
   font-size: 12px;
   padding: 2px 6px;

@@ -8,7 +8,7 @@ umask 077
 readonly REMOTE_ROOT="/opt/warchi-deploy"
 readonly NAMESPACE="arch"
 readonly CLUSTER_NAME="warchi"
-MCP_VERSION="${MCP_VERSION:-0.1.1}"
+MCP_VERSION="${MCP_VERSION:-0.2.0}"
 REUSE_EXISTING_IMAGES="${REUSE_EXISTING_IMAGES:-0}"
 SRC_ROOT="${REMOTE_ROOT}/src"
 WARCHI_REPO="${SRC_ROOT}/warchi"

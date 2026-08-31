@@ -101,6 +101,8 @@ Only **one user** can **edit the canvas** of a given diagram at a time. When you
 - If you opened the diagram while another user was editing, after the lock is released you can use an action such as **Try to edit** (request the lock again).
 - If you were viewing and the diagram **changed on the server**, you may be offered **Reload from server** to fetch the latest state.
 - The lock is **refreshed periodically** while the editor is open; after long idle time or a disconnected session it may **expire**, allowing another user to edit.
+- If the lock **disappears while you are editing** (expiry, network drop, another tab released it), the editor **stays open**. Unsaved canvas changes are kept. The client requests the lock once more; if someone else already holds it, the canvas becomes view-only and the local copy is kept until you click **Reload from server**.
+- The “lock released by administrator” message is no longer shown for an ordinary lock loss. Admins can still force-release a stuck lock from [Administration](/docs/admin); if your session is still alive, the client behaves as for an ordinary lock loss.
 - **Administrators** can force-release a stuck lock from the admin area.
 
 Changes elsewhere — **model tree**, **links**, and other entities — are still saved with **Save** in the model editor; parallel edits can trigger a **save conflict** — see [Models → Saving](/docs/models).

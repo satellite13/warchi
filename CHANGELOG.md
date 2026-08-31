@@ -4,6 +4,42 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.5] - 2026-08-31
+
+### Added
+- A shared editor link opens the same model and diagram. The toolbar copies it, and login returns to that URL.
+
+### Changed
+- Diagram tools and canvas settings sit in the header instead of floating on the canvas.
+- The editor header drops the wArchi wordmark and the “Diagram: name” label to leave more room.
+- Large diagrams pan lighter: hidden edges are skipped by their real path, the minimap and rulers no longer rebuild every pan, the grid stays readable while zooming, and dragging empty canvas feels as light as the hand tool.
+
+## [0.25.4] - 2026-08-27
+
+### Changed
+- Panning a Retina diagram no longer drops the canvas to 1×. The picture stays sharp for the whole gesture.
+
+### Fixed
+- Losing a diagram edit lock is no longer shown as an administrator force-release and no longer kicks you out of the editor with unsaved canvas changes discarded.
+
+## [0.25.3] - 2026-08-26
+
+### Changed
+- Large diagrams skip drawing nodes and links that are off screen, so panning does less work.
+
+## [0.25.2] - 2026-08-26
+
+### Changed
+- Chrome no longer forces a software canvas. That did not stop blank frames and made panning heavier.
+
+### Fixed
+- While panning a Retina diagram, the canvas drops to 1× and sharpens again when you release, so Chrome has a smaller buffer to keep during the drag.
+
+## [0.25.1] - 2026-08-26
+
+### Fixed
+- Panning a large diagram in Chrome no longer blanks the canvas: the picture stays on a software 2D surface, so the GPU cannot drop it.
+
 ## [0.25.0] - 2026-08-25
 
 ### Added

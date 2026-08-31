@@ -1,37 +1,43 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { useI18n } from "vue-i18n";
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
-    size?: "sm" | "md" | "lg";
+    size?: 'sm' | 'md' | 'lg'
+    /** When false, the wArchi wordmark is omitted and shown as a tooltip. */
+    showTitle?: boolean
     /** When false, subtitle is only shown as a tooltip on the logo. */
-    showSubtitle?: boolean;
+    showSubtitle?: boolean
   }>(),
   {
-    size: "md",
+    size: 'md',
+    showTitle: true,
   }
-);
+)
 
-const { t } = useI18n();
+const { t } = useI18n()
 
 const subtitleVisible = computed(() => {
-  if (props.showSubtitle !== undefined) return props.showSubtitle;
-  return props.size !== "sm";
-});
+  if (props.showSubtitle !== undefined) return props.showSubtitle
+  return props.size !== 'sm'
+})
 
-const logoTitle = computed(() =>
-  subtitleVisible.value ? undefined : t("auth.cardSubtitle")
-);
+const textVisible = computed(() => props.showTitle || subtitleVisible.value)
+
+const logoTitle = computed(() => {
+  if (!props.showTitle) return 'wArchi'
+  return subtitleVisible.value ? undefined : t('auth.cardSubtitle')
+})
 </script>
 
 <template>
   <AppTooltip :text="logoTitle ?? ''" placement="bottom">
-    <div :class="['logo', `logo--${size}`]">
+    <div :class="['logo', `logo--${size}`, { 'logo--icon-only': !textVisible }]">
       <img class="logo__icon" src="/warchi.svg" alt="" />
-      <div class="logo__text">
-        <span class="logo__title">wArchi</span>
-        <span v-if="subtitleVisible" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
+      <div v-if="textVisible" class="logo__text">
+        <span v-if="showTitle" class="logo__title">wArchi</span>
+        <span v-if="subtitleVisible" class="logo__subtitle">{{ t('auth.cardSubtitle') }}</span>
       </div>
     </div>
   </AppTooltip>
@@ -46,6 +52,10 @@ const logoTitle = computed(() =>
 
 .logo__icon {
   flex-shrink: 0;
+}
+
+.logo--icon-only {
+  gap: 0;
 }
 
 .logo--sm .logo__icon {

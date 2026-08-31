@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet, apiPost } from '@/composables/useApi'
+import { apiGet, apiPost, type ApiResult } from '@/composables/useApi'
 import { isDiagramServerNewerThanLocal, useDiagramEditLock } from './useDiagramEditLock'
 
 vi.mock('@/composables/useApi', () => ({
@@ -175,26 +175,329 @@ describe('useDiagramEditLock', () => {
     expect(lock.remoteDiagramUpdatedAt.value).toBe('2026-01-02T00:00:00.000Z')
   })
 
-  it('revokes local lock state when verify before save no longer finds our lock', async () => {
+  it('re-acquires when the locks list no longer contains our held lock', async () => {
     const { lock, selectedDiagramId } = mountLock()
-
     selectedDiagramId.value = 'diagram-1'
     await flushPromises()
     expect(lock.isLockHeld.value).toBe(true)
 
     vi.mocked(apiGet).mockResolvedValue({
       success: true,
-      data: {
-        content: [],
-        totalElements: 0,
-        totalPages: 0,
-        size: 20,
-        number: 0,
-      },
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+        }
+      }
+      return { success: true, data: {} }
+    })
+
+    await lock.fetchLocksList()
+    await flushPromises()
+
+    expect(lock.isLockHeld.value).toBe(true)
+    expect(lock.lockLost.value).toBe(false)
+    expect(apiPost).toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
+  })
+
+  it('becomes blocked and keeps lockLost false when another user took the lock', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: {
+            diagramId: 'diagram-1',
+            isLocked: true,
+            lockedByUserId: 'user-2',
+            lockedByDisplay: 'Other User',
+            reason: 'LOCKED_BY_OTHER',
+          },
+        }
+      }
+      return { success: true, data: {} }
+    })
+
+    await lock.fetchLocksList()
+    await flushPromises()
+
+    expect(lock.isLockHeld.value).toBe(false)
+    expect(lock.isBlockedByOther.value).toBe(true)
+    expect(lock.lockHolderDisplay.value).toBe('Other User')
+    expect(lock.lockLost.value).toBe(false)
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(true)
+  })
+
+  it('ignores a locks-list response that arrives during release or acquire', async () => {
+    const resolveListFns: Array<(value: ApiResult<unknown>) => void> = []
+    vi.mocked(apiGet).mockImplementation(
+      () =>
+        new Promise<ApiResult<unknown>>(resolve => {
+          resolveListFns.push(resolve)
+        })
+    )
+    vi.mocked(apiPost).mockResolvedValue({
+      success: true,
+      data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+    })
+
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    expect(lock.isLockHeld.value).toBe(true)
+    const acquireCountAfterHold = vi
+      .mocked(apiPost)
+      .mock.calls.filter(call => String(call[0]).endsWith('/acquire')).length
+
+    const emptyList: ApiResult<unknown> = {
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    }
+    for (const resolve of resolveListFns) {
+      resolve(emptyList)
+    }
+    await flushPromises()
+
+    expect(lock.lockLost.value).toBe(false)
+    expect(lock.isLockHeld.value).toBe(true)
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(false)
+    const acquireCountAfterList = vi
+      .mocked(apiPost)
+      .mock.calls.filter(call => String(call[0]).endsWith('/acquire')).length
+    expect(acquireCountAfterList).toBe(acquireCountAfterHold)
+  })
+
+  it('skips release+acquire when apply is invoked while already holding the eligible diagram', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+    vi.mocked(apiPost).mockClear()
+
+    await lock.retryAcquire()
+    await flushPromises()
+
+    expect(apiPost).not.toHaveBeenCalledWith('/diagram-locks/diagram-1/release', {})
+    expect(apiPost).not.toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
+    expect(lock.isLockHeld.value).toBe(true)
+  })
+
+  it('recovers the lock when heartbeat reports the lock is gone', async () => {
+    vi.useFakeTimers()
+    try {
+      const { lock, selectedDiagramId } = mountLock()
+      selectedDiagramId.value = 'diagram-1'
+      await flushPromises()
+      expect(lock.isLockHeld.value).toBe(true)
+      vi.mocked(apiPost).mockClear()
+
+      vi.mocked(apiPost).mockImplementation(async (url: string) => {
+        if (String(url).endsWith('/heartbeat')) {
+          return { success: false, error: { status: 404, message: 'Lock expired' } }
+        }
+        if (String(url).endsWith('/acquire')) {
+          return {
+            success: true,
+            data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+          }
+        }
+        return { success: true, data: {} }
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      await flushPromises()
+
+      expect(apiPost).toHaveBeenCalledWith('/diagram-locks/diagram-1/acquire', {})
+      expect(lock.isLockHeld.value).toBe(true)
+      expect(lock.lockLost.value).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('verifyLockBeforeSave re-acquires a missing lock and allows save', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+        }
+      }
+      return { success: true, data: {} }
+    })
+
+    await expect(lock.verifyLockBeforeSave()).resolves.toBe(true)
+    expect(lock.isLockHeld.value).toBe(true)
+    expect(lock.lockLost.value).toBe(false)
+  })
+
+  it('clears preserveLocalCanvasAfterLockLoss on reloadAfterRemoteChange', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: {
+            diagramId: 'diagram-1',
+            isLocked: true,
+            lockedByUserId: 'user-2',
+            lockedByDisplay: 'Other User',
+            reason: 'LOCKED_BY_OTHER',
+          },
+        }
+      }
+      return { success: true, data: {} }
+    })
+
+    await lock.fetchLocksList()
+    await flushPromises()
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(true)
+
+    await lock.reloadAfterRemoteChange(async () => undefined)
+    expect(lock.preserveLocalCanvasAfterLockLoss.value).toBe(false)
+  })
+
+  it('verifyLockBeforeSave returns false when another user holds the lock', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: {
+            diagramId: 'diagram-1',
+            isLocked: true,
+            lockedByUserId: 'user-2',
+            lockedByDisplay: 'Other User',
+            reason: 'LOCKED_BY_OTHER',
+          },
+        }
+      }
+      return { success: true, data: {} }
     })
 
     await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
-    expect(lock.isLockHeld.value).toBe(false)
-    expect(lock.lockForceRevoked.value).toBe(true)
+    expect(lock.isBlockedByOther.value).toBe(true)
+    expect(lock.lockLost.value).toBe(false)
+  })
+
+  it('verifyLockBeforeSave returns false while recover acquire is in flight', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+    expect(lock.isLockHeld.value).toBe(true)
+
+    let resolveAcquire!: (value: ApiResult<unknown>) => void
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return new Promise<ApiResult<unknown>>(resolve => {
+          resolveAcquire = resolve
+        })
+      }
+      return { success: true, data: {} }
+    })
+
+    const recoverPromise = lock.fetchLocksList()
+    await flushPromises()
+    await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
+
+    resolveAcquire({
+      success: true,
+      data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+    })
+    await recoverPromise
+    await flushPromises()
+  })
+
+  it('verifyLockBeforeSave returns false when lockLost is already set', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return { success: false, error: { status: 500, message: 'down' } }
+      }
+      return { success: true, data: {} }
+    })
+
+    await lock.fetchLocksList()
+    await flushPromises()
+    expect(lock.lockLost.value).toBe(true)
+    await expect(lock.verifyLockBeforeSave()).resolves.toBe(false)
+  })
+
+  it('clears lockLost after retryAcquire successfully re-acquires', async () => {
+    const { lock, selectedDiagramId } = mountLock()
+    selectedDiagramId.value = 'diagram-1'
+    await flushPromises()
+
+    vi.mocked(apiGet).mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 0, size: 0 },
+    })
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return { success: false, error: { status: 500, message: 'down' } }
+      }
+      return { success: true, data: {} }
+    })
+    await lock.fetchLocksList()
+    await flushPromises()
+    expect(lock.lockLost.value).toBe(true)
+
+    vi.mocked(apiPost).mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/acquire')) {
+        return {
+          success: true,
+          data: { diagramId: 'diagram-1', isLocked: true, lockedByUserId: 'user-1' },
+        }
+      }
+      return { success: true, data: {} }
+    })
+    await lock.retryAcquire()
+    await flushPromises()
+    expect(lock.lockLost.value).toBe(false)
+    expect(lock.isLockHeld.value).toBe(true)
+    await expect(lock.verifyLockBeforeSave()).resolves.toBe(true)
   })
 })

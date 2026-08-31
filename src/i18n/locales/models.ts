@@ -286,11 +286,14 @@ export const modelsMessages = {
       openDiagramDoubleClick: 'Открыть диаграмму (двойной клик)',
       diagramLockHeldBy: 'Диаграмма занята: {name}',
       diagramLockRetryEdit: 'Попробовать редактировать',
+      diagramLockLost:
+        'Блокировка редактирования потеряна. Несохранённые изменения на холсте остались локально.',
+      diagramLockLostChip: 'Блокировка потеряна',
+      diagramLockLostSaveBlocked:
+        'Нельзя сохранить холст: блокировка редактирования потеряна. Нажмите «Попробовать редактировать» или дождитесь освобождения.',
       diagramLockReload: 'Загрузить с сервера',
       diagramLockBadgeYou: 'Вы держите блокировку редактирования',
       diagramLockBadgeOther: 'Редактирует: {name}',
-      diagramLockForceRevoked:
-        'Блокировка снята администратором. Редактирование диаграммы недоступно.',
       resizeLeftPanelWidth: 'Потяните, чтобы изменить ширину левой панели',
       resizeRightPanelWidth: 'Потяните, чтобы изменить ширину правой панели',
       showLeftPanel: 'Показать левую панель',
@@ -322,6 +325,8 @@ export const modelsMessages = {
       notationLabel: 'Нотация',
       diagramConflictMessage: 'Диаграмма с таким именем и версией уже существует в модели.',
       diagramVersion: 'Версия диаграммы',
+      copyDiagramLink: 'Скопировать ссылку на диаграмму',
+      copyDiagramLinkFailed: 'Не удалось скопировать ссылку',
       viewOnly: 'Только просмотр',
       docLinkRegisterFailed: 'Не удалось привязать документ к модели: {message}',
       createBaseline: 'Создать базовую версию',
@@ -949,11 +954,13 @@ export const modelsMessages = {
       openDiagramDoubleClick: 'Open diagram (double click)',
       diagramLockHeldBy: 'Diagram is locked by {name}',
       diagramLockRetryEdit: 'Try to edit',
+      diagramLockLost: 'The edit lock was lost. Unsaved canvas changes are still kept locally.',
+      diagramLockLostChip: 'Lock lost',
+      diagramLockLostSaveBlocked:
+        'Cannot save the canvas: the edit lock was lost. Click “Try to edit” or wait until the diagram is free.',
       diagramLockReload: 'Reload from server',
       diagramLockBadgeYou: 'You hold the edit lock',
       diagramLockBadgeOther: 'Being edited by {name}',
-      diagramLockForceRevoked:
-        'Lock released by administrator. Diagram editing is no longer available.',
       resizeLeftPanelWidth: 'Drag to resize left panel width',
       resizeRightPanelWidth: 'Drag to resize right panel width',
       showLeftPanel: 'Show left panel',
@@ -986,6 +993,8 @@ export const modelsMessages = {
       diagramConflictMessage:
         'A diagram with the same name and version already exists in the model.',
       diagramVersion: 'Diagram version',
+      copyDiagramLink: 'Copy diagram link',
+      copyDiagramLinkFailed: 'Could not copy the link',
       viewOnly: 'View only',
       docLinkRegisterFailed: 'Could not link the document to the model: {message}',
       createBaseline: 'Create baseline',

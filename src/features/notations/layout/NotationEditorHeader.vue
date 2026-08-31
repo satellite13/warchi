@@ -154,7 +154,9 @@ const emit = defineEmits<{
       </button>
     </template>
     <template #toolbar>
-      <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      <div class="notation-header__tools" role="toolbar">
+        <IconToolbar :buttons="toolbarButtons" @action="emit('action', $event)" />
+      </div>
     </template>
   </DiagramEditorHeaderShell>
 </template>
@@ -164,5 +166,27 @@ const emit = defineEmits<{
   font-size: 14px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.notation-header__tools {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.notation-header__tools :deep(.icon-toolbar) {
+  padding: 1px 2px;
+}
+
+.notation-header__tools :deep(.icon-toolbar__btn) {
+  width: 30px;
+  height: 30px;
+}
+
+.notation-header__tools :deep(.icon-toolbar__sep) {
+  margin: 0 4px;
 }
 </style>

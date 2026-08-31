@@ -49,6 +49,11 @@ import {
   ensureNotationImportCatalog,
 } from './composables'
 import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
+import {
+  modelEditorDiagramHref,
+  selectedDiagramQueryMatches,
+  withSelectedDiagramQuery,
+} from './utils/modelEditorDiagramLink'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
 import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
 import { buildDiagramScriptSnapshot } from '@/features/validation-scripts/sandbox/buildDiagramScriptSnapshot'
@@ -595,7 +600,6 @@ const {
   lockAnchorsEnabled,
   attachToOutlineEnabled,
   selectionSyncEnabled,
-  canvasSettingsVisible,
   paletteVisible,
   autoLinkInGroups,
   diagramNavigationOnlyMode,
@@ -637,7 +641,6 @@ const isSelectedDiagramPersistedOnServer = computed(() => {
 })
 
 const {
-  diagramEditLock,
   diagramLocksForTree,
   diagramLockBlockedByOther,
   diagramLockHolderName,
@@ -652,7 +655,8 @@ const {
   onCanvasMouseLeaveForPointer,
   handleReloadModelForDiagramLock: reloadModelForDiagramLock,
   verifyLockBeforeSave,
-  dismissForceRevoked,
+  lockLost,
+  retryAcquire,
 } = useModelEditorSync({
   modelId: computed(() => state.value.modelId || null),
   state,
@@ -1979,7 +1983,10 @@ const saveWithValidation = async (): Promise<boolean> => {
     saveProgress.value = t('common.saving')
     // Проверить, что лок ещё наш, до начала сохранения
     const lockOk = await verifyLockBeforeSave()
-    if (!lockOk) return false
+    if (!lockOk) {
+      setUiError(t('models.diagramLockLostSaveBlocked'))
+      return false
+    }
 
     diagramHistoryBatcher.flush()
     diagramCanvasRef.value?.flushCanvasState()
@@ -2791,6 +2798,23 @@ const handleToolbarAction = async (event: string) => {
     case 'share-diagram-image':
       showDiagramImageShareModal.value = true
       break
+    case 'copy-diagram-link': {
+      const modelId = model.value?.id
+      const diagramId = activeDiagram.value?.id
+      if (!modelId || !diagramId) break
+      const href = modelEditorDiagramHref(
+        to => router.resolve(to),
+        window.location.origin,
+        modelId,
+        diagramId
+      )
+      try {
+        await navigator.clipboard.writeText(href)
+      } catch {
+        setUiError(t('models.copyDiagramLinkFailed'))
+      }
+      break
+    }
     case 'import-oef':
       if (canInspectDiagramJson.value) {
         const loadedSnapshot = await oefDetachedSnapshot.load()
@@ -3460,6 +3484,11 @@ const { applyCurrentDiagramNavigation, retryCurrentDiagramTreeFocus } =
       void whenBackgroundReady().then(() => fetchWikiDocuments())
     },
   })
+
+watch(selectedDiagramId, diagramId => {
+  if (selectedDiagramQueryMatches(route.query, diagramId)) return
+  void router.replace({ query: withSelectedDiagramQuery(route.query, diagramId) })
+})
 const showLeaveDialog = ref(false)
 const allowLeave = ref(false)
 let pendingRoute: RouteLocationRaw | null = null
@@ -3477,18 +3506,6 @@ const cancelLeave = () => {
   showLeaveDialog.value = false
   pendingRoute = null
 }
-
-/** Админ снял блокировку — выкинуть из диаграммы без сохранения */
-watch(
-  () => diagramEditLock.lockForceRevoked.value,
-  revoked => {
-    if (!revoked) return
-    dismissForceRevoked()
-    alert(t('models.diagramLockForceRevoked'))
-    allowLeave.value = true
-    router.push({ name: 'models' })
-  }
-)
 
 onBeforeRouteLeave(to => {
   if (allowLeave.value) {
@@ -3556,18 +3573,22 @@ onBeforeUnmount(() => {
   <MainLayout>
     <template #header>
       <ModelEditorHeader
-        hide-toolbar
         :has-unsaved-changes="hasUnsavedChanges"
-        :can-save="!isSaving && !isDiagramReadOnly"
+        :can-save="!isSaving && !isDiagramReadOnly && !lockLost"
         :toolbar-locked="isSaving"
+        :canvas-toggle-buttons="canvasToggleButtons"
+        :default-link-type-options="defaultLinkTypeOptions"
+        :default-edge-type="defaultEdgeType"
         :can-edit-model="canInspectDiagramJson"
         :show-model-wiki-button="showModelWikiHeaderButton"
+        :show-diagram-wiki-button="showDiagramWikiToolbarButton"
         :model-name="model?.name"
         :model-version="model?.version"
-        :has-active-diagram="!!activeDiagram"
+        :has-active-diagram="!!activeDiagram && diagramScopeReady"
         :can-undo="canUndo"
         :can-redo="canRedo"
         :can-share="canShareModel"
+        :navigation-only-mode="diagramNavigationOnlyMode"
         :diagram-name="activeDiagram?.name ?? ''"
         :diagram-version="activeDiagram?.version ?? ''"
         :notation-name="activeDiagram ? activeDiagramNotationName : ''"
@@ -3579,6 +3600,11 @@ onBeforeUnmount(() => {
         :selected-diagram-id="selectedDiagramId"
         :is-diagram-read-only="isDiagramReadOnly"
         :layout-busy="layoutBusy"
+        :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
+        :diagram-lock-holder-display="diagramLockHolderName"
+        :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
+        :diagram-lock-lost="lockLost"
+        :diagram-spectators="diagramSpectators"
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="canInspectDiagramJson"
@@ -3593,6 +3619,9 @@ onBeforeUnmount(() => {
         @open-notation="handleOpenNotationEditor"
         @select-diagram-version="selectedDiagramId = $event"
         @create-baseline="handleCreateBaseline"
+        @diagram-lock-reload="handleReloadModelForDiagramLock"
+        @diagram-lock-retry="retryAcquire"
+        @update:default-edge-type="defaultEdgeType = $event"
       />
     </template>
     <template #default>
@@ -3670,70 +3699,6 @@ onBeforeUnmount(() => {
               !isDiagramReadOnly,
           }"
         >
-          <template v-if="activeDiagram && diagramScopeReady && !isDiagramReadOnly">
-            <AppTooltip
-              v-if="!canvasSettingsVisible"
-              class="canvas-settings-toggle-wrap"
-              :text="t('models.showDiagramSettings')"
-              placement="right"
-            >
-              <button
-                type="button"
-                class="canvas-settings-toggle"
-                @click="canvasSettingsVisible = true"
-              >
-                <UiIcon name="settings" />
-              </button>
-            </AppTooltip>
-            <div v-else class="canvas-settings">
-              <div class="canvas-settings__header">
-                <UiIcon name="tune" />
-                <span>{{ t('common.settings') }}</span>
-                <AppTooltip :text="t('models.hideDiagramSettings')" placement="left">
-                  <button
-                    type="button"
-                    class="canvas-settings__hide"
-                    @click="canvasSettingsVisible = false"
-                  >
-                    <UiIcon name="chevron_left" />
-                  </button>
-                </AppTooltip>
-              </div>
-              <div class="canvas-settings__list">
-                <button
-                  v-for="button in canvasToggleButtons"
-                  :key="button.event"
-                  type="button"
-                  class="canvas-settings__item"
-                  :class="{ 'canvas-settings__item--active': button.active }"
-                  :title="button.title"
-                  :disabled="button.disabled"
-                  @click="handleToolbarAction(button.event)"
-                >
-                  <UiIcon :name="button.icon" />
-                  <span>{{ button.title }}</span>
-                </button>
-                <div class="canvas-settings__row">
-                  <label class="canvas-settings__label">{{ t('models.defaultLinkType') }}</label>
-                  <div class="canvas-settings__link-type-group">
-                    <button
-                      v-for="opt in defaultLinkTypeOptions"
-                      :key="opt.value"
-                      type="button"
-                      class="canvas-settings__item canvas-settings__item--link-type"
-                      :class="{ 'canvas-settings__item--active': defaultEdgeType === opt.value }"
-                      :title="opt.label"
-                      :disabled="!activeDiagram"
-                      @click="defaultEdgeType = opt.value"
-                    >
-                      <UiIcon :name="opt.icon" />
-                      <span>{{ opt.label }}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
           <div
             v-if="
               newerNotationVersions.length > 0 &&
@@ -3761,37 +3726,6 @@ onBeforeUnmount(() => {
             >
               {{ t('diagram.migrateNotationAction') }}
             </button>
-          </div>
-          <div class="model-canvas-area__toolbar">
-            <ModelEditorHeader
-              canvas-mode
-              :has-unsaved-changes="hasUnsavedChanges"
-              :can-save="!isSaving && !isDiagramReadOnly"
-              :toolbar-locked="isSaving"
-              :can-edit-model="canInspectDiagramJson"
-              :show-model-wiki-button="showModelWikiHeaderButton"
-              :show-diagram-wiki-button="showDiagramWikiToolbarButton"
-              :model-name="model?.name"
-              :model-version="model?.version"
-              :has-active-diagram="!!activeDiagram && diagramScopeReady"
-              :can-undo="canUndo"
-              :can-redo="canRedo"
-              :can-share="canShareModel"
-              :navigation-only-mode="diagramNavigationOnlyMode"
-              :is-diagram-read-only="isDiagramReadOnly"
-              :layout-busy="layoutBusy"
-              :diagram-lock-blocked-by-other="diagramLockBlockedByOther"
-              :diagram-lock-holder-display="diagramLockHolderName"
-              :diagram-lock-server-newer="diagramLockServerNewerWhileBlocked"
-              :diagram-spectators="diagramSpectators"
-              :is-admin="canInspectDiagramJson"
-              :can-open-notation="canOpenActiveDiagramNotation"
-              @action="handleToolbarAction"
-              @rename-model="handleRenameModel"
-              @share="showShareModal = true"
-              @open-notation="handleOpenNotationEditor"
-              @diagram-lock-reload="handleReloadModelForDiagramLock"
-            />
           </div>
           <ModelDiagramCanvas
             v-if="!activeDiagram || diagramScopeReady"
@@ -4735,156 +4669,12 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
-  backdrop-filter: blur(3px);
 }
 
 .relation-rules-loading-badge__icon {
   width: 16px;
   height: 16px;
   color: var(--primary);
-}
-
-.canvas-settings-toggle-wrap {
-  position: absolute;
-  left: 6px;
-  top: 10px;
-}
-
-.canvas-settings-toggle {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 12;
-}
-
-.canvas-settings-toggle:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.canvas-settings {
-  position: absolute;
-  left: 6px;
-  top: 10px;
-  width: 196px;
-  padding: 8px 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(4px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 12;
-}
-
-.canvas-settings__header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-.canvas-settings__header .ui-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.canvas-settings__hide {
-  position: absolute;
-  left: -1px;
-  top: -1px;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--border);
-  border-radius: 10px 0 8px 0;
-  background: var(--surface);
-  color: var(--text-subtle);
-  padding: 0;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.canvas-settings__hide .ui-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.canvas-settings__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.canvas-settings__item {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--base-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 7px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.canvas-settings__item:hover:not(:disabled) {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.canvas-settings__item--active {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.canvas-settings__item:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.canvas-settings__item .ui-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.canvas-settings__row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.canvas-settings__label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.canvas-settings__link-type-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.canvas-settings__item--link-type {
-  width: 100%;
 }
 
 .model-canvas-area__newer-notation-banner {
@@ -4918,16 +4708,6 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-/* Keep overlays below the full-width banner strip */
-.model-canvas-area--has-newer-banner .model-canvas-area__toolbar {
-  top: 50px;
-}
-
-.model-canvas-area--has-newer-banner .canvas-settings-toggle,
-.model-canvas-area--has-newer-banner .canvas-settings {
-  top: 50px;
-}
-
 .model-canvas-area--has-newer-banner :deep(.canvas-palette-toggle),
 .model-canvas-area--has-newer-banner :deep(.canvas-palette) {
   top: 50px;
@@ -4937,16 +4717,4 @@ onBeforeUnmount(() => {
   top: 96px;
 }
 
-.model-canvas-area__toolbar {
-  position: absolute;
-  top: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 11;
-  pointer-events: none;
-}
-
-.model-canvas-area__toolbar :deep(*) {
-  pointer-events: auto;
-}
 </style>

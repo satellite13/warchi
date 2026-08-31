@@ -1,24 +1,52 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 
-defineProps<{
-  title: string;
-  maxWidth?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    title: string
+    maxWidth?: string
+    /** Optional fixed/min height for the dialog panel (e.g. `85vh`). */
+    height?: string
+    /** When false, modal body has no default padding. Default true. */
+    bodyPadding?: boolean
+    /** Extra class on `.modal-body`. */
+    bodyClass?: string
+    /** Extra class on `.modal`. */
+    panelClass?: string
+    /** Hide the default title+close header (use `#header` slot instead). */
+    hideHeader?: boolean
+  }>(),
+  {
+    bodyPadding: true,
+    hideHeader: false,
+  }
+)
 
 const emit = defineEmits<{
-  close: [];
-}>();
+  close: []
+}>()
 
 const footerRef = ref<HTMLElement | null>(null)
 
 let buttons: HTMLElement[] = []
 let focusedIndex = 0
 
+const panelStyle = computed(() => {
+  const style: Record<string, string> = {
+    maxWidth: props.maxWidth || '440px',
+  }
+  if (props.height) {
+    style.height = props.height
+  }
+  return style
+})
+
 const getButtons = (): HTMLElement[] => {
   const footer = footerRef.value
   if (!footer) return []
-  return Array.from(footer.querySelectorAll('.btn, button[type="button"], button[type="submit"]')).filter((el): el is HTMLButtonElement => {
+  return Array.from(
+    footer.querySelectorAll('.btn, button[type="button"], button[type="submit"]')
+  ).filter((el): el is HTMLButtonElement => {
     const btnEl = el as HTMLButtonElement
     return btnEl.offsetParent !== null && !btnEl.disabled
   })
@@ -32,10 +60,15 @@ const focusButton = (index: number) => {
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('close')
+    return
+  }
+
   buttons = getButtons()
   if (buttons.length === 0) return
 
-  // Don't handle navigation if user is typing in an input
   const activeElement = document.activeElement
   const isTextInput =
     activeElement instanceof HTMLInputElement ||
@@ -46,50 +79,38 @@ const handleKeydown = (event: KeyboardEvent) => {
     case 'ArrowRight': {
       if (isTextInput) return
       event.preventDefault()
-      const nextIndex = (focusedIndex + 1) % buttons.length
-      focusButton(nextIndex)
+      focusButton((focusedIndex + 1) % buttons.length)
       break
     }
-
     case 'ArrowLeft': {
       if (isTextInput) return
       event.preventDefault()
-      const prevIndex = focusedIndex <= 0 ? buttons.length - 1 : focusedIndex - 1
-      focusButton(prevIndex)
+      focusButton(focusedIndex <= 0 ? buttons.length - 1 : focusedIndex - 1)
       break
     }
-
     case 'Enter': {
-      // If a button is focused, click it
       if (activeElement && buttons.includes(activeElement as HTMLElement)) {
         event.preventDefault()
         ;(activeElement as HTMLElement).click()
       }
       break
     }
-
-    case 'Escape': {
-      event.preventDefault()
-      emit('close')
-      break
-    }
   }
 }
 
 const handleOverlayClick = () => {
-  emit("close");
-};
+  emit('close')
+}
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
-  
-  // Focus first button after modal opens
   setTimeout(() => {
     buttons = getButtons()
     if (buttons.length > 0) {
-      // Try to find primary/submit button, otherwise last button
-      const submitBtn = buttons.find(btn => (btn as HTMLButtonElement).type === 'submit')
-      const primaryBtn = buttons.find(btn => (btn as HTMLButtonElement).classList.contains('btn--primary'))
+      const submitBtn = buttons.find((btn) => (btn as HTMLButtonElement).type === 'submit')
+      const primaryBtn = buttons.find((btn) =>
+        (btn as HTMLButtonElement).classList.contains('btn--primary')
+      )
       const defaultBtn = submitBtn || primaryBtn || buttons[buttons.length - 1]
       const index = defaultBtn ? buttons.indexOf(defaultBtn) : 0
       focusButton(index)
@@ -105,18 +126,23 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div class="modal-overlay" @click.self="handleOverlayClick">
-      <div class="modal" :style="{ maxWidth: maxWidth || '440px' }">
-        <div class="modal-header">
-          <h2>{{ title }}</h2>
-          <button class="modal-close" type="button" @click="emit('close')">
-            <UiIcon name="close" />
-          </button>
+      <div class="modal" :class="panelClass" :style="panelStyle">
+        <div v-if="!hideHeader || $slots.header" class="modal-header" :class="{ 'modal-header--custom': !!$slots.header }">
+          <slot name="header">
+            <h2>{{ title }}</h2>
+            <button class="modal-close" type="button" @click="emit('close')">
+              <UiIcon name="close" />
+            </button>
+          </slot>
         </div>
-        <div class="modal-body">
-          <slot/>
+        <div
+          class="modal-body"
+          :class="[bodyClass, { 'modal-body--flush': !bodyPadding }]"
+        >
+          <slot />
         </div>
         <div v-if="$slots.footer" ref="footerRef" class="modal-footer">
-          <slot name="footer"/>
+          <slot name="footer" />
         </div>
       </div>
     </div>
@@ -164,6 +190,11 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.modal-header--custom {
+  padding: 0;
+  border-bottom: none;
+}
+
 .modal-header h2 {
   margin: 0;
   font-size: 18px;
@@ -204,6 +235,12 @@ onUnmounted(() => {
   min-height: 0;
 }
 
+.modal-body--flush {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -215,8 +252,12 @@ onUnmounted(() => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {

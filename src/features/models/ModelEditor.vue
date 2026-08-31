@@ -8,6 +8,7 @@ import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
+import NameVersionForm from '@/components/forms/NameVersionForm.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
@@ -4191,25 +4192,26 @@ onBeforeUnmount(() => {
     @close="showCreateDiagramModal = false"
   >
     <div class="form-grid">
-      <label>
-        <span>{{ t('common.name') }}</span>
-        <input
-          v-model="newDiagramName"
-          class="form-input"
-          :placeholder="t('models.newDiagramPlaceholder')"
-        />
-      </label>
-      <label>
-        <span>{{ t('common.version') }}</span>
-        <input v-model="newDiagramVersion" class="form-input" placeholder="1.0.0" />
-      </label>
+      <NameVersionForm
+        v-model:name="newDiagramName"
+        v-model:version="newDiagramVersion"
+        :name-label="t('common.name')"
+        :version-label="t('common.version')"
+        :name-placeholder="t('models.newDiagramPlaceholder')"
+        version-placeholder="1.0.0"
+      />
       <label>
         <span>{{ t('models.notationLabel') }}</span>
-        <select v-model="newDiagramNotationId" class="form-select">
-          <option v-for="notation in state.notations" :key="notation.id" :value="notation.id">
-            {{ notation.name }} ({{ notation.version }})
-          </option>
-        </select>
+        <SearchableSelect
+          v-model="newDiagramNotationId"
+          :options="
+            state.notations.map((notation) => ({
+              id: notation.id,
+              label: `${notation.name} (${notation.version})`,
+            }))
+          "
+          :placeholder="t('models.notationLabel')"
+        />
       </label>
       <div v-if="hasDiagramNameVersionConflict" class="form-error">
         {{ t('models.diagramConflictMessage') }}

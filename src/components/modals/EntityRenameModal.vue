@@ -32,7 +32,7 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
 
 <template>
   <BaseModal :title="title" @close="emit('close')">
-    <form class="rename-form" @submit.prevent="emit('submit')">
+    <form id="entity-rename-form" class="rename-form" @submit.prevent="emit('submit')">
       <label class="rename-form__field">
         <span class="rename-form__label">{{ t("common.name") }}</span>
         <input
@@ -45,24 +45,25 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
         >
       </label>
       <div v-if="error" class="form-error">{{ error }}</div>
-      <div class="rename-form__actions">
-        <button
-          type="button"
-          class="btn btn--secondary"
-          :disabled="isRenaming"
-          @click="emit('close')"
-        >
-          {{ t("common.cancel") }}
-        </button>
-        <button
-          type="submit"
-          class="btn btn--primary"
-          :disabled="!canSubmit"
-        >
-          {{ isRenaming ? t("common.saving") : t("common.save") }}
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="isRenaming"
+        @click="emit('close')"
+      >
+        {{ t("common.cancel") }}
+      </button>
+      <button
+        type="submit"
+        form="entity-rename-form"
+        class="btn btn--primary"
+        :disabled="!canSubmit"
+      >
+        {{ isRenaming ? t("common.saving") : t("common.save") }}
+      </button>
+    </template>
   </BaseModal>
 </template>
 
@@ -83,11 +84,5 @@ const canSubmit = computed(() => !!props.name.trim() && !props.isRenaming);
   font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
-}
-
-.rename-form__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
 }
 </style>

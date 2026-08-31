@@ -11,7 +11,7 @@ import {
   resolveOwnerLabel,
 } from "@/utils/resolveOwnerNames"
 import { parseTypeAttrs, serializeTypeAttrs } from "@/domain/attrs/notationAttrs"
-import { createEmptyCustomProperty } from "@/domain/attrs/createEmptyCustomProperty"
+import { useCustomPropertyEditor } from "@/composables/useCustomPropertyEditor"
 import { createId } from "@/utils/createId"
 import { formatTypeOperationError } from "@/utils/formatEntityError"
 import type { TypeParsedAttrs } from "../../notations/types"
@@ -322,20 +322,24 @@ export function useTypeEditor() {
     }
   }
 
-  function addCustomProperty(item: TypeItem) {
-    if (!item.parsedAttrs.customProperties) {
-      item.parsedAttrs.customProperties = []
-    }
-    item.parsedAttrs.customProperties.push(createEmptyCustomProperty())
-    markTypeDirty(item)
+  const customPropertyEditor = useCustomPropertyEditor({
+    selectedItem: selectedType,
+    onMutateItem: (id, apply) => {
+      const item =
+        nodeTypes.value.find((entry) => entry.id === id) ??
+        linkTypes.value.find((entry) => entry.id === id)
+      if (!item) return
+      apply(item)
+      markTypeDirty(item)
+    },
+  })
+
+  function addCustomProperty(_item?: TypeItem) {
+    customPropertyEditor.addCustomProperty()
   }
 
-  function removeCustomProperty(item: TypeItem, propertyId: string) {
-    if (!item.parsedAttrs.customProperties) return
-    item.parsedAttrs.customProperties = item.parsedAttrs.customProperties.filter(
-      (p) => p.id !== propertyId
-    )
-    markTypeDirty(item)
+  function removeCustomProperty(_item: TypeItem | undefined, propertyId: string) {
+    customPropertyEditor.removeCustomProperty(propertyId)
   }
 
   // --- Type usages ---

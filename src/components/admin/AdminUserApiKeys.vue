@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { apiDelete, apiGet } from '@/composables/useApi'
 import type { ApiKey } from '@/types/apiKeys'
 import { formatApiKeySummary } from '@/utils/apiKeySummary'
+import ApiKeyList from '@/components/profile/ApiKeyList.vue'
 import type { PaginatedResponse } from '@/types/entities'
 import { paginatedContent } from '@/utils/paginatedResponse'
 
@@ -76,28 +77,18 @@ onMounted(() => {
 
     <p v-if="errorMessage" class="au-keys__error">{{ errorMessage }}</p>
 
-    <p v-if="isLoading" class="au-keys__status">{{ t('adminUsers.apiKeysLoading') }}</p>
-    <p v-else-if="keys.length === 0" class="au-keys__status">{{ t('adminUsers.apiKeysEmpty') }}</p>
-
-    <ul v-else class="au-keys__list">
-      <li v-for="key in keys" :key="key.id" class="au-keys__item">
-        <div class="au-keys__meta">
-          <strong class="au-keys__name">{{ key.name }}</strong>
-          <span class="au-keys__prefix">warchi_ak_{{ key.tokenPrefix }}…</span>
-          <span class="au-keys__summary">{{ formatKeySummary(key) }}</span>
-          <span v-if="key.revokedAt" class="au-keys__badge">{{ t('adminUsers.apiKeysRevoked') }}</span>
-        </div>
-        <button
-          v-if="!key.revokedAt"
-          type="button"
-          class="btn btn--danger btn--xs"
-          :disabled="isRevokingId === key.id || isLoading"
-          @click="revokeKey(key.id)"
-        >
-          {{ t('adminUsers.apiKeysRevoke') }}
-        </button>
-      </li>
-    </ul>
+    <ApiKeyList
+      :keys="keys"
+      :is-loading="isLoading"
+      :loading-text="t('adminUsers.apiKeysLoading')"
+      :empty-text="t('adminUsers.apiKeysEmpty')"
+      :revoke-label="t('adminUsers.apiKeysRevoke')"
+      :revoked-label="t('adminUsers.apiKeysRevoked')"
+      :format-summary="formatKeySummary"
+      :is-revoking-id="isRevokingId"
+      show-revoked-badge
+      @revoke="revokeKey"
+    />
   </section>
 </template>
 

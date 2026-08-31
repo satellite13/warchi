@@ -10,7 +10,7 @@ import {
   createModelEditorLoadProgressTracker,
   type ModelEditorLoadProgress,
 } from '../utils/modelEditorLoadProgress'
-import type { BatchConflictItem } from './useModelBatchSave'
+import type { BatchConflictItem, DiagramNameVersionConflict } from './useModelBatchSave'
 import { toEditorDiagram } from './modelEditorMappers'
 import {
   loadModelEditorCatalog,
@@ -88,6 +88,10 @@ type ModelEditorReturn = {
   isNotationRelationsAndRulesLoading: (notationId: string | null | undefined) => boolean
   /** Конфликт версий при batch-save (409); null если нет */
   batchSaveConflict: Ref<BatchConflictItem[] | null>
+  diagramNameVersionConflict: Ref<DiagramNameVersionConflict | null>
+  resolveDiagramTrashBump: () => Promise<boolean>
+  resolveDiagramTrashReplace: () => Promise<boolean>
+  dismissDiagramNameVersionConflict: () => void
   /** Подтянуть модель с сервера и закрыть диалог конфликта */
   resolveBatchSaveReload: () => Promise<void>
   /** Повторить сохранение с force=true (перезаписать сервер) */
@@ -113,6 +117,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
+  const diagramNameVersionConflict = ref<DiagramNameVersionConflict | null>(null)
   const modelDirty = ref(false)
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
@@ -396,6 +401,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     saveOperationActive = true
     if (!isSaving.value) startSave()
     batchSaveConflict.value = null
+    diagramNameVersionConflict.value = null
 
     try {
       const success = await executeModelEditorSave({
@@ -406,6 +412,7 @@ export const useModelEditor = (): ModelEditorReturn => {
         state,
         pendingForceBatch,
         batchSaveConflict,
+        diagramNameVersionConflict,
         saveError,
         remoteCascadeConflictLinkIds: partialStore.store.remoteCascadeConflictLinkIds,
         onProgress: (msg: string) => {
@@ -460,6 +467,55 @@ export const useModelEditor = (): ModelEditorReturn => {
     return editorDiagram
   }
 
+  const applyDiagramNameVersionBump = (): boolean => {
+    const conflict = diagramNameVersionConflict.value
+    if (!conflict?.suggestedVersion) return false
+    for (const diagram of state.value.diagrams) {
+      if (
+        diagram._isNew &&
+        !diagram._isDeleted &&
+        diagram.name === conflict.name &&
+        diagram.version === conflict.version
+      ) {
+        diagram.version = conflict.suggestedVersion
+        delete diagram._replaceDeletedId
+      }
+    }
+    diagramNameVersionConflict.value = null
+    return true
+  }
+
+  const applyDiagramNameVersionReplace = (): boolean => {
+    const conflict = diagramNameVersionConflict.value
+    if (!conflict?.deletedDiagramId) return false
+    for (const diagram of state.value.diagrams) {
+      if (
+        diagram._isNew &&
+        !diagram._isDeleted &&
+        diagram.name === conflict.name &&
+        diagram.version === conflict.version
+      ) {
+        diagram._replaceDeletedId = conflict.deletedDiagramId
+      }
+    }
+    diagramNameVersionConflict.value = null
+    return true
+  }
+
+  const resolveDiagramTrashBump = async (): Promise<boolean> => {
+    if (!applyDiagramNameVersionBump()) return false
+    return saveChanges()
+  }
+
+  const resolveDiagramTrashReplace = async (): Promise<boolean> => {
+    if (!applyDiagramNameVersionReplace()) return false
+    return saveChanges()
+  }
+
+  const dismissDiagramNameVersionConflict = (): void => {
+    diagramNameVersionConflict.value = null
+  }
+
   const { resolveBatchSaveReload, resolveBatchSaveOverwrite, dismissBatchSaveConflict } =
     useModelBatchConflictResolution({
       state,
@@ -508,6 +564,10 @@ export const useModelEditor = (): ModelEditorReturn => {
     ensureNotationRelationsAndRules,
     isNotationRelationsAndRulesLoading,
     batchSaveConflict,
+    diagramNameVersionConflict,
+    resolveDiagramTrashBump,
+    resolveDiagramTrashReplace,
+    dismissDiagramNameVersionConflict,
     resolveBatchSaveReload,
     resolveBatchSaveOverwrite,
     dismissBatchSaveConflict,

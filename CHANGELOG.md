@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.6] - 2026-08-31
+
+### Added
+- Creating a diagram whose name and version are still in the trash now warns. You can bump the new version or permanently delete the old diagram.
+
+### Changed
+- Editor hints use a faster tooltip instead of the native title delay.
+- Trackpad pinch-zoom on the canvas matches two-finger scroll speed.
+
 ## [0.25.5] - 2026-08-31
 
 ### Added

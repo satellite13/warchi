@@ -98,7 +98,7 @@ import {
   clientPointForDrop,
   worldTopLeftCenteredOnScreenPoint,
 } from '../utils/dropCoordinates'
-import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '../../notations/utils/notationElementBuilders'
+import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '@/features/diagram/utils/diagramElementBuilders'
 import {
   applyStylePropertyBindings,
   BIND_TO_NAME,

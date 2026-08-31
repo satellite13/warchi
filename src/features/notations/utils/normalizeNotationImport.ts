@@ -4,7 +4,7 @@ import {
   parseEntityAttrs,
   parseTypeAttrs,
 } from '@/domain/attrs/notationAttrs'
-import { validateCompositeDiagramStyle } from '@/features/notations/utils/validationIssues'
+import { validateCompositeDiagramStyle } from '@/features/diagram-style/utils/validationIssues'
 import { mergeShapePackage } from '@/features/notations/utils/notationShapePackage'
 import {
   stripShapeDocumentFileId,

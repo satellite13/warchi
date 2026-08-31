@@ -1,7 +1,7 @@
 import { ref, computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePersistedToolbarState } from '@/composables/usePersistedToolbarState'
-import type { ToolbarButton } from '@/features/notations/layout/IconToolbar.vue'
+import type { ToolbarButton } from '@/components/layout/IconToolbar.vue'
 
 export type EdgePathType = 'straight' | 'polyline' | 'editable-polyline' | 'bezier'
 

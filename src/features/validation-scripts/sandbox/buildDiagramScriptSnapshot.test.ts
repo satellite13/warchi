@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { createEmptyModelEditorState } from '@/features/models/types'
+import {
+  createEmptyScriptEditorState,
+  type ScriptEditorLink,
+  type ScriptEditorNode,
+} from './editorStateContract'
 import { buildDiagramScriptSnapshot } from './buildDiagramScriptSnapshot'
-import type { EditorDiagram, EditorLink, EditorNode } from '@/features/models/types'
 
-function node(partial: Pick<EditorNode, 'id' | 'name' | 'nodeTypeId'>): EditorNode {
+function node(
+  partial: Pick<ScriptEditorNode, 'id' | 'name' | 'nodeTypeId'>
+): ScriptEditorNode {
   return {
     id: partial.id,
     name: partial.name,
     parentNodeId: null,
     nodeTypeId: partial.nodeTypeId,
-    ownerId: 'u1',
-    modelId: 'm1',
-    createdAt: null,
-    updatedAt: null,
     parsedAttrs: {},
-  } as EditorNode
+  }
 }
 
 describe('buildDiagramScriptSnapshot', () => {
   it('includes only the open diagram canvas nodes and instance geometry', () => {
-    const state = createEmptyModelEditorState()
+    const state = createEmptyScriptEditorState()
     state.modelId = 'm1'
     state.nodes = [
       node({ id: 'on-canvas', name: 'A', nodeTypeId: 'nt1' }),
@@ -32,23 +33,15 @@ describe('buildDiagramScriptSnapshot', () => {
         sourceId: 'on-canvas',
         targetId: 'on-canvas',
         linkTypeId: 'lt1',
-        ownerId: 'u1',
-        modelId: 'm1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {},
-      } as EditorLink,
+      } satisfies ScriptEditorLink,
       {
         id: 'off-canvas-link',
         sourceId: 'off-canvas',
         targetId: 'other',
         linkTypeId: 'lt1',
-        ownerId: 'u1',
-        modelId: 'm1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {},
-      } as EditorLink,
+      } satisfies ScriptEditorLink,
     ]
     state.diagrams = [
       {
@@ -56,10 +49,6 @@ describe('buildDiagramScriptSnapshot', () => {
         name: 'Open',
         version: '1.0.0',
         notationId: 'not1',
-        modelId: 'm1',
-        ownerId: 'u1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {
           instances: {
             nodes: [{ id: 'inst1', modelNodeId: 'on-canvas', x: 10, y: 20, width: 80, height: 40 }],
@@ -73,36 +62,32 @@ describe('buildDiagramScriptSnapshot', () => {
             ],
           },
         },
-      } as EditorDiagram,
+      },
       {
         id: 'd2',
         name: 'Closed',
         version: '1.0.0',
         notationId: 'not2',
-        modelId: 'm1',
-        ownerId: 'u1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {
           instances: {
             nodes: [{ id: 'inst2', modelNodeId: 'other', x: 0, y: 0 }],
             edges: [],
           },
         },
-      } as EditorDiagram,
+      },
     ]
     state.notations = [
-      { id: 'not1', name: 'N', version: '1.0.0', ownerId: 'u1' } as never,
-      { id: 'not2', name: 'OtherN', version: '1.0.0', ownerId: 'u1' } as never,
+      { id: 'not1', name: 'N', version: '1.0.0' },
+      { id: 'not2', name: 'OtherN', version: '1.0.0' },
     ]
     state.nodeTypes = [
-      { id: 'nt1', name: 'App', ownerId: 'u1' } as never,
-      { id: 'nt2', name: 'Loc', ownerId: 'u1' } as never,
+      { id: 'nt1', name: 'App' },
+      { id: 'nt2', name: 'Loc' },
     ]
-    state.linkTypes = [{ id: 'lt1', name: 'Flow', ownerId: 'u1' } as never]
+    state.linkTypes = [{ id: 'lt1', name: 'Flow' }]
     state.components = [
-      { id: 'c1', name: 'App', notationId: 'not1', nodeTypeId: 'nt1', ownerId: 'u1' } as never,
-      { id: 'c2', name: 'Loc', notationId: 'not2', nodeTypeId: 'nt2', ownerId: 'u1' } as never,
+      { id: 'c1', name: 'App', notationId: 'not1', nodeTypeId: 'nt1' },
+      { id: 'c2', name: 'Loc', notationId: 'not2', nodeTypeId: 'nt2' },
     ]
 
     const { snapshot, openDiagramId } = buildDiagramScriptSnapshot({

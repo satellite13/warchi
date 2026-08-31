@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ComposerTranslation } from 'vue-i18n'
-import { validateCompositeDiagramStyle } from './validationIssues'
+import { validateCompositeDiagramStyle } from '@/features/diagram-style/utils/validationIssues'
 
 describe('validationIssues composite diagram style validation', () => {
   it('validates missing name role and broken A5 target', () => {

@@ -48,7 +48,7 @@ import {
   buildNodeIcon,
   buildMarker,
   mergeEdgeLabelStyleFromDiagramStyle,
-} from "../utils/notationElementBuilders"
+} from '@/features/diagram/utils/diagramElementBuilders'
 import {
   applyStylePropertyBindings,
   createDefaultCompositeContent,

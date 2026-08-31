@@ -1,7 +1,7 @@
 import { apiGet } from '@/composables/useApi'
 import { fetchAllByModelId } from '@/features/models/composables/modelEditorLoadModel'
 import { fetchAllComponentsByNotationIds } from '@/features/models/composables/modelNotationComponentsApi'
-import { analyzeImportIconGaps } from '@/features/notations/utils/analyzeImportIconGaps'
+import { analyzeImportIconGaps } from '@/features/diagram/utils/analyzeImportIconGaps'
 import type { DiagramResponse } from '@/types/api'
 import type { LibraryIconRecord } from '@/utils/libraryIconResolve'
 

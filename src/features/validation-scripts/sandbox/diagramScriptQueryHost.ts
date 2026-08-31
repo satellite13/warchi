@@ -1,10 +1,12 @@
 import type { ApiResult } from '@/composables/useApi'
 import type {
-  fetchGraphNeighbors,
-  resolveModelLinks,
-  searchModelNodes,
-} from '@/features/models/composables/modelScopedApi'
-import type { GraphNeighborResponse, ModelSearchHit } from '@/types/api'
+  GraphNeighborResponse,
+  ModelLinkResolveRequest,
+  ModelLinkResolveResponse,
+  ModelSearchHit,
+  ModelSearchResponse,
+} from '@/types/api'
+import type { PaginatedResponse } from '@/types/entities'
 
 export type DiagramScriptQueryMethod = 'neighbors' | 'searchNodes' | 'linksBetween'
 
@@ -17,11 +19,37 @@ export type DiagramScriptQueryResult =
   | { data: unknown }
   | { error: string }
 
+export type DiagramScriptNeighborOptions = {
+  direction: 'outgoing' | 'incoming'
+  linkTypeId?: string
+  page?: number
+  size?: number
+  signal?: AbortSignal
+}
+
+export type DiagramScriptSearchOptions = {
+  limit?: number
+  kinds?: Array<'nodes' | 'diagrams' | 'links'>
+  signal?: AbortSignal
+}
+
 export type DiagramScriptQueryHostDeps = {
   modelId: string
-  fetchNeighbors: typeof fetchGraphNeighbors
-  search: typeof searchModelNodes
-  resolveLinks: typeof resolveModelLinks
+  fetchNeighbors: (
+    modelId: string,
+    nodeId: string,
+    options: DiagramScriptNeighborOptions
+  ) => Promise<ApiResult<PaginatedResponse<GraphNeighborResponse>>>
+  search: (
+    modelId: string,
+    queryText: string,
+    options?: DiagramScriptSearchOptions
+  ) => Promise<ApiResult<ModelSearchResponse>>
+  resolveLinks: (
+    modelId: string,
+    request: ModelLinkResolveRequest,
+    signal?: AbortSignal
+  ) => Promise<ApiResult<ModelLinkResolveResponse>>
 }
 
 function apiErrorMessage(result: ApiResult<unknown>): string {
@@ -37,10 +65,7 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function matchesLinkType(
-  linkTypeId: string,
-  requested: string
-): boolean {
+function matchesLinkType(linkTypeId: string, requested: string): boolean {
   if (!requested) return true
   return linkTypeId === requested || linkTypeId.toLowerCase() === requested.toLowerCase()
 }
@@ -48,10 +73,7 @@ function matchesLinkType(
 function matchesSearchType(hit: ModelSearchHit, type: string): boolean {
   if (!type) return true
   const needle = type.trim().toLowerCase()
-  return (
-    hit.nodeTypeId === type ||
-    (hit.typeName ?? '').trim().toLowerCase() === needle
-  )
+  return hit.nodeTypeId === type || (hit.typeName ?? '').trim().toLowerCase() === needle
 }
 
 export function createDiagramScriptQueryHost(deps: DiagramScriptQueryHostDeps) {

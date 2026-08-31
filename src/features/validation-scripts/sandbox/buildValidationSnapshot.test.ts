@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createEmptyModelEditorState } from '@/features/models/types'
+import { createEmptyScriptEditorState } from './editorStateContract'
 import { buildValidationSnapshot } from './buildValidationSnapshot'
 
 describe('buildValidationSnapshot', () => {
   it('includes diagram membership and open diagram resolution', () => {
-    const state = createEmptyModelEditorState()
+    const state = createEmptyScriptEditorState()
     state.modelId = 'm1'
     state.nodes = [
       {
@@ -12,12 +12,8 @@ describe('buildValidationSnapshot', () => {
         name: 'A',
         parentNodeId: null,
         nodeTypeId: 'nt1',
-        ownerId: 'u1',
-        modelId: 'm1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {},
-      } as never,
+      },
     ]
     state.links = [
       {
@@ -25,12 +21,8 @@ describe('buildValidationSnapshot', () => {
         sourceId: 'n1',
         targetId: 'n1',
         linkTypeId: 'lt1',
-        ownerId: 'u1',
-        modelId: 'm1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {},
-      } as never,
+      },
     ]
     state.diagrams = [
       {
@@ -38,24 +30,25 @@ describe('buildValidationSnapshot', () => {
         name: 'D',
         version: '1.0.0',
         notationId: 'not1',
-        modelId: 'm1',
-        ownerId: 'u1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {
           instances: {
-            nodes: [{ id: 'inst1', modelNodeId: 'n1' }],
-            edges: [{ id: 'e1', modelLinkId: 'l1' }],
+            nodes: [{ id: 'inst1', modelNodeId: 'n1', x: 0, y: 0 }],
+            edges: [
+              {
+                id: 'e1',
+                modelLinkId: 'l1',
+                sourceInstanceId: 'inst1',
+                targetInstanceId: 'inst1',
+              },
+            ],
           },
         },
-      } as never,
+      },
     ]
-    state.notations = [{ id: 'not1', name: 'N', version: '1.0.0', ownerId: 'u1' } as never]
-    state.nodeTypes = [{ id: 'nt1', name: 'App', ownerId: 'u1' } as never]
-    state.linkTypes = [{ id: 'lt1', name: 'Flow', ownerId: 'u1' } as never]
-    state.components = [
-      { id: 'c1', name: 'App', notationId: 'not1', nodeTypeId: 'nt1', ownerId: 'u1' } as never,
-    ]
+    state.notations = [{ id: 'not1', name: 'N', version: '1.0.0' }]
+    state.nodeTypes = [{ id: 'nt1', name: 'App' }]
+    state.linkTypes = [{ id: 'lt1', name: 'Flow' }]
+    state.components = [{ id: 'c1', name: 'App', notationId: 'not1', nodeTypeId: 'nt1' }]
 
     const { snapshot, openDiagramId } = buildValidationSnapshot({
       state,
@@ -72,7 +65,7 @@ describe('buildValidationSnapshot', () => {
   })
 
   it('builds from an explicit detached overlay instead of partial editor arrays', () => {
-    const state = createEmptyModelEditorState()
+    const state = createEmptyScriptEditorState()
     state.modelId = 'm1'
     state.nodes = [
       {
@@ -80,14 +73,10 @@ describe('buildValidationSnapshot', () => {
         name: 'Partial',
         parentNodeId: null,
         nodeTypeId: 'nt1',
-        ownerId: 'u1',
-        modelId: 'm1',
-        createdAt: null,
-        updatedAt: null,
         parsedAttrs: {},
-      } as never,
+      },
     ]
-    state.nodeTypes = [{ id: 'nt1', name: 'App', ownerId: 'u1' } as never]
+    state.nodeTypes = [{ id: 'nt1', name: 'App' }]
 
     const { snapshot } = buildValidationSnapshot({
       state: {
@@ -98,12 +87,8 @@ describe('buildValidationSnapshot', () => {
             name: 'Detached',
             parentNodeId: null,
             nodeTypeId: 'nt1',
-            ownerId: 'u1',
-            modelId: 'm1',
-            createdAt: null,
-            updatedAt: null,
             parsedAttrs: {},
-          } as never,
+          },
         ],
       },
       modelName: 'Model',
@@ -111,7 +96,7 @@ describe('buildValidationSnapshot', () => {
       openDiagramId: null,
     })
 
-    expect(snapshot.model.nodes.map(node => node.id)).toEqual(['detached-n'])
-    expect(state.nodes.map(node => node.id)).toEqual(['partial-only'])
+    expect(snapshot.model.nodes.map((node) => node.id)).toEqual(['detached-n'])
+    expect(state.nodes.map((node) => node.id)).toEqual(['partial-only'])
   })
 })

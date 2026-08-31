@@ -33,6 +33,27 @@ describe('resolveInstanceComponentId', () => {
     ).toBe('instance-visual')
   })
 
+  it('ignores a stale instance binding that is not in the current notation', () => {
+    const instance: DiagramNodeInstance = {
+      id: 'inst-1',
+      modelNodeId: 'node-1',
+      x: 0,
+      y: 0,
+      attrs: { notationComponentId: 'old-version-component' },
+    }
+    expect(
+      resolveInstanceComponentId({
+        instance,
+        node,
+        notationId: 'notation-1',
+        components: [
+          { id: 'node-default', notationId: 'notation-1' },
+          { id: 'old-version-component', notationId: 'notation-old' },
+        ],
+      }),
+    ).toBe('node-default')
+  })
+
   it('falls back to node notationComponents binding', () => {
     const instance: DiagramNodeInstance = {
       id: 'inst-1',

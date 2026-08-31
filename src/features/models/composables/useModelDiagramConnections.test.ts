@@ -402,6 +402,54 @@ describe('useModelDiagramConnections', () => {
     ).toBe('anchor-1')
   })
 
+  it('creates a typed link after notation migrate when instance ids are still stale', () => {
+    const state = createState()
+    state.nodes[0]!.parsedAttrs.notationComponents = {
+      notation: { componentId: 'source-component' },
+    }
+    state.nodes[1]!.parsedAttrs.notationComponents = {
+      notation: { componentId: 'target-component' },
+    }
+    const { diagram, connections, setUiError } = createHarness(state)
+    diagram.value.parsedAttrs.instances.nodes[0]!.attrs = {
+      notationComponentId: 'source-component-old',
+    }
+    diagram.value.parsedAttrs.instances.nodes[1]!.attrs = {
+      notationComponentId: 'target-component-old',
+    }
+
+    connections.startConnectNodes('source', 'target', 'source-instance', 'target-instance')
+
+    expect(setUiError).not.toHaveBeenCalled()
+    expect(state.links).toHaveLength(1)
+    expect(diagram.value.parsedAttrs.instances.edges).toHaveLength(1)
+  })
+
+  it('canConnect uses remapped instance visuals instead of a different node default', () => {
+    const state = createState()
+    state.components.push({
+      id: 'source-visual',
+      notationId: 'notation',
+      nodeTypeId: 'node-type',
+    } as never)
+    state.relationRules = [
+      {
+        fromComponentId: 'source-visual',
+        toComponentId: 'target-component',
+        relationId: 'relation',
+      } as never,
+    ]
+    const { diagram, connections } = createHarness(state)
+    diagram.value.parsedAttrs.instances.nodes[0]!.attrs = {
+      notationComponentId: 'source-visual',
+    }
+
+    expect(connections.canConnect('source', 'target')).toBe(false)
+    expect(connections.canConnect('source', 'target', 'source-instance', 'target-instance')).toBe(
+      true
+    )
+  })
+
   it('clears note-edge selection when undoing its creation', () => {
     const {
       connections,

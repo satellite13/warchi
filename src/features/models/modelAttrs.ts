@@ -299,19 +299,34 @@ export type ResolveInstanceComponentIdInput = {
   instance?: DiagramNodeInstance | null
   node?: { parsedAttrs: ModelNodeAttrs } | null
   notationId: string | null | undefined
+  /** When set, an instance binding that is not a component of this notation is ignored. */
+  components?: readonly Pick<ComponentResponse, 'id' | 'notationId'>[]
 }
 
 /** Prefer per-instance visual binding, then node-level default for the notation. */
 export const resolveInstanceComponentId = (
   input: ResolveInstanceComponentIdInput,
 ): string | null => {
-  const fromInstance = input.instance?.attrs?.notationComponentId
-  if (typeof fromInstance === 'string' && fromInstance.trim().length > 0) {
-    return fromInstance.trim()
-  }
   const notationId = input.notationId
-  if (!notationId || !input.node) return null
-  return input.node.parsedAttrs.notationComponents[notationId]?.componentId ?? null
+  const fromInstance = input.instance?.attrs?.notationComponentId
+  const trimmedInstance =
+    typeof fromInstance === 'string' && fromInstance.trim().length > 0 ? fromInstance.trim() : null
+  const fromNode =
+    notationId && input.node
+      ? (input.node.parsedAttrs.notationComponents[notationId]?.componentId ?? null)
+      : null
+
+  const belongsToNotation = (componentId: string | null): componentId is string => {
+    if (!componentId) return false
+    if (!input.components || !notationId) return true
+    return input.components.some(
+      component => component.id === componentId && component.notationId === notationId
+    )
+  }
+
+  if (belongsToNotation(trimmedInstance)) return trimmedInstance
+  if (belongsToNotation(fromNode)) return fromNode
+  return null
 }
 
 export const hasEligibleNotationComponent = (input: {

@@ -138,6 +138,69 @@ function migrateLinkBinding(
   return true
 }
 
+export function collectUsedOldNotationBindings(params: {
+  diagram: EditorDiagram
+  nodes: readonly EditorNode[]
+  links: readonly EditorLink[]
+  oldNotationId: string
+}): { componentIds: Set<string>; relationIds: Set<string> } {
+  const { diagram, nodes, links, oldNotationId } = params
+  const componentIds = new Set<string>()
+  const relationIds = new Set<string>()
+  const nodeIdsOnDiagram = new Set(
+    diagram.parsedAttrs.instances.nodes.map(instance => instance.modelNodeId)
+  )
+  const linkIdsOnDiagram = new Set(
+    diagram.parsedAttrs.instances.edges.map(edge => edge.modelLinkId)
+  )
+
+  for (const node of nodes) {
+    if (!nodeIdsOnDiagram.has(node.id)) continue
+    const componentId = node.parsedAttrs.notationComponents[oldNotationId]?.componentId
+    if (componentId) componentIds.add(componentId)
+  }
+  for (const instance of diagram.parsedAttrs.instances.nodes) {
+    const current = instance.attrs?.notationComponentId
+    if (typeof current === 'string' && current.trim().length > 0) {
+      componentIds.add(current.trim())
+    }
+  }
+  for (const link of links) {
+    if (!linkIdsOnDiagram.has(link.id)) continue
+    const relationId = link.parsedAttrs.notationRelations[oldNotationId]?.relationId
+    if (relationId) relationIds.add(relationId)
+  }
+  return { componentIds, relationIds }
+}
+
+function migrateInstanceComponentId(
+  instance: DiagramNodeInstance,
+  componentRemap: NotationIdRemap
+): boolean {
+  const current = instance.attrs?.notationComponentId
+  if (typeof current !== 'string' || current.trim().length === 0) return false
+  const mapped = componentRemap.get(current.trim())
+  if (!instance.attrs) instance.attrs = {}
+  if (mapped) {
+    instance.attrs.notationComponentId = mapped
+  } else {
+    delete instance.attrs.notationComponentId
+  }
+  return true
+}
+
+function ensureNodeBindingFromInstance(
+  node: EditorNode,
+  instance: DiagramNodeInstance,
+  newNotationId: string
+): boolean {
+  if (node.parsedAttrs.notationComponents[newNotationId]?.componentId) return false
+  const remapped = instance.attrs?.notationComponentId
+  if (typeof remapped !== 'string' || remapped.trim().length === 0) return false
+  node.parsedAttrs.notationComponents[newNotationId] = { componentId: remapped.trim() }
+  return true
+}
+
 function migrateInstanceScopedProps(
   instance: DiagramNodeInstance | DiagramEdgeInstance,
   key: 'componentProperties' | 'relationProperties',
@@ -186,15 +249,19 @@ export function applyDiagramNotationMigration(params: {
         touchedNodeIds.add(node.id)
       }
     }
-    if (
-      migrateInstanceScopedProps(
-        instance,
-        'componentProperties',
-        oldNotationId,
-        newNotationId,
-        componentRemap
-      )
-    ) {
+    const remappedComponentId = migrateInstanceComponentId(instance, componentRemap)
+    const remappedScoped = migrateInstanceScopedProps(
+      instance,
+      'componentProperties',
+      oldNotationId,
+      newNotationId,
+      componentRemap
+    )
+    if (node && ensureNodeBindingFromInstance(node, instance, newNotationId)) {
+      remappedNodes += 1
+      touchedNodeIds.add(node.id)
+    }
+    if (remappedComponentId || remappedScoped) {
       remappedNodeInstances += 1
     }
   }

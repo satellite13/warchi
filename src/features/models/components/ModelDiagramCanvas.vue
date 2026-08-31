@@ -132,7 +132,12 @@ const props = withDefaults(
     selectedModelLinkId: string | null
     selectedEdgeInstanceId?: string | null
     selectedInstanceIds?: string[]
-    connectionValidator?: ((sourceModelNodeId: string, targetModelNodeId: string) => boolean) | null
+    connectionValidator?: ((
+      sourceModelNodeId: string,
+      targetModelNodeId: string,
+      sourceInstanceId?: string,
+      targetInstanceId?: string
+    ) => boolean) | null
     gridVisible?: boolean
     miniMapVisible?: boolean
     snapEnabled?: boolean
@@ -537,6 +542,7 @@ const isNodeGroupingEnabled = (papNodeId: string): boolean => {
     instance: instance ?? null,
     node,
     notationId,
+    components: props.components,
   })
   if (!componentId) return false
   const component = props.components.find(c => c.id === componentId)
@@ -758,7 +764,10 @@ const getComponentIdForInstance = (
   const instance = instanceId
     ? (instanceNodes.value.find(item => item.id === instanceId) ?? null)
     : null
-  return resolveInstanceComponentId({ instance, node, notationId }) ?? undefined
+  return (
+    resolveInstanceComponentId({ instance, node, notationId, components: props.components }) ??
+    undefined
+  )
 }
 
 const findRelationsWithSystemBoolean = (
@@ -1086,7 +1095,12 @@ const getBoundComponentStyle = (instance: DiagramNodeInstance): DiagramStyle | u
   const node = nodeById.value.get(instance.modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return undefined
-  const componentId = resolveInstanceComponentId({ instance, node, notationId })
+  const componentId = resolveInstanceComponentId({
+    instance,
+    node,
+    notationId,
+    components: props.components,
+  })
   if (!componentId) return undefined
   return componentDiagramStyleById.value.get(componentId)
 }
@@ -1297,7 +1311,12 @@ function getInteractiveBadgesForInstance(instance: DiagramNodeInstance): Array<{
   const node = nodeById.value.get(instance.modelNodeId)
   const notationId = activeNotationId.value
   if (!node || !notationId) return []
-  const componentId = resolveInstanceComponentId({ instance, node, notationId })
+  const componentId = resolveInstanceComponentId({
+    instance,
+    node,
+    notationId,
+    components: props.components,
+  })
   if (!componentId) return []
   const component = props.components.find(c => c.id === componentId)
   if (!component) return []
@@ -2588,7 +2607,12 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     if (!props.connectionValidator) return true
     const targetEntity = nodeIdToInstance.get(targetPapId)
     if (!sourceEntity || !targetEntity) return false
-    return props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
+    return props.connectionValidator(
+      sourceEntity.modelNodeId,
+      targetEntity.modelNodeId,
+      sourceEntity.instanceId,
+      targetEntity.instanceId
+    )
   }
 
   manager.history.on('undo', () => {
@@ -2725,7 +2749,12 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
         if (
           targetIsGroup &&
           props.connectionValidator &&
-          !props.connectionValidator(sourceEntity.modelNodeId, targetEntity.modelNodeId)
+          !props.connectionValidator(
+            sourceEntity.modelNodeId,
+            targetEntity.modelNodeId,
+            sourceEntity.instanceId,
+            targetEntity.instanceId
+          )
         ) {
           currentRenderer.removeEdge(edge.id)
           return

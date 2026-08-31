@@ -8,6 +8,7 @@ import {
   applyDiagramNotationMigration,
   buildComponentIdRemap,
   buildRelationIdRemap,
+  collectUsedOldNotationBindings,
   type MigrateDiagramNotationResult,
 } from '../utils/migrateDiagramNotation'
 
@@ -114,24 +115,13 @@ export function useDiagramNotationMigration(options: {
         relations: relationMap.unmapped,
       }
 
-      const usedOldComponentIds = new Set<string>()
-      const usedOldRelationIds = new Set<string>()
-      const nodeIdsOnDiagram = new Set(
-        diagram.parsedAttrs.instances.nodes.map(instance => instance.modelNodeId)
-      )
-      const linkIdsOnDiagram = new Set(
-        diagram.parsedAttrs.instances.edges.map(edge => edge.modelLinkId)
-      )
-      for (const node of options.state.value.nodes) {
-        if (!nodeIdsOnDiagram.has(node.id)) continue
-        const componentId = node.parsedAttrs.notationComponents[oldNotationId]?.componentId
-        if (componentId) usedOldComponentIds.add(componentId)
-      }
-      for (const link of options.state.value.links) {
-        if (!linkIdsOnDiagram.has(link.id)) continue
-        const relationId = link.parsedAttrs.notationRelations[oldNotationId]?.relationId
-        if (relationId) usedOldRelationIds.add(relationId)
-      }
+      const { componentIds: usedOldComponentIds, relationIds: usedOldRelationIds } =
+        collectUsedOldNotationBindings({
+          diagram,
+          nodes: options.state.value.nodes,
+          links: options.state.value.links,
+          oldNotationId,
+        })
 
       const blockingComponents = [...usedOldComponentIds]
         .filter(id => !componentMap.remap.has(id))

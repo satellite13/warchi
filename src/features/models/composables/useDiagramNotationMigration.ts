@@ -8,6 +8,7 @@ import {
   applyDiagramNotationMigration,
   buildComponentIdRemap,
   buildRelationIdRemap,
+  collectUsedOldNotationBindings,
   type MigrateDiagramNotationResult,
 } from '../utils/migrateDiagramNotation'
 
@@ -27,6 +28,7 @@ export function useDiagramNotationMigration(options: {
     notationId: string,
     options?: { force?: boolean }
   ) => Promise<void>
+  ensureNotationImportCatalog: (notationId: string, options?: { force?: boolean }) => Promise<void>
 }) {
   const showMigrateModal = ref(false)
   const migrateTarget = ref<NotationResponse | null>(null)
@@ -60,11 +62,10 @@ export function useDiagramNotationMigration(options: {
     relations: RelationResponse[],
     notationId: string
   ) => {
-    const componentById = new Map(options.state.value.components.map(item => [item.id, item]))
-    for (const component of components) {
-      componentById.set(component.id, component)
-    }
-    options.state.value.components = [...componentById.values()]
+    options.state.value.components = [
+      ...options.state.value.components.filter(item => item.notationId !== notationId),
+      ...components,
+    ]
 
     options.state.value.relations = [
       ...options.state.value.relations.filter(item => item.notationId !== notationId),
@@ -117,24 +118,13 @@ export function useDiagramNotationMigration(options: {
         relations: relationMap.unmapped,
       }
 
-      const usedOldComponentIds = new Set<string>()
-      const usedOldRelationIds = new Set<string>()
-      const nodeIdsOnDiagram = new Set(
-        diagram.parsedAttrs.instances.nodes.map(instance => instance.modelNodeId)
-      )
-      const linkIdsOnDiagram = new Set(
-        diagram.parsedAttrs.instances.edges.map(edge => edge.modelLinkId)
-      )
-      for (const node of options.state.value.nodes) {
-        if (!nodeIdsOnDiagram.has(node.id)) continue
-        const componentId = node.parsedAttrs.notationComponents[oldNotationId]?.componentId
-        if (componentId) usedOldComponentIds.add(componentId)
-      }
-      for (const link of options.state.value.links) {
-        if (!linkIdsOnDiagram.has(link.id)) continue
-        const relationId = link.parsedAttrs.notationRelations[oldNotationId]?.relationId
-        if (relationId) usedOldRelationIds.add(relationId)
-      }
+      const { componentIds: usedOldComponentIds, relationIds: usedOldRelationIds } =
+        collectUsedOldNotationBindings({
+          diagram,
+          nodes: options.state.value.nodes,
+          links: options.state.value.links,
+          oldNotationId,
+        })
 
       const blockingComponents = [...usedOldComponentIds]
         .filter(id => !componentMap.remap.has(id))
@@ -177,6 +167,7 @@ export function useDiagramNotationMigration(options: {
       }
 
       mergeCatalogEntities(newComponents, newRelations, target.id)
+      await options.ensureNotationImportCatalog(target.id, { force: true })
       options.markDiagramDirty(diagram.id)
       for (const nodeId of touchedNodeIds) {
         if (options.state.value.nodes.some(node => node.id === nodeId)) {

@@ -827,7 +827,12 @@ const nodeBindingComponentId = computed(() => {
     ? (activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ??
       null)
     : null
-  return resolveInstanceComponentId({ instance, node, notationId })
+  return resolveInstanceComponentId({
+    instance,
+    node,
+    notationId,
+    components: state.value.components,
+  })
 })
 const selectedNodeComponent = computed(() => {
   const notationId = activeNotationId.value
@@ -1083,6 +1088,14 @@ const {
   markNodeDirty,
   markLinkDirty,
   ensureNotationRelationsAndRules,
+  ensureNotationImportCatalog: (notationId, catalogOptions) =>
+    ensureNotationImportCatalog({
+      modelId: state.value.modelId,
+      notationId,
+      state,
+      ensureNotationRelationsAndRules,
+      force: catalogOptions?.force,
+    }),
 })
 
 const {
@@ -3193,6 +3206,7 @@ const selectedElementDiagramStyle = computed((): DiagramStyle | undefined => {
       instance,
       node: modelNode ?? null,
       notationId,
+      components: state.value.components,
     })
     if (!componentId) return withInstanceDimensions(undefined, instance)
     const component = state.value.components.find(item => item.id === componentId)
@@ -3272,6 +3286,7 @@ const restoreStyleFromNotation = () => {
       instance,
       node: modelNode ?? null,
       notationId,
+      components: state.value.components,
     })
     const component = componentId
       ? state.value.components.find(

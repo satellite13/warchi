@@ -130,11 +130,13 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       instance: sourceInstance,
       node: sourceNode,
       notationId,
+      components: options.state.value.components,
     })
     const targetComponentId = resolveInstanceComponentId({
       instance: targetInstance,
       node: targetNode,
       notationId,
+      components: options.state.value.components,
     })
     if (!sourceComponentId || !targetComponentId) {
       if (reportErrors) setTranslatedUiError('models.noComponentsForLink')
@@ -690,7 +692,12 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     showReuseLinkModal.value = false
   }
 
-  const canConnect = (sourceModelNodeId: string, targetModelNodeId: string): boolean => {
+  const canConnect = (
+    sourceModelNodeId: string,
+    targetModelNodeId: string,
+    sourceInstanceId?: string,
+    targetInstanceId?: string
+  ): boolean => {
     if (options.isRelationRulesLoading.value) return false
     if (
       options.isDiagramNoteModelNodeId(sourceModelNodeId) ||
@@ -704,7 +711,13 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     ) {
       return true
     }
-    const allowed = allowedRelationsForConnection(sourceModelNodeId, targetModelNodeId, false)
+    const allowed = allowedRelationsForConnection(
+      sourceModelNodeId,
+      targetModelNodeId,
+      false,
+      sourceInstanceId,
+      targetInstanceId
+    )
     return !!allowed && allowed.relations.length > 0
   }
 
@@ -718,7 +731,6 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
     const relation = options.state.value.relations.find(
       item => item.notationId === notationId && item.linkTypeId === link.linkTypeId
     )
-    if (!relation || !canConnect(link.sourceId, link.targetId)) return
     const source = diagram.parsedAttrs.instances.nodes.find(
       item => item.modelNodeId === link.sourceId
     )
@@ -726,6 +738,7 @@ export function useModelDiagramConnections(options: UseModelDiagramConnectionsOp
       item => item.modelNodeId === link.targetId
     )
     if (!source || !target) return
+    if (!relation || !canConnect(link.sourceId, link.targetId, source.id, target.id)) return
     setPendingConnection(link.sourceId, link.targetId, source.id, target.id)
     pendingRelationId.value = relation.id
     createOrReuseLink(link.id)

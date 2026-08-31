@@ -5,6 +5,7 @@ import {
   applyDiagramNotationMigration,
   buildComponentIdRemap,
   buildRelationIdRemap,
+  collectUsedOldNotationBindings,
 } from './migrateDiagramNotation'
 
 describe('migrateDiagramNotation', () => {
@@ -59,6 +60,7 @@ describe('migrateDiagramNotation', () => {
               x: 0,
               y: 0,
               attrs: {
+                notationComponentId: 'cmp-old',
                 componentProperties: {
                   'not-old': { 'cmp-old': { status: 'draft' } },
                 },
@@ -132,5 +134,163 @@ describe('migrateDiagramNotation', () => {
       diagram.parsedAttrs.instances.nodes[0]?.attrs?.componentProperties?.['not-new']?.['cmp-new']
         ?.status
     ).toBe('draft')
+    expect(diagram.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe('cmp-new')
+  })
+
+  it('drops an instance visual binding that has no target in the new notation', () => {
+    const diagram: EditorDiagram = {
+      id: 'd1',
+      name: 'D',
+      version: '1.0.0',
+      notationId: 'not-old',
+      modelId: 'm1',
+      ownerId: 'o1',
+      nodeId: null,
+      parsedAttrs: {
+        ...parseDiagramAttrs(null),
+        instances: {
+          nodes: [
+            {
+              id: 'inst-1',
+              modelNodeId: 'node-1',
+              x: 0,
+              y: 0,
+              attrs: { notationComponentId: 'cmp-gone' },
+            },
+          ],
+          edges: [],
+        },
+      },
+    }
+    const nodes: EditorNode[] = [
+      {
+        id: 'node-1',
+        name: 'N1',
+        modelId: 'm1',
+        ownerId: 'o1',
+        nodeTypeId: 'nt1',
+        parentNodeId: null,
+        parsedAttrs: {
+          ...parseNodeAttrs(null),
+          notationComponents: {
+            'not-old': { componentId: 'cmp-old' },
+            'not-new': { componentId: 'cmp-new' },
+          },
+        },
+      },
+    ]
+
+    applyDiagramNotationMigration({
+      diagram,
+      nodes,
+      links: [],
+      oldNotationId: 'not-old',
+      newNotationId: 'not-new',
+      componentRemap: new Map([['cmp-old', 'cmp-new']]),
+      relationRemap: new Map(),
+    })
+
+    expect(diagram.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBeUndefined()
+  })
+
+  it('writes a node binding from a remapped instance when the node has no old notation key', () => {
+    const diagram: EditorDiagram = {
+      id: 'd1',
+      name: 'D',
+      version: '1.0.0',
+      notationId: 'not-old',
+      modelId: 'm1',
+      ownerId: 'o1',
+      nodeId: null,
+      parsedAttrs: {
+        ...parseDiagramAttrs(null),
+        instances: {
+          nodes: [
+            {
+              id: 'inst-1',
+              modelNodeId: 'node-1',
+              x: 0,
+              y: 0,
+              attrs: { notationComponentId: 'cmp-old' },
+            },
+          ],
+          edges: [],
+        },
+      },
+    }
+    const nodes: EditorNode[] = [
+      {
+        id: 'node-1',
+        name: 'N1',
+        modelId: 'm1',
+        ownerId: 'o1',
+        nodeTypeId: 'nt1',
+        parentNodeId: null,
+        parsedAttrs: parseNodeAttrs(null),
+      },
+    ]
+
+    applyDiagramNotationMigration({
+      diagram,
+      nodes,
+      links: [],
+      oldNotationId: 'not-old',
+      newNotationId: 'not-new',
+      componentRemap: new Map([['cmp-old', 'cmp-new']]),
+      relationRemap: new Map(),
+    })
+
+    expect(nodes[0]!.parsedAttrs.notationComponents['not-new']?.componentId).toBe('cmp-new')
+    expect(diagram.parsedAttrs.instances.nodes[0]?.attrs?.notationComponentId).toBe('cmp-new')
+  })
+
+  it('collects instance visual ids that are missing from node-level bindings', () => {
+    const diagram: EditorDiagram = {
+      id: 'd1',
+      name: 'D',
+      version: '1.0.0',
+      notationId: 'not-old',
+      modelId: 'm1',
+      ownerId: 'o1',
+      nodeId: null,
+      parsedAttrs: {
+        ...parseDiagramAttrs(null),
+        instances: {
+          nodes: [
+            {
+              id: 'inst-1',
+              modelNodeId: 'node-1',
+              x: 0,
+              y: 0,
+              attrs: { notationComponentId: 'cmp-instance-only' },
+            },
+          ],
+          edges: [],
+        },
+      },
+    }
+    const nodes: EditorNode[] = [
+      {
+        id: 'node-1',
+        name: 'N1',
+        modelId: 'm1',
+        ownerId: 'o1',
+        nodeTypeId: 'nt1',
+        parentNodeId: null,
+        parsedAttrs: {
+          ...parseNodeAttrs(null),
+          notationComponents: { 'not-old': { componentId: 'cmp-node' } },
+        },
+      },
+    ]
+
+    const used = collectUsedOldNotationBindings({
+      diagram,
+      nodes,
+      links: [],
+      oldNotationId: 'not-old',
+    })
+
+    expect([...used.componentIds].sort()).toEqual(['cmp-instance-only', 'cmp-node'])
   })
 })

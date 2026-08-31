@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.7] - 2026-08-31
+
+### Fixed
+- Switching a diagram to a newer notation version no longer resets figure styles to defaults or blocks connections that the new version allows.
+- Components added in the new notation version now appear on the palette after the switch.
+
 ## [0.25.6] - 2026-08-31
 
 ### Added

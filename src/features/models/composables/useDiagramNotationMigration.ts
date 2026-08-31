@@ -28,6 +28,10 @@ export function useDiagramNotationMigration(options: {
     notationId: string,
     options?: { force?: boolean }
   ) => Promise<void>
+  ensureNotationImportCatalog: (
+    notationId: string,
+    options?: { force?: boolean }
+  ) => Promise<void>
 }) {
   const showMigrateModal = ref(false)
   const migrateTarget = ref<NotationResponse | null>(null)
@@ -61,11 +65,10 @@ export function useDiagramNotationMigration(options: {
     relations: RelationResponse[],
     notationId: string
   ) => {
-    const componentById = new Map(options.state.value.components.map(item => [item.id, item]))
-    for (const component of components) {
-      componentById.set(component.id, component)
-    }
-    options.state.value.components = [...componentById.values()]
+    options.state.value.components = [
+      ...options.state.value.components.filter(item => item.notationId !== notationId),
+      ...components,
+    ]
 
     options.state.value.relations = [
       ...options.state.value.relations.filter(item => item.notationId !== notationId),
@@ -164,6 +167,7 @@ export function useDiagramNotationMigration(options: {
       }
 
       mergeCatalogEntities(newComponents, newRelations, target.id)
+      await options.ensureNotationImportCatalog(target.id, { force: true })
       options.markDiagramDirty(diagram.id)
       for (const nodeId of touchedNodeIds) {
         if (options.state.value.nodes.some(node => node.id === nodeId)) {

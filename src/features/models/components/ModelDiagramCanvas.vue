@@ -3941,7 +3941,7 @@ defineExpose({
           </button>
         </AppTooltip>
 
-        <div v-if="paletteVisible" class="canvas-palette">
+        <div v-if="paletteVisible" class="canvas-palette" :key="activeNotationId ?? 'none'">
         <div class="canvas-palette__header">
           <UiIcon name="palette" />
           <span>{{ t('diagram.palette') }}</span>

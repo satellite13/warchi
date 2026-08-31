@@ -1088,6 +1088,14 @@ const {
   markNodeDirty,
   markLinkDirty,
   ensureNotationRelationsAndRules,
+  ensureNotationImportCatalog: (notationId, catalogOptions) =>
+    ensureNotationImportCatalog({
+      modelId: state.value.modelId,
+      notationId,
+      state,
+      ensureNotationRelationsAndRules,
+      force: catalogOptions?.force,
+    }),
 })
 
 const {

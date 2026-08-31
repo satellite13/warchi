@@ -7,9 +7,16 @@ import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
-import SearchableSelect from '@/components/forms/SearchableSelect.vue'
-import NameVersionForm from '@/components/forms/NameVersionForm.vue'
+import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
+import ChoiceListModal from './components/modals/ChoiceListModal.vue'
+import CreateDiagramModal from './components/modals/CreateDiagramModal.vue'
+import CreateNodeModal from './components/modals/CreateNodeModal.vue'
+import DiagramJsonModal from './components/modals/DiagramJsonModal.vue'
+import DiagramTrashConflictModal from './components/modals/DiagramTrashConflictModal.vue'
+import LinkDeleteModal from './components/modals/LinkDeleteModal.vue'
+import MigrateNotationModal from './components/modals/MigrateNotationModal.vue'
+import NoteEditorModal from './components/modals/NoteEditorModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
@@ -56,19 +63,7 @@ import {
   withSelectedDiagramQuery,
 } from './utils/modelEditorDiagramLink'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
-import { prepareValidationScriptRun } from './composables/prepareValidationScriptRun'
-import { buildDiagramScriptSnapshot } from '@/features/validation-scripts/sandbox/buildDiagramScriptSnapshot'
-import { createDiagramScriptQueryHost } from '@/features/validation-scripts/sandbox/diagramScriptQueryHost'
-import {
-  fetchGraphNeighbors,
-  resolveModelLinks,
-  resolveModelNodes,
-  searchModelNodes,
-} from './composables/modelScopedApi'
-import { applyDiagramScriptCommands } from '@/features/validation-scripts/sandbox/applyDiagramScriptCommands'
-import { validateCommandQueue } from '@/features/validation-scripts/sandbox/diagramScriptCommands'
-import type { DiagramScriptCommand } from '@/features/validation-scripts/sandbox/diagramScriptCommands'
-import { resolveCompatibleNotationComponents } from './modelAttrs'
+import { useModelEditorScriptRun } from './composables/useModelEditorScriptRun'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
 import {
@@ -128,7 +123,6 @@ import { appendDiagramCaption } from '@/utils/diagramSvgCaption'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
 import { downloadModelPackage } from './composables/useModelPackage'
 import ValidationScriptsRunModal from '@/features/validation-scripts/components/ValidationScriptsRunModal.vue'
-import type { ValidationIssue } from '@/features/validation-scripts/sandbox/types'
 import type {
   DiagramReferenceResponse,
   LinkResponse,
@@ -340,164 +334,6 @@ assignScopedReload({
   invalidate: scopedReload.invalidate,
 })
 const showShareModal = ref(false)
-const showValidationScriptsModal = ref(false)
-const validationRunPayload = shallowRef<
-  Extract<ReturnType<typeof prepareValidationScriptRun>, { ok: true }>['payload'] | null
->(null)
-
-function openValidationScriptsModal(): void {
-  if (!model.value || !selectedDiagramId.value) return
-  const prepared = prepareValidationScriptRun({
-    state: state.value,
-    modelName: model.value.name,
-    modelVersion: model.value.version,
-    openDiagramId: selectedDiagramId.value,
-  })
-  validationRunPayload.value = prepared.ok
-    ? prepared.payload
-    : buildDiagramScriptSnapshot({
-        state: state.value,
-        modelName: model.value.name,
-        modelVersion: model.value.version,
-        openDiagramId: null,
-      })
-  showValidationScriptsModal.value = true
-}
-
-async function handleDiagramScriptQuery(
-  method: string,
-  args: Record<string, unknown>
-): Promise<unknown> {
-  const host = createDiagramScriptQueryHost({
-    modelId: state.value.modelId,
-    fetchNeighbors: fetchGraphNeighbors,
-    search: searchModelNodes,
-    resolveLinks: resolveModelLinks,
-  })
-  const result = await host.handle({ method, args })
-  if ('error' in result) throw new Error(result.error)
-  return result.data
-}
-
-async function handleApplyDiagramScriptCommands(commands: DiagramScriptCommand[]): Promise<void> {
-  const diagram = activeDiagram.value
-  if (!diagram || isDiagramReadOnly.value) {
-    setUiError(t('validationScripts.applyReadOnly'))
-    return
-  }
-  const addNodeIds = commands
-    .filter((command): command is Extract<DiagramScriptCommand, { type: 'addInstance' }> =>
-      command.type === 'addInstance'
-    )
-    .map((command) => command.nodeId)
-  const addLinkIds = commands
-    .filter((command): command is Extract<DiagramScriptCommand, { type: 'addEdge' }> =>
-      command.type === 'addEdge'
-    )
-    .map((command) => command.linkId)
-
-  const nodesResult = await resolveModelNodes(state.value.modelId, addNodeIds)
-  if (!nodesResult.success) {
-    setUiError(nodesResult.error.message)
-    return
-  }
-  const linksResult = await resolveModelLinks(state.value.modelId, {
-    linkIds: addLinkIds,
-    endpointNodeIds: [],
-  })
-  if (!linksResult.success) {
-    setUiError(linksResult.error.message)
-    return
-  }
-  if (nodesResult.data.missingIds.length > 0 || linksResult.data.missingLinkIds.length > 0) {
-    setUiError(t('validationScripts.applyMissingEntity'))
-    return
-  }
-
-  const guard = partialStore.store.beginRequest('diagram-script-apply')
-  if (!partialStore.mergePartialEntities(nodesResult.data.nodes, linksResult.data.links, guard)) {
-    setUiError(t('validationScripts.applyMissingEntity'))
-    return
-  }
-
-  const linkEndpoints: Record<string, { sourceId: string; targetId: string }> = {}
-  for (const link of linksResult.data.links) {
-    linkEndpoints[link.id] = { sourceId: link.sourceId, targetId: link.targetId }
-  }
-
-  const validated = validateCommandQueue({
-    instanceModelNodeIds: new Set(
-      diagram.parsedAttrs.instances.nodes.map((instance) => instance.modelNodeId)
-    ),
-    instanceIds: new Set(diagram.parsedAttrs.instances.nodes.map((instance) => instance.id)),
-    edgeIds: new Set(diagram.parsedAttrs.instances.edges.map((instance) => instance.id)),
-    canvasLinkIds: new Set(
-      diagram.parsedAttrs.instances.edges.map((instance) => instance.modelLinkId)
-    ),
-    linkEndpoints,
-    commands,
-  })
-  if (!validated.ok) {
-    setUiError(t('validationScripts.applyInvalidCommands'))
-    return
-  }
-
-  const componentByNodeId: Record<string, string> = {}
-  for (const nodeId of addNodeIds) {
-    const node = state.value.nodes.find((item) => item.id === nodeId && !item._isDeleted)
-    if (!node) {
-      setUiError(t('validationScripts.applyMissingEntity'))
-      return
-    }
-    const matching = resolveCompatibleNotationComponents({
-      node,
-      notationId: diagram.notationId,
-      components: state.value.components,
-    })
-    if (matching.length !== 1) {
-      setUiError(t('validationScripts.applyNeedComponent'))
-      return
-    }
-    componentByNodeId[nodeId] = matching[0]!.id
-  }
-
-  applyDiagramScriptCommands({
-    diagram,
-    commands,
-    linkEndpoints,
-    componentByNodeId,
-    executeHistory: executeDiagramHistoryCommand,
-    onApplied: () => {
-      markDiagramDirty(diagram.id)
-      invalidateTraceabilityDiagrams()
-    },
-  })
-  closeValidationScriptsModal()
-}
-
-function closeValidationScriptsModal(): void {
-  showValidationScriptsModal.value = false
-  validationRunPayload.value = null
-}
-
-function handleValidationIssueSelect(issue: ValidationIssue): void {
-  closeValidationScriptsModal()
-  const target = issue.target
-  if (!target) return
-  if (target.kind === 'diagram') {
-    selectDiagram(target.id)
-    return
-  }
-  if (target.kind === 'node' || target.kind === 'folder') {
-    selectedNodeId.value = target.id
-    treePanelRef.value?.focusNode?.(target.id)
-    selectedModelNodeIds.value = [target.id]
-    return
-  }
-  if (target.kind === 'link') {
-    selectedModelLinkId.value = target.id
-  }
-}
 const showCompareModal = ref(false)
 
 const versionDiff = useModelVersionDiff()
@@ -2062,6 +1898,33 @@ const selectDiagram = (diagramId: string) => {
   }
   applyDiagramSelection(diagramId)
 }
+
+const {
+  showValidationScriptsModal,
+  validationRunPayload,
+  openValidationScriptsModal,
+  closeValidationScriptsModal,
+  handleDiagramScriptQuery,
+  handleApplyDiagramScriptCommands,
+  handleValidationIssueSelect,
+} = useModelEditorScriptRun({
+  model,
+  state,
+  selectedDiagramId,
+  activeDiagram,
+  isDiagramReadOnly,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  partialStore,
+  executeDiagramHistoryCommand,
+  markDiagramDirty,
+  invalidateTraceabilityDiagrams,
+  selectDiagram,
+  selectedNodeId,
+  selectedModelNodeIds,
+  selectedModelLinkId,
+  focusTreeNode: nodeId => treePanelRef.value?.focusNode?.(nodeId),
+})
 
 const cancelLinkDelete = () => {
   pendingDeleteLinkId.value = null
@@ -4000,41 +3863,15 @@ onBeforeUnmount(() => {
     @dismiss="dismissBatchSaveConflict"
   />
 
-  <BaseModal
+  <DiagramTrashConflictModal
     v-if="diagramNameVersionConflict?.error === 'DIAGRAM_NAME_VERSION_IN_TRASH'"
-    :title="t('models.diagramTrashConflictTitle')"
-    max-width="520px"
+    :name="diagramNameVersionConflict.name"
+    :version="diagramNameVersionConflict.version"
+    :suggested-version="diagramNameVersionConflict.suggestedVersion"
     @close="dismissDiagramNameVersionConflict"
-  >
-    <p class="confirm-modal__text">
-      {{
-        t('models.diagramTrashConflictMessage', {
-          name: diagramNameVersionConflict.name,
-          version: diagramNameVersionConflict.version,
-        })
-      }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="dismissDiagramNameVersionConflict">
-        {{ t('common.cancel') }}
-      </button>
-      <button
-        type="button"
-        class="btn btn--secondary"
-        :disabled="!diagramNameVersionConflict.suggestedVersion"
-        @click="resolveDiagramTrashBump"
-      >
-        {{
-          t('models.diagramTrashConflictBump', {
-            version: diagramNameVersionConflict.suggestedVersion ?? '',
-          })
-        }}
-      </button>
-      <button type="button" class="btn btn--danger" @click="resolveDiagramTrashReplace">
-        {{ t('models.diagramTrashConflictReplace') }}
-      </button>
-    </template>
-  </BaseModal>
+    @bump="resolveDiagramTrashBump"
+    @replace="resolveDiagramTrashReplace"
+  />
 
   <LayoutPreviewModal
     v-if="layoutPreviewBefore"
@@ -4046,255 +3883,80 @@ onBeforeUnmount(() => {
     @error="msg => setUiError(msg || t('toolbar.autoLayoutFailed'))"
   />
 
-  <BaseModal
+  <CreateNodeModal
     v-if="showCreateNodeModal"
     :title="createNodeModalTitle"
-    max-width="440px"
+    :kind="createNodeModal.kind"
+    :name="newNodeName"
+    :node-type-id="newNodeTypeId"
+    :node-type-options="
+      nonDirectoryNodeTypes.map(typeItem => ({ id: typeItem.id, label: typeItem.name }))
+    "
+    :can-create="canCreateNodeFromModal"
+    :pending="createNodePending"
     @close="closeCreateNodeModal"
-  >
-    <div class="form-grid">
-      <label>
-        <span>{{ t('common.name') }}</span>
-        <input
-          v-model="newNodeName"
-          class="form-input"
-          :disabled="createNodePending"
-          :placeholder="
-            createNodeModal.kind === 'folder'
-              ? t('models.newFolderPlaceholder')
-              : t('models.newNodePlaceholder')
-          "
-          @keydown.enter.prevent="canCreateNodeFromModal && !createNodePending && createNode()"
-        />
-      </label>
-      <label v-if="createNodeModal.kind === 'node'">
-        <span>{{ t('models.nodeTypeLabel') }}</span>
-        <SearchableSelect
-          v-model="newNodeTypeId"
-          :options="
-            nonDirectoryNodeTypes.map(typeItem => ({ id: typeItem.id, label: typeItem.name }))
-          "
-          :placeholder="t('models.selectType')"
-          :search-placeholder="t('models.typeSearchPlaceholder')"
-          :empty-text="t('common.nothingFound')"
-          :disabled="createNodePending"
-        />
-      </label>
-      <div v-else class="form-hint">{{ t('models.directoryTypeHint') }}</div>
-    </div>
-    <template #footer>
-      <button
-        type="button"
-        class="btn btn--secondary"
-        :disabled="createNodePending"
-        @click="closeCreateNodeModal"
-      >
-        {{ t('common.cancel') }}
-      </button>
-      <button
-        type="button"
-        class="btn btn--primary"
-        :disabled="!canCreateNodeFromModal || createNodePending"
-        @click="createNode"
-      >
-        {{ t('common.create') }}
-      </button>
-    </template>
-  </BaseModal>
+    @create="createNode"
+    @update:name="newNodeName = $event"
+    @update:node-type-id="newNodeTypeId = $event"
+  />
 
-  <BaseModal
+  <MigrateNotationModal
     v-if="showMigrateModal && migrateTarget"
-    :title="t('diagram.migrateNotationTitle')"
-    max-width="520px"
+    :target-name="migrateTarget.name"
+    :target-version="migrateTarget.version"
+    :unmapped-components="migratePreviewUnmapped.components"
+    :unmapped-relations="migratePreviewUnmapped.relations"
+    :migrating="isMigrating"
     @close="closeMigrateModal"
-  >
-    <p class="leave-text">
-      {{
-        t('diagram.migrateNotationConfirm', {
-          name: migrateTarget.name,
-          version: migrateTarget.version,
-        })
-      }}
-    </p>
-    <p class="leave-text">{{ t('diagram.migrateNotationHint') }}</p>
-    <div
-      v-if="migratePreviewUnmapped.components.length || migratePreviewUnmapped.relations.length"
-      class="leave-text leave-text--warning"
-    >
-      <p v-if="migratePreviewUnmapped.components.length">
-        {{
-          t('diagram.migrateNotationUnmappedComponents', {
-            list: migratePreviewUnmapped.components.join(', '),
-          })
-        }}
-      </p>
-      <p v-if="migratePreviewUnmapped.relations.length">
-        {{
-          t('diagram.migrateNotationUnmappedRelations', {
-            list: migratePreviewUnmapped.relations.join(', '),
-          })
-        }}
-      </p>
-    </div>
-    <template #footer>
-      <button
-        type="button"
-        class="btn btn--secondary"
-        :disabled="isMigrating"
-        @click="closeMigrateModal"
-      >
-        {{ t('common.cancel') }}
-      </button>
-      <button
-        type="button"
-        class="btn btn--primary"
-        :disabled="isMigrating"
-        @click="confirmMigrateNotation"
-      >
-        {{
-          isMigrating ? t('diagram.migrateNotationInProgress') : t('diagram.migrateNotationAction')
-        }}
-      </button>
-    </template>
-  </BaseModal>
+    @confirm="confirmMigrateNotation"
+  />
 
-  <BaseModal
+  <NoteEditorModal
     v-if="showNoteEditorModal"
-    :title="t('diagram.editNote')"
-    max-width="560px"
+    :text="noteEditorText"
     @close="cancelNoteEditor"
-  >
-    <div class="form-grid">
-      <label>
-        <span>{{ t('models.noteTextLabel') }}</span>
-        <textarea
-          v-model="noteEditorText"
-          class="form-textarea form-textarea--lg"
-          rows="8"
-          :placeholder="t('models.noteTextPlaceholder')"
-        />
-      </label>
-    </div>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelNoteEditor">
-        {{ t('common.cancel') }}
-      </button>
-      <button type="button" class="btn btn--primary" @click="saveNoteEditor">
-        {{ t('common.save') }}
-      </button>
-    </template>
-  </BaseModal>
+    @save="saveNoteEditor"
+    @update:text="noteEditorText = $event"
+  />
 
-  <BaseModal
+  <CreateDiagramModal
     v-if="showCreateDiagramModal"
-    :title="t('models.createDiagramTitle')"
-    max-width="460px"
+    :name="newDiagramName"
+    :version="newDiagramVersion"
+    :notation-id="newDiagramNotationId"
+    :notation-options="
+      state.notations.map(notation => ({
+        id: notation.id,
+        label: `${notation.name} (${notation.version})`,
+      }))
+    "
+    :has-name-version-conflict="hasDiagramNameVersionConflict"
+    :trash-conflict="diagramTrashConflict"
+    :pending="createDiagramPending"
     @close="showCreateDiagramModal = false"
-  >
-    <div class="form-grid">
-      <NameVersionForm
-        v-model:name="newDiagramName"
-        v-model:version="newDiagramVersion"
-        :name-label="t('common.name')"
-        :version-label="t('common.version')"
-        :name-placeholder="t('models.newDiagramPlaceholder')"
-        version-placeholder="1.0.0"
-      />
-      <label>
-        <span>{{ t('models.notationLabel') }}</span>
-        <SearchableSelect
-          v-model="newDiagramNotationId"
-          :options="
-            state.notations.map((notation) => ({
-              id: notation.id,
-              label: `${notation.name} (${notation.version})`,
-            }))
-          "
-          :placeholder="t('models.notationLabel')"
-        />
-      </label>
-      <div v-if="hasDiagramNameVersionConflict" class="form-error">
-        {{ t('models.diagramConflictMessage') }}
-      </div>
-      <div v-else-if="diagramTrashConflict" class="form-error">
-        {{
-          t('models.diagramTrashConflictMessage', {
-            name: diagramTrashConflict.name,
-            version: diagramTrashConflict.version,
-          })
-        }}
-      </div>
-    </div>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="showCreateDiagramModal = false">
-        {{ t('common.cancel') }}
-      </button>
-      <template v-if="diagramTrashConflict">
-        <button
-          type="button"
-          class="btn btn--secondary"
-          :disabled="!diagramTrashConflict.suggestedVersion"
-          @click="createDiagramWithBumpedVersion"
-        >
-          {{
-            t('models.diagramTrashConflictBump', {
-              version: diagramTrashConflict.suggestedVersion ?? '',
-            })
-          }}
-        </button>
-        <button type="button" class="btn btn--danger" @click="createDiagramReplacingDeleted">
-          {{ t('models.diagramTrashConflictReplace') }}
-        </button>
-      </template>
-      <button
-        v-else
-        type="button"
-        class="btn btn--primary"
-        :disabled="hasDiagramNameVersionConflict || createDiagramPending"
-        @click="createDiagram"
-      >
-        {{ t('common.create') }}
-      </button>
-    </template>
-  </BaseModal>
+    @create="createDiagram"
+    @bump-version="createDiagramWithBumpedVersion"
+    @replace-deleted="createDiagramReplacingDeleted"
+    @update:name="newDiagramName = $event"
+    @update:version="newDiagramVersion = $event"
+    @update:notation-id="newDiagramNotationId = $event"
+  />
 
-  <BaseModal
+  <ChoiceListModal
     v-if="showComponentChoiceModal"
     :title="t('diagram.selectComponent')"
-    max-width="420px"
+    :options="componentChoiceOptions"
     @close="handleComponentChoiceModalClose"
-  >
-    <div class="choice-list">
-      <button
-        v-for="option in componentChoiceOptions"
-        :key="option.id"
-        type="button"
-        class="choice-item"
-        @click="finalizeComponentChoiceForDiagram(option.id)"
-      >
-        {{ option.name }}
-      </button>
-    </div>
-  </BaseModal>
+    @select="finalizeComponentChoiceForDiagram"
+  />
 
-  <BaseModal
+  <ChoiceListModal
     v-if="showRelationChoiceModal"
     :title="t('diagram.selectRelation')"
-    max-width="420px"
+    :options="relationChoiceOptions"
     @close="showRelationChoiceModal = false"
-  >
-    <div class="choice-list">
-      <button
-        v-for="option in relationChoiceOptions"
-        :key="option.id"
-        type="button"
-        class="choice-item"
-        @click="finalizeConnection(option.id)"
-      >
-        {{ option.name }}
-      </button>
-    </div>
-  </BaseModal>
+    @select="finalizeConnection"
+  />
 
   <LinkReuseModal
     v-if="showReuseLinkModal"
@@ -4304,43 +3966,28 @@ onBeforeUnmount(() => {
     @create-new="handleCreateNewLinkFromReuseModal"
   />
 
-  <BaseModal
+  <UnsavedChangesModal
     v-if="showDiagramSwitchModal"
+    variant="save-or-discard"
     :title="t('models.unsavedChangesTitle')"
+    :message="
+      pendingDiagramAction === 'close'
+        ? t('models.saveBeforeCloseDiagram')
+        : t('models.saveBeforeSwitchDiagram')
+    "
+    :stay-label="t('common.cancel')"
+    :confirm-label="t('models.dontSave')"
+    :save-label="
+      pendingDiagramAction === 'close' ? t('models.saveAndClose') : t('models.saveAndSwitch')
+    "
     max-width="500px"
+    :confirm-disabled="isLoading || isSaving"
+    :save-disabled="isSaving"
+    @stay="cancelDiagramSwitch"
+    @confirm="switchDiagramWithoutSave"
+    @save="saveAndSwitchDiagram"
     @close="cancelDiagramSwitch"
-  >
-    <p class="leave-text">
-      {{
-        pendingDiagramAction === 'close'
-          ? t('models.saveBeforeCloseDiagram')
-          : t('models.saveBeforeSwitchDiagram')
-      }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelDiagramSwitch">
-        {{ t('common.cancel') }}
-      </button>
-      <button
-        type="button"
-        class="btn btn--secondary"
-        :disabled="isLoading || isSaving"
-        @click="switchDiagramWithoutSave"
-      >
-        {{ t('models.dontSave') }}
-      </button>
-      <button
-        type="button"
-        class="btn btn--primary"
-        :disabled="isSaving"
-        @click="saveAndSwitchDiagram"
-      >
-        {{
-          pendingDiagramAction === 'close' ? t('models.saveAndClose') : t('models.saveAndSwitch')
-        }}
-      </button>
-    </template>
-  </BaseModal>
+  />
 
   <ConfirmModal
     v-if="showNodeDeleteModal"
@@ -4362,36 +4009,17 @@ onBeforeUnmount(() => {
     @confirm="confirmDiagramDelete"
   />
 
-  <BaseModal
+  <LinkDeleteModal
     v-if="showLinkDeleteModal"
-    :title="t('models.deleteLinkTitle')"
-    max-width="500px"
+    :allow-remove-from-model="
+      !!pendingDeleteLinkId &&
+      !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) &&
+      !isUntypedModelLinkId(pendingDeleteLinkId)
+    "
     @close="cancelLinkDelete"
-  >
-    <p class="leave-text">
-      {{ t('models.deleteLinkQuestion') }}
-    </p>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="cancelLinkDelete">
-        {{ t('common.cancel') }}
-      </button>
-      <button type="button" class="btn btn--secondary" @click="removeLinkFromCurrentDiagram">
-        {{ t('models.removeLinkFromDiagram') }}
-      </button>
-      <button
-        v-if="
-          pendingDeleteLinkId &&
-          !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) &&
-          !isUntypedModelLinkId(pendingDeleteLinkId)
-        "
-        type="button"
-        class="btn btn--danger"
-        @click="removeLinkFromModel"
-      >
-        {{ t('models.removeLinkFromModel') }}
-      </button>
-    </template>
-  </BaseModal>
+    @remove-from-diagram="removeLinkFromCurrentDiagram"
+    @remove-from-model="removeLinkFromModel"
+  />
 
   <ConfirmModal
     v-if="showLeaveDialog"
@@ -4405,22 +4033,12 @@ onBeforeUnmount(() => {
     @confirm="confirmLeave"
   />
 
-  <BaseModal
+  <DiagramJsonModal
     v-if="showDiagramJson"
-    :title="t('models.diagramJsonTitle')"
-    max-width="600px"
+    :content="diagramJsonContent"
     @close="showDiagramJson = false"
-  >
-    <pre class="json-viewer">{{ diagramJsonContent }}</pre>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="copyDiagramJson">
-        {{ t('models.copy') }}
-      </button>
-      <button type="button" class="btn btn--secondary" @click="showDiagramJson = false">
-        {{ t('common.close') }}
-      </button>
-    </template>
-  </BaseModal>
+    @copy="copyDiagramJson"
+  />
 
   <ShareAccessModal
     v-if="showShareModal && model"
@@ -4653,44 +4271,6 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.form-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.form-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.form-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-.choice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.choice-item {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 9px 10px;
-  text-align: left;
-  cursor: pointer;
-}
-
 .leave-text {
   margin: 0;
   color: var(--text-muted);
@@ -4719,20 +4299,6 @@ onBeforeUnmount(() => {
 .model-import-report--scrollable {
   max-height: min(220px, 40vh);
   overflow-y: auto;
-}
-
-.json-viewer {
-  margin: 0;
-  padding: 12px;
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 12px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 420px;
-  overflow: auto;
 }
 
 .model-canvas-area {

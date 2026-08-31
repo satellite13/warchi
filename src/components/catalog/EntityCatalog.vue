@@ -238,26 +238,31 @@ function handleExport(group: {
     <header class="home-header">
       <div class="catalog-toolbar">
         <div class="catalog-toolbar__actions">
-          <button
-            type="button"
-            class="btn btn--secondary btn--xs btn--toolbar"
-            :title="t(`${i18nPrefix}.createDescription`)"
-            @click="openCreateModal"
-          >
-            <UiIcon name="add" />
-            <span>{{ t(`${i18nPrefix}.createTitle`) }}</span>
-          </button>
-          <button
+          <AppTooltip :text="t(`${i18nPrefix}.createDescription`)" placement="bottom">
+            <button
+              type="button"
+              class="btn btn--secondary btn--xs btn--toolbar"
+              @click="openCreateModal"
+            >
+              <UiIcon name="add" />
+              <span>{{ t(`${i18nPrefix}.createTitle`) }}</span>
+            </button>
+          </AppTooltip>
+          <AppTooltip
             v-if="canImportPackage"
-            type="button"
-            class="btn btn--secondary btn--xs btn--toolbar"
-            :title="t(`${i18nPrefix}.packageImportDescription`)"
-            :disabled="actionBusy"
-            @click="emit('importPackage')"
+            :text="t(`${i18nPrefix}.packageImportDescription`)"
+            placement="bottom"
           >
-            <UiIcon name="upload" />
-            <span>{{ t(`${i18nPrefix}.packageImportTitle`) }}</span>
-          </button>
+            <button
+              type="button"
+              class="btn btn--secondary btn--xs btn--toolbar"
+              :disabled="actionBusy"
+              @click="emit('importPackage')"
+            >
+              <UiIcon name="upload" />
+              <span>{{ t(`${i18nPrefix}.packageImportTitle`) }}</span>
+            </button>
+          </AppTooltip>
         </div>
         <ListHeader
           v-model="searchQuery"

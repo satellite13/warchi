@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test component access pattern */
-/* eslint-disable vue/one-component-per-file -- test files use inline components for setup() */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref, defineComponent } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'

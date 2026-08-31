@@ -13,9 +13,9 @@ const initials = computed(() => {
 </script>
 
 <template>
-  <span :class="['avatar', `avatar--${size || 'md'}`]" :title="label">
-    {{ initials }}
-  </span>
+  <AppTooltip :text="label ?? ''" placement="bottom">
+    <span :class="['avatar', `avatar--${size || 'md'}`]">{{ initials }}</span>
+  </AppTooltip>
 </template>
 
 <style scoped>

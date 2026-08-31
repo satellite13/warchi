@@ -3671,27 +3671,33 @@ onBeforeUnmount(() => {
           }"
         >
           <template v-if="activeDiagram && diagramScopeReady && !isDiagramReadOnly">
-            <button
+            <AppTooltip
               v-if="!canvasSettingsVisible"
-              type="button"
-              class="canvas-settings-toggle"
-              :title="t('models.showDiagramSettings')"
-              @click="canvasSettingsVisible = true"
+              class="canvas-settings-toggle-wrap"
+              :text="t('models.showDiagramSettings')"
+              placement="right"
             >
-              <UiIcon name="settings" />
-            </button>
+              <button
+                type="button"
+                class="canvas-settings-toggle"
+                @click="canvasSettingsVisible = true"
+              >
+                <UiIcon name="settings" />
+              </button>
+            </AppTooltip>
             <div v-else class="canvas-settings">
               <div class="canvas-settings__header">
                 <UiIcon name="tune" />
                 <span>{{ t('common.settings') }}</span>
-                <button
-                  type="button"
-                  class="canvas-settings__hide"
-                  :title="t('models.hideDiagramSettings')"
-                  @click="canvasSettingsVisible = false"
-                >
-                  <UiIcon name="chevron_left" />
-                </button>
+                <AppTooltip :text="t('models.hideDiagramSettings')" placement="left">
+                  <button
+                    type="button"
+                    class="canvas-settings__hide"
+                    @click="canvasSettingsVisible = false"
+                  >
+                    <UiIcon name="chevron_left" />
+                  </button>
+                </AppTooltip>
               </div>
               <div class="canvas-settings__list">
                 <button
@@ -4738,10 +4744,13 @@ onBeforeUnmount(() => {
   color: var(--primary);
 }
 
-.canvas-settings-toggle {
+.canvas-settings-toggle-wrap {
   position: absolute;
   left: 6px;
   top: 10px;
+}
+
+.canvas-settings-toggle {
   width: 32px;
   height: 32px;
   border: 1px solid var(--border);

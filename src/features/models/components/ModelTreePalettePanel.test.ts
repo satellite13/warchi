@@ -193,7 +193,7 @@ describe('ModelTreePalettePanel', () => {
       },
     })
 
-    await wrapper.get('button[title="models.diagramCopy.title"]').trigger('click')
+    await wrapper.get('[text="models.diagramCopy.title"] button').trigger('click')
 
     expect(wrapper.emitted('copyDiagramToModel')).toEqual([['diagram-1']])
   })
@@ -337,10 +337,10 @@ describe('ModelTreePalettePanel', () => {
     await flushTree(wrapper)
 
     expect(wrapper.get('[data-tree-node-id="root-child"]').attributes('draggable')).toBe('true')
-    expect(wrapper.get('[title="models.addRootNode"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[text="models.addRootNode"] button').attributes('disabled')).toBeUndefined()
     expect(
       wrapper
-        .get('[data-tree-node-id="root-child"] [title="models.addChildNode"]')
+        .get('[data-tree-node-id="root-child"] [text="models.addChildNode"] button')
         .attributes('disabled')
     ).toBeUndefined()
   })
@@ -361,7 +361,7 @@ describe('ModelTreePalettePanel', () => {
 
     expect(
       wrapper
-        .get('[data-tree-node-id="new-folder"] [title="models.addChildNode"]')
+        .get('[data-tree-node-id="new-folder"] [text="models.addChildNode"] button')
         .attributes('disabled')
     ).toBeUndefined()
   })
@@ -385,7 +385,7 @@ describe('ModelTreePalettePanel', () => {
     ).toBe(false)
     expect(
       wrapper
-        .get('[data-tree-node-id="persisted-empty-folder"] [title="models.addChildNode"]')
+        .get('[data-tree-node-id="persisted-empty-folder"] [text="models.addChildNode"] button')
         .attributes('disabled')
     ).toBeUndefined()
   })

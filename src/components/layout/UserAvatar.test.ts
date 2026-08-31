@@ -1,45 +1,60 @@
 import { mount } from '@vue/test-utils'
 import { describe, it, expect } from 'vitest'
 import UserAvatar from './UserAvatar.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
+
+const mountAvatar = (props: { label?: string; size?: 'sm' | 'md' | 'lg' } = {}) =>
+  mount(UserAvatar, {
+    props,
+    global: { components: { AppTooltip } },
+  })
 
 describe('UserAvatar', () => {
   it('renders initials from label', () => {
-    const wrapper = mount(UserAvatar, { props: { label: 'John Doe' } })
-    expect(wrapper.text()).toBe('JD')
+    const wrapper = mountAvatar({ label: 'John Doe' })
+    expect(wrapper.find('.avatar').text()).toBe('JD')
   })
 
   it('defaults to md size class', () => {
-    const wrapper = mount(UserAvatar, { props: { label: 'Test' } })
-    expect(wrapper.find('span').classes()).toContain('avatar--md')
+    const wrapper = mountAvatar({ label: 'Test' })
+    expect(wrapper.find('.avatar').classes()).toContain('avatar--md')
   })
 
   it('applies sm size class', () => {
-    const wrapper = mount(UserAvatar, { props: { label: 'Test', size: 'sm' } })
-    expect(wrapper.find('span').classes()).toContain('avatar--sm')
+    const wrapper = mountAvatar({ label: 'Test', size: 'sm' })
+    expect(wrapper.find('.avatar').classes()).toContain('avatar--sm')
   })
 
   it('applies lg size class', () => {
-    const wrapper = mount(UserAvatar, { props: { label: 'Test', size: 'lg' } })
-    expect(wrapper.find('span').classes()).toContain('avatar--lg')
+    const wrapper = mountAvatar({ label: 'Test', size: 'lg' })
+    expect(wrapper.find('.avatar').classes()).toContain('avatar--lg')
   })
 
-  it('shows title attribute with label', () => {
-    const wrapper = mount(UserAvatar, { props: { label: 'Jane Smith' } })
-    expect(wrapper.find('span').attributes('title')).toBe('Jane Smith')
+  it('wraps avatar in AppTooltip with label as text', () => {
+    const wrapper = mountAvatar({ label: 'Jane Smith' })
+    const tooltip = wrapper.findComponent(AppTooltip)
+    expect(tooltip.exists()).toBe(true)
+    expect(tooltip.props('text')).toBe('Jane Smith')
+    expect(tooltip.props('placement')).toBe('bottom')
+  })
+
+  it('passes empty text to AppTooltip for undefined label', () => {
+    const wrapper = mountAvatar()
+    expect(wrapper.findComponent(AppTooltip).props('text')).toBe('')
   })
 
   it('shows "?" for undefined label', () => {
-    const wrapper = mount(UserAvatar, { props: {} })
-    expect(wrapper.text()).toBe('?')
+    const wrapper = mountAvatar()
+    expect(wrapper.find('.avatar').text()).toBe('?')
   })
 
   it('shows "?" for empty string label', () => {
-    const wrapper = mount(UserAvatar, { props: { label: '' } })
-    expect(wrapper.text()).toBe('?')
+    const wrapper = mountAvatar({ label: '' })
+    expect(wrapper.find('.avatar').text()).toBe('?')
   })
 
   it('has avatar base class', () => {
-    const wrapper = mount(UserAvatar, { props: { label: 'A B' } })
-    expect(wrapper.find('span').classes()).toContain('avatar')
+    const wrapper = mountAvatar({ label: 'A B' })
+    expect(wrapper.find('.avatar').classes()).toContain('avatar')
   })
 })

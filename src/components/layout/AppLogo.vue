@@ -5,7 +5,7 @@ import { useI18n } from "vue-i18n";
 const props = withDefaults(
   defineProps<{
     size?: "sm" | "md" | "lg";
-    /** When false, subtitle is only shown as native tooltip on the logo. */
+    /** When false, subtitle is only shown as a tooltip on the logo. */
     showSubtitle?: boolean;
   }>(),
   {
@@ -26,16 +26,15 @@ const logoTitle = computed(() =>
 </script>
 
 <template>
-  <div
-    :class="['logo', `logo--${size}`]"
-    :title="logoTitle"
-  >
-    <img class="logo__icon" src="/warchi.svg" alt="" />
-    <div class="logo__text">
-      <span class="logo__title">wArchi</span>
-      <span v-if="subtitleVisible" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
+  <AppTooltip :text="logoTitle ?? ''" placement="bottom">
+    <div :class="['logo', `logo--${size}`]">
+      <img class="logo__icon" src="/warchi.svg" alt="" />
+      <div class="logo__text">
+        <span class="logo__title">wArchi</span>
+        <span v-if="subtitleVisible" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
+      </div>
     </div>
-  </div>
+  </AppTooltip>
 </template>
 
 <style scoped>

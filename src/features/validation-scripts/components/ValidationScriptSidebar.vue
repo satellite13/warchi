@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ValidationScriptResponse } from '@/types/api'
 import { canEditByAccessPermission } from '@/utils/accessPermission'
+import { compareLocalizedEntityNames } from '@/utils/localeSort'
 import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
 import SidebarListItem from '@/components/list/SidebarListItem.vue'
 
@@ -30,15 +31,11 @@ const filteredScripts = computed(() => {
   })
 })
 
-const sortedScripts = computed(() => {
-  const localeTag = locale.value === 'ru' ? 'ru' : 'en'
-  return [...filteredScripts.value].sort((a, b) =>
-    (a.name || '~~~').localeCompare(b.name || '~~~', localeTag, {
-      sensitivity: 'base',
-      numeric: true,
-    }),
-  )
-})
+const sortedScripts = computed(() =>
+  [...filteredScripts.value].sort((a, b) =>
+    compareLocalizedEntityNames(a.name, b.name, locale.value),
+  ),
+)
 
 const totalCount = computed(() => props.scripts.length)
 </script>

@@ -1,349 +1,51 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue"
-import { useI18n } from "vue-i18n"
-import { useNodeShapes } from "@/composables/useNodeShapes"
-import type { NodeShapeResponse } from "@/types/api"
-import { DEFAULT_RECTANGLE_OUTLINE, createDefaultScaleSlice } from "@/domain/attrs/notationAttrs"
-import type { OutlineSegment, ScaleSlice } from "@/domain/attrs/notationAttrs"
-import {
-  hasEffectiveScaleSlice,
-  mergeScaleSliceIntoAttrs,
-  parseScaleSliceFromAttrs,
-} from "@/types/shapes"
-import BaseModal from "@/components/modals/BaseModal.vue"
-import DocumentEditorModal from "@/components/modals/DocumentEditorModal.vue"
-import ShareAccessModal from "@/components/modals/ShareAccessModal.vue"
-import UnsavedChangesModal from "@/components/modals/UnsavedChangesModal.vue"
-import ListDetailEditorLayout from "@/components/layout/ListDetailEditorLayout.vue"
-import SaveToast from "@/components/ui/SaveToast.vue"
-import ShapeSidebar from "./components/ShapeSidebar.vue"
-import ShapeForm from "./components/ShapeForm.vue"
-import { apiPost } from "@/composables/useApi"
-import { usePermissions } from "@/composables/usePermissions"
-import { useAuth } from "@/composables/useAuth"
-import { useDirtySelectionGuard } from "@/composables/useDirtySelectionGuard"
-import { useSaveErrorToast } from "@/composables/useSaveErrorToast"
-import { canEditByAccessPermission } from "@/utils/accessPermission"
-import {
-  resolveOwnerDisplayNames,
-  resolveOwnerLabel,
-} from "@/utils/resolveOwnerNames"
+import { useI18n } from 'vue-i18n'
+import BaseModal from '@/components/modals/BaseModal.vue'
+import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
+import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
+import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
+import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
+import SaveToast from '@/components/ui/SaveToast.vue'
+import ShapeSidebar from './components/ShapeSidebar.vue'
+import ShapeForm from './components/ShapeForm.vue'
+import { useShapeEditor } from './composables/useShapeEditor'
 
 const { t } = useI18n()
 const {
   list,
   isLoading,
-  fetchList,
-  fetchById,
-  create,
-  update,
-  remove
-} = useNodeShapes()
-
-const selectedShapeId = ref<string | null>(null)
-const selectedDetail = ref<NodeShapeResponse | null>(null)
-const isSaving = ref(false)
-const isDeleting = ref(false)
-const saveError = ref<string | null>(null)
-const localName = ref("")
-const localOutline = ref<OutlineSegment[]>([])
-const localScaleSlice = ref<ScaleSlice | null>(null)
-const scaleSliceEnabled = ref(false)
-const showDeleteConfirm = ref(false)
-const showShareModal = ref(false)
-const { checkPermission } = usePermissions()
-const { currentUser } = useAuth()
-
-function parseOutlineJson(json: string | null): OutlineSegment[] {
-  if (!json) return []
-  try {
-    const parsed = JSON.parse(json) as unknown
-    return Array.isArray(parsed) ? (parsed as OutlineSegment[]) : []
-  } catch {
-    return []
-  }
-}
-
-const canEditSelected = computed(() => {
-  const detail = selectedDetail.value
-  if (!detail) return false
-  if (canEditByAccessPermission(detail.accessPermission)) return true
-  const userId = currentUser.value?.id
-  return !!userId && detail.ownerId === userId
-})
-const canShareSelected = ref(false)
-const ownerDisplayNames = ref(new Map<string, string>())
-
-async function loadOwnerDisplayNames(ownerIds: string[]): Promise<void> {
-  ownerDisplayNames.value = await resolveOwnerDisplayNames(
-    ownerIds,
-    ownerDisplayNames.value,
-    currentUser.value,
-    t("common.unknownUser")
-  )
-}
-
-const selectedShapeOwnerName = computed(() => {
-  const detail = selectedDetail.value
-  const fallback = t("common.unknownUser")
-  if (!detail?.ownerId) return fallback
-  return resolveOwnerLabel(
-    ownerDisplayNames.value,
-    detail.ownerId,
-    currentUser.value,
-    fallback
-  )
-})
-
-/** Есть несохранённые изменения относительно данных с сервера */
-const isDirty = computed(() => {
-  const detail = selectedDetail.value
-  if (!detail) return false
-  const savedName = detail.name ?? ""
-  const savedOutline = parseOutlineJson(detail.outline)
-  if (localName.value !== savedName) return true
-  if (JSON.stringify(localOutline.value) !== JSON.stringify(savedOutline)) return true
-  const savedSlice = parseScaleSliceFromAttrs(detail.attrs) ?? null
-  const localSlice = scaleSliceEnabled.value ? localScaleSlice.value : null
-  return JSON.stringify(normalizeSliceForCompare(localSlice)) !==
-    JSON.stringify(normalizeSliceForCompare(savedSlice))
-})
-
-function normalizeSliceForCompare(slice: ScaleSlice | null): ScaleSlice | null {
-  if (!slice || !hasEffectiveScaleSlice(slice)) return null
-  return {
-    left: slice.left,
-    right: slice.right,
-    top: slice.top,
-    bottom: slice.bottom,
-    refWidth: slice.refWidth,
-    refHeight: slice.refHeight,
-  }
-}
-
-function loadScaleSliceFromDetail(detail: NodeShapeResponse | null) {
-  const slice = parseScaleSliceFromAttrs(detail?.attrs) ?? null
-  if (slice) {
-    localScaleSlice.value = slice
-    scaleSliceEnabled.value = true
-  } else {
-    localScaleSlice.value = createDefaultScaleSlice({
-      left: 24,
-      right: 24,
-      top: 24,
-      bottom: 24,
-    })
-    scaleSliceEnabled.value = false
-  }
-}
-
-onMounted(() => {
-  fetchList({ size: 200 }).then(async (ok) => {
-    if (!ok) {
-      saveError.value = t("shapes.errorLoad")
-      return
-    }
-    await loadOwnerDisplayNames(list.value.map((shape) => shape.ownerId))
-  })
-})
-
-watch(selectedShapeId, async (id) => {
-  selectedDetail.value = null
-  localName.value = ""
-  localOutline.value = []
-  loadScaleSliceFromDetail(null)
-  canShareSelected.value = false
-  if (!id) return
-  const detail = await fetchById(id)
-  selectedDetail.value = detail
-  if (detail) {
-    localName.value = detail.name
-    localOutline.value = parseOutlineJson(detail.outline).length
-      ? parseOutlineJson(detail.outline)
-      : [...DEFAULT_RECTANGLE_OUTLINE]
-    loadScaleSliceFromDetail(detail)
-    await loadOwnerDisplayNames([detail.ownerId])
-    canShareSelected.value = await checkPermission({
-      resourceType: 'NODE_SHAPE',
-      resourceId: detail.id,
-      action: 'MANAGE',
-    })
-  } else {
-    canShareSelected.value = false
-  }
-})
-
-const {
+  selectedShapeId,
+  selectedDetail,
+  isSaving,
+  isDeleting,
+  localName,
+  localOutline,
+  localScaleSlice,
+  scaleSliceEnabled,
+  showDeleteConfirm,
+  showShareModal,
+  showDocModal,
+  docModalFileId,
+  canShareSelected,
+  canEditSelected,
+  selectedShapeOwnerName,
+  isDirty,
   showUnsavedDialog,
-  requestSelect,
-  requestAdd,
-  discardAndContinue,
+  isToastVisible,
+  toastError,
+  handleSelect,
+  handleAdd,
+  discardAndSwitch,
   cancelSwitch,
-} = useDirtySelectionGuard({ isDirty })
-
-function applySelect(id: string) {
-  selectedShapeId.value = id
-}
-
-async function createAndSelectShape() {
-  saveError.value = null
-  const outlineJson = JSON.stringify(DEFAULT_RECTANGLE_OUTLINE)
-  const created = await create({
-    name: t("shapes.addShape"),
-    outline: outlineJson
-  })
-  if (created) {
-    await fetchList({ size: 200 })
-    await loadOwnerDisplayNames(list.value.map((shape) => shape.ownerId))
-    selectedShapeId.value = created.id
-    selectedDetail.value = created
-    localName.value = created.name
-    localOutline.value =
-      parseOutlineJson(created.outline).length > 0
-        ? parseOutlineJson(created.outline)
-        : [...DEFAULT_RECTANGLE_OUTLINE]
-    loadScaleSliceFromDetail(created)
-  } else {
-    saveError.value = t("shapes.errorSave")
-  }
-}
-
-function handleSelect(id: string) {
-  if (selectedShapeId.value === id) return
-  requestSelect(id, applySelect)
-}
-
-function handleAdd() {
-  requestAdd('__add_shape', () => {
-    void createAndSelectShape()
-  })
-}
-
-function discardAndSwitch() {
-  discardAndContinue({
-    onSelect: applySelect,
-    onAdd: () => {
-      void createAndSelectShape()
-    },
-  })
-}
-
-async function handleSave() {
-  if (!selectedDetail.value || !canEditSelected.value) return
-  saveError.value = null
-  isSaving.value = true
-  const sliceToSave = scaleSliceEnabled.value ? localScaleSlice.value : null
-  const nextAttrs = mergeScaleSliceIntoAttrs(selectedDetail.value.attrs, sliceToSave)
-  const updated = await update(selectedDetail.value.id, {
-    name: localName.value.trim() || selectedDetail.value.name,
-    outline: JSON.stringify(localOutline.value),
-    attrs: nextAttrs
-  })
-  isSaving.value = false
-  if (updated) {
-    selectedDetail.value = updated
-    loadScaleSliceFromDetail(updated)
-    const idx = list.value.findIndex((s) => s.id === updated.id)
-    if (idx >= 0) {
-      list.value = [
-        ...list.value.slice(0, idx),
-        updated,
-        ...list.value.slice(idx + 1)
-      ]
-    }
-  } else {
-    saveError.value = t("shapes.errorSave")
-  }
-}
-
-function handleScaleSliceEnabled(enabled: boolean) {
-  scaleSliceEnabled.value = enabled
-  if (enabled && !localScaleSlice.value) {
-    localScaleSlice.value = createDefaultScaleSlice({
-      left: 24,
-      right: 24,
-      top: 24,
-      bottom: 24,
-    })
-  }
-}
-
-function getShapeDocFileId(): string | null {
-  const raw = selectedDetail.value?.attrs
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    return typeof parsed.documentFileId === 'string' ? parsed.documentFileId : null
-  } catch {
-    return null
-  }
-}
-
-function setShapeDocFileId(fileId: string) {
-  if (!selectedDetail.value) return
-  const raw = selectedDetail.value.attrs
-  let parsed: Record<string, unknown> = {}
-  if (raw) {
-    try {
-      parsed = JSON.parse(raw) as Record<string, unknown>
-    } catch {
-      parsed = {}
-    }
-  }
-  parsed.documentFileId = fileId
-  selectedDetail.value = { ...selectedDetail.value, attrs: JSON.stringify(parsed) }
-}
-
-const showDocModal = ref(false)
-const docModalFileId = ref<string | null>(null)
-
-function openDocModal() {
-  docModalFileId.value = getShapeDocFileId()
-  showDocModal.value = true
-}
-
-async function handleDocSaved(fileId: string) {
-  if (!selectedDetail.value || !canEditSelected.value) return
-  setShapeDocFileId(fileId)
-  const updated = await update(selectedDetail.value.id, {
-    attrs: selectedDetail.value.attrs ?? undefined
-  })
-  if (updated) selectedDetail.value = updated
-  const linkRes = await apiPost<{ fileId: string; label: string }>('/documents', {
-    fileId,
-    nodeShapeId: selectedDetail.value.id
-  })
-  if (!linkRes.success) {
-    saveError.value = t('shapes.docLinkRegisterFailed', { message: linkRes.error.message })
-  }
-}
-
-function handleDocModalClose() {
-  showDocModal.value = false
-  docModalFileId.value = null
-}
-
-function openDeleteConfirm() {
-  showDeleteConfirm.value = true
-}
-
-async function confirmDelete() {
-  if (!selectedDetail.value || !canEditSelected.value) return
-  showDeleteConfirm.value = false
-  isDeleting.value = true
-  saveError.value = null
-  const ok = await remove(selectedDetail.value.id)
-  isDeleting.value = false
-  if (ok) {
-    selectedShapeId.value = null
-    selectedDetail.value = null
-    await fetchList({ size: 200 })
-  } else {
-    saveError.value = t("shapes.errorDelete")
-  }
-}
-
-const { isToastVisible, toastError } = useSaveErrorToast(saveError)
+  handleSave,
+  handleScaleSliceEnabled,
+  getShapeDocFileId,
+  openDocModal,
+  handleDocSaved,
+  handleDocModalClose,
+  openDeleteConfirm,
+  confirmDelete,
+} = useShapeEditor()
 </script>
 
 <template>
@@ -423,14 +125,14 @@ const { isToastVisible, toastError } = useSaveErrorToast(saveError)
         @close="showDeleteConfirm = false"
       >
         <p class="shape-editor__delete-text">
-          {{ t("shapes.deleteConfirm", { name: selectedDetail?.name ?? "" }) }}
+          {{ t('shapes.deleteConfirm', { name: selectedDetail?.name ?? '' }) }}
         </p>
         <template #footer>
           <button type="button" class="btn btn--secondary" @click="showDeleteConfirm = false">
-            {{ t("common.cancel") }}
+            {{ t('common.cancel') }}
           </button>
           <button type="button" class="btn btn--danger" @click="confirmDelete">
-            {{ t("common.delete") }}
+            {{ t('common.delete') }}
           </button>
         </template>
       </BaseModal>

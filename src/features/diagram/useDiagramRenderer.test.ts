@@ -86,6 +86,43 @@ describe('useDiagramRenderer', () => {
     expect(diagram.rulersOverlayRef.value).toBeNull()
   })
 
+  it('boosts pinch (ctrl+wheel) deltas before canvas-level handlers see them', () => {
+    const canvas = document.createElement('canvas')
+    const container = document.createElement('div')
+    container.appendChild(canvas)
+    Object.defineProperty(container, 'clientWidth', { value: 320 })
+    Object.defineProperty(container, 'clientHeight', { value: 240 })
+
+    const seenDeltas: number[] = []
+    canvas.addEventListener('wheel', (event: WheelEvent) => {
+      seenDeltas.push(event.deltaY)
+    })
+
+    const diagram = useDiagramRenderer({
+      canvasRef: ref(canvas),
+      containerRef: ref(container),
+      autoMount: false,
+      interactions: { snapToGrid: true },
+    })
+    diagram.mountRenderer()
+
+    // happy-dom не выставляет ctrlKey из инициализатора WheelEvent, как делает браузер
+    const pinch = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 10 })
+    Object.defineProperty(pinch, 'ctrlKey', { value: true, configurable: true })
+    canvas.dispatchEvent(pinch)
+    expect(seenDeltas).toEqual([50])
+
+    const scroll = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 10 })
+    canvas.dispatchEvent(scroll)
+    expect(seenDeltas).toEqual([50, 10])
+
+    diagram.destroyRenderer()
+    const afterDestroy = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 10 })
+    Object.defineProperty(afterDestroy, 'ctrlKey', { value: true, configurable: true })
+    canvas.dispatchEvent(afterDestroy)
+    expect(seenDeltas).toEqual([50, 10, 10])
+  })
+
   it('resizes to the current container and destroys renderer state', () => {
     const canvas = document.createElement('canvas')
     const container = document.createElement('div')

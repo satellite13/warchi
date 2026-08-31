@@ -3901,73 +3901,73 @@ defineExpose({
 
     <template v-if="activeDiagram">
       <template v-if="!readOnly">
-        <button
+        <AppTooltip
           v-if="!paletteVisible"
-          type="button"
-          class="canvas-palette-toggle"
-          :title="t('diagram.showNotationPalette')"
-          @click="setPaletteVisible(true)"
+          class="canvas-palette-toggle-wrap"
+          :text="t('diagram.showNotationPalette')"
+          placement="bottom"
         >
-          <UiIcon name="palette" />
-        </button>
+          <button type="button" class="canvas-palette-toggle" @click="setPaletteVisible(true)">
+            <UiIcon name="palette" />
+          </button>
+        </AppTooltip>
 
         <div v-if="paletteVisible" class="canvas-palette">
         <div class="canvas-palette__header">
           <UiIcon name="palette" />
           <span>{{ t('diagram.palette') }}</span>
-          <button
-            type="button"
-            class="canvas-palette__hide"
-            :title="t('diagram.hidePalette')"
-            @click="setPaletteVisible(false)"
-          >
-            <UiIcon name="chevron_right" />
-          </button>
+          <AppTooltip :text="t('diagram.hidePalette')" placement="bottom">
+            <button type="button" class="canvas-palette__hide" @click="setPaletteVisible(false)">
+              <UiIcon name="chevron_right" />
+            </button>
+          </AppTooltip>
         </div>
         <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
           {{ t('diagram.noNotationComponents') }}
         </div>
         <div class="canvas-palette__list">
-          <button
-            type="button"
-            class="canvas-palette__item canvas-palette__item--note"
-            :title="t('diagram.note')"
-            :draggable="!props.readOnly && !props.navigationOnlyMode"
-            @dragstart="onDragNoteStart"
-          >
-            <UiIcon name="note" class="canvas-palette__note-icon" />
-          </button>
-          <button
-            type="button"
-            class="canvas-palette__item canvas-palette__item--container"
-            :title="t('diagram.container')"
-            :draggable="!props.readOnly && !props.navigationOnlyMode"
-            @dragstart="onDragContainerStart"
-          >
-            <UiIcon name="crop_free" class="canvas-palette__note-icon" />
-          </button>
+          <AppTooltip :text="t('diagram.note')" placement="bottom">
+            <button
+              type="button"
+              class="canvas-palette__item canvas-palette__item--note"
+              :draggable="!props.readOnly && !props.navigationOnlyMode"
+              @dragstart="onDragNoteStart"
+            >
+              <UiIcon name="note" class="canvas-palette__note-icon" />
+            </button>
+          </AppTooltip>
+          <AppTooltip :text="t('diagram.container')" placement="bottom">
+            <button
+              type="button"
+              class="canvas-palette__item canvas-palette__item--container"
+              :draggable="!props.readOnly && !props.navigationOnlyMode"
+              @dragstart="onDragContainerStart"
+            >
+              <UiIcon name="crop_free" class="canvas-palette__note-icon" />
+            </button>
+          </AppTooltip>
           <template
             v-for="(entry, index) in paletteEntries"
             :key="entry.kind === 'item' ? entry.component.id : `divider-${index}`"
           >
             <div v-if="entry.kind === 'divider'" class="canvas-palette__divider" />
-            <button
-              v-else
-              type="button"
-              class="canvas-palette__item"
-              :title="entry.component.name"
-              :style="{ '--palette-item-fill': entry.component.paletteFillColor }"
-              :draggable="!props.readOnly && !props.navigationOnlyMode"
-              @dragstart="onDragComponentStart($event, entry.component.id)"
-            >
-              <img
-                class="canvas-palette__icon"
-                :src="buildIconUrl(entry.component.paletteIconName)"
-                :alt="entry.component.name"
-                draggable="false"
-                @error="handlePaletteIconError($event, entry.component.paletteIconName)"
-              />
-            </button>
+            <AppTooltip v-else :text="entry.component.name" placement="bottom">
+              <button
+                type="button"
+                class="canvas-palette__item"
+                :style="{ '--palette-item-fill': entry.component.paletteFillColor }"
+                :draggable="!props.readOnly && !props.navigationOnlyMode"
+                @dragstart="onDragComponentStart($event, entry.component.id)"
+              >
+                <img
+                  class="canvas-palette__icon"
+                  :src="buildIconUrl(entry.component.paletteIconName)"
+                  :alt="entry.component.name"
+                  draggable="false"
+                  @error="handlePaletteIconError($event, entry.component.paletteIconName)"
+                />
+              </button>
+            </AppTooltip>
           </template>
         </div>
       </div>
@@ -4052,10 +4052,14 @@ defineExpose({
   }
 }
 
-.canvas-palette-toggle {
+.canvas-palette-toggle-wrap {
   position: absolute;
   right: 15px;
   top: 10px;
+  z-index: 6;
+}
+
+.canvas-palette-toggle {
   width: 30px;
   height: 30px;
   border: 1px solid var(--border);
@@ -4066,7 +4070,6 @@ defineExpose({
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 6;
 }
 
 .canvas-palette-toggle:hover {
@@ -4135,6 +4138,10 @@ defineExpose({
   gap: 6px;
   overflow: auto;
   align-content: start;
+}
+
+.canvas-palette__list > .app-tooltip {
+  width: 100%;
 }
 
 .canvas-palette__divider {

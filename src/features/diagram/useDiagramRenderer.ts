@@ -39,6 +39,26 @@ export interface UseDiagramRendererOptions {
 
 const DEFAULT_BACKGROUND = '#f4f2ef'
 
+// Тачпад-пинч (разведение двух пальцев) браузер присылает как wheel-событие с ctrlKey.
+// Papirus обрабатывает ctrl+wheel с чувствительностью zoomSensitivity * 0.2, т.е. в 5 раз
+// медленнее, чем обычный зум скроллом. Усиливаем delta pinch-событий, чтобы пинч приближал
+// с той же скоростью, что и двухпальцевый скролл.
+const PINCH_ZOOM_BOOST = 5
+
+function createPinchWheelNormalizer(): (event: WheelEvent) => void {
+  return (event: WheelEvent): void => {
+    if (!event.ctrlKey) return
+    Object.defineProperty(event, 'deltaY', {
+      value: event.deltaY * PINCH_ZOOM_BOOST,
+      configurable: true,
+    })
+    Object.defineProperty(event, 'deltaZ', {
+      value: event.deltaZ * PINCH_ZOOM_BOOST,
+      configurable: true,
+    })
+  }
+}
+
 function resolveMaybeFactory<T>(value: MaybeFactory<T> | undefined): T | undefined {
   return typeof value === 'function' ? (value as () => T)() : value
 }
@@ -54,6 +74,7 @@ export function useDiagramRenderer(options: UseDiagramRendererOptions) {
   const miniMapRef = shallowRef<MiniMap | null>(null)
   const rulersOverlayRef = shallowRef<RulersOverlay | null>(null)
   let resizeObserver: ResizeObserver | null = null
+  let pinchWheelNormalizer: ((event: WheelEvent) => void) | null = null
 
   function resizeToContainer(): void {
     const renderer = rendererRef.value
@@ -73,7 +94,9 @@ export function useDiagramRenderer(options: UseDiagramRendererOptions) {
   function createRendererOptions(width: number, height: number): DiagramOptions {
     const configured = resolveMaybeFactory(options.rendererOptions) ?? {}
     const backgroundColor =
-      resolveMaybeFactory(options.backgroundColor) ?? configured.backgroundColor ?? DEFAULT_BACKGROUND
+      resolveMaybeFactory(options.backgroundColor) ??
+      configured.backgroundColor ??
+      DEFAULT_BACKGROUND
     return {
       ...configured,
       width,
@@ -118,6 +141,12 @@ export function useDiagramRenderer(options: UseDiagramRendererOptions) {
     const interactionManager =
       options.interactions === null ? null : renderer.enableInteractions(options.interactions ?? {})
     interactionManagerRef.value = interactionManager
+
+    if (interactionManager) {
+      pinchWheelNormalizer = createPinchWheelNormalizer()
+      container.addEventListener('wheel', pinchWheelNormalizer, { capture: true })
+    }
+
     observeContainerResize()
     options.onReady?.({
       renderer,
@@ -137,6 +166,11 @@ export function useDiagramRenderer(options: UseDiagramRendererOptions) {
   function destroyRenderer(): void {
     resizeObserver?.disconnect()
     resizeObserver = null
+    const container = options.containerRef.value
+    if (container && pinchWheelNormalizer) {
+      container.removeEventListener('wheel', pinchWheelNormalizer, { capture: true })
+      pinchWheelNormalizer = null
+    }
     const renderer = rendererRef.value
     if (renderer) {
       options.onBeforeDestroy?.(renderer)

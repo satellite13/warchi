@@ -1,24 +1,26 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 
-defineProps<{
+const props = defineProps<{
   /** Tooltip key: 'toolbar.unsavedChangesHint' in headers, 'types.unsavedChangesHint' in type form */
   tooltipKey?: string
 }>()
 
 const { t } = useI18n()
+
+const tooltipText = computed(() =>
+  props.tooltipKey ? t(props.tooltipKey) : t("types.unsavedChangesHint"),
+)
 </script>
 
 <template>
-  <span
-    class="unsaved-badge"
-    :title="tooltipKey ? t(tooltipKey) : t('types.unsavedChangesHint')"
-    role="status"
-    aria-live="polite"
-  >
-    <UiIcon name="edit" class="unsaved-badge__icon" />
-    <span class="unsaved-badge__text">{{ t("types.notSaved") }}</span>
-  </span>
+  <AppTooltip :text="tooltipText" placement="bottom">
+    <span class="unsaved-badge" role="status" aria-live="polite">
+      <UiIcon name="edit" class="unsaved-badge__icon" />
+      <span class="unsaved-badge__text">{{ t("types.notSaved") }}</span>
+    </span>
+  </AppTooltip>
 </template>
 
 <style scoped>

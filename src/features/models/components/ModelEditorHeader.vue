@@ -451,52 +451,32 @@ function spectatorInitials(name: string): string {
       </div>
     </template>
     <template #left-extra>
-      <button
-        v-if="showCompareButton"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.compareWithVersion')"
-        @click="emit('compare')"
-      >
-        <UiIcon name="compare_arrows" />
-      </button>
-      <button
-        v-if="modelId"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.relationMatrixOpen')"
-        @click="emit('openRelationMatrix')"
-      >
-        <UiIcon name="grid_view" />
-      </button>
-      <button
-        v-if="modelId"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.validationReportOpen')"
-        @click="emit('openValidation')"
-      >
-        <UiIcon name="fact_check" />
-      </button>
+      <AppTooltip v-if="showCompareButton" :text="t('models.compareWithVersion')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('compare')">
+          <UiIcon name="compare_arrows" />
+        </button>
+      </AppTooltip>
+      <AppTooltip v-if="modelId" :text="t('models.relationMatrixOpen')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('openRelationMatrix')">
+          <UiIcon name="grid_view" />
+        </button>
+      </AppTooltip>
+      <AppTooltip v-if="modelId" :text="t('models.validationReportOpen')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('openValidation')">
+          <UiIcon name="fact_check" />
+        </button>
+      </AppTooltip>
       <UnsavedBadge v-if="hasUnsavedChanges" tooltip-key="toolbar.unsavedChangesHint" />
-      <button
-        v-if="canShare"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('toolbar.shareAccess')"
-        @click="emit('share')"
-      >
-        <UiIcon name="share" />
-      </button>
-      <button
-        v-if="showModelWikiButton"
-        type="button"
-        class="deh-icon-btn"
-        :title="t('models.documentation')"
-        @click="emit('action', 'open-model-doc')"
-      >
-        <UiIcon name="article" />
-      </button>
+      <AppTooltip v-if="canShare" :text="t('toolbar.shareAccess')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('share')">
+          <UiIcon name="share" />
+        </button>
+      </AppTooltip>
+      <AppTooltip v-if="showModelWikiButton" :text="t('models.documentation')" placement="bottom">
+        <button type="button" class="deh-icon-btn" @click="emit('action', 'open-model-doc')">
+          <UiIcon name="article" />
+        </button>
+      </AppTooltip>
     </template>
     <template #info>
       <template v-if="diagramName">

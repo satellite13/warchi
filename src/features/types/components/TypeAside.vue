@@ -41,14 +41,20 @@ const usageCount = computed(() =>
         <UiIcon name="data_object" class="type-aside__leading-icon" />
       </template>
       <template #header-extra>
-        <button
-          type="button"
-          class="type-aside__expand-btn"
-          :title="t('types.openFullscreen')"
-          @click.stop="showAttrsModal = true"
+        <AppTooltip
+          class="type-aside__expand-wrap"
+          :text="t('types.openFullscreen')"
+          placement="left"
         >
-          <UiIcon name="open_in_full" />
-        </button>
+          <button
+            type="button"
+            class="type-aside__expand-btn"
+            :aria-label="t('types.openFullscreen')"
+            @click.stop="showAttrsModal = true"
+          >
+            <UiIcon name="open_in_full" />
+          </button>
+        </AppTooltip>
       </template>
       <pre class="json-preview">{{ attrsJson }}</pre>
     </CollapsibleSection>
@@ -169,6 +175,11 @@ const usageCount = computed(() =>
   text-align: center;
 }
 
+.type-aside__expand-wrap {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .type-aside__expand-btn {
   display: flex;
   align-items: center;
@@ -181,8 +192,6 @@ const usageCount = computed(() =>
   background: transparent;
   color: var(--text-subtle);
   cursor: pointer;
-  margin-left: auto;
-  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 

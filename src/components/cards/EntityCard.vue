@@ -74,72 +74,80 @@ const formattedUpdatedAt = computed(() => {
             </template>
             <slot v-else name="icon" />
           </div>
-          <button
-            v-if="canChangeIcon"
-            type="button"
-            class="model-card__icon-edit"
-            :aria-label="t('common.changeIcon')"
-            :title="t('common.changeIcon')"
-            @click.stop="emit('change-icon')"
-          >
-            <UiIcon name="edit" />
-          </button>
+          <AppTooltip v-if="canChangeIcon" :text="t('common.changeIcon')" placement="bottom">
+            <button
+              type="button"
+              class="model-card__icon-edit"
+              :aria-label="t('common.changeIcon')"
+              @click.stop="emit('change-icon')"
+            >
+              <UiIcon name="edit" />
+            </button>
+          </AppTooltip>
         </div>
 
         <div class="model-card__actions" @click.stop>
-          <button
+          <AppTooltip
             v-if="canExport"
-            type="button"
-            class="model-card__action"
-            :aria-label="exportTitle || t('common.export')"
-            :title="exportTitle || t('common.export')"
-            @click="emit('export')"
+            :text="exportTitle || t('common.export')"
+            placement="bottom"
           >
-            <UiIcon name="download" :alt="exportTitle || t('common.export')" />
-          </button>
-          <button
+            <button
+              type="button"
+              class="model-card__action"
+              :aria-label="exportTitle || t('common.export')"
+              @click="emit('export')"
+            >
+              <UiIcon name="download" :alt="exportTitle || t('common.export')" />
+            </button>
+          </AppTooltip>
+          <AppTooltip
             v-if="showVersionTreeButton && versionTreeI18nPrefix"
-            type="button"
-            class="model-card__action"
-            :aria-label="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-            :title="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-            @click="emit('show-version-tree')"
+            :text="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+            placement="bottom"
           >
-            <UiIcon
-              :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
-              name="device_hub"
-            />
-          </button>
-          <button
-            v-if="canShare"
-            type="button"
-            class="model-card__action"
-            :aria-label="t('share.manageAccess')"
-            :title="t('common.share')"
-            @click="emit('share')"
-          >
-            <UiIcon name="share" :alt="t('common.share')" />
-          </button>
-          <button
-            v-if="canRename !== false"
-            type="button"
-            class="model-card__action"
-            :aria-label="t('common.rename')"
-            :title="t('common.rename')"
-            @click="emit('rename')"
-          >
-            <UiIcon name="edit" :alt="t('common.rename')" />
-          </button>
-          <button
-            v-if="canDelete !== false"
-            type="button"
-            class="model-card__action model-card__action--danger"
-            :aria-label="t('common.delete')"
-            :title="t('common.delete')"
-            @click="emit('delete')"
-          >
-            <UiIcon name="delete" :alt="t('common.delete')" />
-          </button>
+            <button
+              type="button"
+              class="model-card__action"
+              :aria-label="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+              @click="emit('show-version-tree')"
+            >
+              <UiIcon
+                :alt="t(`${versionTreeI18nPrefix}.versionTreeTitle`, { name })"
+                name="device_hub"
+              />
+            </button>
+          </AppTooltip>
+          <AppTooltip v-if="canShare" :text="t('common.share')" placement="bottom">
+            <button
+              type="button"
+              class="model-card__action"
+              :aria-label="t('share.manageAccess')"
+              @click="emit('share')"
+            >
+              <UiIcon name="share" :alt="t('common.share')" />
+            </button>
+          </AppTooltip>
+          <AppTooltip v-if="canRename !== false" :text="t('common.rename')" placement="bottom">
+            <button
+              type="button"
+              class="model-card__action"
+              :aria-label="t('common.rename')"
+              @click="emit('rename')"
+            >
+              <UiIcon name="edit" :alt="t('common.rename')" />
+            </button>
+          </AppTooltip>
+          <AppTooltip v-if="canDelete !== false" :text="t('common.delete')" placement="bottom">
+            <button
+              type="button"
+              class="model-card__action model-card__action--danger"
+              :aria-label="t('common.delete')"
+              @click="emit('delete')"
+            >
+              <UiIcon name="delete" :alt="t('common.delete')" />
+            </button>
+          </AppTooltip>
         </div>
       </div>
 
@@ -157,16 +165,20 @@ const formattedUpdatedAt = computed(() => {
               <option v-for="ver in versions" :key="ver" :value="ver">v{{ ver }}</option>
             </select>
           </label>
-          <button
+          <AppTooltip
             v-if="showCreateFromVersionButton"
-            type="button"
-            class="model-card__copy-version"
-            :aria-label="t('common.createFromVersion')"
-            :title="t('common.createFromVersion')"
-            @click.stop="emit('create-from-version')"
+            :text="t('common.createFromVersion')"
+            placement="bottom"
           >
-            <UiIcon name="library_add" :alt="t('common.createFromVersion')" />
-          </button>
+            <button
+              type="button"
+              class="model-card__copy-version"
+              :aria-label="t('common.createFromVersion')"
+              @click.stop="emit('create-from-version')"
+            >
+              <UiIcon name="library_add" :alt="t('common.createFromVersion')" />
+            </button>
+          </AppTooltip>
         </div>
         <span class="model-card__updated">{{ t("common.updatedAt") }}: {{ formattedUpdatedAt }}</span>
         <div v-if="accessLabel" class="model-card__access-badge">

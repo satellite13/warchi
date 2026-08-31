@@ -6,7 +6,7 @@ import ModelTreePalettePanel from './ModelTreePalettePanel.vue'
 import type { ChildrenPageState, EditorDiagram, EditorNode } from '../types'
 import type { ModelSearchHit } from '@/types/api'
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -17,7 +17,7 @@ vi.mock('vue-i18n', async (importOriginal) => {
 })
 
 function makeNode(
-  overrides: Partial<EditorNode> & { id: string; name: string; nodeTypeId?: string },
+  overrides: Partial<EditorNode> & { id: string; name: string; nodeTypeId?: string }
 ): EditorNode {
   return {
     modelId: 'm1',
@@ -51,7 +51,17 @@ function mockTreeViewport(wrapper: VueWrapper, height = 480, width = 320): void 
   Object.defineProperty(tree, 'offsetWidth', { configurable: true, get: () => width })
   Object.defineProperty(tree, 'scrollHeight', {
     configurable: true,
-    get: () => Math.max(height, Number.parseInt(wrapper.find('.tree__virtual').attributes('style')?.match(/height:\s*(\d+)/)?.[1] ?? '0', 10) || height),
+    get: () =>
+      Math.max(
+        height,
+        Number.parseInt(
+          wrapper
+            .find('.tree__virtual')
+            .attributes('style')
+            ?.match(/height:\s*(\d+)/)?.[1] ?? '0',
+          10
+        ) || height
+      ),
   })
   Object.defineProperty(tree, 'scrollTop', {
     configurable: true,
@@ -183,7 +193,7 @@ describe('ModelTreePalettePanel', () => {
       },
     })
 
-    await wrapper.get('button[title="models.diagramCopy.title"]').trigger('click')
+    await wrapper.get('[text="models.diagramCopy.title"] button').trigger('click')
 
     expect(wrapper.emitted('copyDiagramToModel')).toEqual([['diagram-1']])
   })
@@ -327,11 +337,11 @@ describe('ModelTreePalettePanel', () => {
     await flushTree(wrapper)
 
     expect(wrapper.get('[data-tree-node-id="root-child"]').attributes('draggable')).toBe('true')
-    expect(wrapper.get('[title="models.addRootNode"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[text="models.addRootNode"] button').attributes('disabled')).toBeUndefined()
     expect(
-      wrapper.get('[data-tree-node-id="root-child"] [title="models.addChildNode"]').attributes(
-        'disabled'
-      )
+      wrapper
+        .get('[data-tree-node-id="root-child"] [text="models.addChildNode"] button')
+        .attributes('disabled')
     ).toBeUndefined()
   })
 
@@ -350,9 +360,9 @@ describe('ModelTreePalettePanel', () => {
     await flushTree(wrapper)
 
     expect(
-      wrapper.get('[data-tree-node-id="new-folder"] [title="models.addChildNode"]').attributes(
-        'disabled'
-      )
+      wrapper
+        .get('[data-tree-node-id="new-folder"] [text="models.addChildNode"] button')
+        .attributes('disabled')
     ).toBeUndefined()
   })
 
@@ -375,7 +385,7 @@ describe('ModelTreePalettePanel', () => {
     ).toBe(false)
     expect(
       wrapper
-        .get('[data-tree-node-id="persisted-empty-folder"] [title="models.addChildNode"]')
+        .get('[data-tree-node-id="persisted-empty-folder"] [text="models.addChildNode"] button')
         .attributes('disabled')
     ).toBeUndefined()
   })
@@ -386,10 +396,7 @@ describe('ModelTreePalettePanel', () => {
       childrenLoading: new Set(['node:folder']),
       childrenErrors: new Map([['node:folder', 'branch failed']]),
       childrenPages: new Map([
-        [
-          'node:folder',
-          { loadedPages: new Set([0]), nextPage: 1, totalElements: 501 },
-        ],
+        ['node:folder', { loadedPages: new Set([0]), nextPage: 1, totalElements: 501 }],
       ]),
     })
     await flushTree(wrapper)
@@ -404,9 +411,7 @@ describe('ModelTreePalettePanel', () => {
       expect(wrapper.get(selector).attributes('aria-live')).toBe('polite')
     }
     await wrapper.get('[data-tree-load-more] button').trigger('click')
-    expect(wrapper.emitted('loadNextChildrenPage')).toEqual([
-      [{ kind: 'node', nodeId: 'folder' }],
-    ])
+    expect(wrapper.emitted('loadNextChildrenPage')).toEqual([[{ kind: 'node', nodeId: 'folder' }]])
   })
 
   it('pages a wide root scope with a root load-more row', async () => {
@@ -449,7 +454,7 @@ describe('ModelTreePalettePanel search', () => {
     await flushTree(wrapper)
 
     const rows = wrapper.findAll('[data-tree-node-id]')
-    const ids = rows.map((r) => r.attributes('data-tree-node-id'))
+    const ids = rows.map(r => r.attributes('data-tree-node-id'))
     expect(ids).toContain('folder')
     expect(ids).toContain('hit')
     expect(ids).not.toContain('miss')
@@ -515,10 +520,10 @@ describe('ModelTreePalettePanel search', () => {
     await flushTree(wrapper)
 
     expect(wrapper.get('[data-tree-node-id="folder"] .tree-node__name').classes()).toContain(
-      'tree-node__name--ancestor',
+      'tree-node__name--ancestor'
     )
     expect(wrapper.get('[data-tree-node-id="hit"] .tree-node__name').classes()).not.toContain(
-      'tree-node__name--ancestor',
+      'tree-node__name--ancestor'
     )
   })
 
@@ -602,15 +607,15 @@ describe('ModelTreePalettePanel search', () => {
     expect(
       wrapper.get('[data-tree-search-hit-id="diagram-hit"] ui-icon-stub').attributes('name')
     ).toBe('dashboard')
-    expect(wrapper.get('[data-tree-search-hit-id="node-hit"] .tree-search-hit__breadcrumb').text()).toBe(
-      'Apps'
-    )
-    expect(wrapper.get('[data-tree-search-hit-id="diagram-hit"] .tree-search-hit__breadcrumb').text()).toBe(
-      'Apps / Diagrams'
-    )
-    expect(wrapper.find('[data-tree-search-hit-id="broken-hit"] .tree-search-hit__breadcrumb').exists()).toBe(
-      false
-    )
+    expect(
+      wrapper.get('[data-tree-search-hit-id="node-hit"] .tree-search-hit__breadcrumb').text()
+    ).toBe('Apps')
+    expect(
+      wrapper.get('[data-tree-search-hit-id="diagram-hit"] .tree-search-hit__breadcrumb').text()
+    ).toBe('Apps / Diagrams')
+    expect(
+      wrapper.find('[data-tree-search-hit-id="broken-hit"] .tree-search-hit__breadcrumb').exists()
+    ).toBe(false)
 
     await wrapper.get('[data-tree-search-hit-id="diagram-hit"] button').trigger('click')
     expect(wrapper.emitted('selectSearchHit')?.at(-1)).toEqual([
@@ -684,7 +689,7 @@ describe('ModelTreePalettePanel virtualization', () => {
             componentProperties: {},
             typeProperties: {},
           },
-        }),
+        })
       )
     }
 
@@ -716,7 +721,7 @@ describe('ModelTreePalettePanel virtualization', () => {
             componentProperties: {},
             typeProperties: {},
           },
-        }),
+        })
       )
     }
 

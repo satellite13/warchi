@@ -1,47 +1,46 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { useI18n } from "vue-i18n";
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
-    size?: "sm" | "md" | "lg";
-    /** When false, the wArchi wordmark is omitted and shown as a native tooltip. */
-    showTitle?: boolean;
-    /** When false, subtitle is only shown as native tooltip on the logo. */
-    showSubtitle?: boolean;
+    size?: 'sm' | 'md' | 'lg'
+    /** When false, the wArchi wordmark is omitted and shown as a tooltip. */
+    showTitle?: boolean
+    /** When false, subtitle is only shown as a tooltip on the logo. */
+    showSubtitle?: boolean
   }>(),
   {
-    size: "md",
+    size: 'md',
     showTitle: true,
   }
-);
+)
 
-const { t } = useI18n();
+const { t } = useI18n()
 
 const subtitleVisible = computed(() => {
-  if (props.showSubtitle !== undefined) return props.showSubtitle;
-  return props.size !== "sm";
-});
+  if (props.showSubtitle !== undefined) return props.showSubtitle
+  return props.size !== 'sm'
+})
 
-const textVisible = computed(() => props.showTitle || subtitleVisible.value);
+const textVisible = computed(() => props.showTitle || subtitleVisible.value)
 
 const logoTitle = computed(() => {
-  if (!props.showTitle) return "wArchi";
-  return subtitleVisible.value ? undefined : t("auth.cardSubtitle");
-});
+  if (!props.showTitle) return 'wArchi'
+  return subtitleVisible.value ? undefined : t('auth.cardSubtitle')
+})
 </script>
 
 <template>
-  <div
-    :class="['logo', `logo--${size}`, { 'logo--icon-only': !textVisible }]"
-    :title="logoTitle"
-  >
-    <img class="logo__icon" src="/warchi.svg" alt="" />
-    <div v-if="textVisible" class="logo__text">
-      <span v-if="showTitle" class="logo__title">wArchi</span>
-      <span v-if="subtitleVisible" class="logo__subtitle">{{ t("auth.cardSubtitle") }}</span>
+  <AppTooltip :text="logoTitle ?? ''" placement="bottom">
+    <div :class="['logo', `logo--${size}`, { 'logo--icon-only': !textVisible }]">
+      <img class="logo__icon" src="/warchi.svg" alt="" />
+      <div v-if="textVisible" class="logo__text">
+        <span v-if="showTitle" class="logo__title">wArchi</span>
+        <span v-if="subtitleVisible" class="logo__subtitle">{{ t('auth.cardSubtitle') }}</span>
+      </div>
     </div>
-  </div>
+  </AppTooltip>
 </template>
 
 <style scoped>

@@ -58,18 +58,19 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="rootRef" class="diagram-canvas-settings">
-    <button
-      type="button"
-      class="diagram-canvas-settings__toggle"
-      :class="{ 'diagram-canvas-settings__toggle--open': open }"
-      :title="t('models.showDiagramSettings')"
-      :disabled="disabled"
-      :aria-expanded="open"
-      aria-haspopup="true"
-      @click="toggle"
-    >
-      <UiIcon name="tune" />
-    </button>
+    <AppTooltip :text="t('models.showDiagramSettings')" placement="bottom">
+      <button
+        type="button"
+        class="diagram-canvas-settings__toggle"
+        :class="{ 'diagram-canvas-settings__toggle--open': open }"
+        :disabled="disabled"
+        :aria-expanded="open"
+        aria-haspopup="true"
+        @click="toggle"
+      >
+        <UiIcon name="tune" />
+      </button>
+    </AppTooltip>
     <div v-if="open" class="diagram-canvas-settings__panel" role="menu">
       <div class="diagram-canvas-settings__title">{{ t('common.settings') }}</div>
       <button

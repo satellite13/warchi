@@ -680,24 +680,34 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
         <span v-if="totalNodesCount > 0" class="panel__count">{{ totalNodesCount }}</span>
       </div>
       <div class="panel__header-actions">
-        <button
-          type="button"
-          class="btn--icon"
-          :class="{ 'btn--icon--active': !!syncSelectionEnabled }"
-          :title="syncSelectionEnabled ? t('models.disableSelectionSync') : t('models.enableSelectionSync')"
-          @click="emit('toggleSyncSelection')"
+        <AppTooltip
+          :text="syncSelectionEnabled ? t('models.disableSelectionSync') : t('models.enableSelectionSync')"
+          placement="bottom"
         >
-          <UiIcon name="sync_alt" />
-        </button>
-        <button type="button" class="btn--icon" :title="t('models.addRootFolder')" @click="emit('createFolder', null)">
-          <UiIcon name="create_new_folder" />
-        </button>
-        <button type="button" class="btn--icon" :title="t('models.addRootNode')" @click="emit('createNode', null)">
-          <UiIcon name="add_box" />
-        </button>
-        <button type="button" class="btn--icon" :title="t('models.createDiagramTitle')" @click="emit('createDiagram', null)">
-          <UiIcon name="dashboard" />
-        </button>
+          <button
+            type="button"
+            class="btn--icon"
+            :class="{ 'btn--icon--active': !!syncSelectionEnabled }"
+            @click="emit('toggleSyncSelection')"
+          >
+            <UiIcon name="sync_alt" />
+          </button>
+        </AppTooltip>
+        <AppTooltip :text="t('models.addRootFolder')" placement="bottom">
+          <button type="button" class="btn--icon" @click="emit('createFolder', null)">
+            <UiIcon name="create_new_folder" />
+          </button>
+        </AppTooltip>
+        <AppTooltip :text="t('models.addRootNode')" placement="bottom">
+          <button type="button" class="btn--icon" @click="emit('createNode', null)">
+            <UiIcon name="add_box" />
+          </button>
+        </AppTooltip>
+        <AppTooltip :text="t('models.createDiagramTitle')" placement="bottom">
+          <button type="button" class="btn--icon" @click="emit('createDiagram', null)">
+            <UiIcon name="dashboard" />
+          </button>
+        </AppTooltip>
       </div>
     </div>
 
@@ -839,50 +849,67 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                 >{{ row.node.name }}</span>
               </button>
               <div class="tree-node__actions">
-                <button
+                <AppTooltip
                   v-if="isDirectory(row.node)"
-                  type="button"
-                  class="btn--icon"
-                  :title="t('models.addChildFolder')"
-                  @click.stop="emit('createFolder', row.node.id)"
+                  :text="t('models.addChildFolder')"
+                  placement="bottom"
                 >
-                  <UiIcon name="create_new_folder" />
-                </button>
-                <button
+                  <button
+                    type="button"
+                    class="btn--icon"
+                    @click.stop="emit('createFolder', row.node.id)"
+                  >
+                    <UiIcon name="create_new_folder" />
+                  </button>
+                </AppTooltip>
+                <AppTooltip
                   v-if="isDirectory(row.node)"
-                  type="button"
-                  class="btn--icon"
-                  :title="t('models.addChildNode')"
-                  @click.stop="emit('createNode', row.node.id)"
+                  :text="t('models.addChildNode')"
+                  placement="bottom"
                 >
-                  <UiIcon name="add_box" />
-                </button>
-                <button
+                  <button
+                    type="button"
+                    class="btn--icon"
+                    @click.stop="emit('createNode', row.node.id)"
+                  >
+                    <UiIcon name="add_box" />
+                  </button>
+                </AppTooltip>
+                <AppTooltip
                   v-if="isDirectory(row.node)"
-                  type="button"
-                  class="btn--icon"
-                  :title="t('models.createDiagramTitle')"
-                  @click.stop="emit('createDiagram', row.node.id)"
+                  :text="t('models.createDiagramTitle')"
+                  placement="bottom"
                 >
-                  <UiIcon name="dashboard" />
-                </button>
-                <button
+                  <button
+                    type="button"
+                    class="btn--icon"
+                    @click.stop="emit('createDiagram', row.node.id)"
+                  >
+                    <UiIcon name="dashboard" />
+                  </button>
+                </AppTooltip>
+                <AppTooltip
                   v-if="isDirectory(row.node)"
-                  type="button"
-                  class="btn--icon"
-                  :title="t('models.renameFolder')"
-                  @click.stop="startRenameNode(row.node)"
+                  :text="t('models.renameFolder')"
+                  placement="bottom"
                 >
-                  <UiIcon name="edit" />
-                </button>
-                <button
-                  type="button"
-                  class="btn--icon btn--icon--danger"
-                  :title="t('common.delete')"
-                  @click.stop="emit('deleteNode', row.node.id)"
-                >
-                  <UiIcon name="delete" />
-                </button>
+                  <button
+                    type="button"
+                    class="btn--icon"
+                    @click.stop="startRenameNode(row.node)"
+                  >
+                    <UiIcon name="edit" />
+                  </button>
+                </AppTooltip>
+                <AppTooltip :text="t('common.delete')" placement="bottom">
+                  <button
+                    type="button"
+                    class="btn--icon btn--icon--danger"
+                    @click.stop="emit('deleteNode', row.node.id)"
+                  >
+                    <UiIcon name="delete" />
+                  </button>
+                </AppTooltip>
               </div>
             </div>
           </div>
@@ -929,15 +956,19 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                 @blur="commitRenameDiagram(row.diagram)"
               >
             </div>
-            <button
+            <AppTooltip
               v-if="renamingDiagramId !== row.diagram.id"
-              type="button"
-              class="btn--icon diagram-row__edit-btn"
-              :title="t('models.renameDiagram')"
-              @click.stop="startRenameDiagram(row.diagram)"
+              :text="t('models.renameDiagram')"
+              placement="bottom"
             >
-              <UiIcon name="edit" />
-            </button>
+              <button
+                type="button"
+                class="btn--icon diagram-row__edit-btn"
+                @click.stop="startRenameDiagram(row.diagram)"
+              >
+                <UiIcon name="edit" />
+              </button>
+            </AppTooltip>
             <button
               type="button"
               class="btn--icon btn--icon--danger"
@@ -945,14 +976,15 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
             >
               <UiIcon name="delete" />
             </button>
-          <button
-            type="button"
-            class="btn--icon diagram-row__copy-btn"
-            :title="t('models.diagramCopy.title')"
-            @click.stop="emit('copyDiagramToModel', row.diagram.id)"
-          >
-            <UiIcon name="content_copy" />
-          </button>
+          <AppTooltip :text="t('models.diagramCopy.title')" placement="bottom">
+            <button
+              type="button"
+              class="btn--icon diagram-row__copy-btn"
+              @click.stop="emit('copyDiagramToModel', row.diagram.id)"
+            >
+              <UiIcon name="content_copy" />
+            </button>
+          </AppTooltip>
           </div>
           <div
             v-else-if="row.kind === 'search'"
@@ -1297,6 +1329,11 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 
 .tree-node__icon-svg {
   object-fit: contain;
+}
+
+.tree-node__icon-symbol,
+.tree-node__icon-svg {
+  margin-left: calc(var(--tree-depth, 0) * -4px);
 }
 
 .tree-node__row--active .tree-node__icon-symbol,

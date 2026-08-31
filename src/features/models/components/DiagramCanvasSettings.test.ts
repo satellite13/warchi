@@ -17,6 +17,7 @@ describe('DiagramCanvasSettings', () => {
       global: {
         stubs: {
           UiIcon: { template: '<i class="ui-icon" />', props: ['name'] },
+          AppTooltip: { template: '<span><slot /></span>' },
         },
       },
     })

@@ -21,6 +21,7 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, s
           props: ['size', 'showTitle'],
           template: '<div class="app-logo" />',
         },
+        AppTooltip: { template: '<span class="app-tooltip-stub"><slot /></span>' },
       },
     },
   })

@@ -28,9 +28,11 @@ const emit = defineEmits<{
   </div>
   <header v-else class="deh" :class="{ 'deh--no-toolbar': hideToolbar }">
     <div class="deh__left">
-      <button type="button" class="deh__back" :title="backTitle" @click="emit('back')">
-        <UiIcon name="arrow_back" />
-      </button>
+      <AppTooltip :text="backTitle" placement="bottom">
+        <button type="button" class="deh__back" :aria-label="backTitle" @click="emit('back')">
+          <UiIcon name="arrow_back" />
+        </button>
+      </AppTooltip>
       <AppLogo size="sm" :show-title="false" />
       <span class="deh__divider">/</span>
       <slot name="title" />

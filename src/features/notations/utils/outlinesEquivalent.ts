@@ -1,15 +1,6 @@
-import type { OutlineSegment } from '@/domain/attrs/notationAttrs'
+import { parseOutlineSegments, parseOutlineSegmentsOrEmpty } from '@/domain/attrs/outline'
 
-function parseOutlineSegments(raw: string | null | undefined): OutlineSegment[] | null {
-  if (raw == null || raw.trim() === '') return null
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed) || parsed.length === 0) return null
-    return parsed as OutlineSegment[]
-  } catch {
-    return null
-  }
-}
+export { parseOutlineSegmentsOrEmpty }
 
 /** Stable geometry compare: parse JSON outlines and deep-compare segments. */
 export function outlinesEquivalent(
@@ -20,8 +11,4 @@ export function outlinesEquivalent(
   const right = parseOutlineSegments(b)
   if (!left || !right) return false
   return JSON.stringify(left) === JSON.stringify(right)
-}
-
-export function parseOutlineSegmentsOrEmpty(raw: string | null | undefined): OutlineSegment[] {
-  return parseOutlineSegments(raw) ?? []
 }

@@ -5,7 +5,7 @@ import { createEmptyCustomProperty } from '@/domain/attrs/createEmptyCustomPrope
 export type CustomPropertyHost = {
   id: string
   parsedAttrs: {
-    customProperties: CustomProperty[]
+    customProperties?: CustomProperty[]
   }
 }
 
@@ -31,7 +31,9 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   const hasValidationErrors = computed(() => {
     const target = selectedItem.value
     if (!target) return false
-    return target.parsedAttrs.customProperties.some(property => propertyErrors(property).length > 0)
+    return (target.parsedAttrs.customProperties ?? []).some(
+      (property) => propertyErrors(property).length > 0,
+    )
   })
 
   const mutate = (apply: (item: T) => void) => {
@@ -41,13 +43,19 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   }
 
   const addCustomProperty = () => {
-    mutate(item => {
+    mutate((item) => {
+      if (!item.parsedAttrs.customProperties) {
+        item.parsedAttrs.customProperties = []
+      }
       item.parsedAttrs.customProperties.push(createEmptyCustomProperty())
     })
   }
 
   const addCustomPropertyFromType = (typeProperty: CustomProperty) => {
-    mutate(item => {
+    mutate((item) => {
+      if (!item.parsedAttrs.customProperties) {
+        item.parsedAttrs.customProperties = []
+      }
       item.parsedAttrs.customProperties.push({
         ...typeProperty,
         id: createId(),
@@ -58,22 +66,10 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   }
 
   const removeCustomProperty = (propertyId: string) => {
-    mutate(item => {
-      item.parsedAttrs.customProperties = item.parsedAttrs.customProperties.filter(
-        p => p.id !== propertyId,
+    mutate((item) => {
+      item.parsedAttrs.customProperties = (item.parsedAttrs.customProperties ?? []).filter(
+        (p) => p.id !== propertyId,
       )
-    })
-  }
-
-  const updateEnumValues = (property: CustomProperty, value: string) => {
-    const nextValues = value
-      .split(',')
-      .map(item => item.trim())
-      .filter(Boolean)
-    const propertyId = property.id
-    mutate(item => {
-      const p = item.parsedAttrs.customProperties.find(cp => cp.id === propertyId)
-      if (p) p.enumValues = nextValues
     })
   }
 
@@ -82,7 +78,6 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
     addCustomProperty,
     addCustomPropertyFromType,
     removeCustomProperty,
-    updateEnumValues,
     propertyErrors,
   }
 }

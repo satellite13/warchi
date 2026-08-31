@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import CollapseSection from './CollapseSection.vue'
+import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
 import CopyRelationRulesModal from './CopyRelationRulesModal.vue'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
 import MultiSelect from '@/components/forms/MultiSelect.vue'
@@ -204,10 +204,10 @@ const removeRelationRule = (rule: EditorRelationRule) => {
 </script>
 
 <template>
-  <CollapseSection
+  <CollapsibleSection
     v-if="selectedItem && !('linkTypeId' in selectedItem) && !isUntypedComponent(selectedItem)"
-    :label="t('diagram.linkRules')"
-    :expanded="relationRulesExpanded"
+    :title="t('diagram.linkRules')"
+    :open="relationRulesExpanded"
     @toggle="toggleRelationRulesCollapse"
   >
     <template #header-extra>
@@ -290,7 +290,7 @@ const removeRelationRule = (rule: EditorRelationRule) => {
         </button>
       </div>
     </div>
-  </CollapseSection>
+  </CollapsibleSection>
 
   <CopyRelationRulesModal
     v-if="showCopyModal"

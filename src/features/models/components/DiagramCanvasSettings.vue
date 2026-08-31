@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import UiIcon from '@/components/ui/UiIcon.vue'
-import type { ToolbarButton } from '@/features/notations/layout/IconToolbar.vue'
+import type { ToolbarButton } from '@/components/layout/IconToolbar.vue'
 import type { EdgePathType } from '../composables/useModelToolbarState'
 
 const props = withDefaults(

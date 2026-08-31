@@ -3,7 +3,7 @@ import { useLibraryIcons } from '@/composables/useLibraryIcons'
 import {
   analyzeImportIconGaps,
   remapIconNamesInValue,
-} from '@/features/notations/utils/analyzeImportIconGaps'
+} from '@/features/diagram/utils/analyzeImportIconGaps'
 
 export function useNotationIconImport() {
   const { icons, ensureLoaded, refresh } = useLibraryIcons()

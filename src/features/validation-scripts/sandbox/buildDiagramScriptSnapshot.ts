@@ -1,4 +1,7 @@
-import type { EditorDiagram, ModelEditorState } from '@/features/models/types'
+import type {
+  ScriptEditorDiagram,
+  ScriptEditorState,
+} from './editorStateContract'
 import type {
   SnapshotDiagram,
   SnapshotLink,
@@ -16,7 +19,7 @@ function toPlainRecord(value: unknown): Record<string, unknown> | null {
   }
 }
 
-function toOpenSnapshotDiagram(diagram: EditorDiagram): SnapshotDiagram {
+function toOpenSnapshotDiagram(diagram: ScriptEditorDiagram): SnapshotDiagram {
   const instances = diagram.parsedAttrs?.instances
   const instanceNodes = (instances?.nodes ?? []).map((n) => ({
     id: n.id,
@@ -59,7 +62,7 @@ function toOpenSnapshotDiagram(diagram: EditorDiagram): SnapshotDiagram {
 }
 
 export function buildDiagramScriptSnapshot(input: {
-  state: ModelEditorState
+  state: ScriptEditorState
   modelName: string
   modelVersion: string
   openDiagramId: string | null

@@ -342,12 +342,3 @@ export async function retryModelPackageImport(
   })
   return pollImportJob(result.data.jobId || jobId, onProgress, options)
 }
-
-export async function downloadNotationExport(notationId: string): Promise<void> {
-  const result = await apiDownload(`/notations/${encodeURIComponent(notationId)}/export`)
-  if (!result.success) {
-    throw new Error(result.error.message)
-  }
-  const resolvedName = result.data.fileName ?? `${notationId}-export.json`
-  triggerBlobDownload(result.data.blob, resolvedName)
-}

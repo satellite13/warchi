@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShell.vue"
-import IconToolbar, { type ToolbarButton } from "../../notations/layout/IconToolbar.vue"
+import IconToolbar, { type ToolbarButton } from '@/components/layout/IconToolbar.vue'
 import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
 import type { EdgePathType } from "../composables/useModelToolbarState"
 

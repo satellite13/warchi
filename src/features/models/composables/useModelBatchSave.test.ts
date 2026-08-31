@@ -8,6 +8,7 @@ import {
   findBlankNamedBatchNodes,
   hasBatchChanges,
   parseBatchSaveConflictDetails,
+  parseDiagramNameVersionConflict,
   refreshBatchSavedEntityTimestamps,
 } from './useModelBatchSave'
 import { apiGet, apiPost } from '@/composables/useApi'
@@ -250,6 +251,37 @@ describe('useModelBatchSave', () => {
       },
     ])
     expect(parseBatchSaveConflictDetails({ conflicts: [{ kind: 'node' }] })).toBeNull()
+  })
+
+  it('parses a soft-deleted diagram name/version conflict', () => {
+    expect(
+      parseDiagramNameVersionConflict({
+        error: 'DIAGRAM_NAME_VERSION_IN_TRASH',
+        name: 'Sales Price Calculator',
+        version: '1.0.0',
+        deletedDiagramId: 'deleted-1',
+        suggestedVersion: '1.1.0',
+      })
+    ).toEqual({
+      error: 'DIAGRAM_NAME_VERSION_IN_TRASH',
+      name: 'Sales Price Calculator',
+      version: '1.0.0',
+      deletedDiagramId: 'deleted-1',
+      suggestedVersion: '1.1.0',
+    })
+    expect(parseDiagramNameVersionConflict({ error: 'DATA_INTEGRITY' })).toBeNull()
+  })
+
+  it('sends replaceDeletedId when a new diagram reuses a trash key', () => {
+    const request = buildBatchSaveRequest(
+      [],
+      [],
+      [createDiagram({ id: 'diagram-new', _isNew: true, _replaceDeletedId: 'deleted-1' })]
+    )
+    expect(request.diagrams.create[0]).toMatchObject({
+      tempId: 'diagram-new',
+      replaceDeletedId: 'deleted-1',
+    })
   })
 
   it('posts batch saves to the encoded model endpoint', async () => {

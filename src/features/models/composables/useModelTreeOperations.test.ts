@@ -1,8 +1,12 @@
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { parseNodeAttrs } from '../modelAttrs'
 import { createEmptyModelEditorState, type EditorNode, type TreeParentScope } from '../types'
 import { useModelTreeOperations } from './useModelTreeOperations'
+
+vi.mock('@/composables/useApi', () => ({
+  apiGet: vi.fn(),
+}))
 
 const makeNode = (
   id: string,
@@ -379,5 +383,78 @@ describe('useModelTreeOperations partial scope safety', () => {
       kind: 'node',
       nodeId: 'existing',
     })
+  })
+
+  it('warns when creating a diagram that reuses a locally deleted name and version', async () => {
+    const { state, operations } = setup(['root'])
+    state.value.notations = [{ id: 'notation-1', name: 'Arch', version: '1.0.0', ownerId: 'owner-1' }]
+    state.value.diagrams = [
+      {
+        id: 'old-diagram',
+        name: 'Sales Price Calculator',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        parsedAttrs: { instances: { nodes: [], edges: [] } },
+        createdAt: null,
+        updatedAt: null,
+        _isDeleted: true,
+        _isNew: false,
+      },
+    ]
+    operations.openCreateDiagram(null)
+    operations.newDiagramName.value = 'Sales Price Calculator'
+    operations.newDiagramVersion.value = '1.0.0'
+    operations.newDiagramNotationId.value = 'notation-1'
+    await nextTick()
+
+    await operations.createDiagram()
+
+    expect(operations.diagramTrashConflict.value).toMatchObject({
+      error: 'DIAGRAM_NAME_VERSION_IN_TRASH',
+      deletedDiagramId: 'old-diagram',
+      suggestedVersion: '1.1.0',
+    })
+    expect(state.value.diagrams.filter(d => d._isNew)).toHaveLength(0)
+
+    operations.createDiagramWithBumpedVersion()
+    const created = state.value.diagrams.find(d => d._isNew)
+    expect(created?.version).toBe('1.1.0')
+    expect(created?._replaceDeletedId).toBeUndefined()
+  })
+
+  it('creates a replacement diagram that permanently takes the trash key', async () => {
+    const { state, operations } = setup(['root'])
+    state.value.notations = [{ id: 'notation-1', name: 'Arch', version: '1.0.0', ownerId: 'owner-1' }]
+    state.value.diagrams = [
+      {
+        id: 'old-diagram',
+        name: 'Sales Price Calculator',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        parsedAttrs: { instances: { nodes: [], edges: [] } },
+        createdAt: null,
+        updatedAt: null,
+        _isDeleted: true,
+        _isNew: false,
+      },
+    ]
+    operations.openCreateDiagram(null)
+    operations.newDiagramName.value = 'Sales Price Calculator'
+    operations.newDiagramVersion.value = '1.0.0'
+    operations.newDiagramNotationId.value = 'notation-1'
+    await nextTick()
+    await operations.createDiagram()
+
+    operations.createDiagramReplacingDeleted()
+    const created = state.value.diagrams.find(d => d._isNew)
+    expect(created?.version).toBe('1.0.0')
+    expect(created?._replaceDeletedId).toBe('old-diagram')
+    expect(state.value.diagrams.find(d => d.id === 'old-diagram')?._isDeleted).toBe(true)
   })
 })

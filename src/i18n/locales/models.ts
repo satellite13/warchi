@@ -323,6 +323,11 @@ export const modelsMessages = {
       newDiagramPlaceholder: 'Новая диаграмма',
       notationLabel: 'Нотация',
       diagramConflictMessage: 'Диаграмма с таким именем и версией уже существует в модели.',
+      diagramTrashConflictTitle: 'Удалённая диаграмма занимает это имя',
+      diagramTrashConflictMessage:
+        'Диаграмма «{name}» версии {version} удалена, но ещё хранится в корзине. Если создать новую с тем же ключом, старую нельзя будет восстановить. Можно поднять версию новой или удалить старую насовсем.',
+      diagramTrashConflictBump: 'Создать как {version}',
+      diagramTrashConflictReplace: 'Удалить старую насовсем',
       diagramVersion: 'Версия диаграммы',
       copyDiagramLink: 'Скопировать ссылку на диаграмму',
       copyDiagramLinkFailed: 'Не удалось скопировать ссылку',
@@ -990,6 +995,11 @@ export const modelsMessages = {
       notationLabel: 'Notation',
       diagramConflictMessage:
         'A diagram with the same name and version already exists in the model.',
+      diagramTrashConflictTitle: 'A deleted diagram still uses this name',
+      diagramTrashConflictMessage:
+        'Diagram “{name}” version {version} is deleted but still in the trash. Creating a new one with the same key would make restore impossible. Bump the new version or permanently delete the old diagram.',
+      diagramTrashConflictBump: 'Create as {version}',
+      diagramTrashConflictReplace: 'Permanently delete the old one',
       diagramVersion: 'Diagram version',
       copyDiagramLink: 'Copy diagram link',
       copyDiagramLinkFailed: 'Could not copy the link',

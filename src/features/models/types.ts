@@ -81,6 +81,8 @@ export type EditorDiagram = Omit<DiagramResponse, "attrs"> & {
   _isNew?: boolean
   _isDirty?: boolean
   _isDeleted?: boolean
+  /** Soft-deleted server diagram to hard-delete on save so this name+version can be reused. */
+  _replaceDeletedId?: string
 }
 
 export type ModelEditorState = {

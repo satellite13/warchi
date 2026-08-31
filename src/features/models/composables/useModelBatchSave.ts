@@ -57,6 +57,7 @@ export interface BatchSaveRequest {
       notationId: string
       nodeId: string | null
       attrs: string | null
+      replaceDeletedId?: string
     }>
     update: Array<{
       id: string
@@ -157,6 +158,7 @@ export function buildBatchSaveRequest(
           notationId: d.notationId,
           nodeId: d.nodeId ?? null,
           attrs: serializeDiagramAttrs(d.parsedAttrs),
+          ...(d._replaceDeletedId ? { replaceDeletedId: d._replaceDeletedId } : {}),
         })),
       update: diagrams
         .filter(d => d._isDirty && !d._isDeleted && !d._isNew)
@@ -187,6 +189,31 @@ export function isValidBatchResponse(data: unknown): data is BatchSaveResponse {
     typeof obj.diagramIdMap === 'object' &&
     obj.diagramIdMap !== null
   )
+}
+
+export type DiagramNameVersionConflict = {
+  error: 'DIAGRAM_NAME_VERSION_EXISTS' | 'DIAGRAM_NAME_VERSION_IN_TRASH'
+  name: string
+  version: string
+  deletedDiagramId: string | null
+  suggestedVersion: string | null
+}
+
+export function parseDiagramNameVersionConflict(details: unknown): DiagramNameVersionConflict | null {
+  if (!details || typeof details !== 'object') return null
+  const record = details as Record<string, unknown>
+  const error = record.error
+  if (error !== 'DIAGRAM_NAME_VERSION_EXISTS' && error !== 'DIAGRAM_NAME_VERSION_IN_TRASH') {
+    return null
+  }
+  if (typeof record.name !== 'string' || typeof record.version !== 'string') return null
+  return {
+    error,
+    name: record.name,
+    version: record.version,
+    deletedDiagramId: typeof record.deletedDiagramId === 'string' ? record.deletedDiagramId : null,
+    suggestedVersion: typeof record.suggestedVersion === 'string' ? record.suggestedVersion : null,
+  }
 }
 
 export function parseBatchSaveConflictDetails(details: unknown): BatchConflictItem[] | null {

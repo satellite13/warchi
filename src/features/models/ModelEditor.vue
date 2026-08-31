@@ -186,6 +186,10 @@ const {
   whenCatalogReady,
   whenBackgroundReady,
   batchSaveConflict,
+  diagramNameVersionConflict,
+  resolveDiagramTrashBump,
+  resolveDiagramTrashReplace,
+  dismissDiagramNameVersionConflict,
   resolveBatchSaveReload,
   resolveBatchSaveOverwrite,
   dismissBatchSaveConflict,
@@ -1242,6 +1246,8 @@ const {
   newDiagramName,
   newDiagramVersion,
   newDiagramNotationId,
+  diagramTrashConflict,
+  createDiagramPending,
   hasDiagramNameVersionConflict,
   directoryNodeType,
   nodeTypeDefaultDirectoryById,
@@ -1258,6 +1264,8 @@ const {
   createNode,
   openCreateDiagram,
   createDiagram,
+  createDiagramWithBumpedVersion,
+  createDiagramReplacingDeleted,
   isDirectoryNode,
   handleMoveNode,
   handleMoveDiagram,
@@ -3976,6 +3984,42 @@ onBeforeUnmount(() => {
     @dismiss="dismissBatchSaveConflict"
   />
 
+  <BaseModal
+    v-if="diagramNameVersionConflict?.error === 'DIAGRAM_NAME_VERSION_IN_TRASH'"
+    :title="t('models.diagramTrashConflictTitle')"
+    max-width="520px"
+    @close="dismissDiagramNameVersionConflict"
+  >
+    <p class="confirm-modal__text">
+      {{
+        t('models.diagramTrashConflictMessage', {
+          name: diagramNameVersionConflict.name,
+          version: diagramNameVersionConflict.version,
+        })
+      }}
+    </p>
+    <template #footer>
+      <button type="button" class="btn btn--secondary" @click="dismissDiagramNameVersionConflict">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="!diagramNameVersionConflict.suggestedVersion"
+        @click="resolveDiagramTrashBump"
+      >
+        {{
+          t('models.diagramTrashConflictBump', {
+            version: diagramNameVersionConflict.suggestedVersion ?? '',
+          })
+        }}
+      </button>
+      <button type="button" class="btn btn--danger" @click="resolveDiagramTrashReplace">
+        {{ t('models.diagramTrashConflictReplace') }}
+      </button>
+    </template>
+  </BaseModal>
+
   <LayoutPreviewModal
     v-if="layoutPreviewBefore"
     :open="showLayoutPreviewModal"
@@ -4155,15 +4199,41 @@ onBeforeUnmount(() => {
       <div v-if="hasDiagramNameVersionConflict" class="form-error">
         {{ t('models.diagramConflictMessage') }}
       </div>
+      <div v-else-if="diagramTrashConflict" class="form-error">
+        {{
+          t('models.diagramTrashConflictMessage', {
+            name: diagramTrashConflict.name,
+            version: diagramTrashConflict.version,
+          })
+        }}
+      </div>
     </div>
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="showCreateDiagramModal = false">
         {{ t('common.cancel') }}
       </button>
+      <template v-if="diagramTrashConflict">
+        <button
+          type="button"
+          class="btn btn--secondary"
+          :disabled="!diagramTrashConflict.suggestedVersion"
+          @click="createDiagramWithBumpedVersion"
+        >
+          {{
+            t('models.diagramTrashConflictBump', {
+              version: diagramTrashConflict.suggestedVersion ?? '',
+            })
+          }}
+        </button>
+        <button type="button" class="btn btn--danger" @click="createDiagramReplacingDeleted">
+          {{ t('models.diagramTrashConflictReplace') }}
+        </button>
+      </template>
       <button
+        v-else
         type="button"
         class="btn btn--primary"
-        :disabled="hasDiagramNameVersionConflict"
+        :disabled="hasDiagramNameVersionConflict || createDiagramPending"
         @click="createDiagram"
       >
         {{ t('common.create') }}

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   hasBatchChanges: vi.fn(),
   isValidBatchResponse: vi.fn(),
   parseBatchSaveConflictDetails: vi.fn(),
+  parseDiagramNameVersionConflict: vi.fn(),
   refreshBatchSavedEntityTimestamps: vi.fn(),
   remapNodeIds: vi.fn(),
   saveDiagrams: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock("./useModelBatchSave", () => ({
   hasBatchChanges: mocks.hasBatchChanges,
   isValidBatchResponse: mocks.isValidBatchResponse,
   parseBatchSaveConflictDetails: mocks.parseBatchSaveConflictDetails,
+  parseDiagramNameVersionConflict: mocks.parseDiagramNameVersionConflict,
   refreshBatchSavedEntityTimestamps: mocks.refreshBatchSavedEntityTimestamps,
 }))
 
@@ -149,6 +151,7 @@ describe("executeModelEditorSave", () => {
     mocks.batchSave.mockResolvedValue({ success: true, data: { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} } })
     mocks.isValidBatchResponse.mockReturnValue(true)
     mocks.parseBatchSaveConflictDetails.mockReturnValue(null)
+    mocks.parseDiagramNameVersionConflict.mockReturnValue(null)
   })
 
   it("returns false when model is not loaded", async () => {
@@ -396,6 +399,46 @@ describe("executeModelEditorSave", () => {
     expect(batchSaveConflict.value).toEqual(conflicts)
     expect(scheduleSaveErrorClear).not.toHaveBeenCalled()
     expect(mocks.saveNodes).not.toHaveBeenCalled()
+  })
+
+  it("stores a trash name/version conflict on batch 409", async () => {
+    const trash = {
+      error: "DIAGRAM_NAME_VERSION_IN_TRASH" as const,
+      name: "Sales Price Calculator",
+      version: "1.0.0",
+      deletedDiagramId: "deleted-1",
+      suggestedVersion: "1.1.0",
+    }
+    mocks.hasBatchChanges.mockReturnValue(true)
+    mocks.batchSave.mockResolvedValue({
+      success: false,
+      error: { status: 409, message: "trash", details: { error: trash.error } },
+    })
+    mocks.parseDiagramNameVersionConflict.mockReturnValue(trash)
+
+    const diagramNameVersionConflict = ref<typeof trash | null>(null)
+    const result = await executeModelEditorSave({
+      model: ref<ModelData | null>({
+        id: "model-1",
+        name: "Model",
+        version: "1.0.0",
+        ownerId: "owner-1",
+        attrs: null,
+      }),
+      modelDirty: ref(false),
+      modelInitialName: ref("Model"),
+      modelCatalog: ref<ModelData[]>([]),
+      state: ref(createState()),
+      pendingForceBatch: ref(false),
+      batchSaveConflict: ref(null),
+      diagramNameVersionConflict,
+      saveError: ref<string | null>(null),
+      onProgress: vi.fn(),
+      scheduleSaveErrorClear: vi.fn(),
+    })
+
+    expect(result).toBe(false)
+    expect(diagramNameVersionConflict.value).toEqual(trash)
   })
 
   it("builds the batch request only from materialized editor rows", async () => {

@@ -1,9 +1,11 @@
 import { computed, ref, watch, type Ref } from 'vue'
+import { apiGet } from '@/composables/useApi'
 import { bumpMinor, compareVersions } from '@/utils/version'
 import { createId, parseNodeAttrs } from '../modelAttrs'
 import type { EditorNode, ModelEditorState, TreeParentScope } from '../types'
 import { applyDefaultsToEditorNode } from '../utils/syncDefaultsOnLoad'
 import { parseTypeAttrs } from '@/domain/attrs/notationAttrs'
+import { type DiagramNameVersionConflict } from './useModelBatchSave'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 
@@ -37,6 +39,8 @@ export function useModelTreeOperations(options: {
   const newDiagramName = ref('')
   const newDiagramVersion = ref('1.0.0')
   const newDiagramNotationId = ref('')
+  const diagramTrashConflict = ref<DiagramNameVersionConflict | null>(null)
+  const createDiagramPending = ref(false)
 
   const normalizedNewDiagramName = computed(() => newDiagramName.value.trim().toLowerCase())
   const normalizedNewDiagramVersion = computed(() => (newDiagramVersion.value || '1.0.0').trim())
@@ -326,17 +330,32 @@ export function useModelTreeOperations(options: {
     newDiagramName.value = ''
     newDiagramVersion.value = '1.0.0'
     newDiagramNotationId.value = options.state.value.notations[0]?.id ?? ''
+    diagramTrashConflict.value = null
     options.clearUiError()
     showCreateDiagramModal.value = true
   }
 
-  const createDiagram = () => {
-    if (!newDiagramName.value.trim() || !newDiagramNotationId.value) return
-    if (hasDiagramNameVersionConflict.value) {
-      options.setUiError(options.t('models.diagramConflictMessage'))
-      return
+  const findLocalTrashConflict = (): DiagramNameVersionConflict | null => {
+    const name = normalizedNewDiagramName.value
+    const version = normalizedNewDiagramVersion.value
+    const deleted = options.state.value.diagrams.find(
+      diagram =>
+        diagram._isDeleted === true &&
+        diagram._isNew !== true &&
+        diagram.name.trim().toLowerCase() === name &&
+        diagram.version.trim() === version
+    )
+    if (!deleted) return null
+    return {
+      error: 'DIAGRAM_NAME_VERSION_IN_TRASH',
+      name: deleted.name,
+      version: deleted.version,
+      deletedDiagramId: deleted.id,
+      suggestedVersion: bumpMinor(deleted.version),
     }
-    options.clearUiError()
+  }
+
+  const pushNewDiagram = (replaceDeletedId?: string): void => {
     const id = createId()
     options.state.value.diagrams.push({
       id,
@@ -350,10 +369,76 @@ export function useModelTreeOperations(options: {
       updatedAt: null,
       parsedAttrs: { instances: { nodes: [], edges: [] } },
       _isNew: true,
+      ...(replaceDeletedId ? { _replaceDeletedId: replaceDeletedId } : {}),
     })
     options.selectedDiagramId.value = id
+    diagramTrashConflict.value = null
     showCreateDiagramModal.value = false
   }
+
+  const createDiagram = async (): Promise<void> => {
+    if (!newDiagramName.value.trim() || !newDiagramNotationId.value) return
+    if (hasDiagramNameVersionConflict.value) {
+      options.setUiError(options.t('models.diagramConflictMessage'))
+      return
+    }
+    options.clearUiError()
+    const localTrash = findLocalTrashConflict()
+    if (localTrash) {
+      diagramTrashConflict.value = localTrash
+      return
+    }
+    createDiagramPending.value = true
+    try {
+      const modelId = options.state.value.modelId
+      const params = new URLSearchParams({
+        modelId,
+        name: newDiagramName.value.trim(),
+        version: newDiagramVersion.value || '1.0.0',
+      })
+      const result = await apiGet<DiagramNameVersionConflict & { status?: string }>(
+        `/diagrams/name-version-availability?${params.toString()}`
+      )
+      if (result?.success) {
+        const status = result.data.status ?? result.data.error
+        if (status === 'DIAGRAM_NAME_VERSION_EXISTS') {
+          options.setUiError(options.t('models.diagramConflictMessage'))
+          return
+        }
+        if (status === 'DIAGRAM_NAME_VERSION_IN_TRASH' && result.data.deletedDiagramId) {
+          diagramTrashConflict.value = {
+            error: 'DIAGRAM_NAME_VERSION_IN_TRASH',
+            name: result.data.name,
+            version: result.data.version,
+            deletedDiagramId: result.data.deletedDiagramId,
+            suggestedVersion: result.data.suggestedVersion,
+          }
+          return
+        }
+      }
+      pushNewDiagram()
+    } finally {
+      createDiagramPending.value = false
+    }
+  }
+
+  const createDiagramWithBumpedVersion = (): void => {
+    const suggested = diagramTrashConflict.value?.suggestedVersion
+    if (!suggested) return
+    newDiagramVersion.value = suggested
+    diagramTrashConflict.value = null
+    pushNewDiagram()
+  }
+
+  const createDiagramReplacingDeleted = (): void => {
+    const deletedId = diagramTrashConflict.value?.deletedDiagramId
+    if (!deletedId) return
+    pushNewDiagram(deletedId)
+  }
+
+  watch([normalizedNewDiagramName, normalizedNewDiagramVersion], () => {
+    diagramTrashConflict.value = null
+  })
 
   const isDirectoryNode = (nodeId: string): boolean => {
     const node = options.state.value.nodes.find(item => item.id === nodeId)
@@ -533,6 +618,8 @@ export function useModelTreeOperations(options: {
     newDiagramName,
     newDiagramVersion,
     newDiagramNotationId,
+    diagramTrashConflict,
+    createDiagramPending,
     hasDiagramNameVersionConflict,
     directoryNodeType,
     nonDirectoryNodeTypes,
@@ -555,6 +642,8 @@ export function useModelTreeOperations(options: {
     createNode,
     openCreateDiagram,
     createDiagram,
+    createDiagramWithBumpedVersion,
+    createDiagramReplacingDeleted,
     isDirectoryNode,
     handleMoveNode,
     handleMoveDiagram,

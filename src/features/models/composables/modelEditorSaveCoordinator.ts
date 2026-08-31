@@ -1,7 +1,8 @@
 import type { Ref } from "vue"
 import i18n from "@/i18n"
 import type { ModelData } from "@/types/entities"
-import type { BatchConflictItem } from "./useModelBatchSave"
+import type { BatchConflictItem, DiagramNameVersionConflict } from "./useModelBatchSave"
+import { parseDiagramNameVersionConflict } from "./useModelBatchSave"
 import type { EditorDiagram, EditorLink, EditorNode, ModelEditorState } from "../types"
 import { applyDiagramGarbageSanitizeToState } from "../utils/sanitizeDiagramInstances"
 import {
@@ -26,6 +27,7 @@ type ExecuteModelEditorSaveOptions = {
   state: Ref<ModelEditorState>
   pendingForceBatch: Ref<boolean>
   batchSaveConflict: Ref<BatchConflictItem[] | null>
+  diagramNameVersionConflict?: Ref<DiagramNameVersionConflict | null>
   saveError: Ref<string | null>
   remoteCascadeConflictLinkIds?: ReadonlySet<string>
   onProgress: (msg: string) => void
@@ -105,6 +107,16 @@ export async function executeModelEditorSave(options: ExecuteModelEditorSaveOpti
         const conflicts = parseBatchSaveConflictDetails(batchResult.error.details)
         if (conflicts && conflicts.length > 0) {
           options.batchSaveConflict.value = conflicts
+          return false
+        }
+        const nameVersion = parseDiagramNameVersionConflict(batchResult.error.details)
+        if (nameVersion?.error === 'DIAGRAM_NAME_VERSION_IN_TRASH' && options.diagramNameVersionConflict) {
+          options.diagramNameVersionConflict.value = nameVersion
+          return false
+        }
+        if (nameVersion?.error === 'DIAGRAM_NAME_VERSION_EXISTS') {
+          options.saveError.value = t('models.diagramConflictMessage')
+          options.scheduleSaveErrorClear()
           return false
         }
         options.saveError.value =

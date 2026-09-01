@@ -1,10 +1,12 @@
 #!/bin/bash
 #
-# ci-local.sh — локальный quality gate (этапы CI/CD до появления runner).
-# Эквивалент этапов 1–4 из Фазы 2; опционально coverage и npm audit.
+# ci-local.sh — единый quality gate проекта (локально и в GitHub Actions).
+# Workflow: .github/workflows/ci.yml → `npm run ci:local`
+# Опционально coverage и e2e; npm audit (high+) только предупреждает.
 #
 # Использование:
 #   ./scripts/ci-local.sh
+#   npm run ci:local
 #   RUN_E2E=true ./scripts/ci-local.sh
 #   RUN_COVERAGE=true ./scripts/ci-local.sh
 #

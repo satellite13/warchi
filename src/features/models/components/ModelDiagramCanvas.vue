@@ -375,9 +375,12 @@ const viewportControls = useDiagramViewportControls({
   getRenderer: () => renderer,
   getInteraction: () => interactionManager,
   getContainerEl: () => containerRef.value,
-  persistViewport: (diagramId, r) => persistDiagramViewport(diagramId, r as DiagramRenderer),
+  persistViewport: (diagramId, _r) => {
+    if (renderer) persistDiagramViewport(diagramId, renderer)
+  },
   flushPersistViewport: diagramId => flushPersistDiagramViewport(diagramId),
-  restoreViewport: (diagramId, r) => restoreDiagramViewport(diagramId, r as DiagramRenderer),
+  restoreViewport: (diagramId, _r) =>
+    renderer ? restoreDiagramViewport(diagramId, renderer) : false,
   gridVisible,
   miniMapVisible,
   snapEnabled,

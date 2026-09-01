@@ -9,7 +9,7 @@ export type SelectionPropsInput = {
 }
 
 export type PapSelectionApi = {
-  selectedIds: Set<string>
+  selectedIds: ReadonlySet<string>
   selectMultiple: (ids: string[]) => void
   clearSelection: () => void
   select: (id: string) => void
@@ -71,7 +71,7 @@ export function selectionNeedsRepair(
   })
 }
 
-export function selectionIdsDiffer(targetPapIds: string[], currentIds: Set<string>): boolean {
+export function selectionIdsDiffer(targetPapIds: string[], currentIds: ReadonlySet<string>): boolean {
   return targetPapIds.length !== currentIds.size || targetPapIds.some(id => !currentIds.has(id))
 }
 

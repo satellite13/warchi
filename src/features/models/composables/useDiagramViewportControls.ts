@@ -5,7 +5,7 @@ export type ViewportRendererApi = {
   zoom: number
   viewport: ViewportState
   markDirty: () => void
-  edges: Map<string, { lockAnchors?: boolean }>
+  edges: ReadonlyMap<string, { lockAnchors?: boolean }>
 }
 
 export type ViewportNavigationApi = {
@@ -102,16 +102,25 @@ export function useDiagramViewportControls(options: {
     options.getInteraction()?.navigation.fitToView(50)
   }
 
-  const zoomToSelection = (instances: Array<{
-    modelNodeId: string
-    x: number
-    y: number
-    width?: number
-    height?: number
-  }>, selectedModelNodeIds: string[], getDimensions: (inst: {
-    width?: number
-    height?: number
-  }) => { width: number; height: number }): void => {
+  const zoomToSelection = (
+    instances: Array<{
+      modelNodeId: string
+      x: number
+      y: number
+      width?: number
+      height?: number
+      attrs?: Record<string, unknown>
+    }>,
+    selectedModelNodeIds: string[],
+    getDimensions: (inst: {
+      modelNodeId: string
+      x: number
+      y: number
+      width?: number
+      height?: number
+      attrs?: Record<string, unknown>
+    }) => { width: number; height: number }
+  ): void => {
     const interaction = options.getInteraction()
     if (!interaction || !options.getRenderer()) return
     if (selectedModelNodeIds.length === 0) return

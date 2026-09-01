@@ -4,16 +4,10 @@ import type { EditorLink, EditorNode, ModelEditorState } from '../types'
 import {
   DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
   isContainerInstance,
+  isDiagramOnlyVisualInstance,
   isEdgeAnchorInstance,
+  isStickyNoteInstance,
 } from './diagramOnlyInstances'
-
-function isStickyNoteInstance(inst: DiagramNodeInstance): boolean {
-  return inst.attrs?.isNote === true && inst.attrs?.isDirectoryNote !== true
-}
-
-function isDiagramOnlyNodeInstance(inst: DiagramNodeInstance): boolean {
-  return isStickyNoteInstance(inst) || isContainerInstance(inst) || isEdgeAnchorInstance(inst)
-}
 
 function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode | undefined {
   const live = nodes.find(n => n.id === modelNodeId && !n._isDeleted)
@@ -29,7 +23,7 @@ function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode |
  */
 function keepInstanceNode(nodes: EditorNode[], inst: DiagramNodeInstance): boolean {
   if (!inst.id || !inst.modelNodeId) return false
-  if (isDiagramOnlyNodeInstance(inst)) return true
+  if (isDiagramOnlyVisualInstance(inst)) return true
   const n = activeModelNode(nodes, inst.modelNodeId)
   if (!n) return true
   return !n._isDeleted

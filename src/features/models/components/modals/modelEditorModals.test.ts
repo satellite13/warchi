@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import CreateNodeModal from './CreateNodeModal.vue'
 import ChoiceListModal from './ChoiceListModal.vue'
+import OefImportReportModal from './OefImportReportModal.vue'
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -66,5 +67,32 @@ describe('ModelEditor extracted modals', () => {
     const buttons = wrapper.findAll('button.choice-item')
     await buttons[1]!.trigger('click')
     expect(wrapper.emitted('select')?.[0]).toEqual(['b'])
+  })
+
+  it('OefImportReportModal emits close', async () => {
+    const wrapper = mount(OefImportReportModal, {
+      props: {
+        report: {
+          nodes: 1,
+          links: 2,
+          diagrams: 3,
+          nodesReused: 0,
+          nodesUpdated: 0,
+          linksReused: 0,
+          linksUpdated: 0,
+          diagramNodeInstances: 4,
+          diagramConnectionInstances: 5,
+          warningsCount: 0,
+          warningGroups: [],
+          missingRequired: { total: 0, nodeType: 0, component: 0, relation: 0 },
+        },
+        warningLabel: (code: string) => code,
+      },
+      global: {
+        stubs: { BaseModal: BaseModalStub },
+      },
+    })
+    await wrapper.get('button.btn--secondary').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 })

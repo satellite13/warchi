@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
-import BaseModal from '@/components/modals/BaseModal.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
@@ -17,6 +16,7 @@ import DiagramTrashConflictModal from './components/modals/DiagramTrashConflictM
 import LinkDeleteModal from './components/modals/LinkDeleteModal.vue'
 import MigrateNotationModal from './components/modals/MigrateNotationModal.vue'
 import NoteEditorModal from './components/modals/NoteEditorModal.vue'
+import OefImportReportModal from './components/modals/OefImportReportModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
@@ -56,13 +56,13 @@ import {
   useOefImport,
   ensureNotationImportCatalog,
 } from './composables'
-import { applyPendingDiagramSwitch } from './utils/applyPendingDiagramSwitch'
 import {
   modelEditorDiagramHref,
   selectedDiagramQueryMatches,
   withSelectedDiagramQuery,
 } from './utils/modelEditorDiagramLink'
 import { isSaveLockedToolbarEvent } from './utils/modelEditorToolbarLock'
+import { useModelEditorEntityDelete } from './composables/useModelEditorEntityDelete'
 import { useModelEditorScriptRun } from './composables/useModelEditorScriptRun'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import { mergeEffectiveDiagramStyle } from './utils/diagramCanvasBuilders'
@@ -74,7 +74,6 @@ import {
   isEdgeAnchorModelNodeId,
 } from './utils/diagramOnlyInstances'
 import { canvasModelNodeIds, orphanedUntypedNodeIds } from './utils/orphanedDiagramOnlyNodes'
-import { removeOrphanEdgeAnchors } from './utils/edgeAnchorSync'
 import {
   getDiagramScopedLinkValues,
   getDiagramScopedNodeValues,
@@ -1229,63 +1228,6 @@ async function ensureImportDiagramAttrs(): Promise<void> {
   await ensureAllDiagramAttrsLoaded(() => state.value)
 }
 
-const showLinkDeleteModal = ref(false)
-const pendingDeleteLinkId = ref<string | null>(null)
-const pendingDeleteEdgeInstanceId = ref<string | null>(null)
-const showNodeDeleteModal = ref(false)
-const pendingDeleteNodeIds = ref<string[]>([])
-const pendingDeleteInstanceIds = ref<string[]>([])
-const pendingDeleteNodeSource = ref<'canvas' | 'tree'>('tree')
-const showDiagramDeleteModal = ref(false)
-const pendingDeleteDiagramId = ref<string | null>(null)
-const showDiagramSwitchModal = ref(false)
-const pendingDiagramSwitchId = ref<string | null>(null)
-const pendingDiagramAction = ref<'switch' | 'close' | null>(null)
-const pendingDeleteNodeCount = computed(() =>
-  pendingDeleteInstanceIds.value.length > 0
-    ? pendingDeleteInstanceIds.value.length
-    : pendingDeleteNodeIds.value.length
-)
-const pendingDeleteNodeSingleName = computed(() => {
-  const count = pendingDeleteNodeCount.value
-  if (count !== 1) return ''
-  if (pendingDeleteInstanceIds.value.length > 0) {
-    const instanceId = pendingDeleteInstanceIds.value[0]
-    if (!instanceId) return ''
-    const instance = activeDiagram.value?.parsedAttrs.instances.nodes.find(
-      item => item.id === instanceId
-    )
-    if (!instance) return ''
-    if (isNoteInstance(instance)) return t('models.noteName')
-    if (isContainerInstance(instance)) return t('models.containerName')
-    if (isEdgeAnchorInstance(instance)) return t('models.edgeAnchorName')
-    return state.value.nodes.find(item => item.id === instance.modelNodeId)?.name ?? ''
-  }
-  const nodeId = pendingDeleteNodeIds.value[0]
-  if (!nodeId) return ''
-  if (isDiagramNoteModelNodeId(nodeId)) return t('models.noteName')
-  if (isDiagramContainerModelNodeId(nodeId)) return t('models.containerName')
-  if (isEdgeAnchorModelNodeId(nodeId)) return t('models.edgeAnchorName')
-  return state.value.nodes.find(item => item.id === nodeId)?.name ?? ''
-})
-const nodeDeleteConfirmMessage = computed(() => {
-  const name = pendingDeleteNodeSingleName.value || t('common.unnamed')
-  const count = pendingDeleteNodeCount.value
-  if (pendingDeleteNodeSource.value === 'canvas') {
-    return count === 1
-      ? t('models.deleteNodeFromDiagramSingle', { name })
-      : t('models.deleteNodeFromDiagramMultiple', { count })
-  }
-  return count === 1
-    ? t('models.deleteNodeFromModelSingle', { name })
-    : t('models.deleteNodeFromModelMultiple', { count })
-})
-const pendingDeleteDiagramName = computed(() => {
-  const diagramId = pendingDeleteDiagramId.value
-  if (!diagramId) return ''
-  return state.value.diagrams.find(item => item.id === diagramId)?.name ?? ''
-})
-
 const getLinkTypeName = (linkTypeId: string): string =>
   state.value.linkTypes.find(item => item.id === linkTypeId)?.name ?? t('models.unknownLinkType')
 
@@ -1715,41 +1657,6 @@ const markDiagramDeleted = (diagramId: string) => {
   }
 }
 
-const openNodeDeleteDialog = (
-  nodeIds: string[],
-  source: 'canvas' | 'tree',
-  instanceIds: string[] = []
-) => {
-  if (source === 'canvas' && instanceIds.length > 0) {
-    pendingDeleteInstanceIds.value = [...new Set(instanceIds)]
-    pendingDeleteNodeIds.value = []
-  } else if (nodeIds.length > 0) {
-    pendingDeleteNodeIds.value = [...new Set(nodeIds)]
-    pendingDeleteInstanceIds.value = []
-  } else {
-    return
-  }
-  pendingDeleteNodeSource.value = source
-  showNodeDeleteModal.value = true
-}
-
-const cancelNodeDelete = () => {
-  pendingDeleteNodeIds.value = []
-  pendingDeleteInstanceIds.value = []
-  pendingDeleteNodeSource.value = 'tree'
-  showNodeDeleteModal.value = false
-}
-
-const openDiagramDeleteDialog = (diagramId: string) => {
-  pendingDeleteDiagramId.value = diagramId
-  showDiagramDeleteModal.value = true
-}
-
-const cancelDiagramDelete = () => {
-  pendingDeleteDiagramId.value = null
-  showDiagramDeleteModal.value = false
-}
-
 const markLinkDeleted = (linkId: string) => {
   const row = state.value.links.find(item => item.id === linkId)
   if (!row) return
@@ -1768,53 +1675,6 @@ const markLinkDeleted = (linkId: string) => {
     selectedEdgeInstanceId.value = null
   }
   if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
-}
-
-const cancelDiagramSwitch = () => {
-  pendingDiagramSwitchId.value = null
-  pendingDiagramAction.value = null
-  showDiagramSwitchModal.value = false
-}
-
-const switchDiagramWithoutSave = async () => {
-  const action = pendingDiagramAction.value
-  if (!action) return
-
-  const targetDiagramId = pendingDiagramSwitchId.value
-  // Close the modal immediately so the UI does not feel stuck on large models.
-  cancelDiagramSwitch()
-
-  const result = await applyPendingDiagramSwitch({
-    discard: discardUnsavedChanges,
-    action,
-    targetDiagramId,
-  })
-  if (!result.ok) {
-    setUiError(t('models.discardUnsavedFailed'))
-    return
-  }
-
-  diagramInteractionManager.value?.history?.clear?.()
-
-  if (result.effect === 'close') {
-    selectedDiagramId.value = null
-    selectedModelNodeIds.value = []
-    selectedInstanceIds.value = []
-    selectedModelLinkId.value = null
-    selectedEdgeInstanceId.value = null
-    return
-  }
-
-  if (result.effect !== 'switch') return
-  const restoredTarget = state.value.diagrams.find(
-    diagram => diagram.id === result.diagramId && !diagram._isDeleted
-  )
-  if (!restoredTarget) {
-    setUiError(t('models.diagramSwitchFailed'))
-    return
-  }
-
-  applyDiagramSelection(restoredTarget.id)
 }
 
 const saveWithValidation = async (): Promise<boolean> => {
@@ -1862,220 +1722,6 @@ const saveWithValidation = async (): Promise<boolean> => {
     isPreparingValidation.value = false
     if (isSaving.value) finishSave()
   }
-}
-
-const saveAndSwitchDiagram = async () => {
-  const action = pendingDiagramAction.value
-  if (!action) return
-  const ok = await saveWithValidation()
-  if (!ok) return
-  if (action === 'close') {
-    selectedDiagramId.value = null
-    selectedModelNodeIds.value = []
-    selectedInstanceIds.value = []
-    selectedModelLinkId.value = null
-    selectedEdgeInstanceId.value = null
-    cancelDiagramSwitch()
-    return
-  }
-
-  const targetDiagramId = pendingDiagramSwitchId.value
-  if (!targetDiagramId) {
-    cancelDiagramSwitch()
-    return
-  }
-  applyDiagramSelection(targetDiagramId)
-  cancelDiagramSwitch()
-}
-
-const selectDiagram = (diagramId: string) => {
-  if (diagramId === selectedDiagramId.value) return
-  if (activeDiagram.value && hasUnsavedChanges.value) {
-    pendingDiagramAction.value = 'switch'
-    pendingDiagramSwitchId.value = diagramId
-    showDiagramSwitchModal.value = true
-    return
-  }
-  applyDiagramSelection(diagramId)
-}
-
-const {
-  showValidationScriptsModal,
-  validationRunPayload,
-  openValidationScriptsModal,
-  closeValidationScriptsModal,
-  handleDiagramScriptQuery,
-  handleApplyDiagramScriptCommands,
-  handleValidationIssueSelect,
-} = useModelEditorScriptRun({
-  model,
-  state,
-  selectedDiagramId,
-  activeDiagram,
-  isDiagramReadOnly,
-  t: (key, params) => String(t(key, params ?? {})),
-  setUiError,
-  partialStore,
-  executeDiagramHistoryCommand,
-  markDiagramDirty,
-  invalidateTraceabilityDiagrams,
-  selectDiagram,
-  selectedNodeId,
-  selectedModelNodeIds,
-  selectedModelLinkId,
-  focusTreeNode: nodeId => treePanelRef.value?.focusNode?.(nodeId),
-})
-
-const cancelLinkDelete = () => {
-  pendingDeleteLinkId.value = null
-  pendingDeleteEdgeInstanceId.value = null
-  showLinkDeleteModal.value = false
-}
-
-const openLinkDeleteDialog = (linkId: string, edgeInstanceId?: string) => {
-  pendingDeleteLinkId.value = linkId
-  pendingDeleteEdgeInstanceId.value = edgeInstanceId ?? null
-  showLinkDeleteModal.value = true
-}
-
-const removeLinkFromCurrentDiagram = () => {
-  const linkId = pendingDeleteLinkId.value
-  const edgeInstanceId = pendingDeleteEdgeInstanceId.value
-  const diagram = activeDiagram.value
-  if (!linkId || !diagram) {
-    cancelLinkDelete()
-    return
-  }
-
-  const removedEdges = diagram.parsedAttrs.instances.edges
-    .map((edge, index) => ({ index, edge: JSON.parse(JSON.stringify(edge)) }))
-    .filter(
-      entry =>
-        entry.edge.modelLinkId === linkId &&
-        (edgeInstanceId == null || entry.edge.id === edgeInstanceId)
-    )
-  if (removedEdges.length === 0) {
-    cancelLinkDelete()
-    return
-  }
-
-  const idsToRemove = new Set(removedEdges.map(e => e.edge.id))
-
-  const applyRemoval = () => {
-    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      edge => !idsToRemove.has(edge.id)
-    )
-    const cleaned = removeOrphanEdgeAnchors(diagram.parsedAttrs)
-    if (cleaned.changed) {
-      diagram.parsedAttrs = cleaned.nextAttrs
-    }
-    if (selectedModelLinkId.value === linkId) {
-      selectedModelLinkId.value = null
-      selectedEdgeInstanceId.value = null
-    }
-    if (selectedCanvasElementId.value?.startsWith('edge-')) selectedCanvasElementId.value = null
-    markDiagramDirty(diagram.id)
-  }
-
-  const restoreRemoved = () => {
-    const currentEdges = [...diagram.parsedAttrs.instances.edges]
-    for (const { index, edge } of removedEdges) {
-      const alreadyExists = currentEdges.some(item => item.id === edge.id)
-      if (alreadyExists) continue
-      const safeIndex = Math.max(0, Math.min(index, currentEdges.length))
-      currentEdges.splice(safeIndex, 0, JSON.parse(JSON.stringify(edge)))
-    }
-    diagram.parsedAttrs.instances.edges = currentEdges
-    markDiagramDirty(diagram.id)
-  }
-
-  const history = diagramInteractionManager.value?.history
-  if (history && typeof history.execute === 'function') {
-    history.execute({
-      execute: applyRemoval,
-      undo: restoreRemoved,
-    })
-  } else {
-    applyRemoval()
-  }
-
-  cancelLinkDelete()
-}
-
-const removeLinkFromModel = () => {
-  const linkId = pendingDeleteLinkId.value
-  if (!linkId) {
-    cancelLinkDelete()
-    return
-  }
-
-  if (isDiagramOnlyEdgeModelLinkId(linkId) || isUntypedModelLinkId(linkId)) {
-    cancelLinkDelete()
-    return
-  }
-
-  for (const diagram of state.value.diagrams) {
-    if (diagram._isDeleted) continue
-    const initial = diagram.parsedAttrs.instances.edges.length
-    diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-      edge => edge.modelLinkId !== linkId
-    )
-    if (diagram.parsedAttrs.instances.edges.length !== initial) {
-      markDiagramDirty(diagram.id)
-    }
-  }
-
-  markLinkDeleted(linkId)
-  cancelLinkDelete()
-}
-
-const shouldSkipDeleteHotkey = (event: KeyboardEvent): boolean => {
-  const target = event.target as HTMLElement | null
-  if (!target) return false
-  const tag = target.tagName
-  return target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
-
-const onDeleteKeydown = (event: KeyboardEvent) => {
-  const isCtrlOrMeta = event.ctrlKey || event.metaKey
-  const key = event.code.startsWith('Key')
-    ? event.code.slice(3).toLowerCase()
-    : event.key.toLowerCase()
-  const skipHotkeys = shouldSkipDeleteHotkey(event)
-
-  if (isCtrlOrMeta && !event.shiftKey && key === 'c') {
-    if (!skipHotkeys && copySelectedNotesToClipboard()) {
-      event.preventDefault()
-    }
-    return
-  }
-
-  if (isCtrlOrMeta && !event.shiftKey && key === 'v') {
-    if (!skipHotkeys && pasteCopiedNotes()) {
-      event.preventDefault()
-    }
-    return
-  }
-
-  if (event.key !== 'Delete' && event.key !== 'Backspace') return
-  if (!activeDiagram.value) return
-  if (isDiagramReadOnly.value) return
-  if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event))
-    return
-
-  if (selectedModelNodeIds.value.length > 0 || selectedInstanceIds.value.length > 0) {
-    event.preventDefault()
-    openNodeDeleteDialog(
-      selectedModelNodeIds.value,
-      'canvas',
-      selectedInstanceIds.value.length > 0 ? selectedInstanceIds.value : []
-    )
-    return
-  }
-
-  if (!selectedModelLinkId.value) return
-  event.preventDefault()
-  openLinkDeleteDialog(selectedModelLinkId.value, selectedEdgeInstanceId.value ?? undefined)
 }
 
 watch(
@@ -2418,21 +2064,124 @@ const removeNodesFromCurrentDiagram = (modelNodeIds: string[]) => {
   applyRemoval()
 }
 
-const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {
-  if (isDiagramReadOnly.value) return
-  selectedModelLinkId.value = null
-  selectedEdgeInstanceId.value = null
-  openNodeDeleteDialog([], 'canvas', [instanceId])
+const {
+  showLinkDeleteModal,
+  showNodeDeleteModal,
+  showDiagramDeleteModal,
+  showDiagramSwitchModal,
+  pendingDiagramSwitchId,
+  pendingDiagramAction,
+  nodeDeleteConfirmMessage,
+  pendingDeleteDiagramName,
+  allowRemoveLinkFromModel,
+  openNodeDeleteDialog,
+  cancelNodeDelete,
+  confirmNodeDelete,
+  openDiagramDeleteDialog,
+  cancelDiagramDelete,
+  confirmDiagramDelete,
+  cancelLinkDelete,
+  removeLinkFromCurrentDiagram,
+  removeLinkFromModel,
+  handleRequestDeleteNodeFromDiagram,
+  handleRequestDeleteLink,
+  cancelDiagramSwitch,
+  requestDiagramSwitch,
+  switchDiagramWithoutSave,
+  shouldSkipDeleteHotkey,
+  onDeleteKeydown,
+} = useModelEditorEntityDelete({
+  state,
+  activeDiagram,
+  selectedDiagramId,
+  isDiagramReadOnly,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  discardUnsavedChanges,
+  applyDiagramSelection,
+  markNodeDeleted,
+  markDiagramDeleted,
+  markLinkDeleted,
+  markDiagramDirty,
+  removeNodesFromCurrentDiagram,
+  removeNodesFromCurrentDiagramByInstances,
+  isDiagramOnlyEdgeModelLinkId,
+  isUntypedModelLinkId,
+  selectedModelNodeIds,
+  selectedInstanceIds,
+  selectedModelLinkId,
+  selectedEdgeInstanceId,
+  selectedCanvasElementId,
+  diagramInteractionManager,
+  isNoteInstance,
+  isContainerInstance,
+  isEdgeAnchorInstance,
+  isDiagramNoteModelNodeId,
+  isDiagramContainerModelNodeId,
+  isEdgeAnchorModelNodeId,
+  copySelectedNotesToClipboard,
+  pasteCopiedNotes,
+})
+
+const saveAndSwitchDiagram = async () => {
+  const action = pendingDiagramAction.value
+  if (!action) return
+  const ok = await saveWithValidation()
+  if (!ok) return
+  if (action === 'close') {
+    selectedDiagramId.value = null
+    selectedModelNodeIds.value = []
+    selectedInstanceIds.value = []
+    selectedModelLinkId.value = null
+    selectedEdgeInstanceId.value = null
+    cancelDiagramSwitch()
+    return
+  }
+
+  const targetDiagramId = pendingDiagramSwitchId.value
+  if (!targetDiagramId) {
+    cancelDiagramSwitch()
+    return
+  }
+  applyDiagramSelection(targetDiagramId)
+  cancelDiagramSwitch()
 }
 
-const handleRequestDeleteLink = (linkId: string, edgeInstanceId?: string) => {
-  if (isDiagramReadOnly.value) return
-  selectedModelNodeIds.value = []
-  selectedInstanceIds.value = []
-  selectedModelLinkId.value = linkId
-  selectedEdgeInstanceId.value = edgeInstanceId ?? null
-  openLinkDeleteDialog(linkId, edgeInstanceId)
+const selectDiagram = (diagramId: string) => {
+  if (diagramId === selectedDiagramId.value) return
+  if (activeDiagram.value && hasUnsavedChanges.value) {
+    requestDiagramSwitch('switch', diagramId)
+    return
+  }
+  applyDiagramSelection(diagramId)
 }
+
+const {
+  showValidationScriptsModal,
+  validationRunPayload,
+  openValidationScriptsModal,
+  closeValidationScriptsModal,
+  handleDiagramScriptQuery,
+  handleApplyDiagramScriptCommands,
+  handleValidationIssueSelect,
+} = useModelEditorScriptRun({
+  model,
+  state,
+  selectedDiagramId,
+  activeDiagram,
+  isDiagramReadOnly,
+  t: (key, params) => String(t(key, params ?? {})),
+  setUiError,
+  partialStore,
+  executeDiagramHistoryCommand,
+  markDiagramDirty,
+  invalidateTraceabilityDiagrams,
+  selectDiagram,
+  selectedNodeId,
+  selectedModelNodeIds,
+  selectedModelLinkId,
+  focusTreeNode: nodeId => treePanelRef.value?.focusNode?.(nodeId),
+})
 
 const boundaryRelationIds = (notationId: string): Set<string> =>
   new Set(
@@ -2527,39 +2276,6 @@ const handleRequestBoundaryRebind = (
   if (diagram.parsedAttrs.instances.edges.length !== beforeEdges) {
     markDiagramDirty(diagram.id)
   }
-}
-
-const confirmNodeDelete = () => {
-  const nodeIds = pendingDeleteNodeIds.value
-  const instanceIds = pendingDeleteInstanceIds.value
-  const source = pendingDeleteNodeSource.value
-  if (nodeIds.length === 0 && instanceIds.length === 0) {
-    cancelNodeDelete()
-    return
-  }
-
-  if (source === 'canvas') {
-    if (instanceIds.length > 0) {
-      removeNodesFromCurrentDiagramByInstances(instanceIds)
-    } else {
-      removeNodesFromCurrentDiagram(nodeIds)
-    }
-  } else {
-    for (const nodeId of nodeIds) {
-      markNodeDeleted(nodeId)
-    }
-  }
-  cancelNodeDelete()
-}
-
-const confirmDiagramDelete = () => {
-  const diagramId = pendingDeleteDiagramId.value
-  if (!diagramId) {
-    cancelDiagramDelete()
-    return
-  }
-  markDiagramDeleted(diagramId)
-  cancelDiagramDelete()
 }
 
 const handleToolbarAction = async (event: string) => {
@@ -2727,9 +2443,7 @@ const handleToolbarAction = async (event: string) => {
       break
     case 'close-diagram':
       if (activeDiagram.value && hasUnsavedChanges.value) {
-        pendingDiagramAction.value = 'close'
-        pendingDiagramSwitchId.value = null
-        showDiagramSwitchModal.value = true
+        requestDiagramSwitch('close')
         break
       }
       selectedDiagramId.value = null
@@ -4011,11 +3725,7 @@ onBeforeUnmount(() => {
 
   <LinkDeleteModal
     v-if="showLinkDeleteModal"
-    :allow-remove-from-model="
-      !!pendingDeleteLinkId &&
-      !isDiagramOnlyEdgeModelLinkId(pendingDeleteLinkId) &&
-      !isUntypedModelLinkId(pendingDeleteLinkId)
-    "
+    :allow-remove-from-model="allowRemoveLinkFromModel"
     @close="cancelLinkDelete"
     @remove-from-diagram="removeLinkFromCurrentDiagram"
     @remove-from-model="removeLinkFromModel"
@@ -4090,93 +3800,12 @@ onBeforeUnmount(() => {
     @submit="handleOefImportSubmit"
   />
 
-  <BaseModal
+  <OefImportReportModal
     v-if="oefImportReport"
-    :title="t('models.oefImportReportTitle')"
-    max-width="520px"
+    :report="oefImportReport"
+    :warning-label="oefWarningLabel"
     @close="oefImportReport = null"
-  >
-    <p class="leave-text">{{ t('models.oefImportReportSummary') }}</p>
-    <ul class="model-import-report">
-      <li>{{ t('models.oefImportStatNodes', { count: oefImportReport.nodes }) }}</li>
-      <li>{{ t('models.oefImportStatLinks', { count: oefImportReport.links }) }}</li>
-      <li>{{ t('models.oefImportStatDiagrams', { count: oefImportReport.diagrams }) }}</li>
-      <li v-if="oefImportReport.nodesReused > 0">
-        {{ t('models.oefImportReportReusedNodes', { count: oefImportReport.nodesReused }) }}
-      </li>
-      <li v-if="oefImportReport.nodesUpdated > 0">
-        {{ t('models.oefImportReportUpdatedNodes', { count: oefImportReport.nodesUpdated }) }}
-      </li>
-      <li v-if="oefImportReport.linksReused > 0">
-        {{ t('models.oefImportReportReusedLinks', { count: oefImportReport.linksReused }) }}
-      </li>
-      <li v-if="oefImportReport.linksUpdated > 0">
-        {{ t('models.oefImportReportUpdatedLinks', { count: oefImportReport.linksUpdated }) }}
-      </li>
-      <li>
-        {{
-          t('models.oefImportReportDiagramNodeInstances', {
-            count: oefImportReport.diagramNodeInstances,
-          })
-        }}
-      </li>
-      <li>
-        {{
-          t('models.oefImportReportDiagramEdgeInstances', {
-            count: oefImportReport.diagramConnectionInstances,
-          })
-        }}
-      </li>
-    </ul>
-    <p v-if="oefImportReport.warningsCount > 0" class="leave-text leave-text--warning">
-      {{ t('models.oefImportCompletedWithWarnings', { count: oefImportReport.warningsCount }) }}
-    </p>
-    <div v-if="oefImportReport.warningGroups.length > 0" class="model-import-report__warnings">
-      <p class="leave-text">{{ t('models.oefImportReportWarningsByReason') }}</p>
-      <ul class="model-import-report model-import-report--warnings model-import-report--scrollable">
-        <li v-for="item in oefImportReport.warningGroups" :key="item.code">
-          {{ oefWarningLabel(item.code) }}: {{ item.count }}
-        </li>
-      </ul>
-    </div>
-    <div v-if="oefImportReport.missingRequired.total > 0" class="model-import-report__warnings">
-      <p class="leave-text leave-text--warning">
-        {{
-          t('models.oefImportReportMissingRequiredTitle', {
-            count: oefImportReport.missingRequired.total,
-          })
-        }}
-      </p>
-      <ul class="model-import-report model-import-report--warnings">
-        <li>
-          {{
-            t('models.oefImportReportMissingRequiredNodeType', {
-              count: oefImportReport.missingRequired.nodeType,
-            })
-          }}
-        </li>
-        <li>
-          {{
-            t('models.oefImportReportMissingRequiredComponent', {
-              count: oefImportReport.missingRequired.component,
-            })
-          }}
-        </li>
-        <li>
-          {{
-            t('models.oefImportReportMissingRequiredRelation', {
-              count: oefImportReport.missingRequired.relation,
-            })
-          }}
-        </li>
-      </ul>
-    </div>
-    <template #footer>
-      <button type="button" class="btn btn--secondary" @click="oefImportReport = null">
-        {{ t('common.close') }}
-      </button>
-    </template>
-  </BaseModal>
+  />
 
   <DocumentEditorModal
     v-if="showDocModal"
@@ -4271,35 +3900,11 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.leave-text {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
 
-.leave-text--warning {
-  color: var(--warning);
-}
 
-.model-import-report {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
 
-.model-import-report__warnings {
-  margin-top: 10px;
-}
 
-.model-import-report--warnings {
-  margin-top: 6px;
-}
 
-.model-import-report--scrollable {
-  max-height: min(220px, 40vh);
-  overflow-y: auto;
-}
 
 .model-canvas-area {
   position: relative;

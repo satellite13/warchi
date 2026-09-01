@@ -3,10 +3,7 @@ import type { DiagramAttrs, DiagramEdgeInstance, DiagramNodeInstance } from '../
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
 import {
   DIAGRAM_NOTE_EDGE_MODEL_LINK_PREFIX,
-  isContainerInstance,
   isDiagramOnlyVisualInstance,
-  isEdgeAnchorInstance,
-  isStickyNoteInstance,
 } from './diagramOnlyInstances'
 
 function activeModelNode(nodes: EditorNode[], modelNodeId: string): EditorNode | undefined {

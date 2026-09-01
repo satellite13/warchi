@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { DROPDOWN_SEARCH_BLOCK_PX } from '@/utils/dropdownPanelPosition'
 import { useDropdownPanel } from '@/composables/useDropdownPanel'
+import '@/components/forms/dropdownSelectPanel.css'
 
 export type MultiSelectOption = { id: string; label: string }
 
@@ -95,7 +96,7 @@ const toggleOption = (id: string) => {
     <Teleport to="body">
       <div
         v-if="isOpen && panelPlacement"
-        class="multi-select-panel multi-select__panel"
+        class="dropdown-select-panel dropdown-select-panel--sm multi-select-panel multi-select__panel"
         :style="{
           ...(panelPlacement.top !== undefined ? { top: `${panelPlacement.top}px` } : {}),
           ...(panelPlacement.bottom !== undefined ? { bottom: `${panelPlacement.bottom}px` } : {}),
@@ -108,13 +109,13 @@ const toggleOption = (id: string) => {
           v-if="showSearch"
           ref="searchInputRef"
           v-model="searchQuery"
-          class="multi-select__search"
+          class="dropdown-select-panel__search multi-select__search"
           type="text"
           :placeholder="searchPlaceholder"
           @click.stop
         >
         <div
-          class="multi-select__list"
+          class="dropdown-select-panel__list multi-select__list"
           :style="{ maxHeight: `${panelPlacement.maxListHeight}px` }"
         >
           <button
@@ -130,7 +131,10 @@ const toggleOption = (id: string) => {
             </span>
             <span class="multi-select__item-label">{{ option.label }}</span>
           </button>
-          <div v-if="filteredOptions.length === 0" class="multi-select__empty">
+          <div
+            v-if="filteredOptions.length === 0"
+            class="dropdown-select-panel__empty multi-select__empty"
+          >
             {{ emptyText || '—' }}
           </div>
         </div>
@@ -188,43 +192,6 @@ const toggleOption = (id: string) => {
   font-size: 16px;
   color: var(--text-subtle);
   flex-shrink: 0;
-}
-
-.multi-select__panel {
-  position: fixed;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  z-index: 10000;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.multi-select__search {
-  width: 100%;
-  padding: 6px 8px;
-  font-size: 12px;
-  font-family: inherit;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  outline: none;
-  background: var(--surface);
-  color: var(--base-text);
-  box-sizing: border-box;
-}
-
-.multi-select__search::placeholder {
-  color: var(--text-subtle);
-}
-
-.multi-select__list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 3px;
 }
 
 .multi-select__item {
@@ -287,12 +254,5 @@ const toggleOption = (id: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.multi-select__empty {
-  padding: 8px 6px;
-  font-size: 12px;
-  color: var(--text-subtle);
-  text-align: center;
 }
 </style>

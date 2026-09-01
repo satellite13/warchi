@@ -8,6 +8,8 @@ import SearchInput from "@/components/forms/SearchInput.vue"
 import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import PropertyRow from "@/components/properties/PropertyRow.vue"
+import FormSection from "@/components/forms/FormSection.vue"
+import EmptyState from "@/components/list/EmptyState.vue"
 
 const props = withDefaults(
   defineProps<{
@@ -100,8 +102,7 @@ watch(
         {{ t('types.systemTypeReadOnly') }}
       </p>
       <!-- Name -->
-      <div class="form-section">
-        <h3 class="form-section__title">{{ t("types.main") }}</h3>
+      <FormSection :title="t('types.main')">
         <div class="form-row">
           <label class="form-label">{{ t("common.name") }}</label>
           <input
@@ -137,14 +138,12 @@ watch(
             @input="emit('updateDefaultDirectoryPath', ($event.target as HTMLInputElement).value)"
           >
         </div>
-      </div>
+      </FormSection>
 
       <!-- Custom Properties -->
-      <div class="form-section">
-        <div class="form-section__header">
-          <h3 class="form-section__title">{{ t("types.properties") }}</h3>
+      <FormSection :title="t('types.properties')" animation-delay="60ms">
+        <template v-if="canEdit" #header-actions>
           <button
-            v-if="canEdit"
             type="button"
             class="add-btn"
             :title="t('types.addProperty')"
@@ -152,7 +151,7 @@ watch(
           >
             <UiIcon name="add" />
           </button>
-        </div>
+        </template>
 
         <SearchInput
           v-if="selectedType.parsedAttrs.customProperties?.length"
@@ -161,16 +160,17 @@ watch(
           :placeholder="t('types.filterByPropertyName')"
         />
 
-        <div
+        <EmptyState
           v-if="!selectedType.parsedAttrs.customProperties?.length"
-          class="form-section__empty"
-        >
-          {{ t("types.noProperties") }}
-        </div>
+          variant="inline"
+          :title="t('types.noProperties')"
+        />
 
-        <div v-else-if="filteredCustomProperties.length === 0" class="form-section__empty">
-          {{ t("types.noPropertiesByFilter") }}
-        </div>
+        <EmptyState
+          v-else-if="filteredCustomProperties.length === 0"
+          variant="inline"
+          :title="t('types.noPropertiesByFilter')"
+        />
 
         <div v-else class="properties-list" :class="{ 'properties-list--readonly': !canEdit }">
           <PropertyRow
@@ -186,7 +186,7 @@ watch(
             @remove="canEdit && emit('removeProperty', property.id)"
           />
         </div>
-      </div>
+      </FormSection>
     </div>
   </div>
 </template>
@@ -222,43 +222,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-/* Form sections */
-.form-section {
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
-  animation: fadeSlideIn 0.3s ease both;
-}
-
-.form-section:nth-child(2) {
-  animation-delay: 60ms;
-}
-
-.form-section__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.form-section__title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.form-section__empty {
-  font-size: 13px;
-  color: var(--text-subtle);
 }
 
 .form-row {

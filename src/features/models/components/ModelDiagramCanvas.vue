@@ -14,8 +14,6 @@ import {
   RulersOverlay,
   InteractionManager,
   TextLabel,
-  type ContextMenuTarget,
-  type ContextMenuItem,
   type TextStyle,
   type TextLabelOptions,
   type EdgePathType,
@@ -31,6 +29,7 @@ import {
   resolveCornerCutPx,
   resolveDiagramNodeShape,
 } from '@/features/diagram/diagramNodeFactory'
+import { buildModelDiagramContextMenu } from './diagram/buildModelDiagramContextMenu'
 import { customOutlineToPath2D, customOutlineToSvgPath } from '@/utils/customOutlinePath'
 import { diagramShapeFactories } from '@/utils/diagramShapes'
 import { applyContentInsetFromStyle } from '@/features/diagram-style/utils/applyContentInsetFromStyle'
@@ -2966,112 +2965,22 @@ function initRenderer(
   if (!props.readOnly) {
   r.enableContextMenu({
     iconToUrl: (name: string) => srcFor(name) || '/icons/widgets.svg',
-    menu: {
-      node: (target: ContextMenuTarget) => {
-        if (target.type !== 'node') return []
-        const entity = nodeIdToInstance.get(target.node.id)
-        if (!entity) return []
-        const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
-        if (instance && isNoteInstance(instance)) {
-          return [
-            {
-              label: t('diagram.editNote'),
-              icon: 'edit_note',
-              action: () => emit('requestEditNote', entity.instanceId),
-            },
-            {
-              label: t('diagram.deleteNote'),
-              icon: 'delete',
-              action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
-            },
-          ]
-        }
-        if (instance && isContainerInstance(instance)) {
-          return [
-            {
-              label: t('diagram.deleteContainer'),
-              icon: 'delete',
-              action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
-            },
-          ]
-        }
-        if (instance && isEdgeAnchorInstance(instance)) {
-          return []
-        }
-        return [
-          {
-            label: t('diagram.findInTree'),
-            icon: 'account_tree',
-            action: () => emit('findInTree', entity.modelNodeId),
-          },
-          {
-            label: t('diagram.removeFromDiagram'),
-            icon: 'delete',
-            action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
-          },
-        ]
-      },
-      edge: (target: ContextMenuTarget) => {
-        if (target.type !== 'edge') return []
-        const entity = edgeIdToInstance.get(target.edge.id)
-        if (!entity) return []
-
-        const edgeInst = instanceEdges.value.find(edge => edge.id === entity.edgeId)
-        const isDiagramOnly = edgeInst?.attrs?.isDiagramOnly === true
-        const effStyle = getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)
-        const currentType = (effStyle?.edgeType as EdgePathType | undefined) ?? 'bezier'
-
-        const items: ContextMenuItem[] = []
-
-        if (isDiagramOnly) {
-          items.push(
-            { label: t('diagram.noteLink'), icon: 'note', action: () => {} },
-            { separator: true }
-          )
-        }
-
-        items.push(
-          {
-            label: t('diagram.linkType'),
-            icon: 'conversion_path',
-            items: [
-              {
-                label: t('diagram.linkTypeStraight'),
-                icon: 'remove',
-                enabled: currentType !== 'straight',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'straight'),
-              },
-              {
-                label: t('diagram.linkTypePolyline'),
-                icon: 'timeline',
-                enabled: currentType !== 'polyline',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'polyline'),
-              },
-              {
-                label: t('diagram.linkTypeEditablePolyline'),
-                icon: 'polyline',
-                enabled: currentType !== 'editable-polyline',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'editable-polyline'),
-              },
-              {
-                label: t('diagram.linkTypeBezier'),
-                icon: 'line_curve',
-                enabled: currentType !== 'bezier',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'bezier'),
-              },
-            ],
-          },
-          { separator: true },
-          {
-            label: isDiagramOnly ? t('diagram.deleteNoteLink') : t('common.delete'),
-            icon: 'delete',
-            action: () => emit('requestDeleteLink', entity.modelLinkId, entity.edgeId),
-          }
-        )
-
-        return items
-      },
-    },
+    menu: buildModelDiagramContextMenu({
+      findNodeEntity: papNodeId => nodeIdToInstance.get(papNodeId),
+      findEdgeEntity: papEdgeId => edgeIdToInstance.get(papEdgeId),
+      findNodeInstance: instanceId => instanceNodes.value.find(item => item.id === instanceId),
+      findEdgeInstance: edgeId => instanceEdges.value.find(edge => edge.id === edgeId),
+      getEffectiveEdgeStyle,
+      isNoteInstance,
+      isContainerInstance,
+      isEdgeAnchorInstance,
+      setEdgeType: setEdgeTypeFromContext,
+      onEditNote: instanceId => emit('requestEditNote', instanceId),
+      onDeleteNodeFromDiagram: instanceId => emit('requestDeleteNodeFromDiagram', instanceId),
+      onFindInTree: modelNodeId => emit('findInTree', modelNodeId),
+      onDeleteLink: (modelLinkId, edgeId) => emit('requestDeleteLink', modelLinkId, edgeId),
+      t: key => t(key),
+    }),
   })
   }
 

@@ -11,12 +11,14 @@ withDefaults(
     saveLabel?: string
     maxWidth?: string
     saveDisabled?: boolean
+    confirmDisabled?: boolean
   }>(),
   {
     variant: 'discard',
     saveLabel: '',
     maxWidth: '400px',
     saveDisabled: false,
+    confirmDisabled: false,
   },
 )
 
@@ -38,7 +40,8 @@ const emit = defineEmits<{
       <button
         v-if="variant === 'save-or-discard'"
         type="button"
-        class="btn btn--soft-danger"
+        class="btn btn--secondary"
+        :disabled="confirmDisabled"
         @click="emit('confirm')"
       >
         {{ confirmLabel }}

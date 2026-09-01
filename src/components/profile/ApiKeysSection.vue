@@ -16,6 +16,7 @@ import type {
   CreateApiKeyResponse,
 } from '@/types/apiKeys'
 import { formatApiKeySummary } from '@/utils/apiKeySummary'
+import ApiKeyList from '@/components/profile/ApiKeyList.vue'
 
 const MAX_GRANTS = 50
 
@@ -427,25 +428,18 @@ onMounted(() => {
       <AppAlert type="error" :message="errorMessage" />
     </div>
 
-    <p v-if="isLoading" class="api-keys__empty">{{ t('common.loading') }}</p>
-    <p v-else-if="keys.length === 0" class="api-keys__empty">{{ t('profile.apiKeysEmpty') }}</p>
-    <ul v-else class="api-keys__list">
-      <li v-for="key in keys" :key="key.id" class="api-keys__item">
-        <div class="api-keys__meta">
-          <strong>{{ key.name }}</strong>
-          <span class="api-keys__prefix">warchi_ak_{{ key.tokenPrefix }}…</span>
-          <span class="api-keys__summary">{{ formatKeySummary(key) }}</span>
-        </div>
-        <div class="api-keys__actions">
-          <button type="button" class="btn btn--secondary" @click="renameKey(key)">
-            {{ t('profile.apiKeysRename') }}
-          </button>
-          <button type="button" class="btn btn--danger" @click="revokeKey(key.id)">
-            {{ t('profile.apiKeysRevoke') }}
-          </button>
-        </div>
-      </li>
-    </ul>
+    <ApiKeyList
+      :keys="keys"
+      :is-loading="isLoading"
+      :loading-text="t('common.loading')"
+      :empty-text="t('profile.apiKeysEmpty')"
+      :revoke-label="t('profile.apiKeysRevoke')"
+      :rename-label="t('profile.apiKeysRename')"
+      :format-summary="formatKeySummary"
+      show-rename
+      @revoke="revokeKey"
+      @rename="renameKey"
+    />
   </section>
 </template>
 

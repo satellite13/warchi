@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import '@/config/mdEditor'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import SafeMarkdownPreview from "@/components/markdown/SafeMarkdownPreview.vue"
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
+import BaseModal from "@/components/modals/BaseModal.vue"
 import { useLocale } from "../../composables/useLocale"
 import { useTypeDocument } from "../../features/types/composables/useTypeDocument"
 import { sanitizeMarkdownHtml } from "@/utils/sanitizeMarkdownHtml"
@@ -144,24 +145,11 @@ function handleClose() {
   emit('close')
 }
 
-// Keyboard handling for modal: Escape always closes
-const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    handleClose()
-  }
-}
-
 onMounted(() => {
   loadDocument(props.fileId ?? null)
   if (!props.fileId && !props.readOnly) {
     isEditing.value = true
   }
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
 })
 
 function formatDate(dateStr: string): string {
@@ -180,195 +168,178 @@ function formatSize(bytes: number): string {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="doc-modal-overlay" @click.self="handleClose">
-      <div class="doc-modal">
-        <!-- Header -->
-        <div class="doc-modal__header">
-          <div class="doc-modal__header-left">
-            <UiIcon name="description" class="doc-modal__icon" />
-            <h2>{{ title }}</h2>
-            <UnsavedBadge
-              v-if="isDocDirty && !viewingOldVersion"
-              tooltip-key="types.docNotSaved"
-            />
-            <span v-if="viewingOldVersion" class="doc-modal__version-badge">
-              v{{ viewingVersionNumber }}
-            </span>
-          </div>
-          <div class="doc-modal__header-actions">
-            <template v-if="viewingOldVersion">
-              <button
-                type="button"
-                class="doc-modal-btn doc-modal-btn--primary"
-                @click="handleBackToCurrent"
-              >
-                <UiIcon name="undo" />
-                {{ t('types.docBackToCurrent') }}
-              </button>
-            </template>
-            <template v-else>
-              <template v-if="!readOnly">
-                <button
-                  type="button"
-                  class="doc-modal-btn doc-modal-btn--ghost"
-                  @click="togglePreview"
-                >
-                  <UiIcon :name="isEditing ? 'visibility' : 'edit'" />
-                  {{ isEditing ? t('types.docPreview') : t('common.edit') }}
-                </button>
-
-                <button
-                  v-if="isDocDirty"
-                  type="button"
-                  class="doc-modal-btn doc-modal-btn--primary"
-                  :disabled="!canSave"
-                  @click="handleSave"
-                >
-                  <UiIcon name="save" />
-                  {{ isDocSaving ? t('common.saving') : t('common.save') }}
-                </button>
-              </template>
-            </template>
-
-            <button
-              v-if="documentFileId"
-              type="button"
-              class="doc-modal-btn doc-modal-btn--ghost"
-              :class="{ 'doc-modal-btn--active': showVersions }"
-              @click="handleShowVersions"
-            >
-              <UiIcon name="history" />
-              {{ t('types.docVersions') }}
-            </button>
-
-            <button type="button" class="doc-modal__close" @click="handleClose">
-              <UiIcon name="close" />
-            </button>
-          </div>
+  <BaseModal
+    :title="title"
+    max-width="900px"
+    height="85vh"
+    :body-padding="false"
+    hide-header
+    panel-class="doc-modal-panel"
+    body-class="doc-modal-body-host"
+    @close="handleClose"
+  >
+    <template #header>
+      <div class="doc-modal__header">
+        <div class="doc-modal__header-left">
+          <UiIcon name="description" class="doc-modal__icon" />
+          <h2>{{ title }}</h2>
+          <UnsavedBadge
+            v-if="isDocDirty && !viewingOldVersion"
+            tooltip-key="types.docNotSaved"
+          />
+          <span v-if="viewingOldVersion" class="doc-modal__version-badge">
+            v{{ viewingVersionNumber }}
+          </span>
         </div>
-
-        <!-- Version history -->
-        <div v-if="showVersions" class="doc-modal__versions">
-          <div v-if="isLoadingVersions" class="doc-modal__versions-empty">
-            {{ t('common.loading') }}
-          </div>
-          <div v-else-if="docVersions.length === 0" class="doc-modal__versions-empty">
-            {{ t('types.docNoVersions') }}
-          </div>
-          <div v-else class="doc-modal__versions-list">
-            <div
-              v-for="ver in docVersions"
-              :key="ver.versionNumber"
-              class="doc-modal__version-item"
-              role="button"
-              tabindex="0"
-              @click="handleLoadVersion(ver.versionNumber)"
-              @keydown.enter="handleLoadVersion(ver.versionNumber)"
-            >
-              <span class="doc-modal__version-num">v{{ ver.versionNumber }}</span>
-              <span class="doc-modal__version-date">{{ formatDate(ver.createdAt) }}</span>
-              <span class="doc-modal__version-size">{{ formatSize(ver.size) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Body -->
-        <div class="doc-modal__body">
-          <!-- Loading -->
-          <div v-if="isDocLoading" class="doc-modal__placeholder">
-            {{ t('common.loading') }}
-          </div>
-
-          <!-- Broken reference -->
-          <div v-else-if="isBrokenRef" class="doc-modal__broken-ref">
-            <UiIcon name="link_off" class="doc-modal__broken-ref-icon" />
-            <p class="doc-modal__broken-ref-text">{{ t('types.docBrokenRef') }}</p>
+        <div class="doc-modal__header-actions">
+          <template v-if="viewingOldVersion">
             <button
-              v-if="!readOnly"
               type="button"
               class="doc-modal-btn doc-modal-btn--primary"
-              @click="handleCreateNew"
+              @click="handleBackToCurrent"
             >
-              <UiIcon name="add" />
-              {{ t('types.docCreateNew') }}
+              <UiIcon name="undo" />
+              {{ t('types.docBackToCurrent') }}
             </button>
-          </div>
+          </template>
+          <template v-else>
+            <template v-if="!readOnly">
+              <button
+                type="button"
+                class="doc-modal-btn doc-modal-btn--ghost"
+                @click="togglePreview"
+              >
+                <UiIcon :name="isEditing ? 'visibility' : 'edit'" />
+                {{ isEditing ? t('types.docPreview') : t('common.edit') }}
+              </button>
 
-          <!-- Error -->
-          <div v-else-if="docError" class="doc-modal__error">
-            <UiIcon name="error" />
-            {{ docError }}
-          </div>
+              <button
+                v-if="isDocDirty"
+                type="button"
+                class="doc-modal-btn doc-modal-btn--primary"
+                :disabled="!canSave"
+                @click="handleSave"
+              >
+                <UiIcon name="save" />
+                {{ isDocSaving ? t('common.saving') : t('common.save') }}
+              </button>
+            </template>
+          </template>
 
-          <!-- Editor (disabled when viewing old version) -->
-          <div v-else-if="isEditing && !viewingOldVersion && !readOnly" class="doc-modal__editor">
-            <MdEditor
-              :model-value="documentContent"
-              :language="editorLanguage"
-              :sanitize="sanitizeMarkdownHtml"
-              :preview="false"
-              :toolbars="[
-                'bold',
-                'underline',
-                'italic',
-                'strikeThrough',
-                '-',
-                'title',
-                'sub',
-                'sup',
-                'quote',
-                'unorderedList',
-                'orderedList',
-                'task',
-                '-',
-                'codeRow',
-                'code',
-                'link',
-                'table',
-                '-',
-                'revoke',
-                'next',
-                '=',
-                'preview',
-                'fullscreen',
-              ]"
-              @change="handleContentChange"
-            />
-          </div>
+          <button
+            v-if="documentFileId"
+            type="button"
+            class="doc-modal-btn doc-modal-btn--ghost"
+            :class="{ 'doc-modal-btn--active': showVersions }"
+            @click="handleShowVersions"
+          >
+            <UiIcon name="history" />
+            {{ t('types.docVersions') }}
+          </button>
 
-          <!-- Preview -->
-          <div v-else class="doc-modal__preview">
-            <div v-if="!documentContent" class="doc-modal__placeholder">
-              {{ t('types.docEmpty') }}
-            </div>
-            <SafeMarkdownPreview v-else :model-value="documentContent" :language="editorLanguage" />
+          <button type="button" class="doc-modal__close" @click="handleClose">
+            <UiIcon name="close" />
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <div class="doc-modal">
+      <div v-if="showVersions" class="doc-modal__versions">
+        <div v-if="isLoadingVersions" class="doc-modal__versions-empty">
+          {{ t('common.loading') }}
+        </div>
+        <div v-else-if="docVersions.length === 0" class="doc-modal__versions-empty">
+          {{ t('types.docNoVersions') }}
+        </div>
+        <div v-else class="doc-modal__versions-list">
+          <div
+            v-for="ver in docVersions"
+            :key="ver.versionNumber"
+            class="doc-modal__version-item"
+            role="button"
+            tabindex="0"
+            @click="handleLoadVersion(ver.versionNumber)"
+            @keydown.enter="handleLoadVersion(ver.versionNumber)"
+          >
+            <span class="doc-modal__version-num">v{{ ver.versionNumber }}</span>
+            <span class="doc-modal__version-date">{{ formatDate(ver.createdAt) }}</span>
+            <span class="doc-modal__version-size">{{ formatSize(ver.size) }}</span>
           </div>
         </div>
       </div>
+
+      <div class="doc-modal__body">
+        <div v-if="isDocLoading" class="doc-modal__placeholder">
+          {{ t('common.loading') }}
+        </div>
+
+        <div v-else-if="isBrokenRef" class="doc-modal__broken-ref">
+          <UiIcon name="link_off" class="doc-modal__broken-ref-icon" />
+          <p class="doc-modal__broken-ref-text">{{ t('types.docBrokenRef') }}</p>
+          <button
+            v-if="!readOnly"
+            type="button"
+            class="doc-modal-btn doc-modal-btn--primary"
+            @click="handleCreateNew"
+          >
+            <UiIcon name="add" />
+            {{ t('types.docCreateNew') }}
+          </button>
+        </div>
+
+        <div v-else-if="docError" class="doc-modal__error">
+          <UiIcon name="error" />
+          {{ docError }}
+        </div>
+
+        <div v-else-if="isEditing && !viewingOldVersion && !readOnly" class="doc-modal__editor">
+          <MdEditor
+            :model-value="documentContent"
+            :language="editorLanguage"
+            :sanitize="sanitizeMarkdownHtml"
+            :preview="false"
+            :toolbars="[
+              'bold',
+              'underline',
+              'italic',
+              'strikeThrough',
+              '-',
+              'title',
+              'sub',
+              'sup',
+              'quote',
+              'unorderedList',
+              'orderedList',
+              'task',
+              '-',
+              'codeRow',
+              'code',
+              'link',
+              'table',
+              '-',
+              'revoke',
+              'next',
+              '=',
+              'preview',
+              'fullscreen',
+            ]"
+            @change="handleContentChange"
+          />
+        </div>
+
+        <div v-else class="doc-modal__preview">
+          <div v-if="!documentContent" class="doc-modal__placeholder">
+            {{ t('types.docEmpty') }}
+          </div>
+          <SafeMarkdownPreview v-else :model-value="documentContent" :language="editorLanguage" />
+        </div>
+      </div>
     </div>
-  </Teleport>
+  </BaseModal>
 </template>
 
 <style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @keyframes pulseGlow {
   0%,
   100% {
@@ -379,31 +350,13 @@ function formatSize(bytes: number): string {
   }
 }
 
-.doc-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.15s ease;
-}
-
 .doc-modal {
-  width: 100%;
-  max-width: 900px;
-  height: 85vh;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  margin: 16px;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.2s ease;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: var(--surface);
 }
 
 /* Header */

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiDelete, apiGet } from '@/composables/useApi'
-import AdminAlert from '@/components/admin/AdminAlert.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import EntityDeleteModal from '@/components/modals/EntityDeleteModal.vue'
@@ -190,8 +190,8 @@ onMounted(() => {
       </template>
     </AdminPageHeader>
 
-    <AdminAlert v-if="errorMessage" type="error" :message="errorMessage" />
-    <AdminAlert v-if="successMessage" type="success" :message="successMessage" />
+    <AppAlert v-if="errorMessage" type="error" :message="errorMessage" />
+    <AppAlert v-if="successMessage" type="success" :message="successMessage" />
 
     <section class="ad-section">
       <div class="ad-section__head">

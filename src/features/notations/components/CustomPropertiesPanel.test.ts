@@ -37,7 +37,7 @@ describe('CustomPropertiesPanel', () => {
         stubs: {
           UiIcon: true,
           PropertyRow: true,
-          CollapseSection: true,
+          CollapsibleSection: true,
           TypeSelectSection: true,
           RelationRulesSection: true,
           IconPicker: true,
@@ -58,7 +58,7 @@ describe('CustomPropertiesPanel', () => {
         stubs: {
           UiIcon: true,
           PropertyRow: true,
-          CollapseSection: {
+          CollapsibleSection: {
             template: '<div class="collapse-section"><slot /></div>',
             props: ['label'],
           },

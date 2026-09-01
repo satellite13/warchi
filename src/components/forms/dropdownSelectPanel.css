@@ -1,0 +1,68 @@
+/* Shared Teleport dropdown panel chrome for SearchableSelect + MultiSelect. */
+
+.dropdown-select-panel {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  z-index: 10000;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.dropdown-select-panel__search {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  background: var(--surface);
+  color: var(--base-text);
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.dropdown-select-panel__search::placeholder {
+  color: var(--text-subtle);
+}
+
+.dropdown-select-panel__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dropdown-select-panel__empty {
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+.dropdown-select-panel--md .dropdown-select-panel__search {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.dropdown-select-panel--md .dropdown-select-panel__list {
+  padding: 4px;
+}
+
+.dropdown-select-panel--md .dropdown-select-panel__empty {
+  padding: 10px 8px;
+  font-size: 13px;
+}
+
+.dropdown-select-panel--sm .dropdown-select-panel__search {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.dropdown-select-panel--sm .dropdown-select-panel__list {
+  padding: 3px;
+}
+
+.dropdown-select-panel--sm .dropdown-select-panel__empty {
+  padding: 8px 6px;
+  font-size: 12px;
+}

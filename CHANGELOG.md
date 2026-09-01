@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.8] - 2026-09-01
+
+### Changed
+- Model and notation editors share the same form sections, matrix filters, and dropdown panels.
+
 ## [0.25.7] - 2026-08-31
 
 ### Fixed

@@ -7,7 +7,7 @@ import type { PaginatedResponse, User, UserRole } from '../types/entities'
 import { formatDate } from '../utils/formatDate'
 import { paginatedContent } from '../utils/paginatedResponse'
 import { normalizeUserRole } from '../utils/userRole'
-import AdminAlert from '@/components/admin/AdminAlert.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import AdminUserApiKeys from '@/components/admin/AdminUserApiKeys.vue'
@@ -184,8 +184,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <AdminAlert v-if="errorMessage" type="error" :message="errorMessage" />
-    <AdminAlert v-if="successMessage" type="success" :message="successMessage" />
+    <AppAlert v-if="errorMessage" type="error" :message="errorMessage" />
+    <AppAlert v-if="successMessage" type="success" :message="successMessage" />
 
     <AdminTableShell
       class="au-table-wrap"

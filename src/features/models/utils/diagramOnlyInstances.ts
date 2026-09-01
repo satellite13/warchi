@@ -95,3 +95,27 @@ export function getHostEdgeInstanceId(instance: DiagramNodeInstance): string | n
   const hostId = instance.attrs?.hostEdgeInstanceId
   return typeof hostId === 'string' && hostId ? hostId : null
 }
+
+export function isNoteInstance(instance: DiagramNodeInstance): boolean {
+  return instance.attrs?.isNote === true
+}
+
+export function isDirectoryNoteInstance(instance: DiagramNodeInstance): boolean {
+  return instance.attrs?.isDirectoryNote === true
+}
+
+export function isDiagramOnlyVisualInstance(instance: DiagramNodeInstance): boolean {
+  return (
+    isNoteInstance(instance) || isContainerInstance(instance) || isEdgeAnchorInstance(instance)
+  )
+}
+
+/** Raw note text; pass `fallback` for empty/missing (e.g. i18n default). */
+export function getNoteText(instance: DiagramNodeInstance, fallback = ''): string {
+  const value = instance.attrs?.noteText
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback
+}
+
+export function isStickyNoteInstance(instance: DiagramNodeInstance): boolean {
+  return isNoteInstance(instance) && !isDirectoryNoteInstance(instance)
+}

@@ -14,8 +14,6 @@ import {
   RulersOverlay,
   InteractionManager,
   TextLabel,
-  type ContextMenuTarget,
-  type ContextMenuItem,
   type TextStyle,
   type TextLabelOptions,
   type EdgePathType,
@@ -31,6 +29,7 @@ import {
   resolveCornerCutPx,
   resolveDiagramNodeShape,
 } from '@/features/diagram/diagramNodeFactory'
+import { buildModelDiagramContextMenu } from './diagram/buildModelDiagramContextMenu'
 import { customOutlineToPath2D, customOutlineToSvgPath } from '@/utils/customOutlinePath'
 import { diagramShapeFactories } from '@/utils/diagramShapes'
 import { applyContentInsetFromStyle } from '@/features/diagram-style/utils/applyContentInsetFromStyle'
@@ -82,9 +81,12 @@ import {
 } from '../utils/diagramCanvasSync'
 import { collectNestedGroupFollowers } from '../utils/groupDragFollowers'
 import {
-  applyHistoryPersistDirty,
-  type HistoryPersistKind,
-} from '../utils/historyPersistDirty'
+  createSelectionSuppressBox,
+  findTopEdgeAtPoint,
+  useDiagramSelectionBridge,
+} from '../composables/useDiagramSelectionBridge'
+import { useDiagramHistoryPersist } from '../composables/useDiagramHistoryPersist'
+import { useDiagramViewportControls } from '../composables/useDiagramViewportControls'
 import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
@@ -105,14 +107,23 @@ import {
   createDefaultCompositeContent,
   injectCompositeNameAndIcon,
 } from '@/features/diagram-style/utils/compositeBindings'
-import { resolvePaletteIconName } from '@/utils/paletteIcon'
 import {
   applyContainerInlineLabel,
   getContainerLabel,
   getHostEdgeInstanceId,
+  getNoteText,
   isContainerInstance,
+  isDiagramOnlyVisualInstance,
+  isDirectoryNoteInstance,
   isEdgeAnchorInstance,
+  isNoteInstance,
 } from '../utils/diagramOnlyInstances'
+import { applyEdgeTypeFromContextMenu } from './diagram/setEdgeTypeFromContextMenu'
+import {
+  applyDiffOverlayToEdgeStyle,
+  applyDiffOverlayToNodeStyle,
+} from '../utils/diagramDiffOverlay'
+import ModelDiagramCanvasHud from './diagram/ModelDiagramCanvasHud.vue'
 import { syncEdgeAnchorPositions } from '../utils/edgeAnchorSync'
 import { buildEdgeAnchorLookup, resolveDiagramEdgeEndpoint } from '../utils/resolveDiagramEdgeEndpoint'
 import { pickNearestEdgeForDrop, shouldRemapConnectToExistingEdge } from '../utils/noteEdgeDrop'
@@ -189,34 +200,6 @@ const props = withDefaults(
     onRemotePointerLeave: undefined,
   }
 )
-
-const DIFF_COLORS = {
-  added: { strokeColor: '#1ea355', fillColor: 'rgba(30, 163, 85, 0.15)' },
-  removed: { strokeColor: '#dc3545', fillColor: 'rgba(220, 53, 69, 0.15)' },
-  modified: { strokeColor: '#e67e22', fillColor: 'rgba(230, 126, 34, 0.12)' },
-} as const
-
-function applyDiffOverlayToNodeStyle(
-  style: Record<string, unknown>,
-  state: 'added' | 'removed' | 'modified'
-): void {
-  const c = DIFF_COLORS[state]
-  style.strokeColor = c.strokeColor
-  style.strokeWidth = 2
-  style.fillColor = c.fillColor
-}
-
-function applyDiffOverlayToEdgeStyle(
-  style: Record<string, unknown> & { strokeColor?: string; strokeWidth?: number },
-  state: 'added' | 'removed' | 'modified'
-): void {
-  const c = DIFF_COLORS[state]
-  ;(style as Record<string, unknown>).strokeColor = c.strokeColor
-  ;(style as Record<string, unknown>).strokeWidth = Math.max(
-    Number(style.strokeWidth) || 2,
-    2
-  )
-}
 
 const emit = defineEmits<{
   updateDiagram: [next: DiagramAttrs, options?: { dirty?: boolean }]
@@ -332,14 +315,20 @@ const attachToOutlineEnabled = ref(props.attachToOutlineEnabled)
 const canUndo = ref(false)
 const canRedo = ref(false)
 /**
- * When true, history `change` only refreshes canUndo/canRedo.
- * Auto-layout commands apply attrs via updateDiagram + syncDiagram; the usual
- * persist-from-papirus path would race (papirus still has pre-layout coords) and
- * both break undo and can leave an extra no-op history step.
+ * History undo/redo persist orchestration (suppress flag, dirty stack, canUndo/canRedo).
+ * Layout commands must use historyPersist.runWithoutCanvasPersist so papirus
+ * persist-from-renderer does not race pre-layout coords.
  */
-let suppressHistoryCanvasPersist = false
-const dirtyBeforeHistoryCommand: boolean[] = []
-let pendingHistoryPersistKind: HistoryPersistKind = 'execute'
+const historyPersist = useDiagramHistoryPersist({
+  canUndo,
+  canRedo,
+  isReadOnly: () => props.readOnly,
+  isDiagramDirty: () => Boolean(props.diagramDirty),
+  persistHistoryLayoutFromRenderer: opts => persistHistoryLayoutFromRenderer(opts),
+  detectLabelChanges: () => detectLabelChanges(),
+  detectEdgeLabelChanges: () => detectEdgeLabelChanges(),
+  syncEdgeAnchors: opts => syncEdgeAnchors(opts),
+})
 /** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
 const viewportRev = ref(0)
 
@@ -379,30 +368,74 @@ let interactionManager: InteractionManager | null = null
 let gridOverlay: GridOverlay | null = null
 let miniMap: MiniMap | null = null
 let rulersOverlay: RulersOverlay | null = null
-let suppressSelectionEvent = false
-let suppressViewportPersistence = false
+const selectionSuppress = createSelectionSuppressBox()
 let lastActiveDiagramId: string | null = null
 
-function safePersistViewport(diagramId: string, r: DiagramRenderer) {
-  if (!suppressViewportPersistence) persistDiagramViewport(diagramId, r)
-}
-
-function flushViewport(diagramId: string | null) {
-  if (diagramId) flushPersistDiagramViewport(diagramId)
-}
-
-function safeRestoreViewport(diagramId: string, r: DiagramRenderer): boolean {
-  suppressViewportPersistence = true
-  try {
-    return restoreDiagramViewport(diagramId, r)
-  } finally {
-    suppressViewportPersistence = false
-  }
-}
+const viewportControls = useDiagramViewportControls({
+  getRenderer: () => renderer,
+  getInteraction: () => interactionManager,
+  getContainerEl: () => containerRef.value,
+  persistViewport: (diagramId, r) => persistDiagramViewport(diagramId, r as DiagramRenderer),
+  flushPersistViewport: diagramId => flushPersistDiagramViewport(diagramId),
+  restoreViewport: (diagramId, r) => restoreDiagramViewport(diagramId, r as DiagramRenderer),
+  gridVisible,
+  miniMapVisible,
+  snapEnabled,
+  alignEnabled,
+  rulersEnabled,
+  lockAnchorsEnabled,
+  getGridOverlay: () => gridOverlay,
+  getMiniMap: () => miniMap,
+  getRulersOverlay: () => rulersOverlay,
+  onLockAnchorsToggled: enabled => {
+    if (!enabled) clearLockedPortsFromRendererEdges()
+  },
+})
+const {
+  safePersistViewport,
+  flushViewport,
+  safeRestoreViewport,
+  getCanvasCenter,
+  zoomIn,
+  zoomOut,
+  resetView,
+  fitToView,
+  getViewport,
+  setViewport,
+  toggleGrid,
+  getGridVisible,
+  toggleMiniMap,
+  getMiniMapVisible,
+  toggleSnap,
+  getSnapEnabled,
+  toggleAlign,
+  getAlignEnabled,
+  toggleRulers,
+  getRulersEnabled,
+  toggleLockAnchors,
+  getLockAnchorsEnabled,
+} = viewportControls
 
 // Maps: papirus element ID → model entity
 const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: string }>()
 const edgeIdToInstance = new Map<string, { modelLinkId: string; edgeId: string }>()
+
+const selectionBridge = useDiagramSelectionBridge({
+  suppressSelectionEvent: selectionSuppress,
+  getSelection: () =>
+    interactionManager
+      ? {
+          selectedIds: interactionManager.selection.selectedIds,
+          selectMultiple: ids => interactionManager!.selection.selectMultiple(ids),
+          clearSelection: () => interactionManager!.selection.clearSelection(),
+          select: id => interactionManager!.selection.select(id),
+        }
+      : null,
+  getElement: id => renderer?.getNode(id) ?? renderer?.getEdge(id) ?? null,
+  nodeIdToInstance,
+  edgeIdToInstance,
+})
+
 /** Last display-name we pushed onto a papirus node from syncDiagram (editable label / composite name). */
 const syncedNodeNameByPapId = new Map<string, string>()
 /** Outer composite shape fingerprint last applied (shapeType / outline / slice / radius). */
@@ -1119,21 +1152,11 @@ const getEffectiveStyle = (instance: DiagramNodeInstance): DiagramStyle | undefi
   return withResolvedScaleSlice(merged)
 }
 
-const isNoteInstance = (instance: DiagramNodeInstance): boolean => instance.attrs?.isNote === true
-
-const isDirectoryNoteInstance = (instance: DiagramNodeInstance): boolean =>
-  instance.attrs?.isDirectoryNote === true
-
-const isDiagramOnlyVisualInstance = (instance: DiagramNodeInstance): boolean =>
-  isNoteInstance(instance) || isContainerInstance(instance) || isEdgeAnchorInstance(instance)
-
-const getNoteText = (instance: DiagramNodeInstance): string => {
-  const value = instance.attrs?.noteText
-  return typeof value === 'string' && value.trim().length > 0 ? value : t('diagram.newNote')
-}
+const noteTextOrDefault = (instance: DiagramNodeInstance): string =>
+  getNoteText(instance, t('diagram.newNote'))
 
 const getInstanceDisplayName = (instance: DiagramNodeInstance): string => {
-  if (isNoteInstance(instance)) return getNoteText(instance)
+  if (isNoteInstance(instance)) return noteTextOrDefault(instance)
   if (isContainerInstance(instance)) return getContainerLabel(instance)
   if (isEdgeAnchorInstance(instance)) return ''
   return nodeById.value.get(instance.modelNodeId)?.name ?? 'Node'
@@ -1883,87 +1906,22 @@ function syncEdgeAnchors(options: { persist: boolean; updateRenderer: boolean })
 // ── Selection sync ──
 function updateSelection() {
   if (!renderer || !interactionManager) return
-  const selectionManager = interactionManager.selection
-
-  // Sync selection from props
-  const selectedNodeIds = props.selectedModelNodeIds
-  const selectedInstanceIds = props.selectedInstanceIds ?? []
-  const selectedLinkId = props.selectedModelLinkId
-  const selectedEdgeInstanceId = props.selectedEdgeInstanceId ?? null
-
-  const targetPapIds: string[] = []
-
-  if (selectedInstanceIds.length > 0) {
-    const instanceSet = new Set(selectedInstanceIds)
-    for (const [papId, entity] of nodeIdToInstance) {
-      if (instanceSet.has(entity.instanceId)) {
-        targetPapIds.push(papId)
-      }
-    }
-  } else if (selectedNodeIds.length > 0) {
-    const selectedSet = new Set(selectedNodeIds)
-    for (const [papId, entity] of nodeIdToInstance) {
-      if (selectedSet.has(entity.modelNodeId)) {
-        targetPapIds.push(papId)
-      }
-    }
-  } else if (selectedEdgeInstanceId) {
-    const papId = `edge-${selectedEdgeInstanceId}`
-    if (edgeIdToInstance.has(papId)) {
-      targetPapIds.push(papId)
-    }
-  } else if (selectedLinkId) {
-    for (const [papId, entity] of edgeIdToInstance) {
-      if (entity.modelLinkId === selectedLinkId) {
-        targetPapIds.push(papId)
-        break
-      }
-    }
-  }
-
-  if (targetPapIds.length > 0) {
-    const currentIds = selectionManager.selectedIds
-    const needsIdSync =
-      targetPapIds.length !== currentIds.size || targetPapIds.some(id => !currentIds.has(id))
-    // After node rebuild (e.g. composite content sync) selectedIds may still match,
-    // but the new element starts in "normal" and needs selection state reapplied.
-    const needsStateRepair = targetPapIds.some(id => {
-      const el = renderer?.getNode(id) ?? renderer?.getEdge(id)
-      return !!el && el.state !== 'selected'
-    })
-    if (needsIdSync || needsStateRepair) {
-      suppressSelectionEvent = true
-      try {
-        selectionManager.selectMultiple(targetPapIds)
-      } finally {
-        suppressSelectionEvent = false
-      }
-    }
-  } else {
-    if (selectionManager.selectedIds.size > 0) {
-      suppressSelectionEvent = true
-      try {
-        selectionManager.clearSelection()
-      } finally {
-        suppressSelectionEvent = false
-      }
-    }
-  }
+  selectionBridge.syncSelectionFromProps({
+    selectedModelNodeIds: props.selectedModelNodeIds,
+    selectedInstanceIds: props.selectedInstanceIds,
+    selectedModelLinkId: props.selectedModelLinkId,
+    selectedEdgeInstanceId: props.selectedEdgeInstanceId,
+  })
 }
 
-function findTopEdgeAtPoint(worldPoint: { x: number; y: number }): Edge | null {
+function findTopEdgeAtPointLocal(worldPoint: { x: number; y: number }): Edge | null {
   if (!renderer) return null
-  const edges = Array.from(renderer.edges.values())
-  for (let i = edges.length - 1; i >= 0; i--) {
-    const edge = edges[i]
-    if (!edge || !edge.visible) continue
-    const baseTolerance = Math.max((edge.style.strokeWidth ?? 2) * 2, EDGE_HIT_TOLERANCE_MIN)
-    const tolerance = baseTolerance / Math.max(renderer.zoom, 0.0001)
-    if (edge.hitTestWithTolerance(worldPoint, tolerance)) {
-      return edge
-    }
-  }
-  return null
+  return findTopEdgeAtPoint(
+    renderer.edges.values(),
+    worldPoint,
+    renderer.zoom,
+    EDGE_HIT_TOLERANCE_MIN
+  ) as Edge | null
 }
 
 function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
@@ -1972,22 +1930,14 @@ function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
   if (renderer.blocksDiagramPointerAtScreen(event.clientX, event.clientY)) return
 
   const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
-  const hitEdge = findTopEdgeAtPoint(worldPoint)
+  const hitEdge = findTopEdgeAtPointLocal(worldPoint)
   if (!hitEdge) return
 
   // Prevent InteractionManager click handler from re-selecting underlying node.
   event.preventDefault()
   event.stopImmediatePropagation()
 
-  const selection = interactionManager.selection
-  if (selection.selectedIds.size === 1 && selection.selectedIds.has(hitEdge.id)) return
-
-  suppressSelectionEvent = true
-  try {
-    selection.select(hitEdge.id)
-  } finally {
-    suppressSelectionEvent = false
-  }
+  selectionBridge.selectEdgeSuppressingEvent(hitEdge.id)
 
   emit('selectCanvasElementId', hitEdge.id)
   const edgeEntity = edgeIdToInstance.get(hitEdge.id)
@@ -2055,7 +2005,7 @@ function detectLabelChanges() {
         : (papNode.label?.editableText ?? papNode.label?.text ?? '')
     const instance = next.instances.nodes.find(item => item.id === entity.instanceId)
     if (instance && isNoteInstance(instance)) {
-      if (labelText !== getNoteText(instance)) {
+      if (labelText !== noteTextOrDefault(instance)) {
         if (!instance.attrs) instance.attrs = {}
         instance.attrs.noteText = labelText
         diagramOnlyLabelsChanged = true
@@ -2304,31 +2254,7 @@ function detectEditablePolylineControlPointChanges() {
 function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) {
   const before = cloneDiagramAttrs()
   const next = cloneDiagramAttrs()
-  const edgeInst = next.instances.edges.find(edge => edge.id === edgeInstanceId)
-  if (!edgeInst) return
-
-  const instanceStyle =
-    edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object'
-      ? (edgeInst.attrs.diagramStyle as DiagramStyle)
-      : undefined
-  const effective =
-    mergeEffectiveDiagramStyle(getBoundRelationStyle(edgeInst.modelLinkId), instanceStyle) ?? {}
-
-  const currentType = (effective.edgeType as EdgePathType | undefined) ?? 'bezier'
-  if (currentType === edgeType) return
-
-  if (!edgeInst.attrs) edgeInst.attrs = {}
-  // Persist full effective style + new type so relation label/stroke fields are not dropped
-  // when instance diagramStyle previously held only `{ edgeType }` (e.g. after auto-layout).
-  edgeInst.attrs.diagramStyle = {
-    ...effective,
-    edgeType,
-  }
-  const fromPolyline = currentType === 'polyline' || currentType === 'editable-polyline'
-  const toNonPolyline = edgeType === 'bezier' || edgeType === 'straight'
-  if (fromPolyline && toNonPolyline && edgeInst.attrs.controlPoints) {
-    delete edgeInst.attrs.controlPoints
-  }
+  if (!applyEdgeTypeFromContextMenu(next, edgeInstanceId, edgeType, getBoundRelationStyle)) return
   const after = next
   emit('flushDiagramHistory')
   const history = interactionManager?.history
@@ -2482,40 +2408,14 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
 
   // Selection and other interaction events (only when not read-only)
   manager.selection.on('select', (elementIds: string[]) => {
-    if (suppressSelectionEvent) return
-    if (elementIds.length === 0) {
-      emit('selectNodes', [])
-      emit('selectInstanceIds', [])
-      emit('selectLink', null)
-      emit('selectEdgeInstanceId', null)
-      emit('selectCanvasElementId', null)
-      return
-    }
-    emit('selectCanvasElementId', elementIds[0] ?? null)
-
-    const modelNodeIds: string[] = []
-    const instanceIds: string[] = []
-    for (const elementId of elementIds) {
-      const nodeEntity = nodeIdToInstance.get(elementId)
-      if (nodeEntity) {
-        modelNodeIds.push(nodeEntity.modelNodeId)
-        instanceIds.push(nodeEntity.instanceId)
-      }
-    }
-    if (modelNodeIds.length > 0) {
-      emit('selectNodes', modelNodeIds)
-      emit('selectInstanceIds', instanceIds)
-      return
-    }
-
-    if (elementIds.length === 1) {
-      const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
-      if (edgeEntity) {
-        emit('selectInstanceIds', [])
-        emit('selectLink', edgeEntity.modelLinkId)
-        emit('selectEdgeInstanceId', edgeEntity.edgeId)
-      }
-    }
+    if (selectionSuppress.value) return
+    selectionBridge.emitFromPapIds(elementIds, {
+      selectNodes: ids => emit('selectNodes', ids),
+      selectInstanceIds: ids => emit('selectInstanceIds', ids),
+      selectLink: id => emit('selectLink', id),
+      selectEdgeInstanceId: id => emit('selectEdgeInstanceId', id),
+      selectCanvasElementId: id => emit('selectCanvasElementId', id),
+    })
   })
 
   // Drag start → initialize group drag if enabled
@@ -2615,38 +2515,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     )
   }
 
-  manager.history.on('undo', () => {
-    pendingHistoryPersistKind = 'undo'
-  })
-  manager.history.on('redo', () => {
-    pendingHistoryPersistKind = 'redo'
-  })
-
-  // History → sync canUndo/canRedo + detect label changes
-  manager.history.on('change', () => {
-    if (props.readOnly) return
-    canUndo.value = manager.history.canUndo
-    canRedo.value = manager.history.canRedo
-    const persistDirty = applyHistoryPersistDirty(
-      dirtyBeforeHistoryCommand,
-      pendingHistoryPersistKind,
-      Boolean(props.diagramDirty)
-    )
-    pendingHistoryPersistKind = 'execute'
-    while (dirtyBeforeHistoryCommand.length > manager.history.undoCount) {
-      dirtyBeforeHistoryCommand.shift()
-    }
-    if (suppressHistoryCanvasPersist) return
-    // One attrs write: nodes + editable-polyline bends + ports + anchors.
-    // A later cloneDiagramAttrs() still sees pre-undo props and would restore
-    // post-drag controlPoints after nested group undo.
-    persistHistoryLayoutFromRenderer({ dirty: persistDirty.dirty })
-    if (persistDirty.dirty) {
-      detectLabelChanges()
-      detectEdgeLabelChanges()
-    }
-    syncEdgeAnchors({ persist: false, updateRenderer: true })
-  })
+  historyPersist.bindHistoryEvents(manager.history)
 
   // Connection → emit connectNodes / connectNodeToEdge
   manager.connection.on('connect', (edge: Edge) => {
@@ -2966,112 +2835,22 @@ function initRenderer(
   if (!props.readOnly) {
   r.enableContextMenu({
     iconToUrl: (name: string) => srcFor(name) || '/icons/widgets.svg',
-    menu: {
-      node: (target: ContextMenuTarget) => {
-        if (target.type !== 'node') return []
-        const entity = nodeIdToInstance.get(target.node.id)
-        if (!entity) return []
-        const instance = instanceNodes.value.find(item => item.id === entity.instanceId)
-        if (instance && isNoteInstance(instance)) {
-          return [
-            {
-              label: t('diagram.editNote'),
-              icon: 'edit_note',
-              action: () => emit('requestEditNote', entity.instanceId),
-            },
-            {
-              label: t('diagram.deleteNote'),
-              icon: 'delete',
-              action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
-            },
-          ]
-        }
-        if (instance && isContainerInstance(instance)) {
-          return [
-            {
-              label: t('diagram.deleteContainer'),
-              icon: 'delete',
-              action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
-            },
-          ]
-        }
-        if (instance && isEdgeAnchorInstance(instance)) {
-          return []
-        }
-        return [
-          {
-            label: t('diagram.findInTree'),
-            icon: 'account_tree',
-            action: () => emit('findInTree', entity.modelNodeId),
-          },
-          {
-            label: t('diagram.removeFromDiagram'),
-            icon: 'delete',
-            action: () => emit('requestDeleteNodeFromDiagram', entity.instanceId),
-          },
-        ]
-      },
-      edge: (target: ContextMenuTarget) => {
-        if (target.type !== 'edge') return []
-        const entity = edgeIdToInstance.get(target.edge.id)
-        if (!entity) return []
-
-        const edgeInst = instanceEdges.value.find(edge => edge.id === entity.edgeId)
-        const isDiagramOnly = edgeInst?.attrs?.isDiagramOnly === true
-        const effStyle = getEffectiveEdgeStyle(edgeInst as DiagramEdgeInstance)
-        const currentType = (effStyle?.edgeType as EdgePathType | undefined) ?? 'bezier'
-
-        const items: ContextMenuItem[] = []
-
-        if (isDiagramOnly) {
-          items.push(
-            { label: t('diagram.noteLink'), icon: 'note', action: () => {} },
-            { separator: true }
-          )
-        }
-
-        items.push(
-          {
-            label: t('diagram.linkType'),
-            icon: 'conversion_path',
-            items: [
-              {
-                label: t('diagram.linkTypeStraight'),
-                icon: 'remove',
-                enabled: currentType !== 'straight',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'straight'),
-              },
-              {
-                label: t('diagram.linkTypePolyline'),
-                icon: 'timeline',
-                enabled: currentType !== 'polyline',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'polyline'),
-              },
-              {
-                label: t('diagram.linkTypeEditablePolyline'),
-                icon: 'polyline',
-                enabled: currentType !== 'editable-polyline',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'editable-polyline'),
-              },
-              {
-                label: t('diagram.linkTypeBezier'),
-                icon: 'line_curve',
-                enabled: currentType !== 'bezier',
-                action: () => setEdgeTypeFromContext(entity.edgeId, 'bezier'),
-              },
-            ],
-          },
-          { separator: true },
-          {
-            label: isDiagramOnly ? t('diagram.deleteNoteLink') : t('common.delete'),
-            icon: 'delete',
-            action: () => emit('requestDeleteLink', entity.modelLinkId, entity.edgeId),
-          }
-        )
-
-        return items
-      },
-    },
+    menu: buildModelDiagramContextMenu({
+      findNodeEntity: papNodeId => nodeIdToInstance.get(papNodeId),
+      findEdgeEntity: papEdgeId => edgeIdToInstance.get(papEdgeId),
+      findNodeInstance: instanceId => instanceNodes.value.find(item => item.id === instanceId),
+      findEdgeInstance: edgeId => instanceEdges.value.find(edge => edge.id === edgeId),
+      getEffectiveEdgeStyle,
+      isNoteInstance,
+      isContainerInstance,
+      isEdgeAnchorInstance,
+      setEdgeType: setEdgeTypeFromContext,
+      onEditNote: instanceId => emit('requestEditNote', instanceId),
+      onDeleteNodeFromDiagram: instanceId => emit('requestDeleteNodeFromDiagram', instanceId),
+      onFindInTree: modelNodeId => emit('findInTree', modelNodeId),
+      onDeleteLink: (modelLinkId, edgeId) => emit('requestDeleteLink', modelLinkId, edgeId),
+      t: key => t(key),
+    }),
   })
   }
 
@@ -3095,51 +2874,12 @@ const cloneDiagramAttrs = (): DiagramAttrs => {
   return JSON.parse(JSON.stringify(source)) as DiagramAttrs
 }
 
-const getCanvasCenter = (): { x: number; y: number } => {
-  const el = containerRef.value
-  if (!el) return { x: 0, y: 0 }
-  const rect = el.getBoundingClientRect()
-  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-}
-
-// ── Exposed API ──
-const zoomIn = () => {
-  interactionManager?.navigation.setZoom((renderer?.zoom ?? 1) * 1.2, getCanvasCenter())
-}
-
-const zoomOut = () => {
-  interactionManager?.navigation.setZoom((renderer?.zoom ?? 1) / 1.2, getCanvasCenter())
-}
-
-const resetView = () => {
-  interactionManager?.navigation.setZoom(1, getCanvasCenter())
-}
-
-const fitToView = () => {
-  interactionManager?.navigation.fitToView(50)
-}
-
-const zoomToSelection = () => {
-  if (!interactionManager || !renderer) return
-  if (props.selectedModelNodeIds.length === 0) return
-  const selectedSet = new Set(props.selectedModelNodeIds)
-  const selectedInstances = instanceNodes.value.filter(node => selectedSet.has(node.modelNodeId))
-  if (selectedInstances.length === 0) return
-
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity
-  for (const instance of selectedInstances) {
-    const dims = getInstanceDimensions(instance)
-    minX = Math.min(minX, instance.x)
-    minY = Math.min(minY, instance.y)
-    maxX = Math.max(maxX, instance.x + dims.width)
-    maxY = Math.max(maxY, instance.y + dims.height)
-  }
-  interactionManager.navigation.zoomToRect(
-    { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
-    64
+// ── Exposed API (zoom/fit/toggles via viewportControls; undo via historyPersist) ──
+const zoomToSelection = (): void => {
+  viewportControls.zoomToSelection(
+    instanceNodes.value,
+    props.selectedModelNodeIds,
+    getInstanceDimensions
   )
 }
 
@@ -3154,13 +2894,7 @@ const applyDiagramAttrsToCanvas = (
 }
 
 const runLayoutHistoryCommand = (apply: () => void): void => {
-  suppressHistoryCanvasPersist = true
-  apply()
-  // HistoryManager emits `change` synchronously after execute/undo returns;
-  // clear on microtask so persist-from-papirus stays suppressed for that tick.
-  queueMicrotask(() => {
-    suppressHistoryCanvasPersist = false
-  })
+  historyPersist.runWithoutCanvasPersist(apply)
 }
 
 const applyLayoutResult = (after: DiagramAttrs): void => {
@@ -3185,92 +2919,12 @@ const applyLayoutResult = (after: DiagramAttrs): void => {
   requestAnimationFrame(() => fitToView())
 }
 
-const toggleGrid = (): boolean => {
-  gridVisible.value = !gridVisible.value
-  gridOverlay?.setEnabled(gridVisible.value)
-  renderer?.markDirty()
-  return gridVisible.value
-}
-
-const getGridVisible = () => gridVisible.value
-
-const toggleMiniMap = (): boolean => {
-  miniMapVisible.value = !miniMapVisible.value
-  miniMap?.setEnabled(miniMapVisible.value)
-  renderer?.markDirty()
-  return miniMapVisible.value
-}
-
-const getMiniMapVisible = () => miniMapVisible.value
-
-const toggleSnap = (): boolean => {
-  snapEnabled.value = !snapEnabled.value
-  if (interactionManager) {
-    interactionManager.drag.setSnapToGrid(snapEnabled.value)
-    interactionManager.resize.setSnapToGrid(snapEnabled.value)
-    interactionManager.connection.setSnapToGrid(snapEnabled.value)
-  }
-  return snapEnabled.value
-}
-
-const getSnapEnabled = () => snapEnabled.value
-
-const toggleAlign = (): boolean => {
-  alignEnabled.value = !alignEnabled.value
-  interactionManager?.drag.setAlignmentEnabled(alignEnabled.value)
-  return alignEnabled.value
-}
-
-const getAlignEnabled = () => alignEnabled.value
-
-const toggleRulers = (): boolean => {
-  rulersEnabled.value = !rulersEnabled.value
-  rulersOverlay?.setEnabled(rulersEnabled.value)
-  renderer?.markDirty()
-  return rulersEnabled.value
-}
-
-const getRulersEnabled = () => rulersEnabled.value
-
-const undo = () => {
-  interactionManager?.history.undo()
-}
-
-const redo = () => {
-  interactionManager?.history.redo()
-}
-
-const resetHistory = () => {
-  suppressHistoryCanvasPersist = true
-  try {
-    interactionManager?.history.clear()
-  } finally {
-    suppressHistoryCanvasPersist = false
-  }
-  dirtyBeforeHistoryCommand.length = 0
-  pendingHistoryPersistKind = 'execute'
-  canUndo.value = false
-  canRedo.value = false
-}
+const undo = () => historyPersist.undo(interactionManager?.history)
+const redo = () => historyPersist.redo(interactionManager?.history)
+const resetHistory = () => historyPersist.resetHistory(interactionManager?.history)
 
 const getCanUndo = () => canUndo.value
 const getCanRedo = () => canRedo.value
-
-const toggleLockAnchors = (): boolean => {
-  lockAnchorsEnabled.value = !lockAnchorsEnabled.value
-  if (renderer) {
-    for (const [, edge] of renderer.edges) {
-      edge.lockAnchors = lockAnchorsEnabled.value
-    }
-    if (!lockAnchorsEnabled.value) {
-      clearLockedPortsFromRendererEdges()
-    }
-    renderer.markDirty()
-  }
-  return lockAnchorsEnabled.value
-}
-
-const getLockAnchorsEnabled = () => lockAnchorsEnabled.value
 
 // ── Drop handling ──
 const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
@@ -3518,100 +3172,6 @@ const onDrop = (event: DragEvent) => {
   }
 }
 
-const onDragComponentStart = (event: DragEvent, componentId: string) => {
-  event.dataTransfer?.setData('application/x-notation-component-id', componentId)
-  event.dataTransfer?.setData('text/plain', `component:${componentId}`)
-  event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
-}
-
-const onDragNoteStart = (event: DragEvent) => {
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
-  event.dataTransfer?.setData('application/x-model-diagram-note', 'note')
-  event.dataTransfer?.setData('text/plain', 'note')
-  event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
-}
-
-const onDragContainerStart = (event: DragEvent) => {
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy'
-  event.dataTransfer?.setData('application/x-model-diagram-container', 'container')
-  event.dataTransfer?.setData('text/plain', 'container')
-  event.dataTransfer?.setDragImage(event.currentTarget as Element, 10, 10)
-}
-
-// ── Palette ──
-const paletteItems = computed(() => {
-  const notationId = props.activeDiagram?.notationId
-  if (!notationId) return []
-  return props.components
-    .filter(component => component.notationId === notationId)
-    .map(component => {
-      const parsedAttrs = parseEntityAttrs(component.attrs ?? null)
-      const fillColor = parsedAttrs.diagramStyle?.fillColor?.trim()
-      const paletteGroup =
-        typeof parsedAttrs.paletteGroup === 'number' && parsedAttrs.paletteGroup >= 0
-          ? parsedAttrs.paletteGroup
-          : 0
-      return {
-        ...component,
-        paletteIconName: resolvePaletteIconName(parsedAttrs, 'component'),
-        paletteFillColor: fillColor && fillColor.length > 0 ? fillColor : 'var(--accent)',
-        paletteGroup,
-      }
-    })
-})
-
-type PaletteEntry =
-  | { kind: 'divider' }
-  | { kind: 'item'; component: (typeof paletteItems.value)[number] }
-
-const paletteEntries = computed((): PaletteEntry[] => {
-  const items = paletteItems.value
-  if (items.length === 0) return []
-
-  const byGroup = new Map<number, typeof items>()
-  for (const item of items) {
-    const group = item.paletteGroup
-    if (!byGroup.has(group)) byGroup.set(group, [])
-    byGroup.get(group)!.push(item)
-  }
-
-  const sortedGroups = Array.from(byGroup.keys()).sort((a, b) => a - b)
-  const entries: PaletteEntry[] = []
-
-  for (let i = 0; i < sortedGroups.length; i++) {
-    const groupKey = sortedGroups[i]
-    if (groupKey === undefined) continue
-    if (i > 0 || groupKey > 0) entries.push({ kind: 'divider' })
-    const groupItems = byGroup.get(groupKey)!
-    groupItems.sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
-    for (const comp of groupItems) {
-      entries.push({ kind: 'item', component: comp })
-    }
-  }
-
-  return entries
-})
-
-const buildIconUrl = (iconName: string): string => {
-  const normalized = iconName.trim()
-  if (!normalized) return '/icons/component.svg'
-  return srcFor(normalized) || '/icons/component.svg'
-}
-
-const handlePaletteIconError = (event: Event, iconName: string) => {
-  const img = event.target as HTMLImageElement | null
-  if (!img) return
-  const triedAltPath = img.dataset.iconFallbackTried === '1'
-  if (!triedAltPath) {
-    img.dataset.iconFallbackTried = '1'
-    const normalized = iconName.trim()
-    img.src = normalized.toLowerCase().endsWith('.svg')
-      ? `/icon/${normalized}`
-      : `/icon/${normalized}.svg`
-    return
-  }
-  img.src = '/icons/component.svg'
-}
 
 const setPaletteVisible = (visible: boolean) => {
   if (paletteVisible.value === visible) return
@@ -3849,25 +3409,6 @@ watch(
   }
 )
 
-const getViewport = (): ViewportState | null => {
-  if (!renderer) return null
-  return { ...renderer.viewport }
-}
-
-const setViewport = (state: ViewportState): void => {
-  if (!renderer) return
-  suppressViewportPersistence = true
-  try {
-    renderer.viewport = {
-      zoom: state.zoom,
-      offsetX: state.offsetX,
-      offsetY: state.offsetY,
-    }
-  } finally {
-    suppressViewportPersistence = false
-  }
-}
-
 defineExpose({
   zoomIn,
   zoomOut,
@@ -3915,94 +3456,18 @@ defineExpose({
       :class="{ 'diagram-canvas__canvas--hidden': !activeDiagram }"
     />
 
-    <div
-      v-if="remotePointerScreen && activeDiagram"
-      class="diagram-canvas__remote-pointer"
-      :style="remotePointerScreen"
-      aria-hidden="true"
+    
+    <ModelDiagramCanvasHud
+      :has-active-diagram="!!activeDiagram"
+      :read-only="readOnly"
+      :navigation-only-mode="navigationOnlyMode"
+      :palette-visible="paletteVisible"
+      :active-notation-id="activeNotationId"
+      :components="components"
+      :remote-pointer-style="remotePointerScreen"
+      @palette-visible-change="setPaletteVisible"
     />
-
-    <div v-if="!activeDiagram" class="diagram-canvas__placeholder">
-      <UiIcon name="draw" class="diagram-canvas__placeholder-icon" />
-      <span class="diagram-canvas__placeholder-text">{{ t('diagram.openOrCreateDiagram') }}</span>
-      <span class="diagram-canvas__placeholder-hint">{{ t('diagram.selectDiagramInTree') }}</span>
-    </div>
-
-    <template v-if="activeDiagram">
-      <template v-if="!readOnly">
-        <AppTooltip
-          v-if="!paletteVisible"
-          class="canvas-palette-toggle-wrap"
-          :text="t('diagram.showNotationPalette')"
-          placement="bottom"
-        >
-          <button type="button" class="canvas-palette-toggle" @click="setPaletteVisible(true)">
-            <UiIcon name="palette" />
-          </button>
-        </AppTooltip>
-
-        <div v-if="paletteVisible" class="canvas-palette" :key="activeNotationId ?? 'none'">
-        <div class="canvas-palette__header">
-          <UiIcon name="palette" />
-          <span>{{ t('diagram.palette') }}</span>
-          <AppTooltip :text="t('diagram.hidePalette')" placement="bottom">
-            <button type="button" class="canvas-palette__hide" @click="setPaletteVisible(false)">
-              <UiIcon name="chevron_right" />
-            </button>
-          </AppTooltip>
-        </div>
-        <div v-if="paletteItems.length === 0" class="canvas-palette__empty">
-          {{ t('diagram.noNotationComponents') }}
-        </div>
-        <div class="canvas-palette__list">
-          <AppTooltip :text="t('diagram.note')" placement="bottom">
-            <button
-              type="button"
-              class="canvas-palette__item canvas-palette__item--note"
-              :draggable="!props.readOnly && !props.navigationOnlyMode"
-              @dragstart="onDragNoteStart"
-            >
-              <UiIcon name="note" class="canvas-palette__note-icon" />
-            </button>
-          </AppTooltip>
-          <AppTooltip :text="t('diagram.container')" placement="bottom">
-            <button
-              type="button"
-              class="canvas-palette__item canvas-palette__item--container"
-              :draggable="!props.readOnly && !props.navigationOnlyMode"
-              @dragstart="onDragContainerStart"
-            >
-              <UiIcon name="crop_free" class="canvas-palette__note-icon" />
-            </button>
-          </AppTooltip>
-          <template
-            v-for="(entry, index) in paletteEntries"
-            :key="entry.kind === 'item' ? entry.component.id : `divider-${index}`"
-          >
-            <div v-if="entry.kind === 'divider'" class="canvas-palette__divider" />
-            <AppTooltip v-else :text="entry.component.name" placement="bottom">
-              <button
-                type="button"
-                class="canvas-palette__item"
-                :style="{ '--palette-item-fill': entry.component.paletteFillColor }"
-                :draggable="!props.readOnly && !props.navigationOnlyMode"
-                @dragstart="onDragComponentStart($event, entry.component.id)"
-              >
-                <img
-                  class="canvas-palette__icon"
-                  :src="buildIconUrl(entry.component.paletteIconName)"
-                  :alt="entry.component.name"
-                  draggable="false"
-                  @error="handlePaletteIconError($event, entry.component.paletteIconName)"
-                />
-              </button>
-            </AppTooltip>
-          </template>
-        </div>
-      </div>
-      </template>
-    </template>
-  </div>
+</div>
 </template>
 
 <style scoped>
@@ -4025,211 +3490,7 @@ defineExpose({
   display: none;
 }
 
-.diagram-canvas__remote-pointer {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  margin-left: -7px;
-  margin-top: -7px;
-  border-radius: 50%;
-  background: var(--primary);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
-  z-index: 20;
-}
-
 .diagram-canvas--disabled {
   background: var(--surface-muted);
-}
-
-.diagram-canvas__placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  animation: fadeIn 0.4s ease;
-}
-
-.diagram-canvas__placeholder-icon {
-  width: 48px;
-  height: 48px;
-  color: var(--border-strong);
-  margin-bottom: 4px;
-}
-
-.diagram-canvas__placeholder-text {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.diagram-canvas__placeholder-hint {
-  font-size: 13px;
-  color: var(--text-subtle);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.canvas-palette-toggle-wrap {
-  position: absolute;
-  right: 15px;
-  top: 10px;
-  z-index: 6;
-}
-
-.canvas-palette-toggle {
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.canvas-palette-toggle:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.canvas-palette {
-  position: absolute;
-  right: 15px;
-  top: 10px;
-  bottom: 12px;
-  width: 120px;
-  padding: 8px 6px 8px 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 6;
-  margin-bottom: 12px;
-}
-
-.canvas-palette__header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-.canvas-palette__header .ui-icon {
-  font-size: 14px;
-}
-
-.canvas-palette__hide {
-  position: absolute;
-  right: -1px;
-  top: -1px;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--border);
-  border-radius: 0 10px 0 8px;
-  background: var(--surface);
-  color: var(--text-subtle);
-  padding: 0;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.canvas-palette__hide .ui-icon {
-  font-size: 16px;
-}
-
-.canvas-palette__list {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  overflow: auto;
-  align-content: start;
-}
-
-.canvas-palette__list > .app-tooltip {
-  width: 100%;
-}
-
-.canvas-palette__divider {
-  grid-column: 1 / -1;
-  height: 1px;
-  background: var(--border);
-  margin: 2px 0;
-}
-
-.canvas-palette__item {
-  --palette-item-bg: color-mix(in srgb, var(--palette-item-fill) 18%, var(--surface));
-  width: 100%;
-  height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--palette-item-bg);
-  color: var(--base-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: grab;
-  transition: all 0.15s ease;
-}
-
-.canvas-palette__item:hover {
-  border-color: var(--palette-item-fill, var(--accent));
-  background: color-mix(in srgb, var(--palette-item-fill) 28%, var(--surface));
-}
-
-.canvas-palette__item--note {
-  --palette-item-fill: #f1c40f;
-}
-
-.canvas-palette__item--container {
-  --palette-item-fill: transparent;
-  border: 1px dashed #8a8a8a;
-}
-
-.canvas-palette__item--container .canvas-palette__note-icon {
-  color: #5c5c5c;
-}
-
-.canvas-palette__note-icon {
-  width: 18px;
-  height: 18px;
-  color: #7a5a00;
-}
-
-.canvas-palette__icon {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  pointer-events: none;
-}
-
-.canvas-palette__empty {
-  font-size: 11px;
-  color: var(--text-subtle);
-  text-align: center;
-  line-height: 1.3;
 }
 </style>

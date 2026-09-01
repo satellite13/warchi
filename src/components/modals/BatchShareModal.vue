@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
 import BaseModal from "./BaseModal.vue"
+import ShareGrantForm from "./ShareGrantForm.vue"
 import { apiPost } from "../../composables/useApi"
 import { useUserSearch } from "../../composables/useUserSearch"
 import type { SharePermission, ShareResourceType, AccessShareRequest, AccessShareResponse } from "../../types/api"
@@ -121,79 +122,18 @@ watch(shareWithAllUsers, (enabled) => {
       <!-- Form (visible in "form" state) -->
       <template v-if="batchState === 'form'">
         <div class="batch-share__block">
-          <h4 class="batch-share__subtitle">{{ t("share.grantAccess") }}</h4>
-          <div class="batch-share__grid">
-            <label class="batch-share__field">
-              <span>{{ t("share.scope") }}</span>
-              <label class="batch-share__permission-option">
-                <input
-                  v-model="shareWithAllUsers"
-                  type="checkbox"
-                >
-                <span>{{ t("share.allUsers") }}</span>
-              </label>
-            </label>
-            <label class="batch-share__field">
-              <span>{{ t("share.userEmail") }}</span>
-              <div class="batch-share__inline">
-                <input
-                  v-model="userSearchEmail"
-                  class="form-input"
-                  type="text"
-                  placeholder="user@example.com"
-                  :disabled="shareWithAllUsers"
-                >
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  :disabled="shareWithAllUsers || userSearchEmail.trim().length === 0"
-                  @click="searchUsers"
-                >
-                  {{ t("common.find") }}
-                </button>
-              </div>
-            </label>
-            <label class="batch-share__field">
-              <span>{{ t("share.accessLevel") }}</span>
-              <div class="batch-share__permission-group">
-                <label class="batch-share__permission-option">
-                  <input v-model="selectedPermission" type="radio" value="VIEW">
-                  <span>{{ t("share.viewOnly") }}</span>
-                </label>
-                <label class="batch-share__permission-option">
-                  <input v-model="selectedPermission" type="radio" value="EDIT">
-                  <span>{{ t("share.edit") }}</span>
-                </label>
-              </div>
-            </label>
-          </div>
-
-          <div v-if="shareWithAllUsers" class="batch-share__found">
-            {{ t("share.shareWithAllHint") }}
-          </div>
-          <div v-else-if="selectedUser" class="batch-share__found">
-            {{ t("share.userFound") }}: <strong>{{ selectedUser.email }}</strong>
-          </div>
-          <div v-if="searchError" class="batch-share__error">{{ searchError }}</div>
-          <div v-else-if="searchPerformed && searchResults.length === 0" class="batch-share__empty">
-            {{ t("share.usersNotFound") }}
-          </div>
-          <div v-else-if="searchResults.length > 0" class="batch-share__results">
-            <button
-              v-for="user in searchResults"
-              :key="user.id"
-              type="button"
-              class="batch-share__user-item"
-              :class="{ 'batch-share__user-item--selected': selectedUser?.id === user.id }"
-              @click="selectUser(user)"
-            >
-              <strong>{{ user.email }}</strong>
-              <small v-if="user.firstName || user.lastName">
-                {{ [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ") }}
-              </small>
-            </button>
-          </div>
-          <div v-if="errorMessage" class="batch-share__error">{{ errorMessage }}</div>
+          <ShareGrantForm
+            v-model:share-with-all-users="shareWithAllUsers"
+            v-model:user-search-email="userSearchEmail"
+            v-model:selected-permission="selectedPermission"
+            :selected-user="selectedUser"
+            :search-results="searchResults"
+            :search-performed="searchPerformed"
+            :search-error="searchError"
+            :error-message="errorMessage"
+            @search="searchUsers"
+            @select-user="selectUser"
+          />
         </div>
       </template>
 

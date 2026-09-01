@@ -81,9 +81,12 @@ import {
 } from '../utils/diagramCanvasSync'
 import { collectNestedGroupFollowers } from '../utils/groupDragFollowers'
 import {
-  applyHistoryPersistDirty,
-  type HistoryPersistKind,
-} from '../utils/historyPersistDirty'
+  createSelectionSuppressBox,
+  findTopEdgeAtPoint,
+  useDiagramSelectionBridge,
+} from '../composables/useDiagramSelectionBridge'
+import { useDiagramHistoryPersist } from '../composables/useDiagramHistoryPersist'
+import { useDiagramViewportControls } from '../composables/useDiagramViewportControls'
 import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
@@ -312,14 +315,20 @@ const attachToOutlineEnabled = ref(props.attachToOutlineEnabled)
 const canUndo = ref(false)
 const canRedo = ref(false)
 /**
- * When true, history `change` only refreshes canUndo/canRedo.
- * Auto-layout commands apply attrs via updateDiagram + syncDiagram; the usual
- * persist-from-papirus path would race (papirus still has pre-layout coords) and
- * both break undo and can leave an extra no-op history step.
+ * History undo/redo persist orchestration (suppress flag, dirty stack, canUndo/canRedo).
+ * Layout commands must use historyPersist.runWithoutCanvasPersist so papirus
+ * persist-from-renderer does not race pre-layout coords.
  */
-let suppressHistoryCanvasPersist = false
-const dirtyBeforeHistoryCommand: boolean[] = []
-let pendingHistoryPersistKind: HistoryPersistKind = 'execute'
+const historyPersist = useDiagramHistoryPersist({
+  canUndo,
+  canRedo,
+  isReadOnly: () => props.readOnly,
+  isDiagramDirty: () => Boolean(props.diagramDirty),
+  persistHistoryLayoutFromRenderer: opts => persistHistoryLayoutFromRenderer(opts),
+  detectLabelChanges: () => detectLabelChanges(),
+  detectEdgeLabelChanges: () => detectEdgeLabelChanges(),
+  syncEdgeAnchors: opts => syncEdgeAnchors(opts),
+})
 /** Счётчик для пересчёта экранных координат remote pointer при zoom/pan */
 const viewportRev = ref(0)
 
@@ -359,30 +368,74 @@ let interactionManager: InteractionManager | null = null
 let gridOverlay: GridOverlay | null = null
 let miniMap: MiniMap | null = null
 let rulersOverlay: RulersOverlay | null = null
-let suppressSelectionEvent = false
-let suppressViewportPersistence = false
+const selectionSuppress = createSelectionSuppressBox()
 let lastActiveDiagramId: string | null = null
 
-function safePersistViewport(diagramId: string, r: DiagramRenderer) {
-  if (!suppressViewportPersistence) persistDiagramViewport(diagramId, r)
-}
-
-function flushViewport(diagramId: string | null) {
-  if (diagramId) flushPersistDiagramViewport(diagramId)
-}
-
-function safeRestoreViewport(diagramId: string, r: DiagramRenderer): boolean {
-  suppressViewportPersistence = true
-  try {
-    return restoreDiagramViewport(diagramId, r)
-  } finally {
-    suppressViewportPersistence = false
-  }
-}
+const viewportControls = useDiagramViewportControls({
+  getRenderer: () => renderer,
+  getInteraction: () => interactionManager,
+  getContainerEl: () => containerRef.value,
+  persistViewport: (diagramId, r) => persistDiagramViewport(diagramId, r as DiagramRenderer),
+  flushPersistViewport: diagramId => flushPersistDiagramViewport(diagramId),
+  restoreViewport: (diagramId, r) => restoreDiagramViewport(diagramId, r as DiagramRenderer),
+  gridVisible,
+  miniMapVisible,
+  snapEnabled,
+  alignEnabled,
+  rulersEnabled,
+  lockAnchorsEnabled,
+  getGridOverlay: () => gridOverlay,
+  getMiniMap: () => miniMap,
+  getRulersOverlay: () => rulersOverlay,
+  onLockAnchorsToggled: enabled => {
+    if (!enabled) clearLockedPortsFromRendererEdges()
+  },
+})
+const {
+  safePersistViewport,
+  flushViewport,
+  safeRestoreViewport,
+  getCanvasCenter,
+  zoomIn,
+  zoomOut,
+  resetView,
+  fitToView,
+  getViewport,
+  setViewport,
+  toggleGrid,
+  getGridVisible,
+  toggleMiniMap,
+  getMiniMapVisible,
+  toggleSnap,
+  getSnapEnabled,
+  toggleAlign,
+  getAlignEnabled,
+  toggleRulers,
+  getRulersEnabled,
+  toggleLockAnchors,
+  getLockAnchorsEnabled,
+} = viewportControls
 
 // Maps: papirus element ID → model entity
 const nodeIdToInstance = new Map<string, { modelNodeId: string; instanceId: string }>()
 const edgeIdToInstance = new Map<string, { modelLinkId: string; edgeId: string }>()
+
+const selectionBridge = useDiagramSelectionBridge({
+  suppressSelectionEvent: selectionSuppress,
+  getSelection: () =>
+    interactionManager
+      ? {
+          selectedIds: interactionManager.selection.selectedIds,
+          selectMultiple: ids => interactionManager!.selection.selectMultiple(ids),
+          clearSelection: () => interactionManager!.selection.clearSelection(),
+          select: id => interactionManager!.selection.select(id),
+        }
+      : null,
+  getElement: id => renderer?.getNode(id) ?? renderer?.getEdge(id) ?? null,
+  nodeIdToInstance,
+  edgeIdToInstance,
+})
+
 /** Last display-name we pushed onto a papirus node from syncDiagram (editable label / composite name). */
 const syncedNodeNameByPapId = new Map<string, string>()
 /** Outer composite shape fingerprint last applied (shapeType / outline / slice / radius). */
@@ -1853,87 +1906,22 @@ function syncEdgeAnchors(options: { persist: boolean; updateRenderer: boolean })
 // ── Selection sync ──
 function updateSelection() {
   if (!renderer || !interactionManager) return
-  const selectionManager = interactionManager.selection
-
-  // Sync selection from props
-  const selectedNodeIds = props.selectedModelNodeIds
-  const selectedInstanceIds = props.selectedInstanceIds ?? []
-  const selectedLinkId = props.selectedModelLinkId
-  const selectedEdgeInstanceId = props.selectedEdgeInstanceId ?? null
-
-  const targetPapIds: string[] = []
-
-  if (selectedInstanceIds.length > 0) {
-    const instanceSet = new Set(selectedInstanceIds)
-    for (const [papId, entity] of nodeIdToInstance) {
-      if (instanceSet.has(entity.instanceId)) {
-        targetPapIds.push(papId)
-      }
-    }
-  } else if (selectedNodeIds.length > 0) {
-    const selectedSet = new Set(selectedNodeIds)
-    for (const [papId, entity] of nodeIdToInstance) {
-      if (selectedSet.has(entity.modelNodeId)) {
-        targetPapIds.push(papId)
-      }
-    }
-  } else if (selectedEdgeInstanceId) {
-    const papId = `edge-${selectedEdgeInstanceId}`
-    if (edgeIdToInstance.has(papId)) {
-      targetPapIds.push(papId)
-    }
-  } else if (selectedLinkId) {
-    for (const [papId, entity] of edgeIdToInstance) {
-      if (entity.modelLinkId === selectedLinkId) {
-        targetPapIds.push(papId)
-        break
-      }
-    }
-  }
-
-  if (targetPapIds.length > 0) {
-    const currentIds = selectionManager.selectedIds
-    const needsIdSync =
-      targetPapIds.length !== currentIds.size || targetPapIds.some(id => !currentIds.has(id))
-    // After node rebuild (e.g. composite content sync) selectedIds may still match,
-    // but the new element starts in "normal" and needs selection state reapplied.
-    const needsStateRepair = targetPapIds.some(id => {
-      const el = renderer?.getNode(id) ?? renderer?.getEdge(id)
-      return !!el && el.state !== 'selected'
-    })
-    if (needsIdSync || needsStateRepair) {
-      suppressSelectionEvent = true
-      try {
-        selectionManager.selectMultiple(targetPapIds)
-      } finally {
-        suppressSelectionEvent = false
-      }
-    }
-  } else {
-    if (selectionManager.selectedIds.size > 0) {
-      suppressSelectionEvent = true
-      try {
-        selectionManager.clearSelection()
-      } finally {
-        suppressSelectionEvent = false
-      }
-    }
-  }
+  selectionBridge.syncSelectionFromProps({
+    selectedModelNodeIds: props.selectedModelNodeIds,
+    selectedInstanceIds: props.selectedInstanceIds,
+    selectedModelLinkId: props.selectedModelLinkId,
+    selectedEdgeInstanceId: props.selectedEdgeInstanceId,
+  })
 }
 
-function findTopEdgeAtPoint(worldPoint: { x: number; y: number }): Edge | null {
+function findTopEdgeAtPointLocal(worldPoint: { x: number; y: number }): Edge | null {
   if (!renderer) return null
-  const edges = Array.from(renderer.edges.values())
-  for (let i = edges.length - 1; i >= 0; i--) {
-    const edge = edges[i]
-    if (!edge || !edge.visible) continue
-    const baseTolerance = Math.max((edge.style.strokeWidth ?? 2) * 2, EDGE_HIT_TOLERANCE_MIN)
-    const tolerance = baseTolerance / Math.max(renderer.zoom, 0.0001)
-    if (edge.hitTestWithTolerance(worldPoint, tolerance)) {
-      return edge
-    }
-  }
-  return null
+  return findTopEdgeAtPoint(
+    renderer.edges.values(),
+    worldPoint,
+    renderer.zoom,
+    EDGE_HIT_TOLERANCE_MIN
+  ) as Edge | null
 }
 
 function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
@@ -1942,22 +1930,14 @@ function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
   if (renderer.blocksDiagramPointerAtScreen(event.clientX, event.clientY)) return
 
   const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
-  const hitEdge = findTopEdgeAtPoint(worldPoint)
+  const hitEdge = findTopEdgeAtPointLocal(worldPoint)
   if (!hitEdge) return
 
   // Prevent InteractionManager click handler from re-selecting underlying node.
   event.preventDefault()
   event.stopImmediatePropagation()
 
-  const selection = interactionManager.selection
-  if (selection.selectedIds.size === 1 && selection.selectedIds.has(hitEdge.id)) return
-
-  suppressSelectionEvent = true
-  try {
-    selection.select(hitEdge.id)
-  } finally {
-    suppressSelectionEvent = false
-  }
+  selectionBridge.selectEdgeSuppressingEvent(hitEdge.id)
 
   emit('selectCanvasElementId', hitEdge.id)
   const edgeEntity = edgeIdToInstance.get(hitEdge.id)
@@ -2428,40 +2408,14 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
 
   // Selection and other interaction events (only when not read-only)
   manager.selection.on('select', (elementIds: string[]) => {
-    if (suppressSelectionEvent) return
-    if (elementIds.length === 0) {
-      emit('selectNodes', [])
-      emit('selectInstanceIds', [])
-      emit('selectLink', null)
-      emit('selectEdgeInstanceId', null)
-      emit('selectCanvasElementId', null)
-      return
-    }
-    emit('selectCanvasElementId', elementIds[0] ?? null)
-
-    const modelNodeIds: string[] = []
-    const instanceIds: string[] = []
-    for (const elementId of elementIds) {
-      const nodeEntity = nodeIdToInstance.get(elementId)
-      if (nodeEntity) {
-        modelNodeIds.push(nodeEntity.modelNodeId)
-        instanceIds.push(nodeEntity.instanceId)
-      }
-    }
-    if (modelNodeIds.length > 0) {
-      emit('selectNodes', modelNodeIds)
-      emit('selectInstanceIds', instanceIds)
-      return
-    }
-
-    if (elementIds.length === 1) {
-      const edgeEntity = edgeIdToInstance.get(elementIds[0]!)
-      if (edgeEntity) {
-        emit('selectInstanceIds', [])
-        emit('selectLink', edgeEntity.modelLinkId)
-        emit('selectEdgeInstanceId', edgeEntity.edgeId)
-      }
-    }
+    if (selectionSuppress.value) return
+    selectionBridge.emitFromPapIds(elementIds, {
+      selectNodes: ids => emit('selectNodes', ids),
+      selectInstanceIds: ids => emit('selectInstanceIds', ids),
+      selectLink: id => emit('selectLink', id),
+      selectEdgeInstanceId: id => emit('selectEdgeInstanceId', id),
+      selectCanvasElementId: id => emit('selectCanvasElementId', id),
+    })
   })
 
   // Drag start → initialize group drag if enabled
@@ -2561,38 +2515,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     )
   }
 
-  manager.history.on('undo', () => {
-    pendingHistoryPersistKind = 'undo'
-  })
-  manager.history.on('redo', () => {
-    pendingHistoryPersistKind = 'redo'
-  })
-
-  // History → sync canUndo/canRedo + detect label changes
-  manager.history.on('change', () => {
-    if (props.readOnly) return
-    canUndo.value = manager.history.canUndo
-    canRedo.value = manager.history.canRedo
-    const persistDirty = applyHistoryPersistDirty(
-      dirtyBeforeHistoryCommand,
-      pendingHistoryPersistKind,
-      Boolean(props.diagramDirty)
-    )
-    pendingHistoryPersistKind = 'execute'
-    while (dirtyBeforeHistoryCommand.length > manager.history.undoCount) {
-      dirtyBeforeHistoryCommand.shift()
-    }
-    if (suppressHistoryCanvasPersist) return
-    // One attrs write: nodes + editable-polyline bends + ports + anchors.
-    // A later cloneDiagramAttrs() still sees pre-undo props and would restore
-    // post-drag controlPoints after nested group undo.
-    persistHistoryLayoutFromRenderer({ dirty: persistDirty.dirty })
-    if (persistDirty.dirty) {
-      detectLabelChanges()
-      detectEdgeLabelChanges()
-    }
-    syncEdgeAnchors({ persist: false, updateRenderer: true })
-  })
+  historyPersist.bindHistoryEvents(manager.history)
 
   // Connection → emit connectNodes / connectNodeToEdge
   manager.connection.on('connect', (edge: Edge) => {
@@ -2951,51 +2874,12 @@ const cloneDiagramAttrs = (): DiagramAttrs => {
   return JSON.parse(JSON.stringify(source)) as DiagramAttrs
 }
 
-const getCanvasCenter = (): { x: number; y: number } => {
-  const el = containerRef.value
-  if (!el) return { x: 0, y: 0 }
-  const rect = el.getBoundingClientRect()
-  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-}
-
-// ── Exposed API ──
-const zoomIn = () => {
-  interactionManager?.navigation.setZoom((renderer?.zoom ?? 1) * 1.2, getCanvasCenter())
-}
-
-const zoomOut = () => {
-  interactionManager?.navigation.setZoom((renderer?.zoom ?? 1) / 1.2, getCanvasCenter())
-}
-
-const resetView = () => {
-  interactionManager?.navigation.setZoom(1, getCanvasCenter())
-}
-
-const fitToView = () => {
-  interactionManager?.navigation.fitToView(50)
-}
-
-const zoomToSelection = () => {
-  if (!interactionManager || !renderer) return
-  if (props.selectedModelNodeIds.length === 0) return
-  const selectedSet = new Set(props.selectedModelNodeIds)
-  const selectedInstances = instanceNodes.value.filter(node => selectedSet.has(node.modelNodeId))
-  if (selectedInstances.length === 0) return
-
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity
-  for (const instance of selectedInstances) {
-    const dims = getInstanceDimensions(instance)
-    minX = Math.min(minX, instance.x)
-    minY = Math.min(minY, instance.y)
-    maxX = Math.max(maxX, instance.x + dims.width)
-    maxY = Math.max(maxY, instance.y + dims.height)
-  }
-  interactionManager.navigation.zoomToRect(
-    { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
-    64
+// ── Exposed API (zoom/fit/toggles via viewportControls; undo via historyPersist) ──
+const zoomToSelection = (): void => {
+  viewportControls.zoomToSelection(
+    instanceNodes.value,
+    props.selectedModelNodeIds,
+    getInstanceDimensions
   )
 }
 
@@ -3010,13 +2894,7 @@ const applyDiagramAttrsToCanvas = (
 }
 
 const runLayoutHistoryCommand = (apply: () => void): void => {
-  suppressHistoryCanvasPersist = true
-  apply()
-  // HistoryManager emits `change` synchronously after execute/undo returns;
-  // clear on microtask so persist-from-papirus stays suppressed for that tick.
-  queueMicrotask(() => {
-    suppressHistoryCanvasPersist = false
-  })
+  historyPersist.runWithoutCanvasPersist(apply)
 }
 
 const applyLayoutResult = (after: DiagramAttrs): void => {
@@ -3041,92 +2919,12 @@ const applyLayoutResult = (after: DiagramAttrs): void => {
   requestAnimationFrame(() => fitToView())
 }
 
-const toggleGrid = (): boolean => {
-  gridVisible.value = !gridVisible.value
-  gridOverlay?.setEnabled(gridVisible.value)
-  renderer?.markDirty()
-  return gridVisible.value
-}
-
-const getGridVisible = () => gridVisible.value
-
-const toggleMiniMap = (): boolean => {
-  miniMapVisible.value = !miniMapVisible.value
-  miniMap?.setEnabled(miniMapVisible.value)
-  renderer?.markDirty()
-  return miniMapVisible.value
-}
-
-const getMiniMapVisible = () => miniMapVisible.value
-
-const toggleSnap = (): boolean => {
-  snapEnabled.value = !snapEnabled.value
-  if (interactionManager) {
-    interactionManager.drag.setSnapToGrid(snapEnabled.value)
-    interactionManager.resize.setSnapToGrid(snapEnabled.value)
-    interactionManager.connection.setSnapToGrid(snapEnabled.value)
-  }
-  return snapEnabled.value
-}
-
-const getSnapEnabled = () => snapEnabled.value
-
-const toggleAlign = (): boolean => {
-  alignEnabled.value = !alignEnabled.value
-  interactionManager?.drag.setAlignmentEnabled(alignEnabled.value)
-  return alignEnabled.value
-}
-
-const getAlignEnabled = () => alignEnabled.value
-
-const toggleRulers = (): boolean => {
-  rulersEnabled.value = !rulersEnabled.value
-  rulersOverlay?.setEnabled(rulersEnabled.value)
-  renderer?.markDirty()
-  return rulersEnabled.value
-}
-
-const getRulersEnabled = () => rulersEnabled.value
-
-const undo = () => {
-  interactionManager?.history.undo()
-}
-
-const redo = () => {
-  interactionManager?.history.redo()
-}
-
-const resetHistory = () => {
-  suppressHistoryCanvasPersist = true
-  try {
-    interactionManager?.history.clear()
-  } finally {
-    suppressHistoryCanvasPersist = false
-  }
-  dirtyBeforeHistoryCommand.length = 0
-  pendingHistoryPersistKind = 'execute'
-  canUndo.value = false
-  canRedo.value = false
-}
+const undo = () => historyPersist.undo(interactionManager?.history)
+const redo = () => historyPersist.redo(interactionManager?.history)
+const resetHistory = () => historyPersist.resetHistory(interactionManager?.history)
 
 const getCanUndo = () => canUndo.value
 const getCanRedo = () => canRedo.value
-
-const toggleLockAnchors = (): boolean => {
-  lockAnchorsEnabled.value = !lockAnchorsEnabled.value
-  if (renderer) {
-    for (const [, edge] of renderer.edges) {
-      edge.lockAnchors = lockAnchorsEnabled.value
-    }
-    if (!lockAnchorsEnabled.value) {
-      clearLockedPortsFromRendererEdges()
-    }
-    renderer.markDirty()
-  }
-  return lockAnchorsEnabled.value
-}
-
-const getLockAnchorsEnabled = () => lockAnchorsEnabled.value
 
 // ── Drop handling ──
 const canDropModelNodeToDiagram = (modelNodeId: string): boolean => {
@@ -3610,25 +3408,6 @@ watch(
     renderer?.markDirty()
   }
 )
-
-const getViewport = (): ViewportState | null => {
-  if (!renderer) return null
-  return { ...renderer.viewport }
-}
-
-const setViewport = (state: ViewportState): void => {
-  if (!renderer) return
-  suppressViewportPersistence = true
-  try {
-    renderer.viewport = {
-      zoom: state.zoom,
-      offsetX: state.offsetX,
-      offsetY: state.offsetY,
-    }
-  } finally {
-    suppressViewportPersistence = false
-  }
-}
 
 defineExpose({
   zoomIn,

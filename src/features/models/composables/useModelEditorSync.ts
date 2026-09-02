@@ -92,6 +92,7 @@ export function useModelEditorSync(options: {
     getDiagramRenderer: options.getDiagramRenderer,
     isLockHolder: isDiagramLockHolder,
     isSpectator: diagramLockBlockedByOther,
+    preserveLocalCanvasAfterLockLoss: diagramEditLock.preserveLocalCanvasAfterLockLoss,
   })
 
   useModelLiveSync({
@@ -134,6 +135,7 @@ export function useModelEditorSync(options: {
     isDiagramReadOnly,
     remoteEditorPointer: collab.remoteEditorPointer,
     diagramSpectators: collab.diagramSpectators,
+    liveCanvasEpoch: collab.liveCanvasEpoch,
     onLiveCollaborationGesture: collab.onLiveCollaborationGesture,
     scheduleDebouncedLivePush: collab.scheduleDebouncedLivePush,
     onCanvasMouseMoveForPointer: collab.onCanvasMouseMoveForPointer,

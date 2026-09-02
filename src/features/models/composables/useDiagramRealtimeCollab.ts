@@ -1,5 +1,5 @@
 import type { DiagramRenderer } from "@ngroznykh/papirus"
-import { onBeforeUnmount, ref, watch, type Ref } from "vue"
+import { nextTick, onBeforeUnmount, ref, watch, type Ref } from "vue"
 import { apiDelete, apiPost } from "@/composables/useApi"
 import type { ModelEditorState } from "../types"
 import { applyDiagramLiveMessage, createLiveSnapshotBuffer } from "../utils/applyDiagramLiveMessage"
@@ -59,9 +59,12 @@ export function useDiagramRealtimeCollab(options: {
   isLockHolder: Ref<boolean>
   /** Редактирование canvas заблокировано чужим lock */
   isSpectator: Ref<boolean>
+  /** После потери своего lock не принимать чужой эфир, пока пользователь не перезагрузит холст */
+  preserveLocalCanvasAfterLockLoss?: Ref<boolean>
 }): {
   remoteEditorPointer: Ref<RemoteEditorPointer | null>
   diagramSpectators: Ref<DiagramSpectatorEntry[]>
+  liveCanvasEpoch: Ref<number>
   gestureDepth: Ref<number>
   onLiveCollaborationGesture: (phase: "block" | "unblock") => void
   scheduleDebouncedLivePush: () => void
@@ -72,6 +75,7 @@ export function useDiagramRealtimeCollab(options: {
 } {
   const remoteEditorPointer = ref<RemoteEditorPointer | null>(null)
   const diagramSpectators = ref<DiagramSpectatorEntry[]>([])
+  const liveCanvasEpoch = ref(0)
   const gestureDepth = ref(0)
 
   let liveDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -247,7 +251,9 @@ export function useDiagramRealtimeCollab(options: {
     }
     gestureDepth.value = Math.max(0, gestureDepth.value - 1)
     if (gestureDepth.value === 0) {
-      flushLivePushNow()
+      void nextTick(() => {
+        flushLivePushNow()
+      })
     }
   }
 
@@ -276,18 +282,27 @@ export function useDiagramRealtimeCollab(options: {
       if (!diagramId || diagramId !== options.selectedDiagramId.value) return
       const actor = typeof msg.actorUserId === "string" ? msg.actorUserId : null
       if (self && actor === self) return
-      const inst = msg.instances
+      if (options.preserveLocalCanvasAfterLockLoss?.value) return
+      let inst = msg.instances
+      if (typeof inst === "string") {
+        try {
+          inst = JSON.parse(inst) as unknown
+        } catch {
+          return
+        }
+      }
       const diagrams = options.state.value.diagrams
       const idx = diagrams.findIndex((d) => d.id === diagramId && !d._isDeleted)
       if (idx < 0) return
       const row = diagrams[idx]!
-      if (row._isDirty || row._isNew || row._isDeleted) return
+      if (row._isNew || row._isDeleted) return
       const nextInstances = applyDiagramLiveMessage(
         row.parsedAttrs.instances,
         inst,
         incomingSnapshotBuffer
       )
       if (!nextInstances) return
+      const nextEpoch = (row._liveCanvasEpoch ?? 0) + 1
       const nextDiagrams = [...diagrams]
       nextDiagrams[idx] = {
         ...row,
@@ -295,8 +310,10 @@ export function useDiagramRealtimeCollab(options: {
           ...row.parsedAttrs,
           instances: structuredClone(nextInstances),
         },
+        _liveCanvasEpoch: nextEpoch,
       }
       options.state.value.diagrams = nextDiagrams
+      liveCanvasEpoch.value = nextEpoch
       return
     }
 
@@ -346,6 +363,7 @@ export function useDiagramRealtimeCollab(options: {
   return {
     remoteEditorPointer,
     diagramSpectators,
+    liveCanvasEpoch,
     gestureDepth,
     onLiveCollaborationGesture,
     scheduleDebouncedLivePush,

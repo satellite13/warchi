@@ -62,6 +62,7 @@ function createFacade() {
     handleModelTopicBroadcast: vi.fn(),
     onCanvasMouseMoveForPointer: vi.fn(),
     onCanvasMouseLeaveForPointer: vi.fn(),
+    liveCanvasEpoch: ref(0),
   }
   mocks.useDiagramEditLock.mockReturnValue(lock)
   mocks.useDiagramRealtimeCollab.mockReturnValue(collab)
@@ -129,6 +130,7 @@ describe('useModelEditorSync', () => {
       expect.objectContaining({
         isLockHolder: facade.isDiagramLockHolder,
         isSpectator: facade.diagramLockBlockedByOther,
+        preserveLocalCanvasAfterLockLoss: lock.preserveLocalCanvasAfterLockLoss,
       })
     )
     expect(useModelLiveSync).toHaveBeenCalledWith(
@@ -152,6 +154,7 @@ describe('useModelEditorSync', () => {
     expect(facade.isDiagramLockHolder.value).toBe(true)
     expect(facade.remoteEditorPointer).toBe(collab.remoteEditorPointer)
     expect(facade.diagramSpectators).toBe(collab.diagramSpectators)
+    expect(facade.liveCanvasEpoch).toBe(collab.liveCanvasEpoch)
   })
 
   it('delegates lock reload and save verification', async () => {

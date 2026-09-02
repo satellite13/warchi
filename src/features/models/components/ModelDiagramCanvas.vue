@@ -168,6 +168,8 @@ const props = withDefaults(
     diffStateByEdgeInstanceId?: Record<string, 'added' | 'removed' | 'modified'>
     /** Курсор удалённого редактора (мировые координаты) — только для зрителя */
     remoteEditorPointer?: { worldX: number; worldY: number; visible: boolean } | null
+    /** Bumped when remote live instances are applied — force canvas resync */
+    liveCanvasEpoch?: number
     /** Держатель lock: подавлять live во время жестов и слать pointer */
     diagramLiveBroadcastEnabled?: boolean
     onRemotePointerTrack?: (clientX: number, clientY: number) => void
@@ -195,6 +197,7 @@ const props = withDefaults(
     diffStateByModelLinkId: undefined,
     diffStateByEdgeInstanceId: undefined,
     remoteEditorPointer: null,
+    liveCanvasEpoch: 0,
     diagramLiveBroadcastEnabled: false,
     onRemotePointerTrack: undefined,
     onRemotePointerLeave: undefined,
@@ -3244,6 +3247,12 @@ useDiagramRenderer({
 
 // Watch for data changes
 watch([instanceNodes, instanceEdges], () => syncDiagram(), { deep: true })
+watch(
+  () => props.liveCanvasEpoch ?? 0,
+  (epoch, previous) => {
+    if (epoch !== previous) syncDiagram()
+  }
+)
 watch(
   () => props.remoteEditorPointer,
   () => {

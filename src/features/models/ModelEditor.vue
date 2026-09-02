@@ -474,6 +474,7 @@ const {
   isDiagramReadOnly,
   remoteEditorPointer,
   diagramSpectators,
+  liveCanvasEpoch,
   onLiveCollaborationGesture,
   scheduleDebouncedLivePush,
   onCanvasMouseMoveForPointer,
@@ -2671,6 +2672,7 @@ onBeforeUnmount(() => {
             :lock-anchors-enabled="lockAnchorsEnabled"
             :attach-to-outline-enabled="attachToOutlineEnabled"
             :remote-editor-pointer="remoteEditorPointer"
+            :live-canvas-epoch="liveCanvasEpoch"
             :diagram-live-broadcast-enabled="isDiagramLockHolder"
             :on-remote-pointer-track="onCanvasMouseMoveForPointer"
             :on-remote-pointer-leave="onCanvasMouseLeaveForPointer"

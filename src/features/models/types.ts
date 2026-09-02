@@ -83,6 +83,8 @@ export type EditorDiagram = Omit<DiagramResponse, "attrs"> & {
   _isDeleted?: boolean
   /** Soft-deleted server diagram to hard-delete on save so this name+version can be reused. */
   _replaceDeletedId?: string
+  /** Bumped when diagram_live is applied so in-flight GET hydration cannot clobber the canvas. */
+  _liveCanvasEpoch?: number
 }
 
 export type ModelEditorState = {

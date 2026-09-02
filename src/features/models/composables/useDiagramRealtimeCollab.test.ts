@@ -42,12 +42,14 @@ function mountCollab(options?: {
   isLockHolder?: boolean
   isSpectator?: boolean
   selectedDiagramId?: string | null
+  preserveLocalCanvasAfterLockLoss?: boolean
 }) {
   const state = ref(createState()) as Ref<ModelEditorState>
   const selectedDiagramId = ref(options?.selectedDiagramId ?? 'diagram-1')
   const currentUserId = ref('user-self')
   const isLockHolder = ref(options?.isLockHolder ?? false)
   const isSpectator = ref(options?.isSpectator ?? false)
+  const preserveLocalCanvasAfterLockLoss = ref(options?.preserveLocalCanvasAfterLockLoss ?? false)
   let collab!: ReturnType<typeof useDiagramRealtimeCollab>
 
   const wrapper = mount(
@@ -59,6 +61,7 @@ function mountCollab(options?: {
           currentUserId,
           isLockHolder,
           isSpectator,
+          preserveLocalCanvasAfterLockLoss,
           getDiagramRenderer: () => ({
             screenToWorld: (x: number, y: number) => ({ x: x + 10, y: y + 20 }),
           }) as never,
@@ -96,9 +99,11 @@ describe('useDiagramRealtimeCollab', () => {
     expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes).toEqual([
       { id: 'node-instance-1', modelNodeId: 'node-1', x: 10, y: 20 },
     ])
+    expect(state.value.diagrams[0]?._liveCanvasEpoch).toBe(1)
+    expect(collab.liveCanvasEpoch.value).toBe(1)
   })
 
-  it('ignores remote diagram live instances when local diagram is dirty', () => {
+  it('applies remote live instances for a spectator even when the local row is dirty', () => {
     const { collab, state } = mountCollab({ isSpectator: true })
     state.value.diagrams[0]!._isDirty = true
 
@@ -112,7 +117,32 @@ describe('useDiagramRealtimeCollab', () => {
       },
     })
 
+    expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes).toEqual([
+      { id: 'node-instance-1', modelNodeId: 'node-1', x: 10, y: 20 },
+    ])
+    expect(state.value.diagrams[0]?._liveCanvasEpoch).toBe(1)
+    expect(collab.liveCanvasEpoch.value).toBe(1)
+  })
+
+  it('ignores remote live instances after lock loss while local canvas is preserved', () => {
+    const { collab, state } = mountCollab({
+      isSpectator: true,
+      preserveLocalCanvasAfterLockLoss: true,
+    })
+    state.value.diagrams[0]!._isDirty = true
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_live',
+      diagramId: 'diagram-1',
+      actorUserId: 'user-other',
+      instances: {
+        nodes: [{ id: 'node-instance-1', modelNodeId: 'node-1', x: 10, y: 20 }],
+        edges: [],
+      },
+    })
+
     expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes).toEqual([])
+    expect(collab.liveCanvasEpoch.value).toBe(0)
   })
 
   it('tracks remote editor pointer only for spectator broadcasts from other users', () => {
@@ -302,6 +332,28 @@ describe('useDiagramRealtimeCollab', () => {
     expect(livePosts).toHaveLength(0)
   })
 
+  it('applies a remote live payload when instances arrive as a JSON string', () => {
+    const { collab, state } = mountCollab({ isSpectator: true })
+
+    collab.handleModelTopicBroadcast({
+      type: 'diagram_live',
+      diagramId: 'diagram-1',
+      actorUserId: 'user-other',
+      instances: JSON.stringify({
+        v: 1,
+        kind: 'patch',
+        seq: 3,
+        upsertNodes: [{ id: 'n1', modelNodeId: 'm-n1', x: 4, y: 5 }],
+      }),
+    })
+
+    expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes[0]).toMatchObject({
+      id: 'n1',
+      x: 4,
+      y: 5,
+    })
+  })
+
   it('applies a remote patch for spectators', () => {
     const { collab, state } = mountCollab({ isSpectator: true })
     state.value.diagrams[0]!.parsedAttrs.instances = {
@@ -329,6 +381,7 @@ describe('useDiagramRealtimeCollab', () => {
       'n1',
     ])
     expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes[0]?.x).toBe(9)
+    expect(collab.liveCanvasEpoch.value).toBe(1)
   })
 
   it('starts and leaves spectator sessions when spectator state changes', async () => {

@@ -420,6 +420,7 @@ export function createModelGranularSyncReconciler(
       _isNew: local._isNew,
       _isDirty: local._isDirty,
       _isDeleted: local._isDeleted,
+      _liveCanvasEpoch: preserveHydratedAttrs ? local._liveCanvasEpoch : undefined,
     }
   }
 

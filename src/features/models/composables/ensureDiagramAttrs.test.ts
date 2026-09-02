@@ -152,6 +152,65 @@ describe('ensureDiagramAttrsLoaded', () => {
     expect(state.diagrams[0]?._attrsPending).toBe(false)
   })
 
+  it('keeps live-applied instances when GET hydration finishes later', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [
+      toEditorDiagram({
+        id: 'diagram-1',
+        name: 'D',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: null,
+        createdAt: null,
+        updatedAt: null,
+      }),
+    ]
+    let finishRequest!: (value: Awaited<ReturnType<typeof apiFetch>>) => void
+    vi.mocked(apiFetch).mockReturnValueOnce(
+      new Promise(resolve => {
+        finishRequest = resolve
+      })
+    )
+
+    const hydration = ensureDiagramAttrsLoaded(() => state, 'diagram-1', {
+      expectedModelId: 'model-1',
+    })
+    const row = state.diagrams[0]!
+    row._liveCanvasEpoch = 1
+    row.parsedAttrs = {
+      instances: {
+        nodes: [{ id: 'i1', modelNodeId: 'n1', x: 90, y: 40 }],
+        edges: [],
+      },
+    }
+
+    finishRequest({
+      success: true,
+      data: {
+        id: 'diagram-1',
+        name: 'D',
+        version: '1.0.0',
+        modelId: 'model-1',
+        ownerId: 'owner-1',
+        notationId: 'notation-1',
+        nodeId: null,
+        attrs: '{"instances":{"nodes":[{"id":"i1","modelNodeId":"n1","x":10,"y":4}],"edges":[]}}',
+        createdAt: null,
+        updatedAt: null,
+      },
+    })
+
+    const hydrated = await hydration
+    expect(hydrated?.parsedAttrs.instances.nodes[0]).toMatchObject({ id: 'i1', x: 90, y: 40 })
+    expect(state.diagrams[0]?.parsedAttrs.instances.nodes[0]).toMatchObject({ x: 90, y: 40 })
+    expect(state.diagrams[0]?._liveCanvasEpoch).toBe(1)
+    expect(state.diagrams[0]?._attrsPending).toBe(false)
+  })
+
   it('skips fetch when attrs already loaded', async () => {
     const state = createEmptyModelEditorState()
     state.diagrams = [
@@ -359,6 +418,7 @@ describe('toEditorDiagramPreservingLocalAttrs', () => {
           updatedAt: null,
         }),
         _attrsPending: false,
+        _liveCanvasEpoch: 3,
       },
     ]
     const next = toEditorDiagramPreservingLocalAttrs(
@@ -379,6 +439,7 @@ describe('toEditorDiagramPreservingLocalAttrs', () => {
 
     expect(next.name).toBe('Remote')
     expect(next._attrsPending).toBe(false)
+    expect(next._liveCanvasEpoch).toBe(3)
     expect(next.parsedAttrs.instances.nodes).toHaveLength(1)
   })
 })

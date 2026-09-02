@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.10] - 2026-09-02
+
+### Fixed
+- Spectators now see components move on the canvas during collaborative editing, without reopening the diagram.
+
 ## [0.25.9] - 2026-09-02
 
 ### Fixed

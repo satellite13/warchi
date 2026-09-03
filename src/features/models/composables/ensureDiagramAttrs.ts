@@ -102,11 +102,19 @@ export async function ensureDiagramAttrsLoaded(
     )
     if (writeIndex < 0) return null
     const previous = latest.diagrams[writeIndex]!
+    const keepLiveInstances = (previous._liveCanvasEpoch ?? 0) > 0
     const next: EditorDiagram = {
       ...hydrated,
+      parsedAttrs: keepLiveInstances
+        ? {
+            ...hydrated.parsedAttrs,
+            instances: previous.parsedAttrs.instances,
+          }
+        : hydrated.parsedAttrs,
       _isNew: previous._isNew,
       _isDirty: previous._isDirty,
       _isDeleted: previous._isDeleted,
+      _liveCanvasEpoch: previous._liveCanvasEpoch,
     }
     // Tree move / rename can happen while GET is in flight — keep local placement.
     if (previous._isDirty || previous._isNew) {

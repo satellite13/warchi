@@ -6,7 +6,7 @@ import {
   buildEdgeLabelBackground as buildNotationEdgeLabelBackground,
   buildMarker,
   buildNodeIcon as buildNotationNodeIcon,
-} from '@/features/notations/utils/notationElementBuilders'
+} from '@/features/diagram/utils/diagramElementBuilders'
 import {
   buildModelEdgeDisplayLabel,
   buildModelEdgeLabelBackground,

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useI18n } from "vue-i18n"
-import ResizablePanelLayout from "@/components/layout/ResizablePanelLayout.vue"
+import { useI18n } from 'vue-i18n'
+import MainPanelLayout from '@/components/layout/MainPanelLayout.vue'
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <ResizablePanelLayout
+  <MainPanelLayout
     storage-key="warchi:notation-editor:workspace"
     :default-left-width="320"
     :default-right-width="420"
@@ -26,5 +26,5 @@ const { t } = useI18n()
     <template #right>
       <slot name="right" />
     </template>
-  </ResizablePanelLayout>
+  </MainPanelLayout>
 </template>

@@ -71,7 +71,7 @@ import type {
 import A5BindingsEditor from "./composite/A5BindingsEditor.vue";
 import CompositeTreeEditor from "./composite/CompositeTreeEditor.vue";
 import CompositeLivePreview from "./composite/CompositeLivePreview.vue";
-import { validateCompositeDiagramStyle } from "@/features/notations/utils/validationIssues";
+import { validateCompositeDiagramStyle } from '@/features/diagram-style/utils/validationIssues'
 import { createDefaultCompositeContent } from "@/features/diagram-style/utils/compositeBindings";
 import { diagramShapeFactories, DEFAULT_CORNER_CUT_PX } from "@/utils/diagramShapes";
 

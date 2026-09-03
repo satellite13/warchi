@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { apiGet, apiPost } from '@/composables/useApi'
 import type { DiagramLockStatusResponse, DiagramResponse } from '@/types/api'
 import type { ModelData, PaginatedResponse } from '@/types/entities'
-import AdminAlert from '@/components/admin/AdminAlert.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import { formatDate } from '@/utils/formatDate'
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
       </template>
     </AdminPageHeader>
 
-    <AdminAlert v-if="errorMessage" type="error" :message="errorMessage" />
+    <AppAlert v-if="errorMessage" type="error" :message="errorMessage" />
 
     <AdminTableShell
       :loading="loading && locks.length === 0"

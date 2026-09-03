@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiDelete, apiGet, apiPost } from '@/composables/useApi'
 import { apiUpload } from '@/api/apiClient'
-import AdminAlert from '@/components/admin/AdminAlert.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import AdminTableShell from '@/components/admin/AdminTableShell.vue'
 import ListHeader from '@/components/list/ListHeader.vue'
@@ -233,8 +233,8 @@ async function importBundle(bundle: Bundle): Promise<void> {
       @change="onJsonSelected"
     >
 
-    <AdminAlert v-if="errorMessage" type="error" :message="errorMessage" />
-    <AdminAlert v-if="successMessage" type="success" :message="successMessage" />
+    <AppAlert v-if="errorMessage" type="error" :message="errorMessage" />
+    <AppAlert v-if="successMessage" type="success" :message="successMessage" />
 
     <AdminTableShell
       v-if="loading || filteredIcons.length === 0"

@@ -3,6 +3,8 @@ import { useI18n } from "vue-i18n"
 import type { NodeShapeResponse } from "@/types/api"
 import type { OutlineSegment, ScaleSlice } from "@/domain/attrs/notationAttrs"
 import EditorFormHeader from "@/components/forms/EditorFormHeader.vue"
+import FormSection from "@/components/forms/FormSection.vue"
+import EmptyState from "@/components/list/EmptyState.vue"
 import CustomOutlineEditor from "../CustomOutlineEditor.vue"
 import ShapeScalePreview from "./ShapeScalePreview.vue"
 
@@ -63,8 +65,7 @@ const { t } = useI18n()
         {{ t("shapes.noEditRights") }}
       </p>
 
-      <div class="form-section">
-        <h3 class="form-section__title">{{ t("types.main") }}</h3>
+      <FormSection :title="t('types.main')">
         <div class="form-row">
           <label class="form-label">{{ t("common.name") }}</label>
           <input
@@ -91,10 +92,9 @@ const { t } = useI18n()
           />
         </div>
         <p v-if="scaleSliceEnabled" class="form-hint">{{ t("shapes.scaleSliceHint") }}</p>
-      </div>
+      </FormSection>
 
-      <div class="form-section">
-        <h3 class="form-section__title">{{ t("shapes.outlineLabel") }}</h3>
+      <FormSection :title="t('shapes.outlineLabel')" animation-delay="60ms">
         <div v-if="outline.length > 0" class="shape-form__outline-workspace shape-form__outline-workspace--split">
           <div class="shape-form__outline-pane">
             <p class="shape-form__pane-label">{{ t("shapes.scaleSliceTemplate") }}</p>
@@ -118,24 +118,17 @@ const { t } = useI18n()
             />
           </div>
         </div>
-        <p v-else class="form-section__empty">{{ t("shapes.outlinePlaceholder") }}</p>
-      </div>
+        <EmptyState
+          v-else
+          variant="inline"
+          :title="t('shapes.outlinePlaceholder')"
+        />
+      </FormSection>
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .shape-form {
   flex: 1;
   min-width: 0;
@@ -190,33 +183,6 @@ const { t } = useI18n()
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.form-section {
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
-  animation: fadeSlideIn 0.3s ease both;
-}
-
-.form-section__title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.form-section__empty {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-subtle);
 }
 
 .form-row {

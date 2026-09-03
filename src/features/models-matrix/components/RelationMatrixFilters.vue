@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n"
 import ToggleSwitch from "@/components/forms/ToggleSwitch.vue"
 import MultiSelect from "@/components/forms/MultiSelect.vue"
 import SearchableSelect from "@/components/forms/SearchableSelect.vue"
+import MatrixFiltersShell from "@/components/matrix/MatrixFiltersShell.vue"
+import MatrixFilterGroup from "@/components/matrix/MatrixFilterGroup.vue"
 import type { RelationMatrixEntityOption } from "../types"
 
 const props = defineProps<{
@@ -35,28 +37,29 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const notationSelectValue = computed(() => props.notationId ?? "")
-const notationSelectOptions = computed(() => props.notationOptions.map(option => ({ id: option.id, label: option.label })))
+const notationSelectOptions = computed(() =>
+  props.notationOptions.map(option => ({ id: option.id, label: option.label })),
+)
 const rowMultiOptions = computed(() =>
   props.rowOptions.map(option => ({
     id: option.id,
     label: `${option.name} (${props.rowCounts[option.id] ?? 0})`,
-  }))
+  })),
 )
 const columnMultiOptions = computed(() =>
   props.columnOptions.map(option => ({
     id: option.id,
     label: `${option.name} (${props.columnCounts[option.id] ?? 0})`,
-  }))
+  })),
 )
 const relationMultiOptions = computed(() =>
-  props.relationOptions.map(option => ({ id: option.id, label: option.name }))
+  props.relationOptions.map(option => ({ id: option.id, label: option.name })),
 )
 </script>
 
 <template>
-  <section class="matrix-filters">
-    <div class="matrix-filters__group">
-      <label class="matrix-filters__label">{{ t("models.relationMatrixNotationLabel") }}</label>
+  <MatrixFiltersShell padding="sm">
+    <MatrixFilterGroup :label="t('models.relationMatrixNotationLabel')">
       <SearchableSelect
         :model-value="notationSelectValue"
         :options="notationSelectOptions"
@@ -67,10 +70,9 @@ const relationMultiOptions = computed(() =>
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:notationId', $event || null)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="matrix-filters__group">
-      <label class="matrix-filters__label">{{ t("models.relationMatrixRowsLabel") }}</label>
+    <MatrixFilterGroup :label="t('models.relationMatrixRowsLabel')">
       <MultiSelect
         :model-value="selectedRowIds"
         :options="rowMultiOptions"
@@ -79,10 +81,9 @@ const relationMultiOptions = computed(() =>
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:selectedRowIds', $event)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="matrix-filters__group">
-      <label class="matrix-filters__label">{{ t("models.relationMatrixColumnsLabel") }}</label>
+    <MatrixFilterGroup :label="t('models.relationMatrixColumnsLabel')">
       <MultiSelect
         :model-value="selectedColumnIds"
         :options="columnMultiOptions"
@@ -91,10 +92,9 @@ const relationMultiOptions = computed(() =>
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:selectedColumnIds', $event)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="matrix-filters__group">
-      <label class="matrix-filters__label">{{ t("models.relationMatrixRelationsLabel") }}</label>
+    <MatrixFilterGroup :label="t('models.relationMatrixRelationsLabel')">
       <MultiSelect
         :model-value="selectedRelationIds"
         :options="relationMultiOptions"
@@ -103,9 +103,9 @@ const relationMultiOptions = computed(() =>
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:selectedRelationIds', $event)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="matrix-filters__toggles">
+    <template #toggles>
       <span :title="t('models.relationMatrixAllowedHint')">
         <ToggleSwitch :model-value="allowedOnly" @update:model-value="emit('update:allowedOnly', $event)">
           {{ t("models.relationMatrixAllowedOnly") }}
@@ -120,41 +120,6 @@ const relationMultiOptions = computed(() =>
       >
         {{ t("models.relationMatrixHideEmptyAxes") }}
       </ToggleSwitch>
-    </div>
-
-  </section>
+    </template>
+  </MatrixFiltersShell>
 </template>
-
-<style scoped>
-.matrix-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 10px;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: auto;
-  background: var(--surface);
-}
-
-.matrix-filters__group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.matrix-filters__label {
-  font-size: 11px;
-  color: var(--text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.matrix-filters__toggles {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-</style>

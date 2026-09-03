@@ -1,6 +1,9 @@
-import type { DiagramHistoryCommand } from '@/features/models/composables/useDiagramHistoryBatcher'
-import type { DiagramEdgeInstance, DiagramNodeInstance } from '@/features/models/modelAttrs'
-import type { EditorDiagram } from '@/features/models/types'
+import type {
+  ScriptDiagramEdgeInstance,
+  ScriptDiagramNodeInstance,
+  ScriptEditorDiagram,
+  ScriptHistoryCommand,
+} from './editorStateContract'
 import { createId as defaultCreateId } from '@/utils/createId'
 import type { DiagramScriptCommand } from './diagramScriptCommands'
 import { expandLayoutCommands, type LayoutBounds } from './layoutCommands'
@@ -8,17 +11,17 @@ import { expandLayoutCommands, type LayoutBounds } from './layoutCommands'
 const DEFAULT_INSTANCE_WIDTH = 160
 const DEFAULT_INSTANCE_HEIGHT = 56
 
-function cloneInstances(diagram: EditorDiagram): {
-  nodes: DiagramNodeInstance[]
-  edges: DiagramEdgeInstance[]
+function cloneInstances(diagram: ScriptEditorDiagram): {
+  nodes: ScriptDiagramNodeInstance[]
+  edges: ScriptDiagramEdgeInstance[]
 } {
   return JSON.parse(JSON.stringify(diagram.parsedAttrs.instances)) as {
-    nodes: DiagramNodeInstance[]
-    edges: DiagramEdgeInstance[]
+    nodes: ScriptDiagramNodeInstance[]
+    edges: ScriptDiagramEdgeInstance[]
   }
 }
 
-function boundsFromInstances(nodes: DiagramNodeInstance[]): Record<string, LayoutBounds> {
+function boundsFromInstances(nodes: ScriptDiagramNodeInstance[]): Record<string, LayoutBounds> {
   const bounds: Record<string, LayoutBounds> = {}
   for (const node of nodes) {
     bounds[node.id] = {
@@ -32,12 +35,15 @@ function boundsFromInstances(nodes: DiagramNodeInstance[]): Record<string, Layou
   return bounds
 }
 
-function firstInstanceId(nodes: DiagramNodeInstance[], modelNodeId: string): string | undefined {
+function firstInstanceId(
+  nodes: ScriptDiagramNodeInstance[],
+  modelNodeId: string
+): string | undefined {
   return nodes.find(node => node.modelNodeId === modelNodeId)?.id
 }
 
 function applySetBounds(
-  nodes: DiagramNodeInstance[],
+  nodes: ScriptDiagramNodeInstance[],
   command: Extract<DiagramScriptCommand, { type: 'setBounds' }>
 ): void {
   const instance = nodes.find(node => node.id === command.instanceId)
@@ -49,7 +55,7 @@ function applySetBounds(
 }
 
 function mutateInstances(
-  instances: { nodes: DiagramNodeInstance[]; edges: DiagramEdgeInstance[] },
+  instances: { nodes: ScriptDiagramNodeInstance[]; edges: ScriptDiagramEdgeInstance[] },
   input: {
     commands: DiagramScriptCommand[]
     linkEndpoints: Record<string, { sourceId: string; targetId: string }>
@@ -70,7 +76,7 @@ function mutateInstances(
         break
       }
       case 'addInstance': {
-        const instance: DiagramNodeInstance = {
+        const instance: ScriptDiagramNodeInstance = {
           id: input.createId(),
           modelNodeId: command.nodeId,
           x: command.x ?? 0,
@@ -137,10 +143,10 @@ function mutateInstances(
 }
 
 export type ApplyDiagramScriptCommandsInput = {
-  diagram: EditorDiagram
+  diagram: ScriptEditorDiagram
   commands: DiagramScriptCommand[]
   linkEndpoints: Record<string, { sourceId: string; targetId: string }>
-  executeHistory: (command: DiagramHistoryCommand) => void
+  executeHistory: (command: ScriptHistoryCommand) => void
   createId?: () => string
   componentByNodeId?: Record<string, string>
   onApplied?: () => void
@@ -158,8 +164,8 @@ export function applyDiagramScriptCommands(input: ApplyDiagramScriptCommandsInpu
   })
 
   const assign = (snapshot: {
-    nodes: DiagramNodeInstance[]
-    edges: DiagramEdgeInstance[]
+    nodes: ScriptDiagramNodeInstance[]
+    edges: ScriptDiagramEdgeInstance[]
   }): void => {
     input.diagram.parsedAttrs.instances.nodes = JSON.parse(JSON.stringify(snapshot.nodes))
     input.diagram.parsedAttrs.instances.edges = JSON.parse(JSON.stringify(snapshot.edges))

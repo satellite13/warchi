@@ -51,6 +51,7 @@ npm run dev
 | `npm run preview` | Предпросмотр собранного приложения |
 | `npm run test` | Запуск юнит-тестов |
 | `npm run test:watch` | Тесты в watch-режиме |
+| `npm run ci:local` | Полный quality gate (версии, lint, type-check, тесты, build); тот же, что GitHub Actions CI |
 
 ## Деплой (`deploy.sh`)
 

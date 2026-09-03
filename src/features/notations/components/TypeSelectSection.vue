@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from "vue";
 import {useI18n} from "vue-i18n";
-import CollapseSection from "./CollapseSection.vue";
+import CollapsibleSection from "@/components/ui/CollapsibleSection.vue";
 import BaseModal from "@/components/modals/BaseModal.vue";
 import SearchableSelect from "@/components/forms/SearchableSelect.vue";
 import type {EditorComponent, EditorRelation} from "../types";
@@ -133,10 +133,10 @@ const handleRelationTypeChange = (nextLinkTypeId: string) => {
 
 <template>
   <div v-if="selectedItem" class="type-select-section">
-    <CollapseSection
+    <CollapsibleSection
       v-if="!('linkTypeId' in selectedItem)"
-      :label="t('types.nodeType')"
-      :expanded="nodeTypeExpanded"
+      :title="t('types.nodeType')"
+      :open="nodeTypeExpanded"
       @toggle="toggleNodeTypeCollapse"
     >
       <SearchableSelect
@@ -151,12 +151,12 @@ const handleRelationTypeChange = (nextLinkTypeId: string) => {
       <div v-if="props.isComponentTypeLocked" class="type-select-section__hint">
         {{ t("types.componentTypeLockedHint") }}
       </div>
-    </CollapseSection>
+    </CollapsibleSection>
 
-    <CollapseSection
+    <CollapsibleSection
       v-else
-      :label="t('types.linkType')"
-      :expanded="relationTypeExpanded"
+      :title="t('types.linkType')"
+      :open="relationTypeExpanded"
       @toggle="toggleRelationTypeCollapse"
     >
       <SearchableSelect
@@ -171,7 +171,7 @@ const handleRelationTypeChange = (nextLinkTypeId: string) => {
       <div v-if="props.isRelationTypeLocked" class="type-select-section__hint">
         {{ t("types.relationTypeLockedHint") }}
       </div>
-    </CollapseSection>
+    </CollapsibleSection>
   </div>
 
   <BaseModal

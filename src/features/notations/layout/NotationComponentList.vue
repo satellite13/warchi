@@ -5,12 +5,13 @@ import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { loadString, saveString } from "@/utils/localStorage";
 import type { NotationEditorState } from "../types";
 import { resolvePaletteIconName } from "@/utils/paletteIcon";
+import { compareLocalizedEntityNames, localeTagFromAppLocale } from "@/utils/localeSort";
 import { findNameVersionConflict } from "../utils/nameVersionUniqueness";
 import EmptyState from "@/components/list/EmptyState.vue";
 import EditorSidebarShell from "@/components/list/EditorSidebarShell.vue";
 import SidebarListItem from "@/components/list/SidebarListItem.vue";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const props = defineProps<{
   state: NotationEditorState;
@@ -29,7 +30,6 @@ const emit = defineEmits<{
 
 const searchQuery = ref("");
 const selectedTags = ref<Set<string>>(new Set());
-const RU_LOCALE = "ru";
 type SortMode = "alpha-asc" | "alpha-desc" | "type";
 const sortMode = ref<SortMode>("alpha-asc");
 const TAGS_EXPANDED_STORAGE_KEY = "warchi:notation-editor:component-list:tags-expanded";
@@ -62,7 +62,9 @@ const allTags = computed<string[]>(() => {
       r.parsedAttrs.tags.forEach(t => tagSet.add(t));
     }
   }
-  return [...tagSet].sort((a, b) => a.localeCompare(b, RU_LOCALE, {sensitivity: "base"}));
+  return [...tagSet].sort((a, b) =>
+    compareLocalizedEntityNames(a, b, locale.value)
+  );
 });
 
 const toggleTag = (tag: string) => {
@@ -111,8 +113,9 @@ const items = computed<ListItem[]>(() => {
     all = all.filter(item => item.tags.some(t => activeTags.has(t)));
   }
 
+  const tag = localeTagFromAppLocale(locale.value);
   return all.sort((a, b) => {
-    const byName = a.name.localeCompare(b.name, RU_LOCALE, {sensitivity: "base"});
+    const byName = compareLocalizedEntityNames(a.name, b.name, locale.value);
 
     if (sortMode.value === "alpha-asc") {
       if (byName !== 0) return byName;
@@ -125,9 +128,9 @@ const items = computed<ListItem[]>(() => {
       if (byName !== 0) return byName;
     }
 
-    const byKind = a.kind.localeCompare(b.kind, RU_LOCALE, {sensitivity: "base"});
+    const byKind = a.kind.localeCompare(b.kind, tag, { sensitivity: "base" });
     if (byKind !== 0) return byKind;
-    return a.id.localeCompare(b.id, RU_LOCALE, {sensitivity: "base"});
+    return a.id.localeCompare(b.id, tag, { sensitivity: "base" });
   });
 });
 

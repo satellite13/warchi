@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.10] - 2026-09-02
+
+### Fixed
+- Spectators now see components move on the canvas during collaborative editing, without reopening the diagram.
+
+## [0.25.9] - 2026-09-02
+
+### Fixed
+- Reconnecting a link keeps the node–edge index in sync, and mouseup outside the canvas no longer leaves reconnect stuck.
+- Saved style overrides are no longer replaced by the merged theme. PNG bounds, bezier hit-tests, group paint, flex shrink, and SVG colors are correct.
+
+## [0.25.8] - 2026-09-01
+
+### Changed
+- Model and notation editors share the same form sections, matrix filters, and dropdown panels.
+
 ## [0.25.7] - 2026-08-31
 
 ### Fixed

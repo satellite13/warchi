@@ -2,12 +2,13 @@
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PropertyRow from '@/components/properties/PropertyRow.vue'
-import CollapseSection from './CollapseSection.vue'
+import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
 import TypeSelectSection from './TypeSelectSection.vue'
 import RelationRulesSection from './RelationRulesSection.vue'
 import type { CustomProperty, CustomPropertyType } from '@/domain/attrs/notationAttrs'
 import type { EditorComponent, EditorRelation, EditorRelationRule } from '../types'
-import { useCustomProperties } from '../composables/useCustomProperties'
+import { useCustomPropertyEditor } from '@/composables/useCustomPropertyEditor'
+import { customPropertyValidationErrors } from '../utils/customPropertyValidation'
 import { parseTagsInput as parseTagsInputShared } from '../utils/tagParsers'
 import { findNameVersionConflict } from '../utils/nameVersionUniqueness'
 import { COMBINED_ICON_OPTIONS } from '@/config/iconOptions'
@@ -41,7 +42,12 @@ const isComponent = computed(
 const { t } = useI18n()
 
 const { addCustomProperty, addCustomPropertyFromType, removeCustomProperty, propertyErrors } =
-  useCustomProperties(selectedItemComputed, props.onMutateItem)
+  useCustomPropertyEditor({
+    selectedItem: selectedItemComputed,
+    onMutateItem: props.onMutateItem,
+    validateProperty: (property) =>
+      customPropertyValidationErrors(property, (key) => String(t(key))),
+  })
 
 const parseTagsInput = (value: string) => parseTagsInputShared(value, { unique: true })
 
@@ -345,9 +351,9 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="properties-panel__content">
-      <CollapseSection
-        :label="nameLabel"
-        :expanded="nameExpanded"
+      <CollapsibleSection
+        :title="nameLabel"
+        :open="nameExpanded"
         @toggle="nameExpanded = !nameExpanded"
       >
         <input
@@ -361,17 +367,17 @@ onBeforeUnmount(() => {
           @keydown.enter.prevent="applyNameDraft"
         />
         <p v-if="nameError" class="properties-panel__name-error">{{ nameError }}</p>
-      </CollapseSection>
+      </CollapsibleSection>
 
       <!-- Документация компонента: при шаре VIEW — только если файл уже есть (просмотр) -->
-      <CollapseSection
+      <CollapsibleSection
         v-if="
           selectedItem &&
           !('linkTypeId' in selectedItem) &&
           ((props.canEditNotationWiki ?? true) || !!selectedItem.parsedAttrs.documentFileId)
         "
-        :label="t('diagram.documentation')"
-        :expanded="documentationExpanded"
+        :title="t('diagram.documentation')"
+        :open="documentationExpanded"
         @toggle="documentationExpanded = !documentationExpanded"
       >
         <button
@@ -385,16 +391,16 @@ onBeforeUnmount(() => {
             <UiIcon name="check_circle" />
           </span>
         </button>
-      </CollapseSection>
+      </CollapsibleSection>
       <!-- То же для связи (relation): просмотр при VIEW, если есть documentFileId -->
-      <CollapseSection
+      <CollapsibleSection
         v-if="
           selectedItem &&
           'linkTypeId' in selectedItem &&
           ((props.canEditNotationWiki ?? true) || !!selectedItem.parsedAttrs.documentFileId)
         "
-        :label="t('diagram.documentation')"
-        :expanded="documentationExpanded"
+        :title="t('diagram.documentation')"
+        :open="documentationExpanded"
         @toggle="documentationExpanded = !documentationExpanded"
       >
         <button
@@ -408,7 +414,7 @@ onBeforeUnmount(() => {
             <UiIcon name="check_circle" />
           </span>
         </button>
-      </CollapseSection>
+      </CollapsibleSection>
     <TypeSelectSection
         :selected-item="selectedItem"
         :node-types="nodeTypes"
@@ -421,10 +427,10 @@ onBeforeUnmount(() => {
         :on-create-relation-type="onCreateRelationType"
       />
 
-      <CollapseSection
+      <CollapsibleSection
         v-if="selectedItem && !('linkTypeId' in selectedItem)"
-        :label="t('diagram.paletteGroup')"
-        :expanded="paletteGroupExpanded"
+        :title="t('diagram.paletteGroup')"
+        :open="paletteGroupExpanded"
         @toggle="paletteGroupExpanded = !paletteGroupExpanded"
       >
         <input
@@ -438,12 +444,12 @@ onBeforeUnmount(() => {
         <span class="properties-panel__palette-group-hint">{{
           t('diagram.paletteGroupHint')
         }}</span>
-      </CollapseSection>
+      </CollapsibleSection>
 
-      <CollapseSection
+      <CollapsibleSection
         v-if="showPaletteIconSection"
-        :label="t('diagram.paletteIcon')"
-        :expanded="paletteIconExpanded"
+        :title="t('diagram.paletteIcon')"
+        :open="paletteIconExpanded"
         @toggle="paletteIconExpanded = !paletteIconExpanded"
       >
         <div class="properties-panel__palette-icon-select">
@@ -454,11 +460,11 @@ onBeforeUnmount(() => {
           />
         </div>
         <span class="properties-panel__palette-group-hint">{{ t('diagram.paletteIconHint') }}</span>
-      </CollapseSection>
+      </CollapsibleSection>
 
-      <CollapseSection
-        :label="t('diagram.tags')"
-        :expanded="tagsExpanded"
+      <CollapsibleSection
+        :title="t('diagram.tags')"
+        :open="tagsExpanded"
         @toggle="tagsExpanded = !tagsExpanded"
       >
         <input
@@ -482,13 +488,13 @@ onBeforeUnmount(() => {
             <UiIcon name="close" />
           </button>
         </div>
-      </CollapseSection>
+      </CollapsibleSection>
 
       <!-- Label template section (components and relations) -->
-      <CollapseSection
+      <CollapsibleSection
         v-if="selectedItem"
-        :label="t('diagram.compositeLabel')"
-        :expanded="labelTemplateExpanded"
+        :title="t('diagram.compositeLabel')"
+        :open="labelTemplateExpanded"
         @toggle="labelTemplateExpanded = !labelTemplateExpanded"
       >
         <textarea
@@ -507,7 +513,7 @@ onBeforeUnmount(() => {
             labelTemplatePreview
           }}</span>
         </div>
-      </CollapseSection>
+      </CollapsibleSection>
 
       <RelationRulesSection
         :selected-item="selectedItem"
@@ -519,9 +525,9 @@ onBeforeUnmount(() => {
         :on-mutate-relation-rules="onMutateRelationRules"
       />
 
-      <CollapseSection
-        :label="t('types.properties')"
-        :expanded="propertiesExpanded"
+      <CollapsibleSection
+        :title="t('types.properties')"
+        :open="propertiesExpanded"
         @toggle="propertiesExpanded = !propertiesExpanded"
       >
         <template #header-extra>
@@ -583,7 +589,7 @@ onBeforeUnmount(() => {
             @remove="removeCustomProperty(property.id)"
           />
         </div>
-      </CollapseSection>
+      </CollapsibleSection>
     </div>
   </div>
 </template>

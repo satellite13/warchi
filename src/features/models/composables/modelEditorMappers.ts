@@ -74,6 +74,7 @@ export const toEditorDiagramPreservingLocalAttrs = (
       ...toEditorDiagram(row, { attrsPending: false }),
       parsedAttrs: prev.parsedAttrs,
       _attrsPending: false,
+      _liveCanvasEpoch: prev._liveCanvasEpoch,
     })
   }
   return toEditorDiagram(row)

@@ -3,7 +3,12 @@ import type { DiagramNodeInstance } from '../modelAttrs'
 import {
   applyContainerInlineLabel,
   getContainerLabel,
+  getNoteText,
   isContainerInstance,
+  isDiagramOnlyVisualInstance,
+  isDirectoryNoteInstance,
+  isNoteInstance,
+  isStickyNoteInstance,
 } from './diagramOnlyInstances'
 
 function containerInstance(label?: string): DiagramNodeInstance {
@@ -50,5 +55,44 @@ describe('applyContainerInlineLabel', () => {
     const instance = containerInstance('Was set')
     expect(applyContainerInlineLabel(instance, '')).toBe(true)
     expect(getContainerLabel(instance)).toBe('')
+  })
+})
+
+describe('note instance predicates', () => {
+  it('detects notes, directory notes, sticky notes, and diagram-only visuals', () => {
+    const note: DiagramNodeInstance = {
+      id: 'n1',
+      modelNodeId: '__diagram-note__:n1',
+      x: 0,
+      y: 0,
+      attrs: { isNote: true, noteText: 'Hello' },
+    }
+    const directory: DiagramNodeInstance = {
+      id: 'd1',
+      modelNodeId: '__diagram-note__:d1',
+      x: 0,
+      y: 0,
+      attrs: { isNote: true, isDirectoryNote: true },
+    }
+    const plain: DiagramNodeInstance = {
+      id: 'p1',
+      modelNodeId: 'node-1',
+      x: 0,
+      y: 0,
+      attrs: {},
+    }
+
+    expect(isNoteInstance(note)).toBe(true)
+    expect(isDirectoryNoteInstance(note)).toBe(false)
+    expect(isStickyNoteInstance(note)).toBe(true)
+    expect(getNoteText(note)).toBe('Hello')
+    expect(getNoteText(note, 'fallback')).toBe('Hello')
+    expect(getNoteText({ ...note, attrs: { isNote: true } }, 'fb')).toBe('fb')
+
+    expect(isDirectoryNoteInstance(directory)).toBe(true)
+    expect(isStickyNoteInstance(directory)).toBe(false)
+    expect(isDiagramOnlyVisualInstance(note)).toBe(true)
+    expect(isDiagramOnlyVisualInstance(containerInstance())).toBe(true)
+    expect(isDiagramOnlyVisualInstance(plain)).toBe(false)
   })
 })

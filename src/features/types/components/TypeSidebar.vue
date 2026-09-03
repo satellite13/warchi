@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { DEFAULT_ENTITY_ICONS } from '@/config/iconOptions'
 import type { TypeItem } from '../composables/useTypeEditor'
 import { toAccessLabel } from '@/utils/accessPermission'
+import { compareLocalizedEntityNames } from '@/utils/localeSort'
 import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
 import SidebarListItem from '@/components/list/SidebarListItem.vue'
 import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
@@ -30,13 +31,7 @@ const typeSearchQuery = ref('')
 const { t, locale } = useI18n()
 
 function sortTypes(types: TypeItem[]): TypeItem[] {
-  const localeTag = locale.value === 'ru' ? 'ru' : 'en'
-  return [...types].sort((a, b) =>
-    (a.name || '~~~').localeCompare(b.name || '~~~', localeTag, {
-      sensitivity: 'base',
-      numeric: true,
-    }),
-  )
+  return [...types].sort((a, b) => compareLocalizedEntityNames(a.name, b.name, locale.value))
 }
 
 const filteredNodeTypes = computed(() => {

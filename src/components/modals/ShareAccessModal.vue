@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BaseModal from "./BaseModal.vue";
+import ShareGrantForm from "./ShareGrantForm.vue";
 import { useAccessShares } from "../../composables/useAccessShares";
 import { useUserSearch } from "../../composables/useUserSearch";
 import type { SharePermission, ShareResourceType } from "../../types/api";
@@ -95,90 +96,19 @@ onMounted(load);
   <BaseModal :title="title" max-width="640px" @close="emit('close')">
     <div class="share-modal">
       <div class="share-modal__block">
-        <h4 class="share-modal__subtitle">{{ t("share.grantAccess") }}</h4>
-        <div class="share-modal__grid">
-          <label class="share-modal__field">
-            <span>{{ t("share.scope") }}</span>
-            <label class="share-modal__permission-option">
-              <input
-                v-model="shareWithAllUsers"
-                type="checkbox"
-                :disabled="isSubmitting"
-              >
-              <span>{{ t("share.allUsers") }}</span>
-            </label>
-          </label>
-          <label class="share-modal__field">
-            <span>{{ t("share.userEmail") }}</span>
-            <div class="share-modal__inline">
-              <input
-                v-model="userSearchEmail"
-                class="form-input"
-                type="text"
-                placeholder="user@example.com"
-                :disabled="isSubmitting || shareWithAllUsers"
-              >
-              <button
-                type="button"
-                class="btn btn--secondary"
-                :disabled="isSubmitting || shareWithAllUsers || userSearchEmail.trim().length === 0"
-                @click="searchUsers"
-              >
-                {{ t("common.find") }}
-              </button>
-            </div>
-          </label>
-          <label class="share-modal__field">
-            <span>{{ t("share.accessLevel") }}</span>
-            <div class="share-modal__permission-group">
-              <label class="share-modal__permission-option">
-                <input
-                  v-model="selectedPermission"
-                  type="radio"
-                  value="VIEW"
-                  :disabled="isSubmitting"
-                >
-                <span>{{ t("share.viewOnly") }}</span>
-              </label>
-              <label class="share-modal__permission-option">
-                <input
-                  v-model="selectedPermission"
-                  type="radio"
-                  value="EDIT"
-                  :disabled="isSubmitting"
-                >
-                <span>{{ t("share.edit") }}</span>
-              </label>
-            </div>
-          </label>
-        </div>
-
-        <div v-if="shareWithAllUsers" class="share-modal__found">
-          {{ t("share.shareWithAllHint") }}
-        </div>
-        <div v-else-if="selectedUser" class="share-modal__found">
-          {{ t("share.userFound") }}: <strong>{{ selectedUser.email }}</strong>
-        </div>
-        <div v-if="searchError" class="share-modal__error">{{ searchError }}</div>
-        <div v-else-if="searchPerformed && searchResults.length === 0" class="share-modal__empty">
-          {{ t("share.usersNotFound") }}
-        </div>
-        <div v-else-if="searchResults.length > 0" class="share-modal__results">
-          <button
-            v-for="user in searchResults"
-            :key="user.id"
-            type="button"
-            class="share-modal__user-item"
-            :class="{ 'share-modal__user-item--selected': selectedUser?.id === user.id }"
-            @click="selectUser(user)"
-          >
-            <strong>{{ user.email }}</strong>
-            <small v-if="user.firstName || user.lastName">
-              {{ [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ") }}
-            </small>
-          </button>
-        </div>
-        <div v-if="errorMessage" class="share-modal__error">{{ errorMessage }}</div>
+        <ShareGrantForm
+          v-model:share-with-all-users="shareWithAllUsers"
+          v-model:user-search-email="userSearchEmail"
+          v-model:selected-permission="selectedPermission"
+          :selected-user="selectedUser"
+          :search-results="searchResults"
+          :search-performed="searchPerformed"
+          :search-error="searchError"
+          :error-message="errorMessage"
+          :disabled="isSubmitting"
+          @search="searchUsers"
+          @select-user="selectUser"
+        />
       </div>
 
       <div class="share-modal__block">

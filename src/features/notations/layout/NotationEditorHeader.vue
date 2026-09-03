@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import UnsavedBadge from '@/components/UnsavedBadge.vue'
 import DiagramEditorHeaderShell from '@/components/layout/DiagramEditorHeaderShell.vue'
-import IconToolbar, { type ToolbarButton } from './IconToolbar.vue'
+import IconToolbar, { type ToolbarButton } from '@/components/layout/IconToolbar.vue'
 
 const props = withDefaults(
   defineProps<{

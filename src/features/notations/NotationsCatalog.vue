@@ -6,7 +6,7 @@ import type { NotationData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
-import { downloadNotationExport } from "@/features/models/composables/useModelPackage";
+import { downloadNotationExport } from "@/features/notations/utils/notationExportDownload";
 import { uploadNotationExportDocument } from "./composables/uploadNotationExport";
 import { useNotationIconImport } from "./composables/useNotationIconImport";
 import NotationImportIconResolveDialog from "./components/NotationImportIconResolveDialog.vue";

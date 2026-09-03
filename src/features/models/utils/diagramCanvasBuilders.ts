@@ -13,7 +13,7 @@ import {
   buildEdgeLabelBackground as buildNotationEdgeLabelBackground,
   buildMarker,
   buildNodeIcon,
-} from '@/features/notations/utils/notationElementBuilders'
+} from '@/features/diagram/utils/diagramElementBuilders'
 
 const VALID_ICON_PLACEMENTS = new Set<NodeImageOptions['placement']>([
   'center',

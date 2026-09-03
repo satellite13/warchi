@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import MultiSelect from '@/components/forms/MultiSelect.vue'
+import MatrixFiltersShell from '@/components/matrix/MatrixFiltersShell.vue'
+import MatrixFilterGroup from '@/components/matrix/MatrixFilterGroup.vue'
 import type { RelationRulesMatrixAxisOption } from '../utils/buildRelationRulesMatrix'
 
 const props = defineProps<{
@@ -44,21 +46,16 @@ const clearRelations = () => emit('update:selectedRelationIds', [])
 </script>
 
 <template>
-  <section class="rules-matrix-filters">
-    <div class="rules-matrix-filters__group">
-      <div class="rules-matrix-filters__label-row">
-        <label class="rules-matrix-filters__label">{{
-          t('diagram.relationRulesMatrixRowsLabel')
-        }}</label>
-        <div class="rules-matrix-filters__actions">
-          <button type="button" class="link-btn" @click="selectAllRows">
-            {{ t('diagram.relationRulesMatrixSelectAll') }}
-          </button>
-          <button type="button" class="link-btn" @click="clearRows">
-            {{ t('diagram.relationRulesMatrixClearSelection') }}
-          </button>
-        </div>
-      </div>
+  <MatrixFiltersShell bordered>
+    <MatrixFilterGroup :label="t('diagram.relationRulesMatrixRowsLabel')">
+      <template #actions>
+        <button type="button" class="link-btn" @click="selectAllRows">
+          {{ t('diagram.relationRulesMatrixSelectAll') }}
+        </button>
+        <button type="button" class="link-btn" @click="clearRows">
+          {{ t('diagram.relationRulesMatrixClearSelection') }}
+        </button>
+      </template>
       <MultiSelect
         :model-value="selectedRowIds"
         :options="rowMultiOptions"
@@ -67,22 +64,17 @@ const clearRelations = () => emit('update:selectedRelationIds', [])
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:selectedRowIds', $event)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="rules-matrix-filters__group">
-      <div class="rules-matrix-filters__label-row">
-        <label class="rules-matrix-filters__label">{{
-          t('diagram.relationRulesMatrixColumnsLabel')
-        }}</label>
-        <div class="rules-matrix-filters__actions">
-          <button type="button" class="link-btn" @click="selectAllColumns">
-            {{ t('diagram.relationRulesMatrixSelectAll') }}
-          </button>
-          <button type="button" class="link-btn" @click="clearColumns">
-            {{ t('diagram.relationRulesMatrixClearSelection') }}
-          </button>
-        </div>
-      </div>
+    <MatrixFilterGroup :label="t('diagram.relationRulesMatrixColumnsLabel')">
+      <template #actions>
+        <button type="button" class="link-btn" @click="selectAllColumns">
+          {{ t('diagram.relationRulesMatrixSelectAll') }}
+        </button>
+        <button type="button" class="link-btn" @click="clearColumns">
+          {{ t('diagram.relationRulesMatrixClearSelection') }}
+        </button>
+      </template>
       <MultiSelect
         :model-value="selectedColumnIds"
         :options="columnMultiOptions"
@@ -91,22 +83,17 @@ const clearRelations = () => emit('update:selectedRelationIds', [])
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:selectedColumnIds', $event)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="rules-matrix-filters__group">
-      <div class="rules-matrix-filters__label-row">
-        <label class="rules-matrix-filters__label">{{
-          t('diagram.relationRulesMatrixRelationsLabel')
-        }}</label>
-        <div class="rules-matrix-filters__actions">
-          <button type="button" class="link-btn" @click="selectAllRelations">
-            {{ t('diagram.relationRulesMatrixSelectAll') }}
-          </button>
-          <button type="button" class="link-btn" @click="clearRelations">
-            {{ t('diagram.relationRulesMatrixClearSelection') }}
-          </button>
-        </div>
-      </div>
+    <MatrixFilterGroup :label="t('diagram.relationRulesMatrixRelationsLabel')">
+      <template #actions>
+        <button type="button" class="link-btn" @click="selectAllRelations">
+          {{ t('diagram.relationRulesMatrixSelectAll') }}
+        </button>
+        <button type="button" class="link-btn" @click="clearRelations">
+          {{ t('diagram.relationRulesMatrixClearSelection') }}
+        </button>
+      </template>
       <MultiSelect
         :model-value="selectedRelationIds"
         :options="relationMultiOptions"
@@ -115,65 +102,20 @@ const clearRelations = () => emit('update:selectedRelationIds', [])
         :empty-text="t('common.nothingFound')"
         @update:model-value="emit('update:selectedRelationIds', $event)"
       />
-    </div>
+    </MatrixFilterGroup>
 
-    <div class="rules-matrix-filters__toggles">
+    <template #toggles>
       <ToggleSwitch
         :model-value="hideEmptyAxes"
         @update:model-value="emit('update:hideEmptyAxes', $event)"
       >
         {{ t('diagram.relationRulesMatrixHideEmptyAxes') }}
       </ToggleSwitch>
-    </div>
-  </section>
+    </template>
+  </MatrixFiltersShell>
 </template>
 
 <style scoped>
-.rules-matrix-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: auto;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-}
-
-.rules-matrix-filters__group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.rules-matrix-filters__label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.rules-matrix-filters__label {
-  font-size: 11px;
-  color: var(--text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rules-matrix-filters__actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.rules-matrix-filters__toggles {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
 .link-btn {
   background: none;
   border: none;

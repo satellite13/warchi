@@ -11,7 +11,7 @@ import CompositeTreeEditor from './CompositeTreeEditor.vue'
 import CompositeLivePreview from './CompositeLivePreview.vue'
 import A5BindingsEditor from './A5BindingsEditor.vue'
 import { useNodeShapes } from '@/composables/useNodeShapes'
-import { validateCompositeDiagramStyle } from '@/features/notations/utils/validationIssues'
+import { validateCompositeDiagramStyle } from '@/features/diagram-style/utils/validationIssues'
 import { createDefaultCompositeContent } from '@/features/diagram-style/utils/compositeBindings'
 import {
   toInsetSides,

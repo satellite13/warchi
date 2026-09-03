@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { DROPDOWN_SEARCH_BLOCK_PX } from '@/utils/dropdownPanelPosition'
 import { useDropdownPanel } from '@/composables/useDropdownPanel'
+import '@/components/forms/dropdownSelectPanel.css'
 
 export type SelectOption = { id: string; label: string }
 
@@ -96,7 +97,7 @@ const selectOption = (id: string) => {
     <Teleport to="body">
       <div
         v-if="isOpen && panelPlacement"
-        class="searchable-select-panel searchable-select__panel"
+        class="dropdown-select-panel dropdown-select-panel--md searchable-select-panel searchable-select__panel"
         :style="{
           ...(panelPlacement.top !== undefined ? { top: `${panelPlacement.top}px` } : {}),
           ...(panelPlacement.bottom !== undefined ? { bottom: `${panelPlacement.bottom}px` } : {}),
@@ -108,13 +109,13 @@ const selectOption = (id: string) => {
         <input
           ref="searchInputRef"
           v-model="searchQuery"
-          class="searchable-select__search"
+          class="dropdown-select-panel__search searchable-select__search"
           type="text"
           :placeholder="searchPlaceholder"
           @click.stop
         >
         <div
-          class="searchable-select__list"
+          class="dropdown-select-panel__list searchable-select__list"
           :style="{ maxHeight: `${panelPlacement.maxListHeight}px` }"
         >
           <button
@@ -138,10 +139,16 @@ const selectOption = (id: string) => {
               {{ option.label }}
             </slot>
           </button>
-          <div v-if="searchBlocked" class="searchable-select__empty">
+          <div
+            v-if="searchBlocked"
+            class="dropdown-select-panel__empty searchable-select__empty"
+          >
             {{ minSearchHint || emptyText || '—' }}
           </div>
-          <div v-else-if="filteredOptions.length === 0" class="searchable-select__empty">
+          <div
+            v-else-if="filteredOptions.length === 0"
+            class="dropdown-select-panel__empty searchable-select__empty"
+          >
             {{ emptyText || '—' }}
           </div>
         </div>
@@ -197,43 +204,6 @@ const selectOption = (id: string) => {
   flex-shrink: 0;
 }
 
-.searchable-select__panel {
-  position: fixed;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  z-index: 10000;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.searchable-select__search {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  outline: none;
-  background: var(--surface);
-  color: var(--base-text);
-  box-sizing: border-box;
-}
-
-.searchable-select__search::placeholder {
-  color: var(--text-subtle);
-}
-
-.searchable-select__list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px;
-}
-
 .searchable-select__item {
   display: block;
   width: 100%;
@@ -264,12 +234,5 @@ const selectOption = (id: string) => {
 
 .searchable-select__item--active:hover {
   background: var(--primary-soft);
-}
-
-.searchable-select__empty {
-  padding: 10px 8px;
-  font-size: 13px;
-  color: var(--text-subtle);
-  text-align: center;
 }
 </style>

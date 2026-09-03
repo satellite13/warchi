@@ -51,6 +51,7 @@ App runs on `http://localhost:5173` and proxies `/api/*` to backend.
 | `npm run preview` | Preview built app |
 | `npm run test` | Run unit tests |
 | `npm run test:watch` | Run unit tests in watch mode |
+| `npm run ci:local` | Full quality gate (versions, lint, type-check, tests, build); same as GitHub Actions CI |
 
 ## Deployment (`deploy.sh`)
 

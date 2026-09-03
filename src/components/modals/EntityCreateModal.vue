@@ -69,7 +69,7 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
 
 <template>
   <BaseModal :title="title" @close="emit('close')">
-    <form class="create-form" @submit.prevent="emit('submit')">
+    <form id="entity-create-form" class="create-form" @submit.prevent="emit('submit')">
       <NameVersionForm
         v-model:name="nameModel"
         v-model:version="versionModel"
@@ -102,24 +102,25 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
       <div v-if="error" class="form-error">
         {{ error }}
       </div>
-      <div class="form-actions">
-        <button
-          type="button"
-          class="btn btn--secondary"
-          :disabled="isSubmitting"
-          @click="emit('close')"
-        >
-          {{ resolvedCancelLabel }}
-        </button>
-        <button
-          type="submit"
-          class="btn btn--primary"
-          :disabled="isSubmitting"
-        >
-          {{ isSubmitting ? resolvedSubmittingLabel : resolvedSubmitLabel }}
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button
+        type="button"
+        class="btn btn--secondary"
+        :disabled="isSubmitting"
+        @click="emit('close')"
+      >
+        {{ resolvedCancelLabel }}
+      </button>
+      <button
+        type="submit"
+        form="entity-create-form"
+        class="btn btn--primary"
+        :disabled="isSubmitting"
+      >
+        {{ isSubmitting ? resolvedSubmittingLabel : resolvedSubmitLabel }}
+      </button>
+    </template>
   </BaseModal>
 </template>
 
@@ -142,12 +143,5 @@ const resolvedCancelLabel = computed(() => props.cancelLabel ?? t("common.cancel
   color: var(--text-muted);
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
 }
 </style>

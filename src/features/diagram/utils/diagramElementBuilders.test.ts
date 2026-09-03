@@ -8,7 +8,7 @@ import {
   buildNodeIcon,
   buildMarker,
   mergeEdgeLabelStyleFromDiagramStyle,
-} from '@/features/notations/utils/notationElementBuilders'
+} from '@/features/diagram/utils/diagramElementBuilders'
 import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
 

@@ -196,7 +196,7 @@ The server runs two checks:
 The server returns at most 200 groups of each kind; if there are more, the heading shows “200 of N”.
 Expand a member to see diagrams that contain it. A chip opens that diagram and focuses the entity; clicking a node name selects it in the tree without opening a canvas.
 
-**Merge into selected** opens a one-pair wizard: resulting type properties, which unique links to transfer (nodes only), then confirm. The merge is atomic on the server. If both links already sat on the same diagram, one arrow remains. Documentation of the dropped instance is not moved in v1. On conflict (the pair changed), refresh the report — the wizard does not retry the request.
+**Merge into selected** opens a one-pair wizard: the properties step compares values on the kept and removed copies (which value to keep), then which unique links to transfer (nodes only), then confirm. The merge is atomic on the server. If both links already sat on the same diagram, one arrow remains. Documentation of the dropped instance is not moved in v1. On conflict (the pair changed), refresh the report — the wizard does not retry the request.
 
 Diagram scripts in the editor are a separate tool: they see the open canvas only, not the whole model tree.
 

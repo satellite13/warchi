@@ -81,9 +81,14 @@ const i18nMessages = {
       validationReportStepConfirm: 'Confirm',
       validationReportConfirmMerge: 'Merge',
       validationReportCancel: 'Cancel',
-      validationReportKeepColumn: 'Keep',
-      validationReportDropColumn: 'Drop',
-      validationReportResultColumn: 'Result',
+      validationReportPropertyColumn: 'Property',
+      validationReportKeepColumn: 'Kept copy',
+      validationReportDropColumn: 'Removed copy',
+      validationReportResultColumn: 'Which value',
+      validationReportUseKeepValue: 'from kept',
+      validationReportUseDropValue: 'from removed',
+      validationReportPropertiesHint:
+        'Compare the two copies and choose which value the surviving entity will keep.',
       validationReportTransferLink: 'Transfer link',
       validationReportLinksToDelete: 'Will be deleted',
       validationReportReparentDiagrams: 'Diagrams to reparent: {count}',
@@ -133,6 +138,11 @@ describe('ValidationMergeWizard', () => {
     await flushPromises()
 
     expect(fetchNodesPreviewMock).toHaveBeenCalledWith('m1', { keepId: 'a', dropId: 'b' })
+    expect(wrapper.text()).toContain('Compare the two copies')
+    expect(wrapper.text()).toContain('Kept copy')
+    expect(wrapper.text()).toContain('Removed copy')
+    expect(wrapper.text()).toContain('from kept')
+    expect(wrapper.text()).toContain('from removed')
     expect(wrapper.text()).toContain('owner')
     expect(wrapper.text()).toContain('keep')
     expect(wrapper.text()).toContain('drop')

@@ -27,8 +27,11 @@ function mountGroup(
         common: { loading: 'Loading...' },
         models: {
           validationReportCopies: '{count} copies',
-          validationReportKeep: 'Keep this',
-          validationReportMergeInto: 'Merge into selected',
+          validationReportGroupHint: 'The radio button chooses the copy that will remain.',
+          validationReportKeepAria: 'Keep this copy',
+          validationReportKeep: 'Will remain',
+          validationReportMergeInto: 'Merge into remaining',
+          validationReportInFolder: 'in folder {name}',
         },
       },
     },
@@ -60,13 +63,22 @@ describe('ValidationDuplicateGroup', () => {
 
     expect(wrapper.text()).toContain('Application · CRM')
     expect(wrapper.text()).toContain('2 copies')
-    expect(wrapper.text()).toContain('Apps')
+    expect(wrapper.text()).toContain('The radio button chooses the copy that will remain.')
+    expect(wrapper.text()).toContain('Will remain')
+    expect(wrapper.text()).toContain('in folder Apps')
+    expect(wrapper.text()).toContain('Merge into remaining')
 
     await wrapper.get('.validation-duplicate-group__merge').trigger('click')
 
     expect(wrapper.emitted('merge')?.[0]).toEqual([
       { keepId: 'n1', dropId: 'n2', kind: 'node' },
     ])
+
+    const radios = wrapper.findAll('input[type="radio"]')
+    expect(radios).toHaveLength(2)
+    await radios[1]!.setValue()
+    expect(wrapper.findAll('.validation-duplicate-group__details--keep')).toHaveLength(1)
+    expect(wrapper.findAll('.validation-duplicate-group__merge')).toHaveLength(1)
   })
 
   it('navigates to the editor on node name click', async () => {

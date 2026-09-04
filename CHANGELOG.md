@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.12] - 2026-09-04
+
+### Changed
+- Duplicate groups in model validation now mark the remaining copy and say “Merge into remaining” on the others, instead of repeating keep/merge on every row.
+
 ## [0.25.11] - 2026-09-04
 
 ### Changed

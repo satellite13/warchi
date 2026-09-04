@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.11] - 2026-09-04
+
+### Added
+- Favorite diagrams: toggle favorites in the editor and model tree; favorites lists on Home and Profile with pagination.
+
 ## [0.25.10] - 2026-09-02
 
 ### Fixed

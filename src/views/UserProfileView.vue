@@ -5,6 +5,7 @@ import AppFooter from "../components/layout/AppFooter.vue"
 import AppHeader from "../components/layout/AppHeader.vue"
 import UserAvatar from "../components/layout/UserAvatar.vue"
 import ApiKeysSection from "@/components/profile/ApiKeysSection.vue"
+import FavoriteDiagramsSection from "@/components/profile/FavoriteDiagramsSection.vue"
 import UiIcon from "@/components/ui/UiIcon.vue"
 import { apiGet } from "../composables/useApi"
 import { useAuth } from "../composables/useAuth"
@@ -246,6 +247,7 @@ onMounted(async () => {
           </div>
 
           <div class="profile-shell__main">
+            <FavoriteDiagramsSection />
             <ApiKeysSection />
           </div>
         </div>
@@ -347,6 +349,12 @@ onMounted(async () => {
 
 .profile-shell__main > :deep(.panel) {
   flex: 1;
+}
+
+/* Favorites panel keeps its natural height so its content is never clipped
+   (generic .panel flex:1 above + .panel overflow:hidden would squeeze it). */
+.profile-shell__main > :deep(.favorites-panel) {
+  flex: none;
 }
 
 .panel {

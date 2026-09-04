@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.11] - 2026-09-04
+
+### Changed
+- The duplicate-merge wizard now labels property columns as the kept and removed copies and asks which value to keep.
+
 ## [0.25.10] - 2026-09-02
 
 ### Fixed

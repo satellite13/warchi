@@ -6,7 +6,7 @@ import AppHeader from "../components/layout/AppHeader.vue"
 import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
-import { useDashboard } from "../composables/useDashboard"
+import { useDashboard, type RecentCommentItem } from "../composables/useDashboard"
 import { useFavorites, type FavoriteDiagramItem } from "../composables/useFavorites"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
@@ -26,7 +26,7 @@ const changelogRaw = computed(() => {
   return changelogEn
 })
 const { currentUser } = useAuth()
-const { isLoading, stats, recentModels, recentNotations, recentDiagrams } = useDashboard()
+const { isLoading, stats, recentModels, recentNotations, recentDiagrams, recentComments } = useDashboard()
 const { favoriteIds, loadFavoriteDiagrams } = useFavorites()
 const favoriteDiagrams = ref<FavoriteDiagramItem[]>([])
 const isFavoritesLoading = ref(true)
@@ -174,6 +174,33 @@ function openDiagram(item: { id: string; modelId: string }): void {
     params: { id: item.modelId },
     query: { diagramId: item.id },
   })
+}
+
+function openRecentComment(item: RecentCommentItem): void {
+  const query: Record<string, string> = {
+    diagramId: item.diagramId,
+    tab: "comments",
+    commentId: item.threadId,
+  }
+  if (item.instanceId && item.targetType !== "diagram") {
+    query.instanceId = item.instanceId
+    query.targetType = item.targetType
+  }
+  void router.push({ name: "model-editor", params: { id: item.modelId }, query })
+}
+
+const MENTION_TOKEN_RE = /@\[([^\]]*)]\((?:user|oidc):[^)]*\)/g
+
+function commentExcerpt(bodyMd: string): string {
+  const plain = bodyMd
+    .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+    .replace(MENTION_TOKEN_RE, (_m, name: string) => `@${name}`)
+    .replace(/\[([^\]]*)]\([^)]*\)/g, "$1")
+    .replace(/[*_`>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (plain.length <= 140) return plain
+  return plain.slice(0, 139).trimEnd() + "…"
 }
 
 function openNotationPackagePicker() {
@@ -453,6 +480,38 @@ const releaseNotes = computed(() => {
                   @click="router.push({ name: 'model-editor', params: { id: item.id } })"
                 />
               </div>
+            </section>
+
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="forum" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionRecentComments") }}</h2>
+              </div>
+              <div v-if="isLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="recentComments.length === 0"
+                variant="compact"
+                icon="forum"
+                :title="t('home.sectionNoComments')"
+              />
+              <ul v-else class="comment-list">
+                <li v-for="item in recentComments" :key="item.commentId">
+                  <button type="button" class="comment-row" @click="openRecentComment(item)">
+                    <span class="comment-row__head">
+                      <span class="comment-row__author">{{ item.authorName }}</span>
+                      <span class="comment-row__when">{{ formatRelativeDate(item.createdAt) }}</span>
+                    </span>
+                    <span class="comment-row__target">
+                      <UiIcon name="device_hub" class="comment-row__diagram-icon" />
+                      <span class="comment-row__diagram">{{ item.diagramName }}</span>
+                      <span v-if="item.elementName" class="comment-row__element">{{ item.elementName }}</span>
+                    </span>
+                    <span class="comment-row__excerpt">{{ commentExcerpt(item.bodyMd) }}</span>
+                  </button>
+                </li>
+              </ul>
             </section>
 
             <section class="section">
@@ -865,6 +924,94 @@ const releaseNotes = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* ── Recent comments ── */
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comment-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.comment-row:hover {
+  background: var(--surface-strong);
+  border-color: var(--primary);
+}
+
+.comment-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.comment-row__author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--base-text);
+}
+
+.comment-row__when {
+  font-size: 11px;
+  color: var(--text-subtle);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.comment-row__target {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.comment-row__diagram-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.comment-row__diagram {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comment-row__element {
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comment-row__excerpt {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ── Quick Actions ── */

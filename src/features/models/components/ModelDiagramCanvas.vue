@@ -38,6 +38,7 @@ import {
   withResolvedScaleSlice,
 } from '@/utils/resolveCustomScaleSlice'
 import { useDiagramRenderer } from '@/features/diagram/useDiagramRenderer'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import type { ComponentResponse, LinkTypeResponse, NodeTypeResponse, RelationResponse, RelationRuleResponse } from '@/types/api'
 import { isCustomPropertyValueFilled } from '@/domain/attrs/customPropertyValues'
 import { hasSystemBooleanDefault } from '@/domain/attrs/systemBooleanProperty'
@@ -168,6 +169,11 @@ const props = withDefaults(
     diffStateByEdgeInstanceId?: Record<string, 'added' | 'removed' | 'modified'>
     /** Курсор удалённого редактора (мировые координаты) — только для зрителя */
     remoteEditorPointer?: { worldX: number; worldY: number; visible: boolean } | null
+    /** Число тредов комментариев по инстансам диаграммы (instanceId → count) */
+    commentCountsByInstance?: Record<string, number>
+    commentUnresolvedCountsByInstance?: Record<string, number>
+    /** Показывать бейджи комментариев на канвасе (тулбар «Настройки диаграммы») */
+    commentsVisible?: boolean
     /** Bumped when remote live instances are applied — force canvas resync */
     liveCanvasEpoch?: number
     /** Держатель lock: подавлять live во время жестов и слать pointer */
@@ -197,6 +203,9 @@ const props = withDefaults(
     diffStateByModelLinkId: undefined,
     diffStateByEdgeInstanceId: undefined,
     remoteEditorPointer: null,
+    commentCountsByInstance: () => ({}),
+    commentUnresolvedCountsByInstance: () => ({}),
+    commentsVisible: true,
     liveCanvasEpoch: 0,
     diagramLiveBroadcastEnabled: false,
     onRemotePointerTrack: undefined,
@@ -294,6 +303,7 @@ const emit = defineEmits<{
     oldHostModelNodeId?: string | null,
   ]
   liveCollaborationGesture: [phase: 'block' | 'unblock']
+  commentBadgeClick: [payload: { targetType: 'node' | 'edge'; instanceId: string }]
   viewportChange: [viewport: ViewportState]
 }>()
 const { t } = useI18n()
@@ -348,6 +358,63 @@ const remotePointerScreen = computed((): { left: string; top: string } | null =>
     left: `${pt.x - contRect.left}px`,
     top: `${pt.y - contRect.top}px`,
   }
+})
+
+/** Бейджи комментариев: якорь — правый верхний угол ноды / середина пути связи */
+type CommentBadgeVm = {
+  key: string
+  targetType: 'node' | 'edge'
+  instanceId: string
+  count: number
+  unresolved: number
+  left: number
+  top: number
+}
+
+const commentBadges = computed<CommentBadgeVm[]>(() => {
+  void viewportRev.value
+  const entries = Object.entries(props.commentCountsByInstance).filter(([, v]) => v > 0)
+  const r = renderer
+  const container = containerRef.value
+  if (!r || !container || !entries.length) return []
+  const contRect = container.getBoundingClientRect()
+  const badges: CommentBadgeVm[] = []
+  for (const [instanceId, rawCount] of entries) {
+    const count = Number(rawCount)
+    if (!Number.isFinite(count) || count <= 0) continue
+    const unresolved = Number(props.commentUnresolvedCountsByInstance[instanceId] ?? 0)
+    const papNodeId = `instance-${instanceId}`
+    const node = r.getNode(papNodeId)
+    if (node) {
+      const b = node.getBounds()
+      const pt = r.worldToScreen(b.x + b.width, b.y)
+      badges.push({
+        key: papNodeId,
+        targetType: 'node',
+        instanceId,
+        count,
+        unresolved,
+        left: pt.x - contRect.left,
+        top: pt.y - contRect.top,
+      })
+      continue
+    }
+    const path = r.getEdge(`edge-${instanceId}`)?.path
+    if (path && path.length) {
+      const mid = path[Math.floor((path.length - 1) / 2)]
+      const pt = r.worldToScreen(mid.x, mid.y)
+      badges.push({
+        key: `edge-${instanceId}`,
+        targetType: 'edge',
+        instanceId,
+        count,
+        unresolved,
+        left: pt.x - contRect.left,
+        top: pt.y - contRect.top,
+      })
+    }
+  }
+  return badges
 })
 
 function onContainerPointerMove(e: MouseEvent): void {
@@ -2772,6 +2839,9 @@ function initRenderer(
     if (!diagramId) return
     safePersistViewport(diagramId, r)
   })
+  r.on('render', () => {
+    viewportRev.value += 1
+  })
 
   // Permanently patch getElementAtPoint to check edges before nodes.
   // This fixes the issue where double-clicking on an edge that passes over a node
@@ -2887,6 +2957,36 @@ const zoomToSelection = (): void => {
     props.selectedModelNodeIds,
     getInstanceDimensions
   )
+}
+
+/** Центрировать и приблизить канвас на инстанс (нода по углам, связь по пути) */
+const focusInstance = (instanceId: string, targetType: 'node' | 'edge'): void => {
+  const r = renderer
+  if (!r) return
+  let rect: { x: number; y: number; width: number; height: number } | null = null
+  if (targetType === 'node') {
+    const node = r.getNode(`instance-${instanceId}`)
+    if (node) {
+      const b = node.getBounds()
+      rect = { x: b.x, y: b.y, width: b.width, height: b.height }
+    }
+  } else {
+    const path = r.getEdge(`edge-${instanceId}`)?.path
+    if (path && path.length) {
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      for (const p of path) {
+        if (p.x < minX) minX = p.x
+        if (p.y < minY) minY = p.y
+        if (p.x > maxX) maxX = p.x
+        if (p.y > maxY) maxY = p.y
+      }
+      rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    }
+  }
+  if (rect) viewportControls.zoomToRect(rect, 96)
 }
 
 const applyDiagramAttrsToCanvas = (
@@ -3426,6 +3526,7 @@ defineExpose({
   zoomOut,
   fitToView,
   zoomToSelection,
+  focusInstance,
   applyLayoutResult,
   resetView,
   getViewport,
@@ -3479,6 +3580,32 @@ defineExpose({
       :remote-pointer-style="remotePointerScreen"
       @palette-visible-change="setPaletteVisible"
     />
+
+    <div
+      v-if="activeDiagram && commentsVisible && commentBadges.length"
+      class="diagram-canvas__comment-badges"
+    >
+      <button
+        v-for="badge in commentBadges"
+        :key="badge.key"
+        type="button"
+        class="diagram-canvas__comment-badge"
+        :class="{ 'diagram-canvas__comment-badge--muted': badge.unresolved <= 0 }"
+        :style="{ left: `${badge.left}px`, top: `${badge.top}px` }"
+        :title="t('comments.badgeTitle', { count: badge.count })"
+        @pointerdown.stop
+        @mousedown.stop
+        @touchstart.stop
+        @dblclick.stop
+        @click.stop.prevent="emit('commentBadgeClick', { targetType: badge.targetType, instanceId: badge.instanceId })"
+      >
+        <UiIcon
+          class="diagram-canvas__comment-badge-icon"
+          name="forum"
+        />
+        <span class="diagram-canvas__comment-badge-count">{{ badge.count > 99 ? '99+' : badge.count }}</span>
+      </button>
+    </div>
 </div>
 </template>
 
@@ -3504,5 +3631,53 @@ defineExpose({
 
 .diagram-canvas--disabled {
   background: var(--surface-muted);
+}
+
+.diagram-canvas__comment-badges {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.diagram-canvas__comment-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 6px;
+  border: 1px solid #fff;
+  border-radius: 11px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.diagram-canvas__comment-badge:hover {
+  background: var(--primary-hover);
+}
+
+.diagram-canvas__comment-badge--muted,
+.diagram-canvas__comment-badge--muted:hover {
+  background: var(--text-subtle);
+}
+
+.diagram-canvas__comment-badge :deep(.ui-icon) {
+  width: 13px;
+  height: 13px;
+  opacity: 1;
+  filter: brightness(0) invert(1);
+}
+
+.diagram-canvas__comment-badge-count {
+  font-variant-numeric: tabular-nums;
 }
 </style>

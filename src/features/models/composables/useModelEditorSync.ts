@@ -29,6 +29,8 @@ export function useModelEditorSync(options: {
   reconcileMaterializedRows?: () => void
   onRemoteSnapshotApplied?: () => void
   onModelUnavailable?: (status: number) => void
+  /** События комментариев из топика модели (`type: 'diagram_comment'`) */
+  onDiagramCommentEvent?: (msg: Record<string, unknown>) => void
   granularSync?: UseModelLiveSyncOptions['granularSync']
   boundedSync?: UseModelLiveSyncOptions['boundedSync']
 }) {
@@ -93,6 +95,7 @@ export function useModelEditorSync(options: {
     isLockHolder: isDiagramLockHolder,
     isSpectator: diagramLockBlockedByOther,
     preserveLocalCanvasAfterLockLoss: diagramEditLock.preserveLocalCanvasAfterLockLoss,
+    onDiagramCommentEvent: options.onDiagramCommentEvent,
   })
 
   useModelLiveSync({

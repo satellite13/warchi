@@ -86,6 +86,8 @@ import LayoutPreviewModal from './components/LayoutPreviewModal.vue'
 import LinkReuseModal from './components/LinkReuseModal.vue'
 import ModelPropertiesPanel from './components/ModelPropertiesPanel.vue'
 import ModelTraceabilityPanel from './components/ModelTraceabilityPanel.vue'
+import CommentsPanel from '@/features/comments/components/CommentsPanel.vue'
+import { useComments } from '@/features/comments/useComments'
 import ModelImportWizard from './components/ModelImportWizard.vue'
 import ModelEditorLoadProgress from './components/ModelEditorLoadProgress.vue'
 import RemoteCascadeConflictNotice from './components/RemoteCascadeConflictNotice.vue'
@@ -424,6 +426,7 @@ const {
   rulersEnabled,
   lockAnchorsEnabled,
   attachToOutlineEnabled,
+  commentsVisible,
   selectionSyncEnabled,
   paletteVisible,
   autoLinkInGroups,
@@ -464,6 +467,123 @@ const isSelectedDiagramPersistedOnServer = computed(() => {
   const d = state.value.diagrams.find(diagram => diagram.id === id && !diagram._isDeleted)
   return !!d && !d._isNew
 })
+
+// --- Комментарии к диаграмме / элементам холста ---
+const commentsPanelRef = ref<InstanceType<typeof CommentsPanel> | null>(null)
+
+type CommentSelection = {
+  instanceId: string
+  targetType: 'node' | 'edge'
+  label: string
+}
+
+const commentSelection = computed<CommentSelection | null>(() => {
+  const el = selectedCanvasElementId.value
+  const diagram = activeDiagram.value
+  if (!el || !diagram || el.startsWith('instance-') === false && !el.startsWith('edge-')) return null
+
+  if (el.startsWith('instance-')) {
+    const instanceId = el.slice('instance-'.length)
+    const inst = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
+    if (!inst) return null
+    const node = state.value.nodes.find(n => n.id === inst.modelNodeId && !n._isDeleted)
+    return { instanceId, targetType: 'node', label: node?.name ?? t('comments.elementUnknown') }
+  }
+  const edgeId = el.slice('edge-'.length)
+  const edge = diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+  if (!edge) return null
+  const linkType = edge.modelLinkId
+    ? state.value.links.find(l => l.id === edge.modelLinkId && !l._isDeleted)?.linkTypeId
+    : null
+  const linkTypeName = linkType
+    ? state.value.linkTypes.find(lt => lt.id === linkType)?.name
+    : null
+  return {
+    instanceId: edgeId,
+    targetType: 'edge',
+    label: linkTypeName ?? t('comments.elementUnknown'),
+  }
+})
+
+/** Фокус на элементе: выделить на канвасе и центрировать/приблизить */
+function focusCommentInstance(instanceId: string, targetType: 'node' | 'edge'): void {
+  selectedCanvasElementId.value = (targetType === 'edge' ? 'edge-' : 'instance-') + instanceId
+  if (targetType === 'edge') {
+    selectedEdgeInstanceId.value = instanceId
+    selectedInstanceIds.value = []
+  } else {
+    selectedInstanceIds.value = [instanceId]
+    selectedEdgeInstanceId.value = null
+  }
+  void nextTick(() => {
+    diagramCanvasRef.value?.focusInstance(instanceId, targetType)
+  })
+}
+
+/**
+ * Экземпляр для бейджей комментариев на канвасе: тот же module-level стор,
+ * что и у панели (read-state не трогаем — isActive=false).
+ */
+const commentCountsForBadges = useComments({
+  diagramId: computed(() => activeDiagram.value?.id ?? null),
+  currentUserId: computed(() => currentUser.value?.id ?? null),
+  isActive: computed(() => false),
+})
+
+const commentBadgeCounts = computed<Record<string, number>>(
+  () => commentCountsForBadges.counts.value?.byInstance ?? {},
+)
+
+const commentBadgeUnresolvedCounts = computed<Record<string, number>>(
+  () => commentCountsForBadges.counts.value?.byInstanceUnresolved ?? {},
+)
+
+function refreshCommentBadgeCounts(): void {
+  void commentCountsForBadges.refreshCountsOnly()
+}
+
+watch(
+  () => activeDiagram.value?.id ?? null,
+  id => {
+    if (id) void commentCountsForBadges.load()
+  },
+  { immediate: true },
+)
+
+/** Глубокая ссылка с главной: ?tab=comments&commentId=…&instanceId=…&targetType=… */
+const pendingCommentFocus = (() => {
+  const q = new URLSearchParams(window.location.search)
+  if (q.get('tab') !== 'comments') return null
+  const commentId = q.get('commentId')
+  if (!commentId) return null
+  const instanceId = q.get('instanceId')
+  const targetType = q.get('targetType') === 'edge' ? 'edge' : 'node'
+  return { commentId, instanceId, targetType: targetType as 'node' | 'edge' }
+})()
+const commentFocusThreadId = ref<string | null>(pendingCommentFocus?.commentId ?? null)
+let commentFocusApplied = !pendingCommentFocus
+
+watch(
+  () => activeDiagram.value?.id ?? null,
+  diagramId => {
+    if (!diagramId || commentFocusApplied || !pendingCommentFocus) return
+    commentFocusApplied = true
+    if (!pendingCommentFocus.instanceId) return
+    const focus = () => focusCommentInstance(pendingCommentFocus.instanceId!, pendingCommentFocus.targetType)
+    void nextTick(() => {
+      focus()
+      // канвас мог ещё не отрендериться — повторяем через паузу
+      window.setTimeout(focus, 800)
+    })
+  },
+  { immediate: true },
+)
+
+/** Клик по бейджу: выделить элемент, показать его тред в панели комментариев */
+function onCommentBadgeClick(payload: { targetType: 'node' | 'edge'; instanceId: string }): void {
+  focusCommentInstance(payload.instanceId, payload.targetType)
+  activeRightTab.value = 'comments'
+}
 
 const {
   diagramLocksForTree,
@@ -507,6 +627,11 @@ const {
   isSelectedDiagramPersistedOnServer,
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
+  onDiagramCommentEvent: msg => {
+    // Бейджи обновляем всегда; открытая панель дополнительно перезагрузит треды
+    void commentCountsForBadges.refreshCountsOnly()
+    commentsPanelRef.value?.handleBroadcast(msg)
+  },
   ensureNotationRelationsAndRules,
   granularSync: {
     store: partialStore.store,
@@ -814,6 +939,9 @@ const rightPanelTabs = computed(() => {
   if (canShowTraceabilityTab.value) {
     tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'device_hub' })
   }
+  if (activeDiagram.value) {
+    tabs.push({ id: 'comments', label: t('comments.tab'), icon: 'forum' })
+  }
   if (canShowStyleTab.value) {
     if (selectedElementIsComposite.value) {
       tabs.push({
@@ -828,10 +956,22 @@ const rightPanelTabs = computed(() => {
   return tabs
 })
 
+// Таб из query (?tab=comments) применяется, как только он появится в списке
+const queryRequestedTab = new URLSearchParams(window.location.search).get('tab')
+let queryTabApplied = queryRequestedTab === null
+
 watch([rightPanelTabs, activeRightTab], () => {
-  if (!rightPanelTabs.value.some(tab => tab.id === activeRightTab.value)) {
-    activeRightTab.value = rightPanelTabs.value[0]?.id ?? 'properties'
+  if (
+    !queryTabApplied &&
+    queryRequestedTab &&
+    rightPanelTabs.value.some(tab => tab.id === queryRequestedTab)
+  ) {
+    queryTabApplied = true
+    activeRightTab.value = queryRequestedTab
+    return
   }
+  if (rightPanelTabs.value.some(tab => tab.id === activeRightTab.value)) return
+  activeRightTab.value = rightPanelTabs.value[0]?.id ?? 'properties'
 })
 watch(partialStore.generation, () => {
   granularSyncFailures.value = new Map()
@@ -2262,6 +2402,7 @@ const { handleToolbarAction } = useModelEditorToolbarActions({
   alignEnabled,
   rulersEnabled,
   attachToOutlineEnabled,
+  commentsVisible,
   autoLinkInGroups,
   lockAnchorsEnabled,
   diagramNavigationOnlyMode,
@@ -2673,6 +2814,10 @@ onBeforeUnmount(() => {
             :attach-to-outline-enabled="attachToOutlineEnabled"
             :remote-editor-pointer="remoteEditorPointer"
             :live-canvas-epoch="liveCanvasEpoch"
+            :comments-visible="commentsVisible"
+            :comment-counts-by-instance="commentBadgeCounts"
+            :comment-unresolved-counts-by-instance="commentBadgeUnresolvedCounts"
+            @comment-badge-click="onCommentBadgeClick"
             :diagram-live-broadcast-enabled="isDiagramLockHolder"
             :on-remote-pointer-track="onCanvasMouseMoveForPointer"
             :on-remote-pointer-leave="onCanvasMouseLeaveForPointer"
@@ -2820,6 +2965,18 @@ onBeforeUnmount(() => {
               @open-diagram="selectDiagram"
               @focus-node="handleTraceabilityFocusNode"
               @add-node-to-diagram="handleTraceabilityAddNodeToDiagram"
+            />
+            <CommentsPanel
+              v-if="activeRightTab === 'comments' && activeDiagram"
+              ref="commentsPanelRef"
+              :diagram-id="activeDiagram.id"
+              :can-edit="canInspectDiagramJson"
+              :current-user-id="currentUser?.id ?? null"
+              :selected-instance="commentSelection"
+              :is-active="activeRightTab === 'comments'"
+              :focus-thread-id="commentFocusThreadId"
+              @focus-instance="focusCommentInstance"
+              @threads-changed="refreshCommentBadgeCounts"
             />
             <NodeStylePanel
               v-if="activeRightTab === 'style' && canShowStyleTab"

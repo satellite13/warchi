@@ -12,11 +12,16 @@ const folderTestState = vi.hoisted(() => ({
   loadRoot: vi.fn(async () => {}),
   apiGet: vi.fn(),
   wizardOpen: vi.fn(async () => {}),
+  availableModels: {
+    value: [{ id: 'target-model', name: 'Target', version: '1.0.0' }],
+  } as { value: Array<{ id: string; name: string; version: string; accessPermission?: string }> },
+  targetModelId: { value: 'target-model' } as { value: string },
 }))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: Record<string, unknown>) =>
+      params ? `${key}:${JSON.stringify(params)}` : key,
     te: () => true,
   }),
 }))
@@ -28,9 +33,9 @@ vi.mock('@/composables/useApi', () => ({
 vi.mock('../composables/useDiagramCopyWizard', () => ({
   isDiagramNameVersionConflict: () => false,
   useDiagramCopyWizard: () => ({
-    availableModels: ref([{ id: 'target-model', name: 'Target', version: '1.0.0' }]),
+    availableModels: folderTestState.availableModels,
     availableNotations: ref([{ id: 'notation-1', name: 'Notation', version: '1.0.0' }]),
-    targetModelId: ref('target-model'),
+    targetModelId: folderTestState.targetModelId,
     targetNotationId: ref('notation-1'),
     diagramName: ref('Copy'),
     diagramVersion: ref('1.0.0'),
@@ -127,11 +132,52 @@ describe('DiagramCopyWizard folder picker', () => {
     folderTestState.rootError = null
     folderTestState.rootFailedPage = null
     folderTestState.rootLoading = false
+    folderTestState.availableModels.value = [{ id: 'target-model', name: 'Target', version: '1.0.0' }]
+    folderTestState.targetModelId.value = 'target-model'
     folderTestState.setModel.mockClear()
     folderTestState.loadRoot.mockClear()
     folderTestState.apiGet.mockReset()
     folderTestState.apiGet.mockImplementation(async (path: string) => catalogResult(path))
     folderTestState.wizardOpen.mockClear()
+  })
+
+  it('includes the current model and selects it by default', async () => {
+    folderTestState.apiGet.mockImplementation(async (path: string) => ({
+      success: true,
+      data: {
+        content: path.startsWith('/models')
+          ? [
+              { id: 'other-model', name: 'Other', version: '2.0.0' },
+              { id: 'source-model', name: 'Source', version: '1.0.0' },
+              { id: 'view-only', name: 'View', version: '1.0.0', accessPermission: 'VIEW' },
+            ]
+          : [{ id: 'notation-1', name: 'Notation', version: '1.0.0' }],
+      },
+    }))
+
+    mount(DiagramCopyWizard, {
+      props: {
+        open: true,
+        sourceModelId: 'source-model',
+        sourceDiagramId: 'source-diagram',
+      },
+      global: {
+        stubs: {
+          BaseModal: modalStub,
+          SearchableSelect: true,
+          DiagramCopyFolderPicker: true,
+        },
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(folderTestState.availableModels.value.map(model => model.id)).toEqual([
+        'source-model',
+        'other-model',
+      ])
+      expect(folderTestState.targetModelId.value).toBe('source-model')
+    })
+    expect(folderTestState.setModel).toHaveBeenCalledWith('source-model')
   })
 
   it('renders an accessible hierarchical folder choice', async () => {

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Diagram copy now supports the **same model** (default target), not only another model; the current model is listed first in the wizard.
+
+### Changed
+- SVG share dialog warning for “latest by name” now states that renaming the diagram breaks that link.
+
 ## [0.25.12] - 2026-09-04
 
 ### Changed

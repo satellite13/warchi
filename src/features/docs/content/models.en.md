@@ -99,7 +99,7 @@ Actions are toolbar buttons and per-row mini-buttons (there is no context menu):
 
 - create a folder, component, or diagram;
 - rename or delete an item;
-- copy a diagram into another model;
+- copy a diagram (into the same or another model);
 - see who holds the canvas lock.
 
 A panel-header toggle syncs selection between the tree and the canvas.

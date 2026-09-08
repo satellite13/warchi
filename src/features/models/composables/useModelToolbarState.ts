@@ -13,6 +13,7 @@ export type ModelToolbarState = {
   rulersEnabled: boolean
   lockAnchorsEnabled: boolean
   attachToOutlineEnabled: boolean
+  commentsVisible: boolean
   canvasSettingsVisible: boolean
   paletteVisible: boolean
   defaultEdgeType: EdgePathType
@@ -39,6 +40,7 @@ export function useModelToolbarState(
   const rulersEnabled = ref(true)
   const lockAnchorsEnabled = ref(true)
   const attachToOutlineEnabled = ref(true)
+  const commentsVisible = ref(true)
   const selectionSyncEnabled = ref(true)
   const canvasSettingsVisible = ref(true)
   const paletteVisible = ref(true)
@@ -57,6 +59,7 @@ export function useModelToolbarState(
       rulersEnabled,
       lockAnchorsEnabled,
       attachToOutlineEnabled,
+      commentsVisible,
       canvasSettingsVisible,
       paletteVisible,
       defaultEdgeType,
@@ -126,6 +129,13 @@ export function useModelToolbarState(
       active: autoLinkInGroups.value,
       disabled: !hasActiveDiagram.value,
     },
+    {
+      icon: 'forum',
+      event: 'toggle-comments',
+      title: t('toolbar.comments'),
+      active: commentsVisible.value,
+      disabled: !hasActiveDiagram.value,
+    },
   ])
 
   const defaultLinkTypeOptions = computed<
@@ -149,6 +159,7 @@ export function useModelToolbarState(
     rulersEnabled,
     lockAnchorsEnabled,
     attachToOutlineEnabled,
+    commentsVisible,
     selectionSyncEnabled,
     canvasSettingsVisible,
     paletteVisible,

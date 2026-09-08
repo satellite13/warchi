@@ -36,6 +36,7 @@ export interface UserInfo {
   lastName?: string | null;
   middleName?: string | null;
   position?: string | null;
+  oidcSub?: string | null;
 }
 
 /** Метаданные страницы в ответах Spring Data 3.3+ при сериализации Page через PagedModel. */

@@ -61,6 +61,8 @@ export function useDiagramRealtimeCollab(options: {
   isSpectator: Ref<boolean>
   /** После потери своего lock не принимать чужой эфир, пока пользователь не перезагрузит холст */
   preserveLocalCanvasAfterLockLoss?: Ref<boolean>
+  /** События комментариев (`type: 'diagram_comment'`) из того же топика модели */
+  onDiagramCommentEvent?: (msg: Record<string, unknown>) => void
 }): {
   remoteEditorPointer: Ref<RemoteEditorPointer | null>
   diagramSpectators: Ref<DiagramSpectatorEntry[]>
@@ -261,6 +263,11 @@ export function useDiagramRealtimeCollab(options: {
     const type = msg.type
     const diagramId = typeof msg.diagramId === "string" ? msg.diagramId : null
     const self = options.currentUserId.value
+
+    if (type === "diagram_comment") {
+      options.onDiagramCommentEvent?.(msg)
+      return
+    }
 
     if (type === "diagram_pointer") {
       if (!options.isSpectator.value) {

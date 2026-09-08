@@ -250,9 +250,10 @@ describe('useDashboard', () => {
       useDashboard()
       await callLoadAll()
 
-      expect(mockApiGet).toHaveBeenCalledTimes(7)
+      expect(mockApiGet).toHaveBeenCalledTimes(8)
       expect(mockApiGet).toHaveBeenCalledWith('/dashboard/stats')
       expect(mockApiGet).toHaveBeenCalledWith('/dashboard/recent?limit=5')
+      expect(mockApiGet).toHaveBeenCalledWith('/dashboard/recent-comments?limit=5')
       expect(mockApiGet).toHaveBeenCalledWith('/models?page=0&size=50')
       expect(mockApiGet).toHaveBeenCalledWith('/notations?page=0&size=50')
       expect(mockApiGet).toHaveBeenCalledWith('/node-types?page=0&size=50')
@@ -289,7 +290,8 @@ describe('useDashboard', () => {
         modelName: 'Enterprise',
       })
       expect(recentModels.value.map((m) => m.id)).toEqual(['m1'])
-      expect(mockApiGet).toHaveBeenCalledTimes(2)
+      expect(mockApiGet).toHaveBeenCalledTimes(3)
+      expect(mockApiGet).toHaveBeenCalledWith('/dashboard/recent-comments?limit=5')
       expect(mockApiGet).not.toHaveBeenCalledWith(expect.stringMatching(/^\/diagrams/))
     })
   })

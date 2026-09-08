@@ -102,6 +102,13 @@ export function useDiagramViewportControls(options: {
     options.getInteraction()?.navigation.fitToView(50)
   }
 
+  const zoomToRect = (
+    rect: { x: number; y: number; width: number; height: number },
+    padding = 64
+  ): void => {
+    options.getInteraction()?.navigation.zoomToRect(rect, padding)
+  }
+
   const zoomToSelection = (
     instances: Array<{
       modelNodeId: string
@@ -233,6 +240,7 @@ export function useDiagramViewportControls(options: {
     zoomOut,
     resetView,
     fitToView,
+    zoomToRect,
     zoomToSelection,
     getViewport,
     setViewport,

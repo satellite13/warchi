@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Favorite diagrams: toggle favorites in the editor and model tree; favorites lists on Home and Profile with pagination.
+- Diagram comments in the model editor: comment threads with mentions, reactions, read-state, and file attachments.
+- Comments UX: scrollable tabs, unread badge states, and deep links to comments.
+- Recent comments block on Home also includes diagrams recently edited by the user.
+
+### Fixed
+- Mention search when composing comments.
+
 ## [0.25.14] - 2026-09-08
 
 ### Added

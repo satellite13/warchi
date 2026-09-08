@@ -22,6 +22,7 @@ export function useModelEditorToolbarActions(options: {
     resourceId: string
     action: PermissionAction
   }) => Promise<boolean>
+  commentsVisible: Ref<boolean>
   diagramCanvasRef: Ref<InstanceType<typeof ModelDiagramCanvas> | null>
   diagramHistoryBatcher: { flush: () => void }
   diagramNavigationOnlyMode: Ref<boolean>
@@ -169,6 +170,10 @@ export function useModelEditorToolbarActions(options: {
       case 'toggle-lock-anchors': {
         const next = options.diagramCanvasRef.value?.toggleLockAnchors()
         if (typeof next === 'boolean') options.lockAnchorsEnabled.value = next
+        break
+      }
+      case 'toggle-comments': {
+        options.commentsVisible.value = !options.commentsVisible.value
         break
       }
       case 'toggle-navigation-mode':

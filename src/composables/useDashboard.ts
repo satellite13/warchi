@@ -22,6 +22,23 @@ export interface DashboardRecentDiagram {
   updatedAt: string | null
 }
 
+export interface RecentCommentItem {
+  commentId: string
+  threadId: string
+  isReply: boolean
+  diagramId: string
+  diagramName: string
+  modelId: string
+  modelName: string
+  targetType: 'diagram' | 'node' | 'edge'
+  instanceId: string | null
+  elementName: string | null
+  bodyMd: string
+  createdAt: string | null
+  authorId: string
+  authorName: string
+}
+
 interface DashboardStatsApiResponse {
   models: number
   notations: number
@@ -79,6 +96,7 @@ export function useDashboard() {
   const nodeTypes = ref<NodeTypeResponse[]>([])
   const linkTypes = ref<LinkTypeResponse[]>([])
   const diagrams = ref<DashboardRecentDiagram[]>([])
+  const recentComments = ref<RecentCommentItem[]>([])
   const statsOverride = ref<DashboardStats | null>(null)
 
   const stats = computed<DashboardStats>(() => {
@@ -111,10 +129,15 @@ export function useDashboard() {
   const loadAll = async () => {
     isLoading.value = true
 
-    const [dashStatsRes, dashRecentRes] = await Promise.all([
+    const [dashStatsRes, dashRecentRes, recentCommentsRes] = await Promise.all([
       apiGet<DashboardStatsApiResponse>('/dashboard/stats'),
       apiGet<DashboardRecentApiResponse>('/dashboard/recent?limit=5'),
+      apiGet<RecentCommentItem[]>('/dashboard/recent-comments?limit=5'),
     ])
+
+    if (recentCommentsRes.success && Array.isArray(recentCommentsRes.data)) {
+      recentComments.value = recentCommentsRes.data
+    }
 
     if (
       dashStatsRes.success &&
@@ -176,5 +199,6 @@ export function useDashboard() {
     recentModels,
     recentNotations,
     recentDiagrams,
+    recentComments,
   }
 }

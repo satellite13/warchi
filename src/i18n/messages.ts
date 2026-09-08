@@ -7,6 +7,7 @@ import { diagramMessages } from './locales/diagram'
 import { homeMessages } from './locales/home'
 import { docsMessages } from './locales/docs'
 import { validationScriptsMessages } from './locales/validationScripts'
+import { commentsMessages } from './locales/comments'
 
 type DeepRecord = Record<string, unknown>
 
@@ -38,6 +39,7 @@ const mergedMessages = deepMerge(
   homeMessages,
   docsMessages,
   validationScriptsMessages,
+  commentsMessages,
 ) as typeof commonMessages &
   typeof authMessages &
   typeof modelsMessages &
@@ -46,7 +48,8 @@ const mergedMessages = deepMerge(
   typeof diagramMessages &
   typeof homeMessages &
   typeof docsMessages &
-  typeof validationScriptsMessages
+  typeof validationScriptsMessages &
+  typeof commentsMessages
 
 type SupportedMessages = {
   ru: (typeof mergedMessages)['ru']

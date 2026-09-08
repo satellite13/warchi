@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.14] - 2026-09-08
+
 ### Added
 - Diagram copy now supports the **same model** (default target), not only another model; the current model is listed first in the wizard.
 

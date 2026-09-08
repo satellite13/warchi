@@ -61,8 +61,9 @@ export const homeMessages = {
       title: 'Ссылка на картинку',
       hint: 'Ссылка ведёт на превью диаграммы в виде SVG. Кто знает ссылку — может открыть картинку.',
       versionThis: 'Эта версия диаграммы (зафиксировать)',
-      versionLatest: 'Всегда последняя версия по имени',
-      latestWarning: 'Ссылка будет показывать последнюю сохранённую версию диаграммы с этим именем.',
+      versionLatest: 'Всегда последняя версия',
+      latestWarning:
+        'Ссылка привязана к этой диаграмме и будет показывать последнюю сохранённую версию — в том числе после переименования и создания новой версии.',
       getLink: 'Получить ссылку',
       copyLink: 'Скопировать ссылку',
       copied: 'Скопировано',
@@ -134,8 +135,9 @@ export const homeMessages = {
       title: 'Share as image link',
       hint: 'The link opens the diagram preview as SVG. Anyone with the link can view the image.',
       versionThis: 'This diagram version (pinned)',
-      versionLatest: 'Always latest version by name',
-      latestWarning: 'The link will show the latest saved version of the diagram with this name.',
+      versionLatest: 'Always the latest version',
+      latestWarning:
+        'The link stays bound to this diagram and shows the latest saved version — including after a rename or a new version.',
       getLink: 'Get link',
       copyLink: 'Copy link',
       copied: 'Copied',

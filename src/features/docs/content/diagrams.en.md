@@ -214,7 +214,7 @@ You can get a link to the diagram preview as SVG. Use it to share with colleague
 2. Click **Share as image link** on the toolbar.
 3. In the dialog, choose the link type:
    - **This diagram version** — the link will always show the current snapshot (good for a fixed view).
-   - **Always latest version by name** — the link will show the latest saved version of the diagram with this name (the image updates after you save).
+   - **Always the latest version** — the link stays bound to this diagram and shows the latest saved version, even if you rename it or create a new version (the image updates after you save).
 4. Click **Get link** — the current view is uploaded as preview and the link is generated.
 5. Click **Copy link** or **Open link**. The dialog stays open after copy.
 

@@ -63,7 +63,7 @@ describe('DiagramImageShareModal', () => {
     })
   })
 
-  it('regression: latest-by-name link keeps absolute API url (no double /api/v1 prefix)', async () => {
+  it('regression: latest-by-id link keeps absolute API url (no double /api/v1 prefix)', async () => {
     const wrapper = mountModal()
 
     const latestRadio = wrapper.find('input[type="radio"][value="latest"]')
@@ -73,8 +73,7 @@ describe('DiagramImageShareModal', () => {
     await flushPromises()
 
     expect(createDiagramShareLink).toHaveBeenCalledWith({
-      modelId: 'model-1',
-      diagramName: 'Main',
+      diagramId: 'diagram-1',
       latest: true,
     })
 
@@ -129,8 +128,26 @@ describe('DiagramImageShareModal', () => {
     await wrapper.find('.diagram-share-modal__btn--primary').trigger('click')
     await flushPromises()
 
+    expect(createDiagramShareLink).toHaveBeenCalledWith({
+      diagramId: 'diagram-1',
+      latest: true,
+    })
     expect(onUploadPreview).toHaveBeenCalledWith('latest-diagram-9')
     expect(waitForPublicShareUrl).toHaveBeenCalledWith(ABSOLUTE_SHARE_URL)
+    expect(wrapper.find('.diagram-share-modal__url').text()).toBe(ABSOLUTE_SHARE_URL)
+  })
+
+  it('can request latest share without diagram name', async () => {
+    const wrapper = mountModal({ diagramName: '', modelId: null })
+
+    await wrapper.find('input[type="radio"][value="latest"]').setValue(true)
+    await wrapper.find('.diagram-share-modal__btn--primary').trigger('click')
+    await flushPromises()
+
+    expect(createDiagramShareLink).toHaveBeenCalledWith({
+      diagramId: 'diagram-1',
+      latest: true,
+    })
     expect(wrapper.find('.diagram-share-modal__url').text()).toBe(ABSOLUTE_SHARE_URL)
   })
 

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.16] - 2026-09-08
+
+### Fixed
+- Selecting a palette container, note, or edge anchor no longer shows “Request body is malformed or unreadable” in Properties.
+
 ## [0.25.15] - 2026-09-08
 
 ### Added

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.13] - 2026-09-08
+
+### Changed
+- Latest diagram image share links stay bound to the diagram after a rename or a new version, instead of looking it up by name.
+
 ## [0.25.12] - 2026-09-04
 
 ### Changed

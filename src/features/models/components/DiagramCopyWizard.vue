@@ -51,7 +51,13 @@ const folderTree = useLazyFolderTree()
 const modelOptions = computed(() =>
   wizard.availableModels.value.map(model => ({
     id: model.id,
-    label: `${model.name} (${model.version})`,
+    label:
+      model.id === props.sourceModelId
+        ? t('models.diagramCopy.currentModelOption', {
+            name: model.name,
+            version: model.version,
+          })
+        : `${model.name} (${model.version})`,
   }))
 )
 
@@ -114,9 +120,11 @@ async function loadCatalog(generation: number): Promise<boolean> {
     if (!modelsResult.success) throw new Error(modelsResult.error.message)
     if (!notationsResult.success) throw new Error(notationsResult.error.message)
 
-    wizard.availableModels.value = paginatedContent(modelsResult.data).filter(
-      model => model.id !== props.sourceModelId && isEditableModel(model)
-    )
+    const editableModels = paginatedContent(modelsResult.data).filter(isEditableModel)
+    const sourceModel = editableModels.find(model => model.id === props.sourceModelId)
+    const otherModels = editableModels.filter(model => model.id !== props.sourceModelId)
+    // Prefer the current model first so same-project diagram copy is the default path.
+    wizard.availableModels.value = sourceModel ? [sourceModel, ...otherModels] : otherModels
     wizard.availableNotations.value = paginatedContent(notationsResult.data)
     return true
   } catch (error) {
@@ -142,9 +150,11 @@ async function initialize(): Promise<void> {
   if (!(await loadCatalog(generation)) || !isCurrentInitialize(generation)) return
   if (!props.sourceDiagramId) return
 
-  const firstModel = wizard.availableModels.value[0]
+  const preferredTarget =
+    wizard.availableModels.value.find(model => model.id === props.sourceModelId) ??
+    wizard.availableModels.value[0]
   if (!isCurrentInitialize(generation)) return
-  wizard.targetModelId.value = firstModel?.id ?? ''
+  wizard.targetModelId.value = preferredTarget?.id ?? ''
   wizard.targetNotationId.value = pickDefaultTargetNotationId(
     wizard.availableNotations.value,
     props.sourceNotationId

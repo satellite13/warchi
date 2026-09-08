@@ -239,10 +239,13 @@ watch(
 
       <template v-else-if="preview">
         <section v-if="step === 1" class="validation-merge-wizard__panel">
+          <p class="validation-merge-wizard__hint">
+            {{ t('models.validationReportPropertiesHint') }}
+          </p>
           <table v-if="differingRows.length > 0" class="validation-merge-wizard__table">
             <thead>
               <tr>
-                <th />
+                <th>{{ t('models.validationReportPropertyColumn') }}</th>
                 <th>{{ t('models.validationReportKeepColumn') }}</th>
                 <th>{{ t('models.validationReportDropColumn') }}</th>
                 <th>{{ t('models.validationReportResultColumn') }}</th>
@@ -256,11 +259,11 @@ watch(
                 <td>
                   <label class="validation-merge-wizard__choice">
                     <input v-model="row.choice" type="radio" :name="`diff-${row.key}`" value="keep" />
-                    {{ t('models.validationReportKeepColumn') }}
+                    {{ t('models.validationReportUseKeepValue') }}
                   </label>
                   <label class="validation-merge-wizard__choice">
                     <input v-model="row.choice" type="radio" :name="`diff-${row.key}`" value="drop" />
-                    {{ t('models.validationReportDropColumn') }}
+                    {{ t('models.validationReportUseDropValue') }}
                   </label>
                 </td>
               </tr>
@@ -272,7 +275,7 @@ watch(
             <table class="validation-merge-wizard__table">
               <thead>
                 <tr>
-                  <th />
+                  <th>{{ t('models.validationReportPropertyColumn') }}</th>
                   <th>{{ t('models.validationReportKeepColumn') }}</th>
                   <th>{{ t('models.validationReportDropColumn') }}</th>
                   <th>{{ t('models.validationReportResultColumn') }}</th>
@@ -283,7 +286,7 @@ watch(
                   <th scope="row">{{ row.key }}</th>
                   <td>{{ formatValue(row.keepValue) }}</td>
                   <td>{{ formatValue(row.dropValue) }}</td>
-                  <td>{{ t('models.validationReportKeepColumn') }}</td>
+                  <td>{{ t('models.validationReportUseKeepValue') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -467,9 +470,14 @@ watch(
 
 .validation-merge-wizard__delete p,
 .validation-merge-wizard__reparent,
+.validation-merge-wizard__hint,
 .validation-merge-wizard__panel > p {
   margin: 0;
   font-size: 13px;
+}
+
+.validation-merge-wizard__hint {
+  color: var(--text-muted);
 }
 
 .validation-merge-wizard__transfer {

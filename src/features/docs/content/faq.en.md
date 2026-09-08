@@ -50,7 +50,7 @@ In the model editor header: **Relation matrix** and **Import Open Exchange (XML)
 
 ### How do I move a model or copy a diagram?
 
-Export a model ZIP from the card or editor header and import it from the model list (creates a **new** model; a notation with the same name and version may be reused). Copying a diagram into another model is an editor action; wiki and files are not copied in v1. See [Models](/docs/models) and [Diagrams](/docs/diagrams).
+Export a model ZIP from the card or editor header and import it from the model list (creates a **new** model; a notation with the same name and version may be reused). Copying a diagram into the same or another model is an editor action; wiki and files are not copied in v1. See [Models](/docs/models) and [Diagrams](/docs/diagrams).
 
 ### How do I connect an agent (MCP)?
 

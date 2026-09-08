@@ -4,12 +4,25 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.14] - 2026-09-08
+
+### Added
+- Diagram copy now supports the **same model** (default target), not only another model; the current model is listed first in the wizard.
+
+## [0.25.13] - 2026-09-08
+
+### Changed
+- Latest diagram image share links stay bound to the diagram after a rename or a new version, instead of looking it up by name.
+
 ## [0.25.12] - 2026-09-08
 
 ### Added
 - Diagram comments in the model editor: comment threads with mentions, reactions, read-state, and file attachments.
 - Comments UX: scrollable tabs, unread badge states, and deep links to comments.
 - Recent comments block on Home also includes diagrams recently edited by the user.
+
+### Changed
+- Duplicate groups in model validation now mark the remaining copy and say “Merge into remaining” on the others, instead of repeating keep/merge on every row.
 
 ### Fixed
 - Mention search when composing comments.
@@ -18,6 +31,9 @@ All notable changes to this project are documented in this file.
 
 ### Added
 - Favorite diagrams: toggle favorites in the editor and model tree; favorites lists on Home and Profile with pagination.
+
+### Changed
+- The duplicate-merge wizard now labels property columns as the kept and removed copies and asks which value to keep.
 
 ## [0.25.10] - 2026-09-02
 

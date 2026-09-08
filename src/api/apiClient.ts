@@ -581,7 +581,9 @@ export function uploadDiagramSvg(diagramId: string, svg: string): Promise<ApiRes
 }
 
 export type DiagramShareLinkPayload =
-  { diagramId: string } | { modelId: string; diagramName: string; latest: true }
+  | { diagramId: string }
+  | { diagramId: string; latest: true }
+  | { modelId: string; diagramName: string; latest: true }
 
 export type DiagramShareLinkResponse = { url: string; token: string; diagramId: string }
 

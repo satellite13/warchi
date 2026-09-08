@@ -129,6 +129,9 @@ function onMerge(dropId: string): void {
       <span class="validation-duplicate-group__badge">
         {{ t('models.validationReportCopies', { count }) }}
       </span>
+      <p class="validation-duplicate-group__hint">
+        {{ t('models.validationReportGroupHint') }}
+      </p>
     </header>
 
     <ul class="validation-duplicate-group__members">
@@ -139,6 +142,7 @@ function onMerge(dropId: string): void {
       >
         <details
           class="validation-duplicate-group__details"
+          :class="{ 'validation-duplicate-group__details--keep': member.id === keepId }"
           @toggle="onDetailsToggle(member.id, $event)"
         >
           <summary class="validation-duplicate-group__summary">
@@ -148,8 +152,8 @@ function onMerge(dropId: string): void {
                 type="radio"
                 :name="radioGroupName"
                 :value="member.id"
+                :aria-label="t('models.validationReportKeepAria')"
               />
-              {{ t('models.validationReportKeep') }}
             </label>
 
             <button
@@ -168,11 +172,17 @@ function onMerge(dropId: string): void {
               v-if="member.parentName"
               class="validation-duplicate-group__parent"
             >
-              {{ member.parentName }}
+              {{ t('models.validationReportInFolder', { name: member.parentName }) }}
             </span>
 
+            <span
+              v-if="member.id === keepId"
+              class="validation-duplicate-group__kept"
+            >
+              {{ t('models.validationReportKeep') }}
+            </span>
             <button
-              v-if="member.id !== keepId"
+              v-else
               type="button"
               class="validation-duplicate-group__merge"
               @click.stop="onMerge(member.id)"
@@ -227,6 +237,13 @@ function onMerge(dropId: string): void {
   flex-wrap: wrap;
 }
 
+.validation-duplicate-group__hint {
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .validation-duplicate-group__title {
   margin: 0;
   font-size: 14px;
@@ -258,6 +275,11 @@ function onMerge(dropId: string): void {
   padding: 8px 10px;
 }
 
+.validation-duplicate-group__details--keep {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
 .validation-duplicate-group__summary {
   display: flex;
   align-items: center;
@@ -274,10 +296,14 @@ function onMerge(dropId: string): void {
 .validation-duplicate-group__keep {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
   cursor: pointer;
+}
+
+.validation-duplicate-group__kept {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .validation-duplicate-group__name {

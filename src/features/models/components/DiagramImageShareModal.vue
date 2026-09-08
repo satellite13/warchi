@@ -13,7 +13,7 @@ const props = defineProps<{
   modelId: string | null
   /**
    * Upload current canvas preview for the resolved target diagram id
-   * (pinned version or latest-by-name). Return false to abort.
+   * (pinned version or current series head). Return false to abort.
    */
   onUploadPreview?: (diagramId: string) => Promise<boolean | void>
 }>()
@@ -31,11 +31,7 @@ const shareUrl = ref<string | null>(null)
 const copied = ref(false)
 let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const canGetLink = computed(
-  () =>
-    (shareMode.value === 'version' && props.diagramId) ||
-    (shareMode.value === 'latest' && props.modelId && props.diagramName)
-)
+const canGetLink = computed(() => !!props.diagramId)
 
 const clearCopiedFeedback = () => {
   copied.value = false
@@ -46,25 +42,22 @@ const clearCopiedFeedback = () => {
 }
 
 const getShareLink = async () => {
-  if (!canGetLink.value) return
+  if (!canGetLink.value || !props.diagramId) return
   isLoading.value = true
   errorMessage.value = null
   shareUrl.value = null
   clearCopiedFeedback()
   try {
     const payload =
-      shareMode.value === 'version' && props.diagramId
-        ? { diagramId: props.diagramId }
-        : props.modelId && props.diagramName
-          ? { modelId: props.modelId, diagramName: props.diagramName, latest: true as const }
-          : null
-    if (!payload) return
+      shareMode.value === 'latest'
+        ? { diagramId: props.diagramId, latest: true as const }
+        : { diagramId: props.diagramId }
     const result = await createDiagramShareLink(payload)
     if (!result.success) {
       errorMessage.value = result.error.message
       return
     }
-    // Upload to the diagram id the public URL actually resolves to (important for latest-by-name).
+    // Upload to the diagram id the public URL actually resolves to (important for latest-by-id).
     if (props.onUploadPreview) {
       const ok = await props.onUploadPreview(result.data.diagramId)
       if (ok === false) {

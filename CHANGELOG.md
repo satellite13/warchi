@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.15] - 2026-09-08
+
 ### Added
 - Favorite diagrams: toggle favorites in the editor and model tree; favorites lists on Home and Profile with pagination.
 - Diagram comments in the model editor: comment threads with mentions, reactions, read-state, and file attachments.

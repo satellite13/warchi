@@ -1,6 +1,7 @@
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 import type { NodeResponse } from '@/types/api'
 import type { ModelEditorState, ModelPartialRequestGuard } from '../types'
+import { isDiagramOnlyNodeModelNodeId } from '../utils/diagramOnlyInstances'
 import { resolveModelNodes } from './modelScopedApi'
 
 export function useModelSelection(options: {
@@ -43,6 +44,10 @@ export function useModelSelection(options: {
   }
 
   const ensureNodeMaterialized = async (id: string): Promise<boolean> => {
+    if (isDiagramOnlyNodeModelNodeId(id)) {
+      selectedNodeError.value = null
+      return true
+    }
     const existing = options.state.value.nodes.find(node => node.id === id && !node._isDeleted)
     if (existing) {
       selectedNodeError.value = null
@@ -115,7 +120,11 @@ export function useModelSelection(options: {
     ([id]) => {
       cancelNodeMaterialization()
       selectedNodeError.value = null
-      if (id && !options.state.value.nodes.some(node => node.id === id && !node._isDeleted)) {
+      if (
+        id &&
+        !isDiagramOnlyNodeModelNodeId(id) &&
+        !options.state.value.nodes.some(node => node.id === id && !node._isDeleted)
+      ) {
         void ensureNodeMaterialized(id)
       }
     }

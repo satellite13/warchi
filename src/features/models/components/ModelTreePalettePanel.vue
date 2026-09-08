@@ -13,6 +13,7 @@ import type {
   TreeParentScope,
 } from "../types"
 import { useTreeSearch } from "../composables"
+import { useFavorites } from "@/composables/useFavorites"
 import LazyIconImg from "@/components/forms/LazyIconImg.vue"
 import SearchInput from "@/components/forms/SearchInput.vue"
 import EmptyState from "@/components/list/EmptyState.vue"
@@ -72,6 +73,8 @@ function isDiagramLockedByCurrentUser(diagramId: string): boolean {
   if (!lock || !props.currentUserId) return false
   return lock.lockedByUserId === props.currentUserId
 }
+
+const { isFavorite, toggleFavorite } = useFavorites()
 
 const emit = defineEmits<{
   selectNode: [nodeId: string]
@@ -958,6 +961,20 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
             </div>
             <AppTooltip
               v-if="renamingDiagramId !== row.diagram.id"
+              :text="isFavorite(row.diagram.id) ? t('common.removeFromFavorites') : t('common.addToFavorites')"
+              placement="bottom"
+            >
+              <button
+                type="button"
+                class="btn--icon diagram-row__favorite-btn"
+                :class="{ 'diagram-row__favorite-btn--active': isFavorite(row.diagram.id) }"
+                @click.stop="toggleFavorite(row.diagram.id)"
+              >
+                <UiIcon :name="isFavorite(row.diagram.id) ? 'favorite' : 'favorite_border'" />
+              </button>
+            </AppTooltip>
+            <AppTooltip
+              v-if="renamingDiagramId !== row.diagram.id"
               :text="t('models.renameDiagram')"
               placement="bottom"
             >
@@ -1383,7 +1400,8 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 
 .diagram-row .btn--icon--danger,
 .diagram-row .diagram-row__edit-btn,
-.diagram-row .diagram-row__copy-btn {
+.diagram-row .diagram-row__copy-btn,
+.diagram-row .diagram-row__favorite-btn {
   display: none;
   flex-shrink: 0;
 }
@@ -1391,9 +1409,15 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
 .diagram-row--active .btn--icon--danger,
 .diagram-row--active .diagram-row__edit-btn,
 .diagram-row--active .diagram-row__copy-btn,
+.diagram-row--active .diagram-row__favorite-btn,
 .diagram-row:hover .btn--icon--danger,
 .diagram-row:hover .diagram-row__edit-btn,
-.diagram-row:hover .diagram-row__copy-btn {
+.diagram-row:hover .diagram-row__copy-btn,
+.diagram-row:hover .diagram-row__favorite-btn {
+  display: flex;
+}
+
+.diagram-row .diagram-row__favorite-btn--active {
   display: flex;
 }
 

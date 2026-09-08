@@ -6,6 +6,7 @@ import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShell.vue"
 import IconToolbar, { type ToolbarButton } from '@/components/layout/IconToolbar.vue'
 import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
+import { useFavorites } from '@/composables/useFavorites'
 import type { EdgePathType } from "../composables/useModelToolbarState"
 
 import type { EditorDiagram } from '../types'
@@ -107,6 +108,10 @@ const props = withDefaults(
 
 const router = useRouter()
 const { t } = useI18n()
+const { isFavorite, toggleFavorite } = useFavorites()
+const isDiagramFavorite = computed(() =>
+  props.selectedDiagramId ? isFavorite(props.selectedDiagramId) : false
+)
 const emit = defineEmits<{
   action: [event: string]
   renameModel: [name: string]
@@ -496,6 +501,16 @@ function spectatorInitials(name: string): string {
             </option>
           </select>
           <button
+            v-if="selectedDiagramId"
+            type="button"
+            class="model-header__baseline-btn"
+            :class="{ 'model-header__favorite-btn--active': isDiagramFavorite }"
+            :title="isDiagramFavorite ? t('common.removeFromFavorites') : t('common.addToFavorites')"
+            @click="toggleFavorite(selectedDiagramId)"
+          >
+            <UiIcon :name="isDiagramFavorite ? 'favorite' : 'favorite_border'" />
+          </button>
+          <button
             type="button"
             class="model-header__baseline-btn"
             :title="t('models.createBaseline')"
@@ -746,6 +761,11 @@ function spectatorInitials(name: string): string {
 .model-header__baseline-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.model-header__favorite-btn--active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
 }
 
 .model-header__baseline-error {

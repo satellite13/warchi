@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import AppHeader from "../components/layout/AppHeader.vue"
@@ -7,6 +7,7 @@ import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
 import { useDashboard } from "../composables/useDashboard"
+import { useFavorites, type FavoriteDiagramItem } from "../composables/useFavorites"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import CompactEntityRow from "../components/list/CompactEntityRow.vue"
@@ -26,6 +27,23 @@ const changelogRaw = computed(() => {
 })
 const { currentUser } = useAuth()
 const { isLoading, stats, recentModels, recentNotations, recentDiagrams } = useDashboard()
+const { favoriteIds, loadFavoriteDiagrams } = useFavorites()
+const favoriteDiagrams = ref<FavoriteDiagramItem[]>([])
+const isFavoritesLoading = ref(true)
+
+const refreshFavoriteDiagrams = async (): Promise<void> => {
+  const page = await loadFavoriteDiagrams(0, 5)
+  favoriteDiagrams.value = page.items
+  isFavoritesLoading.value = false
+}
+
+watch(
+  favoriteIds,
+  () => {
+    void refreshFavoriteDiagrams()
+  },
+  { immediate: true }
+)
 const appVersion = import.meta.env.APP_VERSION ?? "dev"
 
 const notationPackageInputRef = ref<HTMLInputElement | null>(null)
@@ -347,6 +365,33 @@ const releaseNotes = computed(() => {
                   </span>
                   <span class="action-btn__label">{{ action.label }}</span>
                 </button>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section__header">
+                <UiIcon name="favorite" class="section__icon" />
+                <h2 class="section__title">{{ t("home.sectionFavorites") }}</h2>
+              </div>
+              <div v-if="isFavoritesLoading" class="skeleton-list">
+                <div v-for="i in 3" :key="i" class="skeleton-item" />
+              </div>
+              <EmptyState
+                v-else-if="favoriteDiagrams.length === 0"
+                variant="compact"
+                icon="favorite_border"
+                :title="t('home.sectionNoFavorites')"
+              />
+              <div v-else class="entity-list">
+                <CompactEntityRow
+                  v-for="item in favoriteDiagrams"
+                  :key="item.id"
+                  :id="item.id"
+                  :name="item.name"
+                  :version="item.version"
+                  :meta="diagramMeta(item)"
+                  @click="openDiagram(item)"
+                />
               </div>
             </section>
 

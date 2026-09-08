@@ -51,11 +51,11 @@ Example scenario:
 4. Apply changes in the new version.
 5. If the result is good, continue in the new version; otherwise, return to the previous version as a stable reference.
 
-### Copying a Diagram to Another Model
+### Copying a Diagram
 
-The **Copy diagram to another model** action (tree row and editor) opens a wizard: choose an existing target model, the notation for the new diagram, and optionally change its name, version, and folder. If preview returns a known issue, the wizard shows a localized blocker or warning.
+The **Copy diagram** action (tree row and editor) opens a wizard: the **current model** is selected by default, or pick another; choose the notation for the new diagram, and optionally change its name, version, and folder. If preview returns a known issue, the wizard shows a localized blocker or warning.
 
-The wizard first matches elements against the target model: nodes by `stableId`, then by exact name and type; links by `stableId`, then by type and endpoints. **Match** reuses an existing node/link in the target model — it does not map a notation component. If there is no candidate, the wizard defaults to **Create**. Ambiguous matches (several nodes with the same name and type) stay unset so you can match, create, or skip them. The user chooses the target diagram notation. Changing the target model recalculates matches from scratch.
+The wizard first matches elements against the target model: nodes by `stableId`, then by exact name and type; links by `stableId`, then by type and endpoints. **Match** reuses an existing node/link in the target model — it does not map a notation component. In the same model this is useful for a second view of the same entities. If there is no candidate, the wizard defaults to **Create**. Ambiguous matches (several nodes with the same name and type) stay unset so you can match, create, or skip them. The user chooses the target diagram notation. Changing the target model recalculates matches from scratch.
 
 In v1, documents and files are not copied.
 

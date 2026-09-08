@@ -14,7 +14,7 @@
 - **Scripts** — JavaScript on the open diagram: report, layout, and place existing model nodes/links (the model tree is not loaded or changed)
 - **Custom properties** — `string`, `number`, `boolean`, `enum` with defaults and validation
 - **Sharing** — ACL sharing for models, notations, types, shapes, and scripts with `VIEW`/`EDIT` access levels
-- **Model package and diagram copy** — ZIP transfer between environments and copying a diagram into another model
+- **Model package and diagram copy** — ZIP transfer between environments and copying a diagram into the same or another model
 - **SSO and MCP** — optional corporate sign-in (OIDC) and API keys for agents (Cursor and others)
 
 ## Application Structure
